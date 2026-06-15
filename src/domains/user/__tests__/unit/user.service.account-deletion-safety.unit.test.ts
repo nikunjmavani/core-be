@@ -34,7 +34,7 @@ vi.mock('@/shared/utils/infrastructure/postgres-error.util.js', () => ({
 describe('UserService.softDeleteUserWithOffboarding — sec-U1 + sec-U8', () => {
   const userRow = {
     id: 7,
-    public_id: generatePublicId(),
+    public_id: generatePublicId('user'),
     email: 'leaving@example.com',
     first_name: 'Leaving',
     last_name: 'User',

@@ -210,6 +210,38 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     },
     controller.refreshToken,
   );
+  zodApplication.post(
+    '/switch-to-personal',
+    {
+      onRequest: [app.authenticate],
+      schema: {
+        summary: 'Switch to personal organization',
+        description:
+          "Re-mints the access token scoped to the caller's personal organization (no body — the server resolves it; can never 403). Returns a new access token; the client swaps its Bearer to it.",
+        tags: ['Auth', 'Organization'],
+      },
+    },
+    controller.switchToPersonalOrganization,
+  );
+  zodApplication.post(
+    '/switch-to-organization',
+    {
+      onRequest: [app.authenticate],
+      schema: {
+        summary: 'Switch active organization',
+        description:
+          "Re-mints the access token scoped to the given organization after validating the caller's active membership (403 if not a member). Returns a new access token; the client swaps its Bearer to it.",
+        tags: ['Auth', 'Organization'],
+        body: z.object({
+          organization_id: z
+            .string()
+            .min(1)
+            .describe('Target organization id (`org_…`) the caller is an active member of.'),
+        }),
+      },
+    },
+    controller.switchToOrganization,
+  );
 
   // Authenticated
   zodApplication.post(
@@ -333,8 +365,8 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     },
     controller.listMfaMethods,
   );
-  zodApplication.delete<{ Params: { mfaMethodId: string } }>(
-    '/mfa/:mfaMethodId',
+  zodApplication.delete<{ Params: { mfa_method_id: string } }>(
+    '/mfa/:mfa_method_id',
     {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
@@ -413,8 +445,8 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     },
     controller.createAuthMethod,
   );
-  zodApplication.delete<{ Params: { publicId: string } }>(
-    '/me/auth-methods/:publicId',
+  zodApplication.delete<{ Params: { auth_method_id: string } }>(
+    '/me/auth-methods/:auth_method_id',
     {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
@@ -443,8 +475,8 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     },
     controller.listSessions,
   );
-  zodApplication.delete<{ Params: { id: string } }>(
-    '/me/sessions/:id',
+  zodApplication.delete<{ Params: { session_id: string } }>(
+    '/me/sessions/:session_id',
     {
       onRequest: [app.authenticate],
       // sec-A7: see the comment on DELETE /me/sessions above — same threat model.

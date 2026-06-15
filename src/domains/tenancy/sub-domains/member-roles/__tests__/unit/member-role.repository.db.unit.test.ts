@@ -3,6 +3,7 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
 import {
+  createMembership,
   createRoleWithPermissions,
   seedPermissions,
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
@@ -92,5 +93,39 @@ describe('MemberRoleRepository (database)', () => {
     expect(
       await repository.update('missing_role', organization.id, { name: 'X' }, owner.id),
     ).toBeNull();
+  });
+
+  it('route-audit C2: softDeleteIfNoActiveMembers refuses when the role has active members', async () => {
+    const owner = await createTestUser({ email: 'c2-owner@test.com' });
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+
+    const assignedRole = await createRoleWithPermissions({
+      organizationId: organization.id,
+      permissionCodes: [],
+    });
+    const emptyRole = await createRoleWithPermissions({
+      organizationId: organization.id,
+      permissionCodes: [],
+    });
+
+    const member = await createTestUser({ email: 'c2-member@test.com' });
+    await createMembership({
+      userId: member.id,
+      organizationId: organization.id,
+      roleId: assignedRole.id,
+      status: 'ACTIVE',
+    });
+
+    // Role WITH an active member → the atomic guard matches zero rows (null); the role stays.
+    expect(
+      await repository.softDeleteIfNoActiveMembers(assignedRole.public_id, organization.id),
+    ).toBeNull();
+    expect(await repository.findByPublicId(assignedRole.public_id, organization.id)).not.toBeNull();
+
+    // Role with NO members → soft-deleted.
+    expect(
+      await repository.softDeleteIfNoActiveMembers(emptyRole.public_id, organization.id),
+    ).not.toBeNull();
+    expect(await repository.findByPublicId(emptyRole.public_id, organization.id)).toBeNull();
   });
 });

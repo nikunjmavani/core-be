@@ -1,5 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+vi.mock('@/infrastructure/database/resource-cap-lock.js', () => ({
+  RESOURCE_CAP_ADVISORY_LOCK_NAMESPACES: {
+    OWNED_ORGANIZATION: 1,
+    ORGANIZATION_API_KEY: 2,
+    ORGANIZATION_NOTIFICATION_POLICY: 3,
+    MEMBER_ROLE: 4,
+  },
+  acquireResourceCapAdvisoryLock: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/infrastructure/database/contexts/organization-database.context.js', () => ({
   withOrganizationDatabaseContext: vi.fn(
     async (_organizationPublicId: string, callback: () => Promise<unknown>) => callback(),
@@ -10,17 +20,17 @@ vi.mock('@/domains/tenancy/sub-domains/permission/permission-cache.service.js', 
   invalidateOrganizationPermissions: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
 import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { MemberRoleService } from '@/domains/tenancy/sub-domains/member-roles/member-role.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { MemberRoleRepository } from '@/domains/tenancy/sub-domains/member-roles/member-role.repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
-const organization = { id: 1, public_id: generatePublicId() };
+const organization = { id: 1, public_id: generatePublicId('memberRole') };
 const roleRow = {
   id: 2,
-  public_id: generatePublicId(),
+  public_id: generatePublicId('memberRole'),
   organization_id: 1,
   name: 'Admin',
   description: 'Admin role',
@@ -45,23 +55,14 @@ describe('MemberRoleService', () => {
     // before insert. Default to 0 so the lifecycle tests still reach create;
     // the cap regression lives in `per-org-row-caps.unit.test.ts`.
     countActiveByOrganization: vi.fn().mockResolvedValue(0),
+    // audit-#8: per-org creation quota advisory lock (no-op in unit tests).
+    acquireCreationQuotaLock: vi.fn().mockResolvedValue(undefined),
     create: vi.fn().mockResolvedValue(roleRow),
     update: vi.fn().mockResolvedValue(roleRow),
-    softDelete: vi.fn().mockResolvedValue(roleRow),
+    softDeleteIfNoActiveMembers: vi.fn().mockResolvedValue(roleRow),
   } as unknown as MemberRoleRepository;
 
-  // sec-T3: `MemberRoleService.delete` now reads `membershipRepository.countActiveByRoleId`
-  // before soft-deleting; this test exercises the existing list/get/create/update paths
-  // (which do not touch memberships), so the default count is irrelevant.
-  const membershipRepository = {
-    countActiveByRoleId: vi.fn().mockResolvedValue(0),
-  } as never;
-
-  const service = new MemberRoleService(
-    organizationService,
-    memberRoleRepository,
-    membershipRepository,
-  );
+  const service = new MemberRoleService(organizationService, memberRoleRepository);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -72,7 +73,7 @@ describe('MemberRoleService', () => {
     vi.mocked(memberRoleRepository.findByPublicId).mockResolvedValue(roleRow as never);
     vi.mocked(memberRoleRepository.findByInternalId).mockResolvedValue(roleRow as never);
     vi.mocked(memberRoleRepository.update).mockResolvedValue(roleRow as never);
-    vi.mocked(memberRoleRepository.softDelete).mockResolvedValue(roleRow as never);
+    vi.mocked(memberRoleRepository.softDeleteIfNoActiveMembers).mockResolvedValue(roleRow as never);
     vi.mocked(memberRoleRepository.create).mockResolvedValue(roleRow as never);
   });
 
@@ -102,6 +103,17 @@ describe('MemberRoleService', () => {
       'creator_public',
     );
     expect(memberRoleRepository.create).toHaveBeenCalled();
+  });
+
+  it('create rejects a PERSONAL organization (no custom roles without members)', async () => {
+    vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockResolvedValueOnce({
+      ...organization,
+      type: 'PERSONAL',
+    } as never);
+    await expect(
+      service.create(organization.public_id, { name: 'Editor' }, 'creator_public'),
+    ).rejects.toMatchObject({ messageKey: 'errors:personalOrganizationNoRoles' });
+    expect(memberRoleRepository.create).not.toHaveBeenCalled();
   });
 
   it('create omits optional description and is_system defaults', async () => {
@@ -159,7 +171,7 @@ describe('MemberRoleService', () => {
     );
     await service.delete(organization.public_id, roleRow.public_id);
     expect(memberRoleRepository.update).toHaveBeenCalled();
-    expect(memberRoleRepository.softDelete).toHaveBeenCalled();
+    expect(memberRoleRepository.softDeleteIfNoActiveMembers).toHaveBeenCalled();
   });
 
   it('delete invalidates the entire organization permission namespace', async () => {
@@ -213,10 +225,12 @@ describe('MemberRoleService', () => {
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it('delete throws when soft delete returns null', async () => {
-    vi.mocked(memberRoleRepository.softDelete).mockResolvedValue(null);
+  it('delete throws Conflict when the guarded soft-delete matches no row (active members)', async () => {
+    // route-audit C2: softDeleteIfNoActiveMembers returns null when active members remain (or a
+    // concurrent delete), which the service surfaces as the actionable roleHasActiveMembers conflict.
+    vi.mocked(memberRoleRepository.softDeleteIfNoActiveMembers).mockResolvedValue(null);
     await expect(service.delete(organization.public_id, roleRow.public_id)).rejects.toBeInstanceOf(
-      NotFoundError,
+      ConflictError,
     );
   });
 

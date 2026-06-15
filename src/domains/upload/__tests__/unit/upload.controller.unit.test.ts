@@ -6,7 +6,7 @@ import type { UploadService } from '@/domains/upload/upload.service.js';
 
 function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
   return {
-    auth: { kind: 'user' as const, userId: generatePublicId(), role: 'USER' },
+    auth: { kind: 'user' as const, userId: generatePublicId('user'), role: 'USER' },
     params: {},
     body: {},
     headers: {},
@@ -25,7 +25,7 @@ function mockReply(): FastifyReply {
 }
 
 describe('createUploadController', () => {
-  const uploadPublicId = generatePublicId();
+  const uploadPublicId = generatePublicId('upload');
   const uploadResult = { publicId: uploadPublicId, uploadUrl: 'https://example.com/upload' };
 
   const uploadService = {
@@ -57,14 +57,14 @@ describe('createUploadController', () => {
 
   it('getUpload returns upload detail', async () => {
     const reply = mockReply();
-    await controller.getUpload(mockRequest({ params: { publicId: uploadPublicId } }), reply);
+    await controller.getUpload(mockRequest({ params: { upload_id: uploadPublicId } }), reply);
     expect(uploadService.getUpload).toHaveBeenCalledWith(uploadPublicId, expect.any(String));
     expect(reply.send).toHaveBeenCalled();
   });
 
   it('deleteUpload returns 204', async () => {
     const reply = mockReply();
-    await controller.deleteUpload(mockRequest({ params: { publicId: uploadPublicId } }), reply);
+    await controller.deleteUpload(mockRequest({ params: { upload_id: uploadPublicId } }), reply);
     expect(uploadService.deleteUpload).toHaveBeenCalled();
     expect(reply.code).toHaveBeenCalledWith(204);
   });

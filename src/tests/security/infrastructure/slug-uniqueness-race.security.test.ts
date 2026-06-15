@@ -58,14 +58,14 @@ describe('Security: organization-slug uniqueness race (TOCTOU)', () => {
       url: testApiPath('/tenancy/organizations'),
       token: authToken,
       payload: { name: 'Race Org', slug },
-      headers: { 'idempotency-key': generatePublicId() },
+      headers: { 'idempotency-key': generatePublicId('organization') },
     });
     return response.statusCode;
   }
 
   it('two concurrent creates with the same slug: exactly one 201, one 409, no 5xx', async () => {
     const authToken = await token();
-    const slug = `race-${generatePublicId().toLowerCase()}`;
+    const slug = `race-${generatePublicId('organization').slice(4)}`;
 
     const statuses = await Promise.all([
       createWithSlug(authToken, slug),
@@ -80,7 +80,7 @@ describe('Security: organization-slug uniqueness race (TOCTOU)', () => {
 
   it('five concurrent creates with the same slug: exactly one 201, four 409, no 5xx', async () => {
     const authToken = await token();
-    const slug = `race-${generatePublicId().toLowerCase()}`;
+    const slug = `race-${generatePublicId('organization').slice(4)}`;
 
     const statuses = await Promise.all(
       Array.from({ length: 5 }, () => createWithSlug(authToken, slug)),
@@ -94,7 +94,7 @@ describe('Security: organization-slug uniqueness race (TOCTOU)', () => {
 
   it('a sequential duplicate slug is also a clean 409 (baseline)', async () => {
     const authToken = await token();
-    const slug = `race-${generatePublicId().toLowerCase()}`;
+    const slug = `race-${generatePublicId('organization').slice(4)}`;
 
     expect(await createWithSlug(authToken, slug)).toBe(201);
     expect(await createWithSlug(authToken, slug)).toBe(409);

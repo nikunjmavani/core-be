@@ -15,7 +15,8 @@ import type { FastifyInstance } from 'fastify';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 /**
- * Concurrent requests with different X-Organization-Id headers must not leak tenant context.
+ * Concurrent requests whose JWT `org` claims resolve different tenants must not
+ * leak tenant context across the per-request RLS organization binding.
  */
 describe('Security: Tenant RLS concurrency', () => {
   let app: FastifyInstance;
@@ -46,7 +47,13 @@ describe('Security: Tenant RLS concurrency', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
+    // Flat organization route resolves the active org from the JWT `org` claim;
+    // each tenant's bearer is pinned to its own organization so concurrent
+    // requests cannot cross-bind the RLS GUC.
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
     return { organization, token };
   }
 
@@ -61,9 +68,8 @@ describe('Security: Tenant RLS concurrency', () => {
       responses.push(
         await injectAuthenticated(app, {
           method: 'GET',
-          url: testApiPath(`/tenancy/organizations/${tenant.organization.public_id}`),
+          url: testApiPath('/tenancy/organization'),
           token: tenant.token,
-          organizationPublicId: tenant.organization.public_id,
         }),
       );
     }

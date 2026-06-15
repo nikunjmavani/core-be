@@ -5,7 +5,7 @@ import {
   varchar,
   boolean,
   timestamp,
-  index,
+  uniqueIndex,
   check,
   pgPolicy,
 } from 'drizzle-orm/pg-core';
@@ -57,7 +57,9 @@ export const user_notification_preferences = authSchema
       ),
     },
     (table) => [
-      index('idx_user_notif_prefs_user_type').on(
+      // audit-#11: UNIQUE natural key so duplicate (user_id, type, channel) rows
+      // cannot be persisted (a .limit(1) preference read must be deterministic).
+      uniqueIndex('idx_user_notif_prefs_user_type_channel_unique').on(
         table.user_id,
         table.notification_type,
         table.channel,

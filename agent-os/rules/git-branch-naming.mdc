@@ -1,0 +1,42 @@
+---
+description: Git branch naming policy — working branches use <type>/<short-description>; dev/main are long-lived; claude/* is reserved for Claude Code web sessions. Enforced by .husky/pre-push.
+globs:
+alwaysApply: true
+---
+
+# Git branch naming
+
+Working branches must follow **`<type>/<short-description>`**. The pre-push hook
+([`.husky/pre-push`](../../.husky/pre-push)) rejects any branch outside this policy.
+
+## Allowed names
+
+| Kind | Pattern | Examples |
+| ---- | ------- | -------- |
+| Long-lived (environments) | `dev`, `main` | `dev`, `main` |
+| Working branch | `<type>/<short-description>` | `feature/ai-stream-response`, `fix/login-error` |
+| AI web session | `claude/<slug>` | `claude/vigilant-hopper-cbl23b` |
+
+**Allowed `<type>` values:** `feat`, `feature`, `fix`, `hotfix`, `refactor`,
+`docs`, `test`, `chore`, `ci`, `perf`, `build`, `style`, `revert`
+(`feat` and `feature` are both accepted; conventional-commit types are mirrored).
+Canonical human reference: [`docs/process/git-workflow.md`](../../docs/process/git-workflow.md).
+
+## `claude/*` is platform-assigned, not chosen here
+
+Claude Code **web/cloud** sessions do **not** pick their branch name. The platform
+creates a `claude/<slug>` branch and clones the repo onto it **before** the
+container and the agent start, and the cloud git proxy **restricts pushes to that
+working branch**. Repo skills, rules, and hooks run *inside* the session and cannot
+rename it — so `claude/*` is allowlisted by design (blocking it would break every
+web session's push). To land web work under a `feature/`/`fix/` name, rename at the
+PR/merge layer or teleport the session to a local checkout; do not fight the proxy
+from inside the session.
+
+## When creating a branch yourself
+
+- Branch from `dev` (hotfixes from `main`): `git checkout dev && git pull && git checkout -b feature/<slug>`.
+- In a Claude Code web session you are bound to the assigned `claude/*` branch and
+  must not switch branches without explicit user permission.
+- Bypass the hook for a one-off push with `SKIP_BRANCH_CHECK=1 git push` (prefer
+  renaming the branch instead).

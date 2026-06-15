@@ -6,7 +6,7 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 function mockRequest(overrides: Partial<FastifyRequest> = {}): never {
   return {
-    auth: { kind: 'user' as const, userId: generatePublicId(), role: 'user' },
+    auth: { kind: 'user' as const, userId: generatePublicId('user'), role: 'user' },
     params: {},
     body: {},
     headers: {},
@@ -16,7 +16,7 @@ function mockRequest(overrides: Partial<FastifyRequest> = {}): never {
 }
 
 describe('createNotificationController', () => {
-  const notificationId = generatePublicId();
+  const notificationId = generatePublicId('notification');
   const notification = { public_id: notificationId };
   const service = {
     listForUser: vi.fn().mockResolvedValue({
@@ -58,7 +58,7 @@ describe('createNotificationController', () => {
 
   it('getNotification returns row', async () => {
     await controller.getNotification(
-      mockRequest({ params: { id: notificationId } }),
+      mockRequest({ params: { notification_id: notificationId } }),
       {} as FastifyReply,
     );
     expect(service.get).toHaveBeenCalledWith(notificationId, expect.any(String));
@@ -66,7 +66,7 @@ describe('createNotificationController', () => {
 
   it('markNotificationRead updates row', async () => {
     await controller.markNotificationRead(
-      mockRequest({ params: { id: notificationId } }),
+      mockRequest({ params: { notification_id: notificationId } }),
       {} as FastifyReply,
     );
     expect(service.markRead).toHaveBeenCalled();
@@ -86,7 +86,7 @@ describe('createNotificationController', () => {
   it('deleteNotification returns 204', async () => {
     const reply = { code: vi.fn().mockReturnThis(), send: vi.fn() };
     await controller.deleteNotification(
-      mockRequest({ params: { notificationId } }),
+      mockRequest({ params: { notification_id: notificationId } }),
       reply as unknown as FastifyReply,
     );
     expect(reply.code).toHaveBeenCalledWith(204);
@@ -96,7 +96,7 @@ describe('createNotificationController', () => {
     vi.mocked(service.get).mockResolvedValueOnce(null);
     await expect(
       controller.getNotification(
-        mockRequest({ params: { id: notificationId } }),
+        mockRequest({ params: { notification_id: notificationId } }),
         {} as FastifyReply,
       ),
     ).rejects.toBeInstanceOf(NotFoundError);
@@ -106,7 +106,7 @@ describe('createNotificationController', () => {
     vi.mocked(service.markRead).mockResolvedValueOnce(null);
     await expect(
       controller.markNotificationRead(
-        mockRequest({ params: { id: notificationId } }),
+        mockRequest({ params: { notification_id: notificationId } }),
         {} as FastifyReply,
       ),
     ).rejects.toBeInstanceOf(NotFoundError);
@@ -115,7 +115,7 @@ describe('createNotificationController', () => {
   it('deleteNotification throws NotFound when service returns null', async () => {
     vi.mocked(service.deleteNotification).mockResolvedValueOnce(null);
     await expect(
-      controller.deleteNotification(mockRequest({ params: { notificationId } }), {
+      controller.deleteNotification(mockRequest({ params: { notification_id: notificationId } }), {
         code: vi.fn(),
         send: vi.fn(),
       } as unknown as FastifyReply),

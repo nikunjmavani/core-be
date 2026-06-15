@@ -66,7 +66,7 @@ function buildDeliveryAttempt(
   const status = statusForIndex(options.index, context.counts.edgeCases);
   const base: DeliveryAttemptInsert = {
     // sec-new-B2: generate a unique public_id for each seeded attempt row.
-    public_id: generatePublicId(),
+    public_id: generatePublicId('webhook'),
     webhook_id: options.webhookId,
     event_type: content.event_type,
     payload: content.payload,

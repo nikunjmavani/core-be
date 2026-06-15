@@ -157,6 +157,21 @@ describe('MembershipService', () => {
     expect(membershipRepository.create).not.toHaveBeenCalled();
   });
 
+  it('create rejects a PERSONAL organization (single-member invariant; no side-door members)', async () => {
+    vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockResolvedValueOnce({
+      ...organization,
+      type: 'PERSONAL',
+    } as never);
+    await expect(
+      service.create(
+        'org_public',
+        { user_id: 'user_public', role_id: 'role_public', status: 'INVITED' },
+        'inviter_public',
+      ),
+    ).rejects.toMatchObject({ messageKey: 'errors:personalOrganizationNoMembers' });
+    expect(membershipRepository.create).not.toHaveBeenCalled();
+  });
+
   it('getPermissions throws when organization context is missing', async () => {
     vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockRejectedValueOnce(
       new NotFoundError('Organization'),

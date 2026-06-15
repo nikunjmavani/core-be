@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
+import { createTestOrganization } from '@/tests/factories/organization.factory.js';
 import { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
 import {
   createMembership,
@@ -156,5 +157,22 @@ describe('OrganizationRepository (database)', () => {
     // The owner remains the active member from the only successful transfer.
     const finalState = await repository.findByPublicId(organization.public_id);
     expect(finalState?.owner_user_id).toBe(activeMember.id);
+  });
+
+  it('route-audit-#2: countActiveOwnedByUser counts only active orgs owned by the user', async () => {
+    const owner = await createTestUser({ email: 'count-owner@test.com' });
+    const other = await createTestUser({ email: 'count-other@test.com' });
+    expect(await repository.countActiveOwnedByUser(owner.id)).toBe(0);
+
+    const org1 = await createTestOrganization({ ownerUserId: owner.id });
+    await createTestOrganization({ ownerUserId: owner.id });
+    expect(await repository.countActiveOwnedByUser(owner.id)).toBe(2);
+    // Orgs owned by a different user don't count toward this owner.
+    expect(await repository.countActiveOwnedByUser(other.id)).toBe(0);
+
+    // A soft-deleted org drops out of the count (softDelete requires deletion_started_at first).
+    await repository.markDeletionStarted(org1.public_id);
+    await repository.softDelete(org1.public_id);
+    expect(await repository.countActiveOwnedByUser(owner.id)).toBe(1);
   });
 });

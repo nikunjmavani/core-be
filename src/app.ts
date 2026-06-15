@@ -3,6 +3,7 @@ import { Sentry, isSentryInitialized } from '@/infrastructure/observability/sent
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { env, getEnv } from '@/shared/config/env.config.js';
 import { registerMiddleware } from '@/shared/middlewares/index.js';
+import { registerMethodStatusPolicy } from '@/shared/middlewares/core/method-status-policy.middleware.js';
 import { registerEventHandlers } from '@/core/events/register-event-handlers.js';
 import { registerRoutes } from '@/routes.js';
 import { buildFastifyServerOptions } from '@/shared/utils/http/fastify-server.util.js';
@@ -39,12 +40,38 @@ export type RegisteredRouteCapture = {
 };
 
 /**
+ * One routed response reported to {@link BuildAppOptions.observeResponses}:
+ * the HTTP method, the registered route pattern (e.g. `/api/v1/users/:user_id`),
+ * and the final response status code. `requestBody` / `responseBody` are only
+ * populated when {@link BuildAppOptions.captureBodies} is set (JSON payloads
+ * only — streams and hijacked replies are skipped).
+ */
+export type ObservedRouteResponse = {
+  method: string;
+  routeUrl: string;
+  statusCode: number;
+  requestBody?: unknown;
+  responseBody?: string;
+};
+
+/**
  * Optional knobs for {@link buildApp} consumed by tests. Production callers
  * (`src/index.ts`, the worker entry) pass nothing.
  */
 export type BuildAppOptions = {
   /** When set, every registered HTTP route is appended (used by route parity tests). */
   captureRegisteredRoutes?: RegisteredRouteCapture[];
+  /**
+   * When set, every routed response is reported after it is sent (used by the
+   * route success-status coverage gate). Registered before middleware and
+   * routes so all encapsulated contexts inherit the hook.
+   */
+  observeResponses?: (observation: ObservedRouteResponse) => void;
+  /**
+   * Also report request/response bodies to {@link observeResponses} (used by
+   * the OpenAPI example-capture run; see `pnpm routes:examples`).
+   */
+  captureBodies?: boolean;
 };
 
 /**
@@ -69,6 +96,40 @@ export async function buildApp(options?: BuildAppOptions) {
       }
     });
   }
+
+  if (options?.observeResponses) {
+    const observeResponses = options.observeResponses;
+    const captureBodies = options.captureBodies === true;
+    const capturedResponseBody = Symbol('observedResponseBody');
+
+    if (captureBodies) {
+      app.addHook('onSend', async (request, _reply, payload) => {
+        if (typeof payload === 'string') {
+          (request as unknown as Record<symbol, string>)[capturedResponseBody] = payload;
+        }
+        return payload;
+      });
+    }
+
+    app.addHook('onResponse', async (request, reply) => {
+      const routeUrl = request.routeOptions.url;
+      if (!routeUrl) {
+        return;
+      }
+      const responseBody = captureBodies
+        ? (request as unknown as Record<symbol, string | undefined>)[capturedResponseBody]
+        : undefined;
+      observeResponses({
+        method: request.method.toUpperCase(),
+        routeUrl,
+        statusCode: reply.statusCode,
+        ...(captureBodies && request.body !== undefined ? { requestBody: request.body } : {}),
+        ...(responseBody !== undefined ? { responseBody } : {}),
+      });
+    });
+  }
+
+  registerMethodStatusPolicy(app);
 
   const keepAliveTimeoutMs = env.FASTIFY_KEEP_ALIVE_TIMEOUT_MS ?? 72_000;
   const headersTimeoutMs = env.FASTIFY_HEADERS_TIMEOUT_MS ?? 73_000;

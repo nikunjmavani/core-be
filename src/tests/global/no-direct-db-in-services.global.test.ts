@@ -111,4 +111,38 @@ describe('Global: no direct DB-query primitives outside repositories (sec-r5-arc
     }
     expect(violations).toEqual([]);
   });
+
+  /**
+   * Closes the gap that let `resolve-active-organization.ts` build a full `.select().from()` query
+   * inline on the login path while still passing the check above (it imported `sql` from
+   * `drizzle-orm` + a context wrapper, not from `connection.js`). Request-path domain files MUST
+   * delegate SQL to a repository. Only repositories (`.repository.ts`, already skipped by the walk)
+   * and the async maintenance layer (`*.worker.ts` / `*.processor.ts`, which bind a context handle
+   * for retention jobs) may import the `drizzle-orm` query builder.
+   */
+  it('forbids drizzle-orm query builders in request-path domain files (only repositories and workers/processors may build SQL)', async () => {
+    const repositoryRoot = process.cwd();
+    const domainsRoot = join(repositoryRoot, 'src', 'domains');
+    const DRIZZLE_ORM_IMPORT = /from\s+['"]drizzle-orm['"]/;
+    const violations: string[] = [];
+
+    for await (const absolutePath of walkDomainFiles(domainsRoot)) {
+      const relativePath = relative(repositoryRoot, absolutePath);
+      if (relativePath.endsWith('.worker.ts') || relativePath.endsWith('.processor.ts')) continue;
+
+      const fileText = await fs.readFile(absolutePath, 'utf8');
+      if (DRIZZLE_ORM_IMPORT.test(fileText)) {
+        violations.push(
+          `  ${relativePath} — imports the drizzle-orm query builder outside a repository`,
+        );
+      }
+    }
+
+    if (violations.length > 0) {
+      throw new Error(
+        `Found drizzle-orm query construction in request-path files — violates the codebase architecture rule (CLAUDE.md: only repositories own the actual SQL):\n${violations.join('\n')}\n\nFix: move the query into the relevant *.repository.ts and call the repository method from here.`,
+      );
+    }
+    expect(violations).toEqual([]);
+  });
 });

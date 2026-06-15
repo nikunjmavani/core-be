@@ -86,7 +86,7 @@ describe('Security: sensitive-field leakage sweep', () => {
     const { user, token } = await userWithToken();
     // Seed a TOTP method carrying credential material + PII that must never be serialized.
     await database.insert(auth_methods).values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('user'),
       user_id: user.id,
       method_type: 'MFA_TOTP',
       encrypted_secret: 'leaked-totp-seed-ciphertext',
@@ -125,7 +125,7 @@ describe('Security: sensitive-field leakage sweep', () => {
   });
 
   it('GET org webhooks does not leak the encrypted secret', async () => {
-    const { user, token } = await userWithToken();
+    const { user } = await userWithToken();
     const organization = await createTestOrganization({ ownerUserId: user.id });
     const role = await createRoleWithPermissions({
       organizationId: organization.id,
@@ -134,11 +134,16 @@ describe('Security: sensitive-field leakage sweep', () => {
     await createMembership({ userId: user.id, organizationId: organization.id, roleId: role.id });
     await createTestWebhook({ organizationId: organization.id });
 
+    // Flat webhook route resolves the organization from the JWT `org` claim, so
+    // mint a bearer scoped to this org (the userWithToken bearer carries no claim).
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
+      url: testApiPath('/notify/webhooks'),
       token,
-      organizationPublicId: organization.public_id,
     });
     expect(response.statusCode).toBe(200);
     expectNoSensitiveFields(response.body);
@@ -159,7 +164,7 @@ describe('Security: sensitive-field leakage sweep', () => {
       },
     });
     expect(createResponse.statusCode).toBe(201);
-    const publicId = (createResponse.json() as { data: { publicId: string } }).data.publicId;
+    const publicId = (createResponse.json() as { data: { id: string } }).data.id;
 
     const detailResponse = await injectAuthenticated(app, {
       method: 'GET',

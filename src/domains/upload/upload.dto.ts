@@ -40,5 +40,5 @@ export const createUploadDto = z
 
 /** Zod schema for the `:publicId` URL param shared by the get/confirm/delete routes. */
 export const uploadPublicIdParamDto = z.object({
-  publicId: trimmedStringMinMax(21, 21),
+  upload_id: trimmedStringMinMax(24, 28),
 });

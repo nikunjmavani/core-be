@@ -48,6 +48,52 @@
       "url": "https://mcp.stripe.com",
       "headers": {}
     },
+    "semgrep": {
+      "command": "uvx",
+      "args": [
+        "semgrep-mcp"
+      ]
+    },
+    "sonarqube": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--init",
+        "--pull=always",
+        "--rm",
+        "-i",
+        "-e",
+        "SONARQUBE_TOKEN",
+        "-e",
+        "SONARQUBE_URL",
+        "mcp/sonarqube"
+      ]
+    },
+    "redis": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "redis-mcp-server@latest",
+        "redis-mcp-server",
+        "--url",
+        "${REDIS_URL}"
+      ]
+    },
+    "postman": {
+      "url": "https://mcp.postman.com/mcp",
+      "headers": {}
+    },
+    "resend": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "RESEND_API_KEY",
+        "mcp/resend"
+      ]
+    },
     "codegraph": {
       "type": "stdio",
       "command": "codegraph",

@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import {
+  acknowledgeCommitDispatchTask,
   appendCommitDispatchTask,
   consumeCommitDispatchTasks,
 } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.store.js';
@@ -107,9 +108,12 @@ export class EventBus {
       pendingCommitDispatchRequestIds.delete(requestId);
       try {
         const durableTasks = await consumeCommitDispatchTasks({ requestId });
-        for (const task of durableTasks) {
+        for (const { task, raw } of durableTasks) {
           try {
             await executeCommitDispatchTask(task);
+            // reaudit-#2: remove the durable entry ONLY after the side effect succeeded, so a
+            // crash mid-batch leaves un-executed tasks for the recovery sweeper (never lost).
+            await acknowledgeCommitDispatchTask({ requestId, raw });
           } catch (error) {
             logger.error({ error, requestId, task }, 'event-bus.commit-dispatch.task.failed');
             captureException(error, { requestId, tags: { source: 'event-bus.commit-dispatch' } });

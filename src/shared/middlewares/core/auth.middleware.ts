@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
-import { UnauthorizedError } from '@/shared/errors/index.js';
+import { ConfigurationError, UnauthorizedError } from '@/shared/errors/index.js';
+import { env } from '@/shared/config/env.config.js';
 import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { AuthContext } from '@/shared/types/index.js';
@@ -29,8 +30,14 @@ function getBearerToken(request: FastifyRequest): string {
  * Hot-path safe: only fires when the JWT actually claims SUPER_ADMIN (rare in production),
  * and reuses the existing `findUserRecordByPublicId` resolver. On any failure to resolve
  * the user, fails closed (downgrades to no role) so a missing user record cannot retain
- * admin privileges. When the user-domain is not wired (minimal test harness without
- * `userDomain` decoration), the role is preserved — production always wires it.
+ * admin privileges.
+ *
+ * audit-#16: when the user-domain is not wired this now **fails closed** outside the test
+ * harness — a privileged claim can no longer be accepted without live allowlist/account-state
+ * verification just because an alternate/minimal entrypoint forgot to decorate `userDomain`.
+ * Production composition always wires it, so a missing service there is a configuration error
+ * (raised loudly) rather than a silent privilege grant. The `test` seam is preserved because
+ * several middleware-only test harnesses intentionally omit the user domain.
  */
 async function rederiveSuperAdminRole(
   request: FastifyRequest,
@@ -38,17 +45,26 @@ async function rederiveSuperAdminRole(
 ): Promise<GlobalRole | undefined> {
   const userService = request.server.userDomain?.userService;
   if (!userService) {
-    return GLOBAL_ROLES.SUPER_ADMIN;
+    if (env.NODE_ENV === 'test') {
+      return GLOBAL_ROLES.SUPER_ADMIN;
+    }
+    throw new ConfigurationError(
+      'userDomain.userService is required to re-derive a privileged role; refusing to trust a SUPER_ADMIN claim without it',
+    );
   }
   const user = await userService.findUserRecordByPublicId(userPublicId);
   if (!user) return undefined;
+  // reaudit-#10: gate the SUPER_ADMIN re-grant on the live account state. Previously only the
+  // non-allowlist branch checked status, so a suspended/inactive super-admin whose email is
+  // still allowlisted kept admin via this path. Drop the role for any non-active account
+  // (defense in depth alongside the session-layer status check).
+  if (user.status !== 'ACTIVE') return undefined;
   const currentGlobalRole = resolveGlobalRoleForEmail(user.email);
   if (currentGlobalRole === GLOBAL_ROLES.SUPER_ADMIN) {
     return GLOBAL_ROLES.SUPER_ADMIN;
   }
-  // Email no longer in the allowlist — downgrade to USER if the account is still active,
-  // otherwise drop the role entirely.
-  return user.status === 'ACTIVE' ? GLOBAL_ROLES.USER : undefined;
+  // Active but no longer in the allowlist — downgrade to USER.
+  return GLOBAL_ROLES.USER;
 }
 
 async function authenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
@@ -78,20 +94,28 @@ async function authenticate(request: FastifyRequest, _reply: FastifyReply): Prom
       payload.userId,
     );
 
-    // sec-A6: re-derive SUPER_ADMIN per request so removal from GLOBAL_ADMIN_EMAILS
-    // takes effect immediately, not at next token refresh (default 5-minute window).
+    // sec-A6 / route-#6: re-derive ANY privileged claim (super_admin OR admin) per request against
+    // live state, so removal from GLOBAL_ADMIN_EMAILS or account suspension takes effect
+    // immediately (not at next token refresh, default 5-minute window) and a stale or forged
+    // privileged claim is never trusted for the token lifetime. rederiveSuperAdminRole only ever
+    // returns super_admin / user / undefined, so an `admin` claim is downgraded to the user's TRUE
+    // role. (No code path mints `admin` today, but re-deriving it fails closed if one ever does.)
     // Regular users skip the lookup — preserves the existing hot-path latency.
     const claimedRole = payload.role ? (payload.role as GlobalRole) : undefined;
-    const effectiveRole =
-      claimedRole === GLOBAL_ROLES.SUPER_ADMIN
-        ? await rederiveSuperAdminRole(request, payload.userId)
-        : claimedRole;
+    const isPrivilegedClaim =
+      claimedRole === GLOBAL_ROLES.SUPER_ADMIN || claimedRole === GLOBAL_ROLES.ADMIN;
+    const effectiveRole = isPrivilegedClaim
+      ? await rederiveSuperAdminRole(request, payload.userId)
+      : claimedRole;
 
     request.auth = omitUndefined({
       kind: 'user',
       userId: payload.userId,
       role: effectiveRole,
       sessionPublicId,
+      // Active organization (tenant scope) carried as a signed claim. Membership + RLS are
+      // still re-checked per request — the claim is scope, not authority.
+      organizationPublicId: payload.organizationPublicId,
     }) as AuthContext;
   } catch (error) {
     if (error instanceof UnauthorizedError) {

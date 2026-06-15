@@ -6,7 +6,12 @@ export const organizationSchema = {
     id: { type: 'string' },
     name: { type: 'string' },
     slug: { type: 'string' },
-    status: { type: 'string' },
+    status: {
+      type: 'string',
+      enum: ['ACTIVE', 'SUSPENDED', 'ARCHIVED'],
+      description: 'Possible values: ACTIVE | SUSPENDED | ARCHIVED',
+      example: 'ACTIVE',
+    },
     logo_url: { type: 'string', nullable: true },
     created_at: { type: 'string', format: 'date-time' },
     updated_at: { type: 'string', format: 'date-time' },
@@ -14,7 +19,7 @@ export const organizationSchema = {
 };
 
 export const organizationExample = {
-  id: 'org_k7x9m2pqr4w8n1v3',
+  id: 'org_k7x9m2pqr4w8n1v3a1b2c',
   name: 'Acme Corporation',
   slug: 'acme-corporation',
   status: 'ACTIVE',
@@ -36,7 +41,7 @@ export const organizationSettingsSchema = {
 };
 
 export const organizationSettingsExample = {
-  organization_id: 'org_k7x9m2pqr4w8n1v3',
+  organization_id: 'org_k7x9m2pqr4w8n1v3a1b2c',
   is_email_notifications_enabled: true,
   security_policy: { mfa_required: true, session_timeout_minutes: 30 },
   created_at: '2026-01-01T00:00:00.000Z',
@@ -53,7 +58,12 @@ export const apiKeySchema = {
     key_prefix: { type: 'string' },
     last_used_at: { type: 'string', format: 'date-time', nullable: true },
     expires_at: { type: 'string', format: 'date-time', nullable: true },
-    status: { type: 'string' },
+    status: {
+      type: 'string',
+      enum: ['ACTIVE', 'REVOKED'],
+      description: 'Possible values: ACTIVE | REVOKED',
+      example: 'ACTIVE',
+    },
     created_at: { type: 'string', format: 'date-time' },
     updated_at: { type: 'string', format: 'date-time' },
   },
@@ -66,8 +76,8 @@ export const apiKeySchema = {
 // distinguish a documentation placeholder from a leaked production secret.
 // Use a clearly-fake redacted shape so future regenerations stay scanner-safe.
 export const apiKeyExample = {
-  id: 'key_x9k3m7n2p5q8w1r4',
-  organization_id: 'org_k7x9m2pqr4w8n1v3',
+  id: 'key_x9k3m7n2p5q8w1r4a1b2c',
+  organization_id: 'org_k7x9m2pqr4w8n1v3a1b2c',
   name: 'Production API Key',
   key_prefix: 'ak_redacted',
   last_used_at: '2026-02-14T07:45:00.000Z',
@@ -89,7 +99,12 @@ export const notificationPolicySchema = {
     id: { type: 'integer' },
     organization_id: { type: 'string' },
     notification_type: { type: 'string' },
-    channel: { type: 'string' },
+    channel: {
+      type: 'string',
+      enum: ['EMAIL', 'SMS', 'PUSH', 'IN_APP'],
+      description: 'Possible values: EMAIL | SMS | PUSH | IN_APP',
+      example: 'EMAIL',
+    },
     default_enabled: { type: 'boolean' },
     is_mandatory: { type: 'boolean' },
     muted_until: { type: 'string', format: 'date-time', nullable: true },
@@ -100,7 +115,7 @@ export const notificationPolicySchema = {
 
 export const notificationPolicyExample = {
   id: 1,
-  organization_id: 'org_k7x9m2pqr4w8n1v3',
+  organization_id: 'org_k7x9m2pqr4w8n1v3a1b2c',
   notification_type: 'subscription.updated',
   channel: 'email',
   default_enabled: true,
@@ -118,7 +133,12 @@ export const membershipSchema = {
     user_id: { type: 'string' },
     organization_id: { type: 'string' },
     role_id: { type: 'string' },
-    status: { type: 'string' },
+    status: {
+      type: 'string',
+      enum: ['INVITED', 'ACTIVE', 'SUSPENDED'],
+      description: 'Possible values: INVITED | ACTIVE | SUSPENDED',
+      example: 'INVITED',
+    },
     joined_at: { type: 'string', format: 'date-time', nullable: true },
     created_at: { type: 'string', format: 'date-time' },
     updated_at: { type: 'string', format: 'date-time' },
@@ -127,9 +147,9 @@ export const membershipSchema = {
 
 export const membershipExample = {
   id: 'mbr_q8w3n7p2m5k1r4t6',
-  user_id: 'usr_k7x9m2pqr4w8n1v3',
-  organization_id: 'org_k7x9m2pqr4w8n1v3',
-  role_id: 'rol_m3n7p2q8w5k1r4t6',
+  user_id: 'usr_k7x9m2pqr4w8n1v3a1b2c',
+  organization_id: 'org_k7x9m2pqr4w8n1v3a1b2c',
+  role_id: 'rol_m3n7p2q8w5k1r4t6a1b2c',
   status: 'ACTIVE',
   joined_at: '2026-01-15T10:30:00.000Z',
   created_at: '2026-01-15T10:30:00.000Z',
@@ -151,7 +171,7 @@ export const invitationSchema = {
 };
 
 export const invitationExample = {
-  id: 'inv_r4t6m3n7p2q8w5k1',
+  id: 'inv_r4t6m3n7p2q8w5k1a1b2c',
   membership_id: 'mbr_q8w3n7p2m5k1r4t6',
   email: 'jane.smith@example.com',
   expires_at: '2026-02-21T10:30:00.000Z',
@@ -174,7 +194,7 @@ export const memberRoleSchema = {
 };
 
 export const memberRoleExample = {
-  id: 'rol_m3n7p2q8w5k1r4t6',
+  id: 'rol_m3n7p2q8w5k1r4t6a1b2c',
   name: 'Admin',
   description: 'Full access to all organization resources',
   is_system: true,
@@ -194,17 +214,17 @@ export const memberRolePermissionSchema = {
 
 export const memberRolePermissionExamples = [
   {
-    role_id: 'rol_m3n7p2q8w5k1r4t6',
+    role_id: 'rol_m3n7p2q8w5k1r4t6a1b2c',
     permission_code: 'ORGANIZATION_READ',
     created_at: '2026-01-01T00:00:00.000Z',
   },
   {
-    role_id: 'rol_m3n7p2q8w5k1r4t6',
+    role_id: 'rol_m3n7p2q8w5k1r4t6a1b2c',
     permission_code: 'MEMBERSHIP_READ',
     created_at: '2026-01-01T00:00:00.000Z',
   },
   {
-    role_id: 'rol_m3n7p2q8w5k1r4t6',
+    role_id: 'rol_m3n7p2q8w5k1r4t6a1b2c',
     permission_code: 'ROLE_READ',
     created_at: '2026-01-01T00:00:00.000Z',
   },

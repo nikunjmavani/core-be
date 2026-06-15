@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
@@ -7,6 +7,10 @@ import { users as authUsers } from '@/domains/user/user.schema.js';
 import { BaseRepository } from '@/infrastructure/database/base-repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
+import {
+  RESOURCE_QUOTA_LOCK_NAMESPACE,
+  acquireResourceQuotaLock,
+} from '@/infrastructure/database/resource-quota-lock.util.js';
 import {
   buildAscendingCreatedAtIdCursorCondition,
   createOpaqueCursorFromRow,
@@ -194,18 +198,171 @@ export class OrganizationRepository extends BaseRepository {
     return rows.length > 0;
   }
 
+  /**
+   * Resolve the login-default organization `public_id` for a user: the PERSONAL organization
+   * first (when {@link includePersonalOrganizations}), otherwise the most-recently-joined ACTIVE
+   * TEAM membership. Returns `null` when the user has no eligible active membership. One indexed
+   * memberships → organizations join, ordered personal-first then most-recent join.
+   */
+  async findDefaultActiveOrganizationPublicId(
+    user_id: number,
+    includePersonalOrganizations: boolean,
+  ): Promise<string | null> {
+    const rows = await getRequestDatabase()
+      .select({ public_id: organizations.public_id })
+      .from(memberships)
+      .innerJoin(organizations, eq(organizations.id, memberships.organization_id))
+      .where(
+        and(
+          eq(memberships.user_id, user_id),
+          eq(memberships.status, 'ACTIVE'),
+          isNull(organizations.deleted_at),
+          eq(organizations.status, 'ACTIVE'),
+          includePersonalOrganizations ? undefined : sql`${organizations.type} <> 'PERSONAL'`,
+        ),
+      )
+      .orderBy(desc(sql`(${organizations.type} = 'PERSONAL')`), desc(memberships.joined_at))
+      .limit(1);
+    return rows[0]?.public_id ?? null;
+  }
+
+  /**
+   * Confirm the user holds an ACTIVE membership in the given (active, non-deleted) organization and
+   * return its `public_id`, or `null` when the membership does not exist — the gate for
+   * `switch-to-organization`. Constrained to the caller's own `user_id`.
+   */
+  async findActiveMembershipOrganizationPublicId(
+    user_id: number,
+    organization_public_id: string,
+  ): Promise<string | null> {
+    const rows = await getRequestDatabase()
+      .select({ public_id: organizations.public_id })
+      .from(memberships)
+      .innerJoin(organizations, eq(organizations.id, memberships.organization_id))
+      .where(
+        and(
+          eq(memberships.user_id, user_id),
+          eq(memberships.status, 'ACTIVE'),
+          eq(organizations.public_id, organization_public_id),
+          isNull(organizations.deleted_at),
+          eq(organizations.status, 'ACTIVE'),
+        ),
+      )
+      .limit(1);
+    return rows[0]?.public_id ?? null;
+  }
+
+  /**
+   * Resolve the user's own PERSONAL organization `public_id` — the `switch-to-personal` target —
+   * or `null` when the user has no personal organization. Constrained to `owner_user_id`.
+   */
+  async findPersonalOrganizationPublicId(owner_user_id: number): Promise<string | null> {
+    const rows = await getRequestDatabase()
+      .select({ public_id: organizations.public_id })
+      .from(organizations)
+      .where(
+        and(
+          eq(organizations.owner_user_id, owner_user_id),
+          eq(organizations.type, 'PERSONAL'),
+          isNull(organizations.deleted_at),
+        ),
+      )
+      .limit(1);
+    return rows[0]?.public_id ?? null;
+  }
+
+  /**
+   * Confirm the user holds an ACTIVE membership in the given (active, non-deleted) organization
+   * and return both its internal `id` and `public_id`, or `null` when no such active membership
+   * exists. Used when the caller needs the internal id (e.g. persisting it on the session row at
+   * switch time — audit-#3). Constrained to the caller's own `user_id`.
+   */
+  async findActiveMembershipOrganizationByPublicId(
+    user_id: number,
+    organization_public_id: string,
+  ): Promise<{ id: number; public_id: string } | null> {
+    const rows = await getRequestDatabase()
+      .select({ id: organizations.id, public_id: organizations.public_id })
+      .from(memberships)
+      .innerJoin(organizations, eq(organizations.id, memberships.organization_id))
+      .where(
+        and(
+          eq(memberships.user_id, user_id),
+          eq(memberships.status, 'ACTIVE'),
+          eq(organizations.public_id, organization_public_id),
+          isNull(organizations.deleted_at),
+          eq(organizations.status, 'ACTIVE'),
+        ),
+      )
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
+  /**
+   * Confirm the user holds an ACTIVE membership in the organization identified by its internal
+   * `id` and return the org's `public_id`, or `null` — refresh-time revalidation of the org
+   * persisted on a session (audit-#3). Constrained to the caller's own `user_id`.
+   */
+  async findActiveMembershipOrganizationPublicIdByInternalId(
+    user_id: number,
+    organization_id: number,
+  ): Promise<string | null> {
+    const rows = await getRequestDatabase()
+      .select({ public_id: organizations.public_id })
+      .from(memberships)
+      .innerJoin(organizations, eq(organizations.id, memberships.organization_id))
+      .where(
+        and(
+          eq(memberships.user_id, user_id),
+          eq(memberships.status, 'ACTIVE'),
+          eq(organizations.id, organization_id),
+          isNull(organizations.deleted_at),
+          eq(organizations.status, 'ACTIVE'),
+        ),
+      )
+      .limit(1);
+    return rows[0]?.public_id ?? null;
+  }
+
+  /**
+   * Resolve the user's own PERSONAL organization `id` and `public_id` — the `switch-to-personal`
+   * target — or `null` when the user has no personal organization. Returns both identifiers so
+   * callers that need to persist the internal id on the session row (audit-#3) avoid a second
+   * query. Constrained to `owner_user_id`.
+   */
+  async findPersonalOrganization(
+    owner_user_id: number,
+  ): Promise<{ id: number; public_id: string } | null> {
+    const rows = await getRequestDatabase()
+      .select({ id: organizations.id, public_id: organizations.public_id })
+      .from(organizations)
+      .where(
+        and(
+          eq(organizations.owner_user_id, owner_user_id),
+          eq(organizations.type, 'PERSONAL'),
+          isNull(organizations.deleted_at),
+        ),
+      )
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
   async create(data: {
     name: string;
-    slug: string;
+    /** Null for a personal organization (no human handle); kebab string for a team. */
+    slug: string | null;
+    /** `PERSONAL` or `TEAM` (defaults to `TEAM` for the public create endpoint). */
+    type?: string;
     owner_user_id: number;
     created_by_user_id: number | null;
   }) {
     return runInsertWithPublicIdentifierRetry(async () => {
-      const public_id = generatePublicId();
+      const public_id = generatePublicId('organization');
       const row = {
         public_id,
         name: data.name,
         slug: data.slug,
+        type: data.type ?? 'TEAM',
         owner_user_id: data.owner_user_id,
         created_by_user_id: data.created_by_user_id ?? undefined,
         updated_by_user_id: data.created_by_user_id ?? undefined,
@@ -259,6 +416,38 @@ export class OrganizationRepository extends BaseRepository {
       )
       .returning();
     return (rows[0] ?? null) as Organization | null;
+  }
+
+  /**
+   * Counts the active (not soft-deleted) **TEAM** organizations owned by a user
+   * (route-audit-#2 follow-up). Used to block deleting a user who still owns team
+   * organizations (require ownership transfer first).
+   *
+   * @remarks PERSONAL organizations are excluded: every user owns exactly one, and it
+   * cascade-deletes with the account — counting it would make account deletion impossible.
+   */
+  async countActiveOwnedByUser(owner_user_id: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ value: sql<number>`count(*)::int` })
+      .from(organizations)
+      .where(
+        and(
+          eq(organizations.owner_user_id, owner_user_id),
+          eq(organizations.type, 'TEAM'),
+          isNull(organizations.deleted_at),
+        ),
+      );
+    return rows[0]?.value ?? 0;
+  }
+
+  /**
+   * audit-#8: transaction-scoped advisory lock serializing the owned-TEAM-organization creation
+   * quota check + insert for one owner, so concurrent creates cannot both pass the count and
+   * overshoot `MAX_TEAM_ORGANIZATIONS_PER_OWNER`. Keyed by the owner user id; call inside the
+   * create transaction before {@link countActiveOwnedByUser}.
+   */
+  async acquireOwnedOrganizationQuotaLock(owner_user_id: number): Promise<void> {
+    await acquireResourceQuotaLock(RESOURCE_QUOTA_LOCK_NAMESPACE.OWNED_ORGANIZATION, owner_user_id);
   }
 
   async updateStripeCustomerId(

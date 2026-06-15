@@ -6,6 +6,261 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.6.9-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.8-dev.0...v4.6.9-dev.0) (2026-06-15)
+
+
+### Documentation
+
+* **agent-os:** correct stale workflow, seed, and provider paths in skills ([#641](https://github.com/nikunjmavani/core-be/issues/641)) ([5550f4c](https://github.com/nikunjmavani/core-be/commit/5550f4c274b58403008bb98dd4982642565ed110))
+
+## [4.6.8-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.7-dev.0...v4.6.8-dev.0) (2026-06-15)
+
+
+### Documentation
+
+* **agent-os:** align schema skills to varchar(n) codebase convention ([#638](https://github.com/nikunjmavani/core-be/issues/638)) ([e575074](https://github.com/nikunjmavani/core-be/commit/e5750743e7a8af7a59eebd06d552ca8223a598d1))
+
+## [4.6.7-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.6-dev.0...v4.6.7-dev.0) (2026-06-15)
+
+
+### Documentation
+
+* **integrations:** expand Stripe webhook runbook + Turnstile TODO ([#635](https://github.com/nikunjmavani/core-be/issues/635)) ([be08946](https://github.com/nikunjmavani/core-be/commit/be08946a84175689883f858e61e96b928e8c222d))
+
+## [4.6.6-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.5-dev.0...v4.6.6-dev.0) (2026-06-15)
+
+
+### Documentation
+
+* **integrations:** add Postman + Resend agent MCP servers ([#631](https://github.com/nikunjmavani/core-be/issues/631)) ([6966744](https://github.com/nikunjmavani/core-be/commit/6966744da40ff9887700f433f78afc1f8f313140))
+* **integrations:** fix Stripe CLI/Dashboard webhook URL ([#630](https://github.com/nikunjmavani/core-be/issues/630)) ([570e58f](https://github.com/nikunjmavani/core-be/commit/570e58f79991d12dcf75781ccdc9465da2647b85))
+
+## [4.6.5-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.4-dev.0...v4.6.5-dev.0) (2026-06-15)
+
+
+### Documentation
+
+* **integrations:** map third-party services to CLI/MCP/SDK by consumer ([#626](https://github.com/nikunjmavani/core-be/issues/626)) ([5e90f52](https://github.com/nikunjmavani/core-be/commit/5e90f522061e5de8f31cb2905b9edda43caf2bf9))
+
+## [4.6.4-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.3-dev.0...v4.6.4-dev.0) (2026-06-15)
+
+
+### Documentation
+
+* **runbooks:** refresh worker registry breakdown to 30 workers / 27 Postgres ([#621](https://github.com/nikunjmavani/core-be/issues/621)) ([2d4d111](https://github.com/nikunjmavani/core-be/commit/2d4d111a9578679c856367881c16a5f6d8f62cb6))
+
+## [4.6.3-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.2-dev.0...v4.6.3-dev.0) (2026-06-14)
+
+
+### Documentation
+
+* **process:** document "watch CI -&gt; merge when green" in git flow + pr-babysit ([#616](https://github.com/nikunjmavani/core-be/issues/616)) ([0537a8e](https://github.com/nikunjmavani/core-be/commit/0537a8e86fc135038585d78b523e648cbc289e69))
+
+## [4.6.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.1-dev.0...v4.6.2-dev.0) (2026-06-14)
+
+
+### Fixed
+
+* three pre-existing dev post-merge CI failures (migration idempotency, Stripe Date bind, permission seed) ([#614](https://github.com/nikunjmavani/core-be/issues/614)) ([798cefe](https://github.com/nikunjmavani/core-be/commit/798cefe26f59b8f56c3987f437772d707a42e364))
+
+
+### Documentation
+
+* **process:** add release-versioning cheat-sheet (commit prefix → bump) ([#612](https://github.com/nikunjmavani/core-be/issues/612)) ([6e58397](https://github.com/nikunjmavani/core-be/commit/6e58397013279da347bf5a56305e150ea1cc8e26))
+
+## [4.6.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.0-dev.0...v4.6.1-dev.0) (2026-06-14)
+
+
+### Changed
+
+* **queue:** remove redundant alert-only offboarding reconciler ([#611](https://github.com/nikunjmavani/core-be/issues/611)) ([55e979e](https://github.com/nikunjmavani/core-be/commit/55e979e10528a3b6c794aaea1595e7feeedbc7b6))
+
+## [4.6.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.5.7-dev.0...v4.6.0-dev.0) (2026-06-14)
+
+
+### Added
+
+* 131-route security & production-flow audit — fix all RED/AMBER findings ([#601](https://github.com/nikunjmavani/core-be/issues/601)) ([3df1fbd](https://github.com/nikunjmavani/core-be/commit/3df1fbd91ea9011a6378a6f0785200e4a5f990ed))
+* **agent-os:** add PreToolUse edit-guard and SessionStart hooks ([dcf6335](https://github.com/nikunjmavani/core-be/commit/dcf6335773cb9b8d15f570d7b2afac9e2a1a284c))
+* **agent-os:** add RLS/tenant-isolation and idempotency guard skills ([a94cbb5](https://github.com/nikunjmavani/core-be/commit/a94cbb52df397f1abadf3a3f411f31bf2fc6f49a))
+* **agent-os:** PreToolUse edit-guard + SessionStart hooks (Move 2) ([ad2e2b3](https://github.com/nikunjmavani/core-be/commit/ad2e2b3b87051c2fe34d3005d6a84fc6e37965e0))
+* **agent-os:** RLS/tenant-isolation + idempotency guard skills ([0a3b902](https://github.com/nikunjmavani/core-be/commit/0a3b902748f4fc3e84d5d971b0915496b5e4f440))
+* **audit:** transactional outbox for audit.logs writes (P0-[#2](https://github.com/nikunjmavani/core-be/issues/2)) ([#557](https://github.com/nikunjmavani/core-be/issues/557)) ([4c337da](https://github.com/nikunjmavani/core-be/commit/4c337da6b81523c01d23bf8947226194ee9ad665))
+* **auth:** add switch-to-personal and switch-to-organization endpoints ([79be5b0](https://github.com/nikunjmavani/core-be/commit/79be5b0fe799563e9612eaa3fc48a4a12f3ce2ae))
+* **auth:** carry active organization + session version as signed JWT claims ([9864a2e](https://github.com/nikunjmavani/core-be/commit/9864a2e34917837b7102fdd72f9ba61982e4b0e0))
+* **auth:** mint the active-organization claim at login (default selection) ([a3a805d](https://github.com/nikunjmavani/core-be/commit/a3a805dc143b7af537c0757b4b74bfc77516d75d))
+* **auth:** permission layer falls back to the org token claim (Phase 3 bridge) ([ea07091](https://github.com/nikunjmavani/core-be/commit/ea0709135504d09faa6367bfded88107cc438295))
+* **auth:** permission layer reads the org token claim (Phase 3 bridge) ([6b9e7c3](https://github.com/nikunjmavani/core-be/commit/6b9e7c3458f6788b5c75b0ed4a49d3709b48d181))
+* **auth:** refresh re-mints the active-organization claim ([b22f0a1](https://github.com/nikunjmavani/core-be/commit/b22f0a1712aa76b1f997257997b157025712b791))
+* **auth:** switch building blocks — membership-validation resolvers + session token re-bind ([62cc944](https://github.com/nikunjmavani/core-be/commit/62cc9449314b7684007c937a9ec72b73c2d0eceb))
+* **auth:** switchToOrganization / switchToPersonal service methods ([3f5ecc8](https://github.com/nikunjmavani/core-be/commit/3f5ecc84267e747d6e6d900ae5caf733f6255752))
+* **billing:** flatten subscription routes onto the org token claim ([f835d60](https://github.com/nikunjmavani/core-be/commit/f835d605e0529e0e0e91ca7da1b16aa5f8940bec))
+* **billing:** flatten subscription routes onto the org token claim ([df21c2c](https://github.com/nikunjmavani/core-be/commit/df21c2c62c4b65e4f1bf57228743ac2cd042a92c))
+* **infra-tests:** drop_index_without_concurrently lint rule + org slug collision-proof factory ([#526](https://github.com/nikunjmavani/core-be/issues/526)) ([0915c85](https://github.com/nikunjmavani/core-be/commit/0915c851ab7b5c8934a06108d28f8aec3662e97b))
+* **mcp,k6:** client auth-flow guide + k6 org-claim flow; fix dead idempotency exclusions ([f4bac5a](https://github.com/nikunjmavani/core-be/commit/f4bac5aa9a67f14e5ec87209e326e67b5ae15de6))
+* **mcp,k6:** client auth-flow guide + k6 org-claim flow; fix idempotency exclusions; flatten stale refs ([f6e5894](https://github.com/nikunjmavani/core-be/commit/f6e5894a66cee5de1ff0790f5898b5510fd74f37))
+* **notify:** flatten webhook routes onto the org token claim ([643d13a](https://github.com/nikunjmavani/core-be/commit/643d13ad09bd64e28bca029e4ed42cc40b56d04f))
+* **notify:** flatten webhook routes onto the org token claim ([0bdc8ad](https://github.com/nikunjmavani/core-be/commit/0bdc8add9f37df2bd944995368be8d9f94710755))
+* **notify:** time-based retention for webhook_delivery_attempts (audit-[#3](https://github.com/nikunjmavani/core-be/issues/3)) ([05d6325](https://github.com/nikunjmavani/core-be/commit/05d63258002fd9762962498b0a5059a5b971400f))
+* **openapi:** document the full error-status matrix; observed-vs-spec error gate ([95a71b5](https://github.com/nikunjmavani/core-be/commit/95a71b505c9d8d7f802d73c4e0841b4140bf836d))
+* **openapi:** document the full error-status matrix; observed-vs-spec error gate ([5a001de](https://github.com/nikunjmavani/core-be/commit/5a001de48bb661e048e012dde8ce658bfe612f3e))
+* **openapi:** embed sanitized live-call request/response examples per route and status ([3a1ddb1](https://github.com/nikunjmavani/core-be/commit/3a1ddb1e5d38b40e18b9300a14942219da6ce868))
+* **openapi:** embed sanitized live-call request/response examples per route and status ([bea574c](https://github.com/nikunjmavani/core-be/commit/bea574c92291f96bd309ad1969fe38cdf756722f))
+* personal & team organizations — foundation + token/switch (Phase 1-2) ([9a8b179](https://github.com/nikunjmavani/core-be/commit/9a8b179a097b615b2e7292ad6f6362011ea2563c))
+* **round-5-followup:** per-org row caps (api-keys, member-roles, notification-policies) + auth/MFA route policy tests ([#528](https://github.com/nikunjmavani/core-be/issues/528)) ([19b556f](https://github.com/nikunjmavani/core-be/commit/19b556f9379a3d70889644356e9928a68de549e9))
+* **round-5:** residual-risk findings — DLQ-RLS bug + 5 backlog fixes + 3 test gaps + audit doc ([#527](https://github.com/nikunjmavani/core-be/issues/527)) ([6aa6f88](https://github.com/nikunjmavani/core-be/commit/6aa6f8831e12fa7c8ef88f3d95f9e15bcd2d23d2))
+* **tenancy:** atomic org provisioning with owner role+permissions+membership ([266b22e](https://github.com/nikunjmavani/core-be/commit/266b22ebeb3604dbc45d08608efd7604df37c81e))
+* **tenancy:** auto-provision personal org at signup + exclude personal from delete guard ([9daed03](https://github.com/nikunjmavani/core-be/commit/9daed03c85997744bbfeb50919681de5658cd556))
+* **tenancy:** block invitations on a personal organization (capability matrix) ([cafc549](https://github.com/nikunjmavani/core-be/commit/cafc5493d497f7e99a924a152ca6a64e4f29dd0d))
+* **tenancy:** cap team organizations per owner (anti-abuse) ([f71b968](https://github.com/nikunjmavani/core-be/commit/f71b968577aa19a8ce4c3b4f6ce83142c3fd51d3))
+* **tenancy:** flatten organization routes onto the org token claim ([ddd1a76](https://github.com/nikunjmavani/core-be/commit/ddd1a7604f7da6dfb3a878fdb28c9e35dff086d8))
+* **tenancy:** flatten organization routes onto the org token claim ([f35b74e](https://github.com/nikunjmavani/core-be/commit/f35b74eb0f14cf2e5225b3fb477ea686a82763ed))
+* **tenancy:** make the personal organization immutable (no delete / no transfer) ([a726064](https://github.com/nikunjmavani/core-be/commit/a726064b5f009c1a5ccd878fe8379eb79a533a37))
+* **tenancy:** org-creation per-owner cap + personal-org capability guards ([94d7715](https://github.com/nikunjmavani/core-be/commit/94d77153740b2076afb57ded14748b727367617c))
+* **tenancy:** organization create accepts type + nullable slug (provisioning groundwork) ([35bc409](https://github.com/nikunjmavani/core-be/commit/35bc409c7e85453a2d294f1baf4bd38b19e26d6f))
+* **tenancy:** personal-org backfill script + provisioning tests ([5a40f5d](https://github.com/nikunjmavani/core-be/commit/5a40f5d5eadfd970e712b8d4b5a7f85b86258727))
+* **tenancy:** personal/team organization foundation — schema + capability flags ([11e23d9](https://github.com/nikunjmavani/core-be/commit/11e23d92fc301307638f73e3e1269a0612ddde3d))
+* **testing:** route success-status registry, observed coverage ratchet, never-5xx fuzz gate ([8d88dcf](https://github.com/nikunjmavani/core-be/commit/8d88dcf0677104ce4885ad80d62543c6ec45052a))
+* **testing:** route success-status registry, observed coverage ratchet, never-5xx fuzz gate ([dfe2b43](https://github.com/nikunjmavani/core-be/commit/dfe2b436d3fa28843597576d6b29f43d7932d8ab))
+* **testing:** verified happy path for every route — budget 30→0; 201 creates; OAuth 404 ([01b1b77](https://github.com/nikunjmavani/core-be/commit/01b1b77cbf2f60dcafbfa1afeafab68fe1e54437))
+* **testing:** verified happy path for every route — budget 30→0; 201 creates; OAuth 404 ([624c9d5](https://github.com/nikunjmavani/core-be/commit/624c9d58945e78317e39cd9a412e488454fbdf29))
+* **tests:** post-load settle-and-assert-clean gate + audit-outbox drain coverage ([01258c5](https://github.com/nikunjmavani/core-be/commit/01258c5b5aa9c03f8d6e9c7c9a5218cd10d3750b))
+* **tooling:** project identity refactor, 5 review agents, architecture policy tests ([#552](https://github.com/nikunjmavani/core-be/issues/552)) ([324689e](https://github.com/nikunjmavani/core-be/commit/324689e3c5027056932272f90d3495539d25ea44))
+* **user:** add a scheduled reconciler that detects + alerts on stuck offboarding (audit-[#15](https://github.com/nikunjmavani/core-be/issues/15)) ([6443673](https://github.com/nikunjmavani/core-be/commit/64436733ec73792a3295b46ade51da2ceee98a53))
+* **user:** expose deployment organization capabilities on /users/me ([a27f7a6](https://github.com/nikunjmavani/core-be/commit/a27f7a6d9a1a03a75e6163ab061e137d8a65e1d8))
+* **user:** expose personal_organization_id on /users/me ([b725aca](https://github.com/nikunjmavani/core-be/commit/b725acad609f8a9743f2a199c4234df423ade3a5))
+
+
+### Fixed
+
+* 8th-audit concurrency races + correctness hardening (C1-C5) ([bf077b7](https://github.com/nikunjmavani/core-be/commit/bf077b743cfbe51549c39ca4d4ae28b824a1a6df))
+* **api:** truthful error envelope, id-only external fields, DELETE→204 stragglers, local oasdiff gate ([25b4629](https://github.com/nikunjmavani/core-be/commit/25b46297b331681b528962246f8bee28c4695204))
+* **api:** truthful error envelope, id-only external fields, DELETE→204 stragglers, local oasdiff gate ([2777308](https://github.com/nikunjmavani/core-be/commit/2777308d77c2938b0f66437a24a02b9637392b19))
+* **auth,openapi:** MFA-login org claim (H1) + captcha/bearerAuth OpenAPI accuracy ([909a5ce](https://github.com/nikunjmavani/core-be/commit/909a5ce448a362af445736e8a02cb2e18b7949b8))
+* **auth,openapi:** mfa-login org claim (H1) plus captcha and bearerAuth openapi accuracy ([fc336b8](https://github.com/nikunjmavani/core-be/commit/fc336b867a9a597fb3c613aa0574a4b8e91bae60))
+* **auth:** add user FK + index to mfa_methods to purge orphaned MFA secrets (reaudit-[#1](https://github.com/nikunjmavani/core-be/issues/1)) ([a5a0992](https://github.com/nikunjmavani/core-be/commit/a5a0992eb777f40851e2c97ac7c26ff371325c06))
+* **auth:** atomic credential-mutation guards + lockout counter (route-audit C1, C5) ([e6e33db](https://github.com/nikunjmavani/core-be/commit/e6e33db37b405bf0c92622b3c152f35c88cbf186))
+* **auth:** block revoking the current session via DELETE /me/sessions/:id (route-[#9](https://github.com/nikunjmavani/core-be/issues/9)) ([19f4bff](https://github.com/nikunjmavani/core-be/commit/19f4bff7ba7a651f630204a173f859dc40206d2b))
+* **auth:** bounded refresh-token reuse grace for concurrent refreshes (audit-[#2](https://github.com/nikunjmavani/core-be/issues/2)) ([0cdd75d](https://github.com/nikunjmavani/core-be/commit/0cdd75dd8b85e880950b8a076fbadee39c01d18f))
+* **auth:** close session-revoke cache repopulation race + normalize OAuth email (route-audit session-[#1](https://github.com/nikunjmavani/core-be/issues/1), oauth-[#3](https://github.com/nikunjmavani/core-be/issues/3)) ([b8303a0](https://github.com/nikunjmavani/core-be/commit/b8303a02e1e7010f9516e0e5c2df5b7777c83694))
+* **auth:** close WebAuthn enumeration timing oracle + complete credential-mutation lock (route-audit D1, D2, D3) ([10e2b52](https://github.com/nikunjmavani/core-be/commit/10e2b5271c7cb454e15e99035389787e5c233c25))
+* **auth:** drop SUPER_ADMIN for non-active accounts in per-request re-derive (reaudit-[#10](https://github.com/nikunjmavani/core-be/issues/10)) ([e54a97b](https://github.com/nikunjmavani/core-be/commit/e54a97bd1e643916ac3eb579eeda2dcdb1d26493))
+* **auth:** floor login failure branches to mask enumeration timing (audit-[#15](https://github.com/nikunjmavani/core-be/issues/15)d) ([0c4af59](https://github.com/nikunjmavani/core-be/commit/0c4af594c6aba8d84d383d20c01838ef6d134bf0))
+* **auth:** key DELETE /mfa/:mfaMethodId on public id, not the sequential DB id (route-[#10](https://github.com/nikunjmavani/core-be/issues/10)) ([31bdd46](https://github.com/nikunjmavani/core-be/commit/31bdd46de650dce63aa6bc542beda50d57c0dea2))
+* **auth:** make magic-link verification atomic with first-factor completion (audit-[#12](https://github.com/nikunjmavani/core-be/issues/12)) ([4350845](https://github.com/nikunjmavani/core-be/commit/435084506afc855e48169b8e26b3d87a1690f36a))
+* **auth:** make MFA verification lockout counter atomic (route-audit-[#4](https://github.com/nikunjmavani/core-be/issues/4)) ([7d98218](https://github.com/nikunjmavani/core-be/commit/7d982183877aeea6cbc4531cea9eb47376c704fc))
+* **auth:** make one-time-token issuance atomic with the mail-outbox insert (audit-[#11](https://github.com/nikunjmavani/core-be/issues/11)) ([f122beb](https://github.com/nikunjmavani/core-be/commit/f122beb20866aaf4748b05d29d2307f9a0768462))
+* **auth:** make password change and email verification atomic with their side effects (audit-[#4](https://github.com/nikunjmavani/core-be/issues/4), [#12](https://github.com/nikunjmavani/core-be/issues/12)) ([42d7893](https://github.com/nikunjmavani/core-be/commit/42d7893572ee6e89c5bbe42a08cc18d1f33aa6e6))
+* **auth:** per-user MFA verification lockout (audit-[#12](https://github.com/nikunjmavani/core-be/issues/12)) ([d6331e0](https://github.com/nikunjmavani/core-be/commit/d6331e01f9a0d378096ecc26b30404f23fc20d7c))
+* **auth:** persist and revalidate the active organization across refresh (audit-[#3](https://github.com/nikunjmavani/core-be/issues/3)) ([f9d8f1b](https://github.com/nikunjmavani/core-be/commit/f9d8f1b5a757c5b8dc5f267f4cf166f2e5677816))
+* **auth:** re-derive any privileged JWT claim (admin + super_admin) against live state (route-[#6](https://github.com/nikunjmavani/core-be/issues/6)) ([956c43d](https://github.com/nikunjmavani/core-be/commit/956c43d855978ea9f49c573e4c8a498ae2c4309f))
+* **auth:** restrict POST /me/auth-methods to MAGIC_LINK to stop phantom-credential lockout (route-[#3](https://github.com/nikunjmavani/core-be/issues/3)) ([ee9af9a](https://github.com/nikunjmavani/core-be/commit/ee9af9a5819990189c658a69d9396e0fdb3ed7c5))
+* **auth:** scope MFA lockout to TOTP so recovery codes stay usable (reaudit-[#3](https://github.com/nikunjmavani/core-be/issues/3)) ([a6d4b05](https://github.com/nikunjmavani/core-be/commit/a6d4b05530cd06f563be8a0ede17552d6831f4ac))
+* **auth:** session-revoke cache repopulation race + OAuth email normalization ([c981c7f](https://github.com/nikunjmavani/core-be/commit/c981c7f634a1090faae6513d62aa30206e5e1778))
+* **auth:** switch-to-organization relies on route schema for body validation + suite green ([ab02f71](https://github.com/nikunjmavani/core-be/commit/ab02f711379690a987cf2cc7ab46139dc411adf8))
+* **auth:** WebAuthn enumeration timing oracle + complete credential-mutation lock (D1/D2/D3) ([9a1f3f0](https://github.com/nikunjmavani/core-be/commit/9a1f3f0d5aef7156d4d455935f5295f20b76d257))
+* backend production-readiness audit findings ([0f60e0f](https://github.com/nikunjmavani/core-be/commit/0f60e0f71d6dd0b1f7a5d9aa20bf60712c8a04cb))
+* backend production-readiness re-audit findings ([6bd64bc](https://github.com/nikunjmavani/core-be/commit/6bd64bc3c47c7c28a1f1d42121867bc990f9c99c))
+* **billing:** add per-route rate limit to subscription mutations (route-[#2](https://github.com/nikunjmavani/core-be/issues/2)) ([1e6975e](https://github.com/nikunjmavani/core-be/commit/1e6975e24271d14561f544981c651e254c3ef862))
+* **billing:** alert on plan&lt;-&gt;Stripe price catalog drift (audit-[#13](https://github.com/nikunjmavani/core-be/issues/13)) ([3377510](https://github.com/nikunjmavani/core-be/commit/33775103b9ec7470270ff172b734b34586aebcb3))
+* **billing:** cancel the org's active subscription on organization delete (route-audit-[#2](https://github.com/nikunjmavani/core-be/issues/2)) ([718c80f](https://github.com/nikunjmavani/core-be/commit/718c80f307ae14d9db2ff77dbd26ae591f667afc))
+* **billing:** cancel() releases the slot for never-activated INCOMPLETE subscriptions (reaudit-[#6](https://github.com/nikunjmavani/core-be/issues/6)) ([3d6cfe0](https://github.com/nikunjmavani/core-be/commit/3d6cfe03758b1302a8d1e7f8612d4641d381c1e8))
+* **billing:** enforce unique subscriptions.provider_subscription_id (audit-[#10](https://github.com/nikunjmavani/core-be/issues/10)) ([acf919b](https://github.com/nikunjmavani/core-be/commit/acf919b105cbc10c502b8b197f5af1bd8782646c))
+* **billing:** hide inactive plans from public GET /billing/plans/:id (route-[#7](https://github.com/nikunjmavani/core-be/issues/7)) ([0be46ed](https://github.com/nikunjmavani/core-be/commit/0be46ed971f32287ba326cdbbbb94275ca7f9465))
+* **billing:** make terminal subscriptions immutable (compare-and-set, B5/B6) ([5ac4328](https://github.com/nikunjmavani/core-be/commit/5ac43284d69e28101615d1a2f2caa306ab31cfe2))
+* **billing:** make terminal subscriptions immutable via compare-and-set (route-audit B5, B6) ([18a3e43](https://github.com/nikunjmavani/core-be/commit/18a3e43540814b94e66ad085f40df767a32598e3))
+* **billing:** persist a CANCELED tombstone for out-of-order Stripe deletions (audit-[#1](https://github.com/nikunjmavani/core-be/issues/1)) ([7862609](https://github.com/nikunjmavani/core-be/commit/7862609ed32b9c5c16d5780f4a6d7b59ba5066bb))
+* **billing:** persist new Stripe subscriptions as INCOMPLETE not TRIALING (audit-[#2](https://github.com/nikunjmavani/core-be/issues/2)) ([b5a7f66](https://github.com/nikunjmavani/core-be/commit/b5a7f66537091e20632b3898364c7ac71e3f9f5f))
+* **billing:** release subscription slot for INCOMPLETE_EXPIRED (audit-[#1](https://github.com/nikunjmavani/core-be/issues/1)) ([14cd328](https://github.com/nikunjmavani/core-be/commit/14cd3289545d1229e72b08e16977286cde39db18))
+* **billing:** set concrete sunset for deprecated stripe webhook alias (audit-[#15](https://github.com/nikunjmavani/core-be/issues/15)a) ([4efb4a7](https://github.com/nikunjmavani/core-be/commit/4efb4a78e02af5da54c10fb04de02239120b1f79))
+* block user delete when owning orgs + webhook updated_at flake ([08a5ac2](https://github.com/nikunjmavani/core-be/commit/08a5ac27734c2d3abb3604ab5e694abeb429d85e))
+* **ci:** export GLOBAL_ADMIN_EMAILS in test-env so audit.test.ts super-admin paths work in Matrix Tests ([#532](https://github.com/nikunjmavani/core-be/issues/532)) ([873f59d](https://github.com/nikunjmavani/core-be/commit/873f59df59340bc182e3d8f261b5c2e435f89c63))
+* **ci:** grant release-please job id-token + actions write permissions ([#536](https://github.com/nikunjmavani/core-be/issues/536)) ([b83eab2](https://github.com/nikunjmavani/core-be/commit/b83eab2d4ac3e2b46f5e77e00e34d720db6508e0))
+* **config:** require legacy JWT gate closed once keyring configured in prod (audit-[#15](https://github.com/nikunjmavani/core-be/issues/15)b) ([43e5139](https://github.com/nikunjmavani/core-be/commit/43e5139de2e4b9f7e969b9832e8ffac1a0c32b89))
+* **database:** keyset-page batch delete so FK-blocked rows can't infinite-loop retention ([fd9b523](https://github.com/nikunjmavani/core-be/commit/fd9b523ecaf1825d111a636d6cad954ecba6e83a))
+* **database:** keyset-page batch delete so FK-blocked rows can't infinite-loop retention (route-audit A1) ([f81ca72](https://github.com/nikunjmavani/core-be/commit/f81ca724b6e5d25c158e02403ee39d7132c8c8f2))
+* **db:** enforce RLS deny-all on billing.plans and tenancy.permissions (reaudit-[#9](https://github.com/nikunjmavani/core-be/issues/9)) ([2bb9476](https://github.com/nikunjmavani/core-be/commit/2bb947621fafabfd2ec03ca2d2fc9f905970c838))
+* **deps:** bump esbuild override to &gt;=0.28.1 (GHSA-gv7w-rqvm-qjhr / GHSA-g7r4-m6w7-qqqr) ([514fa96](https://github.com/nikunjmavani/core-be/commit/514fa961bd392ef4583c7e148a7f47277ef23dae))
+* **deps:** override @grpc/grpc-js to &gt;=1.14.4 (GHSA-5375-pq7m-f5r2) ([0a66557](https://github.com/nikunjmavani/core-be/commit/0a6655731c02a3efa03ca598c306fce4d34012c7))
+* **docker:** add HEALTHCHECK to worker image (audit-[#15](https://github.com/nikunjmavani/core-be/issues/15)c) ([b4f7a67](https://github.com/nikunjmavani/core-be/commit/b4f7a67cc2072c9510f63906b2b1ec50ae114f92))
+* **docker:** refresh apk index so base-image security patches install ([#607](https://github.com/nikunjmavani/core-be/issues/607)) ([a3690b9](https://github.com/nikunjmavani/core-be/commit/a3690b91f2f61f48f837553c74890e5d358fbec3))
+* **docker:** worker HEALTHCHECK honors WORKER_HEALTH_PORT at runtime (reaudit-[#8](https://github.com/nikunjmavani/core-be/issues/8)) ([3530bff](https://github.com/nikunjmavani/core-be/commit/3530bff1c5cb6a65e21cc0f507018211150236a3))
+* **mail:** scrub secret-bearing body on terminally-failed outbox rows (audit-[#10](https://github.com/nikunjmavani/core-be/issues/10)) ([61dc948](https://github.com/nikunjmavani/core-be/commit/61dc948505b0eb6e4e7c60020d66a7c3663452bb))
+* **mcp:** strip X-Organization-Id from call_api proxied sub-requests (route-[#8](https://github.com/nikunjmavani/core-be/issues/8)) ([d5a7167](https://github.com/nikunjmavani/core-be/commit/d5a716716e8acff86e1523641e3f44620374411c))
+* **notify:** cap webhook response body bytes read before truncation (audit-[#6](https://github.com/nikunjmavani/core-be/issues/6)) ([0f2421e](https://github.com/nikunjmavani/core-be/commit/0f2421e3b6b211f888f08a0161274063d7599cc1))
+* **notify:** durability-first notification email dedup to stop lost emails (audit-[#7](https://github.com/nikunjmavani/core-be/issues/7)) ([b9d9759](https://github.com/nikunjmavani/core-be/commit/b9d9759885b92320210d681520ecc16236d70d2c))
+* **notify:** durable mail-outbox dedupe key to close concurrent duplicate-email window (reaudit-[#4](https://github.com/nikunjmavani/core-be/issues/4)) ([47cd280](https://github.com/nikunjmavani/core-be/commit/47cd280504c9acdf324b2ff11ff4ca36ded05a1c))
+* **notify:** enforce webhook secret-rotation eligibility in the update predicate (audit-[#9](https://github.com/nikunjmavani/core-be/issues/9)) ([d3337e0](https://github.com/nikunjmavani/core-be/commit/d3337e0c3ad3e314206cce494c23e6b644c90d03))
+* **notify:** guard webhook secret re-rotation within the dual-sign overlap window ([0cfedd0](https://github.com/nikunjmavani/core-be/commit/0cfedd0d28177f40f354133a3d1f53b94002e955))
+* **notify:** guard webhook secret re-rotation within the dual-sign overlap window (route-audit webhook-[#1](https://github.com/nikunjmavani/core-be/issues/1)) ([5c16f85](https://github.com/nikunjmavani/core-be/commit/5c16f8548c7c528944d937c60fe985ee887e8174))
+* **notify:** route webhook handlers through zodApplication type provider ([eaa5684](https://github.com/nikunjmavani/core-be/commit/eaa5684c13253e6f5c7204a7dc8b479e4c9c5465))
+* **notify:** stamp webhook updated_at as greatest(created_at, now()) to fix chk_webhooks_updated flake ([988d87b](https://github.com/nikunjmavani/core-be/commit/988d87baf86a74ebb05ba9d81948e205ffcda2e3))
+* **observability:** monitor every retention worker DLQ + add drift guard (reaudit-[#5](https://github.com/nikunjmavani/core-be/issues/5)) ([0e954dc](https://github.com/nikunjmavani/core-be/commit/0e954dcfe96a4c2d46c48815e963632468243236))
+* **openapi:** registry-authoritative success statuses; deterministic OAuth coverage; scan cleanups ([a7cc7bd](https://github.com/nikunjmavani/core-be/commit/a7cc7bdeb47f4d9d5f5a18465470d8a9b2b86c67))
+* **openapi:** registry-authoritative success statuses; deterministic OAuth coverage; scan cleanups ([1f84793](https://github.com/nikunjmavani/core-be/commit/1f84793ff6f149d7a759ac0223fb45a5d28d1942))
+* **ops:** log circuit-breaker resets for attribution (route-[#5](https://github.com/nikunjmavani/core-be/issues/5)) ([eae48fe](https://github.com/nikunjmavani/core-be/commit/eae48fe4e9c937f7ca65d219acacb55832a1b218))
+* **queue:** acknowledge commit-dispatch tasks after execution, not before (reaudit-[#2](https://github.com/nikunjmavani/core-be/issues/2)) ([8f399c0](https://github.com/nikunjmavani/core-be/commit/8f399c0ddaed24901f6c92445091770286c7a852))
+* **queue:** bound commandTimeout on BullMQ producer connections (audit-[#5](https://github.com/nikunjmavani/core-be/issues/5)) ([2c4e21b](https://github.com/nikunjmavani/core-be/commit/2c4e21bf12dedc6039a0f0085379e80e8a83fee2))
+* **queue:** monitor the offboarding-reconciler DLQ + exempt it from tenant-scoping policy (audit-[#15](https://github.com/nikunjmavani/core-be/issues/15)) ([f5f4ceb](https://github.com/nikunjmavani/core-be/commit/f5f4cebfbf7cc99072c06c0b7588d7c3eb4289fc))
+* **rate-limit,observability:** scope org rate-limit + error context by the org claim ([5e12926](https://github.com/nikunjmavani/core-be/commit/5e12926e869e17a3bd66e71a3d7ec87b98119132))
+* **rate-limit,observability:** scope org rate-limit + error context by the org token claim ([b2caeb1](https://github.com/nikunjmavani/core-be/commit/b2caeb1be96e8fde9631028c4b92e047b14d433d))
+* route-audit state-machine, billing, and cache-header findings ([d4b34ef](https://github.com/nikunjmavani/core-be/commit/d4b34ef388184860aece138aa10716b226562158))
+* route-focused security audit findings ([1fffbf0](https://github.com/nikunjmavani/core-be/commit/1fffbf0270b20b7fdbeef5d0f3d86528e4fb11a5))
+* **runtime:** real-world deep-flow inspection findings — 3 fixes + regression test ([#533](https://github.com/nikunjmavani/core-be/issues/533)) ([5a85ecd](https://github.com/nikunjmavani/core-be/commit/5a85ecd7d19303cb45231ec2d73082dfd6d4e631))
+* **security:** fail closed on privileged re-derivation + bound all retention settings (audit-[#16](https://github.com/nikunjmavani/core-be/issues/16), [#14](https://github.com/nikunjmavani/core-be/issues/14)) ([65a4347](https://github.com/nikunjmavani/core-be/commit/65a4347972c7d029600559f69a080fc611bc555d))
+* **security:** mark recovery-codes + presigned-URL responses no-store / non-cacheable (route-audit-[#3](https://github.com/nikunjmavani/core-be/issues/3)) ([bc67eed](https://github.com/nikunjmavani/core-be/commit/bc67eed1cc521709b36e4eca38289310276ff922))
+* **security:** remediate all 16 findings from the 2026-06-14 dev security audit ([01a22aa](https://github.com/nikunjmavani/core-be/commit/01a22aa5f83fbd1f784039a98b5ac4eda151efdb))
+* **security:** remediate all 16 findings from the 2026-06-14 dev security audit ([#600](https://github.com/nikunjmavani/core-be/issues/600)) ([01a22aa](https://github.com/nikunjmavani/core-be/commit/01a22aa5f83fbd1f784039a98b5ac4eda151efdb))
+* **security:** strip Stripe-shaped literals from source + add regression test (GH secret-scanning) ([#529](https://github.com/nikunjmavani/core-be/issues/529)) ([f234e60](https://github.com/nikunjmavani/core-be/commit/f234e6044879c72385e3b61728ea4ba665931ae6))
+* **security:** untrack agent-os/mcp/mcp.json and repair stale ai/ paths ([#560](https://github.com/nikunjmavani/core-be/issues/560)) ([b3547a4](https://github.com/nikunjmavani/core-be/commit/b3547a43172e2388c0a1a2e4fa8e0388d046b4c6))
+* **storage:** distinguish S3 not-found from transient failure (audit-[#5](https://github.com/nikunjmavani/core-be/issues/5)) ([5ba8d00](https://github.com/nikunjmavani/core-be/commit/5ba8d002a05a423b8a2e8b99e4f23c29a1d79e51))
+* **storage:** serve public media via a distribution and refuse public URLs for private keys (audit-[#13](https://github.com/nikunjmavani/core-be/issues/13)) ([cc10be0](https://github.com/nikunjmavani/core-be/commit/cc10be00c43a9891bff17bfc097f9ba50c5a165d))
+* **tenancy,notify:** atomic role-delete, webhook clock-skew, security_policy proto guard (route-audit C2, C3, C4) ([ddf4f35](https://github.com/nikunjmavani/core-be/commit/ddf4f35762595f2318930855bf1bfccaba3a30ed))
+* **tenancy,notify:** make per-scope resource caps atomic with an advisory lock (audit-[#8](https://github.com/nikunjmavani/core-be/issues/8)) ([3681133](https://github.com/nikunjmavani/core-be/commit/3681133339f47f68570aaf54f773ae8c5964238b))
+* **tenancy,security:** post-flatten audit corrections — idempotency claim scope + personal-org guards ([e105372](https://github.com/nikunjmavani/core-be/commit/e10537260c541131a4386bb37570653242fcc41b))
+* **tenancy,security:** post-flatten audit corrections — idempotency claim scope, personal-org guards, dead-code cleanup ([018fb31](https://github.com/nikunjmavani/core-be/commit/018fb313308ea78843d22df4dd234dc41dea1190))
+* **tenancy:** only activate INVITED memberships on invitation accept (route-audit-[#1](https://github.com/nikunjmavani/core-be/issues/1)) ([aeea26a](https://github.com/nikunjmavani/core-be/commit/aeea26af9f5346fdbf4c7dd38745de90d8951b14))
+* **tenancy:** reject prototype-pollution keys in organization security_policy (route-audit hardening) ([b1eba43](https://github.com/nikunjmavani/core-be/commit/b1eba43d872fe1ff7e018edd45eb42c10f67fa3f))
+* **tenancy:** revoke a removed member's API keys on membership removal (reaudit-[#7](https://github.com/nikunjmavani/core-be/issues/7)) ([1387bd3](https://github.com/nikunjmavani/core-be/commit/1387bd306046d439b5f52840e4b45ae0f0794037))
+* **tenancy:** scale permission-cache stampede poll budget to lock TTL (audit-[#9](https://github.com/nikunjmavani/core-be/issues/9)) ([5322d0f](https://github.com/nikunjmavani/core-be/commit/5322d0fae4dc9043f3563eda431d880ccab74f97))
+* **tenancy:** throttle api-key last_used_at writes (audit-[#8](https://github.com/nikunjmavani/core-be/issues/8)) ([96b3e56](https://github.com/nikunjmavani/core-be/commit/96b3e562e136892ff44e5adf2f06009bdcce5a06))
+* **tests:** cleanupDatabase preserves schema_migrations; update tests inherited from main's B4 + sec-r4-A1 semantics ([#525](https://github.com/nikunjmavani/core-be/issues/525)) ([169327e](https://github.com/nikunjmavani/core-be/commit/169327ec7652cefd7301b8d0c1c47009caa9ae5e))
+* **upload:** lock the organization pending-upload quota at the org scope (audit-[#7](https://github.com/nikunjmavani/core-be/issues/7)) ([171a0fc](https://github.com/nikunjmavani/core-be/commit/171a0fc4c618c93c4bc74aafe0c3ec45f6376b74))
+* **upload:** reclaim orphaned avatar/logo objects + owner-binding + purpose/target check (L1/L2/L3) ([7ffef76](https://github.com/nikunjmavani/core-be/commit/7ffef768a889cab424139e42cab34e7f055f6bb9))
+* **upload:** reclaim orphaned avatar/logo objects, wire owner-binding gate, validate purpose-target (route-audit L1, L2, L3) ([d9d9738](https://github.com/nikunjmavani/core-be/commit/d9d97381082b330d32843511d29e8823fde2cb56))
+* **user:** block admin suspend/delete of protected super-admins (route-[#1](https://github.com/nikunjmavani/core-be/issues/1)) ([b84259d](https://github.com/nikunjmavani/core-be/commit/b84259d3f6cbb34ffb2f8617e900aa0157fc5fae))
+* **user:** block deleting a user who still owns organizations (route-audit-[#2](https://github.com/nikunjmavani/core-be/issues/2) follow-up) ([f94b7c9](https://github.com/nikunjmavani/core-be/commit/f94b7c9c0c95d1525ea31fe41e44970efe452f19))
+* **user:** rate-limit admin user-management mutations (route-[#4](https://github.com/nikunjmavani/core-be/issues/4)) ([a0d8114](https://github.com/nikunjmavani/core-be/commit/a0d8114b28fc1730fbc982271018d64700569537))
+* **user:** unique notification-preference natural key + input dedupe (audit-[#11](https://github.com/nikunjmavani/core-be/issues/11)) ([6805459](https://github.com/nikunjmavani/core-be/commit/68054599b5fb2a120c6fb8571f23a76dc9277e7a))
+
+
+### Changed
+
+* **api:** semantic snake_case params, prefixed public ids, uniform status policy, documented headers ([03820fb](https://github.com/nikunjmavani/core-be/commit/03820fb407116e2532f2afdf12133861b8c58497))
+* **api:** semantic snake_case route params, prefixed public ids, uniform method-status policy, documented headers ([3311bc0](https://github.com/nikunjmavani/core-be/commit/3311bc022f65fcbd517802cc91dcb194d5a31c0c))
+* **architecture:** move raw SQL out of stripe-webhook-organization.util into the repository (+ global gate) ([#530](https://github.com/nikunjmavani/core-be/issues/530)) ([f48fb46](https://github.com/nikunjmavani/core-be/commit/f48fb46fe1005a95adc0abf14222df8f86c030f9))
+* enforce architecture boundaries (DB-in-services, DI, controller thinness) ([#602](https://github.com/nikunjmavani/core-be/issues/602)) ([cc43b3b](https://github.com/nikunjmavani/core-be/commit/cc43b3b3f38cd94d190928ac6728f1077195bbbf))
+* **tenancy:** route org-scoped controllers through claim-aware org accessor ([f4c3b54](https://github.com/nikunjmavani/core-be/commit/f4c3b54f70b5c9c49c2a03cf908f1407810138a8))
+* **tenancy:** route org-scoped controllers through claim-aware org accessor ([af30b20](https://github.com/nikunjmavani/core-be/commit/af30b20e50b8c49f3c906bbbb1ca6d4093fd14ef))
+
+
+### Documentation
+
+* **api:** add frontend auth & headers integration guide ([b8ca013](https://github.com/nikunjmavani/core-be/commit/b8ca01362c4a04aa8d65e511cac136a0953b2445))
+* **api:** add frontend auth & headers integration guide ([ab201e8](https://github.com/nikunjmavani/core-be/commit/ab201e8046a524ad2f5dd9868e22897d77aaf2a9))
+* check in sync; enricher unit tests + full suite (4,516) green. ([c58d39b](https://github.com/nikunjmavani/core-be/commit/c58d39b0aa550158d3106a41fadd403c203eb4c5))
+* check verified green on 0.28.1. ([514fa96](https://github.com/nikunjmavani/core-be/commit/514fa961bd392ef4583c7e148a7f47277ef23dae))
+* check, tsdoc 0/0, migrate lint, env sync, validate all pass. ([3311bc0](https://github.com/nikunjmavani/core-be/commit/3311bc022f65fcbd517802cc91dcb194d5a31c0c))
+* consolidate setup guide into single root SETUP.md ([#555](https://github.com/nikunjmavani/core-be/issues/555)) ([5c311a3](https://github.com/nikunjmavani/core-be/commit/5c311a3c72f1fb33cb44daa087e94ee19e2edb1c))
+* **env:** standardize OPTIONAL marker for conditionally-empty env keys ([#549](https://github.com/nikunjmavani/core-be/issues/549)) ([d7155b4](https://github.com/nikunjmavani/core-be/commit/d7155b48786aee7a8ce2e306133b61398f00cf20))
+* **openapi:** drop "Public ID" from request-body/query field descriptions → "id" ([3cb01a0](https://github.com/nikunjmavani/core-be/commit/3cb01a0b294a1a47a80a25a209ab410403e38117))
+* **openapi:** drop "Public ID" from request-body/query field descriptions → "id" ([c58d39b](https://github.com/nikunjmavani/core-be/commit/c58d39b0aa550158d3106a41fadd403c203eb4c5))
+* **reviews:** add agent-os AI-tooling audit + evals session writeup ([ef55c53](https://github.com/nikunjmavani/core-be/commit/ef55c536b406a3b1aea5df055c844bd4159c7a78))
+* **reviews:** agent-os AI-tooling audit + evals/enforcement session writeup ([32288fa](https://github.com/nikunjmavani/core-be/commit/32288fa07f7e0b3caa92b5325ec51938b95be557))
+* **reviews:** architecture conformance audit + 8-PR follow-up plan ([#531](https://github.com/nikunjmavani/core-be/issues/531)) ([4a9264c](https://github.com/nikunjmavani/core-be/commit/4a9264cb674f57930241a8b348d12afdcc727476))
+* **reviews:** correct sec-r4-A3 analysis and defer to follow-up task ([#523](https://github.com/nikunjmavani/core-be/issues/523)) ([c7e1dab](https://github.com/nikunjmavani/core-be/commit/c7e1dab9433b40eb16a7df6e28fdf317df9318b7))
+* **reviews:** route-coverage audit — 129 routes, 9 deferred gaps allowlisted ([#534](https://github.com/nikunjmavani/core-be/issues/534)) ([d18ec1d](https://github.com/nikunjmavani/core-be/commit/d18ec1df87b78237c77bac6f84b1ec464ff71965))
+
 ## [4.5.7-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.5.6-dev.0...v4.5.7-dev.0) (2026-06-08)
 
 

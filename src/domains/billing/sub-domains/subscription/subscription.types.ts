@@ -7,6 +7,18 @@ export interface SubscriptionCreateData {
   current_period_start: Date;
   current_period_end: Date;
   trial_end?: Date;
+  /**
+   * Set only by the Stripe `customer.subscription.deleted` tombstone path
+   * (audit-#1) when materialising a CANCELED row whose local subscription never
+   * existed. The regular create paths leave this unset (defaults to `NULL`).
+   */
+  canceled_at?: Date;
+  /**
+   * Set alongside {@link canceled_at} on the deletion tombstone path so the
+   * CANCELED row is unambiguously terminal. Defaults to `false` for every other
+   * create path.
+   */
+  cancel_at_period_end?: boolean;
   created_by_user_id?: number;
   provider?: string;
   provider_subscription_id?: string;

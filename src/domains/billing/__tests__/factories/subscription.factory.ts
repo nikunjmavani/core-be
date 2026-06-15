@@ -44,12 +44,12 @@ export async function createTestSubscription(options: CreateTestSubscriptionOpti
   const providerSubscriptionId =
     options.providerSubscriptionId !== undefined
       ? options.providerSubscriptionId
-      : `sub_test_${generatePublicId()}`;
+      : `sub_test_${generatePublicId('subscription')}`;
 
   const [subscription] = await database
     .insert(subscriptions)
     .values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('subscription'),
       organization_id: options.organizationId,
       plan_id: options.planId,
       billing_cycle: options.billingCycle ?? 'MONTHLY',

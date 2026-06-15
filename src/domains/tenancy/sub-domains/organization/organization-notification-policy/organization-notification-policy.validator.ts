@@ -7,7 +7,7 @@ import {
   type UpdateOrganizationNotificationPolicyInput,
 } from './organization-notification-policy.dto.js';
 
-/** Parses raw `POST /organizations/:id/notification-policies` body via {@link createOrganizationNotificationPolicyDto}; throws `ValidationError('errors:invalidInput')` on failure. */
+/** Parses raw `POST /organization/notification-policies` body via {@link createOrganizationNotificationPolicyDto}; throws `ValidationError('errors:invalidInput')` on failure. */
 export function validateCreateOrganizationNotificationPolicy(
   data: unknown,
 ): CreateOrganizationNotificationPolicyInput {
@@ -22,7 +22,7 @@ export function validateCreateOrganizationNotificationPolicy(
   return result.data;
 }
 
-/** Parses raw `PATCH /organizations/:id/notification-policies/:policyId` body via {@link updateOrganizationNotificationPolicyDto}; throws `ValidationError('errors:invalidInput')` on failure. */
+/** Parses raw `PATCH /organization/notification-policies/:policy_id` body via {@link updateOrganizationNotificationPolicyDto}; throws `ValidationError('errors:invalidInput')` on failure. */
 export function validateUpdateOrganizationNotificationPolicy(
   data: unknown,
 ): UpdateOrganizationNotificationPolicyInput {
@@ -38,6 +38,6 @@ export function validateUpdateOrganizationNotificationPolicy(
 }
 
 // sec-T5: `validatePolicyIdParam` (numeric coercion) was removed. The
-// `:policyId` URL segment is now the 21-char `public_id` validated by the
+// `:policy_id` URL segment is now the 21-char `public_id` validated by the
 // shared `validatePublicIdParam` helper, in line with every other resource
 // in the codebase.

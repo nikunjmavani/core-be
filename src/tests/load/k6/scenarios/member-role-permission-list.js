@@ -2,7 +2,7 @@ import http from 'k6/http';
 import { sleep } from 'k6';
 import { API_PREFIX, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
 import { checkOk, checkResponseTime } from '../helpers/checks.js';
-import { authHeaders } from '../helpers/auth.js';
+import { authHeaders, switchToOrganization } from '../helpers/auth.js';
 
 export const options = {
   scenarios: {
@@ -15,19 +15,18 @@ export const options = {
 };
 
 export function memberRolePermissionListOps() {
-  const token = __ENV.TEST_TOKEN;
+  let token = __ENV.TEST_TOKEN;
   const organizationPublicId = __ENV.TEST_ORG_ID;
   const rolePublicId = __ENV.TEST_ROLE_ID;
   if (!(token && organizationPublicId && rolePublicId)) return;
 
-  const headers = {
-    ...authHeaders(token).headers,
-    'X-Organization-Id': organizationPublicId,
-  };
+  // The active org rides the token's `org` claim — scope the token to TEST_ORG_ID
+  // so the flat route resolves the right organization.
+  token = switchToOrganization(token, organizationPublicId) || token;
 
   const response = http.get(
-    `${API_PREFIX}/tenancy/organizations/${organizationPublicId}/roles/${rolePublicId}/permissions`,
-    { headers, tags: { name: 'list-role-permissions' } },
+    `${API_PREFIX}/tenancy/organization/roles/${rolePublicId}/permissions`,
+    { ...authHeaders(token), tags: { name: 'list-role-permissions' } },
   );
   checkOk(response, 'list-role-permissions');
   checkResponseTime(response, 600, 'list-role-permissions');

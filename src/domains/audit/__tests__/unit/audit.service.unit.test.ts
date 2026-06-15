@@ -170,8 +170,8 @@ describe('AuditService', () => {
 
   describe('list (read path unchanged)', () => {
     it('resolves organization and actor filters', async () => {
-      const organizationPublicId = generatePublicId();
-      const actorPublicId = generatePublicId();
+      const organizationPublicId = generatePublicId('organization');
+      const actorPublicId = generatePublicId('user');
       const result = await service.list({
         limit: 20,
         organization_id: organizationPublicId,
@@ -194,7 +194,10 @@ describe('AuditService', () => {
 
     it('returns empty page when organization public id is unknown without total by default', async () => {
       vi.mocked(organizationService.findOrganizationByPublicId).mockResolvedValue(null);
-      const result = await service.list({ limit: 20, organization_id: generatePublicId() });
+      const result = await service.list({
+        limit: 20,
+        organization_id: generatePublicId('organization'),
+      });
       expect(repository.findWithFilters).not.toHaveBeenCalled();
       expect(result).toMatchObject({
         items: [],
@@ -209,7 +212,7 @@ describe('AuditService', () => {
       vi.mocked(organizationService.findOrganizationByPublicId).mockResolvedValue(null);
       const result = await service.list({
         limit: 20,
-        organization_id: generatePublicId(),
+        organization_id: generatePublicId('organization'),
         include_total: 'true',
       });
       expect(repository.findWithFilters).not.toHaveBeenCalled();
@@ -224,7 +227,7 @@ describe('AuditService', () => {
 
     it('returns empty page when actor public id is unknown without total by default', async () => {
       vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(null);
-      const result = await service.list({ limit: 20, actor_user_id: generatePublicId() });
+      const result = await service.list({ limit: 20, actor_user_id: generatePublicId('user') });
       expect(repository.findWithFilters).not.toHaveBeenCalled();
       expect(result).toMatchObject({
         items: [],
@@ -239,7 +242,7 @@ describe('AuditService', () => {
       vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(null);
       const result = await service.list({
         limit: 20,
-        actor_user_id: generatePublicId(),
+        actor_user_id: generatePublicId('user'),
         include_total: 'true',
       });
       expect(repository.findWithFilters).not.toHaveBeenCalled();

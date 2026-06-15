@@ -44,14 +44,19 @@
     "bearerAuthDescription": "Token de acceso JWT obtenido del endpoint de login o renovación de token."
   },
   "responses": {
-    "success": "Operación correcta",
-    "created": "Recurso creado correctamente",
-    "noContent": "Sin contenido",
-    "validationError": "Error de validación",
-    "unauthorized": "No autorizado",
-    "forbidden": "Prohibido",
-    "notFound": "No encontrado",
     "conflict": "Conflicto",
-    "internalError": "Error interno del servidor"
+    "created": "Recurso creado correctamente",
+    "forbidden": "Prohibido",
+    "internalError": "Error interno del servidor",
+    "noContent": "Sin contenido",
+    "notAcceptable": "No aceptable — falta la cabecera Accept requerida o no es compatible",
+    "notFound": "No encontrado",
+    "payloadTooLarge": "El cuerpo de la solicitud excede el límite de tamaño",
+    "success": "Operación correcta",
+    "tooManyRequests": "Demasiadas solicitudes — límite de velocidad excedido",
+    "unauthorized": "No autorizado: falta la cabecera Authorization, es inválida o el token de acceso expiró o fue revocado. Obtén un token con POST /api/v1/auth/login (o /auth/refresh) y envíalo como `Authorization: Bearer <ACCESS_TOKEN>`.",
+    "unprocessableEntity": "Entidad no procesable — violación de regla de negocio o clave de idempotencia reutilizada con un payload diferente",
+    "unsupportedMediaType": "Tipo de contenido no compatible",
+    "validationError": "Error de validación"
   }
 }

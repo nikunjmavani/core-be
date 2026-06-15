@@ -7,7 +7,9 @@ import {
 } from '@/tests/helpers/test-http-inject.helper.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
-import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import { generateTestToken, generateTestTokenAndSession } from '@/tests/helpers/test-auth.js';
+import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { FastifyInstance } from 'fastify';
 
 describe('Auth Session Sub-Domain — Integration', () => {
@@ -54,6 +56,37 @@ describe('Auth Session Sub-Domain — Integration', () => {
         url: testApiPath('/auth/me/sessions/test-id'),
       });
       expect(response.statusCode).toBe(401);
+    });
+
+    it('route-#9: returns 409 when revoking the CURRENT session (directs to logout)', async () => {
+      const user = await createTestUser();
+      const { token, sessionPublicId } = await generateTestTokenAndSession({
+        userId: user.public_id,
+      });
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId); // pass the sec-A7 gate
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/auth/me/sessions/${sessionPublicId}`),
+        token,
+      });
+      expect(response.statusCode).toBe(409);
+    });
+
+    it('route-#9: a DIFFERENT session id is NOT blocked by the guard (reaches the service → 404)', async () => {
+      const user = await createTestUser();
+      const { token, sessionPublicId } = await generateTestTokenAndSession({
+        userId: user.public_id,
+      });
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
+      // A non-current session id passes the current-session guard and reaches the service, which
+      // 404s because the (non-existent) session is not the caller's — proving the guard targets
+      // ONLY the current session, not every revoke.
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/auth/me/sessions/${generatePublicId('authSession')}`),
+        token,
+      });
+      expect(response.statusCode).toBe(404);
     });
   });
 

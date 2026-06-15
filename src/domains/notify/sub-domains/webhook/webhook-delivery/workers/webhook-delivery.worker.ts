@@ -39,6 +39,84 @@ import { env } from '@/shared/config/env.config.js';
 /** Maximum response-body length persisted to the delivery-attempt record (bounds storage growth). */
 const WEBHOOK_DELIVERY_RESPONSE_BODY_STORED_MAX_LENGTH = 2_000;
 
+/**
+ * audit-#6: hard cap on the number of (decompressed) response bytes the worker will read off the
+ * wire before cancelling the stream. The stored body is only {@link WEBHOOK_DELIVERY_RESPONSE_BODY_STORED_MAX_LENGTH}
+ * characters, so 16 KiB is comfortably more than we keep while preventing a hostile or broken
+ * endpoint from returning a multi-gigabyte / gzip-bomb body that exhausts worker heap (a poison
+ * job that OOM-loops across retries and starves every tenant sharing the worker).
+ */
+const WEBHOOK_DELIVERY_RESPONSE_BODY_READ_MAX_BYTES = 16_384;
+
+/** Suffix appended to a stored response body that was truncated (read cap or stored-length cap). */
+const WEBHOOK_DELIVERY_RESPONSE_BODY_TRUNCATION_MARKER = '…[truncated]';
+
+/**
+ * Reads at most `maxBytes` of a fetch response body by streaming the reader and cancelling once the
+ * cap is hit, so the worker never materialises an unbounded (or gzip-expanded) body in memory.
+ *
+ * @remarks
+ * - **Algorithm:** pulls chunks from `response.body.getReader()` (which yields **decompressed**
+ *   bytes, so the cap also bounds a gzip bomb), accumulating until `maxBytes`; the chunk that would
+ *   cross the cap is sliced to the remaining budget and the reader is cancelled.
+ * - **Failure modes:** when there is no readable stream (e.g. a mocked/empty body) it falls back to
+ *   the bounded `response.text()`; the reader is always cancelled in a `finally` to release the
+ *   socket.
+ * - **Side effects:** consumes (and cancels) the response stream.
+ */
+async function readResponseBodyCapped(
+  response: Response,
+  maxBytes: number,
+): Promise<{ body: string; truncated: boolean }> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const text = await response.text();
+    return { body: text.slice(0, maxBytes), truncated: text.length > maxBytes };
+  }
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let truncated = false;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value || value.byteLength === 0) continue;
+      const remaining = maxBytes - total;
+      if (value.byteLength > remaining) {
+        if (remaining > 0) chunks.push(value.subarray(0, remaining));
+        truncated = true;
+        break;
+      }
+      chunks.push(value);
+      total += value.byteLength;
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  return {
+    body: Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8'),
+    truncated,
+  };
+}
+
+/**
+ * Clamps a decoded response body to the stored-length cap, appending a truncation marker when the
+ * body was cut at either the byte read-cap or the stored-length cap (audit-#6).
+ */
+function formatStoredResponseBody(decoded: string, networkTruncated: boolean): string {
+  const overStoredLimit = decoded.length > WEBHOOK_DELIVERY_RESPONSE_BODY_STORED_MAX_LENGTH;
+  if (!(networkTruncated || overStoredLimit)) {
+    return decoded;
+  }
+  return (
+    decoded.slice(
+      0,
+      WEBHOOK_DELIVERY_RESPONSE_BODY_STORED_MAX_LENGTH -
+        WEBHOOK_DELIVERY_RESPONSE_BODY_TRUNCATION_MARKER.length,
+    ) + WEBHOOK_DELIVERY_RESPONSE_BODY_TRUNCATION_MARKER
+  );
+}
+
 /** Derived from queue config: `attemptsMade` at or above this value means it is the final attempt. */
 const WEBHOOK_DELIVERY_MAX_RETRY_ATTEMPTS = WEBHOOK_DELIVERY_JOB_ATTEMPTS - 1;
 
@@ -308,7 +386,15 @@ async function deliverClaimedWebhook(options: {
 
     let responseBody: string;
     try {
-      responseBody = await response.text();
+      // audit-#6: stream at most WEBHOOK_DELIVERY_RESPONSE_BODY_READ_MAX_BYTES off the wire and
+      // cancel the reader, rather than buffering the entire body via `response.text()` and slicing
+      // afterwards. This bounds worker heap regardless of Content-Length / chunked / gzip-expanded
+      // size, so a hostile endpoint cannot OOM the shared worker (poison-loop across retries).
+      const capped = await readResponseBodyCapped(
+        response,
+        WEBHOOK_DELIVERY_RESPONSE_BODY_READ_MAX_BYTES,
+      );
+      responseBody = formatStoredResponseBody(capped.body, capped.truncated);
     } catch (parseError) {
       logger.warn(
         {
@@ -334,7 +420,7 @@ async function deliverClaimedWebhook(options: {
         outcome: {
           status: 'SENT',
           http_status_code: httpStatus,
-          response_body: responseBody.slice(0, WEBHOOK_DELIVERY_RESPONSE_BODY_STORED_MAX_LENGTH),
+          response_body: responseBody,
         },
       });
       return { httpStatus, success: true };
@@ -347,7 +433,7 @@ async function deliverClaimedWebhook(options: {
       outcome: {
         status: 'FAILED',
         http_status_code: httpStatus,
-        response_body: responseBody.slice(0, WEBHOOK_DELIVERY_RESPONSE_BODY_STORED_MAX_LENGTH),
+        response_body: responseBody,
         next_retry_at: computeNextRetryAt(jobContext.attemptsMade),
       },
     });

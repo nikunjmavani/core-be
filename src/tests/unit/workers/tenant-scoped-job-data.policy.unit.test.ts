@@ -8,6 +8,9 @@ const WORKERS_ROOT = join(process.cwd(), 'src/domains');
 const TENANT_SCOPING_EXEMPT_QUEUE_NAME_PATTERNS = [
   /retention/i,
   /cleanup/i,
+  // Offboarding reconcilers are cross-tenant maintenance scans (global-retention
+  // context, no per-job tenant payload), not tenant-scoped delivery workers.
+  /offboarding-reconcile/i,
   /idempotency-cardinality/i,
   /dlq-depth/i,
   /mail\.worker/i,

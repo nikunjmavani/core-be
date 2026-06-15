@@ -52,4 +52,47 @@ describe('AuthMethodRepository (database)', () => {
     const afterRevokeAll = await repository.listByUserId(user.id);
     expect(afterRevokeAll).toHaveLength(0);
   });
+
+  it('route-audit C1: revokeUnlessLastLoginCapable refuses to revoke the last login-capable method', async () => {
+    const LOGIN_CAPABLE = ['PASSWORD', 'OAUTH', 'MAGIC_LINK'];
+    const user = await createTestUser({ email: 'last-login-capable@test.com' });
+
+    const password = await repository.create({
+      user_id: user.id,
+      method_type: 'PASSWORD',
+      is_primary: true,
+      created_by_user_id: user.id,
+    });
+    const oauth = await repository.create({
+      user_id: user.id,
+      method_type: 'OAUTH',
+      provider: 'github',
+      provider_user_id: 'github-user-c1',
+      is_primary: false,
+      created_by_user_id: user.id,
+    });
+    const mfa = await repository.create({
+      user_id: user.id,
+      method_type: 'MFA_TOTP',
+      encrypted_secret: 'secret',
+      is_primary: false,
+      created_by_user_id: user.id,
+    });
+
+    // PASSWORD is revocable while OAUTH (another login-capable method) remains.
+    expect(
+      await repository.revokeUnlessLastLoginCapable(password.id, user.id, LOGIN_CAPABLE),
+    ).not.toBeNull();
+
+    // OAUTH is now the LAST login-capable method → the atomic guard refuses (null) and it stays active.
+    expect(
+      await repository.revokeUnlessLastLoginCapable(oauth.id, user.id, LOGIN_CAPABLE),
+    ).toBeNull();
+    expect(await repository.findByIdForUser(oauth.id, user.id)).not.toBeNull();
+
+    // MFA is not login-capable → revocable regardless of how many login methods remain.
+    expect(
+      await repository.revokeUnlessLastLoginCapable(mfa.id, user.id, LOGIN_CAPABLE),
+    ).not.toBeNull();
+  });
 });

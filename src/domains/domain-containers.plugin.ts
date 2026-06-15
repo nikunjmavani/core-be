@@ -22,10 +22,14 @@ async function registerDomainContainers(application: FastifyInstance): Promise<v
     authMethodService: application.authDomain.authMethodService,
     uploadService: application.uploadDomain.uploadService,
     userDataExportService: application.userDomain.userDataExportService,
+    // route-audit-#2 follow-up: block deleting a user who still owns organizations.
+    organizationOwnership: application.tenancyDomain.organizationService,
   });
 
   application.tenancyDomain.organizationService.wireOffboardingUploadService(
     application.uploadDomain.uploadService,
+    // route-audit-#2: cancel the org's active subscription on org delete so billing stops.
+    application.billingDomain.subscriptionService,
   );
 
   application.userDomain.userDataExportService.wireCrossDomainServices({

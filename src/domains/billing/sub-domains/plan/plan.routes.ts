@@ -6,7 +6,7 @@ import { getPlanParamsDto } from './plan.dto.js';
 
 /**
  * Fastify plugin factory that registers the public plan catalog endpoints
- * (`GET /plans`, `GET /plans/:id`) backed by {@link PlanService}.
+ * (`GET /plans`, `GET /plans/:plan_id`) backed by {@link PlanService}.
  */
 export function planRoutes(service: PlanService): FastifyPluginAsync {
   const controller = createPlanController(service);
@@ -25,8 +25,8 @@ export function planRoutes(service: PlanService): FastifyPluginAsync {
       },
       controller.listPlans,
     );
-    zodApplication.get<{ Params: { id: string } }>(
-      '/plans/:id',
+    zodApplication.get<{ Params: { organization_id: string } }>(
+      '/plans/:plan_id',
       {
         schema: {
           summary: 'Get plan details',

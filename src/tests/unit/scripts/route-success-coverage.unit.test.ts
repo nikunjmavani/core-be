@@ -1,0 +1,203 @@
+import { describe, expect, it } from 'vitest';
+import type { RouteEntry } from '@/tests/helpers/route-catalog-registry.js';
+import {
+  evaluateRouteSuccessCoverage,
+  findUndocumentedObservedStatuses,
+  ROUTE_SUCCESS_DRIFT_EXEMPT_KEYS,
+} from '@/scripts/validators/routes/route-success-coverage.util.js';
+
+function route(method: RouteEntry['method'], path: string): RouteEntry {
+  return {
+    method,
+    path,
+    domain: 'test',
+    access: 'authenticated',
+    description: `${method} ${path}`,
+  };
+}
+
+/**
+ * Pure-logic tests for the observed success-status coverage evaluation used by
+ * pnpm validate:route-success-coverage.
+ */
+describe('evaluateRouteSuccessCoverage', () => {
+  const registry = [
+    route('GET', '/api/v1/widgets'),
+    route('POST', '/api/v1/widgets'),
+    route('DELETE', '/api/v1/widgets/:widgetId'),
+  ];
+  const successStatusMap = {
+    'GET /api/v1/widgets': 200,
+    'POST /api/v1/widgets': 201,
+    'DELETE /api/v1/widgets/:widgetId': 204,
+  };
+
+  it('marks a route covered when its declared status was observed', () => {
+    const result = evaluateRouteSuccessCoverage({
+      registry,
+      successStatusMap,
+      observedLines: ['GET /api/v1/widgets 200', 'GET /api/v1/widgets 401'],
+    });
+    expect(result.coveredRoutes).toEqual(['GET /api/v1/widgets']);
+    expect(result.uncoveredRoutes).toEqual([
+      'DELETE /api/v1/widgets/:widgetId',
+      'POST /api/v1/widgets',
+    ]);
+    expect(result.driftFailures).toEqual([]);
+  });
+
+  it('keeps a route uncovered when only error statuses were observed', () => {
+    const result = evaluateRouteSuccessCoverage({
+      registry,
+      successStatusMap,
+      observedLines: ['POST /api/v1/widgets 400', 'POST /api/v1/widgets 401'],
+    });
+    expect(result.coveredRoutes).toEqual([]);
+    expect(result.uncoveredRoutes).toContain('POST /api/v1/widgets');
+    expect(result.driftFailures).toEqual([]);
+  });
+
+  it('reports drift when an observed success status contradicts the declared one', () => {
+    const result = evaluateRouteSuccessCoverage({
+      registry,
+      successStatusMap,
+      observedLines: ['POST /api/v1/widgets 200'],
+    });
+    expect(result.driftFailures).toHaveLength(1);
+    expect(result.driftFailures[0]).toContain('declared 201 but observed 200');
+    expect(result.coveredRoutes).toEqual([]);
+  });
+
+  it('treats redirects (3xx) on catalog routes as drift', () => {
+    const result = evaluateRouteSuccessCoverage({
+      registry,
+      successStatusMap,
+      observedLines: ['GET /api/v1/widgets 302'],
+    });
+    expect(result.driftFailures).toHaveLength(1);
+  });
+
+  it('treats 304 Not Modified as an alternate success, not drift', () => {
+    const result = evaluateRouteSuccessCoverage({
+      registry,
+      successStatusMap,
+      observedLines: ['GET /api/v1/widgets 304', 'GET /api/v1/widgets 200'],
+    });
+    expect(result.driftFailures).toEqual([]);
+    expect(result.coveredRoutes).toEqual(['GET /api/v1/widgets']);
+  });
+
+  it('does not count a lone 304 as coverage of the declared 200', () => {
+    const result = evaluateRouteSuccessCoverage({
+      registry,
+      successStatusMap,
+      observedLines: ['GET /api/v1/widgets 304'],
+    });
+    expect(result.driftFailures).toEqual([]);
+    expect(result.uncoveredRoutes).toContain('GET /api/v1/widgets');
+  });
+
+  it('skips drift for exempt keys but still requires coverage unless coverage-exempt', () => {
+    const exemptRegistry = [route('POST', '/api/v1/mcp')];
+    const result = evaluateRouteSuccessCoverage({
+      registry: exemptRegistry,
+      successStatusMap: { 'POST /api/v1/mcp': 200 },
+      observedLines: ['POST /api/v1/mcp 405'],
+      driftExemptKeys: ROUTE_SUCCESS_DRIFT_EXEMPT_KEYS,
+      coverageExemptKeys: new Set<string>(),
+    });
+    expect(result.driftFailures).toEqual([]);
+    expect(result.uncoveredRoutes).toEqual(['POST /api/v1/mcp']);
+  });
+
+  it('normalizes trailing slashes from Fastify prefix-root registrations', () => {
+    const result = evaluateRouteSuccessCoverage({
+      registry: [route('GET', '/api/v1/widgets')],
+      successStatusMap: { 'GET /api/v1/widgets': 200 },
+      observedLines: ['GET /api/v1/widgets/ 200'],
+    });
+    expect(result.coveredRoutes).toEqual(['GET /api/v1/widgets']);
+  });
+
+  it('skips coverage-exempt keys but still counts them when observed', () => {
+    const exemptRegistry = [route('GET', '/api/v1/streaming'), route('GET', '/api/v1/widgets')];
+    const map = { 'GET /api/v1/streaming': 200, 'GET /api/v1/widgets': 200 };
+    const exempt = new Set(['GET /api/v1/streaming']);
+
+    const unobserved = evaluateRouteSuccessCoverage({
+      registry: exemptRegistry,
+      successStatusMap: map,
+      observedLines: ['GET /api/v1/widgets 200'],
+      coverageExemptKeys: exempt,
+    });
+    expect(unobserved.uncoveredRoutes).toEqual([]);
+    expect(unobserved.coveredRoutes).toEqual(['GET /api/v1/widgets']);
+
+    const observed = evaluateRouteSuccessCoverage({
+      registry: exemptRegistry,
+      successStatusMap: map,
+      observedLines: ['GET /api/v1/streaming 200', 'GET /api/v1/widgets 200'],
+      coverageExemptKeys: exempt,
+    });
+    expect(observed.coveredRoutes).toEqual(['GET /api/v1/streaming', 'GET /api/v1/widgets']);
+  });
+
+  it('ignores malformed lines and unknown routes', () => {
+    const result = evaluateRouteSuccessCoverage({
+      registry,
+      successStatusMap,
+      observedLines: [
+        '',
+        'garbage',
+        'HEAD /api/v1/widgets 200',
+        'GET /api/v1/unknown 200',
+        'DELETE /api/v1/widgets/:widgetId 204',
+      ],
+    });
+    expect(result.coveredRoutes).toEqual(['DELETE /api/v1/widgets/:widgetId']);
+    expect(result.driftFailures).toEqual([]);
+  });
+});
+
+/**
+ * Error-side documentation check — every observed sub-500 status must be in
+ * the OpenAPI document's responses for that route.
+ */
+describe('findUndocumentedObservedStatuses', () => {
+  const registry = [route('POST', '/api/v1/widgets')];
+  const documented = new Map<string, ReadonlySet<string>>([
+    ['POST /api/v1/widgets', new Set(['201', '400', '401', '429'])],
+  ]);
+
+  it('passes when all observed statuses are documented', () => {
+    const failures = findUndocumentedObservedStatuses({
+      registry,
+      observedLines: ['POST /api/v1/widgets 201', 'POST /api/v1/widgets 429'],
+      documentedStatusesByKey: documented,
+    });
+    expect(failures).toEqual([]);
+  });
+
+  it('flags an observed status missing from the document', () => {
+    const failures = findUndocumentedObservedStatuses({
+      registry,
+      observedLines: ['POST /api/v1/widgets 422'],
+      documentedStatusesByKey: documented,
+    });
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toContain('observed 422');
+  });
+
+  it('exempts 304, 5xx, and routes outside the document', () => {
+    const failures = findUndocumentedObservedStatuses({
+      registry: [...registry, route('GET', '/internal/thing')],
+      observedLines: [
+        'POST /api/v1/widgets 304',
+        'POST /api/v1/widgets 503',
+        'GET /internal/thing 418',
+      ],
+      documentedStatusesByKey: documented,
+    });
+    expect(failures).toEqual([]);
+  });
+});

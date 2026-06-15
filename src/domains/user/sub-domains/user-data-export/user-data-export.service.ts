@@ -143,7 +143,7 @@ export class UserDataExportService {
       return serializeUserDataExport(existingPending);
     }
 
-    const exportPublicId = generatePublicId();
+    const exportPublicId = generatePublicId('userDataExport');
     const s3Key = buildExportS3Key(userPublicId, exportPublicId);
     const expiresAt = computeArtifactExpiresAt();
 

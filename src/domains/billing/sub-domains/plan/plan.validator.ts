@@ -5,7 +5,7 @@ import { getPlanParamsDto, type GetPlanParamsInput } from './plan.dto.js';
 const ERROR_KEY_INVALID_INPUT = 'errors:invalidInput';
 
 /**
- * Validates path params for `GET /api/v1/plans/:id`, throwing
+ * Validates path params for `GET /api/v1/plans/:plan_id`, throwing
  * {@link ValidationError} with field-level details on failure.
  */
 export function validateGetPlanParams(params: unknown): GetPlanParamsInput {

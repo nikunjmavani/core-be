@@ -56,15 +56,21 @@ describe('Webhook Sub-Domain — Integration', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
-    return { organization, token };
+    // Flat webhook routes resolve the organization from the JWT `org` claim, so
+    // the bearer must embed `organizationPublicId` to reach (and pass) the
+    // webhook permission preHandler and the org-scoped controller.
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
+    return { user, organization, token };
   }
 
-  describe('GET /api/v1/notify/organizations/:id/webhooks', () => {
+  describe('GET /api/v1/notify/webhooks', () => {
     it('returns 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'GET',
-        url: testApiPath('/notify/organizations/org_test/webhooks'),
+        url: testApiPath('/notify/webhooks'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -73,25 +79,26 @@ describe('Webhook Sub-Domain — Integration', () => {
       const owner = await createTestUser();
       const organization = await createTestOrganization({ ownerUserId: owner.id });
       const user = await createTestUser({ email: 'no-webhook@test.com' });
-      const token = await generateTestToken({ userId: user.public_id });
+      // Scope the bearer to the org via the `org` claim so the request reaches
+      // the webhook permission check; the user has no membership → 403.
+      const token = await generateTestToken({
+        userId: user.public_id,
+        organizationPublicId: organization.public_id,
+      });
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
+        url: testApiPath('/notify/webhooks'),
         token,
-        organizationPublicId: organization.public_id,
       });
       expect(response.statusCode).toBe(403);
     });
 
     it('returns 200 with webhook read permission', async () => {
-      const { organization, token } = await createAuthorizedContext([
-        NOTIFY_PERMISSIONS.WEBHOOK_READ,
-      ]);
+      const { token } = await createAuthorizedContext([NOTIFY_PERMISSIONS.WEBHOOK_READ]);
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
+        url: testApiPath('/notify/webhooks'),
         token,
-        organizationPublicId: organization.public_id,
       });
       expect(response.statusCode).toBe(200);
       const body = response.json() as {
@@ -121,9 +128,8 @@ describe('Webhook Sub-Domain — Integration', () => {
 
       const page1Response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
+        url: testApiPath('/notify/webhooks'),
         token,
-        organizationPublicId: organization.public_id,
         query: { limit: '2', include_total: 'true' },
       });
       expect(page1Response.statusCode).toBe(200);
@@ -148,9 +154,8 @@ describe('Webhook Sub-Domain — Integration', () => {
 
       const page2Response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
+        url: testApiPath('/notify/webhooks'),
         token,
-        organizationPublicId: organization.public_id,
         query: { limit: '2', after: page1Body.meta!.pagination!.next! },
       });
       expect(page2Response.statusCode).toBe(200);
@@ -167,7 +172,7 @@ describe('Webhook Sub-Domain — Integration', () => {
     });
   });
 
-  describe('GET /api/v1/notify/organizations/:id/webhooks/:webhookId/delivery-attempts', () => {
+  describe('GET /api/v1/notify/webhooks/:webhook_id/delivery-attempts', () => {
     it('paginates delivery attempts with after cursor (newest first)', {
       timeout: 30_000,
     }, async () => {
@@ -203,11 +208,8 @@ describe('Webhook Sub-Domain — Integration', () => {
 
       const page1Response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(
-          `/notify/organizations/${organization.public_id}/webhooks/${webhook.public_id}/delivery-attempts`,
-        ),
+        url: testApiPath(`/notify/webhooks/${webhook.public_id}/delivery-attempts`),
         token,
-        organizationPublicId: organization.public_id,
         query: { limit: '2' },
       });
       expect(page1Response.statusCode).toBe(200);
@@ -221,11 +223,8 @@ describe('Webhook Sub-Domain — Integration', () => {
 
       const page2Response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(
-          `/notify/organizations/${organization.public_id}/webhooks/${webhook.public_id}/delivery-attempts`,
-        ),
+        url: testApiPath(`/notify/webhooks/${webhook.public_id}/delivery-attempts`),
         token,
-        organizationPublicId: organization.public_id,
         query: { limit: '2', after: page1Body.meta!.pagination!.next! },
       });
       expect(page2Response.statusCode).toBe(200);
@@ -235,6 +234,24 @@ describe('Webhook Sub-Domain — Integration', () => {
       };
       expect(page1Body.data.length + page2Body.data.length).toBe(3);
       expect(page2Body.meta?.pagination).toMatchObject({ has_more: false, next: null });
+    });
+  });
+
+  describe('DELETE /api/v1/notify/webhooks/:webhook_id', () => {
+    it('returns 204 with webhook manage permission', async () => {
+      const { user, organization, token } = await createAuthorizedContext();
+      const webhook = await createTestWebhook({
+        organizationId: organization.id,
+        url: 'https://example.com/delete-happy-path',
+        createdByUserId: user.id,
+      });
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/notify/webhooks/${webhook.public_id}`),
+        token,
+      });
+      expect(response.statusCode, response.body).toBe(204);
     });
   });
 });

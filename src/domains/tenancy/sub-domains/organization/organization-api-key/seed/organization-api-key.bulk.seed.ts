@@ -80,7 +80,7 @@ export async function seedOrganizationApiKeysBulk(context: SeedContext): Promise
       const keyPrefix = rawKey.slice(0, ORGANIZATION_API_KEY_PREFIX_DISPLAY_LENGTH);
       const isRevokedEdgeCase = context.counts.edgeCases && index === target - 1;
       await database.insert(api_keys).values({
-        public_id: generatePublicId(),
+        public_id: generatePublicId('organizationApiKey'),
         organization_id: organization.id,
         name: `${BULK_API_KEY_NAME_PREFIX}${index}`,
         key_hash: keyHash,

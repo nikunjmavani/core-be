@@ -4,6 +4,7 @@ import { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-method.service.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
+import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 
 vi.mock('otplib', () => ({
   generateSecret: () => 'TESTSECRET',
@@ -13,6 +14,13 @@ vi.mock('otplib', () => ({
 
 vi.mock('@/shared/utils/security/jwt.util.js', () => ({
   signAccessToken: vi.fn().mockReturnValue('access-token'),
+}));
+
+// H1: the MFA login path now bakes the active-org `org` claim into the token (mirroring the
+// first-factor path). Mock the resolver — without this the unit lane (no Postgres) would hit a
+// real DB call. The verifyLoginMfa test below asserts the resolved org reaches signAccessToken.
+vi.mock('@/domains/tenancy/sub-domains/organization/resolve-active-organization.js', () => ({
+  resolveDefaultActiveOrganizationPublicId: vi.fn().mockResolvedValue('org_mfaactive0000000000'),
 }));
 
 vi.mock('@/shared/utils/auth/global-admin-role.util.js', () => ({
@@ -77,7 +85,8 @@ describe('MfaService', () => {
       .mockResolvedValue({ id: 99, public_id: 'testpublicmid0000000' }),
     listMfaMethodsByUserId: vi.fn().mockResolvedValue([]),
     revokeAuthMethod: vi.fn(),
-    findAuthMethodByIdForUser: vi.fn(),
+    findAuthMethodByPublicIdForUser: vi.fn(),
+    acquireCredentialMutationLock: vi.fn().mockResolvedValue(undefined),
   } as unknown as AuthMethodService;
 
   const authSessionService = {
@@ -86,9 +95,13 @@ describe('MfaService', () => {
 
   const redis = {
     set: vi.fn().mockResolvedValue('OK'),
-    get: vi.fn(),
+    get: vi.fn().mockResolvedValue(null),
     getdel: vi.fn().mockResolvedValue(null),
     del: vi.fn().mockResolvedValue(1),
+    incr: vi.fn().mockResolvedValue(1),
+    expire: vi.fn().mockResolvedValue(1),
+    // route-audit C5: lockout counter now uses an atomic INCR+EXPIRE Lua via redis.eval.
+    eval: vi.fn().mockResolvedValue(1),
   };
 
   const service = new MfaService(
@@ -101,6 +114,10 @@ describe('MfaService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     redis.set.mockResolvedValue('OK');
+    redis.get.mockResolvedValue(null);
+    redis.incr.mockResolvedValue(1);
+    redis.expire.mockResolvedValue(1);
+    redis.eval.mockResolvedValue(1);
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(user as never);
     vi.mocked(authMethodService.findTotpByUserId).mockResolvedValue({
       id: 5,
@@ -116,6 +133,12 @@ describe('MfaService', () => {
     );
     expect(result.access_token).toBe('access-token');
     expect(authSessionService.createSessionForUser).toHaveBeenCalled();
+    // H1 regression guard: the MFA-login token MUST carry the active-org `org` claim, exactly like
+    // the first-factor path. Without it an MFA user gets an org-less token and is locked out of
+    // every org-scoped route (which resolve the active org from the claim post-flatten).
+    expect(vi.mocked(signAccessToken)).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationPublicId: 'org_mfaactive0000000000' }),
+    );
   });
 
   it('verifyLoginMfa issues session after valid recovery code', async () => {
@@ -130,6 +153,41 @@ describe('MfaService', () => {
     );
     expect(result.access_token).toBe('access-token');
     expect(consumeMfaRecoveryCode).toHaveBeenCalledWith(user.id, 'ABCD-1234');
+  });
+
+  it('reaudit-#3: a TOTP-locked-out user can STILL log in with a valid recovery code', async () => {
+    const { consumeMfaRecoveryCode } = await import(
+      '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js'
+    );
+    redis.eval.mockResolvedValue(11); // > MAX_MFA_VERIFICATION_ATTEMPTS — atomic counter says locked
+    vi.mocked(consumeMfaRecoveryCode).mockResolvedValueOnce(true);
+
+    // TOTP is rejected while locked...
+    await expect(
+      service.verifyLoginMfa({ mfa_session_token: 'token', totp_code: '123456' }, '127.0.0.1'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+
+    // ...but the recovery (break-glass) code still works — the lockout does not gate it.
+    const result = await service.verifyLoginMfa(
+      { mfa_session_token: 'token', recovery_code: 'ABCD-1234' },
+      '127.0.0.1',
+    );
+    expect(result.access_token).toBe('access-token');
+  });
+
+  it('reaudit-#3: a wrong recovery code does NOT increment the TOTP lockout counter', async () => {
+    const { consumeMfaRecoveryCode } = await import(
+      '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js'
+    );
+    vi.mocked(consumeMfaRecoveryCode).mockResolvedValueOnce(false);
+
+    await expect(
+      service.verifyLoginMfa(
+        { mfa_session_token: 'token', recovery_code: 'WRONG-9999' },
+        '127.0.0.1',
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(redis.eval).not.toHaveBeenCalled();
   });
 
   it('verifyLoginMfa rejects already-used recovery codes', async () => {
@@ -150,6 +208,65 @@ describe('MfaService', () => {
     const result = await service.verify('user_public', { code: '123456' });
     expect(result.verified).toBe(true);
     expect(authMethodService.updateAuthMethodLastUsedAt).toHaveBeenCalled();
+  });
+
+  it('verify records a failure and rejects on an invalid TOTP code (audit-#12)', async () => {
+    const { verify } = await import('otplib');
+    vi.mocked(verify).mockResolvedValueOnce({ valid: false } as never);
+    await expect(service.verify('user_public', { code: '000000' })).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      'mfa:verify:fail:1',
+      expect.any(String),
+    );
+  });
+
+  it('verify locks out atomically before checking the code once the budget is exhausted (audit-#12 / route-audit-#4)', async () => {
+    redis.eval.mockResolvedValue(11); // > MAX_MFA_VERIFICATION_ATTEMPTS — atomic counter says locked
+    const { verify } = await import('otplib');
+    await expect(service.verify('user_public', { code: '123456' })).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
+    expect(verify).not.toHaveBeenCalled();
+  });
+
+  it('route-audit-#4: counts the attempt with an atomic INCR up-front, not a read-only GET', async () => {
+    redis.eval.mockResolvedValue(1); // under budget
+    await service.verify('user_public', { code: '123456' });
+    // The counter is incremented atomically per attempt (so concurrent guesses get distinct
+    // counts and cannot overspend the budget); the old non-atomic read-only GET check is gone.
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      'mfa:verify:fail:1',
+      expect.any(String),
+    );
+    expect(redis.get).not.toHaveBeenCalled();
+  });
+
+  it('verify clears the failure counter on success (audit-#12)', async () => {
+    await service.verify('user_public', { code: '123456' });
+    expect(redis.del).toHaveBeenCalledWith('mfa:verify:fail:1');
+  });
+
+  it('verifyLoginMfa records a failure on an invalid TOTP code (audit-#12)', async () => {
+    const { verify } = await import('otplib');
+    vi.mocked(verify).mockResolvedValueOnce({ valid: false } as never);
+    await expect(
+      service.verifyLoginMfa(
+        { mfa_session_token: 'session-token', totp_code: '000000' },
+        '127.0.0.1',
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      'mfa:verify:fail:1',
+      expect.any(String),
+    );
   });
 
   it('verify rejects when MFA not enabled', async () => {
@@ -270,6 +387,9 @@ describe('MfaService', () => {
       '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js'
     );
     const callOrder: string[] = [];
+    vi.mocked(authMethodService.acquireCredentialMutationLock).mockImplementation(async () => {
+      callOrder.push('acquireCredentialMutationLock');
+    });
     vi.mocked(authMethodService.listMfaMethodsByUserId).mockImplementation(async () => {
       callOrder.push('listMfaMethodsByUserId');
       return [
@@ -315,6 +435,13 @@ describe('MfaService', () => {
     expect(invalidateIndex).toBeGreaterThanOrEqual(0);
     expect(revokeIndex).toBeLessThan(createIndex);
     expect(invalidateIndex).toBeLessThan(insertCodesIndex);
+
+    // route-audit D3: the credential-mutation advisory lock is taken FIRST — before reading the
+    // existing methods — so a concurrent enroll/delete serializes on the same lock deleteMfa uses.
+    const lockIndex = callOrder.indexOf('acquireCredentialMutationLock');
+    const listIndex = callOrder.indexOf('listMfaMethodsByUserId');
+    expect(lockIndex).toBe(0);
+    expect(lockIndex).toBeLessThan(listIndex);
   });
 
   it('sec-re-04: enrollConfirm proceeds normally when no existing TOTP methods are present (first-time enrollment)', async () => {
@@ -361,23 +488,31 @@ describe('MfaService', () => {
   });
 
   it('deleteMfa revokes method and disables MFA when last method removed', async () => {
-    vi.mocked(authMethodService.findAuthMethodByIdForUser).mockResolvedValue({
+    vi.mocked(authMethodService.findAuthMethodByPublicIdForUser).mockResolvedValue({
       id: 5,
       method_type: 'MFA_TOTP',
     } as never);
     vi.mocked(authMethodService.revokeAuthMethod).mockResolvedValue({ id: 5 } as never);
     vi.mocked(authMethodService.listMfaMethodsByUserId).mockResolvedValue([]);
 
-    await service.deleteMfa('user_public', 5);
+    await service.deleteMfa('user_public', 'mfamethodpublicid0001');
     expect(userService.updateMfaEnabled).toHaveBeenCalledWith('user_public', false);
   });
 
-  it('listMfaMethods returns enrolled methods', async () => {
+  it('listMfaMethods returns enrolled methods with the opaque public id (route-#10)', async () => {
     vi.mocked(authMethodService.listMfaMethodsByUserId).mockResolvedValue([
-      { id: 5, method_type: 'MFA_TOTP', last_used_at: null, created_at: new Date() },
+      {
+        id: 5,
+        public_id: 'mfamethodpublicid0001',
+        method_type: 'MFA_TOTP',
+        last_used_at: null,
+        created_at: new Date(),
+      },
     ] as never);
     const methods = await service.listMfaMethods('user_public');
     expect(methods).toHaveLength(1);
+    // route-#10: the serialized `id` is the opaque public id, never the sequential DB id.
+    expect(methods[0]?.id).toBe('mfamethodpublicid0001');
   });
 
   it('verify rejects invalid TOTP codes', async () => {
@@ -389,7 +524,7 @@ describe('MfaService', () => {
   });
 
   it('deleteMfa keeps MFA enabled when other methods remain', async () => {
-    vi.mocked(authMethodService.findAuthMethodByIdForUser).mockResolvedValue({
+    vi.mocked(authMethodService.findAuthMethodByPublicIdForUser).mockResolvedValue({
       id: 5,
       method_type: 'MFA_TOTP',
     } as never);
@@ -398,35 +533,43 @@ describe('MfaService', () => {
       { id: 6, method_type: 'MFA_TOTP' },
     ] as never);
 
-    await service.deleteMfa('user_public', 5);
+    await service.deleteMfa('user_public', 'mfamethodpublicid0001');
     expect(userService.updateMfaEnabled).not.toHaveBeenCalledWith('user_public', false);
   });
 
   it('deleteMfa rejects unknown or non-TOTP methods', async () => {
-    vi.mocked(authMethodService.findAuthMethodByIdForUser).mockResolvedValue(null);
-    await expect(service.deleteMfa('user_public', 99)).rejects.toBeInstanceOf(UnauthorizedError);
+    vi.mocked(authMethodService.findAuthMethodByPublicIdForUser).mockResolvedValue(null);
+    await expect(service.deleteMfa('user_public', 'mfamethodpublicid0001')).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
 
-    vi.mocked(authMethodService.findAuthMethodByIdForUser).mockResolvedValue({
+    vi.mocked(authMethodService.findAuthMethodByPublicIdForUser).mockResolvedValue({
       id: 5,
       method_type: 'OAUTH',
     } as never);
-    await expect(service.deleteMfa('user_public', 5)).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(service.deleteMfa('user_public', 'mfamethodpublicid0001')).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
   });
 
   it('deleteMfa rejects when user record is missing', async () => {
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(null as never);
-    await expect(service.deleteMfa('missing', 5)).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(service.deleteMfa('missing', 'mfamethodpublicid0001')).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
   });
 
   it('deleteMfa rejects when revoke fails', async () => {
-    vi.mocked(authMethodService.findAuthMethodByIdForUser).mockResolvedValue({
+    vi.mocked(authMethodService.findAuthMethodByPublicIdForUser).mockResolvedValue({
       id: 5,
       method_type: 'MFA_TOTP',
     } as never);
     vi.mocked(authMethodService.revokeAuthMethod).mockRejectedValue(
       new UnauthorizedError('errors:mfaMethodNotFound'),
     );
-    await expect(service.deleteMfa('user_public', 5)).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(service.deleteMfa('user_public', 'mfamethodpublicid0001')).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
   });
 
   it('sec-new-A4: updateMfaEnabled is called inside the withUserDatabaseContext transaction (no TOCTOU window)', async () => {
@@ -446,7 +589,7 @@ describe('MfaService', () => {
       },
     );
 
-    vi.mocked(authMethodService.findAuthMethodByIdForUser).mockResolvedValueOnce({
+    vi.mocked(authMethodService.findAuthMethodByPublicIdForUser).mockResolvedValueOnce({
       id: 5,
       method_type: 'MFA_TOTP',
     } as never);
@@ -462,7 +605,7 @@ describe('MfaService', () => {
       return null as never;
     });
 
-    await service.deleteMfa('user_public', 5);
+    await service.deleteMfa('user_public', 'mfamethodpublicid0001');
 
     // updateMfaEnabled must happen INSIDE the transaction (between txn_start and txn_end)
     expect(callOrder).toContain('updateMfaEnabled');

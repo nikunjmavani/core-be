@@ -25,9 +25,9 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
  * the throttle layer.
  */
 describe('createAuditController — admin-read audit (sec-U4)', () => {
-  const adminPublicId = generatePublicId();
-  const targetUserPublicId = generatePublicId();
-  const targetOrgPublicId = generatePublicId();
+  const adminPublicId = generatePublicId('user');
+  const targetUserPublicId = generatePublicId('user');
+  const targetOrgPublicId = generatePublicId('organization');
   const auditRecord = vi.fn().mockResolvedValue(undefined);
 
   const service = {

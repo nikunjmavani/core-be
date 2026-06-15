@@ -40,11 +40,22 @@ describe('Security: cross-tenant org rate-limit isolation (audit #14)', () => {
       const actorId = request.headers['x-test-actor'];
       const organizationId = request.headers['x-test-org'];
       const mutableRequest = request as {
-        auth?: { kind: 'user'; userId: string } | undefined;
+        auth?: { kind: 'user'; userId: string; organizationPublicId?: string } | undefined;
         organizationId?: string | null;
       };
+      // Post-flatten the active organization rides the signed `org` token claim
+      // (`auth.organizationPublicId`), not the header — set it there so the per-(org, actor)
+      // rate-limit key is exercised the way real requests resolve it.
       mutableRequest.auth =
-        typeof actorId === 'string' ? { kind: 'user', userId: actorId } : undefined;
+        typeof actorId === 'string'
+          ? {
+              kind: 'user',
+              userId: actorId,
+              ...(typeof organizationId === 'string'
+                ? { organizationPublicId: organizationId }
+                : {}),
+            }
+          : undefined;
       mutableRequest.organizationId = typeof organizationId === 'string' ? organizationId : null;
     });
 
@@ -58,7 +69,7 @@ describe('Security: cross-tenant org rate-limit isolation (audit #14)', () => {
     };
 
     app.post(
-      '/organizations/:id/resource',
+      '/tenancy/organization/resource',
       {
         preHandler: [requireMembership],
         config: {
@@ -84,7 +95,7 @@ describe('Security: cross-tenant org rate-limit isolation (audit #14)', () => {
     for (let attempt = 0; attempt < max + 3; attempt += 1) {
       const attacker = await app.inject({
         method: 'POST',
-        url: '/organizations/victim-org/resource',
+        url: '/tenancy/organization/resource',
         headers: { 'x-test-actor': 'attacker', 'x-test-org': 'victim-org' },
       });
       expect(attacker.statusCode).toBe(403);
@@ -94,7 +105,7 @@ describe('Security: cross-tenant org rate-limit isolation (audit #14)', () => {
     for (let attempt = 0; attempt < max; attempt += 1) {
       const member = await app.inject({
         method: 'POST',
-        url: '/organizations/victim-org/resource',
+        url: '/tenancy/organization/resource',
         headers: {
           'x-test-actor': 'member',
           'x-test-org': 'victim-org',
@@ -118,17 +129,17 @@ describe('Security: cross-tenant org rate-limit isolation (audit #14)', () => {
     // Member A burns through their per-actor bucket until throttled.
     const firstA = await app.inject({
       method: 'POST',
-      url: '/organizations/shared-org/resource',
+      url: '/tenancy/organization/resource',
       headers: memberHeaders('member-a'),
     });
     const secondA = await app.inject({
       method: 'POST',
-      url: '/organizations/shared-org/resource',
+      url: '/tenancy/organization/resource',
       headers: memberHeaders('member-a'),
     });
     const thirdA = await app.inject({
       method: 'POST',
-      url: '/organizations/shared-org/resource',
+      url: '/tenancy/organization/resource',
       headers: memberHeaders('member-a'),
     });
 
@@ -139,7 +150,7 @@ describe('Security: cross-tenant org rate-limit isolation (audit #14)', () => {
     // Member B in the SAME org is unaffected — separate per-actor bucket.
     const firstB = await app.inject({
       method: 'POST',
-      url: '/organizations/shared-org/resource',
+      url: '/tenancy/organization/resource',
       headers: memberHeaders('member-b'),
     });
     expect(firstB.statusCode).toBe(200);

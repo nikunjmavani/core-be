@@ -2,6 +2,7 @@ import http from 'k6/http';
 import { sleep } from 'k6';
 import { API_PREFIX, SCENARIOS, SMOKE_THRESHOLDS } from '../helpers/config.js';
 import { checkStatus, checkResponseTime } from '../helpers/checks.js';
+import { switchToOrganization } from '../helpers/auth.js';
 
 /**
  * Warm permission cache then list organizations repeatedly.
@@ -18,16 +19,19 @@ export const options = {
 };
 
 export function permissionCachedList() {
-  const token = __ENV.TEST_TOKEN;
+  let token = __ENV.TEST_TOKEN;
   const organizationPublicId = __ENV.TEST_ORG_ID;
   if (!(token && organizationPublicId)) {
     sleep(1);
     return;
   }
 
+  // The active org rides the token's `org` claim — scope the token to TEST_ORG_ID
+  // so org-permission resolution warms the right organization's cache.
+  token = switchToOrganization(token, organizationPublicId) || token;
+
   const headers = {
     Authorization: `Bearer ${token}`,
-    'X-Organization-Id': organizationPublicId,
     'Content-Type': 'application/json',
   };
 

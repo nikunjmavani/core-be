@@ -16,7 +16,7 @@ export const planSchema = {
 };
 
 export const planExample = {
-  id: 'pln_j5h8t3rwy6m1k9n2',
+  id: 'pln_j5h8t3rwy6m1k9n2a1b2c',
   name: 'Pro',
   description: 'For growing teams that need more power and flexibility',
   price_monthly: '29.00',
@@ -34,8 +34,18 @@ export const subscriptionSchema = {
     id: { type: 'string' },
     organization_id: { type: 'string' },
     plan_id: { type: 'string' },
-    status: { type: 'string' },
-    billing_cycle: { type: 'string' },
+    status: {
+      type: 'string',
+      enum: ['TRIALING', 'ACTIVE', 'PAST_DUE', 'CANCELED', 'PAUSED'],
+      description: 'Possible values: TRIALING | ACTIVE | PAST_DUE | CANCELED | PAUSED',
+      example: 'TRIALING',
+    },
+    billing_cycle: {
+      type: 'string',
+      enum: ['monthly', 'yearly'],
+      description: 'Possible values: monthly | yearly',
+      example: 'monthly',
+    },
     current_period_start: { type: 'string', format: 'date-time' },
     current_period_end: { type: 'string', format: 'date-time' },
     cancel_at_period_end: { type: 'boolean' },
@@ -46,9 +56,9 @@ export const subscriptionSchema = {
 };
 
 export const subscriptionExample = {
-  id: 'sub_w1r4x9k3m7n2p5q8',
-  organization_id: 'org_k7x9m2pqr4w8n1v3',
-  plan_id: 'pln_j5h8t3rwy6m1k9n2',
+  id: 'sub_w1r4x9k3m7n2p5q8a1b2c',
+  organization_id: 'org_k7x9m2pqr4w8n1v3a1b2c',
+  plan_id: 'pln_j5h8t3rwy6m1k9n2a1b2c',
   status: 'ACTIVE',
   billing_cycle: 'monthly',
   current_period_start: '2026-02-01T00:00:00.000Z',

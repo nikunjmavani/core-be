@@ -65,7 +65,7 @@ export async function seedAuthSessionsBulk(context: SeedContext): Promise<void> 
       await database
         .insert(sessions)
         .values({
-          public_id: generatePublicId(),
+          public_id: generatePublicId('authSession'),
           user_id: user.id,
           token_hash: tokenHash,
           ip_address: profile.ip_address,

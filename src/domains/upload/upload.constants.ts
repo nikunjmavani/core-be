@@ -74,6 +74,19 @@ export const UPLOAD_PURPOSE_CONFIG: Record<UploadPurpose, UploadPurposeConfig> =
 } as const;
 
 /**
+ * The required upload target (`for`) for each purpose (route-audit L3). The validator rejects a
+ * mismatched `{ purpose, for }` BEFORE key construction so a request like
+ * `{ purpose: organization-logo, for: user }` can't produce an `organization-logos/undefined/...`
+ * key on a user-scoped row (the key prefix encodes scope, and the attach binding relies on it).
+ */
+export const UPLOAD_PURPOSE_REQUIRED_TARGET: Record<UploadPurpose, UploadTarget> = {
+  [UPLOAD_PURPOSES.AVATAR]: UPLOAD_TARGETS.USER,
+  [UPLOAD_PURPOSES.USER_FILE]: UPLOAD_TARGETS.USER,
+  [UPLOAD_PURPOSES.ORGANIZATION_LOGO]: UPLOAD_TARGETS.ORGANIZATION,
+  [UPLOAD_PURPOSES.ORGANIZATION_FILE]: UPLOAD_TARGETS.ORGANIZATION,
+} as const;
+
+/**
  * Postgres advisory-lock namespace (`classid`) used to serialize per-user PENDING
  * upload-quota reservations. Combined with the user's internal id as the `objid`
  * in the two-key `pg_advisory_xact_lock(classid, objid)` form so it occupies a
@@ -82,6 +95,18 @@ export const UPLOAD_PURPOSE_CONFIG: Record<UploadPurpose, UploadPurposeConfig> =
  * arbitrary — only its stability matters.
  */
 export const UPLOAD_PENDING_QUOTA_ADVISORY_LOCK_NAMESPACE = 0x55_50_4c_44;
+
+/**
+ * Postgres advisory-lock namespace (`classid`) used to serialize per-ORGANIZATION PENDING
+ * upload-quota reservations (audit-#7). Distinct from
+ * {@link UPLOAD_PENDING_QUOTA_ADVISORY_LOCK_NAMESPACE} so the org lock and the per-user lock
+ * occupy separate lock spaces; combined with the organization's internal id as the `objid`.
+ * The reservation path always takes the org lock BEFORE the user lock (a globally consistent
+ * order) so concurrent reservations from different members of the same org serialize on the
+ * org cap without any deadlock risk. The value is the ASCII for `UPLO` and is otherwise
+ * arbitrary — only its stability and distinctness matter.
+ */
+export const UPLOAD_PENDING_ORGANIZATION_QUOTA_ADVISORY_LOCK_NAMESPACE = 0x55_50_4c_4f;
 
 /**
  * Page size for streaming a user's active uploads during offboarding. Bounds the

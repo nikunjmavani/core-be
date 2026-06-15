@@ -57,4 +57,24 @@ describe('user routes rate-limit policy (sec-r4-I1)', () => {
   it('DELETE /me/avatar has MODERATE_AUTHED_RATE_LIMIT applied (S3 delete)', () => {
     expect(findRouteBlock('delete', '/me/avatar')).toContain('...MODERATE_AUTHED_RATE_LIMIT');
   });
+
+  // route-#4: the ADMIN user-management mutations were the only authed mutations with no
+  // per-route cap — a compromised admin token could bulk-edit/delete/suspend accounts.
+  it('PATCH /:user_id (admin) has MODERATE_AUTHED_RATE_LIMIT applied', () => {
+    expect(findRouteBlock('patch', '/:user_id')).toContain('...MODERATE_AUTHED_RATE_LIMIT');
+  });
+
+  it('DELETE /:user_id (admin) has EXPENSIVE_AUTHED_RATE_LIMIT applied (destructive)', () => {
+    expect(findRouteBlock('delete', '/:user_id')).toContain('...EXPENSIVE_AUTHED_RATE_LIMIT');
+  });
+
+  it('POST /:user_id/suspend (admin) has MODERATE_AUTHED_RATE_LIMIT applied', () => {
+    expect(findRouteBlock('post', '/:user_id/suspend')).toContain('...MODERATE_AUTHED_RATE_LIMIT');
+  });
+
+  it('POST /:user_id/unsuspend (admin) has MODERATE_AUTHED_RATE_LIMIT applied', () => {
+    expect(findRouteBlock('post', '/:user_id/unsuspend')).toContain(
+      '...MODERATE_AUTHED_RATE_LIMIT',
+    );
+  });
 });

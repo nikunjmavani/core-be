@@ -141,7 +141,7 @@ sequenceDiagram
   Invitee->>Auth: POST /auth/magic-link {email} (signup-flow if new user)
   Note over Invitee,Auth: invitee establishes a session
 
-  Invitee->>Tenancy: POST /tenancy/invitations/:invitationId/accept {token}
+  Invitee->>Tenancy: POST /tenancy/invitations/:invitation_id/accept {token}
   Tenancy->>Inv: accept(invitationId, token, currentUserId)
   Inv->>DB: BEGIN; SET LOCAL app.current_organization_id
   Inv->>DB: UPDATE member_invitations SET status=accepted, accepted_at=NOW() WHERE token_hash=$1
@@ -173,7 +173,7 @@ sequenceDiagram
 Two paths:
 
 - **Inbound (authoritative)**: Stripe sends `customer.subscription.updated` → `POST /api/v1/billing/webhook`.
-- **User-initiated**: organization admin calls `POST /api/v1/billing/organizations/:id/subscriptions/:subscriptionId/change-plan`. The service calls Stripe; the inbound webhook lands shortly after and reconciles state.
+- **User-initiated**: organization admin calls `POST /api/v1/billing/organizations/:id/subscriptions/:subscription_id/change-plan`. The service calls Stripe; the inbound webhook lands shortly after and reconciles state.
 
 State changes always flow Stripe webhook → service → DB → emit event. We never write subscription state to DB without a Stripe-confirmed event behind it.
 

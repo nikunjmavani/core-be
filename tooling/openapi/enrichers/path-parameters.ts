@@ -1,42 +1,80 @@
-export function getPathParameterExample(parameterName: string): string {
-  const examples: Record<string, string> = {
-    id: 'org_k7x9m2pqr4w8n1v3',
-    provider: 'google',
-    slug: 'acme-corporation',
-    userId: 'usr_k7x9m2pqr4w8n1v3',
-    membershipId: 'mbr_q8w3n7p2m5k1r4t6',
-    roleId: 'rol_m3n7p2q8w5k1r4t6',
-    policyId: 'pol_j5h8t3rwy6m1k9n2',
-    invitationId: 'inv_r4t6m3n7p2q8w5k1',
-    apiKeyId: 'key_x9k3m7n2p5q8w1r4',
-    subscriptionId: 'sub_w1r4x9k3m7n2p5q8',
-    webhookId: 'whk_p5q8w1r4x9k3m7n2',
-    mfaMethodId: 'mfa_t6m3n7p2q8w5k1r4',
-    notificationId: 'ntf_m7n2p5q8w1r4x9k3',
-  };
+import {
+  PARAM_NAME_TO_ENTITY,
+  PUBLIC_ID_PREFIXES,
+  type PublicIdEntity,
+} from '@/shared/utils/identity/public-id.util.js';
 
-  return examples[parameterName] ?? `example-${parameterName}`;
+const ENTITY_LABELS: Record<PublicIdEntity, string> = {
+  user: 'user',
+  organization: 'organization',
+  membership: 'membership',
+  memberInvitation: 'invitation',
+  memberRole: 'role',
+  organizationApiKey: 'API key',
+  organizationNotificationPolicy: 'notification policy',
+  authSession: 'session',
+  authMethod: 'auth method',
+  authMfaMethod: 'MFA method',
+  notification: 'notification',
+  webhook: 'webhook',
+  plan: 'plan',
+  subscription: 'subscription',
+  upload: 'upload',
+  userDataExport: 'data export',
+  webhookDeliveryAttempt: 'webhook delivery attempt',
+};
+
+/** Stable, realistic 21-char example core (alphabet [a-z0-9]). */
+const EXAMPLE_CORE = 'a1b2c3d4e5f6g7h8i9j0k';
+
+function entityFor(parameterName: string): PublicIdEntity | undefined {
+  return PARAM_NAME_TO_ENTITY[parameterName as keyof typeof PARAM_NAME_TO_ENTITY];
 }
 
 /**
- * Returns a description for a path parameter.
+ * Example value for a path parameter. Typed-id params get a valid prefixed
+ * example (`org_a1b2c3d4e5f6g7h8i9j0k`).
+ */
+export function getPathParameterExample(parameterName: string): string {
+  const entity = entityFor(parameterName);
+  if (entity) {
+    return `${PUBLIC_ID_PREFIXES[entity]}_${EXAMPLE_CORE}`;
+  }
+  const literals: Record<string, string> = {
+    provider: 'google',
+    slug: 'acme-corporation',
+    circuit_name: 'stripe',
+  };
+  return literals[parameterName] ?? `example-${parameterName}`;
+}
+
+/**
+ * Paddle-style description for a path parameter: what it identifies, its
+ * prefix, and the exact validation pattern.
  */
 export function getPathParameterDescription(parameterName: string): string {
-  const descriptions: Record<string, string> = {
-    id: 'Resource public ID',
-    provider: 'OAuth provider name (e.g. google, github)',
+  const entity = entityFor(parameterName);
+  if (entity) {
+    const prefix = PUBLIC_ID_PREFIXES[entity];
+    return `Unique ID for this ${ENTITY_LABELS[entity]}, prefixed with \`${prefix}_\`. Pattern: \`^${prefix}_[a-z0-9]{21}$\``;
+  }
+  const literals: Record<string, string> = {
+    provider: 'OAuth provider name (`google` | `github`)',
     slug: 'Organization URL-friendly slug',
-    userId: 'User public ID',
-    membershipId: 'Membership public ID',
-    roleId: 'Role public ID',
-    policyId: 'Notification policy public ID',
-    invitationId: 'Invitation public ID',
-    apiKeyId: 'API key public ID',
-    subscriptionId: 'Subscription public ID',
-    webhookId: 'Webhook public ID',
-    mfaMethodId: 'MFA method public ID',
-    notificationId: 'Notification public ID',
+    circuit_name: 'Managed circuit breaker name (`stripe` | `s3` | `resend` | `turnstile`)',
   };
+  return literals[parameterName] ?? `The ${parameterName} parameter`;
+}
 
-  return descriptions[parameterName] ?? `The ${parameterName} parameter`;
+/**
+ * JSON-schema fragment for a path parameter — typed ids carry the strict
+ * per-entity pattern so generated clients validate before calling.
+ */
+export function getPathParameterSchema(parameterName: string): Record<string, unknown> {
+  const entity = entityFor(parameterName);
+  if (entity) {
+    const prefix = PUBLIC_ID_PREFIXES[entity];
+    return { type: 'string', pattern: `^${prefix}_[a-z0-9]{21}$` };
+  }
+  return { type: 'string' };
 }

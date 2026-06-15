@@ -63,7 +63,7 @@ export const ListUsersDto = z
 export type ListUsersInput = z.infer<typeof ListUsersDto>;
 
 /**
- * Zod schema for the `PATCH /api/v1/users/:userId` admin body. Status only allows `ACTIVE` /
+ * Zod schema for the `PATCH /api/v1/users/:user_id` admin body. Status only allows `ACTIVE` /
  * `SUSPENDED` here — `DELETED` is reachable only through the dedicated delete endpoint, which
  * triggers full soft-delete + offboarding.
  */

@@ -1,9 +1,19 @@
-import { NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/shared/errors/index.js';
+import { resolveGlobalRoleForEmail } from '@/shared/utils/auth/global-admin-role.util.js';
+import { GLOBAL_ROLES } from '@/shared/constants/roles.constants.js';
 import type { ObjectStoragePort } from '@/infrastructure/storage/object-storage.port.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { buildUserAvatarKeyPrefix } from '@/domains/upload/upload.constants.js';
 import type { UserRepository } from './user.repository.js';
+import { env } from '@/shared/config/env.config.js';
+import { resolvePersonalOrganizationPublicId } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 import { UserSerializer } from './user.serializer.js';
+import { resolveStoredMediaReadUrl } from '@/shared/utils/infrastructure/media-url.util.js';
 import {
   validateUpdateMe,
   validateListUsers,
@@ -24,23 +34,44 @@ import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructur
 const ALLOWED_AVATAR_CONTENT_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
 
 /**
+ * Structural port for the organization-ownership check during user offboarding (route-audit-#2).
+ *
+ * @remarks
+ * - **Algorithm:** a minimal interface (not an import of `OrganizationService`) so user offboarding
+ *   can count the user's owned organizations without user depending on tenancy at the type level.
+ * - **Failure modes:** the implementer surfaces DB errors; offboarding propagates them.
+ * - **Side effects:** none on this type — the implementer runs the count read.
+ * - **Notes:** the composition root supplies `OrganizationService` structurally (it already exposes
+ *   `countOrganizationsOwnedByUser`).
+ */
+export type UserOrganizationOwnershipPort = {
+  countOrganizationsOwnedByUser(userPublicId: string, userInternalId: number): Promise<number>;
+};
+
+/**
  * Cross-domain services injected lazily into {@link UserService} so account deletion can fan out
  * its side effects.
  *
  * @remarks
  * - **Algorithm:** wired post-construction by `wireOffboardingServices` so the user container can
- *   be built before the auth, upload, and data-export containers exist (breaks circular DI).
+ *   be built before the auth, upload, data-export, and tenancy containers exist (breaks circular DI).
  * - **Failure modes:** if any dependency is missing at deletion time, the service falls back to a
  *   plain soft-delete and emits no fan-out (see {@link UserService} `softDeleteUserWithOffboarding`).
  * - **Side effects:** none directly — the hosted services are responsible for queue / DB / S3 effects.
  * - **Notes:** intentionally typed as a record rather than an interface so the optional wiring path
- *   stays explicit at the call site.
+ *   stays explicit at the call site; `organizationOwnership` is optional (offboarding still runs
+ *   without it, just without the owned-organizations guard).
  */
 export type UserOffboardingDependencies = {
   authSessionService: AuthSessionService;
   authMethodService: AuthMethodService;
   uploadService: UploadService;
   userDataExportService: UserDataExportService;
+  /**
+   * route-audit-#2 follow-up: blocks deleting a user who still owns organizations (the org — with
+   * its members + billing — would be orphaned at a tombstoned owner). Require transfer/delete first.
+   */
+  organizationOwnership?: UserOrganizationOwnershipPort | undefined;
 };
 
 /**
@@ -72,6 +103,7 @@ export type UserOffboardingDependencies = {
 export class UserService {
   private offboardingUploadService: UploadService | null = null;
   private offboardingUserDataExportService: UserDataExportService | null = null;
+  private offboardingOrganizationOwnership: UserOrganizationOwnershipPort | null = null;
   private authSessionService: AuthSessionService | null = null;
   private authMethodService: AuthMethodService | null = null;
 
@@ -85,6 +117,7 @@ export class UserService {
     this.authMethodService = dependencies.authMethodService;
     this.offboardingUploadService = dependencies.uploadService;
     this.offboardingUserDataExportService = dependencies.userDataExportService;
+    this.offboardingOrganizationOwnership = dependencies.organizationOwnership ?? null;
   }
 
   private get offboardingDependencies(): UserOffboardingDependencies | null {
@@ -103,20 +136,33 @@ export class UserService {
       authMethodService: this.authMethodService,
       uploadService: this.offboardingUploadService,
       userDataExportService: this.offboardingUserDataExportService,
+      organizationOwnership: this.offboardingOrganizationOwnership ?? undefined,
     };
+  }
+
+  /**
+   * Best-effort reclaim of the S3 object backing an owned avatar key. Prefix-guarded, so an
+   * external OAuth-provider avatar URL is left untouched. Does NOT mutate the DB column — callers
+   * decide what to write — so it can be reused by per-asset delete, replacement, and offboarding.
+   */
+  private async deleteOwnedAvatarObject(
+    public_id: string,
+    avatar_url: string | null,
+  ): Promise<void> {
+    if (!avatar_url) return;
+    const expectedPrefix = buildUserAvatarKeyPrefix(public_id);
+    if (!avatar_url.startsWith(expectedPrefix)) return;
+    const objectDeleted = await this.objectStorage.deleteObject(avatar_url);
+    if (!objectDeleted) {
+      logger.warn({ publicId: public_id, avatarKey: avatar_url }, 'user.avatar.deleteFailed');
+    }
   }
 
   private async clearAvatarStorage(public_id: string, avatar_url: string | null): Promise<void> {
     if (!avatar_url) return;
     const expectedPrefix = buildUserAvatarKeyPrefix(public_id);
     if (!avatar_url.startsWith(expectedPrefix)) return;
-    const objectDeleted = await this.objectStorage.deleteObject(avatar_url);
-    if (!objectDeleted) {
-      logger.warn(
-        { publicId: public_id, avatarKey: avatar_url },
-        'user.offboarding.avatarDeleteFailed',
-      );
-    }
+    await this.deleteOwnedAvatarObject(public_id, avatar_url);
     await withUserDatabaseContext(public_id, () =>
       this.repository.update(public_id, { avatar_url: null }),
     );
@@ -139,6 +185,19 @@ export class UserService {
       );
       if (!deleted) throw new NotFoundError('User');
       return;
+    }
+    // route-audit-#2 follow-up: refuse to delete a user who still owns organizations — the org (and
+    // its members + active subscription) would be orphaned at a tombstoned owner. The user must
+    // transfer ownership (or delete the org, which now cancels its subscription) first. Checked
+    // before markDeletionStarted so a blocked delete leaves no half-state.
+    if (offboarding.organizationOwnership) {
+      const ownedCount = await offboarding.organizationOwnership.countOrganizationsOwnedByUser(
+        user.public_id,
+        user.id,
+      );
+      if (ownedCount > 0) {
+        throw new ConflictError('errors:userOwnsOrganizations');
+      }
     }
     const marked = await withUserDatabaseContext(public_id, () =>
       this.repository.markDeletionStarted(public_id),
@@ -215,7 +274,7 @@ export class UserService {
     // enter that user's context, then insert with the exact id so the policy passes. The retry
     // regenerates id + re-enters context on the (rare) public_id unique collision.
     return runInsertWithPublicIdentifierRetry(async () => {
-      const publicId = generatePublicId();
+      const publicId = generatePublicId('user');
       return withUserDatabaseContext(publicId, () =>
         this.repository.insertOAuthUser(publicId, data),
       );
@@ -318,9 +377,32 @@ export class UserService {
         `Invalid avatar content type: ${objectInfo.contentType}`,
       );
     }
+    // Bind the upload row to this owner explicitly (not just via the key prefix) so the ownership
+    // check survives any future caller that doesn't derive the key from the prefix convention.
+    const ownerInternalId = await this.resolveInternalIdByPublicId(ownerPublicId);
+    if (ownerInternalId === null) {
+      throw new ValidationError('errors:validation.avatarNotFound');
+    }
     await withUserDatabaseContext(ownerPublicId, () =>
-      this.offboardingUploadService!.assertKeyConfirmed(avatarKey),
+      this.offboardingUploadService!.assertKeyConfirmedForOwner({
+        fileKey: avatarKey,
+        userInternalId: ownerInternalId,
+      }),
     );
+  }
+
+  /**
+   * Serializes a user row to {@link UserOutput} with `avatar_url` resolved to a
+   * short-lived signed read URL (USER-10: private bucket + signed-on-read). The
+   * presign is a network-free local signature, so it is safe to call from within a
+   * database context.
+   */
+  private async toUserOutput(user: Parameters<typeof UserSerializer.one>[0]): Promise<UserOutput> {
+    const serialized = UserSerializer.one(user);
+    return {
+      ...serialized,
+      avatar_url: await resolveStoredMediaReadUrl(this.objectStorage, user.avatar_url),
+    };
   }
 
   // ── Self-service ────────────────────────────────────────────
@@ -330,7 +412,17 @@ export class UserService {
       this.repository.findByPublicId(publicId),
     );
     if (!user || user.deleted_at) throw new NotFoundError('User');
-    return UserSerializer.one(user);
+    const personalOrganizationId = env.PERSONAL_ORGANIZATION_ENABLED
+      ? ((await resolvePersonalOrganizationPublicId(user.id)) ?? null)
+      : null;
+    return {
+      ...(await this.toUserOutput(user)),
+      capabilities: {
+        personal_organizations: env.PERSONAL_ORGANIZATION_ENABLED,
+        team_organizations: env.TEAM_ORGANIZATION_ENABLED,
+      },
+      personal_organization_id: personalOrganizationId,
+    };
   }
 
   async updateMe(publicId: string, body: unknown): Promise<UserOutput> {
@@ -338,9 +430,14 @@ export class UserService {
 
     const { avatarKey, ...profileFields } = parsed;
     let avatarUrl: string | undefined;
+    let previousAvatarUrl: string | null = null;
     if (avatarKey) {
       await this.assertAvatarObjectInStorage(avatarKey, publicId);
       avatarUrl = avatarKey;
+      const previous = await withUserDatabaseContext(publicId, () =>
+        this.repository.findByPublicId(publicId),
+      );
+      previousAvatarUrl = previous?.avatar_url ?? null;
     }
     const user = await withUserDatabaseContext(publicId, () =>
       this.repository.update(
@@ -352,29 +449,67 @@ export class UserService {
       ),
     );
     if (!user) throw new NotFoundError('User');
-    return UserSerializer.one(user);
+    // Reclaim the previous owned avatar object when the avatar changed (storage leak / GDPR).
+    if (avatarUrl !== undefined && previousAvatarUrl && previousAvatarUrl !== avatarUrl) {
+      await this.deleteOwnedAvatarObject(publicId, previousAvatarUrl);
+    }
+    return this.toUserOutput(user);
   }
 
   async deleteMe(publicId: string): Promise<void> {
     await this.softDeleteUserWithOffboarding(publicId);
   }
 
+  /**
+   * Re-drives a STUCK user offboarding (USER-04 / USER-09 reconciler entry point).
+   *
+   * @remarks
+   * - **Algorithm:** delegates to the same idempotent `softDeleteUserWithOffboarding`
+   *   sequence used by self/admin delete; `deletion_started_at` makes every step
+   *   safe to re-run, so a partial offboarding resumes from where it stalled.
+   * - **Failure modes:** propagates so the reconciler can count + alert and retry on
+   *   the next tick.
+   * - **Side effects:** same as the original offboarding (session/credential revoke,
+   *   upload/export purge, soft-delete, S3 avatar cleanup).
+   * - **Notes:** deliberately skips the admin-entry `assertTargetNotProtectedAdmin`
+   *   guard — the offboarding has ALREADY been authorized and started; this only
+   *   completes it.
+   */
+  async resumeOffboarding(public_id: string): Promise<void> {
+    await this.softDeleteUserWithOffboarding(public_id);
+  }
+
   async uploadAvatar(publicId: string, body: unknown): Promise<UserOutput> {
     const { avatarKey } = validateUploadAvatar(body);
     await this.assertAvatarObjectInStorage(avatarKey, publicId);
+    const previous = await withUserDatabaseContext(publicId, () =>
+      this.repository.findByPublicId(publicId),
+    );
     const user = await withUserDatabaseContext(publicId, () =>
       this.repository.update(publicId, { avatar_url: avatarKey }),
     );
     if (!user) throw new NotFoundError('User');
-    return UserSerializer.one(user);
+    // Reclaim the PREVIOUS owned avatar object now the new one is attached — otherwise replacing an
+    // avatar orphaned the old S3 object indefinitely (storage leak / incomplete GDPR erasure).
+    if (previous?.avatar_url && previous.avatar_url !== avatarKey) {
+      await this.deleteOwnedAvatarObject(publicId, previous.avatar_url);
+    }
+    return this.toUserOutput(user);
   }
 
   async deleteAvatar(publicId: string): Promise<UserOutput> {
+    const existing = await withUserDatabaseContext(publicId, () =>
+      this.repository.findByPublicId(publicId),
+    );
+    if (!existing || existing.deleted_at) throw new NotFoundError('User');
+    // Reclaim the backing S3 object before clearing the column — previously `DELETE` left the bytes
+    // in the bucket (storage leak + incomplete GDPR erasure on the per-asset delete path).
+    await this.deleteOwnedAvatarObject(publicId, existing.avatar_url);
     const user = await withUserDatabaseContext(publicId, () =>
       this.repository.update(publicId, { avatar_url: null }),
     );
     if (!user) throw new NotFoundError('User');
-    return UserSerializer.one(user);
+    return this.toUserOutput(user);
   }
 
   // ── Admin operations ────────────────────────────────────────
@@ -395,7 +530,7 @@ export class UserService {
       ),
     );
     return {
-      items: result.items.map(UserSerializer.one),
+      items: await Promise.all(result.items.map((user) => this.toUserOutput(user))),
       limit: result.limit,
       total: result.total,
       has_more: result.has_more,
@@ -409,11 +544,35 @@ export class UserService {
       this.repository.findByPublicId(publicId),
     );
     if (!user) throw new NotFoundError('User');
-    return UserSerializer.one(user);
+    return this.toUserOutput(user);
+  }
+
+  /**
+   * Guards an admin mutation that would deactivate/remove a target (reaudit route-#1).
+   *
+   * @remarks
+   * Refuses to suspend / delete / deactivate a user whose email is in the global-admin allowlist.
+   * Super-admins are managed exclusively via `GLOBAL_ADMIN_EMAILS` (env), so the admin API must
+   * not be able to suspend or delete one — which previously let a super-admin self-lock-out, take
+   * down a peer admin, or remove the LAST super-admin (total admin-tier lockout). To rotate a
+   * super-admin, change the env allowlist, not this endpoint.
+   */
+  private async assertTargetNotProtectedAdmin(targetPublicId: string): Promise<void> {
+    const target = await withGlobalAdminDatabaseContext(() =>
+      this.repository.findByPublicId(targetPublicId),
+    );
+    if (!target) throw new NotFoundError('User');
+    if (resolveGlobalRoleForEmail(target.email) === GLOBAL_ROLES.SUPER_ADMIN) {
+      throw new ForbiddenError('errors:cannotModifyProtectedAdmin');
+    }
   }
 
   async adminUpdateUser(publicId: string, body: unknown): Promise<UserOutput> {
     const parsed = validateAdminUpdateUser(body);
+    // Only a status change away from ACTIVE is destructive; profile-only edits stay allowed.
+    if (parsed.status !== undefined && parsed.status !== 'ACTIVE') {
+      await this.assertTargetNotProtectedAdmin(publicId);
+    }
     const user = await withGlobalAdminDatabaseContext(() =>
       this.repository.adminUpdate(publicId, omitUndefined(parsed)),
     );
@@ -421,18 +580,20 @@ export class UserService {
     if (parsed.status !== undefined && parsed.status !== 'ACTIVE') {
       await this.revokeAllSessionsForDeactivatedUser(publicId);
     }
-    return UserSerializer.one(user);
+    return this.toUserOutput(user);
   }
 
   async deleteUser(publicId: string): Promise<void> {
+    await this.assertTargetNotProtectedAdmin(publicId);
     await this.softDeleteUserWithOffboarding(publicId);
   }
 
   async suspendUser(publicId: string): Promise<UserOutput> {
+    await this.assertTargetNotProtectedAdmin(publicId);
     const user = await withGlobalAdminDatabaseContext(() => this.repository.suspend(publicId));
     if (!user) throw new NotFoundError('User');
     await this.revokeAllSessionsForDeactivatedUser(publicId);
-    return UserSerializer.one(user);
+    return this.toUserOutput(user);
   }
 
   /**
@@ -450,6 +611,6 @@ export class UserService {
   async unsuspendUser(publicId: string): Promise<UserOutput> {
     const user = await withGlobalAdminDatabaseContext(() => this.repository.unsuspend(publicId));
     if (!user) throw new NotFoundError('User');
-    return UserSerializer.one(user);
+    return this.toUserOutput(user);
   }
 }

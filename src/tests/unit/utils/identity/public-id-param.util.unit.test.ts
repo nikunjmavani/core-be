@@ -5,7 +5,7 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 describe('validatePublicIdParam', () => {
   it('returns the value when public id format is valid', () => {
-    const publicId = generatePublicId();
+    const publicId = generatePublicId('user');
     expect(validatePublicIdParam(publicId, 'id')).toBe(publicId);
   });
 

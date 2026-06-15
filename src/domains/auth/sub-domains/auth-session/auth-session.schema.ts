@@ -20,7 +20,7 @@ export const sessions = authSchema
     'sessions',
     {
       id: bigserial('id', { mode: 'number' }).primaryKey(),
-      public_id: varchar('public_id', { length: 21 }).notNull().unique(),
+      public_id: varchar('public_id', { length: 28 }).notNull().unique(),
       user_id: bigint('user_id', { mode: 'number' })
         .notNull()
         .references(() => users.id, { onDelete: 'cascade' }),
@@ -30,6 +30,12 @@ export const sessions = authSchema
       ),
       token_hash: varchar('token_hash', { length: 64 }).notNull().unique(),
       refresh_token_hash: varchar('refresh_token_hash', { length: 64 }),
+      // audit-#2: the immediately-previous refresh hash + when it was rotated. The refresh CAS
+      // accepts this hash for a short grace window so two concurrent legitimate refreshes (double
+      // click / two tabs / proxy retry) presenting the SAME secret both succeed instead of the
+      // loser being misclassified as token-reuse and revoking the whole session family.
+      previous_refresh_token_hash: varchar('previous_refresh_token_hash', { length: 64 }),
+      refresh_token_rotated_at: timestamp('refresh_token_rotated_at', { withTimezone: true }),
       ip_address: inet('ip_address').notNull(),
       user_agent: varchar('user_agent', { length: 512 }),
       last_active_at: timestamp('last_active_at', { withTimezone: true }).notNull().defaultNow(),

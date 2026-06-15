@@ -7,7 +7,7 @@ import type { UploadCreateOutput, UploadDetailOutput } from './upload.types.js';
  * `fields` map only for `POST`-method (presigned-post) uploads.
  */
 export function serializeUploadCreate(data: {
-  publicId: string;
+  id: string;
   uploadUrl: string;
   key: string;
   expiresAt: Date;
@@ -15,7 +15,7 @@ export function serializeUploadCreate(data: {
   fields?: Record<string, string>;
 }): UploadCreateOutput {
   return {
-    publicId: data.publicId,
+    id: data.id,
     uploadUrl: data.uploadUrl,
     key: data.key,
     expiresAt: data.expiresAt.toISOString(),
@@ -37,7 +37,7 @@ export function serializeUploadDetail(
   // serialized — they are storage-internal, the client uses presigned URLs and
   // never the raw key, and exposing them reveals storage layout for enumeration.
   return {
-    publicId: row.public_id,
+    id: row.public_id,
     fileName: row.file_name,
     mimeType: row.mime_type,
     fileSize: row.file_size,

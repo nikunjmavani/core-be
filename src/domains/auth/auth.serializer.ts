@@ -12,12 +12,12 @@ interface AuthMethodResponseInput {
 /**
  * Allowlist an auth-method row for the API response. NEVER emits credential material
  * (`encrypted_secret` — the AES-GCM TOTP seed), PII (`phone_number`, `provider_user_id`) or
- * internal sequential ids (`id`, `user_id`, `created_by_user_id`). `public_id` is the stable
- * opaque identifier accepted by `DELETE /me/auth-methods/:publicId` (sec-new-B4).
+ * internal sequential ids (`id`, `user_id`, `created_by_user_id`). The emitted `id` is the stable
+ * opaque identifier accepted by `DELETE /me/auth-methods/{auth_method_id}` (sec-new-B4).
  */
 function serializeAuthMethod(item: AuthMethodResponseInput) {
   return {
-    public_id: item.public_id,
+    id: item.public_id,
     method_type: item.method_type,
     provider: item.provider,
     is_primary: item.is_primary,
@@ -32,9 +32,7 @@ export const AuthSerializer = {
   accessToken(data: { access_token: string; session_public_id?: string }) {
     return {
       access_token: data.access_token,
-      ...(data.session_public_id !== undefined
-        ? { session_public_id: data.session_public_id }
-        : {}),
+      ...(data.session_public_id !== undefined ? { session_id: data.session_public_id } : {}),
     };
   },
   mfaRequired(data: { mfa_required: true; mfa_session_token: string }) {
@@ -67,7 +65,7 @@ export const AuthSerializer = {
   mfaEnrollConfirm(data: { recovery_codes: string[]; method_public_id: string }) {
     return {
       recovery_codes: data.recovery_codes,
-      method_public_id: data.method_public_id,
+      mfa_method_id: data.method_public_id,
     };
   },
   oauthProviders(data: { providers: string[] }) {

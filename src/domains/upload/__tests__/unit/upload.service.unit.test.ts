@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ForbiddenError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import { ExternalServiceError } from '@/infrastructure/outbound/index.js';
 import { UploadService } from '@/domains/upload/upload.service.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { UploadRepository } from '@/domains/upload/upload.repository.js';
@@ -7,11 +8,7 @@ import type { UserService } from '@/domains/user/user.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 
 import { createObjectStoragePortMock } from '@/tests/helpers/object-storage-mock.helper.js';
-import { resolveUserOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
-
-vi.mock('@/domains/tenancy/sub-domains/permission/authorization.service.js', () => ({
-  resolveUserOrganizationPermissions: vi.fn().mockResolvedValue(['upload:manage']),
-}));
+import type { AuthorizationService } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
 
 vi.mock('@/shared/config/env.config.js', () => ({
   getEnv: vi.fn(() => ({
@@ -36,8 +33,8 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   ),
 }));
 
-const userPublicId = generatePublicId();
-const uploadPublicId = generatePublicId();
+const userPublicId = generatePublicId('user');
+const uploadPublicId = generatePublicId('upload');
 const user = { id: 1, public_id: userPublicId };
 const uploadRow = {
   id: 2,
@@ -73,6 +70,8 @@ describe('UploadService', () => {
     countPendingByUserId: vi.fn().mockResolvedValue(0),
     countPendingByOrganizationId: vi.fn().mockResolvedValue(0),
     acquirePendingUploadQuotaLock: vi.fn().mockResolvedValue(undefined),
+    // audit-#7: org-scoped pending-upload quota lock (no-op in unit tests).
+    acquirePendingOrganizationQuotaLock: vi.fn().mockResolvedValue(undefined),
   } as unknown as UploadRepository;
 
   const userService = {
@@ -85,10 +84,21 @@ describe('UploadService', () => {
   } as unknown as OrganizationService;
 
   const objectStorage = createObjectStoragePortMock();
-  const service = new UploadService(repository, userService, organizationService, objectStorage);
+  const resolveUserOrganizationPermissions = vi.fn().mockResolvedValue(['upload:manage']);
+  const authorizationService = {
+    resolveUserOrganizationPermissions,
+  } as unknown as AuthorizationService;
+  const service = new UploadService(
+    repository,
+    userService,
+    organizationService,
+    objectStorage,
+    authorizationService,
+  );
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    resolveUserOrganizationPermissions.mockResolvedValue(['upload:manage']);
     const { getEnv } = await import('@/shared/config/env.config.js');
     vi.mocked(getEnv).mockReturnValue({
       S3_BUCKET: 'test-bucket',
@@ -154,10 +164,7 @@ describe('UploadService', () => {
   });
 
   it('createUpload rejects organization upload without manage permission', async () => {
-    const { resolveUserOrganizationPermissions } = await import(
-      '@/domains/tenancy/sub-domains/permission/authorization.service.js'
-    );
-    vi.mocked(resolveUserOrganizationPermissions).mockResolvedValueOnce([]);
+    resolveUserOrganizationPermissions.mockResolvedValueOnce([]);
 
     await expect(
       service.createUpload(
@@ -176,7 +183,7 @@ describe('UploadService', () => {
 
   it('getUpload returns serialized upload', async () => {
     const result = await service.getUpload(uploadPublicId, userPublicId);
-    expect(result.publicId).toBe(uploadPublicId);
+    expect(result.id).toBe(uploadPublicId);
   });
 
   it('deleteUpload removes upload for user', async () => {
@@ -216,7 +223,7 @@ describe('UploadService', () => {
       ...uploadRow,
       organization_id: 10,
     } as never);
-    vi.mocked(resolveUserOrganizationPermissions).mockResolvedValueOnce([]);
+    resolveUserOrganizationPermissions.mockResolvedValueOnce([]);
 
     await expect(service.deleteUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
       ForbiddenError,
@@ -510,6 +517,25 @@ describe('UploadService', () => {
       ValidationError,
     );
     expect(repository.markStatusByPublicId).toHaveBeenCalledWith(uploadPublicId, 'FAILED');
+  });
+
+  it('UPLOAD-03: confirmUpload rethrows a transient storage error WITHOUT marking FAILED', async () => {
+    // sec-UP1: pending-keyed so we reach the verify step rather than the legacy refusal.
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...uploadRow,
+      file_key: `pending/${uploadRow.file_key}`,
+      status: 'PENDING',
+    } as never);
+    // A transient S3 blip surfaces as ExternalServiceError (503), not a verification miss.
+    vi.mocked(objectStorage.verifyUploadedObject).mockRejectedValueOnce(
+      new ExternalServiceError({ integration: 's3', category: 'timeout' }),
+    );
+
+    await expect(service.confirmUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
+      ExternalServiceError,
+    );
+    // The upload must stay PENDING for retry — never permanently FAILED on a blip.
+    expect(repository.markStatusByPublicId).not.toHaveBeenCalledWith(uploadPublicId, 'FAILED');
   });
 
   it('confirmUpload sanitizes a stored SVG before marking UPLOADED', async () => {

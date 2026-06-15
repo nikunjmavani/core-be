@@ -4,15 +4,16 @@ import {
   getActingUserPublicId,
   getRequestIdentifier,
   requirePrincipal,
+  resolveActiveOrganizationId,
 } from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { OrganizationNotificationPolicyService } from './organization-notification-policy.service.js';
 
 /**
- * Builds the Fastify handler map for `/organizations/:id/notification-policies`
- * routes — list, get, create, update, delete. Validates BOTH the
- * organization `id` and the `policyId` path params via
- * {@link validatePublicIdParam}.
+ * Builds the Fastify handler map for `/organization/notification-policies`
+ * routes — list, get, create, update, delete. The active organization is
+ * resolved from the signed JWT `org` claim; the `policyId` path param is
+ * validated via {@link validatePublicIdParam}.
  *
  * @remarks
  * sec-T5: this handler used to coerce `policyId` to a positive integer
@@ -30,43 +31,37 @@ export function createOrganizationNotificationPolicyController(
 ) {
   return {
     listPolicies: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const organizationId = validatePublicIdParam(
-        (request.params as { id: string }).id ?? '',
-        'id',
-      );
+      const organizationId = resolveActiveOrganizationId(request);
       const data = await service.list(organizationId);
       return successResponse(data, getRequestIdentifier(request));
     },
     getPolicy: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const { id: organizationId, policyId } = (request.params as {
-        id: string;
-        policyId: string;
-      }) ?? { id: '', policyId: '' };
+      const { policy_id: policyId } = (request.params as {
+        policy_id: string;
+      }) ?? { policy_id: '' };
+      const organizationId = resolveActiveOrganizationId(request);
       const data = await service.getByPublicId(
-        validatePublicIdParam(organizationId, 'id'),
-        validatePublicIdParam(policyId, 'policyId'),
+        organizationId,
+        validatePublicIdParam(policyId, 'policy_id'),
       );
       return successResponse(data, getRequestIdentifier(request));
     },
     createPolicy: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const organizationId = validatePublicIdParam(
-        (request.params as { id: string }).id ?? '',
-        'id',
-      );
+      const organizationId = resolveActiveOrganizationId(request);
       const data = await service.create(organizationId, request.body, getActingUserPublicId(auth));
       reply.code(201);
       return successResponse(data, getRequestIdentifier(request));
     },
     updatePolicy: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const { id: organizationId, policyId } = (request.params as {
-        id: string;
-        policyId: string;
-      }) ?? { id: '', policyId: '' };
+      const { policy_id: policyId } = (request.params as {
+        policy_id: string;
+      }) ?? { policy_id: '' };
+      const organizationId = resolveActiveOrganizationId(request);
       const data = await service.update(
-        validatePublicIdParam(organizationId, 'id'),
-        validatePublicIdParam(policyId, 'policyId'),
+        organizationId,
+        validatePublicIdParam(policyId, 'policy_id'),
         request.body,
         getActingUserPublicId(auth),
       );
@@ -74,14 +69,11 @@ export function createOrganizationNotificationPolicyController(
     },
     deletePolicy: async (request: FastifyRequest, reply: FastifyReply) => {
       requirePrincipal(request);
-      const { id: organizationId, policyId } = (request.params as {
-        id: string;
-        policyId: string;
-      }) ?? { id: '', policyId: '' };
-      await service.delete(
-        validatePublicIdParam(organizationId, 'id'),
-        validatePublicIdParam(policyId, 'policyId'),
-      );
+      const { policy_id: policyId } = (request.params as {
+        policy_id: string;
+      }) ?? { policy_id: '' };
+      const organizationId = resolveActiveOrganizationId(request);
+      await service.delete(organizationId, validatePublicIdParam(policyId, 'policy_id'));
       return reply.code(204).send();
     },
   };

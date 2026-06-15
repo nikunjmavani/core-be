@@ -59,7 +59,10 @@ describe('Audit Domain — Integration', () => {
       expect(body.data).toBeDefined();
     });
 
-    it('should return logs for admin role', async () => {
+    it('route-#6: downgrades a non-allowlisted admin-role token (no blind trust)', async () => {
+      // The global ADMIN tier is never minted (roles derive only from GLOBAL_ADMIN_EMAILS →
+      // super_admin / user), so a bare `admin` claim is stale/forged: the auth middleware
+      // re-derives it against live state and a non-allowlisted user is downgraded to USER → 403.
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id, role: 'admin' });
       const response = await injectAuthenticated(app, {
@@ -67,7 +70,7 @@ describe('Audit Domain — Integration', () => {
         url: testApiPath('/audit/logs'),
         token,
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(403);
     });
 
     it('should accept cursor pagination query parameters', async () => {

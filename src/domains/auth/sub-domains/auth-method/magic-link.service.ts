@@ -10,6 +10,11 @@ import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session
 import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service.js';
 import type { VerificationTokenRepository } from './verification-token/verification-token.repository.js';
 import { eventBus } from '@/core/events/event-bus.js';
+import { withTransaction } from '@/infrastructure/database/transaction.js';
+import {
+  runWithPinnedDatabaseHandle,
+  type RequestScopedPostgresDatabase,
+} from '@/infrastructure/database/contexts/request-database.context.js';
 import { validateMagicLinkSend, validateMagicLinkVerify } from '@/domains/auth/auth.validator.js';
 import {
   AUTH_EVENT,
@@ -102,29 +107,39 @@ export class MagicLinkService {
     if (!user) {
       return;
     }
-    await this.verificationTokenRepository.invalidateAllForUser(user.id, 'MAGIC_LINK');
 
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + MAGIC_LINK_EXPIRES_IN_MINUTES * 60_000);
 
-    await this.verificationTokenRepository.create(
-      'MAGIC_LINK',
-      user.id,
-      user.email,
-      tokenHash,
-      expiresAt,
+    // audit-#11: invalidating prior links, persisting the new token, and recording the outbound
+    // mail-outbox row (done inside the MAGIC_LINK_REQUESTED handler via recordOutboxEmail) must be
+    // ONE atomic unit. Previously they were separate autocommitted writes, so a handler / Redis /
+    // process failure could invalidate the user's old link AND leave a new valid token that was
+    // never delivered — stranding the user with no usable link. The pinned transaction makes the
+    // handler's outbox insert enrol in the same tx; queue dispatch stays post-commit (the handler
+    // schedules it via scheduleCommitDispatch, backed by the outbox sweeper).
+    await withTransaction((transaction) =>
+      runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
+        await this.verificationTokenRepository.invalidateAllForUser(user.id, 'MAGIC_LINK');
+        await this.verificationTokenRepository.create(
+          'MAGIC_LINK',
+          user.id,
+          user.email,
+          tokenHash,
+          expiresAt,
+        );
+        await eventBus.emitStrict({
+          type: AUTH_EVENT.MAGIC_LINK_REQUESTED,
+          payload: {
+            email: user.email,
+            magic_link_token: rawToken,
+            expires_in_minutes: MAGIC_LINK_EXPIRES_IN_MINUTES,
+          } satisfies MagicLinkEmailPayload,
+          timestamp: new Date(),
+        });
+      }),
     );
-
-    await eventBus.emitStrict({
-      type: AUTH_EVENT.MAGIC_LINK_REQUESTED,
-      payload: {
-        email: user.email,
-        magic_link_token: rawToken,
-        expires_in_minutes: MAGIC_LINK_EXPIRES_IN_MINUTES,
-      } satisfies MagicLinkEmailPayload,
-      timestamp: new Date(),
-    });
   }
 
   /** Verify magic link token; returns MFA challenge or access token + session. */
@@ -135,32 +150,47 @@ export class MagicLinkService {
   ): Promise<FirstFactorAuthResult> {
     const parsed = validateMagicLinkVerify(body);
     const tokenHash = createHash('sha256').update(parsed.token).digest('hex');
-    /** Atomic UPDATE prevents two concurrent verifies from both producing a session. */
-    const record = await this.verificationTokenRepository.consumeIfValid(tokenHash);
-    if (!record || record.token_type !== 'MAGIC_LINK') {
-      throw new UnauthorizedError('errors:invalidOrExpiredMagicLink');
-    }
-    const user = await this.userService.findById(record.user_id);
-    if (!user) throw new UnauthorizedError('errors:userNotFound');
-    // sec-U1: pass the row so the assertion rejects soft-deleted users (the resolver
-    // also filters `deleted_at IS NULL`, so the user would already be null; this is
-    // belt-and-suspenders against a regression in either layer).
-    assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
 
-    return completeFirstFactorAuth({
-      user: {
-        id: user.id,
-        public_id: user.public_id,
-        email: user.email,
-        status: user.status,
-        is_email_verified: user.is_email_verified,
-        is_mfa_enabled: user.is_mfa_enabled,
-      },
-      ipAddress,
-      userAgent,
-      organizationSettingsService: this.organizationSettingsService,
-      mfaService: this.mfaService,
-      authSessionService: this.authSessionService,
-    });
+    // audit-#12: consume the one-time token AND complete first-factor auth (session creation, or
+    // the MFA-challenge decision) in ONE pinned transaction. Previously the token was consumed
+    // first and the downstream work ran outside that transaction, so a transient failure after
+    // consumption permanently burned a valid single-use link ("invalid or expired" on retry).
+    // The atomic `consumeIfValid` UPDATE still prevents two concurrent verifies from both
+    // producing a session; on a downstream failure the pinned transaction rolls the consumption
+    // back, leaving the link redeemable. `completeFirstFactorAuth`'s admin-scoped policy reads run
+    // in their own transactions (separate connection), while `createSessionForUser` reuses this
+    // pinned transaction — so the session insert commits atomically with the token consumption.
+    const result = await withTransaction((transaction) =>
+      runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
+        /** Atomic UPDATE prevents two concurrent verifies from both producing a session. */
+        const record = await this.verificationTokenRepository.consumeIfValid(tokenHash);
+        if (record?.token_type !== 'MAGIC_LINK') {
+          throw new UnauthorizedError('errors:invalidOrExpiredMagicLink');
+        }
+        const user = await this.userService.findById(record.user_id);
+        if (!user) throw new UnauthorizedError('errors:userNotFound');
+        // sec-U1: pass the row so the assertion rejects soft-deleted users (the resolver
+        // also filters `deleted_at IS NULL`, so the user would already be null; this is
+        // belt-and-suspenders against a regression in either layer).
+        assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
+
+        return completeFirstFactorAuth({
+          user: {
+            id: user.id,
+            public_id: user.public_id,
+            email: user.email,
+            status: user.status,
+            is_email_verified: user.is_email_verified,
+            is_mfa_enabled: user.is_mfa_enabled,
+          },
+          ipAddress,
+          userAgent,
+          organizationSettingsService: this.organizationSettingsService,
+          mfaService: this.mfaService,
+          authSessionService: this.authSessionService,
+        });
+      }),
+    );
+    return result;
   }
 }

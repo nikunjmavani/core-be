@@ -78,7 +78,7 @@ export const listCursorPayloadSchema = z
   .object({
     created_at: z.iso.datetime(),
     sort_value: z.string().optional(),
-    public_id: z.string().min(1).max(21).optional(),
+    public_id: z.string().min(1).max(28).optional(),
     id: z.number().int().positive().optional(),
     /**
      * sec-U12: SHA-256 (hex) of the normalized filter set that minted this

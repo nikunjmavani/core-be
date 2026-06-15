@@ -6,10 +6,26 @@ import {
   PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS,
 } from '@/shared/constants/ttl.constants.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { captureException } from '@/infrastructure/observability/sentry/sentry.js';
 
 const PERMISSION_CACHE_PREFIX = 'perm';
 const PERMISSION_CACHE_ORGANIZATION_VERSION_PREFIX = 'perm:org';
-const STAMPEDE_POLL_ATTEMPTS = 40;
+
+/**
+ * Number of stampede poll iterations before a waiter falls through to its own
+ * recompute (audit-#9).
+ *
+ * @remarks
+ * Sized to ~90% of the recompute-lock TTL (was a fixed 40 ≈ 2s) so waiters wait
+ * for the lock holder's recompute — which can exceed 2s for a large org or a DB
+ * under load — instead of stampeding into N concurrent uncached 5-table joins.
+ * Only a genuinely dead holder (lock expired at its TTL) makes a waiter recompute.
+ * Waiters still exit the moment the cache populates, so the common fast-recompute
+ * path is unaffected.
+ */
+const STAMPEDE_POLL_ATTEMPTS = Math.ceil(
+  (PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS * 1000 * 0.9) / PERMISSION_CACHE_STAMPEDE_POLL_MS,
+);
 
 /**
  * Atomic "commit cache write only if we still own the recompute lock". Closes the
@@ -234,6 +250,17 @@ export async function withPermissionCacheRecomputeLock(
       return doubleCheck;
     }
 
+    if (!acquiredLock) {
+      // audit-#9: a waiter polled out the full budget without the cache populating
+      // (lock holder dead or recompute slower than the lock TTL) and is now doing
+      // its own uncached recompute. Surface it so a real stampede is observable
+      // rather than silently amplifying DB load.
+      logger.warn(
+        { userId, organizationId },
+        'permission-cache.stampede.waiter_fell_through_to_recompute',
+      );
+    }
+
     const fresh = await recompute();
     await commitCachedPermissionsIfLockHeld({
       userId,
@@ -282,7 +309,16 @@ export async function invalidatePermissions(userId: string, organizationId: stri
       buildRecomputeLockKey(userId, organizationId),
     );
   } catch (error) {
+    // A failed invalidation leaves the OLD (over-broad) permission set cached until its TTL — a
+    // privilege-retention window after a role/membership change. Fail-open is deliberate (callers
+    // must not block on cache), but surface it to Sentry so the operational risk is VISIBLE, not
+    // buried in a warn log.
     logger.warn({ error }, 'permission-cache.invalidate.failed');
+    captureException(error, {
+      userId,
+      organizationId,
+      tags: { subsystem: 'permission-cache', operation: 'invalidate' },
+    });
   }
 }
 
@@ -310,6 +346,12 @@ export async function invalidateOrganizationPermissions(organizationId: string):
   try {
     await redisConnection.incr(buildOrganizationVersionKey(organizationId));
   } catch (error) {
+    // Same privilege-retention risk as invalidatePermissions, org-wide: a failed version bump
+    // leaves every user's cached permission set live until TTL. Surface to Sentry.
     logger.warn({ error }, 'permission-cache.invalidate-organization.failed');
+    captureException(error, {
+      organizationId,
+      tags: { subsystem: 'permission-cache', operation: 'invalidate-organization' },
+    });
   }
 }

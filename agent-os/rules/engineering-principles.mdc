@@ -34,7 +34,7 @@ Write production-grade, maintainable, scalable code. Preserve simplicity; avoid 
 
 - **Import paths**: `@/` in `src/`, `@tooling/` in tooling; same-folder `./` only — no parent-relative `../`. See **[import-paths.mdc](import-paths.mdc)**.
 - **Controllers** coordinate only — thin handlers, no DB queries.
-- **Services** express intent — business logic, validators, events; no transaction management in services.
+- **Services** express intent — business logic, validators, events; they may declare a transaction boundary via `withTransaction` for atomicity, but issue no raw SQL and manage no DB connection (repositories own the SQL; enforced by `no-direct-db-in-services.global.test.ts`).
 - **Repositories** own DB access (Drizzle).
 - **Services** express intent; they use **same-domain repositories** and other domains' **services** for cross-domain reads/writes — never another domain's repository or schema.
 - **Postgres** is the only source of truth; workers are pull-based (BullMQ).

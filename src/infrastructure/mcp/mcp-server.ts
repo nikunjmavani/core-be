@@ -18,12 +18,14 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { GLOBAL_ROLES } from '@/shared/constants/index.js';
 import {
+  MCP_CLIENT_GUIDE_RESOURCE_URI,
   MCP_OPENAPI_RESOURCE_URI,
   MCP_RESOURCES,
   MCP_ROUTES_RESOURCE_URI,
   MCP_TOOLS,
   callApiInputSchema,
 } from '@/infrastructure/mcp/mcp-capabilities.js';
+import { MCP_CLIENT_GUIDE } from '@/infrastructure/mcp/mcp-client-guide.js';
 import { requireRole } from '@/shared/utils/auth/authorization.util.js';
 import { STRICT_AUTHED_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 
@@ -117,8 +119,11 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
     (resource) => resource.uri === MCP_OPENAPI_RESOURCE_URI,
   );
   const routesResource = MCP_RESOURCES.find((resource) => resource.uri === MCP_ROUTES_RESOURCE_URI);
+  const clientGuideResource = MCP_RESOURCES.find(
+    (resource) => resource.uri === MCP_CLIENT_GUIDE_RESOURCE_URI,
+  );
   const callApiTool = MCP_TOOLS.find((tool) => tool.name === 'call_api');
-  if (!(openApiResource && routesResource && callApiTool)) {
+  if (!(openApiResource && routesResource && clientGuideResource && callApiTool)) {
     throw new Error('MCP resource/tool catalog is incomplete');
   }
 
@@ -160,6 +165,25 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
     }),
   );
 
+  server.registerResource(
+    clientGuideResource.name,
+    MCP_CLIENT_GUIDE_RESOURCE_URI,
+    {
+      title: clientGuideResource.title,
+      description: clientGuideResource.description,
+      mimeType: clientGuideResource.mimeType,
+    },
+    async () => ({
+      contents: [
+        {
+          uri: MCP_CLIENT_GUIDE_RESOURCE_URI,
+          mimeType: 'text/markdown',
+          text: MCP_CLIENT_GUIDE,
+        },
+      ],
+    }),
+  );
+
   server.registerTool(
     callApiTool.name,
     {
@@ -189,9 +213,12 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
         };
       }
       try {
-        // Strip headers that could override authentication or session identity.
-        // The MCP endpoint itself is admin-authenticated; the injected sub-request must not
-        // be able to impersonate a different principal via caller-supplied header overrides.
+        // Strip headers that could override authentication, session identity, or tenant context.
+        // The MCP endpoint itself is admin-authenticated; the injected sub-request must not be
+        // able to impersonate a different principal or pivot tenant context via caller-supplied
+        // header overrides. route-#8: x-organization-id is the tenant selector (→ RLS GUC), so a
+        // caller must not be able to set it on the proxied sub-request; the sub-request derives
+        // its org the same way every other request does.
         const BLOCKED_HEADERS = new Set([
           'authorization',
           'cookie',
@@ -199,6 +226,7 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
           'x-csrf-token',
           'x-forwarded-for',
           'x-real-ip',
+          'x-organization-id',
         ]);
         const safeHeaders: Record<string, string> = {};
         for (const [key, value] of Object.entries(data.headers ?? {})) {

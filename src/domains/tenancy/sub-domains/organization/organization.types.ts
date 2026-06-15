@@ -3,7 +3,10 @@ export interface Organization {
   id: number;
   public_id: string;
   name: string;
-  slug: string;
+  /** Null for PERSONAL organizations (no human handle); kebab string for TEAM. */
+  slug: string | null;
+  /** `PERSONAL` (single-owner workspace) or `TEAM` (shareable). */
+  type: string;
   owner_user_id: number;
   status: string;
   logo_url: string | null;
@@ -18,7 +21,9 @@ export interface Organization {
 export interface OrganizationOutput {
   id: string;
   name: string;
-  slug: string;
+  /** Null for the personal organization. */
+  slug: string | null;
+  type: string;
   status: string;
   logo_url: string | null;
   created_at: string;
@@ -30,7 +35,8 @@ export interface OrganizationBillingContext {
   id: number;
   public_id: string;
   name: string;
-  slug: string;
+  slug: string | null;
+  type: string;
   stripe_customer_id: string | null;
 }
 

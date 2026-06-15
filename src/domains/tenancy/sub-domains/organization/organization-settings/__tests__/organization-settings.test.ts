@@ -48,29 +48,31 @@ describe('Tenancy Organization Settings Sub-Domain — Integration', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
+    // Flat tenancy routes resolve the organization from the JWT `org` claim.
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
     return { user, organization, role, token };
   }
 
-  function organizationSettingsPath(organizationPublicId: string) {
-    return `/api/v1/tenancy/organizations/${organizationPublicId}/settings`;
-  }
+  const ORGANIZATION_SETTINGS_PATH = '/api/v1/tenancy/organization/settings';
 
-  describe('GET /api/v1/tenancy/organizations/:id/settings', () => {
+  describe('GET /api/v1/tenancy/organization/settings', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
-        url: organizationSettingsPath('unauthenticated-organization-route'),
+        url: ORGANIZATION_SETTINGS_PATH,
       });
       expect(response.statusCode).toBe(401);
     });
 
     it('should return 403 without organization read permission', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.ORGANIZATION_UPDATE,
       ]);
 
       const response = await injectAuthenticated(app, {
-        url: organizationSettingsPath(organization.public_id),
+        url: ORGANIZATION_SETTINGS_PATH,
         token,
       });
       expect(response.statusCode).toBe(403);
@@ -82,7 +84,7 @@ describe('Tenancy Organization Settings Sub-Domain — Integration', () => {
       ]);
 
       const response = await injectAuthenticated(app, {
-        url: organizationSettingsPath(organization.public_id),
+        url: ORGANIZATION_SETTINGS_PATH,
         token,
       });
       expect(response.statusCode).toBe(200);
@@ -99,11 +101,11 @@ describe('Tenancy Organization Settings Sub-Domain — Integration', () => {
     });
   });
 
-  describe('PATCH /api/v1/tenancy/organizations/:id/settings', () => {
+  describe('PATCH /api/v1/tenancy/organization/settings', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'PATCH',
-        url: organizationSettingsPath('unauthenticated-organization-route'),
+        url: ORGANIZATION_SETTINGS_PATH,
         payload: { is_email_notifications_enabled: false },
       });
       expect(response.statusCode).toBe(401);
@@ -126,11 +128,14 @@ describe('Tenancy Organization Settings Sub-Domain — Integration', () => {
         organizationId: updateContext.organization.id,
         roleId: readOnlyRole.id,
       });
-      const readOnlyToken = await generateTestToken({ userId: readOnlyUser.public_id });
+      const readOnlyToken = await generateTestToken({
+        userId: readOnlyUser.public_id,
+        organizationPublicId: updateContext.organization.public_id,
+      });
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: organizationSettingsPath(updateContext.organization.public_id),
+        url: ORGANIZATION_SETTINGS_PATH,
         token: readOnlyToken,
         payload: { is_email_notifications_enabled: false },
       });
@@ -138,14 +143,14 @@ describe('Tenancy Organization Settings Sub-Domain — Integration', () => {
     });
 
     it('should return 400 when body contains unknown keys', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.ORGANIZATION_READ,
         TENANCY_PERMISSIONS.ORGANIZATION_UPDATE,
       ]);
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: organizationSettingsPath(organization.public_id),
+        url: ORGANIZATION_SETTINGS_PATH,
         token,
         payload: { is_email_notifications_enabled: true, unknown_field: true },
       });
@@ -153,14 +158,14 @@ describe('Tenancy Organization Settings Sub-Domain — Integration', () => {
     });
 
     it('should return 400 when is_email_notifications_enabled has wrong type', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.ORGANIZATION_READ,
         TENANCY_PERMISSIONS.ORGANIZATION_UPDATE,
       ]);
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: organizationSettingsPath(organization.public_id),
+        url: ORGANIZATION_SETTINGS_PATH,
         token,
         payload: { is_email_notifications_enabled: 'not-a-boolean' },
       });
@@ -168,14 +173,14 @@ describe('Tenancy Organization Settings Sub-Domain — Integration', () => {
     });
 
     it('should update settings with organization update permission', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.ORGANIZATION_READ,
         TENANCY_PERMISSIONS.ORGANIZATION_UPDATE,
       ]);
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: organizationSettingsPath(organization.public_id),
+        url: ORGANIZATION_SETTINGS_PATH,
         token,
         payload: {
           is_email_notifications_enabled: false,

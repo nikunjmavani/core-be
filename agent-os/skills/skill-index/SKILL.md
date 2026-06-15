@@ -5,16 +5,17 @@ description: Master index of all project skills with trigger conditions. Use thi
 
 # Skill index (core-be)
 
-Master directory of all **36 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
+Master directory of all **39 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
 
 For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global-skills**.
 
-## Project skills (36)
+## Project skills (39)
 
 | Skill                          | Path                                                                      |
 | ------------------------------ | ------------------------------------------------------------------------- |
 | skill-index                    | `agent-os/skills/skill-index/SKILL.md`                                     |
 | test-generator                 | `agent-os/skills/test-generator/SKILL.md`                                  |
+| api-contract-guard             | `agent-os/skills/api-contract-guard/SKILL.md`                              |
 | route-catalog                  | `agent-os/skills/route-catalog/SKILL.md`                                   |
 | openapi-route-sync             | `agent-os/skills/openapi-route-sync/SKILL.md` (legacy — tag locale only; use route-schema-doc-guard for schema) |
 | route-schema-doc-guard         | `agent-os/skills/route-schema-doc-guard/SKILL.md`                          |
@@ -49,13 +50,16 @@ For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global
 | contract-test-maintainer       | `agent-os/skills/contract-test-maintainer/SKILL.md`                        |
 | chaos-test-maintainer          | `agent-os/skills/chaos-test-maintainer/SKILL.md`                           |
 | cursor-global-skills           | `agent-os/skills/cursor-global-skills/SKILL.md` (reference only)           |
+| rls-tenant-isolation-guard     | `agent-os/skills/rls-tenant-isolation-guard/SKILL.md` |
+| idempotency-guard              | `agent-os/skills/idempotency-guard/SKILL.md` |
 
 ## Skill trigger map
 
 | What changed                                                                                                                                                                                                    | Skill to invoke                                                                                                    | Path                                                              |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
 | Changed imports or added TypeScript under `src/` / `tooling/`                                                                                                                                                   | **structure-maintainer** (import path conventions); verify `pnpm test:global` import-paths test passes | structure-maintainer                                              |
-| Added/removed/updated a route in `*.routes.ts`                                                                                                                                                                  | **route-schema-doc-guard** + **route-catalog** + **openapi-multilingual** (tags) + **seed-maintainer**             | route-schema-doc-guard, route-catalog, seed-maintainer                |
+| Added/removed/updated a route in `*.routes.ts`                                                                                                                                                                  | **api-contract-guard** + **route-schema-doc-guard** + **route-catalog** + **openapi-multilingual** (tags) + **seed-maintainer** | api-contract-guard, route-schema-doc-guard, route-catalog, seed-maintainer |
+| Changed a route param, public id, response status, or request/response header                                                                                                                                   | **api-contract-guard** (status policy: `docs/reference/api/response-codes.md`)                                     | `agent-os/skills/api-contract-guard/SKILL.md`                      |
 | Created a new domain or sub-domain                                                                                                                                                                              | **domain-generator**                                                                                               | `agent-os/skills/domain-generator/SKILL.md`                        |
 | Added event emission, queue, or worker                                                                                                                                                                          | **workers-events**                                                                                                 | `agent-os/skills/workers-events/SKILL.md`                          |
 | Changed Biome rules, pre-commit hooks, guard orchestrator, or CI security | **code-quality-guard** + **before-commit-guard** | `agent-os/skills/code-quality-guard/SKILL.md` |
@@ -200,7 +204,7 @@ After completing any task, scan the changes and invoke matching skills:
 
 ### Setup infra (third-party providers)
 
-- **Trigger**: added, removed, or changed a third-party provider in the setup:infra flow (e.g. new provider in `tooling/setup/config.ts`, new `tooling/setup/providers/*.provider.ts`, or changes to PREVIEW_PROVIDERS, guide steps, or token instructions)
+- **Trigger**: added, removed, or changed a third-party provider in the setup:infra flow (e.g. new provider in `tooling/setup/setup.config.json`, new `tooling/setup/infra/providers/<name>/<name>.provider.ts`, or changes to PREVIEW_PROVIDERS, guide steps, or token instructions)
 - **Action**: read and follow `setup-infra-maintainer` — run the full checklist so config schema, init defaults, secrets/env-secrets, orchestrator (preview, provision, check, status, rollback), guide, prerequisites, provider module, state, build-env-vars, and `docs/deployment/setup/setup-token-instructions.md` all stay in sync. Then run `pnpm typecheck` and `pnpm setup:infra:preview` to verify.
 - **Follow-up**: if `docs/deployment/setup/setup-token-instructions.md` or other deployment docs were updated, invoke **docs-maintainer** to keep the docs index and cross-links correct.
 
@@ -278,7 +282,7 @@ The following `agent-os/rules/*.mdc` files auto-invoke skills based on file glob
 | `workers-events-sync.mdc`                 | `src/domains/**/events/**`, `**/queues/**`, `**/workers/**`, `src/infrastructure/queue/**`, `src/core/events/**`                                                                    | workers-events                                                             |
 | `code-quality-guard-sync.mdc`             | `biome.json`, `.biomeignore`, `.husky/pre-commit`, `.github/workflows/**`, `.gitleaks.toml`, `.semgrepignore`                                                                       | code-quality-guard                                                         |
 | `dependency-security-sync.mdc`            | `package.json`, `pnpm-lock.yaml`                                                                                                                                                    | dependency-security                                                        |
-| `structure-maintainer-sync.mdc`           | `AGENTS.md`, `CLAUDE.md`, `README.md`, `agent-os/rules/**`, `agent-os/skills/**`, `agent-os/agents/**`                                                                                 | structure-maintainer                                                       |
+| `structure-maintainer-sync.mdc`           | `AGENTS.md`, `CLAUDE.md`, `README.md`, `agent-os/rules/**`, `agent-os/skills/**`, `agent-os/agents/**`, `agent-os/mcp/**`, `.mcp.example.json`                                          | structure-maintainer                                                       |
 | `code-smells-and-best-practices-sync.mdc` | `src/**/*.ts`                                                                                                                                                                       | code-smells-and-best-practices                                             |
 | `tsdoc-export-guard-sync.mdc`             | `src/**/*.ts`                                                                                                                                                                       | tsdoc-export-guard (new/changed public exports)                            |
 | `overview-doc-maintainer-sync.mdc`        | `src/**/OVERVIEW.md`                                                                                                                                                                | overview-doc-maintainer                                                    |
@@ -297,7 +301,7 @@ The following `agent-os/rules/*.mdc` files auto-invoke skills based on file glob
 | `openapi-multilingual-sync.mdc`           | `src/shared/locales/*/openapi.json`, OpenAPI generator scripts                                                                                                                      | openapi-multilingual                                                       |
 | `contract-test-maintainer-sync.mdc`       | `src/tests/contract/**`, payment/mail/storage infra, `tooling/vitest/contract.config.ts`                                                                                            | contract-test-maintainer                                                   |
 | `chaos-test-maintainer-sync.mdc`          | `src/tests/chaos/**`, `tooling/vitest/chaos.config.ts`, chaos provision, `docker-compose.yml`                                                                                       | chaos-test-maintainer                                                      |
-| `setup-infra-maintainer-sync.mdc`         | `tooling/setup/**/*.ts`, `tooling/setup.config.json`, `docs/deployment/setup/setup-token-instructions.md`                                                                           | setup-infra-maintainer                                                     |
+| `setup-infra-maintainer-sync.mdc`         | `tooling/setup/**/*.ts`, `tooling/setup/setup.config.json`, `docs/deployment/setup/setup-token-instructions.md`                                                                           | setup-infra-maintainer                                                     |
 
 **supabase-porting** = manual only (Supabase Edge Functions → core-be).
 

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { ObjectStoragePort } from '@/infrastructure/storage/object-storage.port.js';
+import { ExternalServiceError } from '@/infrastructure/outbound/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { getEnv } from '@/shared/config/env.config.js';
 import {
@@ -9,7 +10,7 @@ import {
   ValidationError,
 } from '@/shared/errors/index.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
-import { resolveUserOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
+import type { AuthorizationService } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import {
@@ -95,6 +96,7 @@ export class UploadService {
     private readonly userService: UserService,
     private readonly organizationService: OrganizationService,
     private readonly objectStorage: ObjectStoragePort,
+    private readonly authorizationService: AuthorizationService,
   ) {}
 
   async createUpload(input: CreateUploadInput, userPublicId: string): Promise<UploadCreateOutput> {
@@ -177,7 +179,7 @@ export class UploadService {
     const expiresAt = new Date(Date.now() + PRESIGNED_URL_EXPIRY_SECONDS * 1000);
 
     return serializeUploadCreate({
-      publicId: row.public_id,
+      id: row.public_id,
       uploadUrl,
       key,
       expiresAt,
@@ -213,13 +215,19 @@ export class UploadService {
     const pendingCap = environment.UPLOAD_MAX_PENDING_PER_USER;
     const orgPendingCap = environment.UPLOAD_MAX_PENDING_PER_ORGANIZATION;
     return withUserDatabaseContext(userPublicId, async () => {
+      // audit-#7: take the ORG-scoped advisory lock BEFORE the per-user lock (a globally
+      // consistent org-then-user order, deadlock-free) so concurrent reservations from
+      // DIFFERENT members of the same org serialize on the org cap. Previously the org count
+      // was checked while holding only the per-user lock, so N members could each pass the
+      // same org count and overshoot UPLOAD_MAX_PENDING_PER_ORGANIZATION by N.
+      if (organizationInternalId !== null) {
+        await this.repository.acquirePendingOrganizationQuotaLock(organizationInternalId);
+      }
       await this.repository.acquirePendingUploadQuotaLock(userInternalId);
       // sec-UP4: enforce the org-level cap BEFORE the per-user cap so a single
       // org with many members cannot pile PENDING uploads across user accounts
-      // and exhaust storage. Race-safe enough for a stability cap (the per-
-      // user advisory lock above bounds per-user concurrency; cross-user
-      // org-level concurrency falls back to "sweeper reconciles" — same
-      // posture as the user cap).
+      // and exhaust storage. The org-scoped lock above now makes this count + insert
+      // atomic across members (not just within a single user).
       if (organizationInternalId !== null) {
         const orgPendingCount =
           await this.repository.countPendingByOrganizationId(organizationInternalId);
@@ -273,7 +281,7 @@ export class UploadService {
     userPublicId: string,
   ): Promise<number | null> {
     if (input.for === UPLOAD_TARGETS.ORGANIZATION && input.organizationId) {
-      const permissions = await resolveUserOrganizationPermissions(
+      const permissions = await this.authorizationService.resolveUserOrganizationPermissions(
         userPublicId,
         input.organizationId,
       );
@@ -366,7 +374,7 @@ export class UploadService {
       throw new NotFoundError('Upload');
     }
 
-    const permissions = await resolveUserOrganizationPermissions(
+    const permissions = await this.authorizationService.resolveUserOrganizationPermissions(
       userPublicId,
       organization.public_id,
     );
@@ -454,7 +462,7 @@ export class UploadService {
       );
       if (!failedRow) throw new NotFoundError('Upload');
       logger.warn(
-        { publicId: validatedPublicId, fileKey: sourceKey },
+        { id: validatedPublicId, fileKey: sourceKey },
         'upload.confirm.legacyInPlaceRefused',
       );
       throw new ValidationError('errors:uploadVerificationFailed', undefined, {
@@ -478,8 +486,19 @@ export class UploadService {
         verified = await this.publishConfirmedObject(sourceKey, finalKey, row.mime_type);
       }
     } catch (error) {
+      // audit-#5: a transient storage failure (timeout / throttle / circuit-open / IAM) must NOT
+      // mark a valid upload FAILED. Re-throw it (surfaces as 503) so the client can retry confirm;
+      // the row stays PENDING and the sweeper / a retry reconciles it. Only genuine verification
+      // failures (not-found, type/size mismatch, magic-byte rejection) fall through to FAILED.
+      if (error instanceof ExternalServiceError) {
+        logger.warn(
+          { id: validatedPublicId, fileKey: sourceKey, error },
+          'upload.confirm.transientStorageError',
+        );
+        throw error;
+      }
       logger.warn(
-        { publicId: validatedPublicId, fileKey: sourceKey, error },
+        { id: validatedPublicId, fileKey: sourceKey, error },
         'upload.confirm.verifyFailed',
       );
       verified = false;
@@ -507,7 +526,7 @@ export class UploadService {
       const pendingObjectDeleted = await this.objectStorage.deleteObject(sourceKey);
       if (!pendingObjectDeleted) {
         logger.warn(
-          { publicId: validatedPublicId, pendingKey: sourceKey },
+          { id: validatedPublicId, pendingKey: sourceKey },
           'upload.confirm.pendingObjectDeleteFailed',
         );
       }
@@ -617,7 +636,7 @@ export class UploadService {
     const objectDeleted = await this.objectStorage.deleteObject(row.file_key);
     if (!objectDeleted) {
       logger.warn(
-        { publicId: validatedPublicId, fileKey: row.file_key },
+        { id: validatedPublicId, fileKey: row.file_key },
         'upload.delete.s3ObjectDeleteFailed',
       );
     }

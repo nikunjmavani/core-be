@@ -47,7 +47,7 @@ describe('refresh rotates session token hash', () => {
       url: testApiPath('/auth/login'),
       payload: { email: user.email, password },
     });
-    expect(loginResponse.statusCode).toBe(200);
+    expect(loginResponse.statusCode).toBe(201);
     const oldAccessToken = (loginResponse.json() as { data: { access_token: string } }).data
       .access_token;
     const cookiePair = sessionIdCookiePairFromLoginResponse(loginResponse.headers);
@@ -58,7 +58,7 @@ describe('refresh rotates session token hash', () => {
       headers: { cookie: cookiePair, origin: 'http://localhost:3000' },
       payload: {},
     });
-    expect(refreshResponse.statusCode).toBe(200);
+    expect(refreshResponse.statusCode).toBe(201);
     const newAccessToken = (refreshResponse.json() as { data: { access_token: string } }).data
       .access_token;
     expect(newAccessToken).not.toBe(oldAccessToken);

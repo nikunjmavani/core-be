@@ -3,6 +3,7 @@ import {
   MCP_OPENAPI_RESOURCE_URI,
   MCP_ROUTES_RESOURCE_URI,
 } from '@/shared/constants/project-identity.constants.js';
+import { MCP_CLIENT_GUIDE_RESOURCE_URI } from '@/infrastructure/mcp/mcp-capabilities.js';
 import {
   MCP_OPENAPI_PATH,
   buildMcpCapabilitiesMarkdown,
@@ -11,12 +12,12 @@ import {
 } from '@tooling/openapi/mcp-openapi.js';
 
 describe('mcp-openapi', () => {
-  it('buildMcpOpenApiExtension lists call_api tool and both resources', () => {
+  it('buildMcpOpenApiExtension lists call_api tool and all resources', () => {
     const extension = buildMcpOpenApiExtension();
 
     expect(extension.tools.map((tool) => tool.name)).toEqual(['call_api']);
     expect(extension.resources.map((resource) => resource.uri).sort()).toEqual(
-      [MCP_OPENAPI_RESOURCE_URI, MCP_ROUTES_RESOURCE_URI].sort(),
+      [MCP_OPENAPI_RESOURCE_URI, MCP_ROUTES_RESOURCE_URI, MCP_CLIENT_GUIDE_RESOURCE_URI].sort(),
     );
     expect(extension.tools[0]?.inputSchema).toMatchObject({
       type: 'object',
@@ -35,6 +36,7 @@ describe('mcp-openapi', () => {
     expect(markdown).toContain('### MCP resources');
     expect(markdown).toContain(MCP_OPENAPI_RESOURCE_URI);
     expect(markdown).toContain(MCP_ROUTES_RESOURCE_URI);
+    expect(markdown).toContain(MCP_CLIENT_GUIDE_RESOURCE_URI);
   });
 
   it('isMcpOpenApiPath matches only /api/v1/mcp', () => {

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ValidationError } from '@/shared/errors/index.js';
+import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type {
   LoginInput,
   MagicLinkSendInput,
@@ -223,23 +224,20 @@ export function validateOauthCallbackQuery(query: unknown): OauthCallbackQueryIn
  * exactly 21 lowercase alphanumeric characters (the shape produced by {@link generatePublicId}).
  */
 export function validateAuthMethodPublicIdParam(authMethodPublicId: string): string {
-  if (!/^[a-z0-9]{21}$/.test(authMethodPublicId)) {
+  if (!/^am_[a-z0-9]{21}$/.test(authMethodPublicId)) {
     throw new ValidationError('errors:validation.invalidAuthMethodId', undefined, {
-      authMethodPublicId: ['Must be a 21-character lowercase alphanumeric public id'],
+      authMethodPublicId: ['Must be an am_-prefixed 21-character lowercase alphanumeric public id'],
     });
   }
   return authMethodPublicId;
 }
 
-/** Parses the `:mfaMethodId` path param on MFA routes into a positive integer; throws {@link ValidationError} otherwise. */
-export function validateMfaMethodIdParam(mfaMethodId: string): number {
-  const mfaMethodIdNumber = Number(mfaMethodId);
-  if (!Number.isInteger(mfaMethodIdNumber) || mfaMethodIdNumber < 1) {
-    throw new ValidationError('errors:validation.invalidMfaMethodId', undefined, {
-      mfaMethodId: ['Must be a positive integer'],
-    });
-  }
-  return mfaMethodIdNumber;
+/**
+ * Validates the `:mfa_method_id` path param on MFA routes as an opaque public id (route-#10);
+ * throws {@link ValidationError} otherwise.
+ */
+export function validateMfaMethodIdParam(mfaMethodId: string): string {
+  return validatePublicIdParam(mfaMethodId, 'mfa_method_id');
 }
 
 // Note: validateRefreshToken removed — refresh is now session-based via httpOnly cookie.

@@ -20,7 +20,9 @@ describe('deleteInBatchesByCondition', () => {
     selectMock.mockReturnValue({
       from: () => ({
         where: () => ({
-          limit: async () => [{ id: 1 }, { id: 2 }],
+          orderBy: () => ({
+            limit: async () => [{ id: 1 }, { id: 2 }],
+          }),
         }),
       }),
     });

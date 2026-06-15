@@ -10,7 +10,7 @@ import {
 } from './subscription.dto.js';
 
 /**
- * Parses `POST /api/v1/organizations/:id/subscriptions` body against
+ * Parses `POST /api/v1/billing/subscriptions` body against
  * {@link CreateSubscriptionDto}, throwing {@link ValidationError} with
  * field-level details on failure.
  */

@@ -1,5 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+vi.mock('@/infrastructure/database/resource-cap-lock.js', () => ({
+  RESOURCE_CAP_ADVISORY_LOCK_NAMESPACES: {
+    OWNED_ORGANIZATION: 1,
+    ORGANIZATION_API_KEY: 2,
+    ORGANIZATION_NOTIFICATION_POLICY: 3,
+    MEMBER_ROLE: 4,
+  },
+  acquireResourceCapAdvisoryLock: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/infrastructure/database/contexts/organization-database.context.js', () => ({
   withOrganizationDatabaseContext: vi.fn(
     async (_organizationPublicId: string, callback: () => Promise<unknown>) => callback(),
@@ -18,7 +28,24 @@ vi.mock('@/domains/tenancy/sub-domains/permission/permission-cache.service.js', 
     invalidateOrganizationPermissionsMock(...parameters),
 }));
 
-import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
+// create() now bootstraps the org atomically via provisionOrganizationWithOwner (org + owner
+// role + permissions + membership), not repository.create — mock that boundary here.
+const provisionOrganizationWithOwnerMock = vi.fn();
+vi.mock('@/domains/tenancy/sub-domains/organization/organization-provisioning.js', () => ({
+  provisionOrganizationWithOwner: (...parameters: unknown[]) =>
+    provisionOrganizationWithOwnerMock(...parameters),
+  provisionPersonalOrganization: vi.fn(),
+  PERSONAL_ORGANIZATION_NAME: 'Personal',
+  OWNER_ROLE_NAME: 'Owner',
+}));
+
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/shared/errors/index.js';
+import { env } from '@/shared/config/env.config.js';
 import { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
@@ -26,9 +53,10 @@ import { createObjectStoragePortMock } from '@/tests/helpers/object-storage-mock
 
 const organizationRow = {
   id: 1,
-  public_id: generatePublicId(),
+  public_id: generatePublicId('organization'),
   name: 'Acme',
   slug: 'acme',
+  type: 'TEAM',
   status: 'ACTIVE',
   stripe_customer_id: null,
   owner_user_id: 10,
@@ -55,6 +83,9 @@ describe('OrganizationService', () => {
     softDelete: vi.fn().mockResolvedValue(organizationRow),
     markDeletionStarted: vi.fn().mockResolvedValue(organizationRow),
     resolveUserIdByPublicId: vi.fn().mockResolvedValue(10),
+    countActiveOwnedByUser: vi.fn().mockResolvedValue(0),
+    // audit-#8: per-owner owned-organization quota advisory lock (no-op in unit tests).
+    acquireOwnedOrganizationQuotaLock: vi.fn().mockResolvedValue(undefined),
     updateOwner: vi.fn().mockResolvedValue(organizationRow),
     updateStripeCustomerId: vi.fn().mockResolvedValue(undefined),
     userHasActiveMembership: vi.fn().mockResolvedValue(true),
@@ -73,10 +104,16 @@ describe('OrganizationService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    provisionOrganizationWithOwnerMock.mockResolvedValue({
+      organization: organizationRow,
+      roleId: 1,
+      membershipPublicId: generatePublicId('membership'),
+    });
     service.wireOffboardingUploadService({
       deleteObject: vi.fn(),
       tombstoneAllByOrganizationId: vi.fn().mockResolvedValue(0),
       assertKeyConfirmed: vi.fn().mockResolvedValue(undefined),
+      assertKeyConfirmedForOwner: vi.fn().mockResolvedValue(undefined),
     } as never);
     vi.mocked(objectStorage.headObject).mockResolvedValue({
       contentLength: 100,
@@ -111,7 +148,9 @@ describe('OrganizationService', () => {
 
   it('create persists organization for owner', async () => {
     const result = await service.create({ name: 'New Org', slug: 'new-org' }, 'owner_public');
-    expect(repository.create).toHaveBeenCalled();
+    expect(provisionOrganizationWithOwnerMock).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'New Org', slug: 'new-org', type: 'TEAM' }),
+    );
     expect(result.name).toBe('Acme');
   });
 
@@ -150,6 +189,31 @@ describe('OrganizationService', () => {
     expect(uploadService.tombstoneAllByOrganizationId).toHaveBeenCalledWith(organizationRow.id);
   });
 
+  it('route-audit-#2: delete cancels the org active subscription so billing stops', async () => {
+    const uploadService = { tombstoneAllByOrganizationId: vi.fn().mockResolvedValue(0) };
+    const subscriptionService = {
+      cancelActiveForOrganizationOffboarding: vi.fn().mockResolvedValue(undefined),
+    };
+    service.wireOffboardingUploadService(uploadService as never, subscriptionService);
+    await service.delete(organizationRow.public_id);
+    expect(subscriptionService.cancelActiveForOrganizationOffboarding).toHaveBeenCalledWith(
+      organizationRow.public_id,
+    );
+  });
+
+  it('route-audit-#2: a Stripe cancel failure aborts the delete (no soft-delete of a billing org)', async () => {
+    const uploadService = { tombstoneAllByOrganizationId: vi.fn().mockResolvedValue(0) };
+    const subscriptionService = {
+      cancelActiveForOrganizationOffboarding: vi
+        .fn()
+        .mockRejectedValue(new Error('stripe unavailable')),
+    };
+    service.wireOffboardingUploadService(uploadService as never, subscriptionService);
+    await expect(service.delete(organizationRow.public_id)).rejects.toThrow();
+    // The soft-delete must NOT have run after the failed cancel.
+    expect(repository.softDelete).not.toHaveBeenCalled();
+  });
+
   it('delete invalidates the organization permission cache so access stops immediately', async () => {
     await service.delete(organizationRow.public_id);
     expect(invalidateOrganizationPermissionsMock).toHaveBeenCalledWith(organizationRow.public_id);
@@ -161,10 +225,18 @@ describe('OrganizationService', () => {
     expect(invalidateOrganizationPermissionsMock).not.toHaveBeenCalled();
   });
 
-  it('uploadLogo validates key prefix and updates logo url', async () => {
+  it('uploadLogo stores the object KEY, not a permanent public URL (TEN-07)', async () => {
     const key = `organization-logos/${organizationRow.public_id}/logo.png`;
     const result = await service.uploadLogo(organizationRow.public_id, { key }, 'owner_public');
     expect(result).toBeDefined();
+    // TEN-07: the private object KEY is persisted (signed-on-read), never an unsigned
+    // permanent S3 URL via getObjectUrl.
+    expect(repository.update).toHaveBeenCalledWith(
+      organizationRow.public_id,
+      { logo_url: key },
+      expect.anything(),
+    );
+    expect(objectStorage.getObjectUrl).not.toHaveBeenCalled();
   });
 
   it('uploadLogo throws when object is missing in storage', async () => {
@@ -183,7 +255,7 @@ describe('OrganizationService', () => {
   });
 
   it('uploadLogo rejects keys outside organization prefix', async () => {
-    const otherOrganizationKey = `organization-logos/${generatePublicId()}/logo.png`;
+    const otherOrganizationKey = `organization-logos/${generatePublicId('organization')}/logo.png`;
     await expect(
       service.uploadLogo(organizationRow.public_id, { key: otherOrganizationKey }, 'owner_public'),
     ).rejects.toMatchObject({ name: 'ValidationError' });
@@ -192,7 +264,7 @@ describe('OrganizationService', () => {
   it('uploadLogo rejects when the upload has not been confirmed', async () => {
     service.wireOffboardingUploadService({
       deleteObject: vi.fn(),
-      assertKeyConfirmed: vi
+      assertKeyConfirmedForOwner: vi
         .fn()
         .mockRejectedValue(new ValidationError('errors:validation.uploadNotConfirmed')),
     } as never);
@@ -245,12 +317,48 @@ describe('OrganizationService', () => {
 
   it('create maps a slug unique_violation race to ConflictError instead of 500', async () => {
     vi.mocked(repository.findBySlug).mockResolvedValue(null);
-    vi.mocked(repository.create).mockRejectedValueOnce(
+    provisionOrganizationWithOwnerMock.mockRejectedValueOnce(
       Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' }),
     );
     await expect(
       service.create({ name: 'Race', slug: 'race-slug' }, 'owner_public'),
     ).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it('TEN-02: create takes the owned-organization advisory lock before counting', async () => {
+    const { acquireResourceCapAdvisoryLock, RESOURCE_CAP_ADVISORY_LOCK_NAMESPACES } = await import(
+      '@/infrastructure/database/resource-cap-lock.js'
+    );
+    await service.create({ name: 'Locked Co', slug: 'locked-co' }, 'owner_public');
+    expect(acquireResourceCapAdvisoryLock).toHaveBeenCalledWith(
+      RESOURCE_CAP_ADVISORY_LOCK_NAMESPACES.OWNED_ORGANIZATION,
+      expect.any(Number),
+    );
+  });
+
+  it('create rejects when the owner is at the team-organization cap', async () => {
+    // env MAX_TEAM_ORGANIZATIONS_PER_OWNER defaults to 20; simulate the owner already at the cap.
+    vi.mocked(repository.countActiveOwnedByUser).mockResolvedValue(20);
+    await expect(
+      service.create({ name: 'Over Cap', slug: 'over-cap' }, 'owner_public'),
+    ).rejects.toBeInstanceOf(ConflictError);
+    // The provisioning path must not run once the cap is hit.
+    expect(provisionOrganizationWithOwnerMock).not.toHaveBeenCalled();
+  });
+
+  it('create rejects when team organizations are disabled (capability gate)', async () => {
+    // Personal-only deployment: the server must reject team-org creation, not just hide it.
+    const original = env.TEAM_ORGANIZATION_ENABLED;
+    (env as { TEAM_ORGANIZATION_ENABLED: boolean }).TEAM_ORGANIZATION_ENABLED = false;
+    try {
+      await expect(
+        service.create({ name: 'No Teams', slug: 'no-teams' }, 'owner_public'),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      // The capability gate fires before any validation or provisioning work.
+      expect(provisionOrganizationWithOwnerMock).not.toHaveBeenCalled();
+    } finally {
+      (env as { TEAM_ORGANIZATION_ENABLED: boolean }).TEAM_ORGANIZATION_ENABLED = original;
+    }
   });
 
   it('getByPublicId throws when organization missing', async () => {
@@ -281,15 +389,23 @@ describe('OrganizationService', () => {
     expect(result.logo_url).toBeNull();
   });
 
-  it('deleteLogo throws when logo object missing in storage', async () => {
-    vi.mocked(objectStorage.headObject).mockResolvedValueOnce(null);
+  it('route-audit L1: deleteLogo reclaims the object and still clears the column when the object is already gone', async () => {
+    // Pre-fix deleteLogo only HEAD-checked and THREW if the object was missing, orphaning the bytes
+    // on the normal path. Now it best-effort DELETES the object and clears the column regardless.
+    vi.mocked(objectStorage.deleteObject).mockResolvedValueOnce(false); // object already gone
     vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...organizationRow,
       logo_url: `https://cdn.example/organization-logos/${organizationRow.public_id}/logo.png`,
     } as never);
-    await expect(
-      service.deleteLogo(organizationRow.public_id, 'owner_public'),
-    ).rejects.toBeInstanceOf(ValidationError);
+    vi.mocked(repository.update).mockResolvedValue({
+      ...organizationRow,
+      logo_url: null,
+    } as never);
+    const result = await service.deleteLogo(organizationRow.public_id, 'owner_public');
+    expect(result.logo_url).toBeNull();
+    expect(objectStorage.deleteObject).toHaveBeenCalledWith(
+      `organization-logos/${organizationRow.public_id}/logo.png`,
+    );
   });
 
   it('delete throws when soft delete returns null', async () => {
@@ -471,12 +587,9 @@ describe('OrganizationService', () => {
     expect(repository.update).toHaveBeenCalled();
   });
 
-  it('deleteLogo validates storage object when logo url contains extractable key', async () => {
+  it('route-audit L1: deleteLogo reclaims the extractable storage key before clearing the column', async () => {
     const logoPath = `organization-logos/${organizationRow.public_id}/logo.png`;
-    vi.mocked(objectStorage.headObject).mockResolvedValueOnce({
-      contentLength: 100,
-      contentType: undefined,
-    });
+    vi.mocked(objectStorage.deleteObject).mockResolvedValueOnce(true);
     vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...organizationRow,
       logo_url: `https://cdn.example/${logoPath}`,
@@ -486,7 +599,7 @@ describe('OrganizationService', () => {
       logo_url: null,
     } as never);
     const result = await service.deleteLogo(organizationRow.public_id, 'owner_public');
-    expect(objectStorage.headObject).toHaveBeenCalledWith(logoPath);
+    expect(objectStorage.deleteObject).toHaveBeenCalledWith(logoPath);
     expect(result.logo_url).toBeNull();
   });
 

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import type { AuthorizationService } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { ObjectStoragePort } from '@/infrastructure/storage/object-storage.port.js';
@@ -20,6 +21,7 @@ export function createUploadContainer(
   userService: UserService,
   organizationService: OrganizationService,
   objectStorage: ObjectStoragePort,
+  authorizationService: AuthorizationService,
 ): UploadContainer {
   const uploadRepository = new UploadRepository();
   const uploadService = new UploadService(
@@ -27,6 +29,7 @@ export function createUploadContainer(
     userService,
     organizationService,
     objectStorage,
+    authorizationService,
   );
   return { uploadService };
 }
@@ -38,9 +41,14 @@ export function createUploadContainer(
  */
 export function registerUploadContainer(application: FastifyInstance): void {
   const { userService } = application.userDomain;
-  const { organizationService } = application.tenancyDomain;
+  const { organizationService, authorizationService } = application.tenancyDomain;
   application.decorate(
     'uploadDomain',
-    createUploadContainer(userService, organizationService, getDefaultS3ObjectStorageAdapter()),
+    createUploadContainer(
+      userService,
+      organizationService,
+      getDefaultS3ObjectStorageAdapter(),
+      authorizationService,
+    ),
   );
 }

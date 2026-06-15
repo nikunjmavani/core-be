@@ -25,7 +25,7 @@ export const member_invitations = tenancySchema
     'member_invitations',
     {
       id: bigserial('id', { mode: 'number' }).primaryKey(),
-      public_id: varchar('public_id', { length: 21 }).notNull(),
+      public_id: varchar('public_id', { length: 28 }).notNull(),
       membership_id: bigint('membership_id', { mode: 'number' })
         .notNull()
         .references(() => memberships.id, { onDelete: 'cascade' }),

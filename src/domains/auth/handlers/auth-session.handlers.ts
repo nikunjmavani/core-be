@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
-import { UnauthorizedError } from '@/shared/errors/index.js';
+import { ConflictError, UnauthorizedError } from '@/shared/errors/index.js';
 import { requireAllowedSourceOriginForCookieSessionRoute } from '@/shared/middlewares/session/cookie-session-origin.pre-handler.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
@@ -59,16 +59,25 @@ export function createAuthSessionHandlers({
       return successResponse(serializeAuthSessions(data), getRequestIdentifier(request));
     },
     revokeSession: async (
-      request: FastifyRequest<{ Params: { id: string } }>,
+      request: FastifyRequest<{ Params: { session_id: string } }>,
       reply: FastifyReply,
     ) => {
       const auth = requireAuth(request);
-      await authSessionService.revoke(auth.userId, request.params.id);
+      // route-#9: this endpoint revokes OTHER sessions; revoking the current one leaves a stale
+      // session cookie and contradicts the documented contract — direct the caller to logout
+      // (which also clears the cookie) instead of silently 401-ing their own next request.
+      if (
+        auth.sessionPublicId !== undefined &&
+        auth.sessionPublicId === request.params.session_id
+      ) {
+        throw new ConflictError('errors:cannotRevokeCurrentSession');
+      }
+      await authSessionService.revoke(auth.userId, request.params.session_id);
       await recordScopedAuditEvent(request, {
         actorUserPublicId: auth.userId,
         action: 'auth.session.revoke',
         resource_type: 'session',
-        metadata: { session_public_id: request.params.id },
+        metadata: { session_public_id: request.params.session_id },
       });
       return reply.code(204).send();
     },
@@ -85,6 +94,31 @@ export function createAuthSessionHandlers({
         refreshSecret: parsedSession.refreshSecret,
       });
       setSessionCookie(reply, parsedSession.sessionPublicId, data.refresh_secret);
+      return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
+    },
+    switchToPersonalOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      if (auth.kind !== 'user' || !auth.sessionPublicId) {
+        throw new UnauthorizedError('errors:invalidOrExpiredSession');
+      }
+      const data = await authService.switchToPersonal({
+        userPublicId: auth.userId,
+        sessionPublicId: auth.sessionPublicId,
+      });
+      return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
+    },
+    switchToOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      if (auth.kind !== 'user' || !auth.sessionPublicId) {
+        throw new UnauthorizedError('errors:invalidOrExpiredSession');
+      }
+      // The route's zod `body` schema has already validated organization_id (400 otherwise).
+      const { organization_id: organizationId } = request.body as { organization_id: string };
+      const data = await authService.switchToOrganization({
+        userPublicId: auth.userId,
+        sessionPublicId: auth.sessionPublicId,
+        organizationPublicId: organizationId,
+      });
       return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
     },
     revokeAllSessions: async (request: FastifyRequest, reply: FastifyReply) => {

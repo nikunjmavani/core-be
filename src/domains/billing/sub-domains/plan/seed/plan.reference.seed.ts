@@ -30,7 +30,7 @@ export async function seedPlans(
     const [row] = await getRequestDatabase()
       .insert(plans)
       .values({
-        public_id: generatePublicId(),
+        public_id: generatePublicId('plan'),
         name: plan.name,
         price_monthly: plan.price_monthly,
         price_yearly: plan.price_yearly,
