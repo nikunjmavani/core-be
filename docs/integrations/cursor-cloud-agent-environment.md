@@ -48,5 +48,6 @@ This image does **not** start PostgreSQL or Redis. For tests that need a databas
 
 ## Related documentation
 
+- [claude-code-web-environment.md](claude-code-web-environment.md) — the Claude Code on the web equivalent (network access, setup script, env vars).
 - [cursor-backend-mcp.md](cursor-backend-mcp.md) — MCP endpoint for tooling in Cursor when the API runs with `ENABLE_MCP_SERVER=true`.
 - [getting-started/setup.md](../getting-started/setup.md) — Local human setup and validation commands.
