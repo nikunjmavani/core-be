@@ -109,6 +109,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | Doc                                                                                              | Description                                                                                         |
 | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
 | [reference/runtime/bull-board.md](reference/runtime/bull-board.md)                               | BullMQ dashboard at `/admin/queues`.                                                                |
+| [integrations/agentic-third-party-tooling.md](integrations/agentic-third-party-tooling.md)       | CLI vs MCP vs SDK by consumer; per-service mapping for every third party.                            |
 | [integrations/cursor-backend-mcp.md](integrations/cursor-backend-mcp.md)                         | Connect frontend to core-be MCP.                                                                    |
 | [integrations/codegraph.md](integrations/codegraph.md)                                           | Semantic code index for AI agents (MCP); auto-set-up in `setup:local` (phase 7/9).                  |
 | [integrations/understand-anything.md](integrations/understand-anything.md)                         | Knowledge graph, dashboard, and learning-curve steps (`/understand`, tour, chat, diff).             |
