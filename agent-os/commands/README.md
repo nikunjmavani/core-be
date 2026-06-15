@@ -37,16 +37,14 @@ for f in "$PWD"/agent-os/commands/*.md; do ln -sf "$f" ~/.codex/prompts/; done
 | `/new-domain <name>` | Scaffold a domain/sub-domain via the domain-generator skill. |
 | `/routes-sync` | Re-sync route catalog + OpenAPI/seed artifacts after route changes. |
 
-## Deferred (recorded for a follow-up)
+## Related: SessionStart + guardrails
 
-Scoped out for now (this pass adds custom commands only):
+The session-start and guardrail follow-up is implemented — see
+[`agent-os/hooks/README.md`](../hooks/README.md):
 
-- **SessionStart hook** — Claude Code `hooks.SessionStart` to *verify env (Node /
-  deps / codegraph freshness) and print the skill-trigger map*. Cursor has no
-  session-start event (closest: an `alwaysApply` rule); Codex's hook is
-  experimental.
-- **Guardrails** — *protected paths* (warn on `migrations/` + billing ledgers),
-  *destructive shell* (block `rm -rf`, `git push --force`), *secrets* (block
-  `.env` / key patterns), *cross-domain imports* (warn). Claude: committed
-  PreToolUse hook; Cursor: `beforeShellExecution` hook; Codex: sandbox/approval +
-  `AGENTS.md`.
+- **SessionStart** (`agent-os/hooks/session-start.sh`) — on Claude Code on the web,
+  verifies Node/deps/codegraph, installs deps, and prints the skill-trigger map.
+- **Guardrails** — block destructive shell + secret writes; warn on protected paths
+  and cross-domain imports. Claude: `PreToolUse` (`guardrails.mjs`); Cursor:
+  `beforeShellExecution` (`cursor-shell-guard.mjs`) + advisory rule; Codex: AGENTS.md
+  policy + sandbox/approvals.
