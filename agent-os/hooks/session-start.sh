@@ -26,6 +26,28 @@ if [ "$current_major" -lt "$required_major" ] 2>/dev/null; then
   node_ok="no"
 fi
 
+# --- If Node is too old, find a new-enough one and pin it for the session -----
+# Persisting to $CLAUDE_ENV_FILE makes the corrected PATH apply to every command
+# the agent runs afterwards, not just this hook.
+if [ "$node_ok" = "no" ]; then
+  for candidate in \
+    "/opt/node${required_major}/bin" \
+    /opt/node"${required_major}"*/bin \
+    "${HOME}/.nvm/versions/node/v${required_major}"*/bin \
+    /usr/local/node"${required_major}"*/bin; do
+    [ -x "${candidate}/node" ] || continue
+    cand_major="$("${candidate}/node" -v 2>/dev/null | tr -dc '0-9.' | cut -d. -f1)"
+    if [ -n "$cand_major" ] && [ "$cand_major" -ge "$required_major" ] 2>/dev/null; then
+      export PATH="${candidate}:${PATH}"
+      [ -n "${CLAUDE_ENV_FILE:-}" ] && printf 'export PATH=%s:$PATH\n' "$candidate" >> "$CLAUDE_ENV_FILE"
+      current_major="$cand_major"
+      node_ok="yes"
+      echo "session-start: switched to $(node -v) at ${candidate} (persisted for the session)." >&2
+      break
+    fi
+  done
+fi
+
 # --- Install dependencies on remote (web) sessions when Node is adequate ------
 if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ]; then
   if [ "$node_ok" = "no" ]; then

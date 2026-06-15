@@ -6,7 +6,7 @@ from `.cursor/hooks.json`.
 
 | Script | Platform / event | What it does |
 | ------ | ---------------- | ------------ |
-| `session-start.sh` | Claude Code `SessionStart` | On the web, verifies Node/deps/codegraph, installs deps (`pnpm install`) when Node is adequate, and prints an env check + the skill-trigger map as session context. |
+| `session-start.sh` | Claude Code `SessionStart` | On the web, verifies Node/deps/codegraph; if Node is too old, switches to a new-enough Node when one is available (pinned for the session via `$CLAUDE_ENV_FILE`); installs deps (`pnpm install`) when Node is adequate; prints an env check + the skill-trigger map as session context. Runs **synchronously**. |
 | `guardrails.mjs` | Claude Code `PreToolUse` (`Bash\|Edit\|Write`) | **Blocks** destructive shell (`rm -rf`, `git push --force`, fork bomb, `mkfs`/`dd`) and secret writes (`.env*` files, private-key/live-credential content). **Warns** on protected-path edits (`migrations/*.sql`, billing ledgers) and cross-domain imports in a service. Fail-open. |
 | `cursor-shell-guard.mjs` | Cursor `beforeShellExecution` (beta) | Blocks the same destructive shell commands as `guardrails.mjs`. Cursor cannot block file writes, so secret/protected-path/cross-domain rules are advisory in `.cursor/rules/ai-guardrails.mdc`. |
 | `skill-reminder.sh` | Claude Code `PostToolUse` (`Edit\|Write`) | Reminds which skill to run for the file just touched. |
