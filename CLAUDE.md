@@ -20,6 +20,7 @@ Claude Code reads `agent-os/` directly via `.claude/` symlinks.
 | [`agent-os/skills/`](agent-os/skills/) | Skill definition files |
 | [`agent-os/rules/`](agent-os/rules/) | Cursor rule files (also accessible via `.cursor/rules/` symlink) |
 | [`agent-os/hooks/`](agent-os/hooks/) | Claude Code hook scripts |
+| [`agent-os/commands/`](agent-os/commands/) | Cross-platform custom slash commands (Claude `.claude/commands`, Cursor `.cursor/commands`, Codex `~/.codex/prompts`) |
 
 ## API Contract (Non-Negotiable)
 
