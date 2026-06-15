@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.6.8-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.7-dev.0...v4.6.8-dev.0) (2026-06-15)
+
+
+### Documentation
+
+* **agent-os:** align schema skills to varchar(n) codebase convention ([#638](https://github.com/nikunjmavani/core-be/issues/638)) ([e575074](https://github.com/nikunjmavani/core-be/commit/e5750743e7a8af7a59eebd06d552ca8223a598d1))
+
 ## [4.6.7-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.6-dev.0...v4.6.7-dev.0) (2026-06-15)
 
 
