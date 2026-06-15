@@ -1,5 +1,11 @@
 # Dependabot version updates. CI failure triage: .github/workflows/dependabot-ci-triage.yml
-# All Dependabot PRs require manual review and merge (branch protection).
+#
+# npm PRs are grouped by risk to reduce lockfile-conflict cascades:
+#   - `npm-non-major` (patch + minor, prod + dev) — auto-merged after approval via
+#     .github/workflows/dependabot-auto-merge.yml.
+#   - `npm-major` (major, prod + dev) — manual review + merge.
+#   - `security-updates` — manual review + merge.
+# github-actions and docker bumps are reviewed and merged manually.
 
 version: 2
 
@@ -26,20 +32,22 @@ updates:
         update-types:
           - 'version-update:semver-major'
     groups:
-      production-minor-and-patch:
+      # Low risk: patch + minor across production and development dependencies.
+      # Auto-merged (after approval) by dependabot-auto-merge.yml.
+      npm-non-major:
         applies-to: version-updates
-        dependency-type: production
+        patterns:
+          - '*'
         update-types:
           - patch
           - minor
-      production-major:
+      # Major upgrades across production and development dependencies. Manual.
+      npm-major:
         applies-to: version-updates
-        dependency-type: production
+        patterns:
+          - '*'
         update-types:
           - major
-      dev-dependencies:
-        applies-to: version-updates
-        dependency-type: development
       security-updates:
         applies-to: security-updates
         patterns:
