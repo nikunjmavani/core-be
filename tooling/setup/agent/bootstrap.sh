@@ -44,8 +44,38 @@ echo "core-be cloud bring-up — $(date -u '+%Y-%m-%d %H:%M:%SZ')"
 # 1) Node runtime ------------------------------------------------------------
 step "[1/${TOTAL}] Node runtime"
 bash "${AGENT_DIR}/install-node.sh" >&2 || skip "install-node best-effort (using session Node)"
+
+# install-node.sh drops the pinned Node into <prefix>/node<major>, but it runs
+# in a child process and so cannot change THIS shell's PATH. Activate it here so
+# every pnpm step below runs on the pinned Node; otherwise the image default
+# (e.g. Node 22) trips pnpm's engineStrict gate at step 5 (compose:up). The
+# SessionStart hook (agent-os/hooks/session-start.sh) does the same switch for
+# interactive sessions, but does not run when bootstrap.sh is the Setup script.
+required_major="24"
+[ -f .nvmrc ] && required_major="$(tr -dc '0-9.' < .nvmrc | cut -d. -f1)"
+current_major="$(node -v 2>/dev/null | tr -dc '0-9.' | cut -d. -f1)"
+current_major="${current_major:-0}"
+if [ "${current_major}" -lt "${required_major}" ] 2>/dev/null; then
+  node_prefix="${NODE_INSTALL_PREFIX:-/opt}"
+  for candidate in \
+    "${node_prefix}/node${required_major}/bin" \
+    /opt/node"${required_major}"*/bin \
+    "${HOME}/.nvm/versions/node/v${required_major}"*/bin \
+    /usr/local/node"${required_major}"*/bin; do
+    [ -x "${candidate}/node" ] || continue
+    export PATH="${candidate}:${PATH}"
+    [ -n "${CLAUDE_ENV_FILE:-}" ] && printf 'export PATH=%s:$PATH\n' "${candidate}" >> "${CLAUDE_ENV_FILE}"
+    echo "bootstrap: switched to Node $("${candidate}/node" -v) at ${candidate} (was v${current_major}.x)." >&2
+    break
+  done
+fi
+
 node -v >/dev/null 2>&1 || die "Node not available"
-ok "[1/${TOTAL}] Node $(node -v)"
+if [ "$(node -v 2>/dev/null | tr -dc '0-9.' | cut -d. -f1)" -lt "${required_major}" ] 2>/dev/null; then
+  skip "[1/${TOTAL}] Node $(node -v) < required v${required_major} — pnpm will self-provision it via useNodeVersion (slower, but unblocks the run)"
+else
+  ok "[1/${TOTAL}] Node $(node -v)"
+fi
 
 # 2) GitHub CLI --------------------------------------------------------------
 step "[2/${TOTAL}] GitHub CLI (gh)"
