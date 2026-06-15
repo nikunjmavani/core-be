@@ -61,13 +61,16 @@ Add the rest via **Custom** (tick "Also include default list of common package m
 
 ## Setup script
 
-Paste into the **Setup script** field:
+Paste into the **Setup script** field (runs as root, cached):
 
 ```bash
 bash tooling/setup/agent/install-node.sh
+bash tooling/setup/agent/install-gh.sh   # optional: GitHub CLI fallback
 ```
 
 On the first session the cached Node 24 is already on disk, [`session-start.sh`](../../agent-os/hooks/session-start.sh) switches `PATH` to `/opt/node24`, and runs `pnpm install`. Do **not** start Postgres / Redis here — setup-script processes do not persist; start them per session (below).
+
+**GitHub CLI (optional).** [`install-gh.sh`](../../tooling/setup/agent/install-gh.sh) adds `gh` as an in-session fallback for reading Actions logs, checking CI, and merging (the GitHub MCP tools already cover this). It belongs in the cached **setup script**, not `session-start.sh` — a per-session `apt install` would not cache and would slow every startup. Set `GH_TOKEN` in the environment's **Variables** (least-privilege: `contents` + `pull_requests` + `actions:read`; env vars are not a secrets store). Its apt-repo fallback needs `cli.github.com` on the network allowlist.
 
 ---
 
