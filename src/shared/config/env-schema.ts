@@ -20,13 +20,15 @@ const nodeEnvSchema = z
 
 /**
  * Whether to apply local-dev convenience defaults for otherwise-required config
- * (DATABASE_URL, REDIS_URL, ALLOWED_ORIGINS, AUTH_SESSION_RETENTION_DAYS). True for
- * local/development/test; false for production/staging, so hosted runtimes still fail
- * loudly when these are unset. Production containers set `NODE_ENV=production` in the
- * environment (Dockerfile), so the gate holds regardless of env-file load order.
- * Keep the default values in sync with `.env.example`.
+ * (DATABASE_URL, REDIS_URL, ALLOWED_ORIGINS, AUTH_SESSION_RETENTION_DAYS). True only
+ * for `local`/`development` (interactive dev + the cloud sandbox). `test` is excluded
+ * so the suite keeps its strict required-vars contract (env.config.unit.test asserts
+ * a throw when these are missing); `staging`/`production` are excluded so hosted
+ * runtimes fail loudly when these are unset. Production containers set
+ * `NODE_ENV=production` in the environment (Dockerfile), so the gate holds regardless
+ * of env-file load order. Keep the default values in sync with `.env.example`.
  */
-const isLocalRuntime = !['production', 'staging'].includes(process.env.NODE_ENV ?? 'local');
+const isLocalRuntime = ['local', 'development'].includes(process.env.NODE_ENV ?? 'local');
 
 const booleanString = (defaultValue: 'true' | 'false') =>
   z
