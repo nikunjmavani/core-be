@@ -13,7 +13,6 @@ referenced `.sh` script exists and that hook commands use `$CLAUDE_PROJECT_DIR`
 | [`guardrails.mjs`](guardrails.mjs) | Claude `PreToolUse` (Bash/Edit/Write) | **Blocks** destructive shell (`rm -rf`, `git push --force`, fork bomb, `mkfs`/`dd`) and secret writes (`.env*`, private-key/live-credential content); **warns** on protected-path edits (`migrations/*.sql`, billing ledgers) and cross-domain service imports. The shell scan strips quoted strings/heredocs so patterns in a message/echo don't false-trigger. Fails open. |
 | [`no-unrequested-pr.sh`](no-unrequested-pr.sh) | Claude `PreToolUse` (`mcp__github__create_pull_request`) | Escalates every GitHub PR-creation attempt to an explicit user confirmation (`permissionDecision: "ask"`) — a deterministic backstop for the "open a PR only when explicitly asked" rule. Does **not** block; fails open. |
 | [`session-start.sh`](session-start.sh) | Claude `SessionStart` | On the web, verifies Node/deps/codegraph and installs deps (switching to a new-enough Node via `$CLAUDE_ENV_FILE` when needed); injects the skill-trigger routing map + an env/commands summary as `additionalContext`. Runs synchronously. |
-| [`requirement-intake-reminder.sh`](requirement-intake-reminder.sh) | Claude `UserPromptSubmit` | When a prompt signals a **new requirement** (verb/`new` + domain/route/schema/worker/queue/seed, or `port … supabase`), injects a reminder to consult `skill-index` first, propose one Plan, then run the matching skills (`docs/getting-started/requirement-intake.md`). Pure context injection; stays silent on plain questions. Fails open. |
 | [`skill-reminder.sh`](skill-reminder.sh) | Claude `PostToolUse` (Edit/Write) | After an edit, surfaces the skill(s) relevant to the changed file. |
 | [`format-edits.sh`](format-edits.sh) | Claude `PostToolUse` (Edit/Write) | Runs `biome format --write` on the edited file so formatting never reaches the `pnpm validate` gate dirty. Scope matches `pnpm format` (`src/**`, `tooling/**`) and Biome-supported file types only; format-only (no lint autofix/import reorder). Fails open (no-op when deps/biome absent). |
 | [`gate-failure-hint.sh`](gate-failure-hint.sh) | Claude `PostToolUseFailure` (Bash) | When a known sync/validation gate fails (`validate:domain`, `routes:catalog`, `tsdoc:check`, `agent-os:check`, `db:migrate:lint`, env/route gates, lint/typecheck), injects the fix command + owning skill as `additionalContext`. Silent for ordinary command failures. Fails open. |
@@ -21,12 +20,11 @@ referenced `.sh` script exists and that hook commands use `$CLAUDE_PROJECT_DIR`
 
 ## Wiring
 
-- **Claude Code** — `.claude/settings.json`: `SessionStart`; `UserPromptSubmit`
-  (`requirement-intake-reminder.sh`); `PreToolUse` runs `guard-edits.sh`,
-  `guardrails.mjs`, and `no-unrequested-pr.sh` (PR-creation guard); `PostToolUse`
-  (Edit/Write) runs `format-edits.sh` **and** `skill-reminder.sh`;
-  `PostToolUseFailure` (Bash) runs `gate-failure-hint.sh`; plus `Stop`. Commands
-  use `$CLAUDE_PROJECT_DIR/agent-os/hooks/…`. (`UserPromptSubmit`, the formatter,
+- **Claude Code** — `.claude/settings.json`: `SessionStart`; `PreToolUse` runs
+  `guard-edits.sh`, `guardrails.mjs`, and `no-unrequested-pr.sh` (PR-creation
+  guard); `PostToolUse` (Edit/Write) runs `format-edits.sh` **and**
+  `skill-reminder.sh`; `PostToolUseFailure` (Bash) runs `gate-failure-hint.sh`;
+  plus `Stop`. Commands use `$CLAUDE_PROJECT_DIR/agent-os/hooks/…`. (The formatter,
   the gate hint, and the PR guard are Claude-only — Cursor mirrors only the shell guard.)
 - **Cursor** — `.cursor/hooks.json` → `beforeShellExecution`. Command paths resolve
   **relative to `.cursor/`**, so the entry uses `../agent-os/hooks/…`.
@@ -41,10 +39,9 @@ referenced `.sh` script exists and that hook commands use `$CLAUDE_PROJECT_DIR`
 - **Portable.** Commands use `$CLAUDE_PROJECT_DIR`, never an absolute home path
   (enforced by `pnpm agent-os:check`).
 - **Reminder vs fix vs escalate vs block.** `skill-reminder.sh` /
-  `requirement-intake-reminder.sh` / `gate-failure-hint.sh` nudge; `format-edits.sh`
-  silently fixes formatting (mutating but safe, in-scope only); `no-unrequested-pr.sh`
-  escalates PR creation to user confirmation (`ask`); `guard-edits.sh` /
-  `guardrails.mjs` enforce (`deny`).
+  `gate-failure-hint.sh` nudge; `format-edits.sh` silently fixes formatting
+  (mutating but safe, in-scope only); `no-unrequested-pr.sh` escalates PR creation
+  to user confirmation (`ask`); `guard-edits.sh` / `guardrails.mjs` enforce (`deny`).
 
 ## Test a hook locally
 
@@ -61,10 +58,6 @@ CLAUDE_CODE_REMOTE=true CLAUDE_PROJECT_DIR="$PWD" bash agent-os/hooks/session-st
 
 # format-edits.sh -> formats the edited file in place (no-op when biome/deps absent)
 echo "{\"tool_input\":{\"file_path\":\"$PWD/src/server.ts\"}}" | bash agent-os/hooks/format-edits.sh
-
-# requirement-intake-reminder.sh -> additionalContext on a new-requirement prompt; silent otherwise
-echo '{"prompt":"add a new route to the billing domain"}' | bash agent-os/hooks/requirement-intake-reminder.sh
-echo '{"prompt":"how does the auth middleware work?"}'    | bash agent-os/hooks/requirement-intake-reminder.sh
 
 # gate-failure-hint.sh -> additionalContext when a known gate fails; silent otherwise
 echo '{"tool_input":{"command":"pnpm validate:domain:strict"}}' | bash agent-os/hooks/gate-failure-hint.sh
