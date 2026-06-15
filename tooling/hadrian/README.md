@@ -20,6 +20,16 @@ authorization permutation testing (BOLA/BFLA/BOPLA) against a **running** core-b
 
 ---
 
+## Findings while wiring locally (Hadrian is free — no purchase)
+
+Hadrian is open-source (Apache-2.0); installed via `go install` at no cost and run locally here against the real 128-route spec. Wiring surfaced:
+
+- **Spec sanitization is required.** core-be's generated OpenAPI trips strict (Go/RE2) parsers, so `run-hadrian.sh` strips two field classes before handing the spec to Hadrian (it needs neither):
+  - `example` **and** `examples` set together — OpenAPI-invalid (Swagger UI tolerates it). e.g. `GET /audit/logs`.
+  - `pattern` regexes using **PCRE lookaheads** `(?!…)` (password-complexity rules) — Go's RE2 cannot compile them.
+  - *Both are worth fixing in the spec generator regardless — they make the spec non-portable to strict tooling.*
+- **Open quirk:** Hadrian v1.0.0 reports `Loaded 0 templates` from `--template-dir` even with its own 8 REST templates present, while the spec + roles parse fine (`Testing 128 operations against 7 roles`). Under investigation. **Until resolved, the in-house matrix is the working free local layer; Hadrian is wired-but-pending.**
+
 ## Prerequisites
 
 | Tool | Note |
@@ -101,6 +111,7 @@ For cross-org BOLA, `user_b`'s token must carry a *different* `org` claim than `
 - [x] Scaffold `auth.yaml`, `roles.yaml`, `run-hadrian.sh`, `.gitignore`.
 - [x] Commit the authorization testing plan (`docs/reference/security/authorization-testing-plan.md`).
 - [x] Install Node 24.13.0 (container shipped Node 22).
+- [x] Bake spec sanitization (example/examples/pattern) + template vendoring into `run-hadrian.sh`; verified the spec parses (`128 operations × 7 roles`).
 
 **Local — pending**
 
@@ -123,3 +134,5 @@ For cross-org BOLA, `user_b`'s token must carry a *different* `org` claim than `
 - [ ] Decide on LLM triage (`--llm-host` Ollama / `--llm-provider`) vs none.
 - [ ] Add `pnpm` aliases `security:authz:hadrian:{local,dev}`.
 - [ ] Verify `roles.yaml` `endpoints` paths against the generated spec's `{param}` style + `/api/v1` prefix.
+- [ ] **Resolve Hadrian v1.0.0 `Loaded 0 templates`** (file upstream / try a newer build); until then, rely on the in-house matrix.
+- [ ] Fix the core-be OpenAPI generator: stop emitting `example`+`examples` together; avoid PCRE-lookahead `pattern`s (so the spec is valid for strict tooling, not just Swagger UI).
