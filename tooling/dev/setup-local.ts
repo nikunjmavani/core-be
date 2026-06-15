@@ -16,11 +16,13 @@
  *   pnpm setup:local --check                    (preflight only, no mutations)
  *   pnpm setup:local --skip-deps --skip-docker  (granular skips)
  *   pnpm setup:local --skip-codegraph           (skip the CodeGraph agent index)
+ *   pnpm setup:local --only-env                  (scaffold .env.local only, then exit)
  *
- * Designed to never overwrite real credentials. If `.env.development` already
- * exists, it is left untouched; if `.env.local` already exists, it is left
- * untouched. Use `--force-env-local` to rewrite `.env.local` from the canonical
- * localhost template.
+ * Designed to never overwrite real credentials: if `.env.local` already exists it is
+ * left untouched. Use `--force-env-local` to rewrite it. `--only-env` scaffolds just a
+ * self-contained `.env.local` (seeded from `.env.example` with a generated RS256 JWT
+ * keypair + SECRETS_ENCRYPTION_KEY and localhost DB/Redis URLs) and exits — used by the
+ * cloud-agent bootstrap (`tooling/setup/agent/bootstrap.sh`).
  */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -52,6 +54,7 @@ interface BootstrapOptions {
   skipMigrate: boolean;
   skipCodegraph: boolean;
   forceEnvLocal: boolean;
+  onlyEnv: boolean;
   seed: 'none' | 'minimal' | 'full';
   withWorker: boolean;
   withToxiproxy: boolean;
@@ -149,6 +152,7 @@ function parseArgs(): BootstrapOptions {
     skipMigrate: has('--skip-migrate'),
     skipCodegraph: has('--skip-codegraph'),
     forceEnvLocal: has('--force-env-local'),
+    onlyEnv: has('--only-env'),
     seed,
     withWorker: has('--with-worker'),
     withToxiproxy: has('--with-toxiproxy'),
@@ -316,43 +320,8 @@ function runInstallDependencies(reports: StepReport[], options: BootstrapOptions
 }
 
 function runEnvScaffolding(reports: StepReport[], options: BootstrapOptions): void {
-  logHeading('3/9 Environment files');
-  scaffoldEnvDevelopmentIfMissing(reports, options);
+  logHeading('3/9 Environment (.env.local)');
   scaffoldEnvLocal(reports, options);
-}
-
-function scaffoldEnvDevelopmentIfMissing(reports: StepReport[], options: BootstrapOptions): void {
-  const startedAt = performance.now();
-  const envDevelopmentPath = resolve(PROJECT_ROOT, '.env.development');
-  if (existsSync(envDevelopmentPath)) {
-    reportStep(reports, '.env.development', 'skipped', startedAt, 'present');
-    return;
-  }
-  if (options.check) {
-    reportStep(
-      reports,
-      '.env.development',
-      'warning',
-      startedAt,
-      '--check mode (would seed from .env.example)',
-    );
-    return;
-  }
-  const examplePath = resolve(PROJECT_ROOT, '.env.example');
-  if (!existsSync(examplePath)) {
-    reportStep(reports, '.env.development', 'failed', startedAt, '.env.example missing');
-    process.exit(1);
-  }
-  let content = readFileSync(examplePath, 'utf8');
-  content = injectGeneratedSecrets(content);
-  writeFileSync(envDevelopmentPath, content);
-  reportStep(
-    reports,
-    '.env.development',
-    'done',
-    startedAt,
-    'seeded from .env.example with generated JWT keys + SECRETS_ENCRYPTION_KEY',
-  );
 }
 
 function injectGeneratedSecrets(content: string): string {
@@ -380,20 +349,26 @@ function upsertEnvAssignment(content: string, key: string, value: string): strin
   return content.endsWith('\n') ? `${content}${line}\n` : `${content}\n${line}\n`;
 }
 
-const LOCAL_OVERRIDE_TEMPLATE = `# Machine-local override (gitignored). Loaded AFTER .env.<NODE_ENV>
-# with override=true (non-production only). See \`.env.example\` for the
-# canonical schema of variable names.
-
-# Local Docker Compose stack (\`pnpm compose:up\`).
-# Credentials match docker-compose.yml (POSTGRES_USER/PASSWORD/DB = core).
-DATABASE_URL=postgresql://core:core@localhost:5432/core
-DATABASE_MIGRATION_URL=postgresql://core:core@localhost:5432/core
-REDIS_URL=redis://localhost:6379
-
-# Local Postgres / Redis do not use TLS.
-DATABASE_SSL_ENABLED=false
-DATABASE_SSL_REJECT_UNAUTHORIZED=false
-`;
+// Localhost DB/Redis values for the `pnpm compose:up` stack. Credentials match
+// docker-compose.yml (POSTGRES_USER/PASSWORD/DB = core); local Postgres/Redis are
+// plaintext (no TLS).
+function injectLocalhostOverrides(content: string): string {
+  let updated = content;
+  updated = upsertEnvAssignment(
+    updated,
+    'DATABASE_URL',
+    'postgresql://core:core@localhost:5432/core',
+  );
+  updated = upsertEnvAssignment(
+    updated,
+    'DATABASE_MIGRATION_URL',
+    'postgresql://core:core@localhost:5432/core',
+  );
+  updated = upsertEnvAssignment(updated, 'REDIS_URL', 'redis://localhost:6379');
+  updated = upsertEnvAssignment(updated, 'DATABASE_SSL_ENABLED', 'false');
+  updated = upsertEnvAssignment(updated, 'DATABASE_SSL_REJECT_UNAUTHORIZED', 'false');
+  return updated;
+}
 
 function scaffoldEnvLocal(reports: StepReport[], options: BootstrapOptions): void {
   const startedAt = performance.now();
@@ -414,12 +389,26 @@ function scaffoldEnvLocal(reports: StepReport[], options: BootstrapOptions): voi
       '.env.local',
       'warning',
       startedAt,
-      '--check mode (would create localhost override)',
+      '--check mode (would create self-contained .env.local)',
     );
     return;
   }
-  writeFileSync(envLocalPath, LOCAL_OVERRIDE_TEMPLATE);
-  reportStep(reports, '.env.local', 'done', startedAt, 'localhost override created');
+  const examplePath = resolve(PROJECT_ROOT, '.env.example');
+  if (!existsSync(examplePath)) {
+    reportStep(reports, '.env.local', 'failed', startedAt, '.env.example missing');
+    process.exit(1);
+  }
+  let content = readFileSync(examplePath, 'utf8');
+  content = injectGeneratedSecrets(content);
+  content = injectLocalhostOverrides(content);
+  writeFileSync(envLocalPath, content);
+  reportStep(
+    reports,
+    '.env.local',
+    'done',
+    startedAt,
+    'self-contained: .env.example + generated JWT keys/SECRETS_ENCRYPTION_KEY + localhost DB/Redis',
+  );
 }
 
 function runDocker(reports: StepReport[], options: BootstrapOptions): void {
@@ -750,6 +739,13 @@ async function main(): Promise<void> {
   if (options.check) logInfo(`${ANSI.yellow}--check mode: read-only, no mutations${ANSI.reset}`);
 
   ensureDevDirectoriesExist();
+
+  if (options.onlyEnv) {
+    runEnvScaffolding(reports, options);
+    printSummary(reports);
+    return;
+  }
+
   runPreflight(reports);
   runInstallDependencies(reports, options);
   runEnvScaffolding(reports, options);
