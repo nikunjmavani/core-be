@@ -69,6 +69,7 @@ flowchart TB
 
 | Doc                                                  | Description                                                                              |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| [process/end-to-end-flow.md](process/end-to-end-flow.md) | Prompt → clone → agent guards → commit/push hooks → PR CI → post-merge deploy → runtime. |
 | [process/git-workflow.md](process/git-workflow.md)   | Branch naming, PR flow, conventional commits.                                            |
 | [process/release-versioning.md](process/release-versioning.md) | Commit prefix → version bump (patch/minor/major), `Release-As` override, dev/main release channels. |
 | [process/pr-review.md](process/pr-review.md)         | Human + agent PR review checklist, severity legend, doc-sync map.                        |
