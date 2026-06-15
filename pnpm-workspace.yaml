@@ -1,5 +1,10 @@
 autoInstallPeers: true
 engineStrict: true
+# Pin the Node version pnpm runs scripts with so environments that boot an
+# older Node (e.g. the Claude Code web sandbox defaults to Node 22) don't trip
+# the engineStrict gate — pnpm self-provisions this version. Keep in sync with
+# .nvmrc / .node-version / engines.node (>=24).
+useNodeVersion: 24.13.0
 
 allowBuilds:
   '@sentry-internal/node-cpu-profiler': true
