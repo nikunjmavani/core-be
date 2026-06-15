@@ -79,6 +79,21 @@
         "${REDIS_URL}"
       ]
     },
+    "postman": {
+      "url": "https://mcp.postman.com/mcp",
+      "headers": {}
+    },
+    "resend": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "RESEND_API_KEY",
+        "mcp/resend"
+      ]
+    },
     "codegraph": {
       "type": "stdio",
       "command": "codegraph",
