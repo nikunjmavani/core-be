@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.6.9-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.8-dev.0...v4.6.9-dev.0) (2026-06-15)
+
+
+### Documentation
+
+* **agent-os:** correct stale workflow, seed, and provider paths in skills ([#641](https://github.com/nikunjmavani/core-be/issues/641)) ([5550f4c](https://github.com/nikunjmavani/core-be/commit/5550f4c274b58403008bb98dd4982642565ed110))
+
 ## [4.6.8-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.7-dev.0...v4.6.8-dev.0) (2026-06-15)
 
 
