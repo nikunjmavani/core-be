@@ -71,12 +71,14 @@ On the first session the cached Node 24 is already on disk, [`session-start.sh`]
 
 ---
 
-## Environment variables (Tier 2)
+## Environment variables
 
-Static checks and unit tests need **no** env vars. For DB-bound and e2e tests, mirror the `api-smoke` service in [`docker-compose.yml`](../../docker-compose.yml) (test-safe values; `pnpm compose:up` publishes Postgres on `localhost:5432` and Redis on `localhost:6379`):
+**Tests need none.** [`src/tests/setup.ts`](../../src/tests/setup.ts) bakes in test RS256 JWT PEMs and sets every other value (`??=` or hard override), and [`src/tests/global-setup.ts`](../../src/tests/global-setup.ts) forces `DATABASE_URL` to the local Docker DB and runs `pnpm db:migrate`. So the full suite runs with **only Postgres + Redis up** — no env vars and no key generation, exactly like local.
+
+You only need env vars to run the **app itself** (`pnpm dev` / `pnpm dev:worker`). Mirror the `api-smoke` service in [`docker-compose.yml`](../../docker-compose.yml) (`pnpm compose:up` publishes Postgres on `localhost:5432` and Redis on `localhost:6379`):
 
 ```text
-NODE_ENV=test
+NODE_ENV=development
 DATABASE_URL=postgresql://core:core@localhost:5432/core
 DATABASE_MIGRATION_URL=postgresql://core:core@localhost:5432/core
 REDIS_URL=redis://localhost:6379
@@ -88,7 +90,7 @@ SECRETS_ENCRYPTION_KEY=000000000000000000000000000000000000000000000000000000000
 - `DATABASE_MIGRATION_URL` must be the **direct (non-pooler)** host — `pnpm db:migrate` rejects a pooler URL.
 - `DATABASE_SSL_ENABLED=false` is for plaintext local Docker only.
 - `METRICS_ENABLED=false` avoids requiring `METRICS_SCRAPE_TOKEN` at boot.
-- **JWT keys** (`JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY`) are multi-line RS256 PEMs that the env-var field handles poorly. Tests that sign tokens should generate them in a SessionStart hook (writing to a gitignored `.env.test`) or via `pnpm setup:infra`; static checks and unit tests do not need them.
+- **JWT keys** (`JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY`) are multi-line RS256 PEMs the env-var field handles poorly; generate them in a SessionStart hook (writing to a gitignored `.env.local`) or via `pnpm setup:infra`. Tests do not need this — they use the baked-in keys in [`src/tests/setup.ts`](../../src/tests/setup.ts).
 
 The full variable surface and how to obtain real values: [`.env.example`](../../.env.example) and [credentials-and-env.md](credentials-and-env.md).
 
@@ -114,8 +116,9 @@ pnpm db:seed         # or pnpm db:seed:full
 | Tier | Goal | Network | Services | Env vars |
 | ---- | ---- | ------- | -------- | -------- |
 | **1** | Lint, typecheck, unit tests, the gates | Custom: defaults + `nodejs.org` | none | none |
-| **2** | DB-bound + e2e tests, migrations, seed, api-smoke | same | `pnpm compose:up` (Postgres + Redis) | minimal boot set above |
-| **3** | Live Stripe / Resend / S3 / Sentry calls | + their API hosts | + Postgres / Redis | + real test keys |
+| **2** | Full test suite (e2e / integration), migrations, seed | same | `pnpm compose:up` (Postgres + Redis) | none — tests self-provision |
+| **3** | Run the app (`pnpm dev` / `pnpm dev:worker`) | same | `pnpm compose:up` | the boot block above |
+| **4** | Live Stripe / Resend / S3 / Sentry calls | + their API hosts | + Postgres / Redis | + real test keys |
 
 ---
 
@@ -139,7 +142,7 @@ flowchart TD
 
 - **Node 24 is not pre-installed** — the setup script is mandatory; without it the session is stuck on Node 22 and `engines` rejects it.
 - **`nodejs.org` is not in the default Trusted allowlist** — the most common miss.
-- **Husky is inactive on the web** (no `core.hooksPath`), so commits and pushes skip local pre-commit / pre-push hooks — rely on CI and `pnpm agent-os:check` / `pnpm ci:local`.
+- **Husky activates after `pnpm install`** (its `prepare` step), so a properly configured session gets the **same** pre-commit / pre-push gates as local — including the pre-push SonarQube gate, which needs `pnpm sonar:up` or `SKIP_SONAR=1 git push`. Before deps install (e.g. a session still on Node 22) Husky is inactive and commits skip the hooks.
 - **Pushes are pinned to the session's `claude/*` branch** by the git proxy; the branch-naming policy allowlists `claude/*` for exactly this reason.
 
 ---
