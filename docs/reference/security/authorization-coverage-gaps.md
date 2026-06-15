@@ -25,8 +25,10 @@ Answers "is every route — organization-level included — covered, and what is
 
 ## What is NOT in the codebase / tests yet
 
+> **Reconciliation with integration tests:** the per-domain `*.integration` suites already cover more than the dedicated `security/` suite. For example `membership.integration` asserts cross-org `404` (invitation revoke/resend, membership-permission lookup), owner-tier `403` (`transfer-ownership`, owner-cannot-leave), and email-match `403` (decline someone else's invitation). The gaps below are what remains **after** counting those.
+
 1. **Cross-user (intra-tenant) BOLA — `auth-by-id` (13 routes).** Ownership is enforced in repositories today, but there is **no end-to-end test** that User B is denied User A's object. Only `upload` has a repo-level unit test. *This is the primary gap.*
-2. **Cross-org BOLA e2e — `org-by-id` (28 routes).** BFLA is fully covered by the permission matrix; cross-org object access is only e2e-tested for `role`, `membership`, `webhook`. `subscription`, `api-key`, `notification-policy`, `invitation` (and the role/membership variants) have **no cross-org BOLA e2e**.
+2. **Cross-org BOLA e2e — remaining `org-by-id` resources.** BFLA is fully covered by the permission matrix; cross-org object access is e2e-tested for `role`, `membership`, `webhook` (security suite) plus `invitation` and membership-permission lookups (`membership.integration`). The residual with **no cross-org BOLA e2e** is `subscription`, `api-key`, and `notification-policy`.
 3. **Grant-grantability on create paths.** `assertCallerCanGrantPermissionCodes` is unit-tested for role-permission PUT, but create paths (`POST roles`, `POST invitations`, api-key scopes) are not all asserted at the route level.
 4. **Global-role denial — `global-role` (9 routes).** A regular user is sampled against one admin route; the per-route "regular user → 403" assertion is not exhaustive across all admin/super_admin routes.
 5. **Caller-scope on `auth-self-mutation` (24 routes).** Guarded by auth + `/me` scoping, but there is no per-route assertion that the body cannot redirect the action to another user (mass-assignment covers a subset only).
@@ -36,6 +38,8 @@ Answers "is every route — organization-level included — covered, and what is
 ---
 
 ## Full route inventory
+
+> The Status column reflects **dedicated** authorization coverage; per-domain `*.integration` tests add further cross-org/tier/email assertions (see Reconciliation above).
 
 ### AUDIT (1)
 
