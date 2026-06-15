@@ -1766,6 +1766,8 @@ src/
     │   │   ├── open-redirect.security.test.ts
     │   │   ├── privilege-escalation.security.test.ts
     │   │   └── session-invalidation.security.test.ts
+    │   ├── authz/
+    │   │   └── object-ownership.security.test.ts
     │   ├── headers/
     │   │   ├── cors.security.test.ts
     │   │   ├── csp.security.test.ts
