@@ -53,6 +53,15 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/agent-os/hooks/guardrails.mjs\""
           }
         ]
+      },
+      {
+        "matcher": "mcp__github__create_pull_request",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/agent-os/hooks/no-unrequested-pr.sh\""
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -61,7 +70,27 @@
         "hooks": [
           {
             "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/agent-os/hooks/format-edits.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/agent-os/hooks/skill-reminder.sh\""
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/agent-os/hooks/gate-failure-hint.sh\""
           }
         ]
       }

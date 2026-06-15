@@ -56,6 +56,19 @@ if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ]; then
   fi
 fi
 
+# --- Readiness check: agent-os integrity only (fast, no DB) ------------------
+# The ONLY gate at startup. Heavy work (compose:up, db:migrate, db:seed, tests,
+# pnpm dev) is intentionally left to run on demand per prompt — not bootstrapped
+# here. Fail-open: never blocks the session; output goes to stderr (diagnostics).
+agent_os_status="skipped"
+if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && [ -x node_modules/.bin/biome ]; then
+  if pnpm agent-os:check >&2; then
+    agent_os_status="passed"
+  else
+    agent_os_status="see: pnpm agent-os:check"
+  fi
+fi
+
 # --- Build session context: skill routing map + env/commands summary --------
 node_version="$(node -v 2>/dev/null || echo unknown)"
 deps="missing"; [ -x node_modules/.bin/biome ] && deps="installed"
@@ -66,8 +79,8 @@ map_file="$ROOT/agent-os/docs/skill-triggers.md"
 map_section=""
 [ -f "$map_file" ] && map_section="$(cat "$map_file")"
 
-context="$(printf 'core-be session ready.\n- Node %s (need >=%s) · deps %s · codegraph %s%s\n- Gates: pnpm validate · pnpm ci:local   (pre-commit: pnpm guard:pre-commit)\n- Custom commands: /validate · /ci-local · /new-domain · /routes-sync\n\nagent-os skill routing — consult skill-index FIRST, then run the listed skill(s) for the files you change:\n\n%s' \
-  "$node_version" "$required_major" "$deps" "$codegraph" "$node_note" "$map_section")"
+context="$(printf 'core-be session ready.\n- Node %s (need >=%s) · deps %s · codegraph %s · agent-os %s%s\n- Startup is light: Node + deps + agent-os:check only — run compose:up / db:migrate / db:seed / tests on demand per prompt.\n- Gates: pnpm validate · pnpm ci:local   (pre-commit: pnpm guard:pre-commit)\n- Custom commands: /validate · /ci-local · /new-domain · /routes-sync\n\nagent-os skill routing — consult skill-index FIRST, then run the listed skill(s) for the files you change:\n\n%s' \
+  "$node_version" "$required_major" "$deps" "$codegraph" "$agent_os_status" "$node_note" "$map_section")"
 
 # Prefer the structured additionalContext envelope; fall back to plain stdout
 # (also injected as context) when jq is unavailable. Fail-open either way.
