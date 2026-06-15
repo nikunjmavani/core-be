@@ -122,18 +122,25 @@ pnpm db:seed         # or pnpm db:seed:full
 
 ---
 
+## Session startup vs on-demand
+
+Startup stays **light** so a session is ready fast: the setup script (Node 24, cached) plus `session-start.sh`, which runs `pnpm install` and a single `pnpm agent-os:check` readiness gate. Nothing else is bootstrapped.
+
+Everything else runs **on demand, driven by your prompt** — `pnpm compose:up` for the database, `pnpm db:migrate` / `pnpm db:seed`, the test suite, or `pnpm dev` — started only when a task needs it.
+
 ## Setup flow
 
 ```mermaid
 flowchart TD
   create["Create environment"] --> net["Network: Custom + nodejs.org"]
   net --> setupScript["Setup script: install-node.sh (cached)"]
-  setupScript --> firstRun["First session launches"]
-  firstRun --> hook["session-start.sh: switch to /opt/node24, pnpm install"]
-  hook --> tier1["Tier 1 ready: validate / test:unit / agent-os:check"]
-  tier1 --> tier2["Tier 2: pnpm compose:up + pnpm compose:wait"]
-  tier2 --> migrate["pnpm db:migrate + pnpm db:seed"]
-  migrate --> tests["DB-bound + e2e tests, api-smoke"]
+  setupScript --> hook["session-start.sh: /opt/node24, pnpm install, agent-os:check"]
+  hook --> ready["Session ready (light startup)"]
+  ready -->|"your prompt drives work"| prompt["Work starts per prompt"]
+  prompt --> staticChecks["validate / test:unit / agent-os:check"]
+  prompt --> services["pnpm compose:up + pnpm compose:wait"]
+  services --> migrate["pnpm db:migrate + pnpm db:seed"]
+  migrate --> dbWork["e2e / DB tests, or pnpm dev"]
 ```
 
 ---
