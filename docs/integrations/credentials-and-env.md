@@ -191,6 +191,27 @@ Implementation lives under `src/domains/auth/sub-domains/auth-method/oauth/` —
   4. CLI prints **webhook signing secret** (`whsec_...`) → `STRIPE_WEBHOOK_SECRET=whsec_xxxx`.
 - **Option B — Dashboard:** **Developers** → **Webhooks** → **Add endpoint** → URL e.g. `https://your-api.com/api/v1/billing/webhook` → select events → create → reveal **Signing secret** → `STRIPE_WEBHOOK_SECRET=whsec_xxxx`.
 
+**Test the subscription webhook flow (local):** with `stripe listen` running (Option A), the API
+ingests exactly the three subscription lifecycle events — `customer.subscription.created`,
+`customer.subscription.updated`, `customer.subscription.deleted` (the switch in
+[`stripe-webhook.service.ts`](../../src/domains/billing/sub-domains/stripe-webhook/stripe-webhook.service.ts)).
+`past_due` / `active` transitions arrive as `status` on `.updated`; there is **no** separate
+`invoice.*` handler.
+
+1. **Run the worker** — webhook receipt only **enqueues**; nothing is processed unless the BullMQ
+   worker runs. In a second terminal (alongside `pnpm dev`): `pnpm dev:worker`.
+2. **Trigger events** — in a third terminal:
+
+   ```bash
+   stripe trigger customer.subscription.created
+   stripe trigger customer.subscription.updated
+   stripe trigger customer.subscription.deleted
+   ```
+
+3. **Verify** — each delivery writes a row to `billing.stripe_webhook_events` (the idempotency
+   ledger), and `billing.subscriptions` reflects the new `status`. If `stripe listen` prints
+   `200` but no rows appear, the worker from step 1 isn't running.
+
 ---
 
 ## 6. Sentry (optional) — errors / tracing
@@ -283,9 +304,6 @@ per provider.
 JWT auth and global role `super_admin`. Mutating Bull Board API calls (2xx)
 are written to `audit.logs`. Optional; leave unset or `false` in production
 if not needed.
-
-For Stripe webhooks locally, Stripe CLI is the easiest way to get
-`STRIPE_WEBHOOK_SECRET`.
 
 **To push these values to a GitHub Environment after editing:**
 
