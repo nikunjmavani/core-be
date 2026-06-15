@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.6.4-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.3-dev.0...v4.6.4-dev.0) (2026-06-15)
+
+
+### Documentation
+
+* **runbooks:** refresh worker registry breakdown to 30 workers / 27 Postgres ([#621](https://github.com/nikunjmavani/core-be/issues/621)) ([2d4d111](https://github.com/nikunjmavani/core-be/commit/2d4d111a9578679c856367881c16a5f6d8f62cb6))
+
 ## [4.6.3-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.2-dev.0...v4.6.3-dev.0) (2026-06-14)
 
 
