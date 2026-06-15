@@ -56,6 +56,27 @@ if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ]; then
   fi
 fi
 
+# --- Start Docker daemon (opt-in via START_DOCKER=1) -------------------------
+# The cached Setup script's processes do not persist, so a per-session daemon
+# must (re)start here. Off by default to keep startup light. Image pulls also
+# require `production.cloudfront.docker.com` on the network allowlist; without
+# it `docker compose up` 403s on layer downloads. Fail-open: never blocks.
+docker_status="absent"
+if command -v docker >/dev/null 2>&1; then
+  docker_status="stopped"
+  if docker info >/dev/null 2>&1; then
+    docker_status="running"
+  elif [ "${START_DOCKER:-}" = "1" ] && command -v dockerd >/dev/null 2>&1; then
+    echo "session-start: starting dockerd (START_DOCKER=1)…" >&2
+    (dockerd >/tmp/dockerd.log 2>&1 &)
+    for _ in $(seq 1 20); do
+      docker info >/dev/null 2>&1 && { docker_status="running"; break; }
+      sleep 1
+    done
+    [ "$docker_status" = "running" ] || echo "session-start: dockerd not ready (see /tmp/dockerd.log)." >&2
+  fi
+fi
+
 # --- Readiness check: agent-os integrity only (fast, no DB) ------------------
 # The ONLY gate at startup. Heavy work (compose:up, db:migrate, db:seed, tests,
 # pnpm dev) is intentionally left to run on demand per prompt — not bootstrapped
@@ -83,8 +104,8 @@ map_file="$ROOT/agent-os/docs/skill-triggers.md"
 map_section=""
 [ -f "$map_file" ] && map_section="$(cat "$map_file")"
 
-context="$(printf 'core-be session ready — environment provisioned: %s.\n- Node %s (need >=%s) · deps %s · gh %s · codegraph %s · agent-os %s%s\n- Startup is light: Node + deps + agent-os:check only — run compose:up / db:migrate / db:seed / tests on demand per prompt.\n- Gates: pnpm validate · pnpm ci:local   (pre-commit: pnpm guard:pre-commit)\n- Custom commands: /validate · /ci-local · /new-domain · /routes-sync\n\nagent-os skill routing — consult skill-index FIRST, then run the listed skill(s) for the files you change:\n\n%s' \
-  "$provisioned" "$node_version" "$required_major" "$deps" "$gh_cli" "$codegraph" "$agent_os_status" "$node_note" "$map_section")"
+context="$(printf 'core-be session ready — environment provisioned: %s.\n- Node %s (need >=%s) · deps %s · gh %s · docker %s · codegraph %s · agent-os %s%s\n- Startup is light: Node + deps + agent-os:check only — run compose:up / db:migrate / db:seed / tests on demand per prompt.\n- Gates: pnpm validate · pnpm ci:local   (pre-commit: pnpm guard:pre-commit)\n- Custom commands: /validate · /ci-local · /new-domain · /routes-sync\n\nagent-os skill routing — consult skill-index FIRST, then run the listed skill(s) for the files you change:\n\n%s' \
+  "$provisioned" "$node_version" "$required_major" "$deps" "$gh_cli" "$docker_status" "$codegraph" "$agent_os_status" "$node_note" "$map_section")"
 
 # Prefer the structured additionalContext envelope; fall back to plain stdout
 # (also injected as context) when jq is unavailable. Fail-open either way.

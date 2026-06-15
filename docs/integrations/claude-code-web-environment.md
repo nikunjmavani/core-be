@@ -47,12 +47,13 @@ The default **Trusted** allowlist already covers what `pnpm install` and image p
 | pnpm / npm | `registry.npmjs.org` |
 | Git / GitHub | `github.com` (plus the GitHub proxy) |
 | S3 (uploads) | `*.amazonaws.com` |
-| Docker images (Postgres / Redis) | `registry-1.docker.io` (Docker Hub) |
+| Docker images (Postgres / Redis) | `registry-1.docker.io` + `auth.docker.io` (manifest/auth only — image **layers** need the CDN below) |
 | Google OAuth | `accounts.google.com` |
 
 Add the rest via **Custom** (tick "Also include default list of common package managers"):
 
 - `nodejs.org` — **always**, for the Node 24 download in the setup script. Without it the install is blocked.
+- `production.cloudfront.docker.com` — **Tier 2 only if you use Docker** for Postgres/Redis. `registry-1.docker.io` resolves the image manifest, but the actual layers download from this Docker Hub CloudFront CDN; without it `docker compose up` returns `403 Forbidden` mid-pull. Not needed if you use the pre-installed **native** Postgres/Redis instead (see Runtime services).
 - Tier 3 only (live calls; contract tests mock these, so usually unnecessary): `api.stripe.com`, `api.resend.com`, `sentry.io` / `*.ingest.sentry.io`.
 
 > **Do not use `None`** — it blocks `pnpm install` entirely.
@@ -118,6 +119,10 @@ pnpm db:seed         # or pnpm db:seed:full
 ```
 
 `pnpm compose:up` also starts the local SonarQube container unless you set `SONAR=0`; a cloud session rarely needs it, so `SONAR=0 pnpm compose:up` brings up just Postgres + Redis. Stop everything with `pnpm compose:down`.
+
+**Docker daemon (required before `compose:up`).** Docker is installed but its **daemon is not running**, and a daemon launched from the cached **Setup script won't persist** (only the filesystem is cached) — so it must start per session. Set the **Variable** `START_DOCKER=1` and the [`session-start.sh`](../../agent-os/hooks/session-start.sh) hook launches `dockerd` at session start (the banner then reads `docker running`); or start it on demand with `dockerd >/tmp/dockerd.log 2>&1 &`. Image pulls **also** require `production.cloudfront.docker.com` on the allowlist (see Network access) — without it `docker compose up` returns `403 Forbidden` on layer downloads.
+
+**Native alternative (no Docker).** Postgres 16 and Redis 7 are pre-installed (`/usr/lib/postgresql/16/bin`, `redis-server`). When the Docker layer CDN isn't allowlisted, run them natively on the ports the tests expect: `redis-server --daemonize yes` for Redis, and for Postgres an `initdb`'d cluster (run as the `postgres` user with `-U core` and trust auth) started on `5432` with a `core` database — satisfying `postgresql://core:core@localhost:5432/core`. The test harness ([`global-setup.ts`](../../src/tests/global-setup.ts)) does not care whether Postgres is Docker or native.
 
 ---
 
