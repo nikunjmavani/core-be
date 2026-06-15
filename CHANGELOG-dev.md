@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.6.5-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.4-dev.0...v4.6.5-dev.0) (2026-06-15)
+
+
+### Documentation
+
+* **integrations:** map third-party services to CLI/MCP/SDK by consumer ([#626](https://github.com/nikunjmavani/core-be/issues/626)) ([5e90f52](https://github.com/nikunjmavani/core-be/commit/5e90f522061e5de8f31cb2905b9edda43caf2bf9))
+
 ## [4.6.4-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.3-dev.0...v4.6.4-dev.0) (2026-06-15)
 
 
