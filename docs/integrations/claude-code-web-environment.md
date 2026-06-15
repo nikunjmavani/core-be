@@ -72,6 +72,13 @@ On the first session the cached Node 24 is already on disk, [`session-start.sh`]
 
 **GitHub CLI (optional).** [`install-gh.sh`](../../tooling/setup/agent/install-gh.sh) adds `gh` as an in-session fallback for reading Actions logs, checking CI, and merging (the GitHub MCP tools already cover this). It belongs in the cached **setup script**, not `session-start.sh` — a per-session `apt install` would not cache and would slow every startup. Set `GH_TOKEN` in the environment's **Variables** (least-privilege: `contents` + `pull_requests` + `actions:read`; env vars are not a secrets store). Its apt-repo fallback needs `cli.github.com` on the network allowlist.
 
+**Troubleshooting — `bash: tooling/setup/agent/install-node.sh: No such file or directory` (exit 127).** The Setup script is cached and runs as root before the session. If the cached layer predates these helper scripts, or executes from a directory other than the repo checkout, the relative path will not resolve. First, re-save the Setup script field and start a **fresh** session — that rebuilds the cache against the current checkout (where the scripts exist). If it still fails, an absolute path is working-directory-independent; use the session's checkout path (here `/home/user/core-be`):
+
+```bash
+bash /home/user/core-be/tooling/setup/agent/install-node.sh
+bash /home/user/core-be/tooling/setup/agent/install-gh.sh   # optional
+```
+
 ---
 
 ## Environment variables
