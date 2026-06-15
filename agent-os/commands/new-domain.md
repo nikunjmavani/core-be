@@ -6,6 +6,7 @@ argument-hint: <name and short description> e.g. "billing/invoice  invoices issu
 Scaffold a new domain or sub-domain: **$ARGUMENTS**
 
 Procedure:
+
 1. Consult `agent-os/skills/skill-index/SKILL.md` first to confirm which skills apply.
 2. Follow the **domain-generator** skill (`agent-os/skills/domain-generator/SKILL.md`)
    and the domain structure in `CLAUDE.md`:

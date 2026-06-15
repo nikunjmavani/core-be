@@ -8,6 +8,7 @@ Run `pnpm ci:local` — the PR gate: validate + domain structure + routes catalo
 migration lint + env-example sync + full tests.
 
 For each failing step:
+
 - Name the step and the root cause.
 - Apply the minimal in-scope fix (run the matching skill from
   `agent-os/skills/skill-index/SKILL.md` if one applies).
