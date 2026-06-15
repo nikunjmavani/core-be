@@ -6,6 +6,14 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.6.6-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.5-dev.0...v4.6.6-dev.0) (2026-06-15)
+
+
+### Documentation
+
+* **integrations:** add Postman + Resend agent MCP servers ([#631](https://github.com/nikunjmavani/core-be/issues/631)) ([6966744](https://github.com/nikunjmavani/core-be/commit/6966744da40ff9887700f433f78afc1f8f313140))
+* **integrations:** fix Stripe CLI/Dashboard webhook URL ([#630](https://github.com/nikunjmavani/core-be/issues/630)) ([570e58f](https://github.com/nikunjmavani/core-be/commit/570e58f79991d12dcf75781ccdc9465da2647b85))
+
 ## [4.6.5-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.4-dev.0...v4.6.5-dev.0) (2026-06-15)
 
 
