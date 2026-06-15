@@ -82,11 +82,14 @@ TEST_REPORT.md
 ai/mcp/mcp.json
 
 # Claude Code — ignore everything except tracked project config
-.claude/
+# Use .claude/* (not .claude/) so the !negations below actually re-include
+# these entries — git cannot re-include children of a wholly-excluded dir.
+.claude/*
 !.claude/settings.json
 !.claude/agents
 !.claude/skills
 !.claude/hooks
+!.claude/commands
 reports/
 **/reports/
 **/*-report.*

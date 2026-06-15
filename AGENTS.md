@@ -34,3 +34,11 @@ Project-defined subagents in [`agent-os/agents/`](agent-os/agents/) run in isola
 
 To add a subagent, use global **create-subagent**
 (see [cursor-global-skills](agent-os/skills/cursor-global-skills/SKILL.md)).
+
+## Custom commands
+
+Reusable slash commands live in [`agent-os/commands/`](agent-os/commands/) (single
+source of truth). Claude Code reads them via `.claude/commands`, Cursor via
+`.cursor/commands`; for Codex, symlink them into `~/.codex/prompts/` (see
+[agent-os/commands/README.md](agent-os/commands/README.md)). Available: `/validate`,
+`/ci-local`, `/new-domain`, `/routes-sync`.
