@@ -187,9 +187,9 @@ Implementation lives under `src/domains/auth/sub-domains/auth-method/oauth/` —
 - **Option A — Stripe CLI (recommended for local):**
   1. Install [Stripe CLI](https://stripe.com/docs/stripe-cli): `brew install stripe/stripe-cli/stripe` (macOS) or see docs.
   2. Login: `stripe login`.
-  3. Forward webhooks to your server: `stripe listen --forward-to localhost:3000/api/v1/billing/webhooks/stripe`.
+  3. Forward webhooks to your server: `stripe listen --forward-to localhost:3000/api/v1/billing/webhook`.
   4. CLI prints **webhook signing secret** (`whsec_...`) → `STRIPE_WEBHOOK_SECRET=whsec_xxxx`.
-- **Option B — Dashboard:** **Developers** → **Webhooks** → **Add endpoint** → URL e.g. `https://your-api.com/api/v1/billing/webhooks/stripe` → select events → create → reveal **Signing secret** → `STRIPE_WEBHOOK_SECRET=whsec_xxxx`.
+- **Option B — Dashboard:** **Developers** → **Webhooks** → **Add endpoint** → URL e.g. `https://your-api.com/api/v1/billing/webhook` → select events → create → reveal **Signing secret** → `STRIPE_WEBHOOK_SECRET=whsec_xxxx`.
 
 ---
 
