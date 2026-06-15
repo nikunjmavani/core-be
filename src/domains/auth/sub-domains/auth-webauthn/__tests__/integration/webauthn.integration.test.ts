@@ -43,7 +43,7 @@ describe('Auth WebAuthn — Integration', () => {
         payload: {},
       });
 
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
       const body = response.json() as {
         data: { options: { challenge: string }; challenge_token: string };
       };

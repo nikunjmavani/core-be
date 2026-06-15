@@ -7,6 +7,7 @@ import {
 import {
   getPathParameterDescription,
   getPathParameterExample,
+  getPathParameterSchema,
 } from '@tooling/openapi/enrichers/path-parameters.js';
 import type { OpenApiLocaleStrings } from '@tooling/openapi/extractors/locale-loader.js';
 import { collectRoutes } from '@tooling/openapi/extractors/route-extractor.js';
@@ -25,9 +26,14 @@ import {
   getMcpComponentSchemas,
   isMcpOpenApiPath,
 } from '@tooling/openapi/mcp-openapi.js';
+import { buildHeaderParameters } from './header-parameters.js';
 import { buildResponses } from './responses-builder.js';
+import { loadCapturedRouteExamples } from '@tooling/openapi/route-examples/loader.js';
 import { PROJECT_OPENAPI_TITLE } from '@/shared/constants/project-identity.constants.js';
 import { buildTagDefinitions } from './tag-definitions.js';
+
+/** Sanitized request/response samples captured from real test-suite API calls. */
+const capturedExamplesByRouteKey = loadCapturedRouteExamples();
 
 export type OpenApiDocument = {
   openapi: string;
@@ -75,7 +81,7 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
         in: 'path',
         required: true,
         description: getPathParameterDescription(parameterName),
-        schema: { type: 'string' },
+        schema: getPathParameterSchema(parameterName),
         example: getPathParameterExample(parameterName),
       });
     }
@@ -84,7 +90,8 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
     for (const tag of tags) tagSet.add(tag);
 
     const queryParameters = getQueryParameters(method, openapiPath);
-    const allParameters = [...pathParameters, ...queryParameters];
+    const headerParameters = buildHeaderParameters(method, routeKey);
+    const allParameters = [...pathParameters, ...queryParameters, ...headerParameters];
 
     const baseDescription = metadata?.description;
     let description = CURSOR_PAGINATED_LIST_ROUTE_KEYS.includes(
@@ -103,7 +110,7 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
       description,
       operationId: generateOperationId(method, openapiPath),
       parameters: allParameters.length > 0 ? allParameters : undefined,
-      security: getRouteSecurity(tags),
+      security: getRouteSecurity(tags, routeKey),
       responses: buildResponses(method, routeKey, responseStrings),
     };
 
@@ -112,12 +119,23 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
     } else if (['post', 'patch', 'put'].includes(operation)) {
       const schema = getRequestBodySchema(method, openapiPath);
       if (schema) {
+        const capturedRequestBody = capturedExamplesByRouteKey[routeKey]?.request_body;
         operationObject.requestBody = {
           required: true,
           content: {
             'application/json': {
               schema,
               ...(schema.example ? { example: schema.example } : {}),
+              ...(capturedRequestBody !== undefined
+                ? {
+                    examples: {
+                      captured: {
+                        summary: 'Captured from a live API call in the test suite (sanitized)',
+                        value: capturedRequestBody,
+                      },
+                    },
+                  }
+                : {}),
             },
           },
         };

@@ -27,7 +27,7 @@ export async function seedUser(payload: SeedUserPayload) {
   const [row] = await getRequestDatabase()
     .insert(users)
     .values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('user'),
       email: payload.email,
       email_hash: emailHash,
       is_email_verified: true,

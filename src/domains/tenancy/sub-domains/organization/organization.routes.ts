@@ -22,7 +22,6 @@ import { AUDIT_PERMISSIONS } from '@/domains/audit/audit.permissions.js';
 import {
   createOrganizationDto,
   listOrganizationsQueryDto,
-  organizationIdParamsDto,
   organizationSlugParamsDto,
   updateOrganizationDto,
   uploadLogoDto,
@@ -41,7 +40,7 @@ import {
 /**
  * Service collaborators required by the organization routes plugin. Includes
  * the four organization-scoped services plus the optional audit service used
- * by the `/organizations/:id/audit-logs` endpoint.
+ * by the `/organization/audit-logs` endpoint.
  */
 export interface OrganizationRoutesDeps {
   organizationService: OrganizationService;
@@ -87,13 +86,12 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
       organizationController.listOrganizations,
     );
     zodApplication.get(
-      '/organizations/:id',
+      '/organization',
       {
         schema: {
-          summary: 'Get organization by ID',
+          summary: 'Get active organization',
           description: 'Returns organization details including name, slug, status, and logo.',
           tags: ['Organization'],
-          params: organizationIdParamsDto,
         },
         onRequest: [app.authenticate],
       },
@@ -133,7 +131,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
       organizationController.createOrganization,
     );
     zodApplication.patch(
-      '/organizations/:id',
+      '/organization',
       {
         // sec-r4-I2: organization-scoped mutation — cap per (org, actor) so a
         // single member cannot churn organization metadata in a loop or starve
@@ -144,16 +142,15 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           description:
             'Updates organization details (name, slug, status, logo). Requires ORGANIZATION_UPDATE permission.',
           tags: ['Organization'],
-          params: organizationIdParamsDto,
           body: updateOrganizationDto,
         },
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ORGANIZATION_UPDATE, 'id')],
+        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ORGANIZATION_UPDATE)],
       },
       organizationController.updateOrganization,
     );
     zodApplication.delete(
-      '/organizations/:id',
+      '/organization',
       {
         // sec-r4-I2: organization deletion is irreversible (cascades members,
         // subscriptions, audit logs, storage objects). Cap at the expensive-authed
@@ -166,17 +163,16 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           description:
             'Permanently deletes an organization and all its data. Requires ORGANIZATION_DELETE permission. This action is irreversible.',
           tags: ['Organization'],
-          params: organizationIdParamsDto,
         },
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ORGANIZATION_DELETE, 'id')],
+        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ORGANIZATION_DELETE)],
       },
       organizationController.deleteOrganization,
     );
 
     // Organization Logo
     zodApplication.put(
-      '/organizations/:id/logo',
+      '/organization/logo',
       {
         // sec-r4-I2: logo upload writes to S3 and rewrites the org row; cap at
         // the org-scoped tier so a hijacked session cannot mint unbounded
@@ -187,22 +183,21 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           description:
             'Uploads or replaces the organization logo. Requires ORGANIZATION_UPDATE permission.',
           tags: ['Organization'],
-          params: organizationIdParamsDto,
           body: uploadLogoDto,
         },
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ORGANIZATION_UPDATE, 'id')],
+        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ORGANIZATION_UPDATE)],
       },
       organizationController.uploadLogo,
     );
-    zodApplication.delete<{ Params: { id: string } }>(
-      '/organizations/:id/logo',
+    zodApplication.delete(
+      '/organization/logo',
       {
         // sec-r4-I2: same org-scoped tier as upload — each call deletes an S3
         // object and rewrites the org row.
         ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ORGANIZATION_UPDATE, 'id')],
+        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ORGANIZATION_UPDATE)],
         schema: {
           summary: 'Remove organization logo',
           description: 'Removes the organization logo. Requires ORGANIZATION_UPDATE permission.',
@@ -213,30 +208,29 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
     );
 
     // Organization Audit Logs
-    zodApplication.get<{ Params: { id: string } }>(
-      '/organizations/:id/audit-logs',
+    zodApplication.get(
+      '/organization/audit-logs',
       {
         schema: {
           summary: 'List organization audit logs',
           description:
             'Returns a paginated list of audit log entries for the organization. Requires AUDIT_LOG_READ permission.',
           tags: ['Organization', 'Audit Log'],
-          params: organizationIdParamsDto,
           querystring: ListAuditLogsQueryDto,
         },
         onRequest: [app.authenticate],
         preValidation: [rejectLegacyPagePagination],
-        preHandler: [requireOrganizationPermission(AUDIT_PERMISSIONS.AUDIT_LOG_READ, 'id')],
+        preHandler: [requireOrganizationPermission(AUDIT_PERMISSIONS.AUDIT_LOG_READ)],
       },
       organizationController.listOrganizationAuditLogs,
     );
 
     // Organization Settings
-    zodApplication.get<{ Params: { id: string } }>(
-      '/organizations/:id/settings',
+    zodApplication.get(
+      '/organization/settings',
       {
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ORGANIZATION_READ, 'id')],
+        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ORGANIZATION_READ)],
         schema: {
           summary: 'Get organization settings',
           description:
@@ -246,8 +240,8 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
       },
       settingsController.getSettings,
     );
-    zodApplication.patch<{ Params: { id: string } }>(
-      '/organizations/:id/settings',
+    zodApplication.patch(
+      '/organization/settings',
       {
         // sec-r4-I2: org-scoped settings mutation — bound per (org, actor) so
         // policy churn or notification-config flapping cannot loop unbounded.
@@ -259,34 +253,33 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           body: updateOrganizationSettingsDto,
         },
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ORGANIZATION_UPDATE, 'id')],
+        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ORGANIZATION_UPDATE)],
       },
       settingsController.updateSettings,
     );
 
     // Organization API Keys
-    zodApplication.get<{ Params: { id: string } }>(
-      '/organizations/:id/api-keys',
+    zodApplication.get(
+      '/organization/api-keys',
       {
         schema: {
           summary: 'List API keys',
           description:
             'Returns all API keys for the organization. The key value is masked after creation. Requires API_KEY_READ permission.',
           tags: ['Organization', 'API Key'],
-          params: organizationIdParamsDto,
           querystring: listOrganizationApiKeysQueryDto,
         },
         onRequest: [app.authenticate],
         preValidation: [rejectLegacyPagePagination],
-        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.API_KEY_READ, 'id')],
+        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.API_KEY_READ)],
       },
       apiKeyController.listApiKeys,
     );
-    zodApplication.get<{ Params: { id: string; apiKeyId: string } }>(
-      '/organizations/:id/api-keys/:apiKeyId',
+    zodApplication.get<{ Params: { api_key_id: string } }>(
+      '/organization/api-keys/:api_key_id',
       {
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.API_KEY_READ, 'id')],
+        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.API_KEY_READ)],
         schema: {
           summary: 'Get API key',
           description: 'Returns a single API key by ID. Requires API_KEY_READ permission.',
@@ -295,8 +288,8 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
       },
       apiKeyController.getApiKey,
     );
-    zodApplication.post<{ Params: { id: string } }>(
-      '/organizations/:id/api-keys',
+    zodApplication.post(
+      '/organization/api-keys',
       {
         // sec-r5-ratelimit-dos-1: per (org, actor) cap on API key creation so a
         // single Admin role-holder (or a hijacked session for one) cannot churn
@@ -311,13 +304,15 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           body: createOrganizationApiKeyDto,
         },
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.API_KEY_MANAGE, 'id')],
+        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.API_KEY_MANAGE)],
       },
       apiKeyController.createApiKey,
     );
-    zodApplication.patch<{ Params: { id: string; apiKeyId: string } }>(
-      '/organizations/:id/api-keys/:apiKeyId',
+    zodApplication.patch<{ Params: { api_key_id: string } }>(
+      '/organization/api-keys/:api_key_id',
       {
+        // R4: org-scoped admin mutation — cap per (org, actor).
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         schema: {
           summary: 'Update API key',
           description: 'Updates an API key (name or status). Requires API_KEY_MANAGE permission.',
@@ -325,15 +320,17 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           body: updateOrganizationApiKeyDto,
         },
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.API_KEY_MANAGE, 'id')],
+        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.API_KEY_MANAGE)],
       },
       apiKeyController.updateApiKey,
     );
-    zodApplication.delete<{ Params: { id: string; apiKeyId: string } }>(
-      '/organizations/:id/api-keys/:apiKeyId',
+    zodApplication.delete<{ Params: { api_key_id: string } }>(
+      '/organization/api-keys/:api_key_id',
       {
+        // R4: org-scoped admin mutation — cap per (org, actor).
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.API_KEY_MANAGE, 'id')],
+        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.API_KEY_MANAGE)],
         schema: {
           summary: 'Delete API key',
           description: 'Permanently deletes an API key. Requires API_KEY_MANAGE permission.',
@@ -342,11 +339,11 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
       },
       apiKeyController.deleteApiKey,
     );
-    zodApplication.post<{ Params: { id: string; apiKeyId: string } }>(
-      '/organizations/:id/api-keys/:apiKeyId/rotate',
+    zodApplication.post<{ Params: { api_key_id: string } }>(
+      '/organization/api-keys/:api_key_id/rotate',
       {
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.API_KEY_MANAGE, 'id')],
+        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.API_KEY_MANAGE)],
         ...STRICT_AUTHED_RATE_LIMIT,
         schema: {
           summary: 'Rotate API key',
@@ -359,13 +356,11 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
     );
 
     // Organization Notification Policies
-    zodApplication.get<{ Params: { id: string } }>(
-      '/organizations/:id/notification-policies',
+    zodApplication.get(
+      '/organization/notification-policies',
       {
         onRequest: [app.authenticate],
-        preHandler: [
-          requireOrganizationPermission(TENANCY_PERMISSIONS.NOTIFICATION_POLICY_READ, 'id'),
-        ],
+        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.NOTIFICATION_POLICY_READ)],
         schema: {
           summary: 'List notification policies',
           description:
@@ -375,13 +370,11 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
       },
       notificationPolicyController.listPolicies,
     );
-    zodApplication.get<{ Params: { id: string; policyId: string } }>(
-      '/organizations/:id/notification-policies/:policyId',
+    zodApplication.get<{ Params: { policy_id: string } }>(
+      '/organization/notification-policies/:policy_id',
       {
         onRequest: [app.authenticate],
-        preHandler: [
-          requireOrganizationPermission(TENANCY_PERMISSIONS.NOTIFICATION_POLICY_READ, 'id'),
-        ],
+        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.NOTIFICATION_POLICY_READ)],
         schema: {
           summary: 'Get notification policy',
           description:
@@ -391,8 +384,8 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
       },
       notificationPolicyController.getPolicy,
     );
-    zodApplication.post<{ Params: { id: string } }>(
-      '/organizations/:id/notification-policies',
+    zodApplication.post(
+      '/organization/notification-policies',
       {
         // sec-r5-ratelimit-dos-3: per (org, actor) cap on notification-policy
         // creation. The `notification_type` field is free-form varchar(50)
@@ -408,15 +401,15 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           body: createOrganizationNotificationPolicyDto,
         },
         onRequest: [app.authenticate],
-        preHandler: [
-          requireOrganizationPermission(TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE, 'id'),
-        ],
+        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE)],
       },
       notificationPolicyController.createPolicy,
     );
-    zodApplication.patch<{ Params: { id: string; policyId: string } }>(
-      '/organizations/:id/notification-policies/:policyId',
+    zodApplication.patch<{ Params: { policy_id: string } }>(
+      '/organization/notification-policies/:policy_id',
       {
+        // R4: org-scoped admin mutation — cap per (org, actor).
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         schema: {
           summary: 'Update notification policy',
           description:
@@ -425,19 +418,17 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           body: updateOrganizationNotificationPolicyDto,
         },
         onRequest: [app.authenticate],
-        preHandler: [
-          requireOrganizationPermission(TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE, 'id'),
-        ],
+        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE)],
       },
       notificationPolicyController.updatePolicy,
     );
-    zodApplication.delete<{ Params: { id: string; policyId: string } }>(
-      '/organizations/:id/notification-policies/:policyId',
+    zodApplication.delete<{ Params: { policy_id: string } }>(
+      '/organization/notification-policies/:policy_id',
       {
+        // R4: org-scoped admin mutation — cap per (org, actor).
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
-        preHandler: [
-          requireOrganizationPermission(TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE, 'id'),
-        ],
+        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE)],
         schema: {
           summary: 'Delete notification policy',
           description:

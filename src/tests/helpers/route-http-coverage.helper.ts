@@ -2,6 +2,10 @@ import { expect } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { getRoutesByDomain, type RouteEntry } from '@/tests/helpers/route-catalog-registry.js';
 import {
+  getDeclaredSuccessStatus,
+  loadRouteSuccessStatusMap,
+} from '@/tests/helpers/route-success-status.helper.js';
+import {
   injectAuthenticated,
   injectUnauthenticated,
   type InjectHttpResult,
@@ -12,17 +16,42 @@ export type RouteSmokeCase = {
   materializedPath: string;
   expectUnauthenticated: number | number[];
   expectForbidden?: number;
-  expectSuccess?: number;
+  /**
+   * Declared happy-path status from tooling/openapi/route-catalog/route-success-statuses.json
+   * (200/201/202/204) — what the route returns for a correctly authorized, valid request.
+   */
+  expectSuccess: number;
 };
 
-const PATH_PARAM_PLACEHOLDER = '000000000000000000000';
+const successStatusMap = loadRouteSuccessStatusMap();
+
+function declaredSuccessStatus(route: RouteEntry): number {
+  return getDeclaredSuccessStatus({
+    method: route.method,
+    path: route.path,
+    map: successStatusMap,
+  });
+}
+
+import {
+  PARAM_NAME_TO_ENTITY,
+  publicIdPlaceholderFor,
+} from '@/shared/utils/identity/public-id.util.js';
+
+/** Entity-correct placeholder for a path param (valid prefixed shape, never a real row). */
+function placeholderForParamName(paramName: string): string {
+  const entity = PARAM_NAME_TO_ENTITY[paramName as keyof typeof PARAM_NAME_TO_ENTITY];
+  return entity ? publicIdPlaceholderFor(entity) : 'placeholder';
+}
 
 export function loadRoutesForDomain(domain: string): RouteEntry[] {
   return getRoutesByDomain(domain);
 }
 
 export function materializeRoutePath(path: string, organizationPublicId: string): string {
-  return path.replace(':id', organizationPublicId).replace(/:[a-zA-Z]+/g, PATH_PARAM_PLACEHOLDER);
+  return path
+    .replace(':organization_id', organizationPublicId)
+    .replace(/:([a-zA-Z_]+)/g, (_, name: string) => placeholderForParamName(name));
 }
 
 export function buildRouteSmokeCases(
@@ -39,11 +68,12 @@ export function buildRouteSmokeCases(
           ? 404
           : hasPathParam
             ? 400
-            : 200;
+            : declaredSuccessStatus(route);
       return {
         route,
         materializedPath,
         expectUnauthenticated,
+        expectSuccess: declaredSuccessStatus(route),
       };
     }
     case 'authenticated': {
@@ -60,7 +90,7 @@ export function buildRouteSmokeCases(
         route,
         materializedPath,
         expectUnauthenticated: unauthenticatedStatus,
-        expectSuccess: 200,
+        expectSuccess: declaredSuccessStatus(route),
       };
     }
     case 'global-role':
@@ -69,7 +99,7 @@ export function buildRouteSmokeCases(
         materializedPath,
         expectUnauthenticated: 401,
         expectForbidden: 403,
-        expectSuccess: 200,
+        expectSuccess: declaredSuccessStatus(route),
       };
     case 'org-permission': {
       const unauthenticatedStatus =
@@ -81,7 +111,7 @@ export function buildRouteSmokeCases(
         materializedPath,
         expectUnauthenticated: unauthenticatedStatus,
         expectForbidden: 403,
-        expectSuccess: 200,
+        expectSuccess: declaredSuccessStatus(route),
       };
     }
     default:
@@ -89,6 +119,7 @@ export function buildRouteSmokeCases(
         route,
         materializedPath,
         expectUnauthenticated: 401,
+        expectSuccess: declaredSuccessStatus(route),
       };
   }
 }

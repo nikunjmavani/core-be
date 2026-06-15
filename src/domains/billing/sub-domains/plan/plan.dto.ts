@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
-/** Zod schema validating the path params for `GET /api/v1/plans/:id`. */
+/** Zod schema validating the path params for `GET /api/v1/plans/:plan_id`. */
 export const getPlanParamsDto = z
   .object({
-    id: trimmedStringMinMax(1, 21),
+    plan_id: trimmedStringMinMax(1, 28),
   })
   .strict();
 

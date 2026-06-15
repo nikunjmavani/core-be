@@ -33,7 +33,7 @@ describe('logout revokes access token (session binding)', () => {
       url: testApiPath('/auth/login'),
       payload: { email: user.email, password },
     });
-    expect(loginResponse.statusCode).toBe(200);
+    expect(loginResponse.statusCode).toBe(201);
     const accessToken = (loginResponse.json() as { data: { access_token: string } }).data
       .access_token;
 
@@ -49,7 +49,7 @@ describe('logout revokes access token (session binding)', () => {
       url: testApiPath('/auth/logout'),
       token: accessToken,
     });
-    expect([200, 204]).toContain(logoutResponse.statusCode);
+    expect([201]).toContain(logoutResponse.statusCode);
 
     const meAfterLogout = await injectAuthenticated(application, {
       method: 'GET',

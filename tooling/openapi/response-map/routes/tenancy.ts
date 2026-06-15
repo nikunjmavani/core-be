@@ -10,7 +10,7 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     schema: wrapPaginated(schemas.organizationSchema, [schemas.organizationExample]),
     example: null,
   },
-  'GET /api/v1/tenancy/organizations/{id}': {
+  'GET /api/v1/tenancy/organization': {
     statusCode: 200,
     schema: wrapSuccess(schemas.organizationSchema, schemas.organizationExample),
     example: null,
@@ -25,50 +25,51 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     schema: wrapSuccess(schemas.organizationSchema, schemas.organizationExample),
     example: null,
   },
-  'PATCH /api/v1/tenancy/organizations/{id}': {
+  'PATCH /api/v1/tenancy/organization': {
     statusCode: 200,
     schema: wrapSuccess(schemas.organizationSchema, schemas.organizationExample),
     example: null,
   },
-  'DELETE /api/v1/tenancy/organizations/{id}': { statusCode: 204, schema: null, example: null },
-  'PUT /api/v1/tenancy/organizations/{id}/logo': {
+  'DELETE /api/v1/tenancy/organization': {
+    statusCode: 204,
+    schema: null,
+    example: null,
+  },
+  'PUT /api/v1/tenancy/organization/logo': {
     statusCode: 200,
     schema: wrapSuccess(schemas.organizationSchema, schemas.organizationExample),
     example: null,
   },
-  'DELETE /api/v1/tenancy/organizations/{id}/logo': {
-    statusCode: 200,
-    schema: wrapSuccess(schemas.organizationSchema, {
-      ...schemas.organizationExample,
-      logo_url: null,
-    }),
+  'DELETE /api/v1/tenancy/organization/logo': {
+    statusCode: 204,
+    schema: null,
     example: null,
   },
 
   // ── Organization: Settings ──
-  'GET /api/v1/tenancy/organizations/{id}/settings': {
+  'GET /api/v1/tenancy/organization/settings': {
     statusCode: 200,
     schema: wrapSuccess(schemas.organizationSettingsSchema, schemas.organizationSettingsExample),
     example: null,
   },
-  'PATCH /api/v1/tenancy/organizations/{id}/settings': {
+  'PATCH /api/v1/tenancy/organization/settings': {
     statusCode: 200,
     schema: wrapSuccess(schemas.organizationSettingsSchema, schemas.organizationSettingsExample),
     example: null,
   },
 
   // ── Organization: API Keys ──
-  'GET /api/v1/tenancy/organizations/{id}/api-keys': {
+  'GET /api/v1/tenancy/organization/api-keys': {
     statusCode: 200,
     schema: wrapPaginated(schemas.apiKeySchema, [schemas.apiKeyExample]),
     example: null,
   },
-  'GET /api/v1/tenancy/organizations/{id}/api-keys/{apiKeyId}': {
+  'GET /api/v1/tenancy/organization/api-keys/{api_key_id}': {
     statusCode: 200,
     schema: wrapSuccess(schemas.apiKeySchema, schemas.apiKeyExample),
     example: null,
   },
-  'POST /api/v1/tenancy/organizations/{id}/api-keys': {
+  'POST /api/v1/tenancy/organization/api-keys': {
     statusCode: 201,
     schema: wrapSuccess(
       {
@@ -79,18 +80,18 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     ),
     example: null,
   },
-  'PATCH /api/v1/tenancy/organizations/{id}/api-keys/{apiKeyId}': {
+  'PATCH /api/v1/tenancy/organization/api-keys/{api_key_id}': {
     statusCode: 200,
     schema: wrapSuccess(schemas.apiKeySchema, schemas.apiKeyExample),
     example: null,
   },
-  'DELETE /api/v1/tenancy/organizations/{id}/api-keys/{apiKeyId}': {
+  'DELETE /api/v1/tenancy/organization/api-keys/{api_key_id}': {
     statusCode: 204,
     schema: null,
     example: null,
   },
-  'POST /api/v1/tenancy/organizations/{id}/api-keys/{apiKeyId}/rotate': {
-    statusCode: 200,
+  'POST /api/v1/tenancy/organization/api-keys/{api_key_id}/rotate': {
+    statusCode: 201,
     schema: wrapSuccess(
       {
         ...schemas.apiKeySchema,
@@ -102,106 +103,110 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
   },
 
   // ── Organization: Notification Policies ──
-  'GET /api/v1/tenancy/organizations/{id}/notification-policies': {
+  'GET /api/v1/tenancy/organization/notification-policies': {
     statusCode: 200,
     schema: wrapSuccess({ type: 'array', items: schemas.notificationPolicySchema }, [
       schemas.notificationPolicyExample,
     ]),
     example: null,
   },
-  'GET /api/v1/tenancy/organizations/{id}/notification-policies/{policyId}': {
+  'GET /api/v1/tenancy/organization/notification-policies/{policy_id}': {
     statusCode: 200,
     schema: wrapSuccess(schemas.notificationPolicySchema, schemas.notificationPolicyExample),
     example: null,
   },
-  'POST /api/v1/tenancy/organizations/{id}/notification-policies': {
+  'POST /api/v1/tenancy/organization/notification-policies': {
     statusCode: 201,
     schema: wrapSuccess(schemas.notificationPolicySchema, schemas.notificationPolicyExample),
     example: null,
   },
-  'PATCH /api/v1/tenancy/organizations/{id}/notification-policies/{policyId}': {
+  'PATCH /api/v1/tenancy/organization/notification-policies/{policy_id}': {
     statusCode: 200,
     schema: wrapSuccess(schemas.notificationPolicySchema, schemas.notificationPolicyExample),
     example: null,
   },
-  'DELETE /api/v1/tenancy/organizations/{id}/notification-policies/{policyId}': {
+  'DELETE /api/v1/tenancy/organization/notification-policies/{policy_id}': {
     statusCode: 204,
     schema: null,
     example: null,
   },
 
   // ── Organization: Audit Logs ──
-  'GET /api/v1/tenancy/organizations/{id}/audit-logs': {
+  'GET /api/v1/tenancy/organization/audit-logs': {
     statusCode: 200,
     schema: wrapPaginated(schemas.auditLogSchema, [schemas.auditLogExample]),
     example: null,
   },
 
   // ── Membership ──
-  'GET /api/v1/tenancy/organizations/{id}/memberships': {
+  'GET /api/v1/tenancy/organization/memberships': {
     statusCode: 200,
     schema: wrapPaginated(schemas.membershipSchema, [schemas.membershipExample]),
     example: null,
   },
-  'GET /api/v1/tenancy/organizations/{id}/memberships/{membershipId}': {
+  'GET /api/v1/tenancy/organization/memberships/{membership_id}': {
     statusCode: 200,
     schema: wrapSuccess(schemas.membershipSchema, schemas.membershipExample),
     example: null,
   },
-  'GET /api/v1/tenancy/organizations/{id}/memberships/{membershipId}/permissions': {
+  'GET /api/v1/tenancy/organization/memberships/{membership_id}/permissions': {
     statusCode: 200,
     schema: wrapSuccess({ type: 'array', items: schemas.permissionSchema }, [
       schemas.permissionExample,
     ]),
     example: null,
   },
-  'POST /api/v1/tenancy/organizations/{id}/memberships': {
+  'POST /api/v1/tenancy/organization/memberships': {
     statusCode: 201,
     schema: wrapSuccess(schemas.membershipSchema, schemas.membershipExample),
     example: null,
   },
-  'PATCH /api/v1/tenancy/organizations/{id}/memberships/{membershipId}': {
+  'PATCH /api/v1/tenancy/organization/memberships/{membership_id}': {
     statusCode: 200,
     schema: wrapSuccess(schemas.membershipSchema, schemas.membershipExample),
     example: null,
   },
-  'DELETE /api/v1/tenancy/organizations/{id}/memberships/{membershipId}': {
+  'DELETE /api/v1/tenancy/organization/memberships/{membership_id}': {
     statusCode: 204,
     schema: null,
     example: null,
   },
-  'POST /api/v1/tenancy/organizations/{id}/leave': { statusCode: 204, schema: null, example: null },
-  'POST /api/v1/tenancy/organizations/{id}/transfer-ownership': {
-    statusCode: 200,
+  'POST /api/v1/tenancy/organization/leave': {
+    statusCode: 201,
+    schema: null,
+    example: null,
+  },
+  'POST /api/v1/tenancy/organization/transfer-ownership': {
+    statusCode: 201,
     schema: wrapSuccess(schemas.membershipSchema, schemas.membershipExample),
     example: null,
   },
 
   // ── Invitations ──
-  'GET /api/v1/tenancy/organizations/{id}/invitations': {
+  'GET /api/v1/tenancy/organization/invitations': {
     statusCode: 200,
     schema: wrapSuccess({ type: 'array', items: schemas.invitationSchema }, [
       schemas.invitationExample,
     ]),
     example: null,
   },
-  'POST /api/v1/tenancy/organizations/{id}/invitations': {
+  'POST /api/v1/tenancy/organization/invitations': {
     statusCode: 201,
     schema: wrapSuccess(schemas.invitationSchema, schemas.invitationExample),
     example: null,
   },
-  'POST /api/v1/tenancy/invitations/{invitationId}/accept': {
-    statusCode: 200,
+  'POST /api/v1/tenancy/invitations/{invitation_id}/accept': {
+    statusCode: 201,
     schema: wrapSuccess(schemas.membershipSchema, schemas.membershipExample),
     example: null,
   },
-  'DELETE /api/v1/tenancy/organizations/{id}/invitations/{invitationId}': {
+  'DELETE /api/v1/tenancy/organization/invitations/{invitation_id}': {
     statusCode: 204,
     schema: null,
     example: null,
   },
-  'POST /api/v1/tenancy/organizations/{id}/invitations/{invitationId}/resend': {
-    statusCode: 200,
+  'POST /api/v1/tenancy/organization/invitations/{invitation_id}/resend': {
+    statusCode: 201,
     schema: wrapSuccess(schemas.invitationSchema, {
       ...schemas.invitationExample,
       expires_at: '2026-02-28T10:30:00.000Z',
@@ -215,24 +220,24 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     ]),
     example: null,
   },
-  'POST /api/v1/tenancy/invitations/{invitationId}/decline': {
-    statusCode: 204,
+  'POST /api/v1/tenancy/invitations/{invitation_id}/decline': {
+    statusCode: 201,
     schema: null,
     example: null,
   },
 
   // ── Roles ──
-  'GET /api/v1/tenancy/organizations/{id}/roles': {
+  'GET /api/v1/tenancy/organization/roles': {
     statusCode: 200,
     schema: wrapPaginated(schemas.memberRoleSchema, [schemas.memberRoleExample]),
     example: null,
   },
-  'GET /api/v1/tenancy/organizations/{id}/roles/{roleId}': {
+  'GET /api/v1/tenancy/organization/roles/{role_id}': {
     statusCode: 200,
     schema: wrapSuccess(schemas.memberRoleSchema, schemas.memberRoleExample),
     example: null,
   },
-  'POST /api/v1/tenancy/organizations/{id}/roles': {
+  'POST /api/v1/tenancy/organization/roles': {
     statusCode: 201,
     schema: wrapSuccess(schemas.memberRoleSchema, {
       ...schemas.memberRoleExample,
@@ -242,19 +247,19 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     }),
     example: null,
   },
-  'PATCH /api/v1/tenancy/organizations/{id}/roles/{roleId}': {
+  'PATCH /api/v1/tenancy/organization/roles/{role_id}': {
     statusCode: 200,
     schema: wrapSuccess(schemas.memberRoleSchema, schemas.memberRoleExample),
     example: null,
   },
-  'DELETE /api/v1/tenancy/organizations/{id}/roles/{roleId}': {
+  'DELETE /api/v1/tenancy/organization/roles/{role_id}': {
     statusCode: 204,
     schema: null,
     example: null,
   },
 
   // ── Role Permissions ──
-  'GET /api/v1/tenancy/organizations/{id}/roles/{roleId}/permissions': {
+  'GET /api/v1/tenancy/organization/roles/{role_id}/permissions': {
     statusCode: 200,
     schema: wrapSuccess(
       { type: 'array', items: schemas.memberRolePermissionSchema },
@@ -262,7 +267,7 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     ),
     example: null,
   },
-  'PUT /api/v1/tenancy/organizations/{id}/roles/{roleId}/permissions': {
+  'PUT /api/v1/tenancy/organization/roles/{role_id}/permissions': {
     statusCode: 200,
     schema: wrapSuccess(
       { type: 'array', items: schemas.memberRolePermissionSchema },

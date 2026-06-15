@@ -72,7 +72,7 @@ describe('Upload Domain — Integration', () => {
   });
 
   describe('GET /api/v1/uploads/:publicId', () => {
-    const unknownUploadPublicId = 'abcdefghijklmnopqrstu';
+    const unknownUploadPublicId = 'upl_abcdefghijklmnopqrstu';
 
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
@@ -95,7 +95,7 @@ describe('Upload Domain — Integration', () => {
   });
 
   describe('DELETE /api/v1/uploads/:publicId', () => {
-    const unknownUploadPublicId = 'abcdefghijklmnopqrstu';
+    const unknownUploadPublicId = 'upl_abcdefghijklmnopqrstu';
 
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
@@ -118,7 +118,7 @@ describe('Upload Domain — Integration', () => {
   });
 
   describe('POST /api/v1/uploads/:publicId/confirm (route-coverage gap-fill)', () => {
-    const unknownUploadPublicId = 'abcdefghijklmnopqrstu';
+    const unknownUploadPublicId = 'upl_abcdefghijklmnopqrstu';
 
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
@@ -144,7 +144,7 @@ describe('Upload Domain — Integration', () => {
     it('is idempotent: re-confirming an already-UPLOADED row returns 200 without S3 calls', async () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
-      const publicId = generatePublicId();
+      const publicId = generatePublicId('upload');
       const [seeded] = await database
         .insert(uploads)
         .values({
@@ -170,7 +170,7 @@ describe('Upload Domain — Integration', () => {
         token,
         payload: {},
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
 
       const [postCall] = await database.select().from(uploads).where(eq(uploads.id, seeded!.id));
       expect(postCall!.status).toBe('UPLOADED');

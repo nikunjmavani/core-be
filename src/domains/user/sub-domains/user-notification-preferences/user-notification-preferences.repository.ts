@@ -28,10 +28,21 @@ export class UserNotificationPreferencesRepository {
       .delete(user_notification_preferences)
       .where(eq(user_notification_preferences.user_id, user_id));
     if (preferences.length === 0) return [];
+    // audit-#11: collapse duplicate (notification_type, channel) tuples — last
+    // occurrence wins — so the idx_user_notif_prefs_user_type_channel_unique index
+    // cannot be tripped by a payload that repeats a tuple.
+    const deduplicatedPreferences = Array.from(
+      new Map(
+        preferences.map((preference) => [
+          `${preference.notification_type} ${preference.channel}`,
+          preference,
+        ]),
+      ).values(),
+    );
     const rows = await getRequestDatabase()
       .insert(user_notification_preferences)
       .values(
-        preferences.map((preference) => ({
+        deduplicatedPreferences.map((preference) => ({
           user_id,
           organization_id: preference.organization_id ?? undefined,
           notification_type: preference.notification_type,

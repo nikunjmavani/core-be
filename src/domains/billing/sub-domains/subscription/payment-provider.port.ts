@@ -32,6 +32,15 @@ export interface PaymentProvider {
     idempotencyKey?: string,
   ): Promise<void>;
 
+  /**
+   * Cancels the subscription immediately (reaudit-#6). Used for never-activated `INCOMPLETE`
+   * subscriptions where `cancel_at_period_end` is a no-op — the org needs the slot freed now.
+   */
+  cancelSubscriptionImmediately(
+    providerSubscriptionId: string,
+    idempotencyKey?: string,
+  ): Promise<void>;
+
   resumeSubscription(providerSubscriptionId: string, idempotencyKey?: string): Promise<void>;
 
   updateSubscriptionPrice(

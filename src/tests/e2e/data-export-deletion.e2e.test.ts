@@ -36,7 +36,7 @@ describe('Cross-domain e2e: data export and deletion', () => {
       token,
       payload: {},
     });
-    expect(exportResponse.statusCode).toBe(202);
+    expect(exportResponse.statusCode).toBe(201);
     const exportBody = exportResponse.json() as { data?: { export_id?: string; status?: string } };
     expect(exportBody.data?.status).toBe('pending');
     expect(exportBody.data?.export_id).toBeTruthy();

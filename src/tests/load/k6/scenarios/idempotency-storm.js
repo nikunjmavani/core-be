@@ -2,6 +2,7 @@ import http from 'k6/http';
 import { sleep } from 'k6';
 import { API_PREFIX, SCENARIOS, SMOKE_THRESHOLDS } from '../helpers/config.js';
 import { checkStatus } from '../helpers/checks.js';
+import { switchToOrganization } from '../helpers/auth.js';
 
 /**
  * Hammer an idempotency-protected route with the same key (expect 409 or 422 on duplicates).
@@ -22,21 +23,24 @@ export const options = {
 };
 
 export function idempotencyStorm() {
-  const token = __ENV.TEST_TOKEN;
+  let token = __ENV.TEST_TOKEN;
   const organizationPublicId = __ENV.TEST_ORG_ID;
   if (!(token && organizationPublicId)) {
     sleep(1);
     return;
   }
 
+  // The active org rides the token's `org` claim — scope the token to TEST_ORG_ID
+  // so the flat route resolves the right organization.
+  token = switchToOrganization(token, organizationPublicId) || token;
+
   const idempotencyKey = `k6-storm-${organizationPublicId}`;
   const response = http.post(
-    `${API_PREFIX}/billing/organizations/${organizationPublicId}/subscriptions`,
+    `${API_PREFIX}/billing/subscriptions`,
     JSON.stringify({ plan_public_id: 'plan_free', billing_cycle: 'monthly' }),
     {
       headers: {
         Authorization: `Bearer ${token}`,
-        'X-Organization-Id': organizationPublicId,
         'Content-Type': 'application/json',
         'Idempotency-Key': idempotencyKey,
       },

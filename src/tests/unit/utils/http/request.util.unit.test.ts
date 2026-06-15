@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { UnauthorizedError } from '@/shared/errors/index.js';
+import { ForbiddenError, UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
 import {
   getActingUserPublicId,
   getAuthenticatedActorId,
@@ -8,6 +8,7 @@ import {
   isUserPrincipal,
   requireAuth,
   requirePrincipal,
+  resolveActiveOrganizationId,
 } from '@/shared/utils/http/request.util.js';
 import type { ApiKeyAuthContext, UserAuthContext } from '@/shared/types/index.js';
 import type { FastifyRequest } from 'fastify';
@@ -86,6 +87,55 @@ describe('request.util', () => {
     it('getAuthenticatedActorId returns a non-empty actor id for both principal kinds', () => {
       expect(getAuthenticatedActorId(userPrincipal)).toBe('user-1');
       expect(getAuthenticatedActorId(apiKeyPrincipal)).toBe('key-1');
+    });
+  });
+
+  describe('resolveActiveOrganizationId', () => {
+    const pathOrg = 'org_a1b2c3d4e5f6g7h8i9j0k';
+    const claimOrg = 'org_z9y8x7w6v5u4t3s2r1q0p';
+
+    it('returns the path param when the route carries {organization_id}', () => {
+      const request = mockRequest({
+        params: { organization_id: pathOrg } as Record<string, string>,
+        auth: { ...userPrincipal, organizationPublicId: claimOrg },
+      });
+      expect(resolveActiveOrganizationId(request)).toBe(pathOrg);
+    });
+
+    it('falls back to the token org claim when the route carries no path param', () => {
+      const request = mockRequest({
+        params: {} as Record<string, string>,
+        auth: { ...userPrincipal, organizationPublicId: claimOrg },
+      });
+      expect(resolveActiveOrganizationId(request)).toBe(claimOrg);
+    });
+
+    it('prefers the path param over the claim (precedence matches requireOrganizationPermission)', () => {
+      const request = mockRequest({
+        params: { organization_id: pathOrg } as Record<string, string>,
+        auth: { ...userPrincipal, organizationPublicId: claimOrg },
+      });
+      // Must equal the permission-layer source (`params ?? claim`) so authz and RLS cannot diverge.
+      expect(resolveActiveOrganizationId(request)).toBe(pathOrg);
+    });
+
+    it('resolves an API-key principal’s pinned organization from the claim', () => {
+      const request = mockRequest({ params: {} as Record<string, string>, auth: apiKeyPrincipal });
+      // apiKeyPrincipal.organizationPublicId is 'org-1' (malformed) — proves it routes through the claim.
+      expect(() => resolveActiveOrganizationId(request)).toThrow(ValidationError);
+    });
+
+    it('throws ForbiddenError when neither a path param nor a claim is present', () => {
+      const request = mockRequest({ params: {} as Record<string, string>, auth: userPrincipal });
+      expect(() => resolveActiveOrganizationId(request)).toThrow(ForbiddenError);
+    });
+
+    it('throws ValidationError when the resolved organization id is malformed', () => {
+      const request = mockRequest({
+        params: { organization_id: 'not-an-org-id' } as Record<string, string>,
+        auth: userPrincipal,
+      });
+      expect(() => resolveActiveOrganizationId(request)).toThrow(ValidationError);
     });
   });
 });

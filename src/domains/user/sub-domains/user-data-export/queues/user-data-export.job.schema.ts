@@ -9,8 +9,8 @@ import { traceContextJobFieldsSchema } from '@/infrastructure/observability/trac
  */
 export const userDataExportJobDataSchema = z
   .object({
-    exportPublicId: z.string().min(1).max(21),
-    userPublicId: z.string().min(1).max(21),
+    exportPublicId: z.string().min(1).max(28),
+    userPublicId: z.string().min(1).max(28),
     userInternalId: z.number().int().positive(),
   })
   .extend(traceContextJobFieldsSchema.shape);

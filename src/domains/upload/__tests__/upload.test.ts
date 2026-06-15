@@ -68,7 +68,7 @@ describe('Upload Domain — Integration', () => {
   });
 
   describe('GET /api/v1/uploads/:publicId', () => {
-    const unknownUploadPublicId = 'abcdefghijklmnopqrstu';
+    const unknownUploadPublicId = 'upl_abcdefghijklmnopqrstu';
 
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
@@ -89,7 +89,7 @@ describe('Upload Domain — Integration', () => {
   });
 
   describe('DELETE /api/v1/uploads/:publicId', () => {
-    const unknownUploadPublicId = 'abcdefghijklmnopqrstu';
+    const unknownUploadPublicId = 'upl_abcdefghijklmnopqrstu';
 
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {

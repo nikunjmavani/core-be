@@ -1,15 +1,24 @@
 import { createHash } from 'node:crypto';
 import { isSensitiveKey } from '@/shared/utils/security/sensitive-redaction.util.js';
 
-/** Route patterns that must never participate in idempotency caching (token or secret issuance). */
+/**
+ * Route patterns that must never participate in idempotency caching (token or secret issuance).
+ *
+ * @remarks
+ * Matched against the Fastify route template from {@link normalizeIdempotencyRoutePath}, which is
+ * the FULL prefixed path (e.g. `/api/v1/auth/login`). The patterns are therefore suffix-anchored
+ * (`/…$/`, not `/^\/…$/`) so they match regardless of the `/api/v{n}` version prefix. The
+ * api-key issuance route is the flattened `/api/v1/tenancy/organization/api-keys` (the active org
+ * comes from the token claim — there is no `/organizations/{organization_id}` segment).
+ */
 const IDEMPOTENCY_EXCLUDED_ROUTE_PATTERNS: RegExp[] = [
-  /^\/login$/,
-  /^\/magic-link\/verify$/,
-  /^\/mfa\/login$/,
-  /^\/oauth\/[^/]+\/callback$/,
-  /^\/webauthn\/authenticate\/verify$/,
-  /^\/refresh$/,
-  /^\/organizations\/[^/]+\/api-keys$/,
+  /\/auth\/login$/,
+  /\/auth\/magic-link\/verify$/,
+  /\/auth\/mfa\/login$/,
+  /\/auth\/oauth\/[^/]+\/callback$/,
+  /\/auth\/webauthn\/authenticate\/verify$/,
+  /\/auth\/refresh$/,
+  /\/tenancy\/organization\/api-keys$/,
 ];
 
 /**
@@ -28,12 +37,20 @@ const IDEMPOTENCY_SECRET_RESPONSE_FIELD_NAMES = new Set([
   'raw_key',
   'mfa_session_token',
   'refresh_token',
+  // route-audit-#3: single-use / signed-URL secrets returned exactly once whose names carry no
+  // sensitive fragment, so `isSensitiveKey` misses them — without this they get neither the
+  // `cache-control: no-store` response header (compress.middleware) nor exclusion from the
+  // idempotency response cache. `recovery_codes` = plaintext MFA-bypass codes; `download_url`
+  // (GDPR data export) and `uploadUrl` (upload presign) embed time-boxed `X-Amz-Signature` grants.
+  'recovery_codes',
+  'download_url',
+  'uploadUrl',
 ]);
 
 /**
  * Normalizes a request path for idempotency fingerprinting: strips the query string and
  * collapses duplicate slashes. Prefer the Fastify route template when available so
- * `/organizations/:id` and concrete ids hash consistently.
+ * `/api/v1/tenancy/organization/api-keys/:api_key_id` and concrete ids hash consistently.
  */
 export function normalizeIdempotencyRoutePath(routePath: string): string {
   if (routePath.length === 0) return '/';

@@ -34,8 +34,8 @@ describe('Security: Upload RLS', () => {
     const organizationA = await createTestOrganization({ ownerUserId: ownerA.id });
     const organizationB = await createTestOrganization({ ownerUserId: ownerB.id });
 
-    const uploadPublicIdA = generatePublicId();
-    const uploadPublicIdB = generatePublicId();
+    const uploadPublicIdA = generatePublicId('upload');
+    const uploadPublicIdB = generatePublicId('upload');
 
     await database.insert(uploads).values({
       public_id: uploadPublicIdA,

@@ -4,6 +4,15 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const SESSION_TOKEN_CACHE_PREFIX = 'session:tok';
 
+/**
+ * Revocation tombstone value. `invalidateCachedSessionToken` writes this (not a DEL) so a concurrent
+ * in-flight validation that read the session row as active BEFORE a revoke committed cannot
+ * repopulate a "valid" entry afterwards: the tombstone blocks the `NX` populate and reads back as a
+ * cache miss (the DB re-check then denies). Bounded by the cache TTL, the same window a populate can
+ * span. Closes the populate-vs-invalidate TOCTOU (route-audit session-#1).
+ */
+const SESSION_TOKEN_REVOKED_TOMBSTONE = '__revoked__';
+
 function buildSessionTokenCacheKey(tokenHash: string): string {
   return `${SESSION_TOKEN_CACHE_PREFIX}:${tokenHash}`;
 }
@@ -30,6 +39,9 @@ export async function getCachedSessionTokenValid(tokenHash: string): Promise<str
   try {
     const cached = await redisConnection.get(buildSessionTokenCacheKey(tokenHash));
     if (cached === null || cached.length === 0) return null;
+    // A revocation tombstone reads as a MISS so the caller re-checks Postgres (which denies the
+    // revoked session) instead of trusting a value that a racing populate might otherwise have set.
+    if (cached === SESSION_TOKEN_REVOKED_TOMBSTONE) return null;
     return cached;
   } catch (error) {
     logger.warn({ error }, 'session-token-cache.get.failed');
@@ -86,11 +98,15 @@ export async function setCachedSessionTokenValid({
     return;
   }
   try {
+    // `NX`: never overwrite an existing key. If a concurrent revoke has written the revocation
+    // tombstone, this in-flight (pre-revoke) populate is a no-op, so a revoked bearer can't be
+    // re-cached as valid (route-audit session-#1).
     await redisConnection.set(
       buildSessionTokenCacheKey(tokenHash),
       sessionPublicId,
       'EX',
       ttlSeconds,
+      'NX',
     );
   } catch (error) {
     logger.warn({ error }, 'session-token-cache.set.failed');
@@ -101,16 +117,25 @@ export async function setCachedSessionTokenValid({
  * Drops the cached "valid bearer" sentinel for a token hash so subsequent calls re-check Postgres.
  *
  * @remarks
- * - **Algorithm:** Redis `DEL session:tok:<hash>`.
- * - **Failure modes:** Redis errors are logged and swallowed — staleness is bounded by
- *   the original `SETEX` TTL even if the delete is lost.
- * - **Side effects:** removes a Redis key.
- * - **Notes:** must be called on session revoke (single + bulk) and on every token-hash
- *   rotation so newly-rotated JWTs don't read a stale cache entry.
+ * - **Algorithm:** Redis `SET session:tok:<hash> <tombstone> EX SESSION_TOKEN_CACHE_TTL_SECONDS` —
+ *   a short-lived REVOCATION TOMBSTONE, NOT a `DEL`. A plain delete left a TOCTOU: a concurrent
+ *   validation that read the row as active just before the revoke committed could `SET` a fresh
+ *   "valid" entry AFTER the delete, granting the revoked bearer up to a full cache-TTL window. The
+ *   tombstone (read as a miss by {@link getCachedSessionTokenValid}, and `NX`-blocking the populate
+ *   in {@link setCachedSessionTokenValid}) makes revocation propagate on the very next request.
+ * - **Failure modes:** Redis errors are logged and swallowed — staleness is bounded by the TTL.
+ * - **Side effects:** writes a single short-lived Redis key.
+ * - **Notes:** must be called on session revoke (single + bulk) and on every token-hash rotation so
+ *   newly-rotated JWTs don't read a stale cache entry.
  */
 export async function invalidateCachedSessionToken(tokenHash: string): Promise<void> {
   try {
-    await redisConnection.del(buildSessionTokenCacheKey(tokenHash));
+    await redisConnection.set(
+      buildSessionTokenCacheKey(tokenHash),
+      SESSION_TOKEN_REVOKED_TOMBSTONE,
+      'EX',
+      SESSION_TOKEN_CACHE_TTL_SECONDS,
+    );
   } catch (error) {
     logger.warn({ error }, 'session-token-cache.invalidate.failed');
   }

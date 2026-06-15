@@ -92,6 +92,17 @@ export const MFA_TOTP_TOLERANCE_STEPS = 1;
  */
 export const MFA_TOTP_CODE_REPLAY_TTL_SECONDS = (MFA_TOTP_TOLERANCE_STEPS + 2) * TOTP_STEP_SECONDS;
 
+/**
+ * Lockout window (seconds) for the per-user failed-MFA-verification counter (audit-#12).
+ *
+ * @remarks
+ * Sliding window keyed on the user id: once the failure count reaches
+ * `MAX_MFA_VERIFICATION_ATTEMPTS`, further TOTP / recovery-code verification is rejected
+ * until the window elapses. 15 minutes balances brute-force throttling against a real
+ * user's retry latency.
+ */
+export const MFA_VERIFICATION_LOCKOUT_TTL_SECONDS = 900;
+
 /** WebAuthn ceremony challenge lifetime in Redis (seconds). */
 export const WEBAUTHN_CHALLENGE_TTL_SECONDS = MFA_SESSION_TTL_SECONDS;
 

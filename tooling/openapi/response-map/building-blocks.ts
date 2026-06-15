@@ -7,7 +7,7 @@
 export const metaSchema = {
   type: 'object' as const,
   properties: {
-    request_id: { type: 'string', example: 'req_a1b2c3d4e5f6' },
+    request_id: { type: 'string', example: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
   },
   required: ['request_id'],
 };
@@ -15,7 +15,7 @@ export const metaSchema = {
 export const paginationMetaSchema = {
   type: 'object' as const,
   properties: {
-    request_id: { type: 'string', example: 'req_a1b2c3d4e5f6' },
+    request_id: { type: 'string', example: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
     pagination: {
       type: 'object',
       properties: {
@@ -45,7 +45,7 @@ export function wrapSuccess(dataSchema: object, dataExample: unknown): object {
     },
     example: {
       data: dataExample,
-      meta: { request_id: 'req_a1b2c3d4e5f6' },
+      meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
     },
   };
 }
@@ -60,7 +60,7 @@ export function wrapPaginated(itemSchema: object, itemExamples: unknown[]): obje
     example: {
       data: itemExamples,
       meta: {
-        request_id: 'req_a1b2c3d4e5f6',
+        request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b',
         pagination: {
           per_page: 20,
           next: 'eyJjcmVhdGVkX2F0IjoiMjAyNi0wNS0xOVQxMjowMDowMC4wMDBaIiwicHVibGljX2lkIjoiYWJjMTIzNDU2Nzg5MDEyMzQ1Njc4IiwiaWQiOjQyfQ',

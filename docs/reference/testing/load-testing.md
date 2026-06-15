@@ -48,7 +48,7 @@ Runs **daily at 02:00 UTC** (`cron`) and **on demand** (`workflow_dispatch`). Th
 **SLO-style thresholds (k6):** Scenarios define `http_req_duration` percentiles on tagged requests and `http_req_failed` (see each file under `src/tests/load/k6/scenarios/`). The gate enforces:
 
 - **Health stress**: `health/live` p(95)&lt;200ms, p(99)&lt;500ms; `health/ready` p(95)&lt;500ms, p(99)&lt;1000ms; global failure rate &lt;1%.
-- **API stress**: Per-route p(95)&lt;500ms for users/me, organizations, notifications, unread-count, memberships; global p(95)&lt;500ms and failure rate &lt;1%.
+- **API stress**: Per-route p(95)&lt;500ms for users/me, organizations, notifications, unread-count, and the active-org memberships (`/tenancy/organization/memberships`); global p(95)&lt;500ms and failure rate &lt;1%.
 
 Artifacts (`k6-*.json` summaries and `server.log`) are uploaded for 14 days. Optional email: configure `RESEND_API_KEY` and `LOAD_TEST_RESULT_EMAIL_TO` or `TEST_REPORT_EMAIL_TO`; the workflow invokes `pnpm tool:send-load-test-results-email` with `K6_USE_SUMMARIES=1` (reads gate `k6-*.json` files — no second k6 run).
 
@@ -73,7 +73,7 @@ To gain confidence in the **whole system** (not just health endpoints), run both
      pnpm load:stress:api
      ```
 
-   - Hits: `GET /api/v1/users/me`, `GET /api/v1/tenancy/organizations`, `GET /api/v1/notify/notifications`, `GET /api/v1/notify/notifications/unread-count`, `GET /api/v1/tenancy/organizations/:id/memberships` with up to 100 VUs.
+   - Hits: `GET /api/v1/users/me`, `GET /api/v1/tenancy/organizations`, `GET /api/v1/notify/notifications`, `GET /api/v1/notify/notifications/unread-count`, `GET /api/v1/tenancy/organization/memberships` with up to 100 VUs. The active org rides the token's `org` claim, so `TEST_ORG_ID` scopes the token (via `switchToOrganization`) rather than appearing in the path.
 
 3. **Optional — auth flow**: `pnpm load:auth`
    - Stresses login + profile + list orgs (ramping load profile; see thresholds in `src/tests/load/k6/scenarios/auth-onboarding.js`).
@@ -100,6 +100,24 @@ If **load:stress** and **load:stress:api** both pass, the system is under load-t
    **Per-route limits:** High-risk routes use tighter caps than the global limit (e.g. login, invitations, data export, webhook test delivery). Values live in [`src/shared/middlewares/rate-limit-presets.constants.ts`](../../../src/shared/middlewares/rate-limit-presets.constants.ts). k6 or scripts that hammer those paths may see 429 sooner than the global budget implies.
 
 3. **Optional — longer-lived token for long runs:** JWT from login expires in 15 minutes. For runs under 15 minutes you don't need to change anything. For longer API stress runs, use a token with longer expiry (e.g. from `pnpm tool:admin-token` if your scenario allows admin role, or a dedicated load-test token with extended expiry).
+
+## Post-run settle check (drain + assert clean)
+
+After a load (or e2e) batch, `pnpm load:settle-check` proves the async fabric finished every job the run started — nothing stuck in a queue, the event-bus / outbox side effects flushed, and nothing dead-lettered. Run it against the **same** API + worker the load test hit (workers must be running so the backlog can drain):
+
+```bash
+pnpm load:settle-check
+```
+
+It polls the throughput queues (`mail`, `webhook-delivery`, `notification`, `stripe-webhook`) until `waiting + active + delayed = 0` and the mail outbox has no pending rows, then asserts — once — that **no** queue and **no** `<queue>-dlq` is holding a failed job. Exit code `0` = clean, `1` = did not settle within the timeout or a failure remains (CI-gateable). Scheduled retention/tombstone queues are intentionally excluded: their next repeatable run always sits in `delayed`, so they never reach zero — their health is covered instead by the cluster-wide dead-letter assertion.
+
+| Env | Default | Purpose |
+| --- | ------- | ------- |
+| `SETTLE_CHECK_TIMEOUT_MS` | `120000` | Max wait for the backlog to drain before reporting a timeout |
+| `SETTLE_CHECK_POLL_INTERVAL_MS` | `2000` | Poll cadence while waiting |
+| `SETTLE_CHECK_QUEUES` | throughput queues | Comma-separated queue-name override |
+
+The same signals are observable live via `GET /readyz` (verbose), `GET /metrics` (`bullmq_queue_*`, `mail_outbox_pending`, `dlq_depth`), and Bull Board — see the [observability runbook](../../deployment/runbooks/observability.md). The settle check turns those gauges into a single pass/fail gate.
 
 ## Prerequisites
 
@@ -128,7 +146,7 @@ If **load:stress** and **load:stress:api** both pass, the system is under load-t
 - **Auth**: Bearer token (TEST_TOKEN) + TEST_ORG_ID for memberships
 - **Env**: `TEST_TOKEN` (required), `TEST_ORG_ID` (required for memberships). Get via `pnpm tool:load-test-credentials`.
 - **Run**: `pnpm load:stress:api` after exporting TEST_TOKEN and TEST_ORG_ID.
-- **Routes**: users/me, tenancy/organizations, notify/notifications, notify/notifications/unread-count, tenancy/organizations/:id/memberships. Stress profile: 20→50→100 VUs.
+- **Routes**: users/me, tenancy/organizations, notify/notifications, notify/notifications/unread-count, tenancy/organization/memberships (active org from the token claim; `TEST_ORG_ID` scopes the token, not the path). Stress profile: 20→50→100 VUs.
 
 ### 3. Auth onboarding
 
@@ -140,7 +158,7 @@ If **load:stress** and **load:stress:api** both pass, the system is under load-t
 ### 4. Daily ops
 
 - **File**: `src/tests/load/k6/scenarios/daily-ops.js`
-- **Auth**: Bearer token + organization context
+- **Auth**: Bearer token scoped to the active org (the `org` claim; scope via `TEST_ORG_ID`)
 - **Env**: `TEST_TOKEN` (required), `TEST_ORG_ID` (default `test-org-id`). Use the helper script to get token and org id: `pnpm tool:load-test-credentials` (see below).
 - **Run**: `pnpm load:daily-ops` with `TEST_TOKEN` and `TEST_ORG_ID`, or `TEST_TOKEN=<token> TEST_ORG_ID=<org_public_id> k6 run src/tests/load/k6/scenarios/daily-ops.js`
 
@@ -154,7 +172,7 @@ If **load:stress** and **load:stress:api** both pass, the system is under load-t
 ### 6. Webhooks
 
 - **File**: `src/tests/load/k6/scenarios/webhooks.js`
-- **Auth**: Bearer token + organization context
+- **Auth**: Bearer token scoped to the active org (the `org` claim; scope via `TEST_ORG_ID`)
 - **Env**: `TEST_TOKEN` (required), `TEST_ORG_ID` (default `test-org-id`)
 - **Run**: `pnpm load:webhooks` with `TEST_TOKEN` and `TEST_ORG_ID`, or `TEST_TOKEN=<token> TEST_ORG_ID=<org_public_id> k6 run src/tests/load/k6/scenarios/webhooks.js`
 
@@ -167,13 +185,17 @@ If **load:stress** and **load:stress:api** both pass, the system is under load-t
 
 ### Org-scoped / RLS-heavy (informational, CI nightly)
 
+Org-scoped scenarios resolve the tenant from the token's `org` claim — no org path segment and no
+`X-Organization-Id` header. `TEST_ORG_ID` is used to **scope the token** to that org (the helpers
+call `switchToOrganization` / `loginScopedToOrganization`), not to build the path.
+
 | File | Env | Routes |
 | ---- | --- | ------ |
 | `audit-list.js` | `ADMIN_TOKEN` | `GET /api/v1/audit/logs` |
-| `org-membership-list.js` | `TEST_TOKEN`, `TEST_ORG_ID` | `GET .../memberships` |
-| `member-role-permission-list.js` | `TEST_TOKEN`, `TEST_ORG_ID`, `TEST_ROLE_ID` | `GET .../roles/:id/permissions` |
-| `notification-policy-crud.js` | `TEST_TOKEN`, `TEST_ORG_ID` | notification-policies list |
-| `billing-subscriptions-rls.js` | `TEST_TOKEN`, `TEST_ORG_ID`, optional `TEST_SUBSCRIPTION_ID` | billing subscriptions |
+| `org-membership-list.js` | `TEST_TOKEN`, `TEST_ORG_ID` | `GET /api/v1/tenancy/organization/memberships` |
+| `member-role-permission-list.js` | `TEST_TOKEN`, `TEST_ORG_ID`, `TEST_ROLE_ID` | `GET /api/v1/tenancy/organization/roles/:role_id/permissions` |
+| `notification-policy-crud.js` | `TEST_TOKEN`, `TEST_ORG_ID` | `GET /api/v1/tenancy/organization/notification-policies` |
+| `billing-subscriptions-rls.js` | `TEST_TOKEN`, `TEST_ORG_ID`, optional `TEST_SUBSCRIPTION_ID` | `GET /api/v1/billing/subscriptions` |
 | `upload-list.js` | `TEST_TOKEN`, optional `TEST_UPLOAD_PUBLIC_ID` | `GET /api/v1/uploads/:id` |
 | `user-data-export.js` | `TEST_TOKEN` | `POST /api/v1/users/me/data-export` |
 
@@ -182,7 +204,7 @@ CI runs a subset in the **org-scoped routes** job step (see `scheduled-k6-load-s
 ### RLS concurrency beyond pool size
 
 - **File**: `src/tests/load/k6/scenarios/rls-concurrency-beyond-pool.js`
-- **Auth**: Bearer token + organization context
+- **Auth**: Bearer token scoped to the active org (the `org` claim; scope via `TEST_ORG_ID`)
 - **Env**: `TEST_TOKEN`, `TEST_ORG_ID` (required); optional `DATABASE_POOL_MAX` (default `10`), `BEYOND_POOL_FACTOR` (default `4`), `BEYOND_POOL_VUS` (explicit VU override)
 - **Run**: `RATE_LIMIT_MAX=10000 pnpm dev` (or `pnpm dev:loadtest`), then `pnpm load:rls-concurrency` with `TEST_TOKEN` and `TEST_ORG_ID`
 - **Rate limit**: This scenario drives `DATABASE_POOL_MAX × BEYOND_POOL_FACTOR` VUs (default 40) with a short `sleep`, so it sends far more than the default global limit of `RATE_LIMIT_MAX` (100) requests per `RATE_LIMIT_WINDOW_MS` (60s) per IP. Without raising `RATE_LIMIT_MAX`, k6 will count `429 Too Many Requests` as failures and breach the `http_req_failed < 1%` threshold even when the pool is healthy. Match the server's `DATABASE_POOL_MAX` when overriding it on the k6 side.

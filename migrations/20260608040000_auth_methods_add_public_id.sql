@@ -5,7 +5,7 @@
 -- :publicId; the bigserial is no longer returned or accepted by the HTTP layer.
 
 ALTER TABLE auth.auth_methods
-  ADD COLUMN IF NOT EXISTS public_id varchar(21);
+  ADD COLUMN IF NOT EXISTS public_id varchar(28);
 
 UPDATE auth.auth_methods
 SET public_id = left(replace(gen_random_uuid()::text, '-', ''), 21)

@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
-import { UnauthorizedError } from '@/shared/errors/index.js';
+import { ForbiddenError, UnauthorizedError } from '@/shared/errors/index.js';
 import type { ApiKeyAuthContext, AuthContext, UserAuthContext } from '@/shared/types/index.js';
+import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 
 /** Returns the per-request id Fastify generates (used for log correlation, audit fields, idempotency). */
 export function getRequestIdentifier(request: FastifyRequest): string {
@@ -46,7 +47,7 @@ export function getAuthenticatedActorId(auth: AuthContext): string {
  */
 export function requireAuth(request: FastifyRequest): UserAuthContext {
   const auth = request.auth;
-  if (!auth || auth.kind !== 'user') throw new UnauthorizedError();
+  if (auth?.kind !== 'user') throw new UnauthorizedError();
   return auth;
 }
 
@@ -63,4 +64,32 @@ export function requirePrincipal(request: FastifyRequest): AuthContext {
   const auth = request.auth;
   if (!auth) throw new UnauthorizedError();
   return auth;
+}
+
+/**
+ * Resolves the active organization public id for an organization-scoped request and validates
+ * its shape, throwing {@link ForbiddenError} (`errors:organizationContextRequired`) when no
+ * organization is in scope and {@link ValidationError} when the resolved value is malformed.
+ *
+ * @remarks
+ * Uses the **exact same precedence** as `requireOrganizationPermission`: the `{organization_id}`
+ * path param when the route carries one, otherwise the signed `org` token claim
+ * (`auth.organizationPublicId`). Matching that precedence is a security invariant — the
+ * organization the permission preHandler authorized MUST equal the organization the controller
+ * then scopes data to (and binds the RLS GUC to via `withOrganizationDatabaseContext`). If the
+ * two could diverge (e.g. one read the path while the other read the claim) a caller could be
+ * permission-checked against organization A while reading/writing organization B. The claim is
+ * scope, not authority: membership is still verified by `requireOrganizationPermission` and RLS
+ * re-checked per request. This is the single accessor flattened (path-param-free) routes use to
+ * resolve their tenant from the access token.
+ */
+export function resolveActiveOrganizationId(request: FastifyRequest): string {
+  const params = request.params as Record<string, string> | undefined;
+  const fromPath = params?.organization_id;
+  const fromClaim = request.auth?.organizationPublicId;
+  const organizationId = fromPath ?? fromClaim;
+  if (!organizationId) {
+    throw new ForbiddenError('errors:organizationContextRequired');
+  }
+  return validatePublicIdParam(organizationId, 'organization_id');
 }

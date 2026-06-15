@@ -120,6 +120,51 @@ describe('processWebhookDeliveryAttempt', () => {
     );
   });
 
+  // audit-#6: a hostile/broken endpoint returning an unbounded (or gzip-expanded) body must not
+  // be buffered in full. The worker streams at most the byte read-cap then cancels the reader, so
+  // a single delivery can never exhaust worker heap and poison-loop across retries.
+  it('caps an oversized response body and cancels the reader instead of buffering it all', async () => {
+    const repository = createDeliveryAttemptRepositoryMock();
+
+    let cancelled = false;
+    let chunksPulled = 0;
+    const oversizedStream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        chunksPulled += 1;
+        // 8 KiB per chunk; the stream never closes, so without a cap the read would run forever.
+        controller.enqueue(new TextEncoder().encode('A'.repeat(8_192)));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    fetchMock = vi.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      body: oversizedStream,
+    }) as unknown as Mock<WebhookDeliveryFetch>;
+
+    const result = await processWebhookDeliveryAttempt(
+      42,
+      'org_public_1',
+      { id: 'job-huge', attemptsMade: 0 },
+      fetchMock,
+      repository as never,
+    );
+
+    expect(result).toEqual({ httpStatus: 200, success: true });
+    // The reader was cancelled after the cap was hit, so only a few chunks were ever pulled
+    // (16 KiB cap ÷ 8 KiB chunk ≈ 2–3 reads) — never the unbounded stream.
+    expect(cancelled).toBe(true);
+    expect(chunksPulled).toBeLessThan(10);
+    const [, outcome] = repository.recordOutcome.mock.calls[0] as [
+      number,
+      { response_body: string },
+    ];
+    expect(outcome.response_body.length).toBeLessThanOrEqual(2_000);
+    expect(outcome.response_body.endsWith('…[truncated]')).toBe(true);
+  });
+
   it('invokes repository.recordOutcome(FAILED) with HTTP error and rethrows on non-2xx', async () => {
     const repository = createDeliveryAttemptRepositoryMock();
     fetchMock = vi.fn().mockResolvedValue({

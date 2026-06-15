@@ -47,15 +47,18 @@ describe('Subscription Sub-Domain — Integration', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
     return { organization, token };
   }
 
-  describe('GET /api/v1/billing/organizations/:id/subscriptions', () => {
+  describe('GET /api/v1/billing/subscriptions', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'GET',
-        url: testApiPath('/billing/organizations/some-id/subscriptions'),
+        url: testApiPath('/billing/subscriptions'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -63,36 +66,36 @@ describe('Subscription Sub-Domain — Integration', () => {
     it('should return 403 without subscription read permission', async () => {
       const { organization } = await createAuthorizedContext();
       const user = await createTestUser({ email: 'noperm-sub@test.com' });
-      const token = await generateTestToken({ userId: user.public_id });
+      const token = await generateTestToken({
+        userId: user.public_id,
+        organizationPublicId: organization.public_id,
+      });
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(`/billing/organizations/${organization.public_id}/subscriptions`),
+        url: testApiPath('/billing/subscriptions'),
         token,
-        organizationPublicId: organization.public_id,
       });
       expect(response.statusCode).toBe(403);
     });
 
     it('should return subscriptions with permission', async () => {
-      const { organization, token } = await createAuthorizedContext();
+      const { token } = await createAuthorizedContext();
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(`/billing/organizations/${organization.public_id}/subscriptions`),
+        url: testApiPath('/billing/subscriptions'),
         token,
-        organizationPublicId: organization.public_id,
       });
       expect(response.statusCode).toBe(200);
     });
   });
 
-  describe('POST /api/v1/billing/organizations/:id/subscriptions', () => {
+  describe('POST /api/v1/billing/subscriptions', () => {
     it('should return 422 when Idempotency-Key header is missing', async () => {
-      const { organization, token } = await createAuthorizedContext();
+      const { token } = await createAuthorizedContext();
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(`/billing/organizations/${organization.public_id}/subscriptions`),
+        url: testApiPath('/billing/subscriptions'),
         token,
-        organizationPublicId: organization.public_id,
         payload: {
           plan_id: 'plan_test',
           billing_cycle: 'monthly',
@@ -102,12 +105,11 @@ describe('Subscription Sub-Domain — Integration', () => {
     });
 
     it('should return 400 for missing body', async () => {
-      const { organization, token } = await createAuthorizedContext();
+      const { token } = await createAuthorizedContext();
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(`/billing/organizations/${organization.public_id}/subscriptions`),
+        url: testApiPath('/billing/subscriptions'),
         token,
-        organizationPublicId: organization.public_id,
         headers: { 'idempotency-key': 'subscription-create-missing-body-key' },
         payload: {},
       });

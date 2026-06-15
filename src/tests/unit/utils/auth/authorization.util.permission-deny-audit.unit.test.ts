@@ -37,7 +37,7 @@ describe('authorization.util — permission-deny audit (sec-U13)', () => {
   function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
     return {
       auth: { kind: 'user' as const, userId: 'user-1', role: GLOBAL_ROLES.USER },
-      params: { organizationId: 'org-public' },
+      params: { organization_id: 'org-public' },
       routeOptions: { url: '/api/v1/admin/test' },
       url: '/api/v1/admin/test',
       method: 'GET',

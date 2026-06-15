@@ -298,7 +298,7 @@ export async function seedRlsMatrixFixtures(): Promise<RlsTenantFixture> {
   const [policyA] = await database
     .insert(organization_notification_policies)
     .values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('organization'),
       organization_id: organizationA.id,
       notification_type: 'billing',
       channel: 'EMAIL',
@@ -307,7 +307,7 @@ export async function seedRlsMatrixFixtures(): Promise<RlsTenantFixture> {
   const [policyB] = await database
     .insert(organization_notification_policies)
     .values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('organization'),
       organization_id: organizationB.id,
       notification_type: 'billing',
       channel: 'EMAIL',
@@ -321,7 +321,7 @@ export async function seedRlsMatrixFixtures(): Promise<RlsTenantFixture> {
   const [apiKeyA] = await database
     .insert(api_keys)
     .values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('organization'),
       organization_id: organizationA.id,
       name: 'key-a',
       key_hash: 'hash-a',
@@ -332,7 +332,7 @@ export async function seedRlsMatrixFixtures(): Promise<RlsTenantFixture> {
   const [apiKeyB] = await database
     .insert(api_keys)
     .values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('organization'),
       organization_id: organizationB.id,
       name: 'key-b',
       key_hash: 'hash-b',
@@ -355,7 +355,7 @@ export async function seedRlsMatrixFixtures(): Promise<RlsTenantFixture> {
   const [notificationA] = await database
     .insert(notifications)
     .values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('organization'),
       organization_id: organizationA.id,
       user_id: ownerA.id,
       type: 'TEST',
@@ -366,7 +366,7 @@ export async function seedRlsMatrixFixtures(): Promise<RlsTenantFixture> {
   const [notificationB] = await database
     .insert(notifications)
     .values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('organization'),
       organization_id: organizationB.id,
       user_id: ownerB.id,
       type: 'TEST',
@@ -382,7 +382,7 @@ export async function seedRlsMatrixFixtures(): Promise<RlsTenantFixture> {
   const [subscriptionA] = await database
     .insert(subscriptions)
     .values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('organization'),
       organization_id: organizationA.id,
       plan_id: plan.id,
       billing_cycle: 'MONTHLY',
@@ -394,7 +394,7 @@ export async function seedRlsMatrixFixtures(): Promise<RlsTenantFixture> {
   const [subscriptionB] = await database
     .insert(subscriptions)
     .values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('organization'),
       organization_id: organizationB.id,
       plan_id: plan.id,
       billing_cycle: 'MONTHLY',
@@ -434,7 +434,7 @@ export async function seedRlsMatrixFixtures(): Promise<RlsTenantFixture> {
   const [uploadA] = await database
     .insert(uploads)
     .values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('organization'),
       user_id: ownerA.id,
       organization_id: organizationA.id,
       file_name: 'a.png',
@@ -449,7 +449,7 @@ export async function seedRlsMatrixFixtures(): Promise<RlsTenantFixture> {
   const [uploadB] = await database
     .insert(uploads)
     .values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('organization'),
       user_id: ownerB.id,
       organization_id: organizationB.id,
       file_name: 'b.png',
@@ -497,7 +497,7 @@ export async function seedUserScopedRlsFixtures(): Promise<RlsUserFixture> {
   const [authMethodA] = await database
     .insert(auth_methods)
     .values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('organization'),
       user_id: userA.id,
       method_type: 'OAUTH',
       provider: oauthProvider,
@@ -508,7 +508,7 @@ export async function seedUserScopedRlsFixtures(): Promise<RlsUserFixture> {
   const [authMethodB] = await database
     .insert(auth_methods)
     .values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('organization'),
       user_id: userB.id,
       method_type: 'PASSWORD',
       is_primary: true,
@@ -526,11 +526,11 @@ export async function seedUserScopedRlsFixtures(): Promise<RlsUserFixture> {
 
   const [exportA] = await database
     .insert(user_data_exports)
-    .values({ public_id: generatePublicId(), user_id: userA.id, status: 'pending' })
+    .values({ public_id: generatePublicId('organization'), user_id: userA.id, status: 'pending' })
     .returning();
   const [exportB] = await database
     .insert(user_data_exports)
-    .values({ public_id: generatePublicId(), user_id: userB.id, status: 'pending' })
+    .values({ public_id: generatePublicId('organization'), user_id: userB.id, status: 'pending' })
     .returning();
   rowIdsByTable.set(tableKey('auth', 'user_data_exports'), {
     userA: exportA!.id,
@@ -539,11 +539,19 @@ export async function seedUserScopedRlsFixtures(): Promise<RlsUserFixture> {
 
   const [credentialA] = await database
     .insert(webauthn_credentials)
-    .values({ user_id: userA.id, credential_id: generatePublicId(), public_key: 'key-a' })
+    .values({
+      user_id: userA.id,
+      credential_id: generatePublicId('organization'),
+      public_key: 'key-a',
+    })
     .returning();
   const [credentialB] = await database
     .insert(webauthn_credentials)
-    .values({ user_id: userB.id, credential_id: generatePublicId(), public_key: 'key-b' })
+    .values({
+      user_id: userB.id,
+      credential_id: generatePublicId('organization'),
+      public_key: 'key-b',
+    })
     .returning();
   rowIdsByTable.set(tableKey('auth', 'webauthn_credentials'), {
     userA: credentialA!.id,
@@ -565,11 +573,11 @@ export async function seedUserScopedRlsFixtures(): Promise<RlsUserFixture> {
 
   const [methodA] = await database
     .insert(mfa_methods)
-    .values({ public_id: generatePublicId(), user_id: userA.id, method_type: 'TOTP' })
+    .values({ public_id: generatePublicId('organization'), user_id: userA.id, method_type: 'TOTP' })
     .returning();
   const [methodB] = await database
     .insert(mfa_methods)
-    .values({ public_id: generatePublicId(), user_id: userB.id, method_type: 'TOTP' })
+    .values({ public_id: generatePublicId('organization'), user_id: userB.id, method_type: 'TOTP' })
     .returning();
   rowIdsByTable.set(tableKey('auth', 'mfa_methods'), { userA: methodA!.id, userB: methodB!.id });
 

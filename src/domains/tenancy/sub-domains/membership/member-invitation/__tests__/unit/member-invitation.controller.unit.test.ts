@@ -6,7 +6,7 @@ import { ValidationError } from '@/shared/errors/index.js';
 
 function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
   return {
-    auth: { userId: generatePublicId(), role: 'USER' },
+    auth: { userId: generatePublicId('user'), role: 'USER' },
     params: {},
     body: {},
     query: {},
@@ -24,8 +24,8 @@ function mockReply(): FastifyReply {
 }
 
 describe('createMemberInvitationController (cursor pagination)', () => {
-  const organizationPublicId = generatePublicId();
-  const invitationPublicId = generatePublicId();
+  const organizationPublicId = generatePublicId('organization');
+  const invitationPublicId = generatePublicId('memberInvitation');
   const invitation = { id: invitationPublicId, email: 'invite@example.com' };
 
   const service = {
@@ -36,11 +36,13 @@ describe('createMemberInvitationController (cursor pagination)', () => {
       has_more: false,
       next_cursor: null,
     }),
-    create: vi.fn().mockResolvedValue({ invitation, token: 'tok' }),
+    create: vi.fn().mockResolvedValue(invitation),
     accept: vi.fn().mockResolvedValue(invitation),
     revoke: vi.fn().mockResolvedValue(undefined),
-    resend: vi.fn().mockResolvedValue({ invitation, token: 'tok' }),
-    listPendingInvitations: vi.fn().mockResolvedValue([invitation]),
+    resend: vi.fn().mockResolvedValue(invitation),
+    listPendingInvitations: vi
+      .fn()
+      .mockResolvedValue({ items: [invitation], limit: 25, has_more: false, next_cursor: null }),
     decline: vi.fn().mockResolvedValue(undefined),
   };
 
@@ -49,7 +51,7 @@ describe('createMemberInvitationController (cursor pagination)', () => {
   it('listMemberInvitations forwards organization and query to the service', async () => {
     await controller.listMemberInvitations(
       mockRequest({
-        params: { id: organizationPublicId },
+        params: { organization_id: organizationPublicId },
         query: { after: 'cursor-1', limit: '5', include_total: 'true' },
       }),
       mockReply(),
@@ -71,7 +73,7 @@ describe('createMemberInvitationController (cursor pagination)', () => {
 
     const response = await controller.listMemberInvitations(
       mockRequest({
-        params: { id: organizationPublicId },
+        params: { organization_id: organizationPublicId },
         query: { limit: '2' },
       }),
       mockReply(),
@@ -100,7 +102,7 @@ describe('createMemberInvitationController (cursor pagination)', () => {
       next_cursor: null,
     });
     const response = await controller.listMemberInvitations(
-      mockRequest({ params: { id: organizationPublicId } }),
+      mockRequest({ params: { organization_id: organizationPublicId } }),
       mockReply(),
     );
     expect(response).toMatchObject({
@@ -118,7 +120,7 @@ describe('createMemberInvitationController (cursor pagination)', () => {
     });
     const response = await controller.listMemberInvitations(
       mockRequest({
-        params: { id: organizationPublicId },
+        params: { organization_id: organizationPublicId },
         query: { include_total: 'true' },
       }),
       mockReply(),
@@ -133,19 +135,21 @@ describe('createMemberInvitationController (cursor pagination)', () => {
 
 // sec-new-T2: invitationId path-param validation
 describe('createMemberInvitationController — invitationId path-param validation (sec-new-T2)', () => {
-  const organizationPublicId = generatePublicId();
-  const invitationPublicId = generatePublicId();
+  const organizationPublicId = generatePublicId('organization');
+  const invitationPublicId = generatePublicId('memberInvitation');
   const invitation = { id: invitationPublicId, email: 'invite@example.com' };
 
   const service = {
     list: vi
       .fn()
       .mockResolvedValue({ items: [], total: null, limit: 25, has_more: false, next_cursor: null }),
-    create: vi.fn().mockResolvedValue({ invitation, token: 'tok' }),
+    create: vi.fn().mockResolvedValue(invitation),
     accept: vi.fn().mockResolvedValue(invitation),
     revoke: vi.fn().mockResolvedValue(undefined),
-    resend: vi.fn().mockResolvedValue({ invitation, token: 'tok' }),
-    listPendingInvitations: vi.fn().mockResolvedValue([invitation]),
+    resend: vi.fn().mockResolvedValue(invitation),
+    listPendingInvitations: vi
+      .fn()
+      .mockResolvedValue({ items: [invitation], limit: 25, has_more: false, next_cursor: null }),
     decline: vi.fn().mockResolvedValue(undefined),
   };
 
@@ -153,7 +157,7 @@ describe('createMemberInvitationController — invitationId path-param validatio
 
   function mockUserRequest(params: Record<string, string>): FastifyRequest {
     return {
-      auth: { kind: 'user', userId: generatePublicId(), role: 'USER' },
+      auth: { kind: 'user', userId: generatePublicId('user'), role: 'USER' },
       params,
       body: {},
       query: {},
@@ -172,7 +176,7 @@ describe('createMemberInvitationController — invitationId path-param validatio
   it('acceptMemberInvitation rejects a malformed invitationId (sec-new-T2)', async () => {
     await expect(
       controller.acceptMemberInvitation(
-        mockUserRequest({ invitationId: 'not-a-public-id!!' }),
+        mockUserRequest({ invitation_id: 'not-a-public-id!!' }),
         mockReply(),
       ),
     ).rejects.toBeInstanceOf(ValidationError);
@@ -181,7 +185,7 @@ describe('createMemberInvitationController — invitationId path-param validatio
 
   it('acceptMemberInvitation accepts a valid invitationId and calls service.accept (sec-new-T2)', async () => {
     await controller.acceptMemberInvitation(
-      mockUserRequest({ invitationId: invitationPublicId }),
+      mockUserRequest({ invitation_id: invitationPublicId }),
       mockReply(),
     );
     expect(service.accept).toHaveBeenCalledWith(
@@ -194,7 +198,10 @@ describe('createMemberInvitationController — invitationId path-param validatio
   it('revokeMemberInvitation rejects a malformed invitationId (sec-new-T2)', async () => {
     await expect(
       controller.revokeMemberInvitation(
-        mockUserRequest({ id: organizationPublicId, invitationId: '../../etc/passwd' }),
+        mockUserRequest({
+          organization_id: organizationPublicId,
+          invitation_id: '../../etc/passwd',
+        }),
         mockReply(),
       ),
     ).rejects.toBeInstanceOf(ValidationError);
@@ -203,7 +210,7 @@ describe('createMemberInvitationController — invitationId path-param validatio
 
   it('revokeMemberInvitation accepts a valid invitationId and calls service.revoke (sec-new-T2)', async () => {
     await controller.revokeMemberInvitation(
-      mockUserRequest({ id: organizationPublicId, invitationId: invitationPublicId }),
+      mockUserRequest({ organization_id: organizationPublicId, invitation_id: invitationPublicId }),
       mockReply(),
     );
     expect(service.revoke).toHaveBeenCalledWith(organizationPublicId, invitationPublicId);
@@ -212,7 +219,7 @@ describe('createMemberInvitationController — invitationId path-param validatio
   it('resendInvitation rejects a malformed invitationId (sec-new-T2)', async () => {
     await expect(
       controller.resendInvitation(
-        mockUserRequest({ id: organizationPublicId, invitationId: 'inv_bad id' }),
+        mockUserRequest({ organization_id: organizationPublicId, invitation_id: 'inv_bad id' }),
         mockReply(),
       ),
     ).rejects.toBeInstanceOf(ValidationError);
@@ -221,26 +228,27 @@ describe('createMemberInvitationController — invitationId path-param validatio
 
   it('resendInvitation accepts a valid invitationId and calls service.resend (sec-new-T2)', async () => {
     await controller.resendInvitation(
-      mockUserRequest({ id: organizationPublicId, invitationId: invitationPublicId }),
+      mockUserRequest({ organization_id: organizationPublicId, invitation_id: invitationPublicId }),
       mockReply(),
     );
     expect(service.resend).toHaveBeenCalledWith(
       organizationPublicId,
       invitationPublicId,
       expect.anything(),
+      expect.objectContaining({ requestId: expect.any(String) }),
     );
   });
 
   it('declineInvitation rejects a malformed invitationId (sec-new-T2)', async () => {
     await expect(
-      controller.declineInvitation(mockUserRequest({ invitationId: '' }), mockReply()),
+      controller.declineInvitation(mockUserRequest({ invitation_id: '' }), mockReply()),
     ).rejects.toBeInstanceOf(ValidationError);
     expect(service.decline).not.toHaveBeenCalled();
   });
 
   it('declineInvitation accepts a valid invitationId and calls service.decline (sec-new-T2)', async () => {
     await controller.declineInvitation(
-      mockUserRequest({ invitationId: invitationPublicId }),
+      mockUserRequest({ invitation_id: invitationPublicId }),
       mockReply(),
     );
     expect(service.decline).toHaveBeenCalledWith(invitationPublicId, expect.any(String));

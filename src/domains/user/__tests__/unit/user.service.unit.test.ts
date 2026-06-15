@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/shared/errors/index.js';
+import { GLOBAL_ROLES } from '@/shared/constants/roles.constants.js';
 import { UserService } from '@/domains/user/user.service.js';
 import type { UserRepository } from '@/domains/user/user.repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
@@ -27,9 +33,23 @@ vi.mock('@/shared/utils/infrastructure/postgres-error.util.js', () => ({
   runInsertWithPublicIdentifierRetry: async (operation: () => Promise<unknown>) => operation(),
 }));
 
+// getMe resolves the caller's personal organization via this tenancy helper (its own DB context);
+// stub it so the pure unit test does not touch Postgres.
+vi.mock('@/domains/tenancy/sub-domains/organization/resolve-active-organization.js', () => ({
+  resolvePersonalOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
+  resolveDefaultActiveOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
+  findUserActiveOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
+}));
+
+// route-#1: control whether the admin-mutation target resolves as a protected super-admin.
+const resolveGlobalRoleForEmailMock = vi.fn().mockReturnValue(undefined);
+vi.mock('@/shared/utils/auth/global-admin-role.util.js', () => ({
+  resolveGlobalRoleForEmail: (...args: unknown[]) => resolveGlobalRoleForEmailMock(...args),
+}));
+
 const userRow = {
   id: 1,
-  public_id: generatePublicId(),
+  public_id: generatePublicId('user'),
   email: 'user@example.com',
   first_name: 'Test',
   last_name: 'User',
@@ -74,6 +94,7 @@ describe('UserService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resolveGlobalRoleForEmailMock.mockReturnValue(undefined);
     vi.mocked(repository.findByPublicId).mockResolvedValue(userRow as never);
     vi.mocked(repository.softDelete).mockResolvedValue(userRow as never);
     vi.mocked(repository.markDeletionStarted).mockResolvedValue(userRow as never);
@@ -87,9 +108,13 @@ describe('UserService', () => {
       uploadService: {
         tombstoneAllByUserId: vi.fn().mockResolvedValue(0),
         assertKeyConfirmed: vi.fn().mockResolvedValue(undefined),
+        assertKeyConfirmedForOwner: vi.fn().mockResolvedValue(undefined),
       } as never,
       userDataExportService: {
         deleteAllExportsForUser: vi.fn().mockResolvedValue(undefined),
+      } as never,
+      organizationOwnership: {
+        countOrganizationsOwnedByUser: vi.fn().mockResolvedValue(0),
       } as never,
     });
   });
@@ -126,11 +151,14 @@ describe('UserService', () => {
     expect(repository.update).toHaveBeenCalled();
   });
 
-  it('uploadAvatar validates storage key and updates avatar', async () => {
+  it('uploadAvatar stores the key and returns a signed read URL (USER-10)', async () => {
     const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
     vi.mocked(repository.update).mockResolvedValue({ ...userRow, avatar_url: avatarKey } as never);
     const result = await service.uploadAvatar(userRow.public_id, { avatarKey });
-    expect(result.avatar_url).toBe(avatarKey);
+    // The raw object KEY is persisted…
+    expect(repository.update).toHaveBeenCalledWith(userRow.public_id, { avatar_url: avatarKey });
+    // …but the response carries a short-lived signed read URL, never the raw key.
+    expect(result.avatar_url).toBe('https://presigned.example/download');
   });
 
   it('uploadAvatar rejects keys outside avatars prefix', async () => {
@@ -148,7 +176,7 @@ describe('UserService', () => {
       } as never,
       uploadService: {
         tombstoneAllByUserId: vi.fn().mockResolvedValue(0),
-        assertKeyConfirmed: vi
+        assertKeyConfirmedForOwner: vi
           .fn()
           .mockRejectedValue(new ValidationError('errors:validation.uploadNotConfirmed')),
       } as never,
@@ -178,6 +206,45 @@ describe('UserService', () => {
     });
     await service.deleteMe(userRow.public_id);
     expect(repository.softDelete).toHaveBeenCalledWith(userRow.public_id);
+  });
+
+  it('route-audit-#2: deleteMe is blocked when the user still owns organizations', async () => {
+    service.wireOffboardingServices({
+      authSessionService: { revokeAllSessions: vi.fn() } as never,
+      authMethodService: {
+        revokeAllForUser: vi.fn(),
+        invalidateAllVerificationTokensForUser: vi.fn(),
+      } as never,
+      uploadService: { tombstoneAllByUserId: vi.fn() } as never,
+      userDataExportService: { deleteAllExportsForUser: vi.fn() } as never,
+      organizationOwnership: {
+        countOrganizationsOwnedByUser: vi.fn().mockResolvedValue(2),
+      } as never,
+    });
+
+    await expect(service.deleteMe(userRow.public_id)).rejects.toBeInstanceOf(ConflictError);
+    // Blocked before any mutation — no half-state.
+    expect(repository.markDeletionStarted).not.toHaveBeenCalled();
+    expect(repository.softDelete).not.toHaveBeenCalled();
+  });
+
+  it('route-audit-#2: deleteUser (admin) is blocked when the target still owns organizations', async () => {
+    resolveGlobalRoleForEmailMock.mockReturnValue(undefined); // target is not a protected admin
+    service.wireOffboardingServices({
+      authSessionService: { revokeAllSessions: vi.fn() } as never,
+      authMethodService: {
+        revokeAllForUser: vi.fn(),
+        invalidateAllVerificationTokensForUser: vi.fn(),
+      } as never,
+      uploadService: { tombstoneAllByUserId: vi.fn() } as never,
+      userDataExportService: { deleteAllExportsForUser: vi.fn() } as never,
+      organizationOwnership: {
+        countOrganizationsOwnedByUser: vi.fn().mockResolvedValue(1),
+      } as never,
+    });
+
+    await expect(service.deleteUser(userRow.public_id)).rejects.toBeInstanceOf(ConflictError);
+    expect(repository.softDelete).not.toHaveBeenCalled();
   });
 
   it('deleteMe soft-deletes before avatar storage cleanup', async () => {
@@ -290,11 +357,11 @@ describe('UserService', () => {
     );
   });
 
-  it('updateMe can set avatar from storage key', async () => {
+  it('updateMe can set avatar from storage key (stored as key, returned as signed URL)', async () => {
     const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
     vi.mocked(repository.update).mockResolvedValue({ ...userRow, avatar_url: avatarKey } as never);
     const result = await service.updateMe(userRow.public_id, { avatarKey, first_name: 'New' });
-    expect(result.avatar_url).toBe(avatarKey);
+    expect(result.avatar_url).toBe('https://presigned.example/download');
   });
 
   it('updateMe throws when repository update returns null', async () => {
@@ -508,5 +575,37 @@ describe('UserService', () => {
     const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
     await service.uploadAvatar(userRow.public_id, { avatarKey });
     expect(repository.update).toHaveBeenCalled();
+  });
+
+  describe('protected super-admin guard (route-#1)', () => {
+    it('suspendUser refuses a target whose email is a global super-admin', async () => {
+      resolveGlobalRoleForEmailMock.mockReturnValue(GLOBAL_ROLES.SUPER_ADMIN);
+      await expect(service.suspendUser(userRow.public_id)).rejects.toBeInstanceOf(ForbiddenError);
+      expect(repository.suspend).not.toHaveBeenCalled();
+    });
+
+    it('deleteUser refuses a target whose email is a global super-admin', async () => {
+      resolveGlobalRoleForEmailMock.mockReturnValue(GLOBAL_ROLES.SUPER_ADMIN);
+      await expect(service.deleteUser(userRow.public_id)).rejects.toBeInstanceOf(ForbiddenError);
+      expect(repository.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('adminUpdateUser refuses to deactivate a protected super-admin', async () => {
+      resolveGlobalRoleForEmailMock.mockReturnValue(GLOBAL_ROLES.SUPER_ADMIN);
+      await expect(
+        service.adminUpdateUser(userRow.public_id, { status: 'SUSPENDED' }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(repository.adminUpdate).not.toHaveBeenCalled();
+    });
+
+    it('suspendUser proceeds for a normal (non-admin) target', async () => {
+      // default mock returns undefined → not a protected admin
+      vi.mocked(repository.suspend).mockResolvedValue({
+        ...userRow,
+        suspended_at: new Date(),
+      } as never);
+      await service.suspendUser(userRow.public_id);
+      expect(repository.suspend).toHaveBeenCalledWith(userRow.public_id);
+    });
   });
 });

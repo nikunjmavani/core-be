@@ -1,0 +1,266 @@
+#!/usr/bin/env tsx
+/**
+ * agent-os integrity evals — Tier 1 (deterministic).
+ *
+ * The agent-os/ bundle (skills, rules, agents, docs, hooks) is a large,
+ * cross-referenced surface that silently drifts: stale counts, dead path
+ * references, index/disk divergence, non-portable hook commands. This gate
+ * asserts the structural invariants so that drift fails CI instead of being
+ * discovered months later by a human audit.
+ *
+ * Tier 1 (here) is pure file inspection — fast, zero-token, zero-flake — and
+ * gates CI. Tier 2 (trigger-eval.ts) checks routing behaviour and is reported,
+ * not gated, until it is calibrated. See README.md.
+ *
+ * Usage:
+ *   tsx agent-os/evals/check.ts            # gate: exits 1 on any ERROR
+ *   tsx agent-os/evals/check.ts --report   # verbose: list every check + WARNs
+ */
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { basename, join, relative } from 'node:path'
+
+const repositoryRoot = process.cwd()
+const agentOsDirectory = join(repositoryRoot, 'agent-os')
+const reportMode = process.argv.includes('--report')
+
+type Level = 'error' | 'warn'
+interface Finding {
+  level: Level
+  check: string
+  message: string
+}
+
+const findings: Finding[] = []
+const error = (check: string, message: string) => findings.push({ level: 'error', check, message })
+const warn = (check: string, message: string) => findings.push({ level: 'warn', check, message })
+
+const readText = (absolutePath: string): string => readFileSync(absolutePath, 'utf8')
+
+const listDirectoryNames = (absoluteDirectory: string): string[] =>
+  readdirSync(absoluteDirectory, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()
+
+const listFilesWithExtension = (absoluteDirectory: string, extension: string): string[] =>
+  readdirSync(absoluteDirectory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(extension))
+    .map((entry) => entry.name)
+    .sort()
+
+/** Extract a single frontmatter field, tolerating folded (`>`) / literal (`|`) scalars. */
+function frontmatterField(text: string, key: string): string | undefined {
+  const block = text.match(/^---\n([\s\S]*?)\n---/)?.[1]
+  if (!block) return undefined
+  const lines = block.split('\n')
+  const index = lines.findIndex((line) => new RegExp(`^${key}:`).test(line))
+  if (index === -1) return undefined
+  const inline = lines[index].slice(key.length + 1).trim()
+  if (inline !== '' && !['>', '|', '>-', '|-'].includes(inline)) return inline
+  const collected: string[] = []
+  for (let cursor = index + 1; cursor < lines.length; cursor++) {
+    if (/^\s+\S/.test(lines[cursor])) collected.push(lines[cursor].trim())
+    else if (/^\s*$/.test(lines[cursor])) continue
+    else break
+  }
+  return collected.join(' ').trim() || undefined
+}
+
+function allNumbers(text: string, pattern: RegExp): number[] {
+  return [...text.matchAll(pattern)].map((match) => Number(match[1]))
+}
+
+// ── Check 1: every skill has valid frontmatter and name matches its directory ──
+const skillNames = listDirectoryNames(join(agentOsDirectory, 'skills'))
+for (const skill of skillNames) {
+  const skillFile = join(agentOsDirectory, 'skills', skill, 'SKILL.md')
+  if (!existsSync(skillFile)) {
+    error('skill-frontmatter', `skills/${skill}/ has no SKILL.md`)
+    continue
+  }
+  const text = readText(skillFile)
+  const name = frontmatterField(text, 'name')
+  const description = frontmatterField(text, 'description')
+  if (!name) error('skill-frontmatter', `skills/${skill}/SKILL.md missing frontmatter \`name\``)
+  else if (name !== skill) error('skill-frontmatter', `skills/${skill}/SKILL.md name "${name}" != directory "${skill}"`)
+  if (!description) error('skill-frontmatter', `skills/${skill}/SKILL.md missing frontmatter \`description\``)
+  else if (description.length < 80)
+    warn('skill-description', `skills/${skill}: description is ${description.length} chars — too thin to auto-trigger reliably`)
+}
+
+// ── Check 2: skill counts stated in the index match the directory count ──
+const indexFile = join(agentOsDirectory, 'skills', 'skill-index', 'SKILL.md')
+if (existsSync(indexFile)) {
+  const indexText = readText(indexFile)
+  const claimed = [
+    ...allNumbers(indexText, /(\d+)\s+project skills/g),
+    ...allNumbers(indexText, /project skills\s*\((\d+)\)/gi),
+    ...allNumbers(indexText, /skills\s*\((\d+)\)/g),
+  ]
+  for (const count of new Set(claimed))
+    if (count !== skillNames.length)
+      error('skill-index-count', `skill-index states ${count} skills; ${skillNames.length} exist on disk`)
+
+  // ── Check 3: the index table lists exactly the skills on disk, and paths resolve ──
+  const tableNames = new Set<string>()
+  for (const row of indexText.matchAll(/^\|\s*([a-z][a-z0-9-]+)\s*\|\s*`([^`]+)`/gm)) {
+    tableNames.add(row[1])
+    const referencedPath = row[2].trim()
+    if (!existsSync(join(repositoryRoot, referencedPath)))
+      error('skill-index-table', `skill-index row "${row[1]}" points at missing path ${referencedPath}`)
+  }
+  for (const skill of skillNames)
+    if (!tableNames.has(skill)) error('skill-index-table', `skill "${skill}" exists on disk but is absent from the skill-index table`)
+  for (const listed of tableNames)
+    if (!skillNames.includes(listed)) error('skill-index-table', `skill-index table lists "${listed}" which has no directory`)
+}
+
+// ── Check 4: the sync-rule count in skill-triggers.md matches reality ──
+const triggersFile = join(agentOsDirectory, 'docs', 'skill-triggers.md')
+const syncRuleCount = listFilesWithExtension(join(agentOsDirectory, 'rules'), '-sync.mdc').length
+if (existsSync(triggersFile)) {
+  const triggersText = readText(triggersFile)
+  const claimed = [
+    ...allNumbers(triggersText, /(\d+)\s+sync rules/g),
+    ...allNumbers(triggersText, /(\d+)\s+`agent-os\/rules\/\*-sync\.mdc`/g),
+  ]
+  for (const count of new Set(claimed))
+    if (count !== syncRuleCount)
+      error('sync-rule-count', `skill-triggers.md states ${count} sync rules; ${syncRuleCount} *-sync.mdc files exist`)
+}
+
+// ── Check 5 + 6: agent catalog count + coverage ──
+const agentFiles = listFilesWithExtension(join(agentOsDirectory, 'agents'), '.md')
+const catalogFile = join(agentOsDirectory, 'docs', 'agents-catalog.md')
+if (existsSync(catalogFile)) {
+  const catalogText = readText(catalogFile)
+  for (const count of new Set(allNumbers(catalogText, /[Aa]ll\s+(\d+)\s+(?:project\s+)?agents/g)))
+    if (count !== agentFiles.length)
+      error('agent-catalog-count', `agents-catalog states ${count} agents; ${agentFiles.length} agent files exist`)
+  for (const file of agentFiles) {
+    const agentName = basename(file, '.md')
+    if (!catalogText.includes(agentName)) error('agent-catalog-coverage', `agent "${agentName}" is not referenced in agents-catalog.md`)
+  }
+}
+
+// ── Check 7: every agent file has valid frontmatter; model is inherit unless intentional ──
+for (const file of agentFiles) {
+  const text = readText(join(agentOsDirectory, 'agents', file))
+  const agentName = basename(file, '.md')
+  const name = frontmatterField(text, 'name')
+  const description = frontmatterField(text, 'description')
+  const model = frontmatterField(text, 'model')
+  if (!name || name !== agentName) error('agent-frontmatter', `agents/${file} name "${name ?? '∅'}" != "${agentName}"`)
+  if (!description) error('agent-frontmatter', `agents/${file} missing frontmatter \`description\``)
+  if (model && model !== 'inherit')
+    warn('agent-model', `agents/${file} pins model "${model}" — prefer \`inherit\` unless deliberately overridden`)
+}
+
+// ── Check 8: hook commands must be portable and reference scripts that exist ──
+const settingsFile = join(repositoryRoot, '.claude', 'settings.json')
+if (existsSync(settingsFile)) {
+  let settings: { hooks?: Record<string, Array<{ hooks?: Array<{ command?: string }> }>> } | null = null
+  try {
+    settings = JSON.parse(readText(settingsFile))
+  } catch {
+    error('hook-portability', '.claude/settings.json is not valid JSON')
+  }
+  const commands = Object.values(settings?.hooks ?? {})
+    .flat()
+    .flatMap((entry) => entry.hooks ?? [])
+    .map((hook) => hook.command)
+    .filter((command): command is string => typeof command === 'string')
+  for (const command of commands) {
+    if (/\/Users\/|\/home\/|\/root\//.test(command))
+      error('hook-portability', `.claude/settings.json hook hardcodes an absolute home path — use "$CLAUDE_PROJECT_DIR": ${command}`)
+    const scriptReference = command.match(/agent-os\/hooks\/[A-Za-z0-9._-]+\.sh/)?.[0]
+    if (scriptReference && !existsSync(join(repositoryRoot, scriptReference)))
+      error('hook-script', `.claude/settings.json references hook script ${scriptReference} which does not exist`)
+  }
+}
+
+// ── Check 9: backtick-referenced repo paths in agent-os docs/rules must exist ──
+const ignoreFile = join(agentOsDirectory, 'evals', 'ignore.json')
+const ignored: string[] = existsSync(ignoreFile) ? JSON.parse(readText(ignoreFile)).paths ?? [] : []
+const pathRoots = ['src/', 'tooling/', 'agent-os/', 'docs/', 'migrations/', '.github/', '.husky/', '.vscode/', '.cursor/']
+// `.js` is excluded on purpose: source uses `.js` ESM specifiers that resolve to `.ts` files on disk.
+const pathExtensions = ['.ts', '.tsx', '.mjs', '.json', '.md', '.mdc', '.sql', '.yml', '.yaml', '.sh', '.hcl', '.txt']
+const isPathCandidate = (token: string): boolean => {
+  // Reject globs, `<placeholders>`, `{brace,expansion}`, URLs, and parent refs.
+  if (/[*<>:{}\s]|\.\.|^https?/.test(token)) return false
+  if (ignored.some((entry) => token === entry || token.startsWith(entry))) return false
+  const underRoot = pathRoots.some((root) => token.startsWith(root))
+  const hasKnownExtension = pathExtensions.some((extension) => token.endsWith(extension))
+  return underRoot && hasKnownExtension
+}
+const scanForPaths = (absoluteDirectory: string, extension: string) => {
+  for (const file of listFilesWithExtension(absoluteDirectory, extension)) {
+    const displayPath = relative(repositoryRoot, join(absoluteDirectory, file))
+    const text = readText(join(absoluteDirectory, file))
+    const seen = new Set<string>()
+    for (const inline of text.matchAll(/`([^`\n]+)`/g)) {
+      const token = inline[1].trim()
+      if (seen.has(token) || !isPathCandidate(token)) continue
+      seen.add(token)
+      if (!existsSync(join(repositoryRoot, token)))
+        // Gated: the reference corpus is clean, so a missing path is a real dead reference.
+        // Add genuinely-absent paths (gitignored / generated / illustrative) to evals/ignore.json.
+        error('referenced-path', `${displayPath} → \`${token}\` does not exist (fix the ref, or add to evals/ignore.json if intentional)`)
+    }
+  }
+}
+scanForPaths(join(agentOsDirectory, 'docs'), '.md')
+scanForPaths(join(agentOsDirectory, 'rules'), '.mdc')
+for (const skill of skillNames) scanForPaths(join(agentOsDirectory, 'skills', skill), '.md')
+
+// ── Report ──
+const errors = findings.filter((finding) => finding.level === 'error')
+const warnings = findings.filter((finding) => finding.level === 'warn')
+
+const checkLabels: Record<string, string> = {
+  'skill-frontmatter': 'Skill frontmatter & names',
+  'skill-index-count': 'Skill-index counts',
+  'skill-index-table': 'Skill-index ↔ disk',
+  'sync-rule-count': 'Sync-rule count',
+  'agent-catalog-count': 'Agent catalog count',
+  'agent-catalog-coverage': 'Agent catalog coverage',
+  'agent-frontmatter': 'Agent frontmatter',
+  'hook-portability': 'Hook portability',
+  'hook-script': 'Hook scripts exist',
+  'referenced-path': 'Referenced paths exist',
+}
+
+console.log('\nagent-os integrity evals (Tier 1)\n')
+console.log(`  skills: ${skillNames.length}   sync-rules: ${syncRuleCount}   agents: ${agentFiles.length}\n`)
+
+const group = (level: Level) => {
+  const list = findings.filter((finding) => finding.level === level)
+  const byCheck = new Map<string, string[]>()
+  for (const finding of list) byCheck.set(finding.check, [...(byCheck.get(finding.check) ?? []), finding.message])
+  return byCheck
+}
+
+if (errors.length || reportMode) {
+  for (const [check, messages] of group('error')) {
+    console.log(`  ✗ ${checkLabels[check] ?? check}`)
+    for (const message of messages) console.log(`      ${message}`)
+  }
+}
+if (warnings.length) {
+  for (const [check, messages] of group('warn')) {
+    console.log(`  ⚠ ${checkLabels[check] ?? check} (${messages.length})`)
+    if (reportMode) for (const message of messages) console.log(`      ${message}`)
+  }
+}
+
+if (reportMode) {
+  const checksWithFindings = new Set(findings.map((finding) => finding.check))
+  for (const [check, label] of Object.entries(checkLabels)) if (!checksWithFindings.has(check)) console.log(`  ✓ ${label}`)
+}
+
+console.log('')
+if (errors.length) {
+  console.log(`✗ FAILED — ${errors.length} integrity error(s), ${warnings.length} warning(s)\n`)
+  process.exit(1)
+}
+console.log(`✓ PASSED — 0 errors, ${warnings.length} warning(s)\n`)

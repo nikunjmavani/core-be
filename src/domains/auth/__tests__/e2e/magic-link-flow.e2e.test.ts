@@ -30,7 +30,7 @@ describe('Auth e2e: magic link flow', () => {
       url: testApiPath('/auth/magic-link/send'),
       payload: { email: 'magic-link-e2e@example.com' },
     });
-    expect([200, 202, 204]).toContain(response.statusCode);
+    expect(response.statusCode).toBe(201);
   });
 
   it('send → verify sets session cookie and returns access token', async () => {
@@ -43,7 +43,7 @@ describe('Auth e2e: magic link flow', () => {
       url: testApiPath('/auth/magic-link/send'),
       payload: { email: user.email },
     });
-    expect(sendResponse.statusCode).toBe(200);
+    expect(sendResponse.statusCode).toBe(201);
     const sendBody = sendResponse.json() as { data: { token?: unknown } };
     /** Raw token is never returned in the API response — only via the event payload. */
     expect(sendBody.data.token).toBeUndefined();
@@ -56,7 +56,7 @@ describe('Auth e2e: magic link flow', () => {
       url: testApiPath('/auth/magic-link/verify'),
       payload: { token: rawMagicLinkToken },
     });
-    expect(verifyResponse.statusCode).toBe(200);
+    expect(verifyResponse.statusCode).toBe(201);
     expect((verifyResponse.json() as { data: Record<string, unknown> }).data).toHaveProperty(
       'access_token',
     );
@@ -81,13 +81,13 @@ describe('Auth e2e: magic link flow', () => {
       url: testApiPath('/auth/magic-link/verify'),
       payload: { token: rawToken },
     });
-    expect(verifyResponse.statusCode).toBe(200);
+    expect(verifyResponse.statusCode).toBe(201);
 
     const verifyBody = verifyResponse.json() as {
-      data: { access_token: string; session_public_id?: string };
+      data: { access_token: string; session_id?: string };
     };
     expect(verifyBody.data.access_token).toBeTruthy();
-    expect(verifyBody.data.session_public_id).toBeTruthy();
+    expect(verifyBody.data.session_id).toBeTruthy();
 
     const cookies = verifyResponse.headers['set-cookie'];
     const sessionCookie = Array.isArray(cookies)

@@ -22,10 +22,20 @@ Claude Code reads `agent-os/` directly via `.claude/` symlinks.
 | [`agent-os/hooks/`](agent-os/hooks/) | Claude Code hook scripts |
 | [`agent-os/commands/`](agent-os/commands/) | Cross-platform custom slash commands (Claude `.claude/commands`, Cursor `.cursor/commands`, Codex `~/.codex/prompts`) |
 
+## API Contract (Non-Negotiable)
+
+See **`agent-os/skills/api-contract-guard/SKILL.md`** (rule: `agent-os/rules/api-contract.mdc`):
+
+- Route params: snake_case + semantic (`{plan_id}`, `{subscription_id}`, never `{id}`); registered in `PARAM_NAME_TO_ENTITY`. The active organization is the signed `org` JWT claim — routes carry NO `{organization_id}` path segment; the active-org resource is singular `/tenancy/organization` (sub-resources nest under it); switch active org via `/auth/switch-to-personal` / `/auth/switch-to-organization`
+- Public ids: Paddle-style `<prefix>_<21 [a-z0-9]>` via `generatePublicId(entity)`; external field is always `id`
+- Method→status policy (middleware-enforced): GET 200 · POST 201 · PUT/PATCH 200 · DELETE 204; webhooks + MCP stay 200
+- Error codes: when to set 400/401/403/404/406/409/413/415/422/429 — see **`docs/reference/api/response-codes.md`** (400 on all POST/PATCH/PUT, omitted only when truly nothing to validate; 409/422 mutating only; never invent statuses)
+- Headers: `Authorization: Bearer`, `X-Organization-Id`, `Idempotency-Key` (required on the 8 `idempotencyRequired` writes), `X-Captcha-Token` (public auth forms), `X-CSRF-Token` (refresh only), `Stripe-Signature` (Stripe-sent); ecosystem X- forms kept (`X-Request-Id`, `X-Api-Key`, `X-RateLimit-*`, …)
+
 ## Architecture Rules (Non-Negotiable)
 
 - HTTP controllers **coordinate**, never enforce invariants
-- Services express **intent**, never manage transactions
+- Services express **intent**; they may wrap a unit of work in `withTransaction` for atomicity, but issue no raw SQL and own no DB connection — repositories own the SQL
 - Postgres is the **only source of truth**
 - Workers are **pull-based**, never push-based
 - Cross-domain service imports are **allowed** for READ/WRITE where needed
@@ -363,6 +373,7 @@ Local SonarQube quality gate (pre-push): `pnpm sonar:up` / `sonar:scan` / `sonar
 - `pnpm docs:postman` — convert OpenAPI spec to Postman Collection at `docs/postman-collection.json`
 - `pnpm docs:upload` — upload Postman Collection to workspace (requires `POSTMAN_API_KEY` + `POSTMAN_WORKSPACE_ID`)
 - `pnpm docs:all` — generate OpenAPI spec + Postman Collection in one step
+- `pnpm docs:breaking` — local mirror of the CI oasdiff breaking-change gate (pinned checksum-verified binary in `.cache/oasdiff/`; base spec from `origin/dev` worktree; honors `.github/oasdiff/breaking-changes-ignore.txt`)
 - `pnpm test` — run all Vitest tests (serial)
 - `pnpm test:unit` — unit only (`--project unit` in `tooling/vitest/projects.ts`: `src/tests/unit` + domain `__tests__/unit/`)
 - `pnpm test:integration` — `src/tests/integration`
@@ -378,6 +389,9 @@ Local SonarQube quality gate (pre-push): `pnpm sonar:up` / `sonar:scan` / `sonar
 - `pnpm test:api-smoke` — live API smoke (server running + seed)
 - `pnpm verify:base` — end-to-end gate: migrate → seed (minimal + full) → API smoke (auto-detects/launches server + worker) → validate
 - `pnpm routes:catalog` / `pnpm routes:catalog:check` — regenerate or verify `docs/routes.txt` (legacy: `route-catalog`, `route-catalog:check`)
+- `pnpm validate:route-success-statuses` — verify `tooling/openapi/route-catalog/route-success-statuses.json` (declared happy-path status per route) stays in sync with `docs/routes.txt`
+- `pnpm validate:route-success-coverage` — observed-status gate after a full `pnpm test`: fails on declared-vs-observed drift; uncovered-routes count ratchets via `tooling/route-coverage/route-success-coverage-budget.json`; also verifies every observed sub-500 status is documented in the generated OpenAPI spec
+- `pnpm routes:examples` — refresh `tooling/openapi/route-examples/route-examples.json` (sanitized request/response samples per route+status, embedded in OpenAPI as `captured` examples) from a capture run: `ROUTE_EXAMPLE_CAPTURE=1 pnpm test && pnpm routes:examples`
 - `pnpm ci:local` — PR gate: validate + domain + routes + migrate lint + env example + full test
 - `pnpm ci:quality` — static CI quality slice (audit, validate, domain, contract tests, routes, env example, migrate lint)
 - `pnpm validate` — lint + format:check + typecheck

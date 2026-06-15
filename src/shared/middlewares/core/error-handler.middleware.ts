@@ -126,7 +126,7 @@ function handleAppErrorResponse(
       omitUndefined({
         requestId,
         userId: request.auth?.kind === 'user' ? request.auth.userId : undefined,
-        organizationId: request.organizationId ?? undefined,
+        organizationId: request.auth?.organizationPublicId ?? request.organizationId ?? undefined,
       }),
     );
   }

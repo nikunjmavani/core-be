@@ -104,11 +104,11 @@ describe('organizationRoutes — route configuration (sec-new-M1)', () => {
 
   // Smoke-check that the rotate key endpoint still has its existing STRICT_AUTHED_RATE_LIMIT.
   // Prevents accidental regressions when refactoring the route config merge pattern.
-  it('POST /organizations/:id/api-keys/:apiKeyId/rotate retains its rateLimit config', async () => {
+  it('POST /organization/api-keys/:api_key_id/rotate retains its rateLimit config', async () => {
     const { app: testApp, capturedRoutes } = await buildTestApp();
     app = testApp;
 
-    const route = capturedRoutes.get('POST /organizations/:id/api-keys/:apiKeyId/rotate');
+    const route = capturedRoutes.get('POST /organization/api-keys/:api_key_id/rotate');
     const config = route?.config as Record<string, unknown> | undefined;
     expect(config?.rateLimit, 'API key rotate route must carry config.rateLimit').toBeDefined();
   });

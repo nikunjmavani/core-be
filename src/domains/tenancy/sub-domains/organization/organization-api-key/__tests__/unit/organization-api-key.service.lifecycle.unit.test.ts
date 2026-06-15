@@ -1,6 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConflictError, NotFoundError } from '@/shared/errors/index.js';
 
+vi.mock('@/infrastructure/database/resource-cap-lock.js', () => ({
+  RESOURCE_CAP_ADVISORY_LOCK_NAMESPACES: {
+    OWNED_ORGANIZATION: 1,
+    ORGANIZATION_API_KEY: 2,
+    ORGANIZATION_NOTIFICATION_POLICY: 3,
+    MEMBER_ROLE: 4,
+  },
+  acquireResourceCapAdvisoryLock: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/infrastructure/database/contexts/organization-database.context.js', () => ({
   withOrganizationDatabaseContext: (_organizationPublicId: string, callback: () => unknown) =>
     callback(),
@@ -45,6 +55,8 @@ function buildService() {
     // before insert. Default to 0 so existing tests still reach the create
     // path; the cap regression lives in `per-org-row-caps.unit.test.ts`.
     countActiveByOrganization: vi.fn().mockResolvedValue(0),
+    // audit-#8: per-org creation quota advisory lock (no-op in unit tests).
+    acquireCreationQuotaLock: vi.fn().mockResolvedValue(undefined),
     create: vi.fn().mockResolvedValue(KEY_ROW),
     update: vi.fn().mockResolvedValue({ ...KEY_ROW, name: 'Renamed' }),
     softDelete: vi.fn().mockResolvedValue(KEY_ROW),

@@ -39,7 +39,7 @@ export interface UserDataExport {
   };
   organizations: {
     name: string;
-    slug: string;
+    slug: string | null;
     role: string;
     joined_at: string;
   }[];

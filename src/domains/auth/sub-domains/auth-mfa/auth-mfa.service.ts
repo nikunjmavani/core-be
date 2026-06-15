@@ -10,6 +10,7 @@ import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
+import { resolveDefaultActiveOrganizationPublicId } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { UserService } from '@/domains/user/user.service.js';
@@ -17,12 +18,16 @@ import type { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/a
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import {
+  MAX_MFA_VERIFICATION_ATTEMPTS,
   MFA_RECOVERY_CODE_COUNT,
   MFA_TOTP_CODE_REPLAY_TTL_SECONDS,
   MFA_TOTP_ENROLLMENT_STAGE_TTL_SECONDS,
   MFA_TOTP_TOLERANCE_STEPS,
+  MFA_VERIFICATION_LOCKOUT_TTL_SECONDS,
   TOTP_STEP_SECONDS,
 } from '@/shared/constants/index.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { incrementWithExpiryOnFirst } from '@/shared/utils/infrastructure/redis-counter.util.js';
 import { TOTP_ISSUER } from '@/shared/constants/project-identity.constants.js';
 import {
   validateMfaVerify,
@@ -47,6 +52,9 @@ const ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE = 'errors:mfaInvalidOrExpiredCode';
 
 /** Redis key prefix marking a TOTP code consumed by a user, used to reject replay within its validity window. */
 const MFA_TOTP_CONSUMED_KEY_PREFIX = 'mfa:totp:consumed:';
+
+/** Redis key prefix for the per-user failed-MFA-verification counter (audit-#12 lockout). */
+const MFA_VERIFICATION_FAILURE_KEY_PREFIX = 'mfa:verify:fail:';
 
 /**
  * Redis key prefix for the staged TOTP enrollment secret keyed by user public id
@@ -115,6 +123,13 @@ export class MfaService {
 
     let verified = false;
     if (parsed.totp_code) {
+      // audit-#12 / reaudit-#3: the brute-force lockout gates ONLY the TOTP path (6-digit,
+      // guessable). Recovery codes are single-use high-entropy break-glass and are
+      // intentionally NOT subject to it — otherwise an attacker who knows the password could
+      // burn TOTP attempts to also lock the victim out of their recovery path (victim DoS).
+      // route-audit-#4: atomically count this attempt up-front so concurrent guesses can't
+      // overspend the budget; a successful verify clears the counter below.
+      await this.consumeMfaVerificationAttempt(user.id);
       // auth.auth_methods is FORCE RLS (audit #7); pin the owner context for every credential
       // read/write — the MFA session already authenticated this user.
       const totpMethod = await withUserDatabaseContext(user.public_id, () =>
@@ -129,6 +144,7 @@ export class MfaService {
         epochTolerance: MFA_TOTP_TOLERANCE_STEPS * TOTP_STEP_SECONDS,
       });
       if (!result.valid) {
+        // The attempt was already counted in consumeMfaVerificationAttempt above (route-audit-#4).
         throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
       }
       await this.rejectReplayedTotpCode(user.id, parsed.totp_code);
@@ -144,6 +160,9 @@ export class MfaService {
         consumeMfaRecoveryCode(user.id, recoveryCode),
       );
       if (!consumed) {
+        // reaudit-#3: a wrong recovery code does NOT increment the TOTP lockout counter,
+        // so recovery attempts can never lock the user out of TOTP (or vice versa). Recovery
+        // codes are bounded by the route rate limit + their own high entropy + single use.
         throw new UnauthorizedError('errors:mfaInvalidOrExpiredRecoveryCode');
       }
       verified = true;
@@ -153,6 +172,8 @@ export class MfaService {
       throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
     }
 
+    // audit-#12: successful second factor clears the failure counter.
+    await this.clearMfaVerificationFailures(user.id);
     return this.issueAccessTokenAndSession(user, ipAddress, userAgent);
   }
 
@@ -171,11 +192,57 @@ export class MfaService {
     }
   }
 
+  /**
+   * Atomically registers one MFA verification attempt and rejects once the per-user budget of
+   * {@link MAX_MFA_VERIFICATION_ATTEMPTS} is exhausted (audit-#12 + route-audit-#4).
+   *
+   * @remarks
+   * Closes the brute-force gap on `/auth/mfa/verify` + `/auth/mfa/login`, which had only a rate
+   * limit and no account-level lockout. route-audit-#4: the previous design did a read-only GET
+   * check BEFORE verifying the code and INCR'd the counter separately on failure, so N concurrent
+   * wrong codes all passed the gate before any increment landed — a burst could spend far more
+   * than the budget in one window. Now the `INCR` happens atomically UP FRONT and its returned
+   * value gates the attempt, so concurrent requests get distinct counts and everything past the
+   * budget is rejected. A successful verification clears the counter (see
+   * {@link clearMfaVerificationFailures}), so legitimate retries never lock out. The response
+   * stays the generic invalid-code error so the lockout is not an oracle; the lockout is logged.
+   */
+  private async consumeMfaVerificationAttempt(userId: number): Promise<void> {
+    const key = `${MFA_VERIFICATION_FAILURE_KEY_PREFIX}${userId}`;
+    // Atomic INCR + first-increment EXPIRE (route-audit C5) — a crash between a separate INCR and
+    // EXPIRE would otherwise leave a no-TTL counter that locks the user out indefinitely.
+    const count = await incrementWithExpiryOnFirst(
+      this.redis,
+      key,
+      MFA_VERIFICATION_LOCKOUT_TTL_SECONDS,
+    );
+    if (count > MAX_MFA_VERIFICATION_ATTEMPTS) {
+      logger.warn({ userId }, 'auth.mfa.verification_locked_out');
+      throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
+    }
+  }
+
+  /** Clears the per-user verification-attempt counter after a successful verification. */
+  private async clearMfaVerificationFailures(userId: number): Promise<void> {
+    await this.redis.del(`${MFA_VERIFICATION_FAILURE_KEY_PREFIX}${userId}`);
+  }
+
   private async issueAccessTokenAndSession(
-    user: { public_id: string; email: string; status: string; is_email_verified: boolean },
+    user: {
+      id: number;
+      public_id: string;
+      email: string;
+      status: string;
+      is_email_verified: boolean;
+    },
     ipAddress: string,
     userAgent?: string,
   ): Promise<{ access_token: string; session_public_id: string; session_refresh_secret: string }> {
+    // Bake the active-organization `org` claim into the token, mirroring the first-factor path
+    // (`complete-first-factor-auth.ts`). Without this an MFA login mints an org-less token and the
+    // user is locked out of every org-scoped route (which resolve the active org from the claim
+    // post-flatten) until they call a switch endpoint — a regression that hit MFA-enforcing tenants.
+    const organizationPublicId = await resolveDefaultActiveOrganizationPublicId(user.id);
     const jsonWebToken = await signAccessToken({
       userId: user.public_id,
       role: resolveAccessTokenRoleForUser({
@@ -183,6 +250,7 @@ export class MfaService {
         status: user.status,
         isEmailVerified: user.is_email_verified,
       }),
+      organizationPublicId,
     });
     const tokenHash = createHash('sha256').update(jsonWebToken).digest('hex');
     const sessionMaxAgeDays = env.AUTH_SESSION_MAX_AGE_DAYS;
@@ -208,6 +276,9 @@ export class MfaService {
     const parsed = validateMfaVerify(body);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
+    // audit-#12 / route-audit-#4: atomically count this attempt up-front and reject once the
+    // per-user budget is exhausted — concurrent guesses can no longer overspend it.
+    await this.consumeMfaVerificationAttempt(user.id);
     const totpMethod = await withUserDatabaseContext(user.public_id, () =>
       this.authMethodService.findTotpByUserId(user.id),
     );
@@ -220,9 +291,12 @@ export class MfaService {
       epochTolerance: MFA_TOTP_TOLERANCE_STEPS * TOTP_STEP_SECONDS,
     });
     if (!result.valid) {
+      // Already counted in consumeMfaVerificationAttempt above (route-audit-#4).
       throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
     }
     await this.rejectReplayedTotpCode(user.id, parsed.code);
+    // audit-#12: successful step-up clears the failure counter.
+    await this.clearMfaVerificationFailures(user.id);
     await withUserDatabaseContext(user.public_id, () =>
       this.authMethodService.updateAuthMethodLastUsedAt(totpMethod.id, user.id),
     );
@@ -329,6 +403,11 @@ export class MfaService {
     const recoveryCodeHashes = plaintextRecoveryCodes.map(hashMfaRecoveryCode);
 
     const record = await withUserDatabaseContext(user.public_id, async () => {
+      // Serialize against every other credential mutation for this user (deleteMfa takes the same
+      // lock) so the revoke-old → insert-new → flip-is_mfa_enabled sequence can't interleave with a
+      // concurrent enroll/delete under READ COMMITTED and leave is_mfa_enabled inconsistent with the
+      // actual method rows (route-audit D3 — the lock was previously only half-deployed).
+      await this.authMethodService.acquireCredentialMutationLock(user.id);
       // sec-re-04: a re-enrollment (lost device, new phone) must replace the
       // previous TOTP factor — not silently add a second active one. Without
       // this dedup, two active MFA_TOTP rows existed and login picked an
@@ -386,11 +465,20 @@ export class MfaService {
    * when the policy would be violated. Non-last deletions and users in MFA-non-required
    * orgs are unaffected.
    */
-  async deleteMfa(userPublicId: string, mfaMethodId: number): Promise<void> {
+  async deleteMfa(userPublicId: string, mfaMethodPublicId: string): Promise<void> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
     await withUserDatabaseContext(user.public_id, async () => {
-      const found = await this.authMethodService.findAuthMethodByIdForUser(mfaMethodId, user.id);
+      // route-audit C1 (deleteMfa sibling): serialize concurrent credential mutations for this user
+      // so the "would this remove the last MFA factor?" count + revoke cannot interleave with a
+      // sibling delete and strip the user to zero factors in an MFA-required org.
+      await this.authMethodService.acquireCredentialMutationLock(user.id);
+      // route-#10: resolve by opaque public id (not the leaked sequential id); the resolved row
+      // still yields its numeric id for the user-scoped revoke below.
+      const found = await this.authMethodService.findAuthMethodByPublicIdForUser(
+        mfaMethodPublicId,
+        user.id,
+      );
       if (!found) throw new UnauthorizedError('errors:mfaMethodNotFound');
       if (found.method_type !== 'MFA_TOTP') {
         throw new UnauthorizedError('errors:mfaNotTotpMethod');
@@ -407,7 +495,7 @@ export class MfaService {
           throw new ForbiddenError('errors:lastMfaRequiredByOrganization');
         }
       }
-      await this.authMethodService.revokeAuthMethod(mfaMethodId, user.id);
+      await this.authMethodService.revokeAuthMethod(found.id, user.id);
       const remaining = await this.authMethodService.listMfaMethodsByUserId(user.id);
       // sec-new-A4: flip is_mfa_enabled INSIDE the same withUserDatabaseContext
       // transaction as the revoke so there is no TOCTOU window where a concurrent
@@ -427,7 +515,9 @@ export class MfaService {
       this.authMethodService.listMfaMethodsByUserId(user.id),
     );
     return methods.map((method) => ({
-      id: method.id,
+      // route-#10: expose the opaque public id (not the sequential DB id); DELETE /mfa/:mfa_method_id
+      // accepts this value, so the round-trip is unchanged for clients.
+      id: method.public_id,
       method_type: method.method_type,
       last_used_at: method.last_used_at,
       created_at: method.created_at,

@@ -4,6 +4,8 @@ import type { CommitDispatchTask } from '@/infrastructure/queue/commit-dispatch/
 const redisMock = {
   multi: vi.fn(),
   lrange: vi.fn(),
+  lrem: vi.fn(),
+  llen: vi.fn(),
   del: vi.fn(),
   zrem: vi.fn(),
   zrangebyscore: vi.fn(),
@@ -13,15 +15,23 @@ vi.mock('@/infrastructure/cache/redis.client.js', () => ({
   redisConnection: redisMock,
 }));
 
+function chainableMulti() {
+  return {
+    rpush: vi.fn().mockReturnThis(),
+    expire: vi.fn().mockReturnThis(),
+    zadd: vi.fn().mockReturnThis(),
+    del: vi.fn().mockReturnThis(),
+    zrem: vi.fn().mockReturnThis(),
+    exec: vi.fn().mockResolvedValue([]),
+  };
+}
+
 describe('commit-dispatch.store', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    redisMock.multi.mockReturnValue({
-      rpush: vi.fn().mockReturnThis(),
-      expire: vi.fn().mockReturnThis(),
-      zadd: vi.fn().mockReturnThis(),
-      exec: vi.fn().mockResolvedValue([]),
-    });
+    redisMock.multi.mockImplementation(chainableMulti);
+    redisMock.lrem.mockResolvedValue(1);
+    redisMock.llen.mockResolvedValue(0);
   });
 
   it('appendCommitDispatchTask writes to Redis list and recovery index', async () => {
@@ -41,21 +51,53 @@ describe('commit-dispatch.store', () => {
     );
   });
 
-  it('consumeCommitDispatchTasks parses and clears durable tasks', async () => {
+  it('reaudit-#2: consumeCommitDispatchTasks reads tasks WITHOUT removing them', async () => {
     const task: CommitDispatchTask = {
       type: 'notification',
       notificationId: 7,
       organizationPublicId: 'org_abc',
     };
-    redisMock.lrange.mockResolvedValue([JSON.stringify(task)]);
+    const raw = JSON.stringify(task);
+    redisMock.lrange.mockResolvedValue([raw]);
 
     const { consumeCommitDispatchTasks } = await import(
       '@/infrastructure/queue/commit-dispatch/commit-dispatch.store.js'
     );
     const tasks = await consumeCommitDispatchTasks({ requestId: 'req-2' });
 
-    expect(tasks).toEqual([task]);
-    expect(redisMock.del).toHaveBeenCalledWith('commit-dispatch:pending:req-2');
-    expect(redisMock.zrem).toHaveBeenCalledWith('commit-dispatch:recovery', 'req-2');
+    // Each task is returned with its raw form, and the durable list is NOT destroyed —
+    // it survives until the caller acknowledges each task post-execution.
+    expect(tasks).toEqual([{ task, raw }]);
+    expect(redisMock.del).not.toHaveBeenCalled();
+    expect(redisMock.lrem).not.toHaveBeenCalled();
+  });
+
+  it('reaudit-#2: acknowledgeCommitDispatchTask LREMs the task and clears the index once empty', async () => {
+    const raw = JSON.stringify({ type: 'mail_outbox', mailOutboxId: 9 });
+    redisMock.llen.mockResolvedValue(0); // list empty after this LREM
+
+    const { acknowledgeCommitDispatchTask } = await import(
+      '@/infrastructure/queue/commit-dispatch/commit-dispatch.store.js'
+    );
+    await acknowledgeCommitDispatchTask({ requestId: 'req-3', raw });
+
+    expect(redisMock.lrem).toHaveBeenCalledWith('commit-dispatch:pending:req-3', 1, raw);
+    const multi = redisMock.multi.mock.results.at(-1)?.value;
+    expect(multi.del).toHaveBeenCalledWith('commit-dispatch:pending:req-3');
+    expect(multi.zrem).toHaveBeenCalledWith('commit-dispatch:recovery', 'req-3');
+  });
+
+  it('reaudit-#2: acknowledge leaves the recovery index intact while tasks remain', async () => {
+    const raw = JSON.stringify({ type: 'mail_outbox', mailOutboxId: 9 });
+    redisMock.llen.mockResolvedValue(2); // more tasks still pending
+
+    const { acknowledgeCommitDispatchTask } = await import(
+      '@/infrastructure/queue/commit-dispatch/commit-dispatch.store.js'
+    );
+    await acknowledgeCommitDispatchTask({ requestId: 'req-4', raw });
+
+    expect(redisMock.lrem).toHaveBeenCalledWith('commit-dispatch:pending:req-4', 1, raw);
+    // The list is not yet empty, so the recovery index entry must remain (no del/zrem multi).
+    expect(redisMock.multi).not.toHaveBeenCalled();
   });
 });

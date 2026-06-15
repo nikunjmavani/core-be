@@ -46,16 +46,19 @@ describe('infrastructure queue scheduler', () => {
   it('getScheduledJobs returns audit, session, stripe retention, audit export, tombstone retention, idempotency, dlq depth, mail sweeper, upload pending sweep, stripe reclaim, and audit-outbox drain jobs', async () => {
     const { getScheduledJobs } = await import('@/infrastructure/queue/scheduler.js');
     const scheduledJobs = getScheduledJobs();
-    expect(scheduledJobs).toHaveLength(22);
+    expect(scheduledJobs).toHaveLength(25);
     expect(scheduledJobs.map((job) => job.queueName)).toEqual([
       'audit-retention',
       'audit-outbox-drain',
       'notification-retention',
       'session-cleanup',
+      'user-offboarding-reconcile',
+      'organization-offboarding-reconcile',
       'stripe-webhook-event-retention',
       'audit-export',
       'user-data-export-retention',
       ...TOMBSTONE_QUEUE_ORDER,
+      'webhook-delivery-attempt-retention',
       'idempotency-cardinality',
       'dlq-depth',
       'dlq-auto-retry',
@@ -132,12 +135,12 @@ describe('infrastructure queue scheduler', () => {
   it('registerScheduledJobs registers one repeatable job per cleanup queue when enabled', async () => {
     const { registerScheduledJobs } = await import('@/infrastructure/queue/scheduler.js');
     const schedulerHandle = await registerScheduledJobs();
-    expect(upsertJobSchedulerMock).toHaveBeenCalledTimes(22);
+    expect(upsertJobSchedulerMock).toHaveBeenCalledTimes(25);
     await schedulerHandle.close();
-    // Each scheduled job opens one Queue for upsert (22) + the reconcile pass opens one
-    // Queue per unique queue name (22) which is closed inside its own loop iteration.
-    // handle.close() then closes the 22 upsert queues, so the mock observes 44 close calls.
-    expect(queueCloseMock).toHaveBeenCalledTimes(44);
+    // Each scheduled job opens one Queue for upsert (25) + the reconcile pass opens one
+    // Queue per unique queue name (25) which is closed inside its own loop iteration.
+    // handle.close() then closes the 25 upsert queues, so the mock observes 50 close calls.
+    expect(queueCloseMock).toHaveBeenCalledTimes(50);
   });
 
   it('registerScheduledJobs does not instantiate queues when SCHEDULER_ENABLED is false', async () => {

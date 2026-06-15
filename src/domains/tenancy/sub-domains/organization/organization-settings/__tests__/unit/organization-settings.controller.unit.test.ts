@@ -7,7 +7,7 @@ import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/
 
 function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
   return {
-    auth: { kind: 'user', userId: generatePublicId(), role: 'user' },
+    auth: { kind: 'user', userId: generatePublicId('user'), role: 'user' },
     params: {},
     body: {},
     headers: {},
@@ -21,7 +21,7 @@ function mockReply(): FastifyReply {
 }
 
 describe('createOrganizationSettingsController', () => {
-  const organizationPublicId = generatePublicId();
+  const organizationPublicId = generatePublicId('organization');
   const settingsRow = {
     organization_id: organizationPublicId,
     is_email_notifications_enabled: true,
@@ -42,7 +42,7 @@ describe('createOrganizationSettingsController', () => {
 
   it('getSettings delegates to service and returns settings', async () => {
     const response = await controller.getSettings(
-      mockRequest({ params: { id: organizationPublicId } }),
+      mockRequest({ params: { organization_id: organizationPublicId } }),
       mockReply(),
     );
     expect(service.get).toHaveBeenCalledWith(organizationPublicId);
@@ -52,23 +52,29 @@ describe('createOrganizationSettingsController', () => {
   it('getSettings propagates NotFoundError when org is missing', async () => {
     vi.mocked(service.get).mockRejectedValueOnce(new NotFoundError('Organization'));
     await expect(
-      controller.getSettings(mockRequest({ params: { id: organizationPublicId } }), mockReply()),
+      controller.getSettings(
+        mockRequest({ params: { organization_id: organizationPublicId } }),
+        mockReply(),
+      ),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('getSettings propagates generic error', async () => {
     vi.mocked(service.get).mockRejectedValueOnce(new Error('Database error'));
     await expect(
-      controller.getSettings(mockRequest({ params: { id: organizationPublicId } }), mockReply()),
+      controller.getSettings(
+        mockRequest({ params: { organization_id: organizationPublicId } }),
+        mockReply(),
+      ),
     ).rejects.toThrow('Database error');
   });
 
   it('updateSettings delegates to service with body and user', async () => {
     const body = { is_email_notifications_enabled: false };
-    const userId = generatePublicId();
+    const userId = generatePublicId('user');
     const response = await controller.updateSettings(
       mockRequest({
-        params: { id: organizationPublicId },
+        params: { organization_id: organizationPublicId },
         body,
         auth: { kind: 'user', userId, role: 'user' } as never,
       }),
@@ -81,7 +87,10 @@ describe('createOrganizationSettingsController', () => {
   it('updateSettings throws UnauthorizedError when auth is missing', async () => {
     await expect(
       controller.updateSettings(
-        mockRequest({ params: { id: organizationPublicId }, auth: undefined as never }),
+        mockRequest({
+          params: { organization_id: organizationPublicId },
+          auth: undefined as never,
+        }),
         mockReply(),
       ),
     ).rejects.toBeInstanceOf(UnauthorizedError);
@@ -91,7 +100,7 @@ describe('createOrganizationSettingsController', () => {
     vi.mocked(service.update).mockRejectedValueOnce(new NotFoundError('Organization'));
     await expect(
       controller.updateSettings(
-        mockRequest({ params: { id: organizationPublicId }, body: {} }),
+        mockRequest({ params: { organization_id: organizationPublicId }, body: {} }),
         mockReply(),
       ),
     ).rejects.toBeInstanceOf(NotFoundError);

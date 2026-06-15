@@ -1,9 +1,6 @@
 import { z } from 'zod';
 import { trimmedEmail, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
-import {
-  AUTH_METHOD_TYPES,
-  type AuthMethodType,
-} from '@/domains/auth/sub-domains/auth-method/auth-method.constants.js';
+import { AUTH_METHOD_TYPE } from '@/domains/auth/sub-domains/auth-method/auth-method.constants.js';
 
 /** Zod schema for the `POST /api/v1/auth/login` request body (email + password). */
 export const LoginDto = z
@@ -46,15 +43,17 @@ export type MfaVerifyInput = z.infer<typeof MfaVerifyDto>;
  * Zod schema for the `POST /api/v1/auth/me/auth-methods` request body that links a new auth method
  * to the current user.
  *
- * `method_type` is constrained to the canonical {@link AUTH_METHOD_TYPES} (matching the DB CHECK),
- * and the externally-verified identity fields (`provider` / `provider_user_id`) are intentionally
- * NOT accepted here: an authenticated user must not be able to assert ownership of an arbitrary
- * OAuth identity, which would let them bind (and later log in as) another user's provider account.
- * OAuth linkage is written only by the verified OAuth callback.
+ * route-#3: `method_type` is restricted to `MAGIC_LINK` — the only type this endpoint can create
+ * as a functional credential-less row. `PASSWORD` needs a hash (set via the password flows),
+ * `MFA_*` need an encrypted secret (set via the enroll ceremony), and `OAUTH` proves an external
+ * identity (written only by the verified callback). Previously the DTO accepted every auth-method
+ * type, so a user could insert a non-functional `PASSWORD`/`MFA_*` row that the last-login-capable
+ * credential guard still counted — letting them delete their only real method and lock themselves
+ * out. The provider identity fields are likewise never accepted here.
  */
 export const CreateAuthMethodDto = z
   .object({
-    method_type: z.enum(AUTH_METHOD_TYPES as [AuthMethodType, ...AuthMethodType[]]),
+    method_type: z.literal(AUTH_METHOD_TYPE.MAGIC_LINK),
     is_primary: z.boolean().optional().default(false),
   })
   .strict();
@@ -180,31 +179,40 @@ export const oauthProviderParamsDto = z
 /** Inferred input type of {@link oauthProviderParamsDto}. */
 export type OauthProviderParamsInput = z.infer<typeof oauthProviderParamsDto>;
 
-/** Zod schema for the `:mfaMethodId` path parameter on `/api/v1/auth/mfa/:mfaMethodId`. */
+/**
+ * Zod schema for the `:mfa_method_id` path parameter on `/api/v1/auth/mfa/:mfa_method_id`.
+ *
+ * route-#10: the param is an opaque 21-char public id (not the sequential DB id). `GET /mfa`
+ * returns each method's public id as `id`, so this is round-trip compatible; it stops leaking
+ * monotonic row ids and matches the public-id convention used everywhere else.
+ */
 export const mfaMethodIdParamsDto = z
   .object({
-    mfaMethodId: z.string().trim().regex(/^\d+$/),
+    mfa_method_id: z
+      .string()
+      .trim()
+      .regex(/^am_[a-z0-9]{21}$/),
   })
   .strict();
 /** Inferred input type of {@link mfaMethodIdParamsDto}. */
 export type MfaMethodIdParamsInput = z.infer<typeof mfaMethodIdParamsDto>;
 
-/** Zod schema for the `:publicId` path parameter on `DELETE /api/v1/auth/me/auth-methods/:publicId` (sec-new-B4). */
+/** Zod schema for the `:auth_method_id` path parameter on `DELETE /api/v1/auth/me/auth-methods/:auth_method_id` (sec-new-B4). */
 export const authMethodPublicIdParamsDto = z
   .object({
-    publicId: z
+    auth_method_id: z
       .string()
       .trim()
-      .regex(/^[a-z0-9]{21}$/),
+      .regex(/^am_[a-z0-9]{21}$/),
   })
   .strict();
 /** Inferred input type of {@link authMethodPublicIdParamsDto}. */
 export type AuthMethodPublicIdParamsInput = z.infer<typeof authMethodPublicIdParamsDto>;
 
-/** Zod schema for the `:id` (session public id) path parameter on `/api/v1/auth/me/sessions/:id`. */
+/** Zod schema for the `:session_id` (session public id) path parameter on `/api/v1/auth/me/sessions/:session_id`. */
 export const sessionIdParamsDto = z
   .object({
-    id: trimmedStringMinMax(1, 21),
+    session_id: trimmedStringMinMax(1, 28),
   })
   .strict();
 /** Inferred input type of {@link sessionIdParamsDto}. */

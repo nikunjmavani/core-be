@@ -53,35 +53,36 @@ describe('Security: role-name uniqueness conflict', () => {
       permissionCodes: ['role:manage', 'role:read'],
     });
     await createMembership({ userId: user.id, organizationId: organization.id, roleId: role.id });
-    const token = await generateTestToken({ userId: user.public_id });
+    // Flat role routes resolve the organization from the JWT `org` claim.
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
     return { organization, token };
   }
 
-  async function createRole(token: string, organizationPublicId: string, name: string) {
+  async function createRole(token: string, name: string) {
     return injectAuthenticatedOrganizationMutation(app, {
       method: 'POST',
-      url: testApiPath(`/tenancy/organizations/${organizationPublicId}/roles`),
+      url: testApiPath('/tenancy/organization/roles'),
       token,
-      organizationPublicId,
       payload: { name },
     });
   }
 
   it('a sequential duplicate role name is a clean 409 (not a 500)', async () => {
-    const { organization, token } = await adminContext();
-    const first = await createRole(token, organization.public_id, 'Duplicate Role');
+    const { token } = await adminContext();
+    const first = await createRole(token, 'Duplicate Role');
     expect(first.statusCode).toBe(201);
 
-    const second = await createRole(token, organization.public_id, 'Duplicate Role');
+    const second = await createRole(token, 'Duplicate Role');
     expect(second.statusCode).toBe(409);
   });
 
   it('concurrent creates with the same name: exactly one 201, rest 409, no 5xx', async () => {
-    const { organization, token } = await adminContext();
+    const { token } = await adminContext();
     const statuses = await Promise.all(
-      Array.from({ length: 5 }, () =>
-        createRole(token, organization.public_id, 'Race Role').then((r) => r.statusCode),
-      ),
+      Array.from({ length: 5 }, () => createRole(token, 'Race Role').then((r) => r.statusCode)),
     );
     const result = tally(statuses);
     expect(result.serverError).toBe(0);
@@ -90,8 +91,8 @@ describe('Security: role-name uniqueness conflict', () => {
   });
 
   it('a different name still succeeds (the guard is name-specific)', async () => {
-    const { organization, token } = await adminContext();
-    expect((await createRole(token, organization.public_id, 'Alpha')).statusCode).toBe(201);
-    expect((await createRole(token, organization.public_id, 'Beta')).statusCode).toBe(201);
+    const { token } = await adminContext();
+    expect((await createRole(token, 'Alpha')).statusCode).toBe(201);
+    expect((await createRole(token, 'Beta')).statusCode).toBe(201);
   });
 });

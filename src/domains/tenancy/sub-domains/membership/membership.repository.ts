@@ -23,7 +23,7 @@ interface MembershipListPagination {
 /** Row shape returned by {@link MembershipRepository.listOrganizationsForUserDataExport}. */
 export interface MembershipOrganizationUserDataExportRow {
   name: string;
-  slug: string;
+  slug: string | null;
   status: string;
   created_at: Date;
 }
@@ -206,7 +206,7 @@ export class MembershipRepository extends BaseRepository {
     created_by_user_id?: number | null;
   }) {
     return runInsertWithPublicIdentifierRetry(async () => {
-      const public_id = generatePublicId();
+      const public_id = generatePublicId('membership');
       const row = {
         public_id,
         organization_id: data.organization_id,
@@ -272,6 +272,13 @@ export class MembershipRepository extends BaseRepository {
         and(
           eq(memberships.id, membership_id),
           eq(memberships.organization_id, organization_id),
+          // route-audit-#1: ONLY a still-invited membership may be activated by accepting. Without
+          // this a member an admin SUSPENDED (the per-org ban) could self-restore to ACTIVE by
+          // accepting a still-pending invitation — including one suspended while INVITED, where
+          // joined_at is still NULL (so a joined_at-only guard would miss it). Mirrors the PATCH
+          // guard that already blocks INVITED→ACTIVE via the manager route; permission resolution
+          // keys on status='ACTIVE', so this is the access kill-switch.
+          eq(memberships.status, 'INVITED'),
           isNull(memberships.deleted_at),
         ),
       )

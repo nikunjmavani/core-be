@@ -40,7 +40,7 @@ const TENANCY_PERMISSIONS = {
 const ADMIN_PERMISSIONS = Object.values(TENANCY_PERMISSIONS);
 
 function idempotent(): { 'idempotency-key': string } {
-  return { 'idempotency-key': generatePublicId() };
+  return { 'idempotency-key': generatePublicId('organization') };
 }
 
 function expectRejected(statusCode: number): void {
@@ -78,7 +78,14 @@ describe('Security: mass-assignment / over-posting', () => {
       permissionCodes: ADMIN_PERMISSIONS,
     });
     await createMembership({ userId: user.id, organizationId: organization.id, roleId: role.id });
-    const token = await generateTestToken({ userId: user.public_id });
+    // Scope the bearer to this org via the `org` claim. Flat webhook routes
+    // resolve the organization from the claim (no org path param); for the nested
+    // org-settings route the claim simply matches the path-derived org. Either
+    // way the request reaches DTO validation, where the strict-DTO check runs.
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
     return { user, organization, token };
   }
 
@@ -96,7 +103,7 @@ describe('Security: mass-assignment / over-posting', () => {
         method: 'POST',
         url: testApiPath('/tenancy/organizations'),
         token,
-        payload: { name: 'Acme Inc', slug: `acme-${generatePublicId()}` },
+        payload: { name: 'Acme Inc', slug: `acme-${generatePublicId('organization').slice(4)}` },
         headers: idempotent(),
       });
       expect(response.statusCode).toBe(201);
@@ -108,7 +115,11 @@ describe('Security: mass-assignment / over-posting', () => {
         method: 'POST',
         url: testApiPath('/tenancy/organizations'),
         token,
-        payload: { name: 'Acme Inc', slug: `acme-${generatePublicId()}`, public_id: 'attacker' },
+        payload: {
+          name: 'Acme Inc',
+          slug: `acme-${generatePublicId('organization').slice(4)}`,
+          public_id: 'attacker',
+        },
         headers: idempotent(),
       });
       expectRejected(response.statusCode);
@@ -123,7 +134,7 @@ describe('Security: mass-assignment / over-posting', () => {
         token,
         payload: {
           name: 'Acme Inc',
-          slug: `acme-${generatePublicId()}`,
+          slug: `acme-${generatePublicId('organization').slice(4)}`,
           owner_user_id: otherUser.public_id,
         },
         headers: idempotent(),
@@ -139,7 +150,7 @@ describe('Security: mass-assignment / over-posting', () => {
         token,
         payload: {
           name: 'Acme Inc',
-          slug: `acme-${generatePublicId()}`,
+          slug: `acme-${generatePublicId('organization').slice(4)}`,
           created_by_user_id: 1,
           created_at: '2000-01-01T00:00:00.000Z',
           deleted_at: null,
@@ -150,17 +161,16 @@ describe('Security: mass-assignment / over-posting', () => {
     });
   });
 
-  // ─── Organization update (PATCH /tenancy/organizations/:id) ─────────────────
+  // ─── Organization update (PATCH /tenancy/organization) ──────────────────────
 
-  describe('PATCH /api/v1/tenancy/organizations/:id', () => {
+  describe('PATCH /api/v1/tenancy/organization', () => {
     it('rejects an injected owner_user_id (no privilege transfer via update)', async () => {
-      const { organization, token } = await createOrgAdminContext();
+      const { token } = await createOrgAdminContext();
       const otherUser = await createTestUser();
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: testApiPath(`/tenancy/organizations/${organization.public_id}`),
+        url: testApiPath('/tenancy/organization'),
         token,
-        organizationPublicId: organization.public_id,
         payload: { name: 'Renamed', owner_user_id: otherUser.public_id },
         headers: idempotent(),
       });
@@ -168,12 +178,11 @@ describe('Security: mass-assignment / over-posting', () => {
     });
 
     it('rejects an injected public_id (identity is immutable)', async () => {
-      const { organization, token } = await createOrgAdminContext();
+      const { token } = await createOrgAdminContext();
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: testApiPath(`/tenancy/organizations/${organization.public_id}`),
+        url: testApiPath('/tenancy/organization'),
         token,
-        organizationPublicId: organization.public_id,
         payload: { public_id: 'attacker-controlled' },
         headers: idempotent(),
       });
@@ -181,12 +190,11 @@ describe('Security: mass-assignment / over-posting', () => {
     });
 
     it('rejects an injected stripe_customer_id (billing-owned field)', async () => {
-      const { organization, token } = await createOrgAdminContext();
+      const { token } = await createOrgAdminContext();
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: testApiPath(`/tenancy/organizations/${organization.public_id}`),
+        url: testApiPath('/tenancy/organization'),
         token,
-        organizationPublicId: organization.public_id,
         payload: { stripe_customer_id: 'cus_attacker' },
         headers: idempotent(),
       });
@@ -194,16 +202,15 @@ describe('Security: mass-assignment / over-posting', () => {
     });
   });
 
-  // ─── Organization settings (PATCH /tenancy/organizations/:id/settings) ──────
+  // ─── Organization settings (PATCH /tenancy/organization/settings) ───────────
 
-  describe('PATCH /api/v1/tenancy/organizations/:id/settings', () => {
-    it('rejects an injected organization_id (tenant binding is from the URL)', async () => {
-      const { organization, token } = await createOrgAdminContext();
+  describe('PATCH /api/v1/tenancy/organization/settings', () => {
+    it('rejects an injected organization_id (tenant binding is from the token claim)', async () => {
+      const { token } = await createOrgAdminContext();
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: testApiPath(`/tenancy/organizations/${organization.public_id}/settings`),
+        url: testApiPath('/tenancy/organization/settings'),
         token,
-        organizationPublicId: organization.public_id,
         payload: { organization_id: 999_999 },
         headers: idempotent(),
       });
@@ -211,16 +218,15 @@ describe('Security: mass-assignment / over-posting', () => {
     });
   });
 
-  // ─── Webhook create (POST /notify/organizations/:id/webhooks) ───────────────
+  // ─── Webhook create (POST /notify/webhooks) ──────────────────────────────────
 
-  describe('POST /api/v1/notify/organizations/:id/webhooks', () => {
+  describe('POST /api/v1/notify/webhooks', () => {
     it('rejects an injected organization_id (cross-tenant binding attempt)', async () => {
-      const { organization, token } = await createOrgAdminContext();
+      const { token } = await createOrgAdminContext();
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
+        url: testApiPath('/notify/webhooks'),
         token,
-        organizationPublicId: organization.public_id,
         payload: {
           url: 'https://example.com/hook',
           events: ['billing.subscription.updated'],
@@ -232,12 +238,11 @@ describe('Security: mass-assignment / over-posting', () => {
     });
 
     it('rejects an injected encrypted_secret (server encrypts the plaintext secret)', async () => {
-      const { organization, token } = await createOrgAdminContext();
+      const { token } = await createOrgAdminContext();
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
+        url: testApiPath('/notify/webhooks'),
         token,
-        organizationPublicId: organization.public_id,
         payload: {
           url: 'https://example.com/hook',
           events: ['billing.subscription.updated'],

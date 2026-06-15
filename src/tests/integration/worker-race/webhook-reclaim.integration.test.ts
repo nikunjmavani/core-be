@@ -30,7 +30,7 @@ describe('Integration: webhook delivery sending reclaim', () => {
     const [pendingAttempt] = await database
       .insert(webhook_delivery_attempts)
       .values({
-        public_id: generatePublicId(),
+        public_id: generatePublicId('webhook'),
         webhook_id: webhook.id,
         event_type: 'webhook.test',
         payload: { reclaim: true },

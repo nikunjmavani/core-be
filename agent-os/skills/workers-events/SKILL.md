@@ -117,7 +117,7 @@ billing events  →  notify/sub-domains/webhook/events/billing-webhook.event-han
      - log structured metadata (job id, organization id, etc.)
      - be idempotent when possible
    - **Database access in workers/processors** (never `getRequestDatabase()` or `request-database.context` imports):
-     - Type handles via `PostgresDatabaseHandle` / `WorkerDatabaseHandle` in `src/infrastructure/database/database-handle.types.ts` and `worker-processor.util.ts`
+     - Type handles via `PostgresDatabaseHandle` / `WorkerDatabaseHandle` in `src/infrastructure/database/utils/database-handle.types.ts` and `worker-processor.util.ts`
      - **Runtime guard:** `src/worker.ts` sets `CORE_BE_RUNTIME=worker`. Unpinned `getRequestDatabase()` throws `WorkerDatabaseContextError`. Context kind is tracked in `worker-database.context.ts` (ALS).
      - Use `runTenantScopedWorkerJob`, `runGlobalRetentionWorkerJob`, or `runUserScopedWorkerJob` from `worker-processor.util.ts`, or `createTenantScopedBullMQWorker` for tenant-scoped queues, or call the context wrappers directly
      - Tenant-scoped jobs → `withOrganizationContext(organizationPublicId, (databaseHandle) => …)` — pins ALS + `SET LOCAL app.current_organization_id`
@@ -185,7 +185,7 @@ Every BullMQ worker is registered exactly once in [`worker-registration.registry
 3. **Add a single entry to `worker-registration.registry.ts`** — pick `family`, `usesPostgres`, `resolvePostgresConcurrency`, `scheduled`, `criticality`, and (when relevant) `holdsConnectionDuringExternalIo`. Use `retentionDefinition({ ... })` for single-concurrency cron workers (it defaults `scheduled: true` + `criticality: 'maintenance'`).
 4. If it is a repeatable / cron job, add an `upsertJobScheduler` entry in `scheduler.ts` using the same `queueName` constant — and set `scheduled: true` in the registration. The startup audit will warn if these disagree.
 5. Run targeted tests: `pnpm test:unit src/infrastructure/queue/worker-runtime/__tests__/unit/` and `pnpm test:unit src/infrastructure/database/__tests__/unit/assert-connection-budget.unit.test.ts` (asserts new demand is bounded).
-6. Update the worker count and family breakdown in [`docs/deployment/runbooks/resource-limits.md`](../../../docs/deployment/runbooks/resource-limits.md#per-family-registry-breakdown-25-workers-23-use-postgres) when the totals change, including the **External-IO holding** column when `holdsConnectionDuringExternalIo: true`.
+6. Update the worker count and family breakdown in [`docs/deployment/runbooks/resource-limits.md`](../../../docs/deployment/runbooks/resource-limits.md#per-family-registry-breakdown-30-workers-27-use-postgres) when the totals change, including the **External-IO holding** column when `holdsConnectionDuringExternalIo: true`.
 
 ### Anti-patterns
 

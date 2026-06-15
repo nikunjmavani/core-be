@@ -102,11 +102,14 @@ describe('Performance: membership list', () => {
         });
       }
 
-      const token = await generateTestToken({ userId: owner.public_id });
+      const token = await generateTestToken({
+        userId: owner.public_id,
+        organizationPublicId: organization.public_id,
+      });
       const start = performance.now();
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(`/tenancy/organizations/${organization.public_id}/memberships?limit=50`),
+        url: testApiPath('/tenancy/organization/memberships?limit=50'),
         token,
         organizationPublicId: organization.public_id,
       });

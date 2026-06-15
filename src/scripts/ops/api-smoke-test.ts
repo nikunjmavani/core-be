@@ -11,6 +11,14 @@
  */
 import '@/shared/config/load-env-files.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import {
+  loadRouteRegistryFromCatalog,
+  type RouteEntry,
+} from '@/tests/helpers/route-catalog-registry.js';
+import {
+  loadRouteSuccessStatusMap,
+  routeSuccessStatusKey,
+} from '@/tests/helpers/route-success-status.helper.js';
 
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000';
 const API_PREFIX = '/api/v1';
@@ -62,9 +70,10 @@ async function requestJson(
     }
   }
   if (expectedStatus !== undefined) {
+    // assertStatus already rejects any status outside the allowed list, so an
+    // explicitly expected status (e.g. a documented typed 501) is not re-flagged.
     assertStatus(response.status, expectedStatus, `${fetchOptions.method ?? 'GET'} ${path}`);
-  }
-  if (response.status >= 500) {
+  } else if (response.status >= 500) {
     throw new Error(`${path}: server error ${response.status} — ${text.slice(0, 200)}`);
   }
   return { status: response.status, body };
@@ -97,15 +106,15 @@ function requireOrganizationId(): string {
 }
 
 function organizationPath(suffix: string): string {
-  return `${API_PREFIX}/tenancy/organizations/${requireOrganizationId()}${suffix}`;
+  return `${API_PREFIX}/tenancy/organization${suffix}`;
 }
 
-function billingOrganizationPath(suffix: string): string {
-  return `${API_PREFIX}/billing/organizations/${requireOrganizationId()}${suffix}`;
+function billingPath(suffix: string): string {
+  return `${API_PREFIX}/billing${suffix}`;
 }
 
-function notifyOrganizationPath(suffix: string): string {
-  return `${API_PREFIX}/notify/organizations/${requireOrganizationId()}${suffix}`;
+function notifyPath(suffix: string): string {
+  return `${API_PREFIX}/notify${suffix}`;
 }
 
 async function runProbe(probe: RouteProbe): Promise<void> {
@@ -163,8 +172,6 @@ async function setupOrganization(): Promise<void> {
 }
 
 async function setupPlanAndRoleIds(): Promise<void> {
-  const organizationId = requireOrganizationId();
-
   const plansResponse = await requestJson(`${API_PREFIX}/billing/plans`, {
     headers: authHeaders(true),
     expectedStatus: 200,
@@ -175,10 +182,10 @@ async function setupPlanAndRoleIds(): Promise<void> {
     smokeContext.planId = planId;
   }
 
-  const rolesResponse = await requestJson(
-    `${API_PREFIX}/tenancy/organizations/${organizationId}/roles`,
-    { headers: authHeaders(true), expectedStatus: 200 },
-  );
+  const rolesResponse = await requestJson(`${API_PREFIX}/tenancy/organization/roles`, {
+    headers: authHeaders(true),
+    expectedStatus: 200,
+  });
   const rolesBody = rolesResponse.body as { data?: Array<{ id?: string }> };
   const roleId = rolesBody.data?.[0]?.id;
   if (roleId !== undefined) {
@@ -188,7 +195,6 @@ async function setupPlanAndRoleIds(): Promise<void> {
 
 /** Routes grouped by domain — GET-heavy probes that should not 5xx with seeded demo user. */
 function buildDomainProbes(): RouteProbe[] {
-  const organizationId = () => requireOrganizationId();
   const planId = () => smokeContext.planId ?? 'missing-plan-id';
   const roleId = () => smokeContext.roleId ?? 'missing-role-id';
 
@@ -269,8 +275,8 @@ function buildDomainProbes(): RouteProbe[] {
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id',
-      path: () => `${API_PREFIX}/tenancy/organizations/${organizationId()}`,
+      name: 'GET /api/v1/tenancy/organization',
+      path: () => `${API_PREFIX}/tenancy/organization`,
       authenticated: true,
       needsOrganization: true,
       expectedStatus: 200,
@@ -283,55 +289,55 @@ function buildDomainProbes(): RouteProbe[] {
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/settings',
+      name: 'GET /api/v1/tenancy/organization/settings',
       path: () => organizationPath('/settings'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/roles',
+      name: 'GET /api/v1/tenancy/organization/roles',
       path: () => organizationPath('/roles'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/roles/:roleId',
+      name: 'GET /api/v1/tenancy/organization/roles/:role_id',
       path: () => organizationPath(`/roles/${roleId()}`),
       needsOrganization: true,
       expectedStatus: [200, 404],
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/roles/:roleId/permissions',
+      name: 'GET /api/v1/tenancy/organization/roles/:role_id/permissions',
       path: () => organizationPath(`/roles/${roleId()}/permissions`),
       needsOrganization: true,
       expectedStatus: [200, 404],
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/memberships',
+      name: 'GET /api/v1/tenancy/organization/memberships',
       path: () => organizationPath('/memberships'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/invitations',
+      name: 'GET /api/v1/tenancy/organization/invitations',
       path: () => organizationPath('/invitations'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/api-keys',
+      name: 'GET /api/v1/tenancy/organization/api-keys',
       path: () => organizationPath('/api-keys'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/notification-policies',
+      name: 'GET /api/v1/tenancy/organization/notification-policies',
       path: () => organizationPath('/notification-policies'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/audit-logs',
+      name: 'GET /api/v1/tenancy/organization/audit-logs',
       path: () => organizationPath('/audit-logs'),
       needsOrganization: true,
       expectedStatus: 200,
@@ -345,15 +351,15 @@ function buildDomainProbes(): RouteProbe[] {
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/billing/plans/:id',
+      name: 'GET /api/v1/billing/plans/:plan_id',
       path: () => `${API_PREFIX}/billing/plans/${planId()}`,
       authenticated: true,
       needsOrganization: true,
       expectedStatus: [200, 404],
     },
     {
-      name: 'GET /api/v1/billing/organizations/:id/subscriptions',
-      path: () => billingOrganizationPath('/subscriptions'),
+      name: 'GET /api/v1/billing/subscriptions',
+      path: () => billingPath('/subscriptions'),
       needsOrganization: true,
       expectedStatus: 200,
     },
@@ -371,14 +377,14 @@ function buildDomainProbes(): RouteProbe[] {
       expectedStatus: [200, 403],
     },
     {
-      name: 'GET /api/v1/notify/organizations/:id/webhooks',
-      path: () => notifyOrganizationPath('/webhooks'),
+      name: 'GET /api/v1/notify/webhooks',
+      path: () => notifyPath('/webhooks'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/notify/organizations/:id/webhook-events',
-      path: () => notifyOrganizationPath('/webhook-events'),
+      name: 'GET /api/v1/notify/webhook-events',
+      path: () => notifyPath('/webhook-events'),
       needsOrganization: true,
       expectedStatus: 200,
     },
@@ -429,6 +435,73 @@ const healthProbes: RouteProbe[] = [
   },
 ];
 
+/**
+ * Per-route expected-status overrides for the catalog GET sweep, where the
+ * generic tolerance is wrong for a documented reason. Keep minimal.
+ */
+const SWEEP_EXPECTED_OVERRIDES: Record<string, number[]> = {
+  // 403 for the demo (non-admin) user; 404 when ENABLE_MCP_SERVER=false in the target env.
+  'GET /api/v1/mcp': [403, 404],
+};
+
+import {
+  PARAM_NAME_TO_ENTITY,
+  publicIdPlaceholderFor,
+} from '@/shared/utils/identity/public-id.util.js';
+
+function sweepPlaceholderFor(paramName: string): string {
+  const entity = PARAM_NAME_TO_ENTITY[paramName as keyof typeof PARAM_NAME_TO_ENTITY];
+  return entity ? publicIdPlaceholderFor(entity) : 'placeholder';
+}
+
+function sweepExpectedStatus(route: RouteEntry, declaredStatus: number): number[] {
+  const override = SWEEP_EXPECTED_OVERRIDES[routeSuccessStatusKey(route)];
+  if (override) {
+    return override;
+  }
+  const hasPathParam = route.path.includes(':');
+  if (route.access === 'bearer-token') {
+    // Probed without the metrics token on purpose — must reject (401), serve
+    // openly when the target env has no scrape token configured, or 404 when
+    // the operational endpoint is disabled in that env. Never 5xx.
+    return [declaredStatus, 401, 404];
+  }
+  if (route.access === 'public') {
+    return hasPathParam ? [declaredStatus, 400, 404] : [declaredStatus];
+  }
+  // Authenticated / role / permission reads: the seeded demo user may lack a
+  // permission (403); placeholder params resolve to nothing (404) or fail
+  // strict param validation (400).
+  return hasPathParam ? [declaredStatus, 400, 403, 404] : [declaredStatus, 403];
+}
+
+/**
+ * Read-only sweep over every GET route in docs/routes.txt: each route must
+ * answer with its declared success status or an allowed, documented
+ * alternative for this caller — never a 5xx. Mutating routes stay with the
+ * curated probes above; a live smoke must not write to a deployed environment.
+ */
+function buildCatalogReadOnlySweepProbes(organizationId: string): RouteProbe[] {
+  const successStatusMap = loadRouteSuccessStatusMap();
+
+  return loadRouteRegistryFromCatalog()
+    .filter((route) => route.method === 'GET')
+    .map((route) => {
+      const declaredStatus = successStatusMap[routeSuccessStatusKey(route)] ?? 200;
+      const materializedPath = route.path
+        .replace(':organization_id', organizationId)
+        .replace(/:([a-zA-Z_]+)/g, (_, name) => sweepPlaceholderFor(name));
+      const usesAuthentication = route.access !== 'public' && route.access !== 'bearer-token';
+      return {
+        name: `sweep: GET ${route.path}`,
+        method: 'GET' as const,
+        path: materializedPath,
+        ...(usesAuthentication ? { authenticated: true, needsOrganization: true } : {}),
+        expectedStatus: sweepExpectedStatus(route, declaredStatus),
+      };
+    });
+}
+
 async function main(): Promise<void> {
   console.log(`API smoke tests (all domains) → ${BASE_URL}`);
   console.log(`User: ${EMAIL}\n`);
@@ -473,8 +546,15 @@ async function main(): Promise<void> {
     await runCase(probe.name, () => runProbe(probe));
   }
 
+  const sweepProbes = buildCatalogReadOnlySweepProbes(requireOrganizationId());
+  for (const probe of sweepProbes) {
+    await runCase(probe.name, () => runProbe(probe));
+  }
+
   console.log(
-    `\n${passed} passed, ${failed} failed (${domainProbes.length + healthProbes.length + 3} checks)`,
+    `\n${passed} passed, ${failed} failed (${
+      domainProbes.length + sweepProbes.length + healthProbes.length + 3
+    } checks)`,
   );
 
   if (smokeContext.accessToken && smokeContext.organizationId) {

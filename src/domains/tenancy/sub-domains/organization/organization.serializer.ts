@@ -8,7 +8,8 @@ import type { OrganizationOutput } from './organization.types.js';
 export function serializeOrganization(row: {
   public_id: string;
   name: string;
-  slug: string;
+  slug: string | null;
+  type: string;
   status: string;
   logo_url: string | null;
   created_at: Date;
@@ -18,6 +19,7 @@ export function serializeOrganization(row: {
     id: row.public_id,
     name: row.name,
     slug: row.slug,
+    type: row.type,
     status: row.status,
     logo_url: row.logo_url,
     created_at: row.created_at.toISOString(),

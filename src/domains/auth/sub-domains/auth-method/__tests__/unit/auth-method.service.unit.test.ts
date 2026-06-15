@@ -71,6 +71,7 @@ describe('AuthMethodService', () => {
     listByUserId: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockResolvedValue({ id: 2 }),
     revoke: vi.fn().mockResolvedValue({ id: 2 }),
+    revokeUnlessLastLoginCapable: vi.fn().mockResolvedValue({ id: 2 }),
     revokeAllByUserId: vi.fn().mockResolvedValue(1),
     findByProviderUserId: vi.fn().mockResolvedValue(null),
     findTotpByUserId: vi.fn().mockResolvedValue(null),
@@ -235,6 +236,35 @@ describe('AuthMethodService', () => {
     });
     expect(authSessionService.revokeAllSessionsExceptCurrent).not.toHaveBeenCalled();
     expect(authSessionService.revokeAllSessions).toHaveBeenCalledWith(user.public_id);
+  });
+
+  it('AUTH-17: changePassword propagates a session-revocation failure so the tx rolls back', async () => {
+    // The new hash and the session revocation run in ONE transaction. If revocation
+    // fails, the error must propagate (rolling the password change back) instead of
+    // leaving a changed password with a still-live, possibly-compromised session.
+    vi.mocked(authSessionService.revokeAllSessionsExceptCurrent).mockRejectedValueOnce(
+      new Error('redis down'),
+    );
+    await expect(
+      service.changePassword(
+        'user_public',
+        { current_password: 'old', new_password: 'NewPassword123!' },
+        { currentAccessToken: 'current-bearer-token' },
+      ),
+    ).rejects.toThrow('redis down');
+    // updatePassword ran inside the same transaction callback, so a real DB rolls it back.
+    expect(userService.updatePassword).toHaveBeenCalled();
+  });
+
+  it('AUTH-10: verifyEmail propagates a verified-flag update failure so the token consume rolls back', async () => {
+    vi.mocked(verificationTokenRepository.consumeIfValid).mockResolvedValue({
+      token_type: 'EMAIL_VERIFICATION',
+      user_id: user.id,
+    } as never);
+    vi.mocked(userService.updateEmailVerified).mockRejectedValueOnce(new Error('db error'));
+    await expect(service.verifyEmail({ token: 'verify-token' })).rejects.toThrow('db error');
+    // consumeIfValid ran inside the same transaction, so the single-use token is not burned.
+    expect(verificationTokenRepository.consumeIfValid).toHaveBeenCalled();
   });
 
   it('changePassword rejects when password auth disabled', async () => {

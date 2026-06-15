@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Redis } from 'ioredis';
-import { NotImplementedError, UnauthorizedError } from '@/shared/errors/index.js';
+import { NotFoundError, UnauthorizedError } from '@/shared/errors/index.js';
 import {
   assertOAuthProviderSupported,
   consumeOAuthState,
@@ -37,7 +37,7 @@ describe('oauth-state', () => {
   });
 
   it('assertOAuthProviderSupported rejects unknown providers', () => {
-    expect(() => assertOAuthProviderSupported('unknown')).toThrow(NotImplementedError);
+    expect(() => assertOAuthProviderSupported('unknown')).toThrow(NotFoundError);
   });
 
   it('createOAuthState stores a JSON payload with provider, verifier, and nonce hash', async () => {

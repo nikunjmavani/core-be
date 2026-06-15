@@ -5,7 +5,7 @@ description: Keep a core-be PR merge-ready — triage review comments, resolve m
 
 # PR babysit (core-be)
 
-Get the current PR to **mergeable + green CI + review comments addressed**.
+Get the current PR to **mergeable + green CI + review comments addressed**, then **merge it when green** (on the user's go-ahead).
 
 ## Preconditions
 
@@ -65,6 +65,16 @@ Re-watch `gh pr checks` until green.
 ```bash
 pnpm ci:local
 ```
+
+### 6. Merge when green
+
+"Merge-ready" is not the finish line — take it to merged once the user has asked you to merge (or to "merge when green"):
+
+- Merge only when **every required check is green** and the PR is mergeable (`mergeable_state: clean`).
+- Prefer **squash** so the base branch gets one conventional commit (release-please bumps from it).
+- If the branch is **behind** the base, update it first (re-runs CI), then re-check.
+- For a **transient** CI failure (e.g. an image-pull timeout), re-run the failed job / re-trigger CI rather than editing code.
+- CI **success is not delivered by webhooks** — re-check on a timer or self check-in. The watch is not finished until the PR is **merged or closed**.
 
 ## Related skills
 

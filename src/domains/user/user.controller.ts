@@ -83,10 +83,10 @@ export function createUserController({
       return successResponse(data, getRequestIdentifier(request));
     },
 
-    deleteAvatar: async (request: FastifyRequest, _reply: FastifyReply) => {
+    deleteAvatar: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const data = await userService.deleteAvatar(auth.userId);
-      return successResponse(data, getRequestIdentifier(request));
+      await userService.deleteAvatar(auth.userId);
+      return reply.code(204).send();
     },
 
     // ── Admin ─────────────────────────────────────────────────
@@ -103,8 +103,8 @@ export function createUserController({
 
     getUser: async (request: FastifyRequest, _reply: FastifyReply) => {
       const userId = validatePublicIdParam(
-        (request.params as { userId: string }).userId ?? '',
-        'userId',
+        (request.params as { user_id: string }).user_id ?? '',
+        'user_id',
       );
       const data = await userService.getUser(userId);
       return successResponse(data, getRequestIdentifier(request));
@@ -113,8 +113,8 @@ export function createUserController({
     updateUser: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
       const userId = validatePublicIdParam(
-        (request.params as { userId: string }).userId ?? '',
-        'userId',
+        (request.params as { user_id: string }).user_id ?? '',
+        'user_id',
       );
       const data = await userService.adminUpdateUser(userId, request.body);
       // sec-U9: every admin user-management action emits an audit row so a rogue
@@ -131,8 +131,8 @@ export function createUserController({
     deleteUser: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);
       const userId = validatePublicIdParam(
-        (request.params as { userId: string }).userId ?? '',
-        'userId',
+        (request.params as { user_id: string }).user_id ?? '',
+        'user_id',
       );
       await userService.deleteUser(userId);
       await recordScopedAuditEvent(request, {
@@ -148,8 +148,8 @@ export function createUserController({
     suspendUser: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
       const userId = validatePublicIdParam(
-        (request.params as { userId: string }).userId ?? '',
-        'userId',
+        (request.params as { user_id: string }).user_id ?? '',
+        'user_id',
       );
       const data = await userService.suspendUser(userId);
       await recordScopedAuditEvent(request, {
@@ -165,8 +165,8 @@ export function createUserController({
     unsuspendUser: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
       const userId = validatePublicIdParam(
-        (request.params as { userId: string }).userId ?? '',
-        'userId',
+        (request.params as { user_id: string }).user_id ?? '',
+        'user_id',
       );
       const data = await userService.unsuspendUser(userId);
       await recordScopedAuditEvent(request, {

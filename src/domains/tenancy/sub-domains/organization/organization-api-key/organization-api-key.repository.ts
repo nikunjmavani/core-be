@@ -6,6 +6,10 @@ import { BaseRepository } from '@/infrastructure/database/base-repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import {
+  RESOURCE_QUOTA_LOCK_NAMESPACE,
+  acquireResourceQuotaLock,
+} from '@/infrastructure/database/resource-quota-lock.util.js';
+import {
   buildAscendingCreatedAtIdCursorCondition,
   createOpaqueCursorFromRow,
   parseListCursor,
@@ -60,6 +64,19 @@ export class OrganizationApiKeyRepository extends BaseRepository {
       .from(api_keys)
       .where(and(eq(api_keys.organization_id, organization_id), isNull(api_keys.deleted_at)));
     return rows[0]?.value ?? 0;
+  }
+
+  /**
+   * audit-#8: transaction-scoped advisory lock that serializes the per-org API-key creation
+   * quota check + insert, so concurrent creates cannot both pass the count and overshoot
+   * `ORGANIZATION_API_KEY_MAX_PER_ORG`. Must be called inside the create transaction before
+   * {@link countActiveByOrganization}.
+   */
+  async acquireCreationQuotaLock(organization_id: number): Promise<void> {
+    await acquireResourceQuotaLock(
+      RESOURCE_QUOTA_LOCK_NAMESPACE.ORGANIZATION_API_KEY,
+      organization_id,
+    );
   }
 
   async findByOrganizationId(
@@ -123,7 +140,7 @@ export class OrganizationApiKeyRepository extends BaseRepository {
     created_by_user_id?: number | null;
   }) {
     return runInsertWithPublicIdentifierRetry(async () => {
-      const public_id = generatePublicId();
+      const public_id = generatePublicId('organizationApiKey');
       const row = {
         public_id,
         organization_id: data.organization_id,
@@ -166,6 +183,29 @@ export class OrganizationApiKeyRepository extends BaseRepository {
       )
       .returning();
     return (rows[0] ?? null) as OrganizationApiKeyRow | null;
+  }
+
+  /**
+   * Revokes (soft-deletes) every active API key created by a user within an organization —
+   * called when that member is removed/leaves so their keys lose access too (reaudit-#7).
+   * Returns the number of keys revoked.
+   */
+  async revokeAllByCreatorInOrganization(
+    organization_id: number,
+    creator_user_id: number,
+  ): Promise<number> {
+    const rows = await getRequestDatabase()
+      .update(api_keys)
+      .set({ deleted_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
+      .where(
+        and(
+          eq(api_keys.organization_id, organization_id),
+          eq(api_keys.created_by_user_id, creator_user_id),
+          isNull(api_keys.deleted_at),
+        ),
+      )
+      .returning({ id: api_keys.id });
+    return rows.length;
   }
 
   async softDelete(
@@ -214,9 +254,20 @@ export class OrganizationApiKeyRepository extends BaseRepository {
   }
 
   async touchLastUsedAt(public_id: string): Promise<void> {
+    // audit-#8: throttle the write. Previously every authenticated API-key request
+    // issued an unconditional UPDATE of last_used_at, so a single hot key serialized
+    // writes to one row (row-lock contention, dead-tuple churn, autovacuum pressure).
+    // Bucket to ~1 minute: the predicate makes the statement a no-op for most
+    // requests, so last_used_at stays approximately accurate without write
+    // amplification.
     await getRequestDatabase()
       .update(api_keys)
       .set({ last_used_at: sql`now()`, updated_at: databaseNowTimestamp })
-      .where(eq(api_keys.public_id, public_id));
+      .where(
+        and(
+          eq(api_keys.public_id, public_id),
+          sql`(${api_keys.last_used_at} IS NULL OR ${api_keys.last_used_at} < now() - interval '1 minute')`,
+        ),
+      );
   }
 }

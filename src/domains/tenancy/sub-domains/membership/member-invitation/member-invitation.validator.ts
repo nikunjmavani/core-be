@@ -5,15 +5,17 @@ import {
   acceptMemberInvitationDto,
   createMemberInvitationDto,
   listMemberInvitationsQueryDto,
+  listPendingMemberInvitationsQueryDto,
   resendMemberInvitationDto,
   type AcceptMemberInvitationInput,
   type CreateMemberInvitationInput,
   type ListMemberInvitationsQueryInput,
+  type ListPendingMemberInvitationsQueryInput,
   type ResendMemberInvitationInput,
 } from './member-invitation.dto.js';
 
 /**
- * Validates the `GET /organizations/:id/invitations` query string. Rejects
+ * Validates the `GET /organization/invitations` query string. Rejects
  * legacy page-number pagination first, then parses against
  * {@link listMemberInvitationsQueryDto}.
  */
@@ -31,7 +33,27 @@ export function validateListMemberInvitationsQuery(data: unknown): ListMemberInv
 }
 
 /**
- * Validates a `POST /organizations/:id/invitations` body against
+ * Validates the `GET /invitations/pending` query string. Rejects legacy
+ * page-number pagination first, then parses against
+ * {@link listPendingMemberInvitationsQueryDto}.
+ */
+export function validateListPendingMemberInvitationsQuery(
+  data: unknown,
+): ListPendingMemberInvitationsQueryInput {
+  ensureCursorOnlyPagination(data);
+  const result = listPendingMemberInvitationsQueryDto.safeParse(data);
+  if (!result.success) {
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
+  }
+  return result.data;
+}
+
+/**
+ * Validates a `POST /organization/invitations` body against
  * {@link createMemberInvitationDto}, throwing
  * `ValidationError('errors:invalidInput')` with per-field details on failure.
  */
@@ -48,7 +70,7 @@ export function validateCreateMemberInvitation(data: unknown): CreateMemberInvit
 }
 
 /**
- * Validates a `POST /invitations/:invitationId/accept` body against
+ * Validates a `POST /invitations/:invitation_id/accept` body against
  * {@link acceptMemberInvitationDto}; the parsed `token` is then SHA-256
  * compared against the stored `token_hash` by the service.
  */
@@ -65,7 +87,7 @@ export function validateAcceptMemberInvitation(data: unknown): AcceptMemberInvit
 }
 
 /**
- * Validates a `POST /organizations/:id/invitations/:invitationId/resend` body
+ * Validates a `POST /organization/invitations/:invitation_id/resend` body
  * against {@link resendMemberInvitationDto}.
  */
 export function validateResendMemberInvitation(data: unknown): ResendMemberInvitationInput {

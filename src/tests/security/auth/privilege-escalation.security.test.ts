@@ -52,21 +52,23 @@ describe('Security: Privilege escalation', () => {
       roleId: role.id,
     });
     await invalidatePermissions(user.public_id, organization.public_id);
-    const token = await generateTestToken({ userId: user.public_id });
+    // Flat tenancy routes resolve the organization from the JWT `org` claim; the
+    // member's bearer is scoped to its own organization.
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
     return { user, organization, role, token };
   }
 
   // POSITIVE — user with ROLE_READ can list roles
   it('should allow a member with ROLE_READ to list organization roles', async () => {
-    const { organization, token } = await createMemberWithPermissions([
-      TENANCY_PERMISSIONS.ROLE_READ,
-    ]);
+    const { token } = await createMemberWithPermissions([TENANCY_PERMISSIONS.ROLE_READ]);
 
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}/roles`),
+      url: testApiPath('/tenancy/organization/roles'),
       token,
-      organizationPublicId: organization.public_id,
     });
 
     expect(response.statusCode).not.toBe(403);
@@ -75,15 +77,12 @@ describe('Security: Privilege escalation', () => {
 
   // POSITIVE — user with MEMBERSHIP_READ can list memberships
   it('should allow a member with MEMBERSHIP_READ to list organization memberships', async () => {
-    const { organization, token } = await createMemberWithPermissions([
-      TENANCY_PERMISSIONS.MEMBERSHIP_READ,
-    ]);
+    const { token } = await createMemberWithPermissions([TENANCY_PERMISSIONS.MEMBERSHIP_READ]);
 
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}/memberships`),
+      url: testApiPath('/tenancy/organization/memberships'),
       token,
-      organizationPublicId: organization.public_id,
     });
 
     expect(response.statusCode).not.toBe(403);
@@ -92,18 +91,15 @@ describe('Security: Privilege escalation', () => {
 
   // NEGATIVE — member without ROLE_MANAGE cannot grant admin role to anyone
   it('should return 403 when member without ROLE_MANAGE tries to replace role permissions', async () => {
-    const { organization, token, role } = await createMemberWithPermissions([
+    const { token, role } = await createMemberWithPermissions([
       TENANCY_PERMISSIONS.ROLE_READ,
       // Intentionally missing ROLE_MANAGE
     ]);
 
     const response = await injectAuthenticated(app, {
       method: 'PUT',
-      url: testApiPath(
-        `/tenancy/organizations/${organization.public_id}/roles/${role.public_id}/permissions`,
-      ),
+      url: testApiPath(`/tenancy/organization/roles/${role.public_id}/permissions`),
       token,
-      organizationPublicId: organization.public_id,
       payload: { permission_codes: Object.values(TENANCY_PERMISSIONS) },
     });
 
@@ -112,49 +108,61 @@ describe('Security: Privilege escalation', () => {
 
   // NEGATIVE — member without ROLE_MANAGE cannot create a role with elevated permissions
   it('should return 403 when member without ROLE_MANAGE tries to create a new role', async () => {
-    const { organization, token } = await createMemberWithPermissions([
+    const { token } = await createMemberWithPermissions([
       TENANCY_PERMISSIONS.ROLE_READ,
       // Intentionally missing ROLE_MANAGE
     ]);
 
     const response = await injectAuthenticated(app, {
       method: 'POST',
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}/roles`),
+      url: testApiPath('/tenancy/organization/roles'),
       token,
-      organizationPublicId: organization.public_id,
       payload: { name: 'Escalated role' },
     });
 
     expect(response.statusCode).toBe(403);
   });
 
-  // NEGATIVE — user in org A with valid token cannot access org B membership list
-  it('should return 403 when org-A user tries to list memberships in org-B', async () => {
+  // NEGATIVE — user in org A with valid token cannot access org B membership list.
+  // Flat routes resolve the org from the `org` claim, so cross-tenant access is
+  // expressed by scoping member A's token to org B's claim: A has no membership
+  // in B, so the permission preHandler denies it. A's privileges in A grant
+  // nothing in B.
+  it("should return 403 when an org-A user claims org-B and lists B's memberships", async () => {
     const memberA = await createMemberWithPermissions([TENANCY_PERMISSIONS.MEMBERSHIP_READ]);
     const memberB = await createMemberWithPermissions([TENANCY_PERMISSIONS.MEMBERSHIP_READ]);
 
+    const memberATokenScopedToB = await generateTestToken({
+      userId: memberA.user.public_id,
+      organizationPublicId: memberB.organization.public_id,
+    });
+
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(`/tenancy/organizations/${memberB.organization.public_id}/memberships`),
-      token: memberA.token,
-      organizationPublicId: memberB.organization.public_id,
+      url: testApiPath('/tenancy/organization/memberships'),
+      token: memberATokenScopedToB,
     });
 
     expect(response.statusCode).toBe(403);
   });
 
-  // NEGATIVE — user in org A cannot update a role in org B
-  it('should return 403 when org-A member with ROLE_MANAGE tries to update a role in org-B', async () => {
+  // NEGATIVE — user in org A cannot update a role in org B.
+  // Member A holds ROLE_MANAGE in A, but a token scoped to org B's claim grants
+  // nothing in B; even addressing B's role id, the permission preHandler denies
+  // before any org-scoped lookup.
+  it("should return 403 when an org-A member claims org-B and updates B's role", async () => {
     const memberA = await createMemberWithPermissions([TENANCY_PERMISSIONS.ROLE_MANAGE]);
     const memberB = await createMemberWithPermissions([TENANCY_PERMISSIONS.ROLE_MANAGE]);
 
+    const memberATokenScopedToB = await generateTestToken({
+      userId: memberA.user.public_id,
+      organizationPublicId: memberB.organization.public_id,
+    });
+
     const response = await injectAuthenticated(app, {
       method: 'PATCH',
-      url: testApiPath(
-        `/tenancy/organizations/${memberB.organization.public_id}/roles/${memberB.role.public_id}`,
-      ),
-      token: memberA.token,
-      organizationPublicId: memberB.organization.public_id,
+      url: testApiPath(`/tenancy/organization/roles/${memberB.role.public_id}`),
+      token: memberATokenScopedToB,
       payload: { name: 'Hijacked role name' },
     });
 
@@ -163,52 +171,50 @@ describe('Security: Privilege escalation', () => {
 
   // NEGATIVE — authenticated user with no permission hits a permission-protected route
   it('should return 403 when member with no permissions hits a ROLE_READ-protected route', async () => {
-    const { organization, token } = await createMemberWithPermissions([
+    const { token } = await createMemberWithPermissions([
       // No permissions at all
     ]);
 
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}/roles`),
+      url: testApiPath('/tenancy/organization/roles'),
       token,
-      organizationPublicId: organization.public_id,
     });
 
     expect(response.statusCode).toBe(403);
   });
 
-  // NEGATIVE — member tries to update their own membership role to a privileged one
+  // NEGATIVE — member tries to update their own membership but lacks MEMBERSHIP_MANAGE
   it('should return 403 when member without MEMBERSHIP_MANAGE tries to update a membership', async () => {
-    const { organization, token, user } = await createMemberWithPermissions([
+    const { token, user } = await createMemberWithPermissions([
       TENANCY_PERMISSIONS.MEMBERSHIP_READ,
       // Intentionally missing MEMBERSHIP_MANAGE
     ]);
 
-    // Fetch the membership id for this user
+    // Fetch a real membership id from the (flat, org-from-claim) list — the
+    // paginated payload is `data: [{ id, user_id, ... }]`. Using a real row
+    // makes the 403 meaningful: the request reaches the MEMBERSHIP_MANAGE
+    // preHandler and is denied, rather than failing earlier on a bad id.
     const listResponse = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}/memberships`),
+      url: testApiPath('/tenancy/organization/memberships'),
       token,
-      organizationPublicId: organization.public_id,
     });
-    // If we can list (200), grab the id; otherwise pick a placeholder
-    let membershipId = '000000000000000000000';
+    let membershipId = 'mem_000000000000000000000';
     if (listResponse.statusCode === 200) {
-      const body = listResponse.json() as {
-        data: { memberships: { id: string; userId: string }[] };
-      };
-      const own = body.data?.memberships?.find((m) => m.userId === user.public_id);
+      const body = listResponse.json() as { data: { id: string; user_id: string }[] };
+      const own = body.data?.find((membership) => membership.user_id === user.public_id);
       if (own) membershipId = own.id;
     }
 
+    // A valid (strict-DTO-passing) body so the request reaches the permission
+    // preHandler — `status` is the only updatable field. An unknown key would
+    // be rejected at validation (400) before authorization runs.
     const upgradeRoleResponse = await injectAuthenticated(app, {
       method: 'PATCH',
-      url: testApiPath(
-        `/tenancy/organizations/${organization.public_id}/memberships/${membershipId}`,
-      ),
+      url: testApiPath(`/tenancy/organization/memberships/${membershipId}`),
       token,
-      organizationPublicId: organization.public_id,
-      payload: { role_id: '000000000000000000000' },
+      payload: { status: 'SUSPENDED' },
     });
 
     expect(upgradeRoleResponse.statusCode).toBe(403);
@@ -216,19 +222,16 @@ describe('Security: Privilege escalation', () => {
 
   // NEGATIVE — member without MEMBERSHIP_MANAGE cannot add another user as a member
   it('should return 403 when member without MEMBERSHIP_MANAGE tries to add a new member', async () => {
-    const { organization, token } = await createMemberWithPermissions([
-      TENANCY_PERMISSIONS.MEMBERSHIP_READ,
-    ]);
+    const { token } = await createMemberWithPermissions([TENANCY_PERMISSIONS.MEMBERSHIP_READ]);
 
     const response = await injectAuthenticated(app, {
       method: 'POST',
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}/memberships`),
+      url: testApiPath('/tenancy/organization/memberships'),
       token,
-      organizationPublicId: organization.public_id,
       headers: { 'idempotency-key': randomUUID() },
       payload: {
-        user_id: '000000000000000000000',
-        role_id: '000000000000000000000',
+        user_id: 'usr_000000000000000000000',
+        role_id: 'rol_000000000000000000000',
         status: 'ACTIVE',
       },
     });
@@ -238,16 +241,15 @@ describe('Security: Privilege escalation', () => {
 
   // NEGATIVE — member without ORGANIZATION_UPDATE cannot modify organization settings
   it('should return 403 when member without ORGANIZATION_UPDATE tries to update the organization', async () => {
-    const { organization, token } = await createMemberWithPermissions([
+    const { token } = await createMemberWithPermissions([
       TENANCY_PERMISSIONS.ORGANIZATION_READ,
       // Intentionally missing ORGANIZATION_UPDATE
     ]);
 
     const response = await injectAuthenticated(app, {
       method: 'PATCH',
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}`),
+      url: testApiPath('/tenancy/organization'),
       token,
-      organizationPublicId: organization.public_id,
       payload: { name: 'Escalated org name' },
     });
 

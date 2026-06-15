@@ -36,7 +36,7 @@ describe('user-notification-preferences.serializer edge cases', () => {
     expect(result).not.toHaveProperty('organization_id');
   });
 
-  it('drops `organization_id` even when populated (no organization-id echo)', () => {
+  it('drops `organization_id` even when populated (no x-organization-id echo)', () => {
     const result = serializeUserNotificationPreference(
       makeRow({ id: 5, organization_id: 99, notification_type: 'billing.invoice' }),
     );

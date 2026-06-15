@@ -28,7 +28,9 @@ describe('auth-session.serializer', () => {
     const keys = Object.keys(output);
     expect(keys).not.toContain('token_hash');
     expect(keys).not.toContain('refresh_token_hash');
-    expect(keys).not.toContain('id');
+    // `id` is the opaque public id — assert it is NOT the numeric row id
+    expect(output.id).toBe('sess-public-id');
+    expect(keys).not.toContain('public_id');
     expect(keys).not.toContain('user_id');
     expect(keys).not.toContain('organization_id');
     expect(keys).not.toContain('is_revoked');
@@ -41,7 +43,7 @@ describe('auth-session.serializer', () => {
   it('exposes only the safe display fields as ISO strings', () => {
     const output = serializeAuthSession(buildRow());
     expect(output).toEqual({
-      public_id: 'sess-public-id',
+      id: 'sess-public-id',
       ip_address: '203.0.113.10',
       user_agent: 'Mozilla/5.0',
       last_active_at: '2026-01-02T03:04:05.000Z',
@@ -58,7 +60,7 @@ describe('auth-session.serializer', () => {
   it('serializes a list', () => {
     const output = serializeAuthSessions([buildRow(), buildRow({ public_id: 'sess-2' })]);
     expect(output).toHaveLength(2);
-    expect(output[1]?.public_id).toBe('sess-2');
+    expect(output[1]?.id).toBe('sess-2');
     expect(JSON.stringify(output)).not.toContain('token_hash');
   });
 });

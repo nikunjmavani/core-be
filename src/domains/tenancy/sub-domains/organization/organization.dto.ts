@@ -2,13 +2,6 @@ import { z } from 'zod';
 import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedSlug, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
-/** Shared path params for org-scoped routes (`/organizations/:id/...`). */
-export const organizationIdParamsDto = z
-  .object({
-    id: trimmedStringMinMax(1, 21),
-  })
-  .strict();
-
 /** Path params for `/organizations/by-slug/:slug` (URL-friendly organization slug). */
 export const organizationSlugParamsDto = z
   .object({
@@ -16,20 +9,26 @@ export const organizationSlugParamsDto = z
   })
   .strict();
 
-/** Path params for member-role routes scoped under an organization (`/organizations/:id/roles/:roleId`). */
-export const organizationRoleParamsDto = organizationIdParamsDto.extend({
-  roleId: trimmedStringMinMax(1, 21),
-});
+/** Path params for member-role routes scoped under the active organization (`/organization/roles/:role_id`). */
+export const roleIdParamsDto = z
+  .object({
+    role_id: trimmedStringMinMax(1, 28),
+  })
+  .strict();
 
-/** Path params for organization API-key routes (`/organizations/:id/api-keys/:apiKeyId`). */
-export const organizationApiKeyParamsDto = organizationIdParamsDto.extend({
-  apiKeyId: trimmedStringMinMax(1, 21),
-});
+/** Path params for organization API-key routes (`/organization/api-keys/:api_key_id`). */
+export const apiKeyIdParamsDto = z
+  .object({
+    api_key_id: trimmedStringMinMax(1, 28),
+  })
+  .strict();
 
-/** Path params for notification-policy routes (`/organizations/:id/notification-policies/:policyId`). */
-export const organizationNotificationPolicyParamsDto = organizationIdParamsDto.extend({
-  policyId: trimmedStringMinMax(1, 21),
-});
+/** Path params for notification-policy routes (`/organization/notification-policies/:policy_id`). */
+export const policyIdParamsDto = z
+  .object({
+    policy_id: trimmedStringMinMax(1, 28),
+  })
+  .strict();
 
 /** Zod schema for the `POST /api/v1/organizations` request body (name + URL-friendly slug). */
 export const createOrganizationDto = z
@@ -40,7 +39,7 @@ export const createOrganizationDto = z
   .strict();
 
 /**
- * Zod schema for the `PATCH /api/v1/organizations/:id` request body. All
+ * Zod schema for the `PATCH /api/v1/organization` request body. All
  * fields optional; `status` is constrained to the lifecycle values stored
  * in `tenancy.organizations.status`.
  */
@@ -56,7 +55,7 @@ export const updateOrganizationDto = z
 export const listOrganizationsQueryDto = cursorPaginationSchema.strict();
 
 /**
- * Zod schema for the `PUT /api/v1/organizations/:id/logo` request body.
+ * Zod schema for the `PUT /api/v1/organization/logo` request body.
  * Enforces that `key` lives under the `organization-logos/` S3 prefix; the
  * service additionally checks the key belongs to this organization.
  */
@@ -68,18 +67,14 @@ export const uploadLogoDto = z
   })
   .strict();
 
-/** DTO inferred from {@link organizationIdParamsDto}. */
-export type OrganizationIdParamsInput = z.infer<typeof organizationIdParamsDto>;
 /** DTO inferred from {@link organizationSlugParamsDto}. */
 export type OrganizationSlugParamsInput = z.infer<typeof organizationSlugParamsDto>;
-/** DTO inferred from {@link organizationRoleParamsDto}. */
-export type OrganizationRoleParamsInput = z.infer<typeof organizationRoleParamsDto>;
-/** DTO inferred from {@link organizationApiKeyParamsDto}. */
-export type OrganizationApiKeyParamsInput = z.infer<typeof organizationApiKeyParamsDto>;
-/** DTO inferred from {@link organizationNotificationPolicyParamsDto}. */
-export type OrganizationNotificationPolicyParamsInput = z.infer<
-  typeof organizationNotificationPolicyParamsDto
->;
+/** DTO inferred from {@link roleIdParamsDto}. */
+export type RoleIdParamsInput = z.infer<typeof roleIdParamsDto>;
+/** DTO inferred from {@link apiKeyIdParamsDto}. */
+export type ApiKeyIdParamsInput = z.infer<typeof apiKeyIdParamsDto>;
+/** DTO inferred from {@link policyIdParamsDto}. */
+export type PolicyIdParamsInput = z.infer<typeof policyIdParamsDto>;
 /** DTO inferred from {@link createOrganizationDto}. */
 export type CreateOrganizationInput = z.infer<typeof createOrganizationDto>;
 /** DTO inferred from {@link updateOrganizationDto}. */

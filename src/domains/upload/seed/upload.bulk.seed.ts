@@ -113,7 +113,7 @@ async function seedUploadsForOrganization(options: {
       profile.status === UPLOAD_STATUS.PENDING ? buildPendingObjectKey(finalKey) : finalKey;
 
     await database.insert(uploads).values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('upload'),
       user_id: owner.id,
       organization_id: profile.isOrganizationScoped ? organization.id : null,
       file_name: profile.file_name,

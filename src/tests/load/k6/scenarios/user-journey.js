@@ -16,13 +16,14 @@
  *   user      — GET /users/me, GET /users/me/settings, PATCH /users/me/settings,
  *               GET /users/me/notification-preferences
  *   auth      — GET /auth/me/sessions
- *   tenancy   — GET /tenancy/organizations, GET …/:id, GET …/:id/settings,
- *               PATCH …/:id/settings, GET …/:id/memberships, GET …/:id/roles,
- *               GET …/:id/api-keys
- *   billing   — GET /billing/plans, GET /billing/organizations/:id/subscriptions
+ *   tenancy   — GET /tenancy/organizations, GET /tenancy/organization,
+ *               GET …/organization/settings, PATCH …/organization/settings,
+ *               GET …/organization/memberships, GET …/organization/roles,
+ *               GET …/organization/api-keys
+ *   billing   — GET /billing/plans, GET /billing/subscriptions
  *   notify    — GET /notify/notifications, GET …/unread-count,
  *               POST …/mark-all-read (write),
- *               GET /notify/organizations/:id/webhooks,
+ *               GET /notify/webhooks,
  *               POST + DELETE one webhook per iteration (write + cleanup)
  *   upload    — POST /uploads (presigned URL request only — no actual S3 upload)
  *
@@ -36,7 +37,7 @@ import { check, sleep } from 'k6';
 import { randomString } from 'https://jslib.k6.io/k6-utils/1.4.0/index.js';
 import { API_PREFIX, SCENARIOS, STRICT_THRESHOLDS } from '../helpers/config.js';
 import { checkOk, checkResponseTime } from '../helpers/checks.js';
-import { authHeaders } from '../helpers/auth.js';
+import { authHeaders, switchToOrganization } from '../helpers/auth.js';
 import { credentialPool, mintTokenPool, vuToken } from '../helpers/pool.js';
 
 // ---------------------------------------------------------------------------
@@ -101,17 +102,6 @@ export function setup() {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Headers for authenticated, org-scoped requests.
- * Merges Authorization, Content-Type, and X-Organization-Id.
- */
-function orgHeaders(token, orgPublicId) {
-  return {
-    ...authHeaders(token).headers,
-    'X-Organization-Id': orgPublicId,
-  };
-}
-
 /** Parse `data` from a JSON response, or null on failure. */
 function parseData(response) {
   try {
@@ -156,7 +146,7 @@ function phaseProfile(authed) {
   sleep(0.3);
 }
 
-function phaseOrg(authed, withOrg, orgPublicId) {
+function phaseOrg(authed) {
   const listOrgsRes = http.get(`${API_PREFIX}/tenancy/organizations`, {
     headers: authed,
     tags: { name: 'list-orgs' },
@@ -165,7 +155,7 @@ function phaseOrg(authed, withOrg, orgPublicId) {
   checkResponseTime(listOrgsRes, 500, 'list-orgs');
   sleep(0.2);
 
-  const getOrgRes = http.get(`${API_PREFIX}/tenancy/organizations/${orgPublicId}`, {
+  const getOrgRes = http.get(`${API_PREFIX}/tenancy/organization`, {
     headers: authed,
     tags: { name: 'get-org' },
   });
@@ -173,32 +163,32 @@ function phaseOrg(authed, withOrg, orgPublicId) {
   checkResponseTime(getOrgRes, 400, 'get-org');
   sleep(0.2);
 
-  const orgSettingsRes = http.get(`${API_PREFIX}/tenancy/organizations/${orgPublicId}/settings`, {
-    headers: withOrg,
+  const orgSettingsRes = http.get(`${API_PREFIX}/tenancy/organization/settings`, {
+    headers: authed,
     tags: { name: 'get-org-settings' },
   });
   checkOk(orgSettingsRes, 'get-org-settings');
   checkResponseTime(orgSettingsRes, 400, 'get-org-settings');
   sleep(0.2);
 
-  const listMembersRes = http.get(
-    `${API_PREFIX}/tenancy/organizations/${orgPublicId}/memberships`,
-    { headers: withOrg, tags: { name: 'list-members' } },
-  );
+  const listMembersRes = http.get(`${API_PREFIX}/tenancy/organization/memberships`, {
+    headers: authed,
+    tags: { name: 'list-members' },
+  });
   checkOk(listMembersRes, 'list-members');
   checkResponseTime(listMembersRes, 500, 'list-members');
   sleep(0.2);
 
-  const listRolesRes = http.get(`${API_PREFIX}/tenancy/organizations/${orgPublicId}/roles`, {
-    headers: withOrg,
+  const listRolesRes = http.get(`${API_PREFIX}/tenancy/organization/roles`, {
+    headers: authed,
     tags: { name: 'list-roles' },
   });
   checkOk(listRolesRes, 'list-roles');
   checkResponseTime(listRolesRes, 400, 'list-roles');
   sleep(0.2);
 
-  const listApiKeysRes = http.get(`${API_PREFIX}/tenancy/organizations/${orgPublicId}/api-keys`, {
-    headers: withOrg,
+  const listApiKeysRes = http.get(`${API_PREFIX}/tenancy/organization/api-keys`, {
+    headers: authed,
     tags: { name: 'list-api-keys' },
   });
   checkOk(listApiKeysRes, 'list-api-keys');
@@ -206,7 +196,7 @@ function phaseOrg(authed, withOrg, orgPublicId) {
   sleep(0.3);
 }
 
-function phaseBillingAndNotify(authed, withOrg, orgPublicId) {
+function phaseBillingAndNotify(authed) {
   const plansRes = http.get(`${API_PREFIX}/billing/plans`, {
     headers: authed,
     tags: { name: 'list-plans' },
@@ -215,8 +205,8 @@ function phaseBillingAndNotify(authed, withOrg, orgPublicId) {
   checkResponseTime(plansRes, 300, 'list-plans');
   sleep(0.2);
 
-  const subsRes = http.get(`${API_PREFIX}/billing/organizations/${orgPublicId}/subscriptions`, {
-    headers: withOrg,
+  const subsRes = http.get(`${API_PREFIX}/billing/subscriptions`, {
+    headers: authed,
     tags: { name: 'list-subscriptions' },
   });
   checkOk(subsRes, 'list-subscriptions');
@@ -248,9 +238,9 @@ function phaseBillingAndNotify(authed, withOrg, orgPublicId) {
   sleep(0.3);
 }
 
-function phaseWebhooksAndWrites(authed, withOrg, orgPublicId, json) {
-  const listWebhooksRes = http.get(`${API_PREFIX}/notify/organizations/${orgPublicId}/webhooks`, {
-    headers: withOrg,
+function phaseWebhooksAndWrites(authed, json) {
+  const listWebhooksRes = http.get(`${API_PREFIX}/notify/webhooks`, {
+    headers: authed,
     tags: { name: 'list-webhooks' },
   });
   checkOk(listWebhooksRes, 'list-webhooks');
@@ -261,13 +251,13 @@ function phaseWebhooksAndWrites(authed, withOrg, orgPublicId, json) {
   // doesn't accumulate test rows across a long soak run.
   const suffix = `${__VU}-${__ITER}-${randomString(4)}`;
   const createWebhookRes = http.post(
-    `${API_PREFIX}/notify/organizations/${orgPublicId}/webhooks`,
+    `${API_PREFIX}/notify/webhooks`,
     JSON.stringify({
       url: `https://httpbin.org/post?k6=${suffix}`,
       events: ['*'],
       description: `k6 journey ${suffix}`,
     }),
-    { headers: { ...withOrg, ...json }, tags: { name: 'create-webhook' } },
+    { headers: { ...authed, ...json }, tags: { name: 'create-webhook' } },
   );
   check(createWebhookRes, { 'create-webhook 2xx': (r) => r.status >= 200 && r.status < 300 });
   checkResponseTime(createWebhookRes, 600, 'create-webhook');
@@ -275,11 +265,10 @@ function phaseWebhooksAndWrites(authed, withOrg, orgPublicId, json) {
   const createdWebhook = parseData(createWebhookRes);
   if (createdWebhook?.id) {
     sleep(0.1);
-    const deleteWebhookRes = http.del(
-      `${API_PREFIX}/notify/organizations/${orgPublicId}/webhooks/${createdWebhook.id}`,
-      null,
-      { headers: withOrg, tags: { name: 'delete-webhook' } },
-    );
+    const deleteWebhookRes = http.del(`${API_PREFIX}/notify/webhooks/${createdWebhook.id}`, null, {
+      headers: authed,
+      tags: { name: 'delete-webhook' },
+    });
     checkOk(deleteWebhookRes, 'delete-webhook');
     checkResponseTime(deleteWebhookRes, 400, 'delete-webhook');
   }
@@ -311,9 +300,9 @@ function phaseWebhooksAndWrites(authed, withOrg, orgPublicId, json) {
 
   // Patch org settings
   const patchOrgSettingsRes = http.patch(
-    `${API_PREFIX}/tenancy/organizations/${orgPublicId}/settings`,
+    `${API_PREFIX}/tenancy/organization/settings`,
     JSON.stringify({ is_email_notifications_enabled: true }),
-    { headers: { ...withOrg, ...json }, tags: { name: 'patch-org-settings' } },
+    { headers: { ...authed, ...json }, tags: { name: 'patch-org-settings' } },
   );
   checkOk(patchOrgSettingsRes, 'patch-org-settings');
   checkResponseTime(patchOrgSettingsRes, 600, 'patch-org-settings');
@@ -322,6 +311,13 @@ function phaseWebhooksAndWrites(authed, withOrg, orgPublicId, json) {
 // ---------------------------------------------------------------------------
 // Main VU function
 // ---------------------------------------------------------------------------
+
+/**
+ * Per-VU org-scoped token cache. The active org rides the token's `org` claim,
+ * so we re-mint the pool token scoped to this VU's org exactly once per VU
+ * (not per iteration) — keeping the extra auth cost bounded like setup()'s mint.
+ */
+let scopedToken = null;
 
 /**
  * One iteration = one realistic authenticated user session spanning all
@@ -336,15 +332,18 @@ export function userJourney(tokenPool) {
     return;
   }
 
-  const { token, orgPublicId } = entry;
-  const authed = authHeaders(token).headers;
-  const withOrg = orgHeaders(token, orgPublicId);
+  // Scope the token to this VU's org once — the flat org-scoped routes carry no
+  // org path segment, so the org must come from the token's `org` claim.
+  if (!scopedToken) {
+    scopedToken = switchToOrganization(entry.token, entry.orgPublicId) || entry.token;
+  }
+  const authed = authHeaders(scopedToken).headers;
   const json = { 'Content-Type': 'application/json' };
 
   phaseProfile(authed);
-  phaseOrg(authed, withOrg, orgPublicId);
-  phaseBillingAndNotify(authed, withOrg, orgPublicId);
-  phaseWebhooksAndWrites(authed, withOrg, orgPublicId, json);
+  phaseOrg(authed);
+  phaseBillingAndNotify(authed);
+  phaseWebhooksAndWrites(authed, json);
 
   sleep(1);
 }

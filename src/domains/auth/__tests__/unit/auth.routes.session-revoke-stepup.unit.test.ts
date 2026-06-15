@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 /**
- * Regression for sec-A7 (Low): `DELETE /me/sessions` and `DELETE /me/sessions/:id` used
+ * Regression for sec-A7 (Low): `DELETE /me/sessions` and `DELETE /me/sessions/:session_id` used
  * to require only `app.authenticate`. A holder of a stolen bearer could revoke every
  * other session of the legitimate user, kicking them out of their own browser long
  * enough to complete a transfer in another tab.
@@ -30,7 +30,7 @@ describe('auth.routes — DELETE /me/sessions requires recent step-up (sec-A7)',
 
   it('DELETE /me/sessions registration includes requireRecentStepUpPreHandler', () => {
     // Match the `zodApplication.delete('/me/sessions', { ... })` block (no trailing slash
-    // qualifier so it does not falsely match `/me/sessions/:id` below) and assert it
+    // qualifier so it does not falsely match `/me/sessions/:session_id` below) and assert it
     // mentions the step-up preHandler.
     const blockPattern =
       /zodApplication\.delete\(\s*'\/me\/sessions'\s*,\s*\{[\s\S]*?\}\s*,\s*controller\./;
@@ -39,9 +39,9 @@ describe('auth.routes — DELETE /me/sessions requires recent step-up (sec-A7)',
     expect(match?.[0]).toContain('requireRecentStepUpPreHandler');
   });
 
-  it('DELETE /me/sessions/:id registration includes requireRecentStepUpPreHandler', () => {
+  it('DELETE /me/sessions/:session_id registration includes requireRecentStepUpPreHandler', () => {
     const blockPattern =
-      /zodApplication\.delete[^(]*\(\s*'\/me\/sessions\/:id'\s*,\s*\{[\s\S]*?\}\s*,\s*controller\./;
+      /zodApplication\.delete[^(]*\(\s*'\/me\/sessions\/:session_id'\s*,\s*\{[\s\S]*?\}\s*,\s*controller\./;
     const match = blockPattern.exec(routesSource);
     expect(match).not.toBeNull();
     expect(match?.[0]).toContain('requireRecentStepUpPreHandler');

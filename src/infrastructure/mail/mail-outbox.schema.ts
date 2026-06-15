@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { bigserial, jsonb, text, timestamp, varchar, index, check } from 'drizzle-orm/pg-core';
+import {
+  bigserial,
+  jsonb,
+  text,
+  timestamp,
+  varchar,
+  index,
+  uniqueIndex,
+  check,
+} from 'drizzle-orm/pg-core';
 import { authSchema } from '@/infrastructure/database/pg-schemas.js';
 
 /**
@@ -23,9 +32,17 @@ export const mail_outbox = authSchema.table(
     created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     sent_at: timestamp('sent_at', { withTimezone: true }),
+    // reaudit-#4: optional caller-supplied idempotency key. When set, a second insert with
+    // the same key is a no-op (ON CONFLICT DO NOTHING) and resolves to the existing row, so
+    // concurrent producers (e.g. a stalled-then-redelivered notification job) cannot create
+    // two outbox rows → two emails. NULL for the common case (no dedup needed).
+    dedupe_key: varchar('dedupe_key', { length: 255 }),
   },
   (table) => [
     index('idx_mail_outbox_status_created_at').on(table.status, table.created_at),
+    uniqueIndex('idx_mail_outbox_dedupe_key')
+      .on(table.dedupe_key)
+      .where(sql`${table.dedupe_key} IS NOT NULL`),
     check(
       'mail_outbox_status_check',
       sql`${table.status} IN ('pending', 'sending', 'sent', 'failed')`,

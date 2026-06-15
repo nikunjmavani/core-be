@@ -12,10 +12,11 @@ describe('Security: system tables RLS deny-all', () => {
       JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE (n.nspname, c.relname) IN (
         ('billing', 'stripe_webhook_events'),
+        ('billing', 'stripe_subscription_tombstones'),
         ('auth', 'mail_outbox')
       )
     `;
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     for (const row of rows) {
       expect(row.relrowsecurity).toBe(true);
       expect(row.relforcerowsecurity).toBe(true);
@@ -31,6 +32,17 @@ describe('Security: system tables RLS deny-all', () => {
     const names = policies.map((row) => row.policyname);
     expect(names).toContain('stripe_webhook_events_deny_all');
     expect(names).toContain('stripe_webhook_events_app_access');
+  });
+
+  it('defines deny-all and core_be_app policies on stripe_subscription_tombstones (BILL-03)', async () => {
+    const policies = await sql<{ policyname: string }[]>`
+      SELECT policyname
+      FROM pg_policies
+      WHERE schemaname = 'billing' AND tablename = 'stripe_subscription_tombstones'
+    `;
+    const names = policies.map((row) => row.policyname);
+    expect(names).toContain('stripe_subscription_tombstones_deny_all');
+    expect(names).toContain('stripe_subscription_tombstones_app_access');
   });
 
   it('defines deny-all and core_be_app policies on mail_outbox', async () => {

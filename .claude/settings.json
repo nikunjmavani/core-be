@@ -15,6 +15,7 @@
       "Bash(pnpm routes*)",
       "Bash(pnpm docs*)",
       "Bash(pnpm tsdoc*)",
+      "Bash(pnpm agent-os*)",
       "Bash(pnpm guard*)",
       "Bash(git status)",
       "Bash(git diff*)",
@@ -35,6 +36,15 @@
       }
     ],
     "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/agent-os/hooks/guard-edits.sh\""
+          }
+        ]
+      },
       {
         "matcher": "Bash|Edit|Write",
         "hooks": [

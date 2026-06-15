@@ -7,6 +7,9 @@ vi.mock('@/infrastructure/resilience/circuit-breaker.js', () => ({
   s3Circuit: {
     execute: <T>(operation: () => Promise<T>) => operation(),
   },
+  // outboundCall references `error instanceof CircuitBreakerOpenError` in its error
+  // path; provide a stub so the not-found-vs-transient classification (UPLOAD-03) runs.
+  CircuitBreakerOpenError: class CircuitBreakerOpenError extends Error {},
 }));
 
 vi.mock('@aws-sdk/client-s3', () => {
@@ -41,13 +44,20 @@ vi.mock('@aws-sdk/s3-request-presigner', () => ({
   getSignedUrl: (...arguments_: unknown[]) => getSignedUrlMock(...arguments_),
 }));
 
-vi.mock('@/shared/config/env.config.js', () => ({
-  env: {
+const { mockEnv } = vi.hoisted(() => ({
+  mockEnv: {
     S3_BUCKET: 'test-bucket',
     S3_REGION: 'eu-west-1',
     S3_MAX_ATTEMPTS: 3,
     LOG_LEVEL: 'silent',
+    // audit-#13: unset → getObjectUrl falls back to the virtual-hosted S3 URL.
+    PUBLIC_MEDIA_BASE_URL: undefined as string | undefined,
   },
+}));
+vi.mock('@/shared/config/env.config.js', () => ({
+  env: mockEnv,
+  // audit-#13: buildPublicMediaUrl reads PUBLIC_MEDIA_BASE_URL via getEnv() (re-read-friendly).
+  getEnv: () => mockEnv,
 }));
 
 vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
@@ -150,6 +160,44 @@ describe('S3ObjectStorageAdapter', () => {
 
     expect(metadata).toEqual({ contentType: 'image/png', contentLength: 2048 });
     expect(sendMock).toHaveBeenCalledOnce();
+  });
+
+  it('UPLOAD-03: headObject returns null for a genuine NotFound (404)', async () => {
+    sendMock.mockRejectedValueOnce(
+      Object.assign(new Error('not found'), {
+        name: 'NotFound',
+        $metadata: { httpStatusCode: 404 },
+      }),
+    );
+
+    const metadata = await adapter.headObject('uploads/missing.png');
+
+    expect(metadata).toBeNull();
+  });
+
+  it('UPLOAD-03: headObject rethrows a transient failure instead of returning null', async () => {
+    sendMock.mockRejectedValueOnce(new Error('connection reset by peer'));
+
+    await expect(adapter.headObject('uploads/file.png')).rejects.toBeTruthy();
+  });
+
+  it('UPLOAD-03: getObjectFirstBytes rethrows a transient failure instead of returning null', async () => {
+    sendMock.mockRejectedValueOnce(new Error('ETIMEDOUT'));
+
+    await expect(adapter.getObjectFirstBytes('uploads/file.png', 16)).rejects.toBeTruthy();
+  });
+
+  it('UPLOAD-03: getObjectFirstBytes returns null for a genuine NoSuchKey (404)', async () => {
+    sendMock.mockRejectedValueOnce(
+      Object.assign(new Error('no such key'), {
+        name: 'NoSuchKey',
+        $metadata: { httpStatusCode: 404 },
+      }),
+    );
+
+    const result = await adapter.getObjectFirstBytes('uploads/missing.png', 16);
+
+    expect(result).toBeNull();
   });
 
   it('deleteObject returns false when S3 delete fails', async () => {

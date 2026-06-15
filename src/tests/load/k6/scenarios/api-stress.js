@@ -7,7 +7,9 @@ import { authHeaders } from '../helpers/auth.js';
  * k6 Scenario: API stress — key authenticated routes under high concurrency.
  *
  * Ramps to 20 → 50 → 100 VUs. Use for full-confidence load testing of the API.
- * Requires: TEST_TOKEN (required), TEST_ORG_ID (required for memberships).
+ * Requires: TEST_TOKEN (required). TEST_TOKEN must be minted already scoped to
+ * TEST_ORG_ID — the active org rides the token's `org` claim, so the flat
+ * memberships route carries no org path segment (set TEST_ORG_ID to enable it).
  * Get credentials: pnpm tool:load-test-credentials (server + full seed).
  *
  * Routes loaded:
@@ -15,7 +17,7 @@ import { authHeaders } from '../helpers/auth.js';
  * - GET /api/v1/tenancy/organizations
  * - GET /api/v1/notify/notifications
  * - GET /api/v1/notify/notifications/unread-count
- * - GET /api/v1/tenancy/organizations/:orgId/memberships
+ * - GET /api/v1/tenancy/organization/memberships
  */
 export const options = {
   scenarios: {
@@ -71,7 +73,7 @@ export function apiStress() {
 
   if (organizationId) {
     const membersRes = http.get(
-      `${API_PREFIX}/tenancy/organizations/${organizationId}/memberships`,
+      `${API_PREFIX}/tenancy/organization/memberships`,
       opts('tenancy-memberships'),
     );
     check(membersRes, {

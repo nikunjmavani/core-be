@@ -92,6 +92,25 @@ describe('PlanService', () => {
     await expect(service.getByPublicId('missing')).rejects.toBeInstanceOf(NotFoundError);
   });
 
+  it('route-#7: getByPublicId 404s an inactive (retired/draft) plan — public catalog must not leak it', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...planRow,
+      is_active: false,
+    } as never);
+    await expect(service.getByPublicId('plan_public')).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('route-#7: requirePlanRecordByPublicId still returns an inactive row for internal callers', async () => {
+    // The internal resolver must NOT 404 inactive plans (the Stripe webhook needs to map them);
+    // only the PUBLIC getByPublicId path hides them.
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...planRow,
+      is_active: false,
+    } as never);
+    const row = await service.requirePlanRecordByPublicId('plan_public');
+    expect(row.is_active).toBe(false);
+  });
+
   it('requirePlanRecordByInternalId throws when plan is missing', async () => {
     vi.mocked(repository.findById).mockResolvedValue(null);
     await expect(service.requirePlanRecordByInternalId(999)).rejects.toBeInstanceOf(NotFoundError);

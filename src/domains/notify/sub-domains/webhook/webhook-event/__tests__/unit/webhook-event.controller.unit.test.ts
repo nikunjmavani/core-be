@@ -7,8 +7,8 @@ import type { WebhookEventService } from '@/domains/notify/sub-domains/webhook/w
 
 function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
   return {
-    auth: { kind: 'user', userId: generatePublicId(), role: 'user' },
-    params: { id: generatePublicId() },
+    auth: { kind: 'user', userId: generatePublicId('user'), role: 'user' },
+    params: { organization_id: generatePublicId('organization') },
     body: {},
     headers: {},
     id: 'request-id',

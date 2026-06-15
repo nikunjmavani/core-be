@@ -46,7 +46,10 @@ describe('Billing e2e: subscription lifecycle', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
 
     const plansResponse = await injectAuthenticated(app, {
       method: 'GET',
@@ -57,9 +60,8 @@ describe('Billing e2e: subscription lifecycle', () => {
 
     const subscriptionsResponse = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(`/billing/organizations/${organization.public_id}/subscriptions`),
+      url: testApiPath('/billing/subscriptions'),
       token,
-      organizationPublicId: organization.public_id,
     });
     expect(subscriptionsResponse.statusCode).toBe(200);
   });

@@ -94,6 +94,17 @@ function main(): void {
         process.exit(1);
       }
 
+      // Collection-level bearer auth: every authed request inherits
+      // `Authorization: Bearer {{ACCESS_TOKEN}}` — set the variable once.
+      collectionData.auth = {
+        type: 'bearer',
+        bearer: [{ key: 'token', value: '{{ACCESS_TOKEN}}', type: 'string' }],
+      };
+      collectionData.variable = [
+        ...((collectionData.variable as unknown[] | undefined) ?? []),
+        { key: 'ACCESS_TOKEN', value: '', type: 'string' },
+      ];
+
       // Stamp version into collection info for traceability
       collectionData.info.name = `core-be API v${version}`;
       const scalarRegistryUrl = buildScalarRegistryUrl();

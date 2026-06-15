@@ -54,6 +54,7 @@ export function createDomainContainers(
     userBase.userService,
     tenancyDomain.organizationService,
     objectStorage,
+    tenancyDomain.authorizationService,
   );
 
   const userDataExportRepository = new UserDataExportRepository();
@@ -75,9 +76,15 @@ export function createDomainContainers(
     authMethodService: authDomain.authMethodService,
     uploadService: uploadDomain.uploadService,
     userDataExportService: userDomain.userDataExportService,
+    // route-audit-#2 follow-up: block deleting a user who still owns organizations.
+    organizationOwnership: tenancyDomain.organizationService,
   });
 
-  tenancyDomain.organizationService.wireOffboardingUploadService(uploadDomain.uploadService);
+  tenancyDomain.organizationService.wireOffboardingUploadService(
+    uploadDomain.uploadService,
+    // route-audit-#2: cancel the org's active subscription on org delete so billing stops.
+    billingDomain.subscriptionService,
+  );
 
   userDomain.userDataExportService.wireCrossDomainServices({
     authSessionService: authDomain.authSessionService,

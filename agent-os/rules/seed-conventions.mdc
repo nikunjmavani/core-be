@@ -45,7 +45,7 @@ The contract lives in `src/scripts/seed/seed-contract.ts`.
 
 - Each `seed/index.ts` folds its own seeders together with its children's via `composeContributions(...)` (runs every part's `seedReference` first, then every part's `seedBulk`).
 - Composition flows **upward**: nested sub-domain → sub-domain → domain. A parent that must run before a child (e.g. the org pool before per-org extras) controls that by ordering them in its own `composeContributions` call.
-- The orchestrator (`src/scripts/seed/bulk.ts`, `MODULES`) registers and topologically orders **only domain modules** (one per domain). Cross-domain `dependsOn` is declared once, at the domain level.
+- The orchestrator (`src/scripts/seed/bulk.ts`) topologically orders the domain modules declared in `SEED_MODULES` (`src/scripts/seed/modules.ts`) — **only domain modules** (one per domain). Cross-domain `dependsOn` is declared once, at the domain level.
 
 ## Seed only your own tables — registry carries parents
 

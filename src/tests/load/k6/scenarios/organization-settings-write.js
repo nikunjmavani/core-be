@@ -2,7 +2,7 @@ import http from 'k6/http';
 import { sleep } from 'k6';
 import { API_PREFIX, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
 import { checkOk, checkResponseTime } from '../helpers/checks.js';
-import { authHeaders } from '../helpers/auth.js';
+import { authHeaders, switchToOrganization } from '../helpers/auth.js';
 
 /**
  * k6 Scenario: Organization settings write path
@@ -20,11 +20,15 @@ export const options = {
 };
 
 export function organizationSettingsWriteOps() {
-  const token = __ENV.TEST_TOKEN;
+  let token = __ENV.TEST_TOKEN;
   const organizationPublicId = __ENV.TEST_ORG_ID;
   if (!(token && organizationPublicId)) {
     return;
   }
+
+  // The active org rides the token's `org` claim — scope the token to TEST_ORG_ID
+  // so the flat route resolves the right organization.
+  token = switchToOrganization(token, organizationPublicId) || token;
 
   const headers = {
     ...authHeaders(token).headers,
@@ -32,7 +36,7 @@ export function organizationSettingsWriteOps() {
   };
 
   const patchResponse = http.patch(
-    `${API_PREFIX}/tenancy/organizations/${organizationPublicId}/settings`,
+    `${API_PREFIX}/tenancy/organization/settings`,
     JSON.stringify({ is_email_notifications_enabled: true }),
     {
       headers,

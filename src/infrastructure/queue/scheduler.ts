@@ -14,8 +14,11 @@ import {
 import { NOTIFICATION_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/notification/workers/notification-retention.constants.js';
 import { SESSION_CLEANUP_QUEUE_NAME } from '@/domains/auth/sub-domains/auth-session/workers/session-cleanup.constants.js';
 import { WEBHOOK_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/workers/webhook-tombstone-retention.constants.js';
+import { WEBHOOK_DELIVERY_ATTEMPT_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/workers/webhook-delivery-attempt-retention.constants.js';
 import { ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/organization-notification-policy/workers/organization-notification-policy-tombstone-retention.constants.js';
 import { USER_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/user/workers/user-tombstone-retention.constants.js';
+import { USER_OFFBOARDING_RECONCILE_QUEUE_NAME } from '@/domains/user/workers/user-offboarding-reconcile.constants.js';
+import { ORGANIZATION_OFFBOARDING_RECONCILE_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/workers/organization-offboarding-reconcile.constants.js';
 import { ORGANIZATION_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/workers/organization-tombstone-retention.constants.js';
 import { MEMBERSHIP_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub-domains/membership/workers/membership-tombstone-retention.constants.js';
 import { MEMBER_ROLE_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub-domains/member-roles/workers/member-role-tombstone-retention.constants.js';
@@ -64,6 +67,8 @@ export interface SchedulerHandle {
 const DEFAULT_AUDIT_RETENTION_CRON = '0 3 * * *';
 /** In-app notification row retention purge (runs after audit cleanup). */
 const DEFAULT_NOTIFICATION_RETENTION_CRON = '30 3 * * *';
+/** Offboarding reconcilers run every 15 minutes so a stuck delete completes promptly, not next day. */
+const DEFAULT_OFFBOARDING_RECONCILE_CRON = '*/15 * * * *';
 const DEFAULT_SESSION_CLEANUP_CRON = '0 4 * * *';
 /** GDPR export artifact purge runs before upload tombstone retention. */
 const DEFAULT_USER_DATA_EXPORT_RETENTION_CRON = '44 5 * * *';
@@ -71,6 +76,8 @@ const DEFAULT_USER_DATA_EXPORT_RETENTION_CRON = '44 5 * * *';
 const DEFAULT_UPLOAD_TOMBSTONE_RETENTION_CRON = '45 5 * * *';
 const DEFAULT_ORGANIZATION_TOMBSTONE_RETENTION_CRON = '46 5 * * *';
 const DEFAULT_WEBHOOK_TOMBSTONE_RETENTION_CRON = '47 5 * * *';
+/** Time-based purge of webhook delivery attempts (audit-#3); off-peak, distinct slot. */
+const DEFAULT_WEBHOOK_DELIVERY_ATTEMPT_RETENTION_CRON = '40 3 * * *';
 const DEFAULT_ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_CRON = '48 5 * * *';
 const DEFAULT_MEMBERSHIP_TOMBSTONE_RETENTION_CRON = '50 5 * * *';
 const DEFAULT_MEMBER_ROLE_TOMBSTONE_RETENTION_CRON = '51 5 * * *';
@@ -157,6 +164,15 @@ function getTombstoneRetentionScheduledJobs(timezone: string | undefined): Sched
       jobName: 'purge-old-deleted-users',
       cronPattern: env.USER_TOMBSTONE_RETENTION_CRON ?? DEFAULT_USER_TOMBSTONE_RETENTION_CRON,
     }),
+    // audit-#3: time-based purge of webhook delivery attempts (not a tombstone cascade).
+    withSchedulerTimezone(timezone, {
+      queueName: WEBHOOK_DELIVERY_ATTEMPT_RETENTION_QUEUE_NAME,
+      schedulerId: 'daily-webhook-delivery-attempt-retention',
+      jobName: 'purge-old-webhook-delivery-attempts',
+      cronPattern:
+        env.WEBHOOK_DELIVERY_ATTEMPT_RETENTION_CRON ??
+        DEFAULT_WEBHOOK_DELIVERY_ATTEMPT_RETENTION_CRON,
+    }),
   ];
 }
 
@@ -192,6 +208,18 @@ export function getScheduledJobs(): ScheduledJob[] {
       schedulerId: 'daily-session-cleanup',
       jobName: 'cleanup-sessions',
       cronPattern: env.AUTH_SESSION_CLEANUP_CRON ?? DEFAULT_SESSION_CLEANUP_CRON,
+    }),
+    withSchedulerTimezone(timezone, {
+      queueName: USER_OFFBOARDING_RECONCILE_QUEUE_NAME,
+      schedulerId: 'user-offboarding-reconcile',
+      jobName: 'reconcile-stuck-user-offboardings',
+      cronPattern: DEFAULT_OFFBOARDING_RECONCILE_CRON,
+    }),
+    withSchedulerTimezone(timezone, {
+      queueName: ORGANIZATION_OFFBOARDING_RECONCILE_QUEUE_NAME,
+      schedulerId: 'organization-offboarding-reconcile',
+      jobName: 'reconcile-stuck-organization-offboardings',
+      cronPattern: DEFAULT_OFFBOARDING_RECONCILE_CRON,
     }),
     withSchedulerTimezone(timezone, {
       queueName: STRIPE_WEBHOOK_EVENT_RETENTION_QUEUE_NAME,

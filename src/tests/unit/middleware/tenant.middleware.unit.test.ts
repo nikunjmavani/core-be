@@ -1,19 +1,12 @@
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
-import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import tenantMiddleware from '@/shared/middlewares/tenant/tenant.middleware.js';
 
 async function createTenantApp() {
   const application = Fastify();
   await application.register(tenantMiddleware);
   application.get('/probe', async (request) => ({
-    organizationId: request.organizationId,
-  }));
-  application.get('/api/v1/tenancy/organizations/:id/memberships', async (request) => ({
-    organizationId: request.organizationId,
-  }));
-  application.get('/api/v1/tenancy/organizations/:id/settings', async (request) => ({
     organizationId: request.organizationId,
   }));
   await application.ready();
@@ -31,7 +24,7 @@ describe('tenant.middleware', () => {
 
   it('sets organizationId from valid X-Organization-Id header', async () => {
     application = await createTenantApp();
-    const organizationPublicId = generatePublicId();
+    const organizationPublicId = generatePublicId('organization');
 
     const response = await application.inject({
       method: 'GET',
@@ -54,29 +47,13 @@ describe('tenant.middleware', () => {
     expect(response.json()).toEqual({ organizationId: null });
   });
 
-  it('infers organizationId from /organizations/:id/ URL when header is absent', async () => {
+  it('leaves organizationId null when no header is present', async () => {
     application = await createTenantApp();
-    const organizationPublicId = generatePublicId();
 
-    const response = await application.inject({
-      method: 'GET',
-      url: testApiPath(`/tenancy/organizations/${organizationPublicId}/memberships`),
-    });
+    const response = await application.inject({ method: 'GET', url: '/probe' });
 
-    expect(response.json()).toEqual({ organizationId: organizationPublicId });
-  });
-
-  it('returns 400 when header and path organization ids differ', async () => {
-    application = await createTenantApp();
-    const headerOrganizationId = generatePublicId();
-    const pathOrganizationId = generatePublicId();
-
-    const response = await application.inject({
-      method: 'GET',
-      url: testApiPath(`/tenancy/organizations/${pathOrganizationId}/settings`),
-      headers: { 'x-organization-id': headerOrganizationId },
-    });
-
-    expect(response.statusCode).toBe(400);
+    // The active organization now comes from the signed `org` token claim, not the URL —
+    // routes no longer carry an `{organization_id}` path segment for the middleware to parse.
+    expect(response.json()).toEqual({ organizationId: null });
   });
 });

@@ -1,5 +1,6 @@
 import {
   ConfigurationError,
+  ConflictError,
   ForbiddenError,
   NotFoundError,
   ValidationError,
@@ -15,12 +16,13 @@ import {
   validateCreateMemberInvitation,
   validateAcceptMemberInvitation,
   validateListMemberInvitationsQuery,
+  validateListPendingMemberInvitationsQuery,
   validateResendMemberInvitation,
 } from './member-invitation.validator.js';
 import { serializeMemberInvitation } from './member-invitation.serializer.js';
 import { hashInvitationToken, generateInvitationToken } from './member-invitation.token.js';
 import { invalidatePermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
-import { eventBus } from '@/core/events/event-bus.js';
+import { buildDomainEvent, eventBus } from '@/core/events/event-bus.js';
 import {
   MEMBER_INVITATION_EVENT,
   type MemberInvitationEmailPayload,
@@ -69,6 +71,35 @@ export interface MemberInvitationListOptions {
 }
 
 /**
+ * Optional per-command context for invitation create/resend.
+ *
+ * @remarks
+ * - **Notes:** `requestId` propagates the originating HTTP request id into the
+ *   post-commit mail dispatch so the durable Redis commit-dispatch entry
+ *   survives a process crash; omit it on non-HTTP callers (the in-memory
+ *   onCommit fallback is used instead).
+ */
+export interface MemberInvitationCommandOptions {
+  requestId?: string;
+}
+
+/**
+ * One cursor-paginated page of the caller's cross-organization pending
+ * invitations returned by {@link MemberInvitationService.listPendingInvitations}.
+ *
+ * @remarks
+ * - **Notes:** `next_cursor` is an opaque keyset cursor (null on the last page);
+ *   `has_more` reflects whether a further page exists. `limit` echoes the
+ *   effective page size after DTO defaults/clamping.
+ */
+export interface PendingMemberInvitationListResult {
+  items: MemberInvitationOutput[];
+  limit: number;
+  has_more: boolean;
+  next_cursor: string | null;
+}
+
+/**
  * Application service for organization-member invitations: create, list,
  * accept, decline, resend, and revoke.
  *
@@ -96,9 +127,13 @@ export interface MemberInvitationListOptions {
  *   purges the member's Redis permission cache so access is granted
  *   immediately. Emits {@link MEMBER_INVITATION_EVENT.CREATED} / `RESENT` on
  *   the in-process event bus, which the invitation email handler turns into a
- *   mail-outbox row dispatched on commit. The raw token is only returned to
- *   the API caller and embedded in the outgoing email — it never leaves the
- *   service in any other form.
+ *   mail-outbox row dispatched on commit. The raw token is delivered **only**
+ *   through the outgoing invitation email — it is never returned in any HTTP
+ *   response (R1 / TEN-32 / TEN-34). Create/resend use `emitStrict` so a failed
+ *   outbox write rolls back the whole org transaction (which already wraps the
+ *   invitation INSERT and the outbox INSERT), making token issuance and email
+ *   delivery atomic (R2): the caller never receives success with a rotated token
+ *   but no email.
  * - **Notes:** invitations have mutually-exclusive terminal states
  *   (`accepted_at` vs `revoked_at`); resend regenerates the token and pushes
  *   `expires_at`. {@link listPendingInvitations} is intentionally
@@ -148,11 +183,17 @@ export class MemberInvitationService {
     organization_public_id: string,
     body: unknown,
     invited_by_user_public_id: string,
-  ): Promise<{ invitation: MemberInvitationOutput; token: string }> {
+    options?: MemberInvitationCommandOptions,
+  ): Promise<MemberInvitationOutput> {
     const parsed = validateCreateMemberInvitation(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization = await this.organizationRepository.findByPublicId(organization_public_id);
       if (!organization) throw new NotFoundError('Organization');
+      // Capability matrix: a PERSONAL organization is single-member by definition — it cannot
+      // issue invitations. Collaboration requires a TEAM organization.
+      if (organization.type === 'PERSONAL') {
+        throw new ConflictError('errors:personalOrganizationNoMembers');
+      }
       const membership = await this.membershipRepository.findByPublicId(
         parsed.membership_id,
         organization.id,
@@ -193,20 +234,26 @@ export class MemberInvitationService {
       });
       const output = serializeMemberInvitation(row, membership.public_id);
 
-      await eventBus.emit({
-        type: MEMBER_INVITATION_EVENT.CREATED,
-        payload: {
-          email: memberEmail,
-          organization_name: organization.name ?? organization.public_id,
-          inviter_name: invited_by_user_public_id,
-          token,
-          invitation_public_id: output.id,
-          expires_in_days: parsed.expires_in_days,
-        } satisfies MemberInvitationEmailPayload,
-        timestamp: new Date(),
-      });
+      // R2: emitStrict (not emit) so a failed mail-outbox write propagates and
+      // rolls back this org transaction — the invitation row + token_hash and
+      // the secret-bearing outbox row commit together or not at all. The raw
+      // token leaves the service only through the email payload below.
+      await eventBus.emitStrict(
+        buildDomainEvent(
+          MEMBER_INVITATION_EVENT.CREATED,
+          {
+            email: memberEmail,
+            organization_name: organization.name ?? organization.public_id,
+            inviter_name: invited_by_user_public_id,
+            token,
+            invitation_public_id: output.id,
+            expires_in_days: parsed.expires_in_days,
+          } satisfies MemberInvitationEmailPayload,
+          options?.requestId !== undefined ? { requestId: options.requestId } : undefined,
+        ),
+      );
 
-      return { invitation: output, token };
+      return output;
     });
   }
 
@@ -289,7 +336,8 @@ export class MemberInvitationService {
     organization_public_id: string,
     invitation_public_id: string,
     body: unknown,
-  ): Promise<{ invitation: MemberInvitationOutput; token: string }> {
+    options?: MemberInvitationCommandOptions,
+  ): Promise<MemberInvitationOutput> {
     const parsed = validateResendMemberInvitation(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization = await this.organizationRepository.findByPublicId(organization_public_id);
@@ -316,51 +364,71 @@ export class MemberInvitationService {
       if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
       const output = serializeMemberInvitation(updated, membership.public_id);
 
-      await eventBus.emit({
-        type: MEMBER_INVITATION_EVENT.RESENT,
-        payload: {
-          email: row.email,
-          organization_name: organization.name ?? organization.public_id,
-          inviter_name: 'Team member',
-          token,
-          invitation_public_id: output.id,
-          expires_in_days: parsed.expires_in_days,
-        } satisfies MemberInvitationEmailPayload,
-        timestamp: new Date(),
-      });
+      // R2: emitStrict so the rotated token_hash (already persisted above in this
+      // same org transaction) and the new outbox row commit atomically. The old
+      // token was overwritten by `resend`, so a swallowed email failure would
+      // otherwise leave the invitee with no working link and no error surfaced.
+      await eventBus.emitStrict(
+        buildDomainEvent(
+          MEMBER_INVITATION_EVENT.RESENT,
+          {
+            email: row.email,
+            organization_name: organization.name ?? organization.public_id,
+            inviter_name: 'Team member',
+            token,
+            invitation_public_id: output.id,
+            expires_in_days: parsed.expires_in_days,
+          } satisfies MemberInvitationEmailPayload,
+          options?.requestId !== undefined ? { requestId: options.requestId } : undefined,
+        ),
+      );
 
-      return { invitation: output, token };
+      return output;
     });
   }
 
-  async listPendingInvitations(user_public_id: string): Promise<MemberInvitationOutput[]> {
+  async listPendingInvitations(
+    user_public_id: string,
+    query: unknown,
+  ): Promise<PendingMemberInvitationListResult> {
     if (!this.userService) {
       throw new ConfigurationError(
         'UserService is not configured on MemberInvitationService. Wire it via tenancy.container.',
       );
     }
+    const parsed = validateListPendingMemberInvitationsQuery(query);
     const user = await this.userService.findUserRecordByPublicId(user_public_id);
     if (!user) throw new NotFoundError('User');
     /**
      * Cross-organization read: a single user may have invitations from many orgs and
      * no `app.current_organization_id` matches all of them. Uses the SECURITY DEFINER
      * lookup that runs outside RLS but exposes only minimal non-sensitive metadata.
+     * Cursor-paginated (R5 / TEN-35) so users invited to >100 orgs can page through
+     * every invitation instead of being silently capped at 100.
      */
-    const rows = await this.invitationRepository.findByEmailPending(user.email, 100);
-    return rows.map((row) =>
-      serializeMemberInvitation(
-        {
-          public_id: row.invitation_public_id,
-          email: row.invitation_email,
-          expires_at: row.invitation_expires_at,
-          accepted_at: null,
-          revoked_at: null,
-          created_at: row.invitation_created_at,
-          membership_id: row.membership_id,
-        },
-        row.membership_public_id,
-      ),
+    const page = await this.invitationRepository.findByEmailPending(
+      user.email,
+      omitUndefined({ after: parsed.after, limit: parsed.limit }),
     );
+    return {
+      items: page.items.map((row) =>
+        serializeMemberInvitation(
+          {
+            public_id: row.invitation_public_id,
+            email: row.invitation_email,
+            expires_at: row.invitation_expires_at,
+            accepted_at: null,
+            revoked_at: null,
+            created_at: row.invitation_created_at,
+            membership_id: row.membership_id,
+          },
+          row.membership_public_id,
+        ),
+      ),
+      limit: page.limit,
+      has_more: page.has_more,
+      next_cursor: page.next_cursor,
+    };
   }
 
   async decline(invitation_public_id: string, user_public_id: string): Promise<void> {

@@ -330,6 +330,16 @@ const envSchemaBase = z.object({
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   /** AWS SDK maxAttempts for S3 (each attempt bounded by service/client timeouts). */
   S3_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+  /**
+   * audit-#13: public base URL (e.g. a CloudFront distribution) for PUBLIC media only
+   * (avatars, organization logos). When set, `getObjectUrl` builds links from this base instead
+   * of the raw `https://<bucket>.s3.<region>.amazonaws.com/<key>` form, so the S3 bucket can keep
+   * "Block all public access" enabled (the documented production posture) while public media is
+   * still reachable through a distribution scoped to the public prefixes. Leave unset in local/dev
+   * to fall back to the direct S3 URL. NEVER point this at a base that exposes private prefixes
+   * (`user-files/`, `organization-files/`) — `getObjectUrl` additionally refuses non-public keys.
+   */
+  PUBLIC_MEDIA_BASE_URL: z.string().url().optional(),
 
   // Ops knobs
   /** BullMQ worker concurrency fallback when per-queue overrides are unset (default 4). */
@@ -427,12 +437,27 @@ const envSchemaBase = z.object({
    * largest in the DB and trips autovacuum / search-path bloat thresholds.
    */
   AUDIT_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(365),
-  NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
-  AUTH_SESSION_RETENTION_DAYS: z.coerce.number().int().min(1),
+  /**
+   * audit-#14: every retention knob carries a defensible MAX as well as a min. Without an
+   * upper bound a deployment typo (e.g. `90` → `90000`) silently disables cleanup, so the
+   * high-volume tables (notifications, sessions, tombstones, Stripe ledger, webhook attempts)
+   * grow unbounded, retain PII far beyond policy, and eventually degrade autovacuum + query
+   * performance. Exceptional longer retention must be a reviewed policy/migration change, not
+   * an arbitrary env value.
+   */
+  NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(90),
+  AUTH_SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).max(730),
   /** Tombstoned-row TTL before purge workers hard-delete (default avoids mandatory deploy secret). */
-  TOMBSTONE_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+  TOMBSTONE_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(90),
   /** Terminal Stripe webhook ledger rows older than this are purged (failed rows kept for replay). */
-  STRIPE_WEBHOOK_EVENT_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+  STRIPE_WEBHOOK_EVENT_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(90),
+  /**
+   * Webhook delivery-attempt rows older than this are purged (audit-#3). These rows retain the
+   * full event payload + response body, so a shorter default than tombstone retention bounds both
+   * storage growth and PII retention for long-lived active webhooks. Capped at 180 days
+   * (audit-#14) so a misconfiguration cannot retain payloads/response bodies indefinitely.
+   */
+  WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS: z.coerce.number().int().min(1).max(180).default(30),
 
   // BullMQ repeatable jobs (retention / cleanup schedules)
   SCHEDULER_ENABLED: z
@@ -446,6 +471,8 @@ const envSchemaBase = z.object({
   NOTIFICATION_RETENTION_CRON: z.string().min(1).optional(),
   AUTH_SESSION_CLEANUP_CRON: z.string().min(1).optional(),
   STRIPE_WEBHOOK_EVENT_RETENTION_CRON: z.string().min(1).optional(),
+  /** Cron for the webhook delivery-attempt retention sweep (audit-#3); omit to use the default. */
+  WEBHOOK_DELIVERY_ATTEMPT_RETENTION_CRON: z.string().min(1).optional(),
   STRIPE_WEBHOOK_EVENT_RECLAIM_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(100),
   STRIPE_WEBHOOK_EVENT_RECLAIM_CRON: z.string().min(1).optional(),
   /** Daily audit cold export to S3 (disabled when S3_BUCKET unset). */
@@ -596,6 +623,16 @@ const envSchemaBase = z.object({
     .transform((v) => v === 'true' || v === '1'),
   OPENAPI_SPEC_PATH: z.string().min(1).optional(),
 
+  // Organization capability flags — toggle the two organization kinds independently so one
+  // codebase serves a B2C (personal-only), B2B (team-only), or hybrid product. At least one
+  // MUST be enabled (enforced in the cross-field refine on envSchema). They gate route
+  // registration, signup auto-provisioning, and the organization switcher — never the core
+  // scoping path (token claim → RLS), which is identical in every mode.
+  PERSONAL_ORGANIZATION_ENABLED: booleanString('true'),
+  TEAM_ORGANIZATION_ENABLED: booleanString('true'),
+  /** Per-owner cap on TEAM organizations a single user may create (anti-abuse). Personal exempt. */
+  MAX_TEAM_ORGANIZATIONS_PER_OWNER: z.coerce.number().int().min(1).max(1000).default(20),
+
   // Response encryption (obfuscation layer — AES-256-GCM; hides JSON from DevTools Network tab)
   ENABLE_RESPONSE_ENCRYPTION: z
     .string()
@@ -636,6 +673,10 @@ const envSchemaBase = z.object({
   POSTMAN_API_KEY: z.string().min(1).optional(),
   /** Postman workspace ID where the API documentation collection is published. GitHub Environment secret via `pnpm github:sync`. */
   POSTMAN_WORKSPACE_ID: z.string().min(1).optional(),
+
+  // Release automation (GitHub Actions only — consumed by .github/workflows/post-merge-ci.yml)
+  /** PAT (classic `repo` + `workflow` scopes) release-please uses to create the dev/main GitHub Releases; the default GITHUB_TOKEN cannot — the create-a-release API path requires the `workflow` scope. GitHub Environment secret via `pnpm github:sync`. */
+  RELEASE_PLEASE_TOKEN: z.string().min(1).optional(),
 });
 
 /**
@@ -659,6 +700,11 @@ export const envSchema = envSchemaBase
   .refine((data) => data.REDIS_MEMORY_CRITICAL_RATIO >= data.REDIS_MEMORY_WARN_RATIO, {
     message: 'REDIS_MEMORY_CRITICAL_RATIO must be >= REDIS_MEMORY_WARN_RATIO',
     path: ['REDIS_MEMORY_CRITICAL_RATIO'],
+  })
+  .refine((data) => data.PERSONAL_ORGANIZATION_ENABLED || data.TEAM_ORGANIZATION_ENABLED, {
+    message:
+      'At least one of PERSONAL_ORGANIZATION_ENABLED or TEAM_ORGANIZATION_ENABLED must be true — a deployment needs at least one organization kind.',
+    path: ['PERSONAL_ORGANIZATION_ENABLED'],
   })
   .refine(
     (data) => {
@@ -848,6 +894,29 @@ export const envSchema = envSchemaBase
       message:
         'COOKIE_SECURE must be true in production and staging (cookies sent over HTTPS only).',
       path: ['COOKIE_SECURE'],
+    },
+  )
+  .refine(
+    (data) => {
+      // audit-#15b: once a JWT verification keyring (JWT_PUBLIC_KEYS) is configured
+      // in production, the legacy kid-less fallback must be CLOSED. Leaving
+      // JWT_LEGACY_KEY_ENABLED=true alongside a keyring keeps the original single
+      // signing key as a permanent trust anchor that key rotation / revocation
+      // cannot retire — a leaked original key would keep minting valid tokens.
+      // Deployments WITHOUT a keyring are unaffected: the legacy single-key path
+      // stays available until they migrate to the keyring.
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      if (!data.JWT_PUBLIC_KEYS) {
+        return true;
+      }
+      return data.JWT_LEGACY_KEY_ENABLED === false;
+    },
+    {
+      message:
+        'JWT_LEGACY_KEY_ENABLED must be false in production once JWT_PUBLIC_KEYS (the verification keyring) is configured — close the legacy kid-less trust window after migrating to the keyring.',
+      path: ['JWT_LEGACY_KEY_ENABLED'],
     },
   )
   .refine(

@@ -25,6 +25,12 @@ export interface MailEnqueueInput {
   text?: string;
   replyTo?: string;
   tags?: { name: string; value: string }[];
+  /**
+   * reaudit-#4: optional idempotency key. When set, {@link recordOutboxEmail} dedupes the
+   * insert at the DB level so concurrent producers cannot create two outbox rows for the same
+   * logical email. Used by the notification worker (`notification:<id>:email:<recipient>`).
+   */
+  dedupeKey?: string;
 }
 
 let mailQueue: Queue<MailJobData> | null = null;
