@@ -100,7 +100,7 @@ Each row is a real attack pattern, its applicability here, the structural defens
 | 9 | **Grant-what-you-don't-hold** (role:manage grants `organization:delete` they lack) | `PUT roles/:id/permissions`, `POST roles`, `POST invitations`, api-key scopes | `assertCallerCanGrantPermissionCodes` | Over-grant → `403 cannotGrantPermissionNotHeld`; union (add+remove) enforced |
 | 10 | **Token / claim forgery** (mint token with foreign `org`) | all org-scoped routes | membership re-check on `org` claim | Foreign `org` claim → `403` (no membership) |
 | 11 | **JWT tampering / alg confusion** | all authed routes | RS256 verify | Tampered/`alg:none`/wrong-key → `401` |
-| 12 | **Email-targeted resource hijack** (accept an invite addressed to someone else) | `POST invitations/:id/accept|decline` | email-match guard | Caller email ≠ invite email → `403` |
+| 12 | **Email-targeted resource hijack** (accept an invite addressed to someone else) | `POST invitations/:id/{accept,decline}` | email-match guard | Caller email ≠ invite email → `403` |
 | 13 | **API-key escalation** (key grants perms) | api-key principal on grant paths | fail-closed (no acting user) | Key cannot grant → `403` |
 
 ---
@@ -213,7 +213,7 @@ All `PERM:` by-id routes (`role`, `membership`, `webhook`, `subscription`, `api_
 
 The matrix is **data-driven** so new routes are covered (or flagged) automatically — the same philosophy as the existing permission matrix.
 
-```
+```text
 tooling/openapi/route-catalog/route-authorization-model.json   ← NEW: per-route ownership model
   {
     "DELETE /api/v1/uploads/:upload_id":            { "model": "user",  "verifyNoMutation": true },
@@ -239,7 +239,7 @@ tooling/openapi/route-catalog/route-authorization-model.json   ← NEW: per-rout
 
 ### 7.3 File layout
 
-```
+```text
 src/tests/security/authz/
   authz-matrix.security.test.ts          # engine: iterates route-authorization-model.json
   object-ownership.security.test.ts      # Class A bespoke cases needing rich setup

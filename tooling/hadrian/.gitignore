@@ -1,0 +1,6 @@
+# Generated / secret artifacts — never commit
+.spec.*.json
+.tokens.env
+report.*.md
+report.*.json
+.hadrian/
