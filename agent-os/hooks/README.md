@@ -15,7 +15,8 @@ from `.cursor/hooks.json`.
 
 - **Claude Code** — `.claude/settings.json` → `hooks.SessionStart`, `hooks.PreToolUse`,
   `hooks.PostToolUse` (commands invoked via `$CLAUDE_PROJECT_DIR/agent-os/hooks/...`).
-- **Cursor** — `.cursor/hooks.json` → `beforeShellExecution`.
+- **Cursor** — `.cursor/hooks.json` → `beforeShellExecution`. Command paths are
+  resolved **relative to `.cursor/`**, so the entry uses `../agent-os/hooks/…`.
 - **Codex** — has no committable hook; enforce via `~/.codex/config.toml`
   (`sandbox_mode`, `approval_policy`) plus the policy in `AGENTS.md`.
 

@@ -9,11 +9,11 @@
 import { readFileSync } from "node:fs";
 
 function allow() {
-  process.stdout.write(JSON.stringify({ permission: "allow" }));
+  process.stdout.write(JSON.stringify({ continue: true, permission: "allow" }));
   process.exit(0);
 }
 function deny(message) {
-  process.stdout.write(JSON.stringify({ permission: "deny", userMessage: message, agentMessage: message }));
+  process.stdout.write(JSON.stringify({ continue: true, permission: "deny", userMessage: message, agentMessage: message }));
   process.exit(0);
 }
 
