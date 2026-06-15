@@ -2,22 +2,24 @@
 # One-shot cloud-session bring-up for core-be on Claude Code on the web.
 #
 # Runs every agent setup helper in order — Node, gh, Docker images (registry
-# mirror), CodeGraph — then brings up the local Docker stack (Postgres + Redis),
-# migrates, seeds, and verifies the app is healthy (/livez + /readyz). A single
-# command to make a cloud session "same as local", with a progress log after
-# each step so anyone watching the session sees live status.
+# mirror), CodeGraph — scaffolds a self-contained `.env.local` (`pnpm setup:local
+# --only-env`), then brings up the local Docker stack (Postgres + Redis), migrates,
+# seeds, and verifies the app is healthy (/livez + /readyz). A single command to
+# make a cloud session "same as local", with a progress log after each step so
+# anyone watching the session sees live status.
 #
 #   bash tooling/setup/agent/bootstrap.sh
 #
 # Steps 1-4 (tool installs) are best-effort and log ✓/skip without aborting; the
-# DB bring-up, migrate, seed, and healthcheck are HARD gates (non-zero exit on
-# failure). Leaves Postgres + Redis running. The app is started only transiently
-# for the healthcheck and then stopped — set KEEP_APP=1 to leave `pnpm dev` up.
+# env scaffold, DB bring-up, migrate, seed, and healthcheck are HARD gates
+# (non-zero exit on failure). Leaves Postgres + Redis running. The app is started
+# only transiently for the healthcheck and then stopped — set KEEP_APP=1 to leave
+# `pnpm dev` up.
 set -uo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.." || exit 1
 readonly AGENT_DIR="tooling/setup/agent"
-readonly TOTAL=8
+readonly TOTAL=9
 start_ts=$(date +%s)
 
 step() { echo ""; echo "▶ $*"; }
@@ -96,28 +98,33 @@ step "[4/${TOTAL}] CodeGraph CLI + index"
 bash "${AGENT_DIR}/install-codegraph.sh" || true
 if command -v codegraph >/dev/null 2>&1; then ok "[4/${TOTAL}] codegraph $(codegraph --version 2>/dev/null)"; else skip "[4/${TOTAL}] codegraph unavailable (non-fatal)"; fi
 
-# 5) Postgres + Redis (docker compose) --------------------------------------
-step "[5/${TOTAL}] Postgres + Redis (docker compose)"
+# 5) Environment files (.env.local) -----------------------------------------
+step "[5/${TOTAL}] Environment (.env.local)"
+pnpm setup:local --only-env >&2 || die "env scaffold failed (pnpm setup:local --only-env)"
+ok "[5/${TOTAL}] .env.local ready"
+
+# 6) Postgres + Redis (docker compose) --------------------------------------
+step "[6/${TOTAL}] Postgres + Redis (docker compose)"
 SONAR=0 pnpm compose:up >&2 || die "compose:up failed (is dockerd running? see step 3)"
 pnpm compose:wait >&2 || die "Postgres did not become ready"
-ok "[5/${TOTAL}] Postgres + Redis healthy"
+ok "[6/${TOTAL}] Postgres + Redis healthy"
 
-# 6) Migrations --------------------------------------------------------------
-step "[6/${TOTAL}] Database migrations"
+# 7) Migrations --------------------------------------------------------------
+step "[7/${TOTAL}] Database migrations"
 pnpm db:migrate >&2 || die "db:migrate failed"
-ok "[6/${TOTAL}] migrations applied"
+ok "[7/${TOTAL}] migrations applied"
 
-# 7) Seed --------------------------------------------------------------------
-step "[7/${TOTAL}] Seed (minimal reference data)"
+# 8) Seed --------------------------------------------------------------------
+step "[8/${TOTAL}] Seed (minimal reference data)"
 pnpm db:seed >&2 || die "db:seed failed"
-ok "[7/${TOTAL}] seed complete"
+ok "[8/${TOTAL}] seed complete"
 
-# 8) App health (/livez + /readyz) ------------------------------------------
-step "[8/${TOTAL}] App health (/livez + /readyz)"
+# 9) App health (/livez + /readyz) ------------------------------------------
+step "[9/${TOTAL}] App health (/livez + /readyz)"
 app_log="$(mktemp)"
 pnpm dev >"${app_log}" 2>&1 &
 if bash "${AGENT_DIR}/healthcheck.sh"; then
-  ok "[8/${TOTAL}] app live & ready"
+  ok "[9/${TOTAL}] app live & ready"
   app_ok=1
 else
   echo "---- pnpm dev log (tail) ----" >&2
