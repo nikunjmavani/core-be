@@ -30,6 +30,31 @@ readonly CODEGRAPH_PACKAGE="@colbymchenry/codegraph"
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "${repository_root}" || exit 0
 
+# Activate the repo's pinned Node (.nvmrc) on PATH before the global install, so
+# the codegraph CLI is installed under the pinned Node — not the image default —
+# even when this runs as a standalone Setup-script line rather than via
+# bootstrap.sh. install-node.sh drops the pinned Node into <prefix>/node<major>
+# but runs in a child process and cannot change THIS shell's PATH; mirror the
+# candidate search in agent-os/hooks/session-start.sh (honors NODE_INSTALL_PREFIX).
+required_major="24"
+[ -f .nvmrc ] && required_major="$(tr -dc '0-9.' < .nvmrc | cut -d. -f1)"
+current_major="$(node -v 2>/dev/null | tr -dc '0-9.' | cut -d. -f1)"
+current_major="${current_major:-0}"
+if [ "${current_major}" -lt "${required_major}" ] 2>/dev/null; then
+  node_prefix="${NODE_INSTALL_PREFIX:-/opt}"
+  for candidate in \
+    "${node_prefix}/node${required_major}/bin" \
+    /opt/node"${required_major}"*/bin \
+    "${HOME}/.nvm/versions/node/v${required_major}"*/bin \
+    /usr/local/node"${required_major}"*/bin; do
+    [ -x "${candidate}/node" ] || continue
+    export PATH="${candidate}:${PATH}"
+    [ -n "${CLAUDE_ENV_FILE:-}" ] && printf 'export PATH=%s:$PATH\n' "${candidate}" >> "${CLAUDE_ENV_FILE}"
+    echo "install-codegraph: switched to Node $("${candidate}/node" -v) at ${candidate}." >&2
+    break
+  done
+fi
+
 if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
   echo "install-codegraph: node/npm not on PATH — run install-node.sh first (non-fatal)." >&2
   exit 0
