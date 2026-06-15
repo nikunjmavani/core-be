@@ -35,12 +35,14 @@ describe('mfa.validator', () => {
     );
   });
 
-  it('validateMfaMethodIdParam accepts positive integer string', () => {
-    expect(validateMfaMethodIdParam('42')).toBe(42);
+  it('validateMfaMethodIdParam accepts a valid public id (route-#10)', () => {
+    expect(validateMfaMethodIdParam('mfa_a1b2c3d4e5f6g7h8i9j0k')).toBe('mfa_a1b2c3d4e5f6g7h8i9j0k');
   });
 
   it('validateMfaMethodIdParam throws ValidationError for invalid id', () => {
     expect(() => validateMfaMethodIdParam('0')).toThrow(ValidationError);
     expect(() => validateMfaMethodIdParam('abc')).toThrow(ValidationError);
+    // route-#10: a bare numeric id is no longer a valid param (now an opaque 21-char public id).
+    expect(() => validateMfaMethodIdParam('42')).toThrow(ValidationError);
   });
 });

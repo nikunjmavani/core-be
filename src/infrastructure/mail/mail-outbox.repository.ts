@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, lt } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
 import {
   assertWorkerDatabaseContext,
@@ -26,22 +26,46 @@ function mailOutboxDatabase() {
  * enrolls in the active request transaction when present so the row commits only
  * if the surrounding business write succeeds. Returns the generated `id` used as
  * the BullMQ job payload.
+ *
+ * @remarks
+ * reaudit-#4: when `data.dedupeKey` is supplied, the insert is idempotent on that key
+ * (`ON CONFLICT (dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING`). A concurrent
+ * producer using the same key gets back the EXISTING row's id instead of creating a
+ * second row, so two redelivered runs of the same notification converge on one outbox
+ * row → one email. No lost-email risk: the insert is always attempted.
  */
 export async function insertMailOutbox(data: MailEnqueueInput): Promise<number> {
   const toAddresses = Array.isArray(data.to) ? data.to : [data.to];
-  const rows = await mailOutboxDatabase()
-    .insert(mail_outbox)
-    .values({
-      to_addresses: toAddresses,
-      subject: data.subject,
-      html: data.html,
-      text_body: data.text,
-      reply_to: data.replyTo,
-      tags: data.tags,
-      status: 'pending',
-    })
-    .returning({ id: mail_outbox.id });
-  const mailOutboxId = rows[0]?.id;
+  const insertQuery = mailOutboxDatabase().insert(mail_outbox).values({
+    to_addresses: toAddresses,
+    subject: data.subject,
+    html: data.html,
+    text_body: data.text,
+    reply_to: data.replyTo,
+    tags: data.tags,
+    status: 'pending',
+    dedupe_key: data.dedupeKey,
+  });
+  const rows = data.dedupeKey
+    ? await insertQuery
+        .onConflictDoNothing({
+          target: mail_outbox.dedupe_key,
+          where: isNotNull(mail_outbox.dedupe_key),
+        })
+        .returning({ id: mail_outbox.id })
+    : await insertQuery.returning({ id: mail_outbox.id });
+
+  let mailOutboxId = rows[0]?.id;
+  if (mailOutboxId === undefined && data.dedupeKey) {
+    // Conflict — another producer already recorded this dedupe_key. Resolve to that row's id
+    // so the caller dispatches the SAME (idempotent) outbox row rather than failing.
+    const existing = await mailOutboxDatabase()
+      .select({ id: mail_outbox.id })
+      .from(mail_outbox)
+      .where(sql`${mail_outbox.dedupe_key} = ${data.dedupeKey}`)
+      .limit(1);
+    mailOutboxId = existing[0]?.id;
+  }
   if (mailOutboxId === undefined) {
     throw new Error('Failed to insert mail outbox row');
   }
@@ -168,7 +192,20 @@ export async function markMailOutboxSent(
 export async function markMailOutboxFailed(mailOutboxId: number): Promise<void> {
   await mailOutboxDatabase()
     .update(mail_outbox)
-    .set({ status: 'failed', updated_at: new Date() })
+    .set({
+      status: 'failed',
+      updated_at: new Date(),
+      // audit-#10: scrub the secret-bearing rendered body on TERMINAL failure too — not only on
+      // success. A `failed` row still embedded the live single-use token (password-reset /
+      // magic-link / invitation / email-verification); previously only `markMailOutboxSent`
+      // cleared it, so a permanently-failed delivery left the token recoverable from a PITR
+      // snapshot, leaked operator console, SQLi, or compromised app credential until token
+      // expiry (and invitation/verification tokens can be long-lived). The row is retained for
+      // the audit trail (recipient, subject, status, timestamps); a manual resend must mint a
+      // fresh token rather than replaying stored HTML.
+      html: '',
+      text_body: null,
+    })
     .where(eq(mail_outbox.id, mailOutboxId));
 }
 

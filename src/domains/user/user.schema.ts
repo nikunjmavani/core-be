@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   bigserial,
+  bigint,
   varchar,
   boolean,
   integer,
@@ -26,7 +27,7 @@ export const users = authSchema
     'users',
     {
       id: bigserial('id', { mode: 'number' }).primaryKey(),
-      public_id: varchar('public_id', { length: 21 }).notNull(),
+      public_id: varchar('public_id', { length: 28 }).notNull(),
       email: varchar('email', { length: 255 }).notNull(),
       email_hash: varchar('email_hash', { length: 64 }).notNull(),
       is_email_verified: boolean('is_email_verified').notNull().default(false),
@@ -40,6 +41,10 @@ export const users = authSchema
       is_mfa_enabled: boolean('is_mfa_enabled').notNull().default(false),
       status: varchar('status', { length: 20 }).notNull().default('ACTIVE'),
       last_active_at: timestamp('last_active_at', { withTimezone: true }),
+      // Soft pointer to the organization the user last acted in; restored as the default
+      // active organization at login. No hard FK (avoids a circular cross-schema FK); the
+      // login selection re-validates membership, so a stale/dangling value falls back safely.
+      last_active_organization_id: bigint('last_active_organization_id', { mode: 'number' }),
       deleted_at: timestamp('deleted_at', { withTimezone: true }),
       deletion_started_at: timestamp('deletion_started_at', { withTimezone: true }),
       created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

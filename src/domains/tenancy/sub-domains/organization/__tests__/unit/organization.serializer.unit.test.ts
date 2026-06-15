@@ -14,6 +14,7 @@ describe('organization serializers', () => {
         public_id: 'org-public',
         name: 'Demo',
         slug: 'demo-org',
+        type: 'TEAM',
         status: 'ACTIVE',
         logo_url: null,
         created_at: createdAt,
@@ -23,11 +24,27 @@ describe('organization serializers', () => {
       id: 'org-public',
       name: 'Demo',
       slug: 'demo-org',
+      type: 'TEAM',
       status: 'ACTIVE',
       logo_url: null,
       created_at: createdAt.toISOString(),
       updated_at: updatedAt.toISOString(),
     });
+  });
+
+  it('serializeOrganization passes through a null slug for a personal organization', () => {
+    expect(
+      serializeOrganization({
+        public_id: 'org-personal',
+        name: 'Personal',
+        slug: null,
+        type: 'PERSONAL',
+        status: 'ACTIVE',
+        logo_url: null,
+        created_at: createdAt,
+        updated_at: updatedAt,
+      }).slug,
+    ).toBeNull();
   });
 
   it('serializeOrganizationSettings maps settings row', () => {

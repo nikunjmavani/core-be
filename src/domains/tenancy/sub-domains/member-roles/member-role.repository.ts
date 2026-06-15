@@ -2,9 +2,14 @@ import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
+import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
 import { BaseRepository } from '@/infrastructure/database/base-repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
+import {
+  RESOURCE_QUOTA_LOCK_NAMESPACE,
+  acquireResourceQuotaLock,
+} from '@/infrastructure/database/resource-quota-lock.util.js';
 import {
   buildAscendingTextIdCursorCondition,
   createOpaqueCursorFromRow,
@@ -38,6 +43,16 @@ export class MemberRoleRepository extends BaseRepository {
       .from(roles)
       .where(and(eq(roles.organization_id, organization_id), isNull(roles.deleted_at)));
     return rows[0]?.value ?? 0;
+  }
+
+  /**
+   * audit-#8: transaction-scoped advisory lock serializing the per-org custom-role creation quota
+   * check + insert so concurrent creates cannot both pass the count and overshoot
+   * `MEMBER_ROLE_MAX_PER_ORG`. Call inside the create transaction before
+   * {@link countActiveByOrganization}.
+   */
+  async acquireCreationQuotaLock(organization_id: number): Promise<void> {
+    await acquireResourceQuotaLock(RESOURCE_QUOTA_LOCK_NAMESPACE.MEMBER_ROLE, organization_id);
   }
 
   async findByOrganizationId(organization_id: number, pagination: MemberRoleListPagination) {
@@ -114,7 +129,7 @@ export class MemberRoleRepository extends BaseRepository {
     created_by_user_id?: number | null;
   }) {
     return runInsertWithPublicIdentifierRetry(async () => {
-      const public_id = generatePublicId();
+      const public_id = generatePublicId('memberRole');
       const row = {
         public_id,
         organization_id: data.organization_id,
@@ -162,6 +177,42 @@ export class MemberRoleRepository extends BaseRepository {
           eq(roles.public_id, public_id),
           eq(roles.organization_id, organization_id),
           isNull(roles.deleted_at),
+        ),
+      )
+      .returning();
+    return (rows[0] ?? null) as MemberRoleRow | null;
+  }
+
+  /**
+   * Soft-deletes a role ONLY if it has no active (not soft-deleted) members, in ONE statement.
+   *
+   * @remarks
+   * A `NOT EXISTS` over `memberships` is folded into the delete's WHERE so a concurrent
+   * member-assignment cannot slip between a separate count and the delete and leave a member pointing
+   * at a `deleted_at` role — which the permission-resolution join (`roles.deleted_at IS NULL`) would
+   * then silently strip of all permissions (route-audit C2). Returns the deleted row, or `null` when
+   * the role is missing/already-deleted OR still has active members; the caller distinguishes the
+   * latter via a prior existence check.
+   */
+  async softDeleteIfNoActiveMembers(
+    public_id: string,
+    organization_id: number,
+  ): Promise<MemberRoleRow | null> {
+    const rows = await getRequestDatabase()
+      .update(roles)
+      .set({ deleted_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
+      .where(
+        and(
+          eq(roles.public_id, public_id),
+          eq(roles.organization_id, organization_id),
+          isNull(roles.deleted_at),
+          sql`NOT EXISTS (
+            SELECT 1
+            FROM ${memberships}
+            WHERE ${memberships.role_id} = ${roles.id}
+              AND ${memberships.organization_id} = ${organization_id}
+              AND ${memberships.deleted_at} IS NULL
+          )`,
         ),
       )
       .returning();

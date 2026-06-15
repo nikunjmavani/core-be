@@ -217,11 +217,16 @@ export class WebauthnService {
     // retained only as a defense-in-depth for tests/callers that bypass the validator;
     // the DTO produces a typed value so this branch should be unreachable in normal flow.
     const user = await this.userService.findByEmail(parsed.email);
-    const credentials = user
-      ? await withUserDatabaseContext(user.public_id, () =>
-          this.credentialRepository.listActiveByUserId(user.id),
-        )
-      : [];
+    // Anti-enumeration (timing): the decoy below equalizes the response SHAPE, but a KNOWN email
+    // otherwise incurs an extra user-context credential query that an unknown email skips — a
+    // measurable timing oracle that re-opens what the decoy closes. Run the SAME user-context lookup
+    // on both paths; an unknown/credential-less email uses a non-resolvable synthetic context (the
+    // RLS policy + `user_id = 0` filter return zero rows), so the DB work matches.
+    const lookupUserPublicId = user?.public_id ?? `decoy:${generatePublicId('authMethod')}`;
+    const lookupUserId = user?.id ?? 0;
+    const credentials = await withUserDatabaseContext(lookupUserPublicId, () =>
+      this.credentialRepository.listActiveByUserId(lookupUserId),
+    );
 
     // Anti-enumeration: never let the response reveal whether `email` maps to an account
     // that has passkeys. Unknown accounts (and known accounts without credentials) receive
@@ -289,7 +294,7 @@ export class WebauthnService {
     const challengeToken = await createWebauthnChallenge(
       this.redis,
       'authentication',
-      `decoy:${generatePublicId()}`,
+      `decoy:${generatePublicId('authMethod')}`,
       options.challenge,
     );
 
@@ -310,6 +315,18 @@ export class WebauthnService {
     );
 
     const response = parsed.response as AuthenticationResponseJSON;
+    // Defense-in-depth: when the authenticator returns a `userHandle` (resident/discoverable
+    // credentials), it MUST decode to the challenged user's public id — registration sets
+    // `userID = utf8(public_id)`. The credential↔user binding is enforced below by the id-scoped
+    // lookup + signature, so this is not load-bearing today; it pins the invariant so a future
+    // usernameless flow that resolves the user FROM `userHandle` cannot regress into account confusion.
+    const assertedUserHandle = response.response.userHandle;
+    if (
+      assertedUserHandle !== undefined &&
+      Buffer.from(assertedUserHandle, 'base64url').toString('utf8') !== challenge.user_public_id
+    ) {
+      throw new UnauthorizedError('errors:webauthnInvalidChallenge');
+    }
     // The challenge binds this assertion to a user; auth.webauthn_credentials is FORCE RLS keyed on
     // app.current_user_id, so look the credential up inside that user's context.
     const storedCredential = await withUserDatabaseContext(challenge.user_public_id, () =>

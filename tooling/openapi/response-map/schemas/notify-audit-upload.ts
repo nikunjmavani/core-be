@@ -15,8 +15,8 @@ export const notificationSchema = {
 };
 
 export const notificationExample = {
-  id: 'ntf_m7n2p5q8w1r4x9k3',
-  user_id: 'usr_k7x9m2pqr4w8n1v3',
+  id: 'ntf_m7n2p5q8w1r4x9k3a1b2c',
+  user_id: 'usr_k7x9m2pqr4w8n1v3a1b2c',
   type: 'subscription.updated',
   title: 'Subscription updated',
   body: 'Your subscription was updated successfully.',
@@ -48,8 +48,8 @@ export const webhookSchema = {
 };
 
 export const webhookExample = {
-  id: 'whk_p5q8w1r4x9k3m7n2',
-  organization_id: 'org_k7x9m2pqr4w8n1v3',
+  id: 'whk_p5q8w1r4x9k3m7n2a1b2c',
+  organization_id: 'org_k7x9m2pqr4w8n1v3a1b2c',
   url: 'https://api.example.com/webhooks/receive',
   events: ['subscription.created', 'subscription.updated', 'member.invited'],
   is_enabled: true,
@@ -89,7 +89,7 @@ export const deliveryAttemptSchema = {
 
 export const deliveryAttemptExample = {
   id: 'da_w1r4x9k3m7n2p5q8',
-  webhook_id: 'whk_p5q8w1r4x9k3m7n2',
+  webhook_id: 'whk_p5q8w1r4x9k3m7n2a1b2c',
   event_type: 'subscription.created',
   status_code: 200,
   response_time_ms: 245,
@@ -117,10 +117,10 @@ export const auditLogSchema = {
 
 export const auditLogExample = {
   id: 'log_t6m3n7p2q8w5k1r4',
-  organization_id: 'org_k7x9m2pqr4w8n1v3',
-  actor_user_id: 'usr_k7x9m2pqr4w8n1v3',
+  organization_id: 'org_k7x9m2pqr4w8n1v3a1b2c',
+  actor_user_id: 'usr_k7x9m2pqr4w8n1v3a1b2c',
   resource_type: 'organization',
-  resource_id: 'org_k7x9m2pqr4w8n1v3',
+  resource_id: 'org_k7x9m2pqr4w8n1v3a1b2c',
   action: 'organization.updated',
   metadata: { changes: { name: { from: 'Old Name', to: 'Acme Corporation' } } },
   ip_address: '203.0.113.42',
@@ -140,7 +140,7 @@ export const uploadSchema = {
 
 export const uploadExample = {
   uploadUrl: 'https://s3.amazonaws.com/bucket/avatars/usr_abc123.png?X-Amz-Algorithm=...',
-  key: 'avatars/usr_k7x9m2pqr4w8n1v3.png',
+  key: 'avatars/usr_k7x9m2pqr4w8n1v3a1b2c.png',
   expiresAt: '2026-02-14T11:30:00.000Z',
 };
 

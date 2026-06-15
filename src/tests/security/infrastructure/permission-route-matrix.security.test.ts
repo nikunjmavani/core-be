@@ -17,30 +17,40 @@ import { loadOrganizationPermissionRoutesFromCatalog } from '@/tests/helpers/rou
 import type { FastifyInstance } from 'fastify';
 
 const organizationPermissionRoutes = loadOrganizationPermissionRoutesFromCatalog();
-const PATH_PARAM_PLACEHOLDER = '000000000000000000000';
+import {
+  PARAM_NAME_TO_ENTITY,
+  publicIdPlaceholderFor,
+} from '@/shared/utils/identity/public-id.util.js';
+
+function placeholderForParamName(paramName: string): string {
+  const entity = PARAM_NAME_TO_ENTITY[paramName as keyof typeof PARAM_NAME_TO_ENTITY];
+  return entity ? publicIdPlaceholderFor(entity) : 'placeholder';
+}
 
 function materializeOrganizationScopedPath(path: string, organizationPublicId: string): string {
-  return path.replace(':id', organizationPublicId).replace(/:[a-zA-Z]+/g, PATH_PARAM_PLACEHOLDER);
+  return path
+    .replace(':organization_id', organizationPublicId)
+    .replace(/:([a-zA-Z_]+)/g, (_, name: string) => placeholderForParamName(name));
 }
 
 function payloadForPermissionRoute(
   route: (typeof organizationPermissionRoutes)[number],
-  planPublicId: string = PATH_PARAM_PLACEHOLDER,
+  planPublicId: string = publicIdPlaceholderFor('plan'),
 ): Record<string, unknown> | undefined {
   if (route.method === 'GET' || route.method === 'DELETE') return undefined;
-  if (route.path.includes('/subscriptions/:subscriptionId/change-plan')) {
+  if (route.path.includes('/subscriptions/:subscription_id/change-plan')) {
     return { plan_id: planPublicId };
   }
   if (route.path.endsWith('/subscriptions')) {
     return { plan_id: planPublicId, billing_cycle: 'monthly' };
   }
-  if (route.path.includes('/subscriptions/:subscriptionId')) {
+  if (route.path.includes('/subscriptions/:subscription_id')) {
     return {};
   }
   if (route.path.endsWith('/api-keys')) {
     return { name: 'Matrix API key', scopes: [route.permissionCode] };
   }
-  if (route.path.includes('/api-keys/:apiKeyId')) {
+  if (route.path.includes('/api-keys/:api_key_id')) {
     return { name: 'Matrix API key updated' };
   }
   if (route.path.endsWith('/logo')) {
@@ -51,19 +61,19 @@ function payloadForPermissionRoute(
     // schema validation (400) preempt the permission check (403) this matrix asserts on.
     return { notification_type: 'billing', channel: 'EMAIL' };
   }
-  if (route.path.includes('/notification-policies/:policyId')) {
+  if (route.path.includes('/notification-policies/:policy_id')) {
     return { default_enabled: false };
   }
   if (route.path.endsWith('/webhooks')) {
     return { url: 'https://example.com/webhook', events: ['notification.created'] };
   }
-  if (route.path.includes('/webhooks/:webhookId')) {
+  if (route.path.includes('/webhooks/:webhook_id')) {
     return { is_enabled: false };
   }
   if (route.path.endsWith('/invitations')) {
-    return { membership_id: PATH_PARAM_PLACEHOLDER };
+    return { membership_id: publicIdPlaceholderFor('plan') };
   }
-  if (route.path.includes('/invitations/:invitationId/resend')) {
+  if (route.path.includes('/invitations/:invitation_id/resend')) {
     return { expires_in_days: 7 };
   }
   if (route.path.endsWith('/memberships')) {
@@ -71,27 +81,27 @@ function payloadForPermissionRoute(
     // activation guard even when the caller holds the permission, which would break
     // the "does not return 403 with <permission>" half of the matrix.
     return {
-      user_id: PATH_PARAM_PLACEHOLDER,
-      role_id: PATH_PARAM_PLACEHOLDER,
+      user_id: publicIdPlaceholderFor('plan'),
+      role_id: publicIdPlaceholderFor('plan'),
       status: 'INVITED',
     };
   }
-  if (route.path.includes('/memberships/:membershipId')) {
+  if (route.path.includes('/memberships/:membership_id')) {
     return { status: 'ACTIVE' };
   }
   if (route.path.endsWith('/roles')) {
     return { name: 'Matrix role' };
   }
-  if (route.path.includes('/roles/:roleId/permissions')) {
+  if (route.path.includes('/roles/:role_id/permissions')) {
     return { permission_codes: [] };
   }
-  if (route.path.includes('/roles/:roleId')) {
+  if (route.path.includes('/roles/:role_id')) {
     return { name: 'Matrix role updated' };
   }
   if (route.path.endsWith('/settings')) {
     return { is_email_notifications_enabled: true };
   }
-  if (route.path.endsWith('/organizations/:id')) {
+  if (route.path.endsWith('/tenancy/organization')) {
     return { name: 'Matrix organization' };
   }
   return {};
@@ -100,7 +110,7 @@ function payloadForPermissionRoute(
 function routeNeedsExistingPlan(route: (typeof organizationPermissionRoutes)[number]): boolean {
   return (
     route.path.endsWith('/subscriptions') ||
-    route.path.includes('/subscriptions/:subscriptionId/change-plan')
+    route.path.includes('/subscriptions/:subscription_id/change-plan')
   );
 }
 
@@ -147,7 +157,10 @@ describe('Security: Permission route matrix', () => {
         organizationId: organization.id,
         roleId: role.id,
       });
-      const token = await generateTestToken({ userId: user.public_id });
+      const token = await generateTestToken({
+        userId: user.public_id,
+        organizationPublicId: organization.public_id,
+      });
       const materializedPath = materializeOrganizationScopedPath(
         route.path,
         organization.public_id,
@@ -184,7 +197,10 @@ describe('Security: Permission route matrix', () => {
         roleId: role.id,
       });
       await invalidatePermissions(user.public_id, organization.public_id);
-      const token = await generateTestToken({ userId: user.public_id });
+      const token = await generateTestToken({
+        userId: user.public_id,
+        organizationPublicId: organization.public_id,
+      });
       const materializedPath = materializeOrganizationScopedPath(
         route.path,
         organization.public_id,

@@ -58,7 +58,7 @@ export class NotificationRepository {
     const rows = await this.db()
       .insert(notifications)
       .values({
-        public_id: generatePublicId(),
+        public_id: generatePublicId('notification'),
         user_id: input.user_id,
         organization_id: input.organization_id,
         type: input.type,

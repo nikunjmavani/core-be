@@ -2,7 +2,7 @@
 
 Total routes: 129
 
-- ✅ Covered by explicit test: **126**
+- ✅ Covered by explicit test: **127**
 - 🟡 Smoke-only (probe but no assertion-rich test): **2**
 - ❌ Gap (no test reference found): **0**
 
@@ -26,33 +26,33 @@ Every route in `docs/routes.txt` is referenced by at least one explicit test fil
 | Method | Route | First test reference |
 |---|---|---|
 | GET | `/api/v1/audit/logs` | `src/tests/security/input/payload-dos.security.test.ts:102` |
-| POST | `/api/v1/auth/email/resend-verification` | `src/domains/auth/__tests__/auth.test.ts:705` |
-| POST | `/api/v1/auth/email/verify` | `src/domains/auth/__tests__/auth.test.ts:658` |
+| POST | `/api/v1/auth/email/resend-verification` | `src/domains/auth/__tests__/auth.test.ts:707` |
+| POST | `/api/v1/auth/email/verify` | `src/domains/auth/__tests__/auth.test.ts:660` |
 | POST | `/api/v1/auth/login` | `src/tests/e2e/billing-onboarding.e2e.test.ts:42` |
 | POST | `/api/v1/auth/logout` | `src/tests/integration/empty-body-json-parser.integration.test.ts:42` |
 | POST | `/api/v1/auth/magic-link/send` | `src/tests/chaos/redis-queue-enqueue.chaos.test.ts:63` |
 | POST | `/api/v1/auth/magic-link/verify` | `src/tests/integration/auth/magic-link.integration.test.ts:26` |
 | GET | `/api/v1/auth/me/auth-methods` | `src/tests/security/infrastructure/sensitive-field-leakage.security.test.ts:85` |
 | POST | `/api/v1/auth/me/auth-methods` | `src/tests/security/infrastructure/sensitive-field-leakage.security.test.ts:85` |
-| DELETE | `/api/v1/auth/me/auth-methods/:publicId` | `src/domains/auth/__tests__/auth.test.ts:957` |
+| DELETE | `/api/v1/auth/me/auth-methods/:publicId` | `src/domains/auth/__tests__/auth.test.ts:959` |
 | GET | `/api/v1/auth/me/sessions` | `src/tests/security/auth/jwt-attacks.security.test.ts:24` |
 | DELETE | `/api/v1/auth/me/sessions` | `src/tests/security/auth/jwt-attacks.security.test.ts:24` |
 | DELETE | `/api/v1/auth/me/sessions/:id` | `src/tests/security/auth/session-invalidation.security.test.ts:159` |
-| GET | `/api/v1/auth/mfa` | `src/domains/auth/__tests__/auth.test.ts:818` |
+| GET | `/api/v1/auth/mfa` | `src/domains/auth/__tests__/auth.test.ts:820` |
 | DELETE | `/api/v1/auth/mfa/:mfaMethodId` | `src/tests/security/auth/mfa-security.security.test.ts:61` |
-| POST | `/api/v1/auth/mfa/enroll` | `src/domains/auth/__tests__/auth.test.ts:631` |
-| POST | `/api/v1/auth/mfa/enroll/confirm` | `src/domains/user/__tests__/integration/user.integration.test.ts:116` |
+| POST | `/api/v1/auth/mfa/enroll` | `src/domains/auth/__tests__/auth.test.ts:633` |
+| POST | `/api/v1/auth/mfa/enroll/confirm` | `src/domains/auth/sub-domains/auth-mfa/__tests__/integration/auth-mfa.integration.test.ts:122` |
 | POST | `/api/v1/auth/mfa/login` | `src/tests/security/auth/mfa-security.security.test.ts:145` |
 | POST | `/api/v1/auth/mfa/verify` | `src/tests/security/auth/mfa-security.security.test.ts:61` |
 | GET | `/api/v1/auth/oauth/:provider` | `src/tests/security/infrastructure/api-versioning.security.test.ts:26` |
-| ... | ... | (106 more) |
+| ... | ... | (107 more) |
 
 ## Method overview
 
 | Method | Covered | Smoke-only | Gap |
 |---|---|---|---|
 | GET | 46 | 2 | 0 |
-| POST | 47 | 0 | 1 |
+| POST | 48 | 0 | 0 |
 | PATCH | 12 | 0 | 0 |
 | PUT | 4 | 0 | 0 |
 | DELETE | 17 | 0 | 0 |

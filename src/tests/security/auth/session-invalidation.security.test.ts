@@ -17,6 +17,12 @@ import {
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
+import { provisionOrganizationWithOwner } from '@/domains/tenancy/sub-domains/organization/organization-provisioning.js';
+import { invalidatePermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
+import { database } from '@/infrastructure/database/connection.js';
+import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 
 /**
@@ -91,16 +97,25 @@ describe('Security: Session invalidation', () => {
     expect(response.statusCode).toBe(401);
   });
 
-  // NEGATIVE — token for user in org A used against org B resource
-  it('should return 403 when org-A token is used against an org-B endpoint', async () => {
+  // NEGATIVE — a user with no membership in org B cannot reach org B's resources.
+  //
+  // Flat tenancy routes resolve the organization from the JWT `org` claim, so
+  // cross-tenant access is expressed by scoping user A's token to org B's claim:
+  // A holds no membership in B, so the flat settings route resolves to B and the
+  // permission preHandler denies it (403). A forged claim is scope, not authority.
+  it("should return 403 when a user's token claims an organization they don't belong to", async () => {
     const userA = await createActiveUserWithToken();
     const userB = await createActiveUserWithToken();
 
+    const userATokenScopedToB = await generateTestToken({
+      userId: userA.user.public_id,
+      organizationPublicId: userB.organization.public_id,
+    });
+
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(`/tenancy/organizations/${userB.organization.public_id}/settings`),
-      token: userA.token,
-      organizationPublicId: userB.organization.public_id,
+      url: testApiPath('/tenancy/organization/settings'),
+      token: userATokenScopedToB,
     });
 
     expect([403, 404]).toContain(response.statusCode);
@@ -111,7 +126,7 @@ describe('Security: Session invalidation', () => {
    *
    * @remarks
    * The endpoint returns the active session rows as a plain array under `data`,
-   * each carrying a `public_id` (the id accepted by DELETE /auth/me/sessions/:id).
+   * each carrying an `id` (the value accepted by DELETE /auth/me/sessions/:session_id).
    */
   async function listSessionPublicIds(token: string): Promise<string[]> {
     const listResponse = await injectAuthenticated(app, {
@@ -120,14 +135,14 @@ describe('Security: Session invalidation', () => {
       token,
     });
     expect(listResponse.statusCode).toBe(200);
-    const sessions = (listResponse.json() as { data: { public_id: string }[] }).data;
+    const sessions = (listResponse.json() as { data: { id: string }[] }).data;
     expect(Array.isArray(sessions)).toBe(true);
-    return sessions.map((session) => session.public_id);
+    return sessions.map((session) => session.id);
   }
 
   // NEGATIVE — a revoked (non-current) session's token must be rejected.
   //
-  // DELETE /auth/me/sessions/:id revokes OTHER devices, not the caller's current
+  // DELETE /auth/me/sessions/:session_id revokes OTHER devices, not the caller's current
   // session, so we revoke a second session (device B) using device A's token and
   // assert device B's token is then rejected while device A's still works. This
   // proves the auth middleware enforces per-session revocation (verifyActiveAccessToken).
@@ -268,6 +283,56 @@ describe('Security: Session invalidation', () => {
     });
 
     expect(response.statusCode).toBe(401);
+  });
+
+  // M3 — TRUST GUARANTEE: a removed member's still-valid `org`-claim token must lose
+  // access on its NEXT request. The claim is SCOPE, not AUTHORITY: requireOrganizationPermission
+  // re-checks membership per request, and a membership change invalidates the permission cache.
+  // This proves that revoking someone's membership takes effect immediately even though their
+  // bearer token (claim still = the org) is otherwise unexpired.
+  it('should return 403 on the next request after a member is removed (stale org-claim token loses access)', async () => {
+    // An ACTIVE owner-member of org A holds role:read (the owner role grants all tenancy perms).
+    const user = await createTestUser();
+    const orgA = await provisionOrganizationWithOwner({
+      name: 'M3 Org A',
+      slug: `m3-org-a-${generatePublicId('organization').slice(4, 14)}`,
+      type: 'TEAM',
+      ownerUserId: user.id,
+    });
+    const { token } = await generateTestTokenAndSession({
+      userId: user.public_id,
+      organizationPublicId: orgA.organization.public_id,
+    });
+
+    // Pre-condition: the org-scoped role:read route resolves the org from the claim and allows it.
+    const before = await injectAuthenticated(app, {
+      method: 'GET',
+      url: testApiPath('/tenancy/organization/roles'),
+      token,
+    });
+    expect(before.statusCode).toBe(200);
+
+    // Remove the user's membership in org A, exactly as the membership service does: soft-delete
+    // the row, then invalidate the per-(user, org) permission cache so the change is immediate.
+    await database
+      .update(memberships)
+      .set({ deleted_at: new Date() })
+      .where(
+        and(
+          eq(memberships.user_id, user.id),
+          eq(memberships.organization_id, orgA.organization.id),
+        ),
+      );
+    await invalidatePermissions(user.public_id, orgA.organization.public_id);
+
+    // The SAME token (claim still = org A) now resolves zero permissions for a non-member →
+    // requireOrganizationPermission denies role:read with 403. The token was never re-minted.
+    const after = await injectAuthenticated(app, {
+      method: 'GET',
+      url: testApiPath('/tenancy/organization/roles'),
+      token,
+    });
+    expect(after.statusCode).toBe(403);
   });
 
   // NEGATIVE — token with role claim tampered to super_admin must not bypass session check

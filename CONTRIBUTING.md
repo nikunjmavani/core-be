@@ -61,11 +61,13 @@ Use **[docs/getting-started/requirement-intake.md](docs/getting-started/requirem
 
 ## Branches
 
-Use prefixes such as:
+Use `<type>/<short-description>` prefixes:
 
-- `feat/` — features
+- `feat/` or `feature/` — features
 - `fix/` — bug fixes
-- `chore/` / `docs/` / `ci/` — maintenance
+- `chore/` / `docs/` / `ci/` / `refactor/` / `test/` / `perf/` — maintenance
+
+`dev` and `main` are the long-lived branches; `claude/*` is reserved for Claude Code web sessions (platform-assigned — see [git-workflow.md](docs/process/git-workflow.md)). The naming policy is enforced by `.husky/pre-push` (bypass once with `SKIP_BRANCH_CHECK=1 git push`).
 
 ## Commits and releases
 
@@ -79,7 +81,7 @@ Commits should follow **[Conventional Commits](https://www.conventionalcommits.o
 | --- | --- | --- |
 | **pre-commit** | [`.husky/pre-commit`](.husky/pre-commit) | **`pnpm guard:pre-commit`** — labeled steps (list with `pnpm guard:pre-commit:list`): lint-staged, typecheck, validate:domain:strict, validate:scripts-layout, route catalog, optional structure tree / OpenAPI / migration checks, tsdoc, project identity, env-example sync, gitleaks, conflict-marker and large-file guards. On failure, read the **`✗ FAILED at step N/M:`** line. |
 | **commit-msg** | [`.husky/commit-msg`](.husky/commit-msg) | [Conventional Commits](https://www.conventionalcommits.org/) via commitlint |
-| **pre-push** | [`.husky/pre-push`](.husky/pre-push) | `typecheck`, `build`, `build:check`, `test:unit` |
+| **pre-push** | [`.husky/pre-push`](.husky/pre-push) | branch-name policy, `typecheck`, `build`, `build:check`, `test:unit` |
 
 **Gitleaks:** Install the [Gitleaks CLI](https://github.com/gitleaks/gitleaks) so pre-commit secret scanning is not skipped. CI always runs a full-repo scan. Manual check: `pnpm security:secrets`.
 

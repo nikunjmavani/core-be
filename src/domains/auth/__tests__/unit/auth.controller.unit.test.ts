@@ -40,9 +40,9 @@ function mockRequest(overrides: Record<string, unknown> = {}): never {
   return {
     auth: {
       kind: 'user' as const,
-      userId: generatePublicId(),
+      userId: generatePublicId('user'),
       role: 'user',
-      sessionPublicId: generatePublicId(),
+      sessionPublicId: generatePublicId('authSession'),
     },
     params: {},
     body: {},
@@ -236,14 +236,17 @@ describe('createAuthController', () => {
     );
     await controller.listMfaMethods(mockRequest(), mockReply());
     const deleteReply = mockReply();
-    await controller.deleteMfa(mockRequest({ params: { mfaMethodId: '5' } }), deleteReply);
+    await controller.deleteMfa(
+      mockRequest({ params: { mfa_method_id: 'mfa_a1b2c3d4e5f6g7h8i9j0k' } }),
+      deleteReply,
+    );
     expect(mfaService.enrollInit).toHaveBeenCalled();
     expect(mfaService.enrollConfirm).toHaveBeenCalled();
     expect(mfaService.verifyLoginMfa).toHaveBeenCalled();
     expect(deleteReply.code).toHaveBeenCalledWith(204);
   });
 
-  it('verifyMfaLogin returns session_public_id and sets session cookie', async () => {
+  it('verifyMfaLogin returns session_id and sets session cookie', async () => {
     const loginReply = mockReply();
     const responsePayload = await controller.verifyMfaLogin(
       mockRequest({ body: { mfa_session_token: 'session-token', totp_code: '123456' } }),
@@ -251,7 +254,7 @@ describe('createAuthController', () => {
     );
     expect(responsePayload.data).toMatchObject({
       access_token: 'token',
-      session_public_id: 'session',
+      session_id: 'session',
     });
     expect(loginReply.setCookie).toHaveBeenCalledWith(
       'session_id',
@@ -265,13 +268,13 @@ describe('createAuthController', () => {
     await controller.createAuthMethod(mockRequest({ body: { type: 'password' } }), mockReply());
     const deleteMethodReply = mockReply();
     await controller.deleteAuthMethod(
-      mockRequest({ params: { publicId: 'testpublicid12345678a' } }),
+      mockRequest({ params: { auth_method_id: 'am_a1b2c3d4e5f6g7h8i9j0k' } }),
       deleteMethodReply,
     );
     await controller.listSessions(mockRequest(), mockReply());
     const revokeReply = mockReply();
     await controller.revokeSession(
-      mockRequest({ params: { id: generatePublicId() } }),
+      mockRequest({ params: { organization_id: generatePublicId('organization') } }),
       revokeReply,
     );
     expect(authMethodService.list).toHaveBeenCalled();

@@ -51,7 +51,13 @@ describe('UploadService pending-quota concurrency (database)', () => {
       requireUserRecordByPublicId: async () => user,
     } as unknown as UserService;
     const organizationService = {} as unknown as OrganizationService;
-    const service = new UploadService(repository, userService, organizationService, objectStorage);
+    const service = new UploadService(
+      repository,
+      userService,
+      organizationService,
+      objectStorage,
+      {} as ConstructorParameters<typeof UploadService>[4],
+    );
 
     const results = await Promise.allSettled(
       Array.from({ length: CONCURRENT_REQUESTS }, () =>

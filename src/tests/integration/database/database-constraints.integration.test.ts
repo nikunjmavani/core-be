@@ -25,7 +25,7 @@ describe('Integration: database constraints', () => {
   it('should reject duplicate organization slug (23505)', async () => {
     const owner = await createTestUser();
     await database.insert(organizations).values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('organization'),
       name: 'Acme',
       slug: 'duplicate-slug-constraint',
       owner_user_id: owner.id,
@@ -34,7 +34,7 @@ describe('Integration: database constraints', () => {
 
     await expect(
       database.insert(organizations).values({
-        public_id: generatePublicId(),
+        public_id: generatePublicId('organization'),
         name: 'Other',
         slug: 'duplicate-slug-constraint',
         owner_user_id: owner.id,

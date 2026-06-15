@@ -35,7 +35,7 @@ Layer 3 (CI)      -- Full validation, Semgrep SAST, Gitleaks full-repo, tests
 ## When to run this skill
 
 - Adding or changing Biome rules in `biome.json`
-- Modifying `.husky/pre-commit` hook steps
+- Modifying `.husky/pre-commit` or `.husky/pre-push` hook steps (incl. the branch-name policy)
 - Adding `.husky/commit-msg` or changing commitlint config
 - Changing `lint-staged` config in `lint-staged.config.mjs`
 - Adding or updating CI security jobs
@@ -95,6 +95,7 @@ Pre-commit mirrors a **subset** of the static checks in [`.github/workflows/pr-c
 
 | Step | Command            | What it catches                    |
 | ---- | ------------------ | ---------------------------------- |
+| 0    | branch-name policy | Branch names outside the allowed prefixes (`dev`/`main`/`claude/*` + `<type>/…`) — runs first, fail-fast; bypass: `SKIP_BRANCH_CHECK=1 git push` (see `agent-os/rules/git-branch-naming.mdc`) |
 | 1    | `pnpm typecheck`   | Type errors before push            |
 | 2    | `pnpm build`       | Compile failures                   |
 | 3    | `pnpm build:check` | Unresolved `@/` aliases in `dist/` |

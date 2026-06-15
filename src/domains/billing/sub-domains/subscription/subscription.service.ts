@@ -1,5 +1,8 @@
 import { ConflictError, NotFoundError, UnprocessableEntityError } from '@/shared/errors/index.js';
 
+import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
+import { INACTIVE_SUBSCRIPTION_STATUSES } from './subscription.repository.js';
+
 /**
  * Subscription statuses that are considered terminal (non-mutable).
  *
@@ -9,10 +12,11 @@ import { ConflictError, NotFoundError, UnprocessableEntityError } from '@/shared
  * spurious Stripe API call against an already-inactive subscription, which
  * produces a Stripe error, surfaces as 503 to the caller, and may confuse
  * downstream event reconciliation. Guard every mutating method with this set
- * before reaching the payment provider (sec-new-B1).
+ * before reaching the payment provider (sec-new-B1). Sourced from
+ * {@link INACTIVE_SUBSCRIPTION_STATUSES} so the "mutable" and "occupies the
+ * subscription slot" definitions stay in lockstep (audit-#1).
  */
-const TERMINAL_STATUSES = new Set(['CANCELED', 'INCOMPLETE_EXPIRED']);
-import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
+const TERMINAL_STATUSES = new Set<string>(INACTIVE_SUBSCRIPTION_STATUSES);
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { PlanService } from '@/domains/billing/sub-domains/plan/plan.service.js';
 import type { PaymentProvider } from './payment-provider.port.js';
@@ -162,6 +166,61 @@ export class SubscriptionService {
     });
   }
 
+  /**
+   * Insert a terminal CANCELED tombstone row for a Stripe
+   * `customer.subscription.deleted` event whose local subscription row never
+   * existed (audit-#1).
+   *
+   * @remarks
+   * - **Algorithm:** resolves the internal organization id from the active
+   *   webhook RLS context (set by the tenancy resolver before dispatch), then
+   *   inserts a `CANCELED` row keyed by `provider_subscription_id` with the
+   *   deletion event's `created` timestamp stamped on `last_stripe_event_created_at`.
+   *   The partial unique index `idx_subscriptions_provider_subscription_id_unique`
+   *   plus the terminal-status guard in {@link syncFromStripeProviderSubscription}
+   *   then make any later out-of-order `.created` / `.updated` for the same id a
+   *   no-op, closing the resurrection gap.
+   * - **Failure modes:** returns `null` when the organization cannot be resolved
+   *   (defensive — the tenancy resolver already throws earlier) so the caller can
+   *   fall back to a retryable error instead of silently advancing the ledger. A
+   *   concurrent insert that loses the `provider_subscription_id` unique race
+   *   surfaces as a Postgres unique violation; the caller catches it and treats
+   *   the now-present row as the winner.
+   * - **Side effects:** one INSERT into `billing.subscriptions`.
+   */
+  async insertCanceledTombstoneFromStripeWebhookEvent(input: {
+    providerSubscriptionId: string;
+    providerCustomerId: string | null;
+    planId: number;
+    billingCycle: string;
+    currentPeriodStart: Date;
+    currentPeriodEnd: Date;
+    canceledAt: Date;
+    stripeEventCreatedAt: Date;
+    repositoryOverride: SubscriptionRepository;
+  }) {
+    const organizationId = await input.repositoryOverride.findOrganizationIdFromCurrentContext();
+    if (organizationId === null) {
+      return null;
+    }
+    return input.repositoryOverride.create({
+      organization_id: organizationId,
+      plan_id: input.planId,
+      billing_cycle: input.billingCycle,
+      status: 'CANCELED',
+      canceled_at: input.canceledAt,
+      cancel_at_period_end: false,
+      current_period_start: input.currentPeriodStart,
+      current_period_end: input.currentPeriodEnd,
+      provider: 'stripe',
+      provider_subscription_id: input.providerSubscriptionId,
+      ...(input.providerCustomerId !== null
+        ? { provider_customer_id: input.providerCustomerId }
+        : {}),
+      last_stripe_event_created_at: input.stripeEventCreatedAt,
+    });
+  }
+
   async list(organization_public_id: string) {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
@@ -229,6 +288,14 @@ export class SubscriptionService {
             organization_id: organization.id,
             plan_id: plan.id,
             billing_cycle: parsed.billing_cycle.toUpperCase() as 'MONTHLY' | 'YEARLY',
+            // audit-#2: a Stripe-backed subscription is created with
+            // `payment_behavior: 'default_incomplete'`, i.e. Stripe status
+            // `incomplete` with NO successful payment yet. Persist the local row
+            // as INCOMPLETE so entitlement never over-reports as TRIALING (an
+            // entitled state) before the first `customer.subscription.updated`
+            // webhook reconciles the real status. Local-only subscriptions (no
+            // Stripe) keep the repository's TRIALING default.
+            status: paymentResult.providerSubscriptionId ? 'INCOMPLETE' : undefined,
             current_period_start: now,
             current_period_end: periodEnd,
             created_by_user_id: createdByUserInternalId ?? undefined,
@@ -378,6 +445,29 @@ export class SubscriptionService {
       },
     );
 
+    // reaudit-#6: a never-activated INCOMPLETE subscription has no active period, so
+    // `cancel_at_period_end` is a no-op and the row would keep occupying the org's single
+    // subscription slot until a Stripe `incomplete_expired` webhook arrives — if that webhook
+    // never lands, the org is permanently locked out of re-subscribing. Cancel it immediately
+    // (at Stripe and locally) so the slot is freed now, giving a programmatic exit.
+    if (subscription.status === 'INCOMPLETE') {
+      if (subscription.provider_subscription_id) {
+        await this.paymentProvider.cancelSubscriptionImmediately(
+          subscription.provider_subscription_id,
+          idempotencyKey,
+        );
+      }
+      const canceled = await withOrganizationDatabaseContext(organization_public_id, async () =>
+        this.repository.update(subscription_public_id, organization.id, {
+          status: 'CANCELED',
+          canceled_at: new Date(),
+          last_stripe_event_created_at: new Date(),
+        }),
+      );
+      if (!canceled) throw new NotFoundError('Subscription');
+      return canceled;
+    }
+
     // Stripe network call — outside any database context.
     if (subscription.provider_subscription_id) {
       await this.paymentProvider.cancelSubscriptionAtPeriodEnd(
@@ -396,6 +486,46 @@ export class SubscriptionService {
     );
     if (!updated) throw new NotFoundError('Subscription');
     return updated;
+  }
+
+  /**
+   * Immediately cancels the organization's active subscription as part of organization offboarding
+   * (route-audit-#2). Idempotent: a no-op when there is no active subscription.
+   *
+   * @remarks
+   * - **Algorithm:** resolve the org + its active subscription; if one exists, cancel it at Stripe
+   *   NOW (not at period end — the org is going away) and set the local row `CANCELED`.
+   * - **Failure modes:** a Stripe outage throws `ServiceUnavailableError` (propagated), so the
+   *   caller's organization delete aborts rather than soft-deleting an org that keeps billing.
+   * - **Side effects:** Stripe cancel + a local `subscriptions` update.
+   * - **Notes:** deleting an org previously left its subscription billing forever — no offboarding
+   *   path touched billing. Re-running after a partial failure finds no active sub → no-op.
+   */
+  async cancelActiveForOrganizationOffboarding(organization_public_id: string): Promise<void> {
+    const { organization, subscription } = await withOrganizationDatabaseContext(
+      organization_public_id,
+      async () => {
+        const organization =
+          await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        const subscription = await this.repository.findActiveByOrganization(organization.id);
+        return { organization, subscription };
+      },
+    );
+    if (!subscription) return;
+
+    // Stripe network call — outside any database context.
+    if (subscription.provider_subscription_id) {
+      await this.paymentProvider.cancelSubscriptionImmediately(
+        subscription.provider_subscription_id,
+      );
+    }
+    await withOrganizationDatabaseContext(organization_public_id, async () =>
+      this.repository.update(subscription.public_id, organization.id, {
+        status: 'CANCELED',
+        canceled_at: new Date(),
+        last_stripe_event_created_at: new Date(),
+      }),
+    );
   }
 
   async resume(

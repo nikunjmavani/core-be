@@ -4,6 +4,7 @@ import {
   getActingUserPublicId,
   getRequestIdentifier,
   requirePrincipal,
+  resolveActiveOrganizationId,
 } from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { SubscriptionService } from './subscription.service.js';
@@ -17,99 +18,96 @@ function readIdempotencyKey(request: FastifyRequest): string | undefined {
 
 /**
  * Builds organization-scoped subscription handlers (list / get / create /
- * update / change-plan / cancel / resume). Each handler validates the
- * organization `id` AND the `subscriptionId` path params (sec-B10); externally
+ * update / change-plan / cancel / resume). The active organization is resolved
+ * from the signed `org` token claim via `resolveActiveOrganizationId`; handlers
+ * that take a `subscription_id` path param validate it (sec-B10); externally
  * mutating routes also require the `Idempotency-Key` header before delegating
  * to {@link SubscriptionService}.
  *
  * @remarks
- * sec-B10: every handler used to validate the organization `id` but threaded
- * `request.params.subscriptionId` to the service unchecked. Not an IDOR (the
- * service uses an exact-match WHERE), but unbounded attacker-supplied input
+ * sec-B10: every handler resolves the organization from the token claim and
+ * validates `request.params.subscription_id` rather than threading it to the
+ * service unchecked. Not an IDOR (the service uses an exact-match WHERE, scoped
+ * by RLS to the active organization), but unbounded attacker-supplied input
  * would otherwise flow into Sentry breadcrumbs, log payloads, and route-tagged
  * metric labels — a small cardinality + content-exfiltration foot-gun.
- * Validate both ids at the boundary so observability cannot be poisoned.
+ * Validate the subscription id at the boundary so observability cannot be poisoned.
  */
 export function createSubscriptionController(service: SubscriptionService) {
   return {
-    listSubscriptions: async (
-      request: FastifyRequest<{ Params: { id: string } }>,
-      _reply: FastifyReply,
-    ) => {
+    listSubscriptions: async (request: FastifyRequest, _reply: FastifyReply) => {
       requirePrincipal(request);
-      const data = await service.list(validatePublicIdParam(request.params.id, 'id'));
+      const data = await service.list(resolveActiveOrganizationId(request));
       return successResponse(SubscriptionSerializer.many(data), getRequestIdentifier(request));
     },
     getSubscription: async (
-      request: FastifyRequest<{ Params: { id: string; subscriptionId: string } }>,
+      request: FastifyRequest<{ Params: { subscription_id: string } }>,
       _reply: FastifyReply,
     ) => {
       requirePrincipal(request);
       const data = await service.get(
-        validatePublicIdParam(request.params.id, 'id'),
-        validatePublicIdParam(request.params.subscriptionId, 'subscriptionId'),
+        resolveActiveOrganizationId(request),
+        validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
       );
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
-    createSubscription: async (
-      request: FastifyRequest<{ Params: { id: string } }>,
-      _reply: FastifyReply,
-    ) => {
+    createSubscription: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requirePrincipal(request);
       const idempotencyKey = readIdempotencyKey(request);
       const data = await service.create(
-        validatePublicIdParam(request.params.id, 'id'),
+        resolveActiveOrganizationId(request),
         request.body,
         getActingUserPublicId(auth),
         idempotencyKey,
       );
+      reply.code(201);
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
     updateSubscription: async (
-      request: FastifyRequest<{ Params: { id: string; subscriptionId: string } }>,
+      request: FastifyRequest<{ Params: { subscription_id: string } }>,
       _reply: FastifyReply,
     ) => {
       requirePrincipal(request);
       const data = await service.update(
-        validatePublicIdParam(request.params.id, 'id'),
-        validatePublicIdParam(request.params.subscriptionId, 'subscriptionId'),
+        resolveActiveOrganizationId(request),
+        validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
         request.body,
       );
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
     changePlan: async (
-      request: FastifyRequest<{ Params: { id: string; subscriptionId: string } }>,
+      request: FastifyRequest<{ Params: { subscription_id: string } }>,
       _reply: FastifyReply,
     ) => {
       requirePrincipal(request);
       const data = await service.changePlan(
-        validatePublicIdParam(request.params.id, 'id'),
-        validatePublicIdParam(request.params.subscriptionId, 'subscriptionId'),
+        resolveActiveOrganizationId(request),
+        validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
         request.body,
         readIdempotencyKey(request),
       );
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
     cancelSubscription: async (
-      request: FastifyRequest<{ Params: { id: string; subscriptionId: string } }>,
+      request: FastifyRequest<{ Params: { subscription_id: string } }>,
       _reply: FastifyReply,
     ) => {
       requirePrincipal(request);
       const data = await service.cancel(
-        validatePublicIdParam(request.params.id, 'id'),
-        validatePublicIdParam(request.params.subscriptionId, 'subscriptionId'),
+        resolveActiveOrganizationId(request),
+        validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
         readIdempotencyKey(request),
       );
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
     resumeSubscription: async (
-      request: FastifyRequest<{ Params: { id: string; subscriptionId: string } }>,
+      request: FastifyRequest<{ Params: { subscription_id: string } }>,
       _reply: FastifyReply,
     ) => {
       requirePrincipal(request);
       const data = await service.resume(
-        validatePublicIdParam(request.params.id, 'id'),
-        validatePublicIdParam(request.params.subscriptionId, 'subscriptionId'),
+        resolveActiveOrganizationId(request),
+        validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
         readIdempotencyKey(request),
       );
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));

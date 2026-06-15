@@ -27,7 +27,7 @@ export function validateCreateOrganization(data: unknown): CreateOrganizationInp
   return result.data;
 }
 
-/** Parses raw `PATCH /organizations/:id` body via {@link updateOrganizationDto}; throws `ValidationError('errors:invalidInput')` on failure. */
+/** Parses raw `PATCH /organization` body via {@link updateOrganizationDto}; throws `ValidationError('errors:invalidInput')` on failure. */
 export function validateUpdateOrganization(data: unknown): UpdateOrganizationInput {
   const result = updateOrganizationDto.safeParse(data);
   if (!result.success) {
@@ -59,7 +59,7 @@ export function validateListOrganizationsQuery(data: unknown): ListOrganizations
   return result.data;
 }
 
-/** Parses raw `PUT /organizations/:id/logo` body via {@link uploadLogoDto}; throws `ValidationError('errors:invalidInput')` on failure. */
+/** Parses raw `PUT /organization/logo` body via {@link uploadLogoDto}; throws `ValidationError('errors:invalidInput')` on failure. */
 export function validateUploadLogo(data: unknown): UploadLogoInput {
   const result = uploadLogoDto.safeParse(data);
   if (!result.success) {

@@ -6,9 +6,11 @@ import {
   text,
   boolean,
   timestamp,
+  index,
   pgPolicy,
 } from 'drizzle-orm/pg-core';
 import { authSchema } from '@/infrastructure/database/pg-schemas.js';
+import { users } from '@/domains/user/user.schema.js';
 
 /**
  * Dedicated MFA methods table — conceptually separate from login auth_methods.
@@ -20,8 +22,11 @@ export const mfa_methods = authSchema
     'mfa_methods',
     {
       id: bigserial('id', { mode: 'number' }).primaryKey(),
-      public_id: varchar('public_id', { length: 21 }).notNull().unique(),
-      user_id: bigint('user_id', { mode: 'number' }).notNull(),
+      public_id: varchar('public_id', { length: 28 }).notNull().unique(),
+      user_id: bigint('user_id', { mode: 'number' })
+        .notNull()
+        // reaudit-#1: FK + cascade so a user delete purges its MFA secrets (no GDPR orphan).
+        .references(() => users.id, { onDelete: 'cascade' }),
       method_type: varchar('method_type', { length: 20 }).notNull(), // TOTP, SMS, EMAIL, BACKUP_CODES
       encrypted_secret: text('encrypted_secret'),
       phone_number: varchar('phone_number', { length: 20 }),
@@ -32,9 +37,14 @@ export const mfa_methods = authSchema
       revoked_at: timestamp('revoked_at', { withTimezone: true }),
       created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
       updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-      created_by_user_id: bigint('created_by_user_id', { mode: 'number' }),
+      created_by_user_id: bigint('created_by_user_id', { mode: 'number' }).references(
+        () => users.id,
+        { onDelete: 'set null' },
+      ),
     },
     (table) => [
+      // reaudit-#1: index the per-user RLS owner predicate + every per-user MFA read.
+      index('idx_mfa_methods_user_id').on(table.user_id),
       pgPolicy('mfa_methods_owner_access', {
         as: 'permissive',
         for: 'all',

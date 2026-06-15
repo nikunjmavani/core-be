@@ -13,8 +13,9 @@ export const auditUploadRouteResponses: Record<string, ResponseDefinition> = {
 
   // ── Upload ──
   'POST /api/v1/uploads': {
-    statusCode: 200,
+    statusCode: 201,
     schema: wrapSuccess(schemas.uploadSchema, schemas.uploadExample),
     example: null,
   },
+  'DELETE /api/v1/uploads/{upload_id}': { statusCode: 204, schema: null, example: null },
 };

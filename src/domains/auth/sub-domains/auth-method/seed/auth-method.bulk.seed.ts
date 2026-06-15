@@ -41,7 +41,7 @@ export async function seedAuthMethodsBulk(context: SeedContext): Promise<void> {
     if (seededUserIds.has(user.id)) continue;
     const profile = generateBulkAuthMethod(context.faker);
     await database.insert(auth_methods).values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('authMethod'),
       user_id: user.id,
       method_type: profile.method_type,
       provider: profile.provider,

@@ -480,7 +480,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
   });
 
   it('claimPreHandler prefers request.organizationId over header value', async () => {
-    const organizationPublicId = generatePublicId();
+    const organizationPublicId = generatePublicId('organization');
     mockRedisSet.mockResolvedValue('OK');
     const { claimPreHandler } = await registerIdempotencyHooks();
     const request = {
@@ -525,7 +525,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
   });
 
   it('claimPreHandler scopes cache keys using organization header', async () => {
-    const organizationPublicId = generatePublicId();
+    const organizationPublicId = generatePublicId('organization');
     mockRedisSet.mockResolvedValue('OK');
     const { claimPreHandler } = await registerIdempotencyHooks();
     const request = {
@@ -882,7 +882,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     });
 
     it('keys the rate counter by API key id when the actor authenticates with an API key', async () => {
-      const apiKeyPublicId = generatePublicId();
+      const apiKeyPublicId = generatePublicId('organizationApiKey');
       const { claimPreHandler } = await registerIdempotencyHooks();
       const request = {
         method: 'POST',

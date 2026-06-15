@@ -3,7 +3,11 @@ import path from 'node:path';
 import { ValidationError } from '@/shared/errors/index.js';
 import { createUploadDto, uploadPublicIdParamDto } from './upload.dto.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
-import { UPLOAD_PURPOSE_CONFIG, UPLOAD_TARGETS } from './upload.constants.js';
+import {
+  UPLOAD_PURPOSE_CONFIG,
+  UPLOAD_PURPOSE_REQUIRED_TARGET,
+  UPLOAD_TARGETS,
+} from './upload.constants.js';
 import {
   getAllowedContentTypesForPurpose,
   getAllowedExtensionsForContentType,
@@ -32,15 +36,25 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
   const config = UPLOAD_PURPOSE_CONFIG[input.purpose];
   const allowedTypes = getAllowedContentTypesForPurpose(input.purpose);
 
+  // route-audit L3: the purpose must match its required target BEFORE the org-id checks and key
+  // construction — otherwise e.g. { purpose: organization-logo, for: user } builds an
+  // `organization-logos/undefined/...` key on a user-scoped row (namespace pollution + erodes the
+  // "key prefix encodes scope" invariant the attach binding relies on).
+  if (input.for !== UPLOAD_PURPOSE_REQUIRED_TARGET[input.purpose]) {
+    throw new ValidationError('errors:uploadPurposeTargetMismatch', undefined, undefined, [
+      { field: 'for', messageKey: 'errors:uploadPurposeTargetMismatch' },
+    ]);
+  }
+
   // Ownership validation
   if (input.for === UPLOAD_TARGETS.USER && input.organizationId) {
     throw new ValidationError('errors:uploadOrganizationIdNotAllowed', undefined, undefined, [
-      { field: 'organizationId', messageKey: 'errors:uploadOrganizationIdNotAllowed' },
+      { field: 'organization_id', messageKey: 'errors:uploadOrganizationIdNotAllowed' },
     ]);
   }
   if (input.for === UPLOAD_TARGETS.ORGANIZATION && !input.organizationId) {
     throw new ValidationError('errors:uploadOrganizationIdRequired', undefined, undefined, [
-      { field: 'organizationId', messageKey: 'errors:uploadOrganizationIdRequired' },
+      { field: 'organization_id', messageKey: 'errors:uploadOrganizationIdRequired' },
     ]);
   }
   // sec-UP3: when present, organizationId must match the canonical public-id
@@ -50,7 +64,7 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
   // char id; arbitrary 1-255-char strings are rejected with ValidationError
   // before any downstream side effect.
   if (input.organizationId !== undefined) {
-    validatePublicIdParam(input.organizationId, 'organizationId');
+    validatePublicIdParam(input.organizationId, 'organization_id');
   }
 
   // Content type validation
@@ -150,7 +164,7 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
  * and the shared public-id format check; returns the normalized public id.
  */
 export function validateUploadPublicIdParam(public_id: string): string {
-  const parsed = uploadPublicIdParamDto.safeParse({ publicId: public_id });
+  const parsed = uploadPublicIdParamDto.safeParse({ upload_id: public_id });
   if (!parsed.success) {
     throw new ValidationError(
       'errors:invalidInput',
@@ -158,5 +172,5 @@ export function validateUploadPublicIdParam(public_id: string): string {
       z.flattenError(parsed.error).fieldErrors,
     );
   }
-  return validatePublicIdParam(parsed.data.publicId, 'publicId');
+  return validatePublicIdParam(parsed.data.upload_id, 'publicId');
 }

@@ -204,7 +204,7 @@ export class AuthSessionService {
     // (first request per 60 s window) to avoid a per-request DB round-trip.
     // findUserRecordByPublicId wraps withUserDatabaseContext internally.
     const user = await this.userService.findUserRecordByPublicId(userPublicId);
-    if (!user || user.status !== 'ACTIVE' || user.deleted_at !== null) {
+    if (user?.status !== 'ACTIVE' || user.deleted_at !== null) {
       throw new UnauthorizedError('errors:accountNotActive');
     }
 
@@ -320,6 +320,48 @@ export class AuthSessionService {
     }
 
     return { refresh_secret: nextRefreshSecret };
+  }
+
+  /**
+   * Re-bind the session's active access token to a freshly minted one — used by the
+   * organization-switch endpoints, which re-mint the token with a different `org` claim.
+   *
+   * @remarks
+   * - **Algorithm:** under the session's RLS context, confirm the session is present and not
+   *   revoked, invalidate the previous token's Redis cache entry, then point `token_hash` at
+   *   the new token AND persist `activeOrganizationId` on the session (audit-#3) so a later
+   *   `/auth/refresh` preserves the switched organization instead of recomputing the default.
+   *   Unlike refresh, the refresh secret is NOT rotated — the caller is already authenticated
+   *   via a valid access token for this session; only the access token moves. The previously
+   *   held token immediately fails `verifyActiveAccessToken` (hash drift).
+   * - **Failure modes:** `UnauthorizedError` when the session is gone or revoked.
+   * - **Side effects:** one UPDATE on `auth.sessions`; two Redis cache invalidations.
+   */
+  async rebindAccessToken({
+    sessionPublicId,
+    nextAccessToken,
+    activeOrganizationId,
+  }: {
+    sessionPublicId: string;
+    nextAccessToken: string;
+    activeOrganizationId: number;
+  }): Promise<void> {
+    const nextTokenHash = hashAccessToken(nextAccessToken);
+    await withSessionPublicIdDatabaseContext(sessionPublicId, async (_databaseHandle) => {
+      const existing = await this.sessionRepository.findByPublicId(sessionPublicId);
+      if (!existing) {
+        throw new UnauthorizedError('errors:invalidOrExpiredSession');
+      }
+      if (existing.token_hash) {
+        await invalidateCachedSessionToken(existing.token_hash);
+      }
+      await this.sessionRepository.rotateTokenHashAndOrganization(
+        sessionPublicId,
+        nextTokenHash,
+        activeOrganizationId,
+      );
+      await invalidateCachedSessionToken(nextTokenHash);
+    });
   }
 
   /**

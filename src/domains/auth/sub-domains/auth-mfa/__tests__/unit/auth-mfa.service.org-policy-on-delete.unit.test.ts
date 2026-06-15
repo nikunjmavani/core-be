@@ -29,9 +29,10 @@ describe('MfaService.deleteMfa — organization MFA policy guard (sec-A4)', () =
   } as unknown as UserService;
 
   const authMethodService = {
-    findAuthMethodByIdForUser: vi.fn(),
+    findAuthMethodByPublicIdForUser: vi.fn(),
     revokeAuthMethod: vi.fn().mockResolvedValue(undefined),
     listMfaMethodsByUserId: vi.fn(),
+    acquireCredentialMutationLock: vi.fn().mockResolvedValue(undefined),
   } as unknown as AuthMethodService;
 
   const authSessionService = {} as AuthSessionService;
@@ -62,7 +63,9 @@ describe('MfaService.deleteMfa — organization MFA policy guard (sec-A4)', () =
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(user as never);
-    vi.mocked(authMethodService.findAuthMethodByIdForUser).mockResolvedValue(totpMethod as never);
+    vi.mocked(authMethodService.findAuthMethodByPublicIdForUser).mockResolvedValue(
+      totpMethod as never,
+    );
   });
 
   it('refuses to delete the LAST MFA method when the user belongs to an MFA-required org', async () => {
@@ -72,7 +75,9 @@ describe('MfaService.deleteMfa — organization MFA policy guard (sec-A4)', () =
     ] as never);
     vi.mocked(organizationSettingsService.userHasOrganizationRequiringMfa).mockResolvedValue(true);
 
-    await expect(service.deleteMfa('user_pub', 42)).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(service.deleteMfa('user_pub', 'mfamethodpublicid0001')).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
 
     // The org-policy guard fires AFTER the candidate-method lookup but BEFORE the revoke;
     // the revoke must NOT execute and is_mfa_enabled must NOT flip.
@@ -87,7 +92,7 @@ describe('MfaService.deleteMfa — organization MFA policy guard (sec-A4)', () =
       .mockResolvedValueOnce([] as never);
     vi.mocked(organizationSettingsService.userHasOrganizationRequiringMfa).mockResolvedValue(false);
 
-    await expect(service.deleteMfa('user_pub', 42)).resolves.toBeUndefined();
+    await expect(service.deleteMfa('user_pub', 'mfamethodpublicid0001')).resolves.toBeUndefined();
 
     expect(authMethodService.revokeAuthMethod).toHaveBeenCalledWith(42, user.id);
     expect(userService.updateMfaEnabled).toHaveBeenCalledWith('user_pub', false);
@@ -104,7 +109,7 @@ describe('MfaService.deleteMfa — organization MFA policy guard (sec-A4)', () =
       .mockResolvedValueOnce([{ id: 99, user_id: 7, method_type: 'MFA_TOTP' }] as never);
     vi.mocked(organizationSettingsService.userHasOrganizationRequiringMfa).mockResolvedValue(true);
 
-    await expect(service.deleteMfa('user_pub', 42)).resolves.toBeUndefined();
+    await expect(service.deleteMfa('user_pub', 'mfamethodpublicid0001')).resolves.toBeUndefined();
 
     expect(authMethodService.revokeAuthMethod).toHaveBeenCalledWith(42, user.id);
     // Not the last method → is_mfa_enabled stays true.

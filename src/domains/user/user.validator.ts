@@ -41,7 +41,7 @@ export function validateListUsers(query: unknown): ListUsersInput {
   return parseWithSchema(ListUsersDto, query);
 }
 
-/** Validate the admin `PATCH /api/v1/users/:userId` body against {@link AdminUpdateUserDto}. */
+/** Validate the admin `PATCH /api/v1/users/:user_id` body against {@link AdminUpdateUserDto}. */
 export function validateAdminUpdateUser(body: unknown): AdminUpdateUserInput {
   return parseWithSchema(AdminUpdateUserDto, body);
 }

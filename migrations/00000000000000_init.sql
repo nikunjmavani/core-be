@@ -87,7 +87,7 @@ CREATE TABLE "auth"."verification_tokens" (
 ALTER TABLE "auth"."verification_tokens" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "auth"."sessions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
-	"public_id" varchar(21) NOT NULL,
+	"public_id" varchar(28) NOT NULL,
 	"user_id" bigint NOT NULL,
 	"organization_id" bigint,
 	"token_hash" varchar(64) NOT NULL,
@@ -106,7 +106,7 @@ CREATE TABLE "auth"."sessions" (
 ALTER TABLE "auth"."sessions" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "auth"."mfa_methods" (
 	"id" bigserial PRIMARY KEY NOT NULL,
-	"public_id" varchar(21) NOT NULL,
+	"public_id" varchar(28) NOT NULL,
 	"user_id" bigint NOT NULL,
 	"method_type" varchar(20) NOT NULL,
 	"encrypted_secret" text,
@@ -146,7 +146,7 @@ CREATE TABLE "auth"."webauthn_credentials" (
 --> statement-breakpoint
 CREATE TABLE "billing"."plans" (
 	"id" bigserial PRIMARY KEY NOT NULL,
-	"public_id" varchar(21) NOT NULL,
+	"public_id" varchar(28) NOT NULL,
 	"name" varchar(100) NOT NULL,
 	"description" text,
 	"price_monthly" numeric(10, 2) NOT NULL,
@@ -183,7 +183,7 @@ CREATE TABLE "billing"."stripe_webhook_events" (
 --> statement-breakpoint
 CREATE TABLE "billing"."subscriptions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
-	"public_id" varchar(21) NOT NULL,
+	"public_id" varchar(28) NOT NULL,
 	"organization_id" bigint NOT NULL,
 	"plan_id" bigint NOT NULL,
 	"provider" varchar(50),
@@ -210,7 +210,7 @@ CREATE TABLE "billing"."subscriptions" (
 ALTER TABLE "billing"."subscriptions" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "notify"."notifications" (
 	"id" bigserial PRIMARY KEY NOT NULL,
-	"public_id" varchar(21) NOT NULL,
+	"public_id" varchar(28) NOT NULL,
 	"user_id" bigint NOT NULL,
 	"organization_id" bigint,
 	"type" varchar(50) NOT NULL,
@@ -246,7 +246,7 @@ CREATE TABLE "notify"."webhook_delivery_attempts" (
 ALTER TABLE "notify"."webhook_delivery_attempts" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "notify"."webhooks" (
 	"id" bigserial PRIMARY KEY NOT NULL,
-	"public_id" varchar(21) NOT NULL,
+	"public_id" varchar(28) NOT NULL,
 	"organization_id" bigint NOT NULL,
 	"url" text NOT NULL,
 	"encrypted_secret" varchar(255) NOT NULL,
@@ -273,7 +273,7 @@ CREATE TABLE "tenancy"."role_permissions" (
 ALTER TABLE "tenancy"."role_permissions" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "tenancy"."roles" (
 	"id" bigserial PRIMARY KEY NOT NULL,
-	"public_id" varchar(21) NOT NULL,
+	"public_id" varchar(28) NOT NULL,
 	"organization_id" bigint NOT NULL,
 	"name" varchar(100) NOT NULL,
 	"description" text,
@@ -289,7 +289,7 @@ CREATE TABLE "tenancy"."roles" (
 ALTER TABLE "tenancy"."roles" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "tenancy"."member_invitations" (
 	"id" bigserial PRIMARY KEY NOT NULL,
-	"public_id" varchar(21) NOT NULL,
+	"public_id" varchar(28) NOT NULL,
 	"membership_id" bigint NOT NULL,
 	"email" varchar(255) NOT NULL,
 	"token_hash" varchar(64) NOT NULL,
@@ -306,7 +306,7 @@ CREATE TABLE "tenancy"."member_invitations" (
 ALTER TABLE "tenancy"."member_invitations" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "tenancy"."memberships" (
 	"id" bigserial PRIMARY KEY NOT NULL,
-	"public_id" varchar(21) NOT NULL,
+	"public_id" varchar(28) NOT NULL,
 	"user_id" bigint NOT NULL,
 	"organization_id" bigint NOT NULL,
 	"role_id" bigint NOT NULL,
@@ -326,7 +326,7 @@ CREATE TABLE "tenancy"."memberships" (
 ALTER TABLE "tenancy"."memberships" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "tenancy"."api_keys" (
 	"id" bigserial PRIMARY KEY NOT NULL,
-	"public_id" varchar(21) NOT NULL,
+	"public_id" varchar(28) NOT NULL,
 	"organization_id" bigint NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"key_hash" varchar(255) NOT NULL,
@@ -347,7 +347,7 @@ CREATE TABLE "tenancy"."api_keys" (
 ALTER TABLE "tenancy"."api_keys" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "tenancy"."organization_notification_policies" (
 	"id" bigserial PRIMARY KEY NOT NULL,
-	"public_id" varchar(21) NOT NULL,
+	"public_id" varchar(28) NOT NULL,
 	"organization_id" bigint NOT NULL,
 	"notification_type" varchar(50) NOT NULL,
 	"channel" varchar(20) NOT NULL,
@@ -381,9 +381,10 @@ CREATE TABLE "tenancy"."organization_settings" (
 ALTER TABLE "tenancy"."organization_settings" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "tenancy"."organizations" (
 	"id" bigserial PRIMARY KEY NOT NULL,
-	"public_id" varchar(21) NOT NULL,
+	"public_id" varchar(28) NOT NULL,
 	"name" varchar(255) NOT NULL,
-	"slug" varchar(100) NOT NULL,
+	"slug" varchar(100),
+	"type" varchar(20) DEFAULT 'TEAM' NOT NULL,
 	"owner_user_id" bigint NOT NULL,
 	"status" varchar(20) DEFAULT 'ACTIVE' NOT NULL,
 	"logo_url" varchar(512),
@@ -394,6 +395,7 @@ CREATE TABLE "tenancy"."organizations" (
 	"created_by_user_id" bigint,
 	"updated_by_user_id" bigint,
 	CONSTRAINT "chk_organizations_status" CHECK ("tenancy"."organizations"."status" IN ('ACTIVE', 'SUSPENDED', 'ARCHIVED')),
+	CONSTRAINT "chk_organizations_type" CHECK ("tenancy"."organizations"."type" IN ('PERSONAL', 'TEAM')),
 	CONSTRAINT "chk_organizations_slug" CHECK ("tenancy"."organizations"."slug" ~ '^[a-z0-9-]+$'),
 	CONSTRAINT "chk_organizations_updated" CHECK ("tenancy"."organizations"."updated_at" >= "tenancy"."organizations"."created_at")
 );
@@ -409,7 +411,7 @@ CREATE TABLE "tenancy"."permissions" (
 --> statement-breakpoint
 CREATE TABLE "upload"."uploads" (
 	"id" bigserial PRIMARY KEY NOT NULL,
-	"public_id" varchar(21) NOT NULL,
+	"public_id" varchar(28) NOT NULL,
 	"user_id" bigint NOT NULL,
 	"organization_id" bigint,
 	"file_name" varchar(255) NOT NULL,
@@ -432,7 +434,7 @@ CREATE TABLE "upload"."uploads" (
 ALTER TABLE "upload"."uploads" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "auth"."user_data_exports" (
 	"id" bigserial PRIMARY KEY NOT NULL,
-	"public_id" varchar(21) NOT NULL,
+	"public_id" varchar(28) NOT NULL,
 	"user_id" bigint NOT NULL,
 	"status" varchar(20) DEFAULT 'pending' NOT NULL,
 	"s3_key" varchar(512),
@@ -475,7 +477,7 @@ CREATE TABLE "auth"."user_settings" (
 --> statement-breakpoint
 CREATE TABLE "auth"."users" (
 	"id" bigserial PRIMARY KEY NOT NULL,
-	"public_id" varchar(21) NOT NULL,
+	"public_id" varchar(28) NOT NULL,
 	"email" varchar(255) NOT NULL,
 	"email_hash" varchar(64) NOT NULL,
 	"is_email_verified" boolean DEFAULT false NOT NULL,
@@ -489,6 +491,7 @@ CREATE TABLE "auth"."users" (
 	"is_mfa_enabled" boolean DEFAULT false NOT NULL,
 	"status" varchar(20) DEFAULT 'ACTIVE' NOT NULL,
 	"last_active_at" timestamp with time zone,
+	"last_active_organization_id" bigint,
 	"deleted_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -625,6 +628,7 @@ CREATE INDEX "idx_org_notif_policy_mandatory" ON "tenancy"."organization_notific
 CREATE INDEX "idx_org_notif_policy_muted" ON "tenancy"."organization_notification_policies" USING btree ("muted_until");--> statement-breakpoint
 CREATE UNIQUE INDEX "idx_organizations_public_id" ON "tenancy"."organizations" USING btree ("public_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "idx_organizations_slug" ON "tenancy"."organizations" USING btree ("slug");--> statement-breakpoint
+CREATE UNIQUE INDEX "idx_org_one_personal_per_owner" ON "tenancy"."organizations" USING btree ("owner_user_id") WHERE "tenancy"."organizations"."type" = 'PERSONAL';--> statement-breakpoint
 CREATE INDEX "idx_organizations_owner" ON "tenancy"."organizations" USING btree ("owner_user_id");--> statement-breakpoint
 CREATE INDEX "idx_organizations_status_deleted" ON "tenancy"."organizations" USING btree ("status","deleted_at");--> statement-breakpoint
 CREATE INDEX "idx_organizations_created_at" ON "tenancy"."organizations" USING btree ("created_at");--> statement-breakpoint

@@ -1,16 +1,31 @@
-import { and, asc, count, eq, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, eq, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
 import { webhooks } from '@/domains/notify/sub-domains/webhook/webhook.schema.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
+import {
+  RESOURCE_QUOTA_LOCK_NAMESPACE,
+  acquireResourceQuotaLock,
+} from '@/infrastructure/database/resource-quota-lock.util.js';
 import type { WebhookCreateData, WebhookUpdateData } from './webhook.types.js';
 import {
   buildAscendingCreatedAtIdCursorCondition,
   createOpaqueCursorFromRow,
   parseListCursor,
 } from '@/shared/utils/http/pagination.util.js';
+
+/**
+ * `updated_at` value for webhook mutations: `greatest(created_at, now())` rather than bare `now()`.
+ *
+ * Postgres `now()` is the TRANSACTION start time. Under heavy parallel test load a mutation's
+ * transaction can begin before a webhook row that was created in a later-started transaction which
+ * committed first, making `now() < created_at` and violating the `chk_webhooks_updated`
+ * (`updated_at >= created_at`) CHECK on soft-delete/update. `greatest` keeps the invariant — and
+ * "updated_at never precedes created_at" — true regardless of transaction-start timing.
+ */
+const webhookUpdatedAtTimestamp: SQL = sql`greatest(${webhooks.created_at}, now())`;
 
 /** Drizzle row type inferred from the `notify.webhooks` table. */
 export type WebhookRow = typeof webhooks.$inferSelect;
@@ -88,6 +103,16 @@ export class WebhookRepository {
     return Number(rows[0]?.count ?? 0);
   }
 
+  /**
+   * audit-#8: transaction-scoped advisory lock serializing the per-org webhook creation quota
+   * check + insert so concurrent creates cannot both pass the count and overshoot
+   * `WEBHOOK_MAX_PER_ORG`. Call inside the create transaction before
+   * {@link countActiveByOrganization}.
+   */
+  async acquireCreationQuotaLock(organization_id: number): Promise<void> {
+    await acquireResourceQuotaLock(RESOURCE_QUOTA_LOCK_NAMESPACE.WEBHOOK, organization_id);
+  }
+
   async listEnabledSubscribedToEvent(
     organization_id: number,
     event_type: string,
@@ -163,10 +188,39 @@ export class WebhookRepository {
     return rows[0] ?? null;
   }
 
+  /**
+   * Like {@link findByPublicId} but takes a `FOR UPDATE` row lock so concurrent
+   * secret rotations serialize on the row (NOTIFY-11).
+   *
+   * @remarks
+   * - **Algorithm:** identical projection to `findByPublicId` plus `.for('update')`;
+   *   must run inside the org transaction opened by `withOrganizationDatabaseContext`.
+   * - **Failure modes:** none beyond Postgres errors; returns `null` when absent.
+   * - **Side effects:** acquires a row-level write lock held until the surrounding
+   *   transaction commits — a second rotation blocks here, then re-reads the
+   *   freshly-stamped `secret_rotated_at` and is correctly rejected by the gate.
+   * - **Notes:** the overlap window has a single previous-secret slot, so the lock
+   *   prevents two parallel rotations from both passing a stale read and clobbering it.
+   */
+  async findByPublicIdForUpdate(public_id: string, organization_id: number) {
+    const rows = await getRequestDatabase()
+      .select()
+      .from(webhooks)
+      .where(
+        and(
+          eq(webhooks.public_id, public_id),
+          eq(webhooks.organization_id, organization_id),
+          isNull(webhooks.deleted_at),
+        ),
+      )
+      .limit(1)
+      .for('update');
+    return rows[0] ?? null;
+  }
+
   async create(data: WebhookCreateData) {
-    const now = new Date();
     return runInsertWithPublicIdentifierRetry(async () => {
-      const public_id = generatePublicId();
+      const public_id = generatePublicId('webhook');
       const rows = await getRequestDatabase()
         .insert(webhooks)
         .values({
@@ -185,7 +239,11 @@ export class WebhookRepository {
             encrypted_secret: data.encrypted_secret,
             events: data.events as Record<string, unknown>,
             is_enabled: data.is_enabled ?? true,
-            updated_at: now,
+            // route-audit C3: greatest(created_at, now()) — the revived row's created_at is the
+            // original DB-clock value; a bare JS `new Date()` here could be < created_at under
+            // host/DB clock skew and violate chk_webhooks_updated. Reuses the same expression as
+            // update()/softDelete().
+            updated_at: webhookUpdatedAtTimestamp,
             updated_by_user_id: data.created_by_user_id ?? undefined,
           },
         })
@@ -199,6 +257,7 @@ export class WebhookRepository {
     organization_id: number,
     data: WebhookUpdateData,
     updated_by_user_id?: number,
+    options?: { secretRotationOverlapCutoff?: Date },
   ) {
     // sec-N8: when the encrypted_secret is being rotated, atomically copy the
     // CURRENT value into encrypted_secret_previous and stamp secret_rotated_at.
@@ -208,23 +267,36 @@ export class WebhookRepository {
     const baseSet: Record<string, unknown> = {
       ...data,
       events: data.events as Record<string, unknown> | undefined,
-      updated_at: databaseNowTimestamp,
+      updated_at: webhookUpdatedAtTimestamp,
       updated_by_user_id: updated_by_user_id ?? undefined,
     };
     if (rotatingSecret) {
-      baseSet['encrypted_secret_previous'] = sql`${webhooks.encrypted_secret}`;
-      baseSet['secret_rotated_at'] = databaseNowTimestamp;
+      baseSet.encrypted_secret_previous = sql`${webhooks.encrypted_secret}`;
+      baseSet.secret_rotated_at = databaseNowTimestamp;
+    }
+    const whereClauses: SQL[] = [
+      eq(webhooks.public_id, public_id),
+      eq(webhooks.organization_id, organization_id),
+      isNull(webhooks.deleted_at),
+    ];
+    // audit-#9: enforce rotation eligibility INSIDE the update predicate so concurrent rotations
+    // cannot each pass a separate pre-check and both shift the single previous-secret slot — the
+    // later winner would evict (and immediately invalidate) a key returned to a caller moments
+    // earlier. With the cutoff in the WHERE, exactly one concurrent rotation matches and returns
+    // a row; the losers return null and the service maps that to a 409 (rotate-too-soon).
+    if (rotatingSecret && options?.secretRotationOverlapCutoff) {
+      const eligible = or(
+        isNull(webhooks.secret_rotated_at),
+        lte(webhooks.secret_rotated_at, options.secretRotationOverlapCutoff),
+      );
+      if (eligible) {
+        whereClauses.push(eligible);
+      }
     }
     const rows = await getRequestDatabase()
       .update(webhooks)
       .set(baseSet)
-      .where(
-        and(
-          eq(webhooks.public_id, public_id),
-          eq(webhooks.organization_id, organization_id),
-          isNull(webhooks.deleted_at),
-        ),
-      )
+      .where(and(...whereClauses))
       .returning();
     return rows[0] ?? null;
   }
@@ -232,7 +304,7 @@ export class WebhookRepository {
   async softDelete(public_id: string, organization_id: number) {
     const rows = await getRequestDatabase()
       .update(webhooks)
-      .set({ deleted_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
+      .set({ deleted_at: databaseNowTimestamp, updated_at: webhookUpdatedAtTimestamp })
       .where(
         and(
           eq(webhooks.public_id, public_id),

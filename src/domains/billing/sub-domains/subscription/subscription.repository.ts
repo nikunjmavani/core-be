@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
+import { and, eq, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { plans } from '@/domains/billing/sub-domains/plan/plan.schema.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
@@ -12,6 +12,21 @@ import { subscriptions } from '@/domains/billing/sub-domains/subscription/subscr
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import type { SubscriptionCreateData, SubscriptionUpdateData } from './subscription.types.js';
+
+/**
+ * Subscription statuses that release the per-organization subscription slot.
+ *
+ * @remarks
+ * A subscription in one of these states neither occupies the single-subscription
+ * slot (so the org can create a fresh subscription) nor is mutable. This list is
+ * the single source of truth shared by three call sites that must agree
+ * (audit-#1): the `idx_subscriptions_org` partial-unique index predicate, the
+ * {@link SubscriptionRepository.findActiveByOrganization} filter, and the
+ * service-layer `TERMINAL_STATUSES` guard. `INCOMPLETE_EXPIRED` is included so an
+ * abandoned-checkout subscription cannot permanently lock the organization out
+ * of re-subscribing.
+ */
+export const INACTIVE_SUBSCRIPTION_STATUSES = ['CANCELED', 'INCOMPLETE_EXPIRED'] as const;
 
 /**
  * Drizzle `select` projection that mirrors every {@link subscriptions} column and adds
@@ -48,15 +63,20 @@ const subscriptionRowWithPlanPublicId = {
  * @remarks
  * - **Algorithm:** Each organization is constrained to a single *non-terminal*
  *   subscription row by the partial unique index `idx_subscriptions_org`
- *   (`UNIQUE(organization_id) WHERE status <> 'CANCELED'`), so a fresh
- *   subscription can be created once a prior one is canceled. Stripe-driven
+ *   (`UNIQUE(organization_id) WHERE status NOT IN ('CANCELED',
+ *   'INCOMPLETE_EXPIRED')`), so a fresh subscription can be created once a prior
+ *   one is canceled or an abandoned-checkout row expires (audit-#1). Stripe-driven
  *   writes
  *   ({@link syncFromStripeProviderSubscription},
  *   {@link markCanceledByProviderSubscriptionId}) gate the update on
  *   `last_stripe_event_created_at` being `NULL` or strictly older than the incoming
- *   event timestamp so out-of-order or same-second stale events are dropped;
- *   cancellation uses `lte` so a terminal delete at the same second still wins.
- *   the immutable record of the latest authoritative state.
+ *   event timestamp so out-of-order or same-second stale events are dropped. The
+ *   in-place sync uses strict `<` while cancellation uses `<=`; this asymmetry is
+ *   deliberate and makes a terminal cancel **deterministically win** a same-second
+ *   in-place update regardless of delivery order (audit-#6, locked by test). Stripe
+ *   `event.created` has 1-second resolution, so the residual theoretical edge — a
+ *   genuine same-second cancel-then-reactivation — would require a monotonic event
+ *   sequence (Stripe does not emit such a pair); tracked as a future hardening.
  * - **Failure modes:** Insert collisions on `public_id` are retried by
  *   {@link runInsertWithPublicIdentifierRetry}; updates that miss the
  *   timestamp guard return `null` to the caller so the worker can log a stale
@@ -101,7 +121,11 @@ export class SubscriptionRepository {
       .where(
         and(
           eq(subscriptions.organization_id, organization_id),
-          ne(subscriptions.status, 'CANCELED'),
+          // audit-#1: exclude every slot-releasing status (CANCELED AND
+          // INCOMPLETE_EXPIRED), kept in lockstep with the idx_subscriptions_org
+          // partial-unique predicate so an abandoned-checkout row does not block
+          // re-subscription.
+          notInArray(subscriptions.status, [...INACTIVE_SUBSCRIPTION_STATUSES]),
         ),
       )
       .limit(1);
@@ -141,7 +165,7 @@ export class SubscriptionRepository {
 
   async create(data: SubscriptionCreateData) {
     const inserted = await runInsertWithPublicIdentifierRetry(async () => {
-      const public_id = generatePublicId();
+      const public_id = generatePublicId('subscription');
       const rows = await this.db()
         .insert(subscriptions)
         .values({
@@ -153,6 +177,12 @@ export class SubscriptionRepository {
           current_period_start: data.current_period_start,
           current_period_end: data.current_period_end,
           trial_end: data.trial_end,
+          // audit-#1: the deletion-tombstone path persists a terminal CANCELED row
+          // (with canceled_at / cancel_at_period_end) so a later out-of-order
+          // `customer.subscription.created` cannot resurrect it. Every other path
+          // leaves these at their column defaults (NULL / false).
+          canceled_at: data.canceled_at,
+          cancel_at_period_end: data.cancel_at_period_end,
           provider: data.provider,
           provider_subscription_id: data.provider_subscription_id,
           provider_customer_id: data.provider_customer_id,
@@ -190,6 +220,10 @@ export class SubscriptionRepository {
         and(
           eq(subscriptions.public_id, public_id),
           eq(subscriptions.organization_id, organization_id),
+          // Terminal subscriptions are immutable. Refuse to mutate a CANCELED / INCOMPLETE_EXPIRED
+          // row even if a concurrent webhook moved it there AFTER the service's TERMINAL_STATUSES
+          // read-check — a compare-and-set that closes the terminal-guard TOCTOU (route-audit B6).
+          notInArray(subscriptions.status, [...INACTIVE_SUBSCRIPTION_STATUSES]),
         ),
       )
       .returning({ id: subscriptions.id });
@@ -237,6 +271,13 @@ export class SubscriptionRepository {
       .where(
         and(
           eq(subscriptions.provider_subscription_id, provider_subscription_id),
+          // Never RESURRECT a locally-terminal subscription via an in-place `.updated` sync — only
+          // the dedicated `.deleted` handler (markCanceled) writes terminal state. Without this, a
+          // late `.updated` whose Stripe timestamp beats the wall-clock watermark stamped by an
+          // offboarding / immediate-cancel could flip a CANCELED org's sub back to ACTIVE
+          // (route-audit B5). A non-terminal Dashboard cancel (ACTIVE → CANCELED via `.updated`) is
+          // unaffected: the guard checks the CURRENT row status, not the incoming one.
+          notInArray(subscriptions.status, [...INACTIVE_SUBSCRIPTION_STATUSES]),
           or(
             isNull(subscriptions.last_stripe_event_created_at),
             lt(subscriptions.last_stripe_event_created_at, stripe_event_created_at),

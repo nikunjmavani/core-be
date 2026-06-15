@@ -67,7 +67,7 @@ describe('auth.middleware — super_admin per-request re-derive (sec-A6)', () =>
   it('downgrades a SUPER_ADMIN JWT to USER when the email is no longer in GLOBAL_ADMIN_EMAILS', async () => {
     vi.mocked(resolveGlobalRoleForEmail).mockReturnValue(undefined);
     await setup();
-    const userPublicId = generatePublicId();
+    const userPublicId = generatePublicId('user');
     const accessToken = await signAccessToken({
       userId: userPublicId,
       role: GLOBAL_ROLES.SUPER_ADMIN,
@@ -91,7 +91,7 @@ describe('auth.middleware — super_admin per-request re-derive (sec-A6)', () =>
   it('keeps SUPER_ADMIN when the email is still in GLOBAL_ADMIN_EMAILS', async () => {
     vi.mocked(resolveGlobalRoleForEmail).mockReturnValue(GLOBAL_ROLES.SUPER_ADMIN);
     await setup();
-    const userPublicId = generatePublicId();
+    const userPublicId = generatePublicId('user');
     const accessToken = await signAccessToken({
       userId: userPublicId,
       role: GLOBAL_ROLES.SUPER_ADMIN,
@@ -108,10 +108,64 @@ describe('auth.middleware — super_admin per-request re-derive (sec-A6)', () =>
     await application.close();
   });
 
+  it('reaudit-#10: drops SUPER_ADMIN when the account is suspended even if the email is still allowlisted', async () => {
+    vi.mocked(resolveGlobalRoleForEmail).mockReturnValue(GLOBAL_ROLES.SUPER_ADMIN);
+    findUserRecordByPublicId.mockResolvedValue({
+      id: 1,
+      public_id: 'user_pub',
+      email: 'admin@example.com',
+      status: 'SUSPENDED',
+      is_email_verified: true,
+    });
+    await setup();
+    const userPublicId = generatePublicId('user');
+    const accessToken = await signAccessToken({
+      userId: userPublicId,
+      role: GLOBAL_ROLES.SUPER_ADMIN,
+    });
+
+    const response = await application.inject({
+      method: 'GET',
+      url: '/protected',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    // The email is still in the allowlist, but the account is suspended → role is dropped.
+    expect((response.json() as { role?: string }).role).toBeUndefined();
+    await application.close();
+  });
+
+  it('route-#6: re-derives an ADMIN JWT claim against live state instead of trusting it', async () => {
+    // No code path mints `admin` today, but if a stale/forged admin claim ever appeared it must
+    // be re-validated (not honored for the token lifetime). resolveGlobalRoleForEmail returns the
+    // user's TRUE role; a non-allowlisted account is downgraded to USER.
+    vi.mocked(resolveGlobalRoleForEmail).mockReturnValue(undefined);
+    await setup();
+    const adminUserPublicId = generatePublicId('user');
+    const accessToken = await signAccessToken({
+      userId: adminUserPublicId,
+      role: GLOBAL_ROLES.ADMIN,
+    });
+
+    const response = await application.inject({
+      method: 'GET',
+      url: '/protected',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    // The ADMIN claim triggered the live re-derivation (not a blind trust)...
+    expect(findUserRecordByPublicId).toHaveBeenCalledWith(adminUserPublicId);
+    // ...and downgraded to USER since the email is not in the allowlist.
+    expect((response.json() as { role?: string }).role).toBe(GLOBAL_ROLES.USER);
+    await application.close();
+  });
+
   it('does NOT call findUserRecordByPublicId for a non-admin JWT (hot-path stays unchanged)', async () => {
     vi.mocked(resolveGlobalRoleForEmail).mockReturnValue(undefined);
     await setup();
-    const userPublicId = generatePublicId();
+    const userPublicId = generatePublicId('user');
     const accessToken = await signAccessToken({ userId: userPublicId, role: GLOBAL_ROLES.USER });
 
     const response = await application.inject({

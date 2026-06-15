@@ -9,24 +9,24 @@ export const userAdminRouteResponses: Record<string, ResponseDefinition> = {
     schema: wrapPaginated(schemas.userSchema, [schemas.userExample]),
     example: null,
   },
-  'GET /api/v1/users/{userId}': {
+  'GET /api/v1/users/{user_id}': {
     statusCode: 200,
     schema: wrapSuccess(schemas.userSchema, schemas.userExample),
     example: null,
   },
-  'PATCH /api/v1/users/{userId}': {
+  'PATCH /api/v1/users/{user_id}': {
     statusCode: 200,
     schema: wrapSuccess(schemas.userSchema, schemas.userExample),
     example: null,
   },
-  'DELETE /api/v1/users/{userId}': { statusCode: 204, schema: null, example: null },
-  'POST /api/v1/users/{userId}/suspend': {
-    statusCode: 200,
+  'DELETE /api/v1/users/{user_id}': { statusCode: 204, schema: null, example: null },
+  'POST /api/v1/users/{user_id}/suspend': {
+    statusCode: 201,
     schema: wrapSuccess(schemas.userSchema, { ...schemas.userExample, status: 'SUSPENDED' }),
     example: null,
   },
-  'POST /api/v1/users/{userId}/unsuspend': {
-    statusCode: 200,
+  'POST /api/v1/users/{user_id}/unsuspend': {
+    statusCode: 201,
     schema: wrapSuccess(schemas.userSchema, { ...schemas.userExample, status: 'ACTIVE' }),
     example: null,
   },

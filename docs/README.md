@@ -70,6 +70,7 @@ flowchart TB
 | Doc                                                  | Description                                                                              |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | [process/git-workflow.md](process/git-workflow.md)   | Branch naming, PR flow, conventional commits.                                            |
+| [process/release-versioning.md](process/release-versioning.md) | Commit prefix → version bump (patch/minor/major), `Release-As` override, dev/main release channels. |
 | [process/pr-review.md](process/pr-review.md)         | Human + agent PR review checklist, severity legend, doc-sync map.                        |
 | [process/dr-runbook.md](process/dr-runbook.md)       | Disaster recovery — RTO 1h, RPO 15m, failover, quarterly review.                         |
 | [process/backup-drills.md](process/backup-drills.md) | Monthly restore drill — required automated RTO gate + optional manual evidence workflow. |
@@ -108,6 +109,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | Doc                                                                                              | Description                                                                                         |
 | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
 | [reference/runtime/bull-board.md](reference/runtime/bull-board.md)                               | BullMQ dashboard at `/admin/queues`.                                                                |
+| [integrations/agentic-third-party-tooling.md](integrations/agentic-third-party-tooling.md)       | CLI vs MCP vs SDK by consumer; per-service mapping for every third party.                            |
 | [integrations/cursor-backend-mcp.md](integrations/cursor-backend-mcp.md)                         | Connect frontend to core-be MCP.                                                                    |
 | [integrations/codegraph.md](integrations/codegraph.md)                                           | Semantic code index for AI agents (MCP); auto-set-up in `setup:local` (phase 7/9).                  |
 | [integrations/understand-anything.md](integrations/understand-anything.md)                         | Knowledge graph, dashboard, and learning-curve steps (`/understand`, tour, chat, diff).             |
@@ -125,10 +127,13 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [reference/architecture/project-structure-guide.md](reference/architecture/project-structure-guide.md)             | Layer matrix, request flow, naming (`pnpm tool:project-structure-tree` for live tree). |
 | [reference/architecture/domains-and-public-api-design.md](reference/architecture/domains-and-public-api-design.md) | Domain layout and Paddle-style API responses.                                          |
 | [reference/api/api-versioning.md](reference/api/api-versioning.md)                                                 | `/api/v1`, deprecation, `Sunset` / `Deprecation` headers.                              |
+| [reference/api/response-codes.md](reference/api/response-codes.md)                                                 | Method→status policy, when to use each error code, error envelope.                     |
+| [reference/api/frontend-auth-guide.md](reference/api/frontend-auth-guide.md)                                       | Frontend SPA auth: Bearer + reactive refresh, headers per route, org switching.        |
 | [reference/data/data-lifecycle-deletion.md](reference/data/data-lifecycle-deletion.md)                             | Soft-delete, retention, Drizzle table inventory.                                       |
 | [reference/data/user-data-export.md](reference/data/user-data-export.md)                                           | Async GDPR export to S3, presigned download, offboarding cleanup.                      |
 | [reference/security/authentication.md](reference/security/authentication.md)                                       | Auth methods, rate limits, CAPTCHA (Turnstile) production boot guard.                  |
 | [reference/security/csrf-and-session-cookies.md](reference/security/csrf-and-session-cookies.md)                   | Session cookie CSRF posture and Origin checks.                                         |
+| [reference/security/route-flow-audit-remediation.md](reference/security/route-flow-audit-remediation.md)           | Route-flow audit fixes, regression tests, and deferred-item plans.                     |
 | [reference/reliability/chaos-testing.md](reference/reliability/chaos-testing.md)                                   | Toxiproxy chaos suite (`pnpm test:chaos`).                                             |
 | [reference/testing/contract-tests.md](reference/testing/contract-tests.md)                                         | Outbound contracts for Stripe, Resend, S3.                                             |
 | [reference/reliability/health-checks.md](reference/reliability/health-checks.md)                                   | API and worker health endpoints, curl examples, k8s/Railway probes.                    |
@@ -145,6 +150,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [reviews/production-readiness-2026-05-15.md](reviews/production-readiness-2026-05-15.md)                   | Pre-production checklist (Prometheus/OTel deferred).           |
 | [reviews/full-codebase-review-deliverables.md](reviews/full-codebase-review-deliverables.md)               | Full review deliverables: security, performance, dependencies. |
 | [reviews/architecture-consistency-roadmap-2026-05.md](reviews/architecture-consistency-roadmap-2026-05.md) | Completed domain-layout / route-catalog program (archival).    |
+| [reviews/agent-os-tooling-audit-and-evals-2026-06-14.md](reviews/agent-os-tooling-audit-and-evals-2026-06-14.md) | AI-tooling audit → open/closed-loop strategy → evals harness, enforcement hooks, guard skills (PRs #595–#597). |
 
 ---
 

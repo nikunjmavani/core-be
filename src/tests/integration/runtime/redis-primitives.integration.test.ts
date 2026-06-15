@@ -85,6 +85,44 @@ describe.runIf(runRedisTests)('Integration: Redis primitives', () => {
   );
 
   it.runIf(() => redisAvailable)(
+    'a concurrent waiter awaits the lock holder and does not stampede a second recompute (audit-#9)',
+    async () => {
+      const userId = `${testKeyPrefix}:stampede-user`;
+      const organizationId = `${testKeyPrefix}:stampede-org`;
+      let recomputeCount = 0;
+
+      const holder = withPermissionCacheRecomputeLock(userId, organizationId, async () => {
+        recomputeCount += 1;
+        // A non-trivial recompute: the waiter must poll and wait for the cache to
+        // populate rather than falling through to its own uncached recompute.
+        await new Promise<void>((resolve) => setTimeout(resolve, 300));
+        await setCachedPermissions(userId, organizationId, ['member:read'], 300);
+        return ['member:read'];
+      });
+
+      // Let the holder acquire the lock before the waiter starts.
+      await new Promise<void>((resolve) => setTimeout(resolve, 25));
+
+      const waiter = withPermissionCacheRecomputeLock(userId, organizationId, async () => {
+        recomputeCount += 1; // must NOT run — the waiter should read the holder's cached value
+        return ['member:read'];
+      });
+
+      const [holderResult, waiterResult] = await Promise.all([holder, waiter]);
+      expect(holderResult).toEqual(['member:read']);
+      expect(waiterResult).toEqual(['member:read']);
+      expect(recomputeCount).toBe(1);
+
+      await redisConnection.del(
+        `perm:0:${userId}:${organizationId}`,
+        `perm:lock:${userId}:${organizationId}`,
+        `perm:org:${organizationId}:v`,
+      );
+    },
+    70_000,
+  );
+
+  it.runIf(() => redisAvailable)(
     'invalidates organization permission cache via version INCR',
     async () => {
       const userId = `${testKeyPrefix}:version-user`;
@@ -117,6 +155,28 @@ describe.runIf(runRedisTests)('Integration: Redis primitives', () => {
       await expect(circuit.execute(async () => Promise.resolve('ok'))).rejects.toThrow(/OPEN/);
 
       await circuit.reset();
+    },
+  );
+
+  it.runIf(() => redisAvailable)(
+    'route-audit C5: incrementWithExpiryOnFirst increments and sets TTL atomically on the first hit',
+    async () => {
+      const { incrementWithExpiryOnFirst } = await import(
+        '@/shared/utils/infrastructure/redis-counter.util.js'
+      );
+      const key = `${testKeyPrefix}:counter`;
+
+      // First increment → count 1 AND a TTL is set (no INCR-then-EXPIRE gap).
+      expect(await incrementWithExpiryOnFirst(redisConnection, key, 100)).toBe(1);
+      const ttlAfterFirst = await redisConnection.ttl(key);
+      expect(ttlAfterFirst).toBeGreaterThan(0);
+      expect(ttlAfterFirst).toBeLessThanOrEqual(100);
+
+      // Second increment → count 2; the window is anchored to the first hit, not extended.
+      expect(await incrementWithExpiryOnFirst(redisConnection, key, 100)).toBe(2);
+      const ttlAfterSecond = await redisConnection.ttl(key);
+      expect(ttlAfterSecond).toBeGreaterThan(0);
+      expect(ttlAfterSecond).toBeLessThanOrEqual(ttlAfterFirst);
     },
   );
 });

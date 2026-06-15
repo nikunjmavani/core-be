@@ -93,7 +93,7 @@ describe('User Data Export Sub-Domain — Integration', () => {
         token: bearerToken,
         payload: {},
       });
-      expect(exportResponse.statusCode).toBe(202);
+      expect(exportResponse.statusCode).toBe(201);
 
       const exportBody = exportResponse.json() as { data: Record<string, unknown> };
       const payload = exportBody.data;

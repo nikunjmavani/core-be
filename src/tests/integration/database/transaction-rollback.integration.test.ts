@@ -10,7 +10,7 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 function buildUserInsert(email: string) {
   return {
-    public_id: generatePublicId(),
+    public_id: generatePublicId('user'),
     email,
     email_hash: createHash('sha256').update(email).digest('hex'),
     status: 'ACTIVE' as const,

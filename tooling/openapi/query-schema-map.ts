@@ -20,14 +20,13 @@ export const routeQuerySchemaMap: Record<string, ZodTypeAny> = {
   'GET /api/v1/audit/logs': ListAuditLogsQueryDto,
   'GET /api/v1/users': ListUsersDto,
   'GET /api/v1/tenancy/organizations': listOrganizationsQueryDto,
-  'GET /api/v1/tenancy/organizations/{id}/audit-logs': ListAuditLogsQueryDto,
-  'GET /api/v1/tenancy/organizations/{id}/api-keys': listOrganizationApiKeysQueryDto,
-  'GET /api/v1/tenancy/organizations/{id}/memberships': listMembershipsQueryDto,
-  'GET /api/v1/tenancy/organizations/{id}/roles': listMemberRolesQueryDto,
+  'GET /api/v1/tenancy/organization/audit-logs': ListAuditLogsQueryDto,
+  'GET /api/v1/tenancy/organization/api-keys': listOrganizationApiKeysQueryDto,
+  'GET /api/v1/tenancy/organization/memberships': listMembershipsQueryDto,
+  'GET /api/v1/tenancy/organization/roles': listMemberRolesQueryDto,
   'GET /api/v1/notify/notifications': listNotificationsQueryDto,
-  'GET /api/v1/tenancy/organizations/{id}/invitations': listMemberInvitationsQueryDto,
-  'GET /api/v1/notify/organizations/{id}/webhooks/{webhookId}/delivery-attempts':
-    listLimitQuerySchema,
+  'GET /api/v1/tenancy/organization/invitations': listMemberInvitationsQueryDto,
+  'GET /api/v1/notify/webhooks/{webhook_id}/delivery-attempts': listLimitQuerySchema,
   'GET /api/v1/auth/oauth/{provider}/callback': OauthCallbackQueryDto,
 };
 

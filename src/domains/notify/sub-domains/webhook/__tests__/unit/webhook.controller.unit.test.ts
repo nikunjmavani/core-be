@@ -7,7 +7,7 @@ import type { WebhookService } from '@/domains/notify/sub-domains/webhook/webhoo
 
 function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
   return {
-    auth: { userId: generatePublicId(), role: 'user' },
+    auth: { userId: generatePublicId('user'), role: 'user' },
     params: {},
     body: {},
     query: {},
@@ -26,8 +26,8 @@ function mockReply(): FastifyReply {
 }
 
 describe('createWebhookController', () => {
-  const organizationPublicId = generatePublicId();
-  const webhookPublicId = generatePublicId();
+  const organizationPublicId = generatePublicId('organization');
+  const webhookPublicId = generatePublicId('webhook');
   const webhook = { public_id: webhookPublicId, url: 'https://example.com/hook' };
 
   const service = {
@@ -56,7 +56,7 @@ describe('createWebhookController', () => {
 
   it('listWebhooks and getWebhook delegate to service', async () => {
     await controller.listWebhooks(
-      mockRequest({ params: { id: organizationPublicId } }) as never,
+      mockRequest({ params: { organization_id: organizationPublicId } }) as never,
       mockReply(),
     );
     expect(service.list).toHaveBeenCalledWith(
@@ -64,7 +64,9 @@ describe('createWebhookController', () => {
     );
 
     await controller.getWebhook(
-      mockRequest({ params: { id: organizationPublicId, webhookId: webhookPublicId } }) as never,
+      mockRequest({
+        params: { organization_id: organizationPublicId, webhook_id: webhookPublicId },
+      }) as never,
       mockReply(),
     );
     expect(service.get).toHaveBeenCalled();
@@ -73,7 +75,7 @@ describe('createWebhookController', () => {
   it('createWebhook and updateWebhook delegate to service', async () => {
     await controller.createWebhook(
       mockRequest({
-        params: { id: organizationPublicId },
+        params: { organization_id: organizationPublicId },
         body: { url: 'https://example.com/hook', events: ['subscription.updated'] },
       }) as never,
       mockReply(),
@@ -82,7 +84,7 @@ describe('createWebhookController', () => {
 
     await controller.updateWebhook(
       mockRequest({
-        params: { id: organizationPublicId, webhookId: webhookPublicId },
+        params: { organization_id: organizationPublicId, webhook_id: webhookPublicId },
         body: { enabled: false },
       }) as never,
       mockReply(),
@@ -93,7 +95,9 @@ describe('createWebhookController', () => {
   it('deleteWebhook returns 204', async () => {
     const reply = mockReply();
     await controller.deleteWebhook(
-      mockRequest({ params: { id: organizationPublicId, webhookId: webhookPublicId } }) as never,
+      mockRequest({
+        params: { organization_id: organizationPublicId, webhook_id: webhookPublicId },
+      }) as never,
       reply,
     );
     expect(service.delete).toHaveBeenCalled();
@@ -103,7 +107,7 @@ describe('createWebhookController', () => {
   it('listDeliveryAttempts and testWebhook delegate to service', async () => {
     await controller.listDeliveryAttempts(
       mockRequest({
-        params: { id: organizationPublicId, webhookId: webhookPublicId },
+        params: { organization_id: organizationPublicId, webhook_id: webhookPublicId },
         query: { limit: '10' },
       }) as never,
       mockReply(),
@@ -117,7 +121,9 @@ describe('createWebhookController', () => {
     );
 
     await controller.testWebhook(
-      mockRequest({ params: { id: organizationPublicId, webhookId: webhookPublicId } }) as never,
+      mockRequest({
+        params: { organization_id: organizationPublicId, webhook_id: webhookPublicId },
+      }) as never,
       mockReply(),
     );
     expect(service.testWebhook).toHaveBeenCalled();
@@ -126,7 +132,7 @@ describe('createWebhookController', () => {
   it('listDeliveryAttempts uses default limit when query is omitted', async () => {
     await controller.listDeliveryAttempts(
       mockRequest({
-        params: { id: organizationPublicId, webhookId: webhookPublicId },
+        params: { organization_id: organizationPublicId, webhook_id: webhookPublicId },
         query: {},
       }) as never,
       mockReply(),
@@ -144,7 +150,7 @@ describe('createWebhookController', () => {
     it('forwards after, limit, and include_total=true to the service', async () => {
       await controller.listWebhooks(
         mockRequest({
-          params: { id: organizationPublicId },
+          params: { organization_id: organizationPublicId },
           query: { after: 'cursor-token', limit: '5', include_total: 'true' },
         }) as never,
         mockReply(),
@@ -168,7 +174,10 @@ describe('createWebhookController', () => {
         next_cursor: 'opaque-cursor-2',
       } as never);
       const response = await controller.listWebhooks(
-        mockRequest({ params: { id: organizationPublicId }, query: { limit: '1' } }) as never,
+        mockRequest({
+          params: { organization_id: organizationPublicId },
+          query: { limit: '1' },
+        }) as never,
         mockReply(),
       );
       expect(response).toMatchObject({
@@ -194,7 +203,7 @@ describe('createWebhookController', () => {
         next_cursor: null,
       } as never);
       const response = await controller.listWebhooks(
-        mockRequest({ params: { id: organizationPublicId } }) as never,
+        mockRequest({ params: { organization_id: organizationPublicId } }) as never,
         mockReply(),
       );
       expect(response).toMatchObject({
@@ -217,7 +226,7 @@ describe('createWebhookController', () => {
       } as never);
       const response = await controller.listWebhooks(
         mockRequest({
-          params: { id: organizationPublicId },
+          params: { organization_id: organizationPublicId },
           query: { include_total: 'true' },
         }) as never,
         mockReply(),
@@ -234,7 +243,9 @@ describe('createWebhookController', () => {
     it('getWebhook rejects empty webhookId with ValidationError', async () => {
       await expect(
         controller.getWebhook(
-          mockRequest({ params: { id: organizationPublicId, webhookId: '' } }) as never,
+          mockRequest({
+            params: { organization_id: organizationPublicId, webhook_id: '' },
+          }) as never,
           mockReply(),
         ),
       ).rejects.toBeInstanceOf(ValidationError);
@@ -244,7 +255,7 @@ describe('createWebhookController', () => {
       await expect(
         controller.getWebhook(
           mockRequest({
-            params: { id: organizationPublicId, webhookId: 'not-a-valid-id' },
+            params: { organization_id: organizationPublicId, webhook_id: 'not-a-valid-id' },
           }) as never,
           mockReply(),
         ),
@@ -255,7 +266,7 @@ describe('createWebhookController', () => {
       await expect(
         controller.updateWebhook(
           mockRequest({
-            params: { id: organizationPublicId, webhookId: 'bad!!id' },
+            params: { organization_id: organizationPublicId, webhook_id: 'bad!!id' },
             body: { enabled: false },
           }) as never,
           mockReply(),
@@ -266,7 +277,9 @@ describe('createWebhookController', () => {
     it('deleteWebhook rejects malformed webhookId with ValidationError', async () => {
       await expect(
         controller.deleteWebhook(
-          mockRequest({ params: { id: organizationPublicId, webhookId: 'INVALID' } }) as never,
+          mockRequest({
+            params: { organization_id: organizationPublicId, webhook_id: 'INVALID' },
+          }) as never,
           mockReply(),
         ),
       ).rejects.toBeInstanceOf(ValidationError);
@@ -276,7 +289,7 @@ describe('createWebhookController', () => {
       await expect(
         controller.listDeliveryAttempts(
           mockRequest({
-            params: { id: organizationPublicId, webhookId: '../traversal' },
+            params: { organization_id: organizationPublicId, webhook_id: '../traversal' },
             query: {},
           }) as never,
           mockReply(),
@@ -287,7 +300,9 @@ describe('createWebhookController', () => {
     it('testWebhook rejects malformed webhookId with ValidationError', async () => {
       await expect(
         controller.testWebhook(
-          mockRequest({ params: { id: organizationPublicId, webhookId: 'not valid' } }) as never,
+          mockRequest({
+            params: { organization_id: organizationPublicId, webhook_id: 'not valid' },
+          }) as never,
           mockReply(),
         ),
       ).rejects.toBeInstanceOf(ValidationError);
@@ -298,7 +313,7 @@ describe('createWebhookController', () => {
     it('forwards after cursor and include_total to the service', async () => {
       await controller.listDeliveryAttempts(
         mockRequest({
-          params: { id: organizationPublicId, webhookId: webhookPublicId },
+          params: { organization_id: organizationPublicId, webhook_id: webhookPublicId },
           query: { after: 'cursor-attempt', limit: '50', include_total: 'true' },
         }) as never,
         mockReply(),
@@ -327,7 +342,7 @@ describe('createWebhookController', () => {
       } as never);
       const response = await controller.listDeliveryAttempts(
         mockRequest({
-          params: { id: organizationPublicId, webhookId: webhookPublicId },
+          params: { organization_id: organizationPublicId, webhook_id: webhookPublicId },
           query: { limit: '2', include_total: 'true' },
         }) as never,
         mockReply(),
@@ -354,7 +369,7 @@ describe('createWebhookController', () => {
       } as never);
       const response = await controller.listDeliveryAttempts(
         mockRequest({
-          params: { id: organizationPublicId, webhookId: webhookPublicId },
+          params: { organization_id: organizationPublicId, webhook_id: webhookPublicId },
         }) as never,
         mockReply(),
       );

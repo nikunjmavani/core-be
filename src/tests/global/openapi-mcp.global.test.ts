@@ -29,6 +29,7 @@ describe('OpenAPI MCP', () => {
     expect(spec['x-mcp']).toBeDefined();
     expect(spec['x-mcp']?.tools.map((tool) => tool.name)).toEqual(['call_api']);
     expect(spec['x-mcp']?.resources.map((resource) => resource.uri).sort()).toEqual([
+      'core-be://client-guide',
       'core-be://openapi',
       'core-be://routes',
     ]);

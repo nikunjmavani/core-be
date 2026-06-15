@@ -68,7 +68,7 @@ describe('Security: Organization RLS session', () => {
     });
   });
 
-  it('should return 200 for matching X-Organization-Id and route organization', async () => {
+  it('should return 200 when the org claim resolves the active organization', async () => {
     const user = await createTestUser();
     const organization = await createTestOrganization({ ownerUserId: user.id });
     const role = await createRoleWithPermissions({
@@ -80,13 +80,17 @@ describe('Security: Organization RLS session', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
+    // Flat organization route resolves the active org from the JWT `org` claim,
+    // which drives the RLS GUC (`app.current_organization_id`) for the request.
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
 
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}`),
+      url: testApiPath('/tenancy/organization'),
       token,
-      organizationPublicId: organization.public_id,
     });
 
     expect(response.statusCode).toBe(200);

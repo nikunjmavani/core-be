@@ -19,7 +19,7 @@ describe('buildIdempotencyRequestFingerprint', () => {
     });
     const differentRoute = buildIdempotencyRequestFingerprint({
       method: 'POST',
-      routePath: '/organizations/:id/memberships',
+      routePath: '/api/v1/tenancy/organization/memberships',
       body: { name: 'A' },
     });
     const differentBody = buildIdempotencyRequestFingerprint({
@@ -34,12 +34,22 @@ describe('buildIdempotencyRequestFingerprint', () => {
 });
 
 describe('isIdempotencyRouteExcluded', () => {
+  // Matched against the full prefixed Fastify route template (request.routeOptions.url), e.g.
+  // `/api/v1/auth/login` — the patterns are suffix-anchored so the /api/v{n} prefix is irrelevant.
   it('excludes auth token issuance and api-key creation routes', () => {
-    expect(isIdempotencyRouteExcluded('/login')).toBe(true);
-    expect(isIdempotencyRouteExcluded('/magic-link/verify')).toBe(true);
-    expect(isIdempotencyRouteExcluded('/oauth/google/callback')).toBe(true);
-    expect(isIdempotencyRouteExcluded('/organizations/:id/api-keys')).toBe(true);
-    expect(isIdempotencyRouteExcluded('/tenancy/organizations')).toBe(false);
+    expect(isIdempotencyRouteExcluded('/api/v1/auth/login')).toBe(true);
+    expect(isIdempotencyRouteExcluded('/api/v1/auth/magic-link/verify')).toBe(true);
+    expect(isIdempotencyRouteExcluded('/api/v1/auth/mfa/login')).toBe(true);
+    expect(isIdempotencyRouteExcluded('/api/v1/auth/oauth/google/callback')).toBe(true);
+    expect(isIdempotencyRouteExcluded('/api/v1/auth/webauthn/authenticate/verify')).toBe(true);
+    expect(isIdempotencyRouteExcluded('/api/v1/auth/refresh')).toBe(true);
+    expect(isIdempotencyRouteExcluded('/api/v1/tenancy/organization/api-keys')).toBe(true);
+  });
+
+  it('does not exclude account-level or non-issuance routes', () => {
+    expect(isIdempotencyRouteExcluded('/api/v1/tenancy/organizations')).toBe(false);
+    expect(isIdempotencyRouteExcluded('/api/v1/tenancy/organization/memberships')).toBe(false);
+    expect(isIdempotencyRouteExcluded('/api/v1/billing/subscriptions')).toBe(false);
   });
 });
 
@@ -56,5 +66,24 @@ describe('responseBodyContainsSecretFields', () => {
     expect(
       responseBodyContainsSecretFields(JSON.stringify({ data: { id: 'org-1', name: 'Acme' } })),
     ).toBe(false);
+  });
+
+  it('route-audit-#3: flags recovery codes and presigned-URL fields (no-store + no idempotency cache)', () => {
+    // MFA recovery codes — plaintext single-use MFA-bypass material.
+    expect(
+      responseBodyContainsSecretFields(
+        JSON.stringify({ data: { recovery_codes: ['ABCD-1234'], method_public_id: 'm1' } }),
+      ),
+    ).toBe(true);
+    // GDPR data-export presigned download URL (carries X-Amz-Signature).
+    expect(
+      responseBodyContainsSecretFields(
+        JSON.stringify({ data: { download_url: 'https://s3/...' } }),
+      ),
+    ).toBe(true);
+    // Upload presign URL.
+    expect(
+      responseBodyContainsSecretFields(JSON.stringify({ data: { uploadUrl: 'https://s3/...' } })),
+    ).toBe(true);
   });
 });

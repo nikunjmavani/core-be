@@ -35,6 +35,23 @@ vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
   captureMessage: vi.fn(),
 }));
 
+// audit-#15d: spy the timing floor so we can assert both login failure branches apply it.
+vi.mock('@/shared/utils/security/anti-enumeration.util.js', () => ({
+  enforceMinimumDuration: vi.fn().mockResolvedValue(undefined),
+  ANTI_ENUMERATION_MINIMUM_DURATION_MS: 300,
+}));
+
+// login/refresh/switch mint the `org` claim via these tenancy resolvers (their own DB context).
+// Stub them so the AuthService unit tests stay pure (the CI unit lane has no Postgres).
+vi.mock('@/domains/tenancy/sub-domains/organization/resolve-active-organization.js', () => ({
+  resolveDefaultActiveOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
+  findUserActiveOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
+  findUserActiveOrganizationPublicIdByInternalId: vi.fn().mockResolvedValue(undefined),
+  findUserActiveOrganizationByPublicId: vi.fn().mockResolvedValue(undefined),
+  resolvePersonalOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
+  resolvePersonalOrganization: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
     callback(),
@@ -49,7 +66,7 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
 
 const user = {
   id: 1,
-  public_id: generatePublicId(),
+  public_id: generatePublicId('authSession'),
   email: 'user@example.com',
   password_hash: 'hash',
   failed_login_count: 0,
@@ -62,6 +79,7 @@ describe('AuthService', () => {
   const userService = {
     findByEmail: vi.fn().mockResolvedValue(user),
     findById: vi.fn().mockResolvedValue(user),
+    requireUserRecordByPublicId: vi.fn().mockResolvedValue(user),
     updateLoginAttempt: vi.fn().mockResolvedValue(undefined),
     registerFailedLoginAttempt: vi.fn().mockResolvedValue(undefined),
     updatePassword: vi.fn().mockResolvedValue(user),
@@ -87,6 +105,7 @@ describe('AuthService', () => {
     }),
     rotateSessionTokenHash: vi.fn().mockResolvedValue(undefined),
     refreshSessionCredentials: vi.fn().mockResolvedValue({ refresh_secret: 'new-refresh-secret' }),
+    rebindAccessToken: vi.fn().mockResolvedValue(undefined),
   } as unknown as AuthSessionService;
 
   const mfaService = {
@@ -101,6 +120,8 @@ describe('AuthService', () => {
     get: vi.fn().mockResolvedValue(null),
     incr: vi.fn().mockResolvedValue(1),
     expire: vi.fn().mockResolvedValue(1),
+    // route-audit C5: per-IP failed-login counter now uses an atomic INCR+EXPIRE Lua via redis.eval.
+    eval: vi.fn().mockResolvedValue(1),
   } as unknown as Redis;
 
   const service = new AuthService(
@@ -175,6 +196,30 @@ describe('AuthService', () => {
       service.login({ email: 'unknown@example.com', password: 'WrongPassword1!' }, '127.0.0.1'),
     ).rejects.toBeInstanceOf(UnauthorizedError);
     expect(verifyPassword).toHaveBeenCalledWith('WrongPassword1!', DUMMY_ARGON2_HASH);
+  });
+
+  it('applies the timing floor on both login failure branches (audit-#15d)', async () => {
+    const { enforceMinimumDuration } = await import(
+      '@/shared/utils/security/anti-enumeration.util.js'
+    );
+    const { verifyPassword } = await import('@/shared/utils/security/password.util.js');
+
+    // Unknown-email branch.
+    vi.mocked(enforceMinimumDuration).mockClear();
+    vi.mocked(userService.findByEmail).mockResolvedValue(null);
+    await expect(
+      service.login({ email: 'unknown@example.com', password: 'WrongPassword1!' }, '127.0.0.1'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(enforceMinimumDuration).toHaveBeenCalledTimes(1);
+
+    // Wrong-password branch (known email) — the branch with the extra Postgres write.
+    vi.mocked(enforceMinimumDuration).mockClear();
+    vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
+    vi.mocked(verifyPassword).mockResolvedValueOnce({ valid: false, needsRehash: false });
+    await expect(
+      service.login({ email: user.email, password: 'WrongPassword1!' }, '127.0.0.1'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(enforceMinimumDuration).toHaveBeenCalledTimes(1);
   });
 
   it('login rejects a locked account only when the password is also wrong', async () => {
@@ -264,6 +309,79 @@ describe('AuthService', () => {
     expect(result.access_token).toBe('jwt-access-token');
     expect(result.refresh_secret).toBe('new-refresh-secret');
     expect(authSessionService.refreshSessionCredentials).toHaveBeenCalled();
+  });
+
+  it('AUTH-14: refreshToken preserves the session-selected org (re-validated) instead of resetting to default', async () => {
+    const resolve = await import(
+      '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js'
+    );
+    const jwt = await import('@/shared/utils/security/jwt.util.js');
+    vi.mocked(authSessionService.findSessionByPublicIdIncludingRevoked).mockResolvedValue({
+      public_id: 'session_public',
+      user_id: 1,
+      organization_id: 42,
+      expires_at: new Date(Date.now() + 86_400_000),
+      is_revoked: false,
+    } as never);
+    vi.mocked(resolve.findUserActiveOrganizationPublicIdByInternalId).mockResolvedValue(
+      'org_selected',
+    );
+
+    await service.refreshToken({
+      sessionPublicId: 'session_public',
+      refreshSecret: 'refresh-secret',
+    });
+
+    // The selected org is re-validated by internal id and reused for the token claim.
+    expect(resolve.findUserActiveOrganizationPublicIdByInternalId).toHaveBeenCalledWith(1, 42);
+    expect(resolve.resolveDefaultActiveOrganizationPublicId).not.toHaveBeenCalled();
+    expect(jwt.signAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationPublicId: 'org_selected' }),
+    );
+  });
+
+  it('AUTH-14: refreshToken falls back to the default org when the persisted org is no longer a valid membership', async () => {
+    const resolve = await import(
+      '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js'
+    );
+    vi.mocked(authSessionService.findSessionByPublicIdIncludingRevoked).mockResolvedValue({
+      public_id: 'session_public',
+      user_id: 1,
+      organization_id: 42,
+      expires_at: new Date(Date.now() + 86_400_000),
+      is_revoked: false,
+    } as never);
+    // Membership revoked / org deleted → re-validation returns undefined.
+    vi.mocked(resolve.findUserActiveOrganizationPublicIdByInternalId).mockResolvedValue(undefined);
+    vi.mocked(resolve.resolveDefaultActiveOrganizationPublicId).mockResolvedValue('org_default');
+
+    await service.refreshToken({
+      sessionPublicId: 'session_public',
+      refreshSecret: 'refresh-secret',
+    });
+
+    expect(resolve.resolveDefaultActiveOrganizationPublicId).toHaveBeenCalledWith(1);
+  });
+
+  it('AUTH-15: switchToOrganization persists the selected org on the session for refresh to preserve', async () => {
+    const resolve = await import(
+      '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js'
+    );
+    vi.mocked(resolve.findUserActiveOrganizationByPublicId).mockResolvedValue({
+      id: 9,
+      public_id: 'org_team',
+    });
+
+    const result = await service.switchToOrganization({
+      userPublicId: user.public_id,
+      sessionPublicId: 'session_public',
+      organizationPublicId: 'org_team',
+    });
+
+    expect(result.access_token).toBe('jwt-access-token');
+    expect(authSessionService.rebindAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionPublicId: 'session_public', activeOrganizationId: 9 }),
+    );
   });
 
   it('records a failed attempt via the atomic increment (count + lock decided in SQL)', async () => {
@@ -413,7 +531,7 @@ describe('AuthService', () => {
     await expect(
       service.login({ email: user.email, password: 'WrongPassword1!' }, '10.0.0.1'),
     ).rejects.toBeInstanceOf(UnauthorizedError);
-    expect(redis.incr).toHaveBeenCalled();
+    expect(redis.eval).toHaveBeenCalled();
   });
 
   it('login increments the per-IP counter when the email is not found', async () => {
@@ -421,7 +539,7 @@ describe('AuthService', () => {
     await expect(
       service.login({ email: 'nobody@example.com', password: 'WrongPassword1!' }, '10.0.0.2'),
     ).rejects.toBeInstanceOf(UnauthorizedError);
-    expect(redis.incr).toHaveBeenCalled();
+    expect(redis.eval).toHaveBeenCalled();
   });
 
   it('login fails open on Redis error during IP check (does not block legitimate user)', async () => {

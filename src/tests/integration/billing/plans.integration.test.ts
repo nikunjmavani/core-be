@@ -21,7 +21,7 @@ describe('Billing - Plans', () => {
     expect(Array.isArray((response.body as { data: unknown }).data)).toBe(true);
   });
 
-  it('GET /api/v1/billing/plans/:id returns 404 for nonexistent plan', async () => {
+  it('GET /api/v1/billing/plans/:plan_id returns 404 for nonexistent plan', async () => {
     const response = await request.get('/api/v1/billing/plans/nonexistent-id');
 
     expect(response.status).toBe(404);

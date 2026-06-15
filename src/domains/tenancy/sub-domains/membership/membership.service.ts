@@ -25,10 +25,11 @@ import {
 } from './membership.validator.js';
 import { serializeMembership } from './membership.serializer.js';
 import { invalidatePermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
+import type { OrganizationApiKeyRepository } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.repository.js';
 
 /**
  * HTTP response shape for `GET
- * /organizations/:id/memberships/:membershipId/permissions` — the resolved
+ * /organization/memberships/:membership_id/permissions` — the resolved
  * permission codes for the membership's current role.
  *
  * @remarks
@@ -90,7 +91,26 @@ export class MembershipService {
     private readonly permissionRepository: PermissionRepository,
     private readonly organizationSettingsService?: OrganizationSettingsService,
     private readonly userSettingsService?: UserSettingsService,
+    // reaudit-#7: optional so minimal test harnesses can omit it; the container always wires it.
+    private readonly organizationApiKeyRepository?: OrganizationApiKeyRepository,
   ) {}
+
+  /**
+   * Revokes every API key the departing member created in this organization (reaudit-#7), so a
+   * removed/left member's keys lose access along with their session. Runs inside the caller's
+   * organization DB context (RLS-scoped). Best-effort: skipped when the api-key repository is not
+   * wired (minimal test harness).
+   */
+  private async revokeApiKeysForDepartedMember(
+    userId: number,
+    organizationId: number,
+  ): Promise<void> {
+    if (!this.organizationApiKeyRepository) return;
+    await this.organizationApiKeyRepository.revokeAllByCreatorInOrganization(
+      organizationId,
+      userId,
+    );
+  }
 
   private async invalidatePermissionsForMembership(
     user_internal_id: number,
@@ -214,6 +234,14 @@ export class MembershipService {
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
         );
+      // Capability matrix: a PERSONAL organization is single-member by definition. The invitation
+      // flow already blocks this, but membership-create is a second entry point (a holder of
+      // MEMBERSHIP_MANAGE — which the personal-org owner has — could otherwise seed a second member
+      // directly). Reject here so the single-member invariant holds at every door. Collaboration
+      // requires a TEAM organization.
+      if (organization.type === 'PERSONAL') {
+        throw new ConflictError('errors:personalOrganizationNoMembers');
+      }
       const role = await this.memberRoleService.requireRoleRecordByPublicId(
         organization_public_id,
         parsed.role_id,
@@ -345,6 +373,8 @@ export class MembershipService {
         }
         throw new NotFoundError('Membership');
       }
+      // reaudit-#7: revoke the removed member's API keys so they lose access too.
+      await this.revokeApiKeysForDepartedMember(deleted.user_id, organization.id);
       await this.invalidatePermissionsForMembership(deleted.user_id, organization_public_id);
     });
   }
@@ -403,6 +433,8 @@ export class MembershipService {
         }
         throw new NotFoundError('Membership');
       }
+      // reaudit-#7: revoke the departing member's API keys so they lose access too.
+      await this.revokeApiKeysForDepartedMember(userId, organization.id);
       await invalidatePermissions(user_public_id, organization_public_id);
     });
   }
@@ -418,6 +450,10 @@ export class MembershipService {
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
         );
+      // A PERSONAL organization belongs solely to its owner and cannot be handed off.
+      if (organization.type === 'PERSONAL') {
+        throw new ConflictError('errors:personalOrganizationImmutable');
+      }
       const currentUserId =
         await this.organizationService.resolveUserInternalIdByPublicId(current_user_public_id);
       if (currentUserId === null) throw new NotFoundError('User');
@@ -432,7 +468,7 @@ export class MembershipService {
         newOwnerUserId,
         organization.id,
       );
-      if (!newOwnerMembership || newOwnerMembership.status !== 'ACTIVE') {
+      if (newOwnerMembership?.status !== 'ACTIVE') {
         throw new NotFoundError('New owner must be an active member');
       }
       await this.organizationService.transferOrganizationOwnership(

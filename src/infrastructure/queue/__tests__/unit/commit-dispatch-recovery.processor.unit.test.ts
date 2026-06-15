@@ -2,11 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const listStaleMock = vi.fn();
 const consumeTasksMock = vi.fn();
+const acknowledgeMock = vi.fn();
 vi.mock('@/infrastructure/queue/commit-dispatch/commit-dispatch.store.js', () => ({
   COMMIT_DISPATCH_RECOVERY_AFTER_MS: 30_000,
   listStaleCommitDispatchRequestIds: (...args: unknown[]) => listStaleMock(...args),
   consumeCommitDispatchTasks: (...args: unknown[]) => consumeTasksMock(...args),
+  acknowledgeCommitDispatchTask: (...args: unknown[]) => acknowledgeMock(...args),
 }));
+
+/** Wrap a bare task in the {task, raw} shape consumeCommitDispatchTasks now returns. */
+function pending(task: Record<string, unknown>) {
+  return { task, raw: JSON.stringify(task) };
+}
 
 const executeTaskMock = vi.fn();
 vi.mock('@/infrastructure/queue/commit-dispatch/commit-dispatch.executor.js', () => ({
@@ -43,20 +50,22 @@ describe('runCommitDispatchRecoveryJob', () => {
     expect(executeTaskMock).not.toHaveBeenCalled();
   });
 
-  it('executes tasks for each stale request id and counts successes', async () => {
+  it('executes tasks for each stale request id, acknowledging each after success (reaudit-#2)', async () => {
     listStaleMock.mockResolvedValue(['req-1']);
-    consumeTasksMock.mockResolvedValue([{ type: 'enqueue', payload: {} }]);
+    consumeTasksMock.mockResolvedValue([pending({ type: 'enqueue', payload: {} })]);
     executeTaskMock.mockResolvedValue(undefined);
 
     const result = await runCommitDispatchRecoveryJob();
     expect(result).toEqual({ scannedCount: 1, executedCount: 1 });
     expect(executeTaskMock).toHaveBeenCalledTimes(1);
+    // reaudit-#2: the task is removed ONLY after it executed successfully.
+    expect(acknowledgeMock).toHaveBeenCalledTimes(1);
   });
 
   it('sec-new-Q2: captures exception in Sentry when a task fails and Sentry is initialized', async () => {
     const taskError = new Error('task execution failed');
     listStaleMock.mockResolvedValue(['req-1']);
-    consumeTasksMock.mockResolvedValue([{ type: 'enqueue', payload: {} }]);
+    consumeTasksMock.mockResolvedValue([pending({ type: 'enqueue', payload: {} })]);
     executeTaskMock.mockRejectedValue(taskError);
 
     const result = await runCommitDispatchRecoveryJob();
@@ -64,13 +73,15 @@ describe('runCommitDispatchRecoveryJob', () => {
     // Task failure should not interrupt the batch — scanned = 1, executed = 0.
     expect(result).toEqual({ scannedCount: 1, executedCount: 0 });
     expect(captureExceptionMock).toHaveBeenCalledWith(taskError);
+    // reaudit-#2: a failed task is NOT acknowledged, so the recovery sweeper retries it.
+    expect(acknowledgeMock).not.toHaveBeenCalled();
   });
 
   it('sec-new-Q2: skips Sentry capture when Sentry is not initialized', async () => {
     isSentryInitializedMock.mockReturnValue(false);
     const taskError = new Error('task execution failed');
     listStaleMock.mockResolvedValue(['req-1']);
-    consumeTasksMock.mockResolvedValue([{ type: 'enqueue', payload: {} }]);
+    consumeTasksMock.mockResolvedValue([pending({ type: 'enqueue', payload: {} })]);
     executeTaskMock.mockRejectedValue(taskError);
 
     await runCommitDispatchRecoveryJob();
@@ -82,8 +93,8 @@ describe('runCommitDispatchRecoveryJob', () => {
     const taskError = new Error('first task failed');
     listStaleMock.mockResolvedValue(['req-1']);
     consumeTasksMock.mockResolvedValue([
-      { type: 'enqueue', payload: { a: 1 } },
-      { type: 'enqueue', payload: { b: 2 } },
+      pending({ type: 'enqueue', payload: { a: 1 } }),
+      pending({ type: 'enqueue', payload: { b: 2 } }),
     ]);
     executeTaskMock.mockRejectedValueOnce(taskError).mockResolvedValueOnce(undefined);
 
@@ -93,5 +104,7 @@ describe('runCommitDispatchRecoveryJob', () => {
     expect(result).toEqual({ scannedCount: 1, executedCount: 1 });
     expect(captureExceptionMock).toHaveBeenCalledTimes(1);
     expect(executeTaskMock).toHaveBeenCalledTimes(2);
+    // reaudit-#2: only the SUCCEEDED task is acknowledged; the failed one stays for retry.
+    expect(acknowledgeMock).toHaveBeenCalledTimes(1);
   });
 });

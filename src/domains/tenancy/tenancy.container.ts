@@ -84,11 +84,7 @@ export function createTenancyContainer(
     authorizationService,
     permissionRepository,
   );
-  const memberRoleService = new MemberRoleService(
-    organizationService,
-    memberRoleRepository,
-    membershipRepository,
-  );
+  const memberRoleService = new MemberRoleService(organizationService, memberRoleRepository);
   const memberRolePermissionService = new MemberRolePermissionService(
     organizationRepository,
     memberRoleRepository,
@@ -106,6 +102,8 @@ export function createTenancyContainer(
     permissionRepository,
     organizationSettingsService,
     userSettingsService,
+    // reaudit-#7: revoke a removed/departed member's API keys.
+    organizationApiKeyRepository,
   );
   const memberInvitationService = new MemberInvitationService(
     organizationRepository,

@@ -54,6 +54,42 @@ describe('WebhookRepository (database)', () => {
     expect(subscribed).toHaveLength(0);
   });
 
+  it('audit-#4: re-creating at a soft-deleted URL resurrects the row (upsert), no unique violation', async () => {
+    // Verifies the audit-#4 finding is a non-issue: create() upserts ON CONFLICT
+    // (organization_id, url) and clears deleted_at, so re-adding a webhook at a
+    // previously deleted URL succeeds by resurrecting the existing row rather than
+    // throwing a unique violation. The full unique index is required for this.
+    const user = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: user.id });
+    const url = 'https://example.com/recreatable-hook';
+
+    const first = await repository.create({
+      organization_id: organization.id,
+      url,
+      encrypted_secret: 'secret-v1',
+      events: ['subscription.updated'],
+      is_enabled: true,
+      created_by_user_id: user.id,
+    });
+    const deleted = await repository.softDelete(first.public_id, organization.id);
+    expect(deleted?.deleted_at).not.toBeNull();
+
+    const recreated = await repository.create({
+      organization_id: organization.id,
+      url,
+      encrypted_secret: 'secret-v2',
+      events: ['subscription.updated'],
+      is_enabled: true,
+      created_by_user_id: user.id,
+    });
+
+    // Same row, resurrected: deleted_at cleared and the secret/events updated.
+    expect(recreated.public_id).toBe(first.public_id);
+    expect(recreated.deleted_at).toBeNull();
+    const found = await repository.findByPublicId(recreated.public_id, organization.id);
+    expect(found?.url).toBe(url);
+  });
+
   it('listEnabledSubscribedToEvent returns enabled webhooks for event', async () => {
     const user = await createTestUser();
     const organization = await createTestOrganization({ ownerUserId: user.id });
@@ -220,6 +256,78 @@ describe('WebhookRepository (database)', () => {
 
       expect(afterDelete.items).toHaveLength(1);
       expect(afterDelete.total).toBe(1);
+    });
+  });
+
+  describe('chk_webhooks_updated invariant (updated_at never precedes created_at)', () => {
+    it('soft-delete and update succeed even when created_at is ahead of now()', async () => {
+      const user = await createTestUser({ email: 'webhook-updated-at@test.com' });
+      const organization = await createTestOrganization({ ownerUserId: user.id });
+      const created = await repository.create({
+        organization_id: organization.id,
+        url: 'https://example.com/future-hook',
+        encrypted_secret: 'secret',
+        events: ['subscription.updated'],
+        is_enabled: true,
+        created_by_user_id: user.id,
+      });
+
+      // Force the flake condition: created_at AHEAD of now() (set updated_at too so the row stays
+      // valid). Previously a later mutation's `updated_at = now()` would be < created_at and violate
+      // chk_webhooks_updated; greatest(created_at, now()) keeps the invariant true.
+      const future = new Date(Date.now() + 60 * 60 * 1000);
+      await database
+        .update(webhooks)
+        .set({ created_at: future, updated_at: future })
+        .where(eq(webhooks.public_id, created.public_id));
+
+      // update() must not violate the CHECK...
+      const updated = await repository.update(
+        created.public_id,
+        organization.id,
+        { is_enabled: false },
+        user.id,
+      );
+      expect(updated?.is_enabled).toBe(false);
+
+      // ...and neither must soft-delete.
+      const deleted = await repository.softDelete(created.public_id, organization.id);
+      expect(deleted?.deleted_at).not.toBeNull();
+    });
+
+    it('route-audit C3: re-adding a soft-deleted webhook with created_at ahead of now() holds the invariant', async () => {
+      const user = await createTestUser({ email: 'webhook-c3@test.com' });
+      const organization = await createTestOrganization({ ownerUserId: user.id });
+      const created = await repository.create({
+        organization_id: organization.id,
+        url: 'https://example.com/c3-hook',
+        encrypted_secret: 'secret',
+        events: ['subscription.updated'],
+        is_enabled: true,
+        created_by_user_id: user.id,
+      });
+
+      // Soft-delete, then force created_at (and updated_at, to stay valid) into the future.
+      await repository.softDelete(created.public_id, organization.id);
+      const future = new Date(Date.now() + 60 * 60 * 1000);
+      await database
+        .update(webhooks)
+        .set({ created_at: future, updated_at: future })
+        .where(eq(webhooks.public_id, created.public_id));
+
+      // Re-add (same org+url) resurrects the row via onConflictDoUpdate. Pre-fix, updated_at =
+      // new Date() (JS clock) could be < the future created_at and violate chk_webhooks_updated;
+      // greatest(created_at, now()) keeps it valid.
+      const revived = await repository.create({
+        organization_id: organization.id,
+        url: 'https://example.com/c3-hook',
+        encrypted_secret: 'secret-rotated',
+        events: ['subscription.updated'],
+        is_enabled: true,
+        created_by_user_id: user.id,
+      });
+      expect(revived.public_id).toBe(created.public_id);
+      expect(revived.deleted_at).toBeNull();
     });
   });
 });

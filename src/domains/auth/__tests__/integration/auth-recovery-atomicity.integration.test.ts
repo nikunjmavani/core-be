@@ -106,7 +106,7 @@ describe('Auth recovery atomicity — password reset', () => {
       payload: { token: rawToken, password: 'BrandNewPassword456!' },
     });
 
-    expect(response.statusCode).toBe(204);
+    expect(response.statusCode).toBe(201);
     expect(await readPasswordHash(user.id)).not.toBe(passwordHashBefore);
     expect(await readTokenUsedAt(tokenHash)).not.toBeNull();
   });

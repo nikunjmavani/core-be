@@ -145,7 +145,7 @@ describe('Security: payload / resource-exhaustion (DoS) hardening', () => {
         url: testApiPath('/tenancy/organizations'),
         token,
         payload: { name: 'Acme Inc', slug: pathologicalSlug },
-        headers: { 'idempotency-key': generatePublicId() },
+        headers: { 'idempotency-key': generatePublicId('user') },
       });
       const elapsedMs = Date.now() - start;
 

@@ -1,0 +1,5803 @@
+{
+  "DELETE /api/v1/auth/me/auth-methods/:auth_method_id": {
+    "responses": {
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "params.auth_method_id",
+              "message": "Invalid string: must match pattern /^am_[a-z0-9]{21}$/"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "c5089ac0-a7e1-483d-90a5-13bcea41ef5e"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "db6acba2-9eb5-474e-9526-35e728a1016a"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Recent step-up authentication is required for this action",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "a924573c-f8be-459a-96bd-fb700974837b"
+        }
+      }
+    }
+  },
+  "DELETE /api/v1/auth/me/sessions": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "224ab2c7-a193-4ad9-9dc6-4802b56bd5eb"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Recent step-up authentication is required for this action",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "e26dc29a-3d97-48eb-9833-52301b149bbf"
+        }
+      }
+    }
+  },
+  "DELETE /api/v1/auth/me/sessions/:session_id": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "1e5b242b-3bf3-4d18-99bc-c34a7475df15"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Recent step-up authentication is required for this action",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "e5742d9c-56b8-402f-90ca-befa423aa018"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "ded16815-e519-41b3-9d47-8933241bdbb2"
+        }
+      },
+      "409": {
+        "error": {
+          "type": "request_error",
+          "code": "conflict",
+          "detail": "You cannot revoke the session you are currently using; sign out instead to end it.",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "93eb4908-e94a-46bc-997f-79c9cf0bac20"
+        }
+      }
+    }
+  },
+  "DELETE /api/v1/auth/mfa/:mfa_method_id": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "b93b8e58-90dd-4aad-9f94-a41295e77089"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Recent step-up authentication is required for this action",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "2e771d0c-ffb2-4fdb-9ead-3aa1903fb89f"
+        }
+      }
+    }
+  },
+  "DELETE /api/v1/notify/notifications/:notification_id": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "2a45c670-77c5-456c-9d7e-1072618a2de6"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "c982ee2d-f77b-4f1f-99d6-afcb65373f49"
+        }
+      }
+    }
+  },
+  "DELETE /api/v1/notify/webhooks/:webhook_id": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "8571b12b-2fa4-421f-9669-59a2b4fc8761"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "00d3adcf-82da-4236-9827-166990cd56c1"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "09e792c2-5a40-4b41-92cd-2308f2f839d2"
+        }
+      }
+    }
+  },
+  "DELETE /api/v1/tenancy/organization": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "f49cae50-2635-4a6e-9af8-5229496bec6b"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "f71d769a-f30d-4076-929b-0937896e7067"
+        }
+      }
+    }
+  },
+  "DELETE /api/v1/tenancy/organization/api-keys/:api_key_id": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "9300be29-dffc-4c9e-9a3c-359a22fce173"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "4ab3f563-c758-4e7e-96f1-6f58517f2ae8"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "ab726f68-19e1-4e0c-9f42-effc666a60c2"
+        }
+      }
+    }
+  },
+  "DELETE /api/v1/tenancy/organization/invitations/:invitation_id": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "474d7046-45b3-4f52-964e-63560883bcd2"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "f6b4509b-1bdb-43dd-960f-5ca02fdb0c29"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "743d2568-50f8-48b7-96a2-791dfe64c275"
+        }
+      }
+    }
+  },
+  "DELETE /api/v1/tenancy/organization/logo": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "50653ec1-1c7c-4397-9941-3b2769de8a20"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "c77be790-8dea-4291-97e2-8dd1cec7ae50"
+        }
+      }
+    }
+  },
+  "DELETE /api/v1/tenancy/organization/memberships/:membership_id": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "9c48b924-242f-4c2e-9cd4-a44fab25ce3b"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "The organization owner cannot be removed; transfer ownership first",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "b3989284-0610-4dfa-94a7-bc2ecd57d492"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "26af1153-d654-49a0-9262-441e8f074b74"
+        }
+      }
+    }
+  },
+  "DELETE /api/v1/tenancy/organization/notification-policies/:policy_id": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "1197b0bb-6571-49fb-9194-2e44abbe653e"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "45f79f44-a395-4303-970f-219f7c9c489a"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "62d86d23-2c70-4523-9de1-de02b55d0d15"
+        }
+      }
+    }
+  },
+  "DELETE /api/v1/tenancy/organization/roles/:role_id": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "50b3925c-fd44-47c5-9e7a-3a436ddaebec"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "b1cfb462-fce1-4500-9a02-9a027ae33b45"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "97681188-be6b-4d2d-9feb-b28cba9a8305"
+        }
+      }
+    }
+  },
+  "DELETE /api/v1/uploads/:upload_id": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "7b49bc82-aaa4-44c2-9b05-a02b05f66ddc"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions for upload",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "c2fa7b2e-0629-4166-9897-40da966fa436"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "28062512-c868-4d7c-9325-e726d8f8fa51"
+        }
+      }
+    }
+  },
+  "DELETE /api/v1/users/:user_id": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "21059a2c-96db-4253-9d55-854afb0cbf4d"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient role privileges",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "29f91c6e-d477-43e9-9f59-d42b265e46a4"
+        }
+      }
+    }
+  },
+  "DELETE /api/v1/users/me": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "d05bdbc6-7a7c-448b-991d-0fdd87622719"
+        }
+      }
+    }
+  },
+  "DELETE /api/v1/users/me/avatar": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "d649ce24-d2b5-4bf3-9c9b-8075aa33f4c4"
+        }
+      }
+    }
+  },
+  "GET /api/v1/audit/logs": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "f9c998ac-dac3-4144-92e6-a39620dbc186",
+          "pagination": {
+            "per_page": 25,
+            "next": null,
+            "has_more": false
+          }
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid input",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "limit",
+              "message": "Too big: expected number to be <=100"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "02b0389e-0077-48a0-9a2a-87684b12af13"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "ce626d02-562a-4a06-9d55-e94d10190b8a"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient role privileges",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "dbca6540-6026-43a0-9748-af0730bdf7de"
+        }
+      }
+    }
+  },
+  "GET /api/v1/auth/me/auth-methods": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "6e03e4a7-5f8d-401d-9e94-b214afbb62fb"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "27b624e6-ab5b-4f97-9a91-15a38e798c4f"
+        }
+      }
+    }
+  },
+  "GET /api/v1/auth/me/sessions": {
+    "responses": {
+      "200": {
+        "data": [
+          {
+            "id": "ses_example00000000000000",
+            "ip_address": "127.0.0.1",
+            "user_agent": "lightMyRequest",
+            "last_active_at": "2026-01-01T00:00:00.000Z",
+            "expires_at": "2026-01-01T00:00:00.000Z",
+            "created_at": "2026-01-01T00:00:00.000Z"
+          }
+        ],
+        "meta": {
+          "request_id": "079a675f-7a62-4efd-9e15-5d8d1c8cd473"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Invalid or expired session",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "1209340e-a23b-4924-96d3-e3ad6917ebf8"
+        }
+      }
+    }
+  },
+  "GET /api/v1/auth/mfa": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "4fa14ab6-4e2c-44a7-9e83-823b3da02ec8"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "ac1f8b1d-76ab-4b4d-9209-832299db77fe"
+        }
+      }
+    }
+  },
+  "GET /api/v1/auth/oauth/:provider": {
+    "responses": {
+      "200": {
+        "data": {
+          "redirect_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "3cd9562f-19dc-4bcc-98ab-11509da72276"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "fc9e0537-d25a-4faa-9b1a-a7211a47552e"
+        }
+      }
+    }
+  },
+  "GET /api/v1/auth/oauth/:provider/callback": {
+    "responses": {
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "querystring.code",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "querystring.state",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "6584c522-206a-403d-92de-7a06cffe3203"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Invalid or expired OAuth state. Please try again.",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "f24404cb-dbf1-4c96-98fa-962e21ba52fb"
+        }
+      }
+    }
+  },
+  "GET /api/v1/auth/oauth/providers": {
+    "responses": {
+      "200": {
+        "data": {
+          "providers": ["google", "github"]
+        },
+        "meta": {
+          "request_id": "10821861-f5fa-4877-99e2-df0b334db510"
+        }
+      }
+    }
+  },
+  "GET /api/v1/billing/subscriptions": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "ea84ee3b-4d70-485a-96c0-1c3f116f7f75"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "e321980c-0608-49eb-9ddf-b90ed257143b"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "b8fe2cc8-da95-4279-92e1-7652015fe04f"
+        }
+      }
+    }
+  },
+  "GET /api/v1/billing/subscriptions/:subscription_id": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "sub_example00000000000000",
+          "status": "ACTIVE",
+          "billing_cycle": "MONTHLY",
+          "current_period_start": "2026-01-01T00:00:00.000Z",
+          "current_period_end": "2026-01-01T00:00:00.000Z",
+          "trial_end": null,
+          "cancel_at_period_end": false,
+          "canceled_at": null,
+          "provider": "stripe",
+          "plan_id": "pln_example00000000000000",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "1f94d8da-177a-467a-953b-c74b894346d5"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "f085b0e9-def2-48b2-9421-a86618a726b4"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "41a0b12f-4edf-4fe7-9d85-214eac67f718"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "ab6a6698-cf0e-4044-9fba-29a5d5278928"
+        }
+      }
+    }
+  },
+  "GET /api/v1/billing/plans": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "5df4024f-8fdd-4fce-9e3e-9dab5c43b179",
+          "pagination": {
+            "per_page": 0,
+            "next": null,
+            "has_more": false,
+            "estimated_total": 0
+          }
+        }
+      }
+    }
+  },
+  "GET /api/v1/billing/plans/:plan_id": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "pln_example00000000000000",
+          "name": "Test Plan pln_ctjw0xe82pw6qre10mf5j",
+          "description": null,
+          "price_monthly": "9.99",
+          "price_yearly": "99.99",
+          "currency": "USD",
+          "is_active": true,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "76855ee2-d21d-4ee3-9469-c42eedb3f4d3"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "beff4dfb-d882-439d-9177-c90b6aaee1b0"
+        }
+      }
+    }
+  },
+  "GET /api/v1/mcp": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "c632fba1-815f-4d4b-9447-d4827625f8f1"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient role privileges",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "d8895cd6-43ae-403d-9ce4-5b0548edd594"
+        }
+      }
+    }
+  },
+  "GET /api/v1/notify/notifications": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "56aea853-b944-4b92-968f-5f3588b803b5",
+          "pagination": {
+            "per_page": 25,
+            "next": null,
+            "has_more": false
+          }
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "querystring.limit",
+              "message": "Too big: expected number to be <=100"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "f321482c-ab2b-4b19-94e6-7060273e07a8"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "789f8db7-2426-445d-95b2-9f0eed61e51b"
+        }
+      }
+    }
+  },
+  "GET /api/v1/notify/notifications/:notification_id": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "ntf_example00000000000000",
+          "type": "system",
+          "title": "Detail happy-path notification",
+          "message": "Created directly for the notification detail routes.",
+          "data": {},
+          "action_url": null,
+          "action_label": null,
+          "is_read": false,
+          "read_at": null,
+          "created_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "5afd8970-84c4-43f3-9395-316d6ceaf46d"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "fe62fdc4-cb1e-4fad-9785-d8ffdcd655fd"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "5a8113d7-71b6-4287-9fea-3b5a58e46843"
+        }
+      }
+    }
+  },
+  "GET /api/v1/notify/notifications/unread-count": {
+    "responses": {
+      "200": {
+        "data": {
+          "count": 0
+        },
+        "meta": {
+          "request_id": "290c16ae-4900-48e9-9685-c97f69482baa"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "c1c24366-a3ee-42ed-92d6-8d60424eacc2"
+        }
+      }
+    }
+  },
+  "GET /api/v1/notify/webhook-events": {
+    "responses": {
+      "200": {
+        "data": [
+          {
+            "event": "organization.created",
+            "description": "When an organization is created"
+          },
+          {
+            "event": "organization.updated",
+            "description": "When an organization is updated"
+          }
+        ],
+        "meta": {
+          "request_id": "dcab1ee3-80e1-48db-95a6-b5d8c0a19a7b"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "d4de2208-9026-4617-988a-a9d31317f2ab"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "db82d7e7-c838-4dcb-938d-7395a1cb133a"
+        }
+      }
+    }
+  },
+  "GET /api/v1/notify/webhooks": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "d83a80a5-6379-49eb-9bcf-5dcfc8eee568",
+          "pagination": {
+            "per_page": 25,
+            "next": null,
+            "has_more": false
+          }
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "1bb58a09-a6c3-446c-97c0-7e347dbcbd27"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "597b56e1-6981-4ec9-9ed2-86f3325ce951"
+        }
+      }
+    }
+  },
+  "GET /api/v1/notify/webhooks/:webhook_id": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "whk_example00000000000000",
+          "url": "https://example.com/resource",
+          "events": ["webhook.test"],
+          "is_enabled": true,
+          "secret_rotated_at": null,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "877373da-1b28-4e2d-9962-a8612e6df684"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "d52afcca-68cc-4f52-9f96-1b09388d1f2d"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "96736368-c846-479d-92ff-2d3483e63c1f"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "8d7ae1ff-ce95-42a5-9bcc-cbb034697544"
+        }
+      }
+    }
+  },
+  "GET /api/v1/notify/webhooks/:webhook_id/delivery-attempts": {
+    "responses": {
+      "200": {
+        "data": [
+          {
+            "event_type": "subscription.updated",
+            "event_key": null,
+            "status": "SENT",
+            "http_status_code": 200,
+            "sent_at": "2026-01-01T00:00:00.000Z",
+            "attempt_count": 1,
+            "next_retry_at": null,
+            "created_at": "2026-01-01T00:00:00.000Z"
+          },
+          {
+            "event_type": "subscription.updated",
+            "event_key": null,
+            "status": "SENT",
+            "http_status_code": 200,
+            "sent_at": "2026-01-01T00:00:00.000Z",
+            "attempt_count": 1,
+            "next_retry_at": null,
+            "created_at": "2026-01-01T00:00:00.000Z"
+          }
+        ],
+        "meta": {
+          "request_id": "7f790520-5e4f-4417-9243-79e8fb8db109",
+          "pagination": {
+            "per_page": 2,
+            "next": "<opaque-cursor>",
+            "has_more": true
+          }
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "4227841d-030f-4ec1-949b-e065c46774ed"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "0c309551-6332-4599-976f-a4ff44c53957"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "393122da-669d-4c08-99b5-5008df99c043"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/invitations/pending": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "68d6888b-9934-4dc3-9b0e-2cda59fc9932"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "7b642e75-38ab-4285-9b59-4f5de6bbefa6"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organizations": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "9de5c22e-938f-44eb-9c43-c78061acdcfb",
+          "pagination": {
+            "per_page": 25,
+            "next": null,
+            "has_more": false
+          }
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Legacy `page` pagination is no longer supported on this route. Use cursor-based pagination via `limit` and `after` (opaque cursor from `meta.pagination.next`).",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "page",
+              "message": "Legacy `page` pagination is no longer supported on this route. Use cursor-based pagination via `limit` and `after` (opaque cursor from `meta.pagination.next`)."
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "fa425207-9591-49e5-93f0-23c03617487c"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "0bfffe92-9423-42bb-9a12-5915ddb481c9"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "org_example00000000000000",
+          "name": "Satterfield Inc",
+          "slug": "satterfield-inc-p0uuwdjblq",
+          "status": "ACTIVE",
+          "logo_url": null,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "9cf1eed3-a80d-440d-9eed-ade5dcf8952d"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid input",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "organization_id",
+              "message": "Must be a valid id (entity prefix + 21 lowercase alphanumerics, e.g. org_a1b2c3d4e5f6g7h8i9j0k)"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "6eba69ff-ad44-475d-938e-8a5c12f94911"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "77acf908-6dcd-4af8-9f6d-c6773aad325a"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "c6425e94-a43e-4de7-987a-9dfd132e0d8d"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/api-keys": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "3ffd315f-1e7c-471a-9282-34f7c3a5265f",
+          "pagination": {
+            "per_page": 25,
+            "next": null,
+            "has_more": false
+          }
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "c1678f50-5960-44ce-96a2-4436273da811"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "fbeb31aa-7787-4e74-916a-68a081eee5ee"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/api-keys/:api_key_id": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "key_example00000000000000",
+          "organization_id": "org_example00000000000000",
+          "name": "Listing Test Key",
+          "key_prefix": "ak_f9c02",
+          "last_used_at": null,
+          "expires_at": "2026-01-01T00:00:00.000Z",
+          "status": "ACTIVE",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "fe219b34-fbaf-4606-922b-f427afcaf669"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "6c2d3da4-66ce-4f34-9811-c52c2f83e9bb"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "132dcbe2-c10d-4da7-988c-7963f5fc843a"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "ffa83f3b-308f-4e35-9b83-9353a712dda8"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/audit-logs": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "4fcecc29-a2d6-4511-942a-7508623ffd33",
+          "pagination": {
+            "per_page": 25,
+            "next": null,
+            "has_more": false
+          }
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "2ae16ac8-1ee8-443f-9e32-d6f108e767a2"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "b9a7e53e-d915-4f9f-9a97-315dccfc320d"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/invitations": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "c61e4ad9-6d46-46e4-955a-9ba16667f471",
+          "pagination": {
+            "per_page": 25,
+            "next": null,
+            "has_more": false
+          }
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "querystring.limit",
+              "message": "Too big: expected number to be <=100"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "9910ce74-c513-4650-94fb-0c5be3813224"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "36f718c0-c65c-4c5d-94a9-055097f8b3b9"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "5c832b67-31b3-40da-97a7-49d0d7060b5b"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/memberships": {
+    "responses": {
+      "200": {
+        "data": [
+          {
+            "id": "rol_example00000000000000",
+            "user_id": "usr_example00000000000000",
+            "organization_id": "org_example00000000000000",
+            "role_id": "rol_example00000000000000",
+            "status": "ACTIVE",
+            "joined_at": "2026-01-01T00:00:00.000Z",
+            "created_at": "2026-01-01T00:00:00.000Z",
+            "updated_at": "2026-01-01T00:00:00.000Z"
+          }
+        ],
+        "meta": {
+          "request_id": "b9576a2b-0487-4f70-956a-743e58f1ea65",
+          "pagination": {
+            "per_page": 25,
+            "next": null,
+            "has_more": false
+          }
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "5972ebba-3649-4308-9d6a-110716006e0f"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "39f88c1b-4a45-41ee-9053-a6c892361c8d"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/memberships/:membership_id": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "rol_example00000000000000",
+          "user_id": "usr_example00000000000000",
+          "organization_id": "org_example00000000000000",
+          "role_id": "rol_example00000000000000",
+          "status": "ACTIVE",
+          "joined_at": "2026-01-01T00:00:00.000Z",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "4a3df4ba-4e87-4328-9093-c4036cb281a4"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "2e973130-e908-4207-9966-56634129ecaa"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "11485fad-e55c-46a1-9342-d2cd8eac0cd1"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "05977655-6601-4b9e-94ba-c39caaf92630"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/memberships/:membership_id/permissions": {
+    "responses": {
+      "200": {
+        "data": {
+          "permissions": ["membership:read", "membership:manage"]
+        },
+        "meta": {
+          "request_id": "312c7dd3-bfe4-42c3-99d3-04c4f675269e"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "4cab77df-7c7f-4aaa-9638-bf5fad1286c1"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "57378971-6013-4e51-901e-6961e7d8ffe0"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "df44c01d-cef5-4bc6-9059-ebe8d3961864"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/notification-policies": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "8fb59f46-5b46-487b-95e7-6dd68d2b7502"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "71faf23f-09d9-463a-9499-0d2596e2d32b"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "00b9367f-3951-4111-9d80-65e5af6a8f72"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/notification-policies/:policy_id": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "pol_example00000000000000",
+          "organization_id": "org_example00000000000000",
+          "notification_type": "IN_APP",
+          "channel": "EMAIL",
+          "default_enabled": true,
+          "is_mandatory": false,
+          "muted_until": null,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "cec8a61b-6430-407d-9b30-c36718b0e220"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid input",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "policy_id",
+              "message": "Must be a valid id (entity prefix + 21 lowercase alphanumerics, e.g. org_a1b2c3d4e5f6g7h8i9j0k)"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "b43293f8-16e5-443f-9949-0abd7425db21"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "29e1ca22-c905-4e2a-941a-e977ede8253f"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "d1147efe-14ce-49d2-9e62-5a37ff0855f9"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "e8108512-0ed3-40d5-9291-5f2e2f9005bc"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/roles": {
+    "responses": {
+      "200": {
+        "data": [
+          {
+            "id": "rol_example00000000000000",
+            "name": "Test Role rol_lxd3el324rc63dxa5fkph",
+            "description": null,
+            "is_system": false,
+            "created_at": "2026-01-01T00:00:00.000Z",
+            "updated_at": "2026-01-01T00:00:00.000Z"
+          }
+        ],
+        "meta": {
+          "request_id": "c49549c9-c66f-42d2-968c-d91256c7f988",
+          "pagination": {
+            "per_page": 25,
+            "next": null,
+            "has_more": false
+          }
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "1fff0ee8-6daa-43d6-94b6-7158d7e1bdcc"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "7e49c551-3529-4eaf-9597-0b8e7b944a80"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/roles/:role_id": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "rol_example00000000000000",
+          "name": "Detail Target Role",
+          "description": null,
+          "is_system": false,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "4d94a4dc-0b5e-4a9b-9c81-6cf3cbdeeee7"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "75bb6f6c-2daf-43e6-9189-3162d237e650"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "a1db0941-0b68-429d-9d3a-027886ff59c5"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "bd0563ea-bee8-4f8e-974a-9e0c077ca498"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/roles/:role_id/permissions": {
+    "responses": {
+      "200": {
+        "data": [
+          {
+            "role_id": "rol_example00000000000000",
+            "permission_code": "organization:read",
+            "created_at": "2026-01-01T00:00:00.000Z"
+          },
+          {
+            "role_id": "rol_example00000000000000",
+            "permission_code": "organization:update",
+            "created_at": "2026-01-01T00:00:00.000Z"
+          }
+        ],
+        "meta": {
+          "request_id": "3e5151bb-ec6a-4910-90fe-d5d9d3f2ac69",
+          "pagination": {
+            "per_page": 12,
+            "next": null,
+            "has_more": false,
+            "estimated_total": 12
+          }
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "da76cd13-b253-46d8-9e85-27ad5f76dbba"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "364ccb91-b3c6-47be-9e3c-798e8162231c"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "c77f73e6-2c29-44f7-90c6-bc393238a4f0"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/settings": {
+    "responses": {
+      "200": {
+        "data": {
+          "organization_id": "org_example00000000000000",
+          "is_email_notifications_enabled": true,
+          "default_locale": "en",
+          "security_policy": {},
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "d63c66b6-dbc9-4bfe-9ca7-e7ffb64c0187"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "306f35eb-b54d-4852-9e83-56dca7d626d5"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "bb605887-e76b-44e7-9329-bc3ffb626e5f"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organizations/by-slug/:slug": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "org_example00000000000000",
+          "name": "Zieme, Gusikowski and Hickle",
+          "slug": "my-org",
+          "status": "ACTIVE",
+          "logo_url": null,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "a11d1552-9078-4213-92e5-70ad1c08f703"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "56a13fab-13f7-4cd8-9a85-2633ccd9ca13"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "12793b1b-03ec-41ce-9ff8-6820adba20a4"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/permissions": {
+    "responses": {
+      "200": {
+        "data": [
+          {
+            "code": "api-key:manage",
+            "name": "api key manage",
+            "description": null,
+            "category": "api-key",
+            "created_at": "2026-01-01T00:00:00.000Z"
+          },
+          {
+            "code": "api-key:read",
+            "name": "api key read",
+            "description": null,
+            "category": "api-key",
+            "created_at": "2026-01-01T00:00:00.000Z"
+          }
+        ],
+        "meta": {
+          "request_id": "eca2600a-4f0c-4418-9654-d855eeeaec21",
+          "pagination": {
+            "per_page": 21,
+            "next": null,
+            "has_more": false,
+            "estimated_total": 21
+          }
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "1fea13e9-5cf6-469b-9a4e-d36032bfaef7"
+        }
+      }
+    }
+  },
+  "GET /api/v1/uploads/:upload_id": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "upl_example00000000000000",
+          "fileName": "avatar.png",
+          "mimeType": "image/png",
+          "fileSize": 1024,
+          "status": "PENDING",
+          "storageProvider": "s3",
+          "organizationId": null,
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "6307e917-f182-4365-9cf1-485e86822e9a"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "ff7c248c-ab70-4bd9-9e4d-0385aef650d2"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions for upload",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "8275a7d9-cef1-4874-98e9-a37c7a727981"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "75263077-132a-4b17-934a-bb068bf40d71"
+        }
+      }
+    }
+  },
+  "GET /api/v1/users": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "dc82ac3b-b9da-4813-9ff1-3e4d0851edd1"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient role privileges",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "8e4299f9-096d-46df-9070-9dd4b12206d2"
+        }
+      }
+    }
+  },
+  "GET /api/v1/users/:user_id": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "usr_example00000000000000",
+          "email": "user@example.com",
+          "is_email_verified": false,
+          "is_mfa_enabled": false,
+          "first_name": "Cameron",
+          "last_name": "Hahn",
+          "avatar_url": null,
+          "status": "ACTIVE",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "ea279ffa-166e-4cae-966e-5506e4070b9b"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "3d396c78-3fc3-416c-90e1-63c019daa612"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient role privileges",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "9fcc6e83-be47-455b-92eb-95918b3ef5c5"
+        }
+      }
+    }
+  },
+  "GET /api/v1/users/me": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "usr_example00000000000000",
+          "email": "user@example.com",
+          "is_email_verified": false,
+          "is_mfa_enabled": false,
+          "first_name": "Sandra",
+          "last_name": "Schoen",
+          "avatar_url": null,
+          "status": "ACTIVE",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "44b212d5-7a5f-40b9-9a3b-f2b174ff0577"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "bb155e06-1510-489f-9a7d-564bc837e9d4"
+        }
+      }
+    }
+  },
+  "GET /api/v1/users/me/data-export/:export_id": {
+    "responses": {
+      "200": {
+        "data": {
+          "export_id": "exp_example00000000000000",
+          "status": "pending",
+          "download_url": null,
+          "expires_at": "2026-01-01T00:00:00.000Z",
+          "completed_at": null,
+          "failed_at": null,
+          "error_code": null,
+          "created_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "fb8ba73b-fbc5-4ffd-923d-fac8666cc35a"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "559b74a7-9ad2-481b-900d-abda3c017c05"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "6c1558be-34ed-4b21-9e35-4c7866e1486e"
+        }
+      }
+    }
+  },
+  "GET /api/v1/users/me/notification-preferences": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "5abe4497-10ea-436c-9082-e59ec1674a98"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "1a31883f-f011-4da2-9eaa-e279129696a0"
+        }
+      }
+    }
+  },
+  "GET /api/v1/users/me/settings": {
+    "responses": {
+      "200": {
+        "data": {
+          "is_dark_mode_enabled": false,
+          "is_notifications_enabled": true,
+          "language": "en",
+          "preferred_locales": ["en"]
+        },
+        "meta": {
+          "request_id": "9e00c9a1-6742-4e52-96e2-4fc9a4b0cd13"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "1066c0ca-8b18-4cc7-93d9-2dfbac87f4ab"
+        }
+      }
+    }
+  },
+  "GET /internal/ops/circuit-breakers": {
+    "responses": {
+      "200": {
+        "circuits": [
+          {
+            "name": "stripe",
+            "state": "CLOSED"
+          },
+          {
+            "name": "s3",
+            "state": "CLOSED"
+          }
+        ]
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Invalid or missing metrics token",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "ca2f6763-c90a-4efc-9aa4-ee6bdc99c255"
+        }
+      }
+    }
+  },
+  "GET /livez": {
+    "responses": {
+      "200": {
+        "status": "ok"
+      }
+    }
+  },
+  "GET /metrics": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Invalid or missing metrics token",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "eeddafda-d1ef-485d-92b4-c920972a7fb1"
+        }
+      }
+    }
+  },
+  "GET /readyz": {
+    "responses": {
+      "200": {
+        "status": "ok",
+        "database": "connected",
+        "redis": "connected",
+        "bullmq": "connected",
+        "latencyMs": {
+          "database": 55,
+          "redis": 1,
+          "bullmq": 20
+        }
+      }
+    }
+  },
+  "PATCH /api/v1/billing/subscriptions/:subscription_id": {
+    "request_body": {},
+    "responses": {
+      "200": {
+        "data": {
+          "id": "sub_example00000000000000",
+          "status": "ACTIVE",
+          "billing_cycle": "MONTHLY",
+          "current_period_start": "2026-01-01T00:00:00.000Z",
+          "current_period_end": "2026-01-01T00:00:00.000Z",
+          "trial_end": null,
+          "cancel_at_period_end": false,
+          "canceled_at": null,
+          "provider": "stripe",
+          "plan_id": "pln_example00000000000000",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "e3e3c6f5-2ad7-4ebd-9ffc-c93013bbe2a8"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body",
+              "message": "Unrecognized key: \"cancel_at_period_end\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "82ed681e-7fd3-4cea-974f-5c28e8e748ec"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "aa932f63-0b2b-4aee-97d2-c9143cb290ed"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "28751fd8-c02c-4beb-95f9-1827210e3b42"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "2fcab032-1052-41cb-95c6-f90e4b7d27d6"
+        }
+      }
+    }
+  },
+  "PATCH /api/v1/notify/notifications/:notification_id/read": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "ntf_example00000000000000",
+          "type": "system",
+          "title": "Detail happy-path notification",
+          "message": "Created directly for the notification detail routes.",
+          "data": {},
+          "action_url": null,
+          "action_label": null,
+          "is_read": true,
+          "read_at": "2026-01-01T00:00:00.000Z",
+          "created_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "25717ac9-ada2-4b0c-92ad-2e4e4774b900"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "64aef69a-84ce-4610-98df-c88baae004bc"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "f3c2ba2f-e08b-40d3-974a-e151602fb4d1"
+        }
+      }
+    }
+  },
+  "PATCH /api/v1/notify/webhooks/:webhook_id": {
+    "request_body": {
+      "url": "https://example.com/resource"
+    },
+    "responses": {
+      "200": {
+        "data": {
+          "id": "whk_example00000000000000",
+          "url": "https://example.com/resource",
+          "events": ["webhook.test"],
+          "is_enabled": true,
+          "secret_rotated_at": null,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "f728de1a-46fb-433f-98ed-a10abc2d39c6"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid input",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "8d9921ff-5128-456f-9d62-89af593bd0a7"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "09b89471-347b-49ec-9c66-d7cb6d21c989"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "77515dff-208a-4120-9602-325c92733e20"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "8eb7c118-b9e3-41ff-9996-dfc714d5331d"
+        }
+      },
+      "409": {
+        "error": {
+          "type": "request_error",
+          "code": "conflict",
+          "detail": "A webhook for \"{{url}}\" already exists in this organization",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "aad65a15-9d6a-4bcb-98f1-605f451ff41b"
+        }
+      }
+    }
+  },
+  "PATCH /api/v1/tenancy/organization": {
+    "request_body": {
+      "name": "Updated Org"
+    },
+    "responses": {
+      "200": {
+        "data": {
+          "id": "org_example00000000000000",
+          "name": "Updated Org",
+          "slug": "bayer-and-sons-k0bm46iqvi",
+          "status": "ACTIVE",
+          "logo_url": null,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "89d28c1a-0468-462f-9772-e24d40c8f3a5"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body",
+              "message": "Unrecognized key: \"unknown_field\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "385266c3-602c-4bf8-9aec-ce2b3baf5a55"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "4d28d94d-3ae8-4a69-9dd6-b9b1bc5d5aa2"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "116860d2-01e5-4188-9ffd-18faef90c52d"
+        }
+      },
+      "409": {
+        "error": {
+          "type": "request_error",
+          "code": "conflict",
+          "detail": "Organization with slug \"race-shared-org-slug\" already exists",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "b4ec5beb-cba4-4ed9-95cc-0475b19bb480"
+        }
+      }
+    }
+  },
+  "PATCH /api/v1/tenancy/organization/api-keys/:api_key_id": {
+    "request_body": {
+      "name": "After Rename",
+      "status": "REVOKED"
+    },
+    "responses": {
+      "200": {
+        "data": {
+          "id": "key_example00000000000000",
+          "organization_id": "org_example00000000000000",
+          "name": "After Rename",
+          "key_prefix": "ak_47095",
+          "last_used_at": null,
+          "expires_at": null,
+          "status": "REVOKED",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "731c3203-0ccf-469b-95bb-4720d3654185"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.status",
+              "message": "Invalid option: expected one of \"ACTIVE\"|\"REVOKED\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "48c96a02-2eb5-4dd7-98f5-e7f4f1c8723b"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "ec5d3f74-18ea-49be-9179-48c4fbd4e313"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "4754c461-96a9-4eec-9a1e-6e227891afb9"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "1766f15d-c794-4f83-955e-363e6e1dbbcb"
+        }
+      }
+    }
+  },
+  "PATCH /api/v1/tenancy/organization/memberships/:membership_id": {
+    "request_body": {
+      "status": "ACTIVE"
+    },
+    "responses": {
+      "200": {
+        "data": {
+          "id": "rol_example00000000000000",
+          "user_id": "usr_example00000000000000",
+          "organization_id": "org_example00000000000000",
+          "role_id": "rol_example00000000000000",
+          "status": "ACTIVE",
+          "joined_at": "2026-01-01T00:00:00.000Z",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "e143c881-91d7-4b50-9620-165fb439e7a3"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid input",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "ede28d56-ba4c-4ee1-9959-18b5637ab9af"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "eb52514a-e9d6-4f52-94da-6771279d865c"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Membership can only be activated by accepting the invitation",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "e3976832-8ce8-46b6-9143-5407c778e111"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "3ec8a37e-5676-4a91-91ef-df21168e9480"
+        }
+      }
+    }
+  },
+  "PATCH /api/v1/tenancy/organization/notification-policies/:policy_id": {
+    "request_body": {
+      "default_enabled": false,
+      "is_mandatory": true
+    },
+    "responses": {
+      "200": {
+        "data": {
+          "id": "pol_example00000000000000",
+          "organization_id": "org_example00000000000000",
+          "notification_type": "ORIGINAL_POLICY",
+          "channel": "IN_APP",
+          "default_enabled": false,
+          "is_mandatory": true,
+          "muted_until": null,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "be711db4-c11a-43c9-95d2-45d562352b35"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body",
+              "message": "Unrecognized key: \"unexpected\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "e970be73-6e1c-42ab-9928-0e6c19dee772"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "338d5f1c-0b49-4a44-9017-9a61f2dd74cb"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "2f275839-84f3-461f-9a55-efa059e3c122"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "e0c29732-ef16-496b-99d4-6ffc6e59cb95"
+        }
+      }
+    }
+  },
+  "PATCH /api/v1/tenancy/organization/roles/:role_id": {
+    "request_body": {
+      "name": "Detail Target Role Updated"
+    },
+    "responses": {
+      "200": {
+        "data": {
+          "id": "rol_example00000000000000",
+          "name": "Detail Target Role Updated",
+          "description": null,
+          "is_system": false,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "a53b669c-b474-4825-9c1c-8ef0a2ee60bd"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid input",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "f009d774-e0ba-4b1b-98fc-f07fbdb161e4"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "4214ca7a-8fa1-4b59-9f21-77bbc8dcaf60"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "b07da21c-a716-4491-9813-6420c5478ffe"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "f6979df8-3d86-4af9-9aa4-81f6a6e9a485"
+        }
+      }
+    }
+  },
+  "PATCH /api/v1/tenancy/organization/settings": {
+    "request_body": {
+      "is_email_notifications_enabled": false,
+      "security_policy": {
+        "mfa_required": true
+      }
+    },
+    "responses": {
+      "200": {
+        "data": {
+          "organization_id": "org_example00000000000000",
+          "is_email_notifications_enabled": false,
+          "default_locale": "en",
+          "security_policy": {
+            "mfa_required": true
+          },
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "a90278c8-e593-4f60-9252-57d26a1d1ab0"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body",
+              "message": "Unrecognized key: \"unknown_field\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "9c331094-67b4-4d9f-9050-8205f6a95bc5"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "201dfeca-d4dc-42f8-91fb-30a91ca9fd04"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "5246e60a-48dd-4b25-9223-09d2e7f0e58a"
+        }
+      }
+    }
+  },
+  "PATCH /api/v1/users/:user_id": {
+    "request_body": {
+      "first_name": "Updated"
+    },
+    "responses": {
+      "200": {
+        "data": {
+          "id": "usr_example00000000000000",
+          "email": "user@example.com",
+          "is_email_verified": false,
+          "is_mfa_enabled": false,
+          "first_name": "Updated",
+          "last_name": "Douglas",
+          "avatar_url": null,
+          "status": "ACTIVE",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "97a557d5-583b-4662-98cb-a81c382d3310"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body",
+              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "ad416f09-4b04-458a-9eef-e31d2b027806"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "0249909f-b97e-4ca8-9527-84850697c7f2"
+        }
+      }
+    }
+  },
+  "PATCH /api/v1/users/me": {
+    "request_body": {
+      "first_name": "Updated"
+    },
+    "responses": {
+      "200": {
+        "data": {
+          "id": "usr_example00000000000000",
+          "email": "user@example.com",
+          "is_email_verified": false,
+          "is_mfa_enabled": false,
+          "first_name": "Updated",
+          "last_name": "Fritsch",
+          "avatar_url": null,
+          "status": "ACTIVE",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "8e8ede86-01fc-4490-90e5-1680d0625d14"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body",
+              "message": "Unrecognized key: \"unknown_field\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "5b5907da-45a1-47d4-9deb-503231c2b95a"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "3c3f9226-7489-464b-96b7-5de8f01c1e51"
+        }
+      }
+    }
+  },
+  "PATCH /api/v1/users/me/settings": {
+    "request_body": {
+      "language": "es"
+    },
+    "responses": {
+      "200": {
+        "data": {
+          "is_dark_mode_enabled": false,
+          "is_notifications_enabled": true,
+          "language": "es",
+          "preferred_locales": ["en"]
+        },
+        "meta": {
+          "request_id": "95a6aaa9-a810-44c6-9e11-4e3883a2f313"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body",
+              "message": "Unrecognized key: \"unknown_field\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "b4a271bc-145f-4e14-972a-ad556b67c310"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "29fa5305-f00f-4855-9975-e2f6cf4763f7"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/email/resend-verification": {
+    "responses": {
+      "201": {
+        "data": {
+          "message": "Verification email sent."
+        },
+        "meta": {
+          "request_id": "4f11d760-1ea5-446b-9f63-e7418d66194c"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "12c59626-f771-44e4-9a71-30d31316230a"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/email/verify": {
+    "request_body": {
+      "token": "<redacted>"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "message": "Email verified successfully."
+        },
+        "meta": {
+          "request_id": "7eefb97b-7bb2-411f-9e17-1845dfae9895"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.token",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "b875aa9b-46cf-4423-99f4-ecab0d1f73c5"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Invalid or expired verification token",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "9fb622b8-b998-4b8d-95a2-955fcbe38d0f"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/login": {
+    "request_body": {
+      "email": "user@example.com",
+      "password": "<redacted>"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "access_token": "<redacted>",
+          "session_id": "ses_example00000000000000"
+        },
+        "meta": {
+          "request_id": "5dfe3c58-0a4b-4cab-9cf7-4bb5d8f32a46"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.email",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body.password",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "07a43106-f935-42ed-90e5-1da45bdcad69"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Invalid email or password",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "37734922-29f2-4e30-9743-8f6b422ca926"
+        }
+      },
+      "413": {
+        "error": {
+          "type": "request_error",
+          "code": "payload_too_large",
+          "detail": "Payload too large",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "7dbffc0f-4f8e-451d-92e3-6a8ade2e7790"
+        }
+      },
+      "415": {
+        "error": {
+          "type": "request_error",
+          "code": "unsupported_media_type",
+          "detail": "Unsupported media type",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "50c08034-ccca-460b-9eff-da8339642e39"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/logout": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "b947970d-5aad-46f9-905a-70406103d4c7"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/magic-link/send": {
+    "request_body": {
+      "email": "user@example.com"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "message": "If an account exists with this email, you will receive a magic link shortly.",
+          "expires_in_minutes": 15
+        },
+        "meta": {
+          "request_id": "3fce5cf3-035e-4903-9c5e-ac4b7b974942"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.email",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "4cc65107-2712-4a24-99a7-362feea68b65"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/magic-link/verify": {
+    "request_body": {
+      "token": "<redacted>"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "access_token": "<redacted>",
+          "session_id": "ses_example00000000000000"
+        },
+        "meta": {
+          "request_id": "f2d58703-a630-4c9b-9814-f966efd6cec4"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.token",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "5f83b11f-483f-40d1-9b6b-c3b8637f29e7"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Invalid or expired magic link",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "b24c5a29-502f-460c-9abb-12d68926d8fa"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/me/auth-methods": {
+    "request_body": {
+      "method_type": "MAGIC_LINK",
+      "is_primary": false
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "id": "am_example00000000000000",
+          "method_type": "MAGIC_LINK",
+          "provider": null,
+          "is_primary": false,
+          "verified_at": null,
+          "last_used_at": null,
+          "created_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "1c947cf8-4d6a-4a13-96c6-386043ce419a"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.method_type",
+              "message": "Invalid input: expected \"MAGIC_LINK\""
+            },
+            {
+              "field": "body",
+              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "e9535130-9fe0-4cac-942c-b8ae88b892ef"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "bdfd57d7-a496-4ecb-9b11-c42ba636163f"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/mfa/enroll": {
+    "request_body": {
+      "method_type": "MFA_TOTP"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "secret": "<redacted>",
+          "provisioning_uri": "<redacted>"
+        },
+        "meta": {
+          "request_id": "d29041e2-fb55-494d-9c09-80a9123eb17b"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.method_type",
+              "message": "Invalid input: expected \"MFA_TOTP\""
+            },
+            {
+              "field": "body",
+              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "dacce848-994a-4c78-988d-9e1d6946f9db"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "2d8265c5-65f0-48c0-974b-9beaf7c24495"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Recent step-up authentication is required for this action",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "dd612ea6-9bbe-432b-9890-ad539e87cd70"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/mfa/enroll/confirm": {
+    "request_body": {
+      "code": "009308"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "recovery_codes": ["<redacted>"],
+          "mfa_method_id": "am_example00000000000000"
+        },
+        "meta": {
+          "request_id": "8330647d-4bc0-4e36-97bb-92dce95cde4b"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.code",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body",
+              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "e2296861-eceb-4104-95d9-1d45d490a6fa"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "0f23dee3-b4f2-4eec-9f7c-016db47e5791"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/mfa/login": {
+    "request_body": {
+      "mfa_session_token": "<redacted>",
+      "totp_code": "340065"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "access_token": "<redacted>",
+          "session_id": "ses_example00000000000000"
+        },
+        "meta": {
+          "request_id": "192d1d93-c772-4d8c-92fc-1f3e008469d7"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.mfa_session_token",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "346ed33d-ed7e-424a-90d9-3bcbe4f45dc9"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Invalid or expired MFA session. Please log in again.",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "1b295090-6054-4243-9c02-d560061fd23c"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/mfa/verify": {
+    "request_body": {
+      "code": "696343"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "verified": true
+        },
+        "meta": {
+          "request_id": "c41fe81e-8fd0-4a92-9b80-a953e0d2b2ca"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.code",
+              "message": "Too small: expected string to have >=6 characters"
+            },
+            {
+              "field": "body.code",
+              "message": "Invalid string: must match pattern /^\\d+$/"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "e799a401-1b0b-4b13-9ee8-9ac8019b4e37"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "5bb8cfe7-e61d-4ec5-9fb2-7750de11f06c"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/password/change": {
+    "request_body": {
+      "current_password": "<redacted>",
+      "new_password": "<redacted>"
+    },
+    "responses": {
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.current_password",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body.new_password",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "285fa761-c2d3-4caa-98ed-039dd4e5b7da"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "52468268-1f6b-40ad-9283-f13d4c8e2332"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/password/forgot": {
+    "request_body": {
+      "email": "user@example.com"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "message": "If an account exists with this email, you will receive a password reset link shortly."
+        },
+        "meta": {
+          "request_id": "d7e07d72-70cd-4d50-9e01-921b6afb98a3"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.email",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "b8697d07-1b38-4361-9e34-b915d5f2e343"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/password/reset": {
+    "request_body": {
+      "token": "<redacted>",
+      "password": "<redacted>"
+    },
+    "responses": {
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.token",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body.password",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "9d54fe6a-ad2c-4df9-9423-c8916c3594c3"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Invalid or expired reset token",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "23bd227b-860e-4d04-985f-dcf340d7ee7d"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/refresh": {
+    "request_body": {},
+    "responses": {
+      "201": {
+        "data": {
+          "access_token": "<redacted>"
+        },
+        "meta": {
+          "request_id": "a0e44717-59b4-44e9-931b-6384feba0b78"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing session cookie",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "1020558e-23fc-4657-94ab-c818346904f5"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Request origin is not allowed for this operation.",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "0c6c6647-9210-48d0-965b-13c2e6aacad5"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/step-up": {
+    "request_body": {
+      "password": "<redacted>"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "stepped_up": true
+        },
+        "meta": {
+          "request_id": "4605f7ff-dfa1-4509-93ce-c504da8e8024"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.password",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body",
+              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "72f4f55f-9460-46c8-912d-c5caafd5801a"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "f3645f7f-bb83-4c0e-912f-87c6ca9b7ccb"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/webauthn/authenticate/options": {
+    "request_body": {
+      "email": "user@example.com"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "options": {
+            "rpId": "localhost",
+            "challenge": "k3GZOK77sMGQ0MkU1kXNQJOeS1AJWOy51S0MrnxbdI8",
+            "allowCredentials": [
+              {
+                "id": "e2e-test-credential-id",
+                "transports": ["internal"],
+                "type": "public-key"
+              }
+            ],
+            "timeout": 60000,
+            "userVerification": "required"
+          },
+          "challenge_token": "<redacted>"
+        },
+        "meta": {
+          "request_id": "b8032744-944e-4741-9cb2-bf35b6b999ce"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.email",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "54e69bbe-a4db-43c9-9763-3e5e716cac03"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/webauthn/authenticate/verify": {
+    "request_body": {
+      "challenge_token": "<redacted>",
+      "response": {
+        "id": "e2e-test-credential-id",
+        "rawId": "e2e-test-credential-id",
+        "response": {
+          "clientDataJSON": "dGVzdA",
+          "authenticatorData": "dGVzdA",
+          "signature": "dGVzdA"
+        },
+        "type": "public-key"
+      }
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "access_token": "<redacted>",
+          "session_id": "ses_example00000000000000"
+        },
+        "meta": {
+          "request_id": "2603bfbb-0ece-4c13-9f27-29e8a6edfe00"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.challenge_token",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body.response",
+              "message": "Invalid input: expected object, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "8495e679-6ce0-4cd7-9279-419d90d041e3"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/webauthn/register/options": {
+    "request_body": {},
+    "responses": {
+      "201": {
+        "data": {
+          "options": {
+            "challenge": "XqKmPP2KnvdZ-OX7Aap9T94VZcaddslssEYv1POfg5o",
+            "rp": {
+              "name": "YourApp",
+              "id": "localhost"
+            },
+            "user": {
+              "id": "dXNyX3N5MTVyeXd6dHc3cGNlYXd4cDY4eQ",
+              "name": "user@example.com",
+              "displayName": "user@example.com"
+            },
+            "pubKeyCredParams": [
+              {
+                "alg": -8,
+                "type": "public-key"
+              },
+              {
+                "alg": -7,
+                "type": "public-key"
+              }
+            ],
+            "timeout": 60000,
+            "attestation": "none",
+            "excludeCredentials": [],
+            "authenticatorSelection": {
+              "residentKey": "preferred",
+              "userVerification": "required",
+              "requireResidentKey": false
+            },
+            "extensions": {
+              "credProps": true
+            },
+            "hints": []
+          },
+          "challenge_token": "<redacted>"
+        },
+        "meta": {
+          "request_id": "0260eddf-c771-4e49-95d5-74eb01d65564"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body",
+              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "e5ddbf50-f1ed-495a-92fc-45dd782feea7"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "422437a8-9b07-4494-904e-a8b174004dcc"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/webauthn/register/verify": {
+    "request_body": {
+      "challenge_token": "<redacted>",
+      "response": {
+        "id": "e2e-test-credential-id",
+        "rawId": "e2e-test-credential-id",
+        "response": {
+          "clientDataJSON": "dGVzdA",
+          "attestationObject": "dGVzdA"
+        },
+        "type": "public-key"
+      }
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "verified": true,
+          "credential_id": "e2e-test-credential-id"
+        },
+        "meta": {
+          "request_id": "b87b4a4b-2bdd-4145-9453-5d51b4f350fd"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.challenge_token",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body.response",
+              "message": "Invalid input: expected object, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "8812b380-93e5-4c52-92b7-26669bcdc837"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "ed175e92-d820-45f6-98f7-990a2e5c3a90"
+        }
+      },
+      "409": {
+        "error": {
+          "type": "request_error",
+          "code": "conflict",
+          "detail": "This passkey is already registered",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "5684ea7a-1bc2-4f22-9788-13e9301603bc"
+        }
+      }
+    }
+  },
+  "POST /api/v1/billing/subscriptions": {
+    "request_body": {
+      "plan_id": "pln_example00000000000000",
+      "billing_cycle": "monthly"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "id": "sub_example00000000000000",
+          "status": "INCOMPLETE",
+          "billing_cycle": "MONTHLY",
+          "current_period_start": "2026-01-01T00:00:00.000Z",
+          "current_period_end": "2026-01-01T00:00:00.000Z",
+          "trial_end": null,
+          "cancel_at_period_end": false,
+          "canceled_at": null,
+          "provider": "stripe",
+          "plan_id": "pln_example00000000000000",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "b6267dab-00a4-448c-9cd9-f2801b52d7ae"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.plan_id",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body.billing_cycle",
+              "message": "Invalid option: expected one of \"monthly\"|\"yearly\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "fb89ef6c-d063-40b8-904d-1ab53bc3661d"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "2d24bc09-8c96-409d-9bc6-bf6a9ad2124e"
+        }
+      },
+      "422": {
+        "error": {
+          "type": "request_error",
+          "code": "unprocessable_entity",
+          "detail": "Idempotency-Key header is required for this operation",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "8d46e99a-1909-458d-9d51-0feedc85ab38"
+        }
+      }
+    }
+  },
+  "POST /api/v1/billing/subscriptions/:subscription_id/cancel": {
+    "responses": {
+      "201": {
+        "data": {
+          "id": "sub_example00000000000000",
+          "status": "ACTIVE",
+          "billing_cycle": "MONTHLY",
+          "current_period_start": "2026-01-01T00:00:00.000Z",
+          "current_period_end": "2026-01-01T00:00:00.000Z",
+          "trial_end": null,
+          "cancel_at_period_end": true,
+          "canceled_at": null,
+          "provider": "stripe",
+          "plan_id": "pln_example00000000000000",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "69dd5cd8-3c7f-411a-990a-85be54ca1c88"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "9b9c10eb-af56-4a86-93b0-737a86add0b6"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "e033461d-346a-4e1d-9e03-e7aa66169c29"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "93555543-a7a5-409e-956c-883abc143d68"
+        }
+      },
+      "422": {
+        "error": {
+          "type": "request_error",
+          "code": "unprocessable_entity",
+          "detail": "Idempotency-Key header is required for this operation",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "9e616e7b-dc90-4730-9395-70503516fb6f"
+        }
+      }
+    }
+  },
+  "POST /api/v1/billing/subscriptions/:subscription_id/change-plan": {
+    "request_body": {
+      "plan_id": "pln_example00000000000000"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "id": "sub_example00000000000000",
+          "status": "ACTIVE",
+          "billing_cycle": "MONTHLY",
+          "current_period_start": "2026-01-01T00:00:00.000Z",
+          "current_period_end": "2026-01-01T00:00:00.000Z",
+          "trial_end": null,
+          "cancel_at_period_end": false,
+          "canceled_at": null,
+          "provider": "stripe",
+          "plan_id": "pln_example00000000000000",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "7bbc6c03-61ca-4d90-91cd-5727fc6198cc"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.plan_id",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body",
+              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "fd8dd82f-09b1-4256-9b5f-678817989daf"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "e7f5e8ca-b430-4045-9018-826c6a30bb59"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "fc78c8b7-daf3-444b-9bd2-737b5c14ed4d"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "4af98a56-60f9-4aa2-9604-af2fa154d75c"
+        }
+      },
+      "422": {
+        "error": {
+          "type": "request_error",
+          "code": "unprocessable_entity",
+          "detail": "Idempotency-Key header is required for this operation",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "9e25df9a-530a-4998-9783-3424f3c5c958"
+        }
+      }
+    }
+  },
+  "POST /api/v1/billing/subscriptions/:subscription_id/resume": {
+    "responses": {
+      "201": {
+        "data": {
+          "id": "sub_example00000000000000",
+          "status": "ACTIVE",
+          "billing_cycle": "MONTHLY",
+          "current_period_start": "2026-01-01T00:00:00.000Z",
+          "current_period_end": "2026-01-01T00:00:00.000Z",
+          "trial_end": null,
+          "cancel_at_period_end": false,
+          "canceled_at": null,
+          "provider": "stripe",
+          "plan_id": "pln_example00000000000000",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "24880b97-ed63-44aa-90d1-9fe14b52369c"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "a21df4ae-eeab-43f5-9ea1-42fbc77fc1a2"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "53ba99af-8755-4826-99a1-4998c5d5d1a4"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "77b85db0-58e6-4b4c-955c-e1b8f1986cb3"
+        }
+      },
+      "422": {
+        "error": {
+          "type": "request_error",
+          "code": "unprocessable_entity",
+          "detail": "Idempotency-Key header is required for this operation",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "bc377a18-b01d-40e1-9391-48144d8cee13"
+        }
+      }
+    }
+  },
+  "POST /api/v1/billing/stripe/webhook": {
+    "request_body": {
+      "id": "evt_dup_1781296361564",
+      "object": "event",
+      "type": "customer.subscription.updated",
+      "created": 1781296361,
+      "data": {
+        "object": {
+          "id": "<redacted>",
+          "object": "subscription",
+          "status": "active",
+          "items": {
+            "data": [
+              {
+                "current_period_start": 1781296361,
+                "current_period_end": 1781382761
+              }
+            ]
+          }
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "data": {
+          "received": true
+        },
+        "meta": {
+          "request_id": "33edd8f1-b878-4582-9bd9-da284307c980"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Missing stripe-signature header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "09fcfa40-9913-44ba-93fc-a458396e5aec"
+        }
+      }
+    }
+  },
+  "POST /api/v1/billing/webhook": {
+    "request_body": {
+      "id": "evt_legacy_1781296337989",
+      "object": "event",
+      "type": "customer.subscription.updated",
+      "created": 1781296337,
+      "data": {
+        "object": {
+          "id": "<redacted>",
+          "object": "subscription",
+          "status": "active",
+          "items": {
+            "data": [
+              {
+                "current_period_start": 1781296337,
+                "current_period_end": 1781382737
+              }
+            ]
+          }
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "data": {
+          "received": true
+        },
+        "meta": {
+          "request_id": "0fd94f53-7271-4749-9c7d-e484dfef02a7"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Missing stripe-signature header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "06beabc1-67bc-4562-9a5a-b2a52307814b"
+        }
+      }
+    }
+  },
+  "POST /api/v1/mcp": {
+    "request_body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "initialize",
+      "params": {
+        "protocolVersion": "2025-03-26",
+        "capabilities": {},
+        "clientInfo": {
+          "name": "route-coverage-test",
+          "version": "1.0.0"
+        }
+      }
+    },
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "91e1bef7-0bc5-4c3e-9131-aff28afeab4c"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient role privileges",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "8b04f444-8aaf-40db-9115-60a0b82443fb"
+        }
+      }
+    }
+  },
+  "POST /api/v1/notify/notifications/mark-all-read": {
+    "request_body": {
+      "__fuzz": "junk",
+      "unexpected": {
+        "deeply": ["nested", 42],
+        "nullish": null
+      }
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "updated_count": 0
+        },
+        "meta": {
+          "request_id": "3fa1a28d-3689-4cd5-99c2-1432d28e5a8c"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "c21bf6b4-4566-4f72-94d9-7a202d5546d6"
+        }
+      }
+    }
+  },
+  "POST /api/v1/notify/webhooks": {
+    "request_body": {
+      "url": "https://example.com/resource",
+      "events": ["subscription.created"]
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "id": "whk_example00000000000000",
+          "url": "https://example.com/resource",
+          "events": ["subscription.created"],
+          "is_enabled": true,
+          "secret_rotated_at": null,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "911da639-2a13-42b4-9a7d-3d1f78bae3b7"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid input",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "url",
+              "message": "Invalid URL, Webhook URL must use HTTPS"
+            },
+            {
+              "field": "events",
+              "message": "Too small: expected array to have >=1 items"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "2d8a2697-8ef7-45ed-9ba8-88c82577e127"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "cf1b5ccf-7550-4775-9b86-aabcb9d93bdb"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "14aa37a0-3170-4125-9898-2c9c1b9ce6de"
+        }
+      }
+    }
+  },
+  "POST /api/v1/notify/webhooks/:webhook_id/test": {
+    "responses": {
+      "201": {
+        "data": {
+          "success": true,
+          "status_code": 200,
+          "delivered_at": "2026-01-01T00:00:00.000Z",
+          "response_body": "{\"ok\":true}"
+        },
+        "meta": {
+          "request_id": "f75be494-d073-4e2c-98c8-fc8cf6943230"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "dcfdd086-f926-4363-9b6c-5b73350cc779"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "c929e6c3-b43a-4848-9978-3cf916cb05c7"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "f65460f0-1bb4-43e2-9dd1-5f393174cdeb"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/invitations/:invitation_id/accept": {
+    "request_body": {
+      "token": "<redacted>"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "id": "inv_example00000000000000",
+          "membership_id": "mem_example00000000000000",
+          "email": "user@example.com",
+          "expires_at": "2026-01-01T00:00:00.000Z",
+          "accepted_at": "2026-01-01T00:00:00.000Z",
+          "revoked_at": null,
+          "created_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "91ec0740-f7de-404a-9c7e-a366bc81daf3"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid input",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "token",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "418a9078-e7a0-4431-9c70-ec5e66715dc5"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "76bb2a38-c82c-4184-9b2b-2db3635e3ac9"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/invitations/:invitation_id/decline": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "80f278f1-8c85-40ee-9f7d-3904d4540a2c"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "You can only decline invitations sent to your email",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "bcc843bd-b3d7-446e-97ff-569101d2d877"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "005c432c-507c-4f3f-914c-cd13970b2eba"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organizations": {
+    "request_body": {
+      "name": "Test Org",
+      "slug": "test-org"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "id": "org_example00000000000000",
+          "name": "Test Org",
+          "slug": "test-org",
+          "status": "ACTIVE",
+          "logo_url": null,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "051b6b5b-18f6-4119-9656-e2ea398668a1"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body",
+              "message": "Unrecognized key: \"public_id\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "9c906612-2465-43fb-9b88-71b69f128a66"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "c0e28f51-6e59-436d-9a0e-1732d3c471b3"
+        }
+      },
+      "409": {
+        "error": {
+          "type": "request_error",
+          "code": "conflict_in_flight",
+          "detail": "A request with this idempotency key is still in flight"
+        }
+      },
+      "422": {
+        "error": {
+          "type": "request_error",
+          "code": "unprocessable_entity",
+          "detail": "Idempotency-Key header is required for this operation",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "76ae3c86-360c-403f-9d30-002a0f9a467d"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organization/api-keys": {
+    "request_body": {
+      "name": "Listing Test Key",
+      "scopes": ["api-key:read"],
+      "expires_in_days": 365
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "api_key": {
+            "id": "key_example00000000000000",
+            "organization_id": "org_example00000000000000",
+            "name": "Listing Test Key",
+            "key_prefix": "ak_f9c02",
+            "last_used_at": null,
+            "expires_at": "2026-01-01T00:00:00.000Z",
+            "status": "ACTIVE",
+            "created_at": "2026-01-01T00:00:00.000Z",
+            "updated_at": "2026-01-01T00:00:00.000Z"
+          },
+          "raw_key": "<redacted>"
+        },
+        "meta": {
+          "request_id": "0d3ca807-eec4-42ae-9496-f35b9cf89d9e"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.name",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body.scopes",
+              "message": "Invalid input: expected array, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "df4ae447-02d8-429b-9f7e-24107afae4d1"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "d382c00c-0bd8-4615-9727-e68f9977b085"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "f0e807dd-e037-456a-9508-5ae943c8cac1"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organization/api-keys/:api_key_id/rotate": {
+    "responses": {
+      "201": {
+        "data": {
+          "api_key": {
+            "id": "key_example00000000000000",
+            "organization_id": "org_example00000000000000",
+            "name": "Rotation Source",
+            "key_prefix": "ak_82dac",
+            "last_used_at": null,
+            "expires_at": null,
+            "status": "ACTIVE",
+            "created_at": "2026-01-01T00:00:00.000Z",
+            "updated_at": "2026-01-01T00:00:00.000Z"
+          },
+          "raw_key": "<redacted>"
+        },
+        "meta": {
+          "request_id": "b9792990-b780-4a6b-9417-982eca3b47e7"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "5ecc558c-89e5-4e97-97f1-1a3f47a72c7d"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "53e69072-6f94-4b89-9cbd-7ba84bf9daa2"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "793b11ea-8335-4c61-9e6e-a27cf2a0b64c"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organization/invitations": {
+    "request_body": {
+      "membership_id": "rol_example00000000000000",
+      "expires_in_days": 7
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "invitation": {
+            "id": "inv_example00000000000000",
+            "membership_id": "rol_example00000000000000",
+            "email": "user@example.com",
+            "expires_at": "2026-01-01T00:00:00.000Z",
+            "accepted_at": null,
+            "revoked_at": null,
+            "created_at": "2026-01-01T00:00:00.000Z"
+          },
+          "token": "<redacted>"
+        },
+        "meta": {
+          "request_id": "e2fcf85a-e4af-4ed2-9f70-7a479cf016d6"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid input",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "membership_id",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "bf53d861-3fa3-4291-93b1-1283968855a7"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "f438cb0a-687f-4470-9b85-eda12d1dcb56"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "236faed3-3f2e-42c6-9c60-4f5ade6e2b24"
+        }
+      },
+      "422": {
+        "error": {
+          "type": "request_error",
+          "code": "unprocessable_entity",
+          "detail": "Idempotency-Key header is required for this operation",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "b6d5d4e8-02d8-4120-9694-31f94c31026f"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organization/invitations/:invitation_id/resend": {
+    "request_body": {
+      "expires_in_days": 10
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "invitation": {
+            "id": "inv_example00000000000000",
+            "membership_id": "mem_example00000000000000",
+            "email": "user@example.com",
+            "expires_at": "2026-01-01T00:00:00.000Z",
+            "accepted_at": null,
+            "revoked_at": null,
+            "created_at": "2026-01-01T00:00:00.000Z"
+          },
+          "token": "<redacted>"
+        },
+        "meta": {
+          "request_id": "4957d072-139e-4712-9cb6-277bcdb0d5a9"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invitation revoked",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "d57d51cc-6aa1-4495-973f-074a6d32bdae"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "d9e4176b-81f1-4e98-916a-1d4ed72c8680"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "feef6c8a-6123-4445-9fca-9c3349ff085e"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "51da6e39-6c6c-45ef-9d54-167e36436d8e"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organization/leave": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "10e74454-df40-4876-919e-b6d4fb4aadf9"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Organization owner cannot leave; transfer ownership first",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "9b91076f-24ae-443c-9ee6-ea936e3c8eb0"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organization/memberships": {
+    "request_body": {
+      "user_id": "usr_example00000000000000",
+      "role_id": "rol_example00000000000000"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "id": "mem_example00000000000000",
+          "user_id": "usr_example00000000000000",
+          "organization_id": "org_example00000000000000",
+          "role_id": "rol_example00000000000000",
+          "status": "INVITED",
+          "joined_at": null,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "5516a15e-c477-4e46-970c-609f56afdeb2"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid input",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "user_id",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "role_id",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "b358699f-0c1d-4506-9f82-046913856742"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Membership can only be activated by accepting the invitation",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "12e46912-eee2-424a-9503-6202587dd69f"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "70838231-c773-4951-9198-67a14f5aabf0"
+        }
+      },
+      "409": {
+        "error": {
+          "type": "request_error",
+          "code": "conflict",
+          "detail": "This user is already a member of the organization",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "93c73889-de31-4353-9fd9-e865665b8536"
+        }
+      },
+      "422": {
+        "error": {
+          "type": "request_error",
+          "code": "unprocessable_entity",
+          "detail": "Idempotency-Key header is required for this operation",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "4b935a6e-6602-4056-98b6-a61827a7ff27"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organization/notification-policies": {
+    "request_body": {
+      "notification_type": "IN_APP",
+      "channel": "EMAIL",
+      "default_enabled": true,
+      "is_mandatory": false
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "id": "pol_example00000000000000",
+          "organization_id": "org_example00000000000000",
+          "notification_type": "IN_APP",
+          "channel": "EMAIL",
+          "default_enabled": true,
+          "is_mandatory": false,
+          "muted_until": null,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "f649540e-69e5-4c8f-9f81-00a7cb294dda"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.notification_type",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "83148dd7-cdcb-4309-9b17-201ed41098fd"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "2dbbcb97-33ff-4c65-9046-a4d918399e16"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "420a3c7c-f0e4-410d-91e2-f63c75055e82"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organization/roles": {
+    "request_body": {
+      "name": "New Role",
+      "description": "A test role"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "id": "rol_example00000000000000",
+          "name": "New Role",
+          "description": "A test role",
+          "is_system": false,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "79965635-71d4-4e84-91a9-6a5150a6566b"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid input",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "name",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "816daa2e-5971-4132-9234-2f0a91970ab3"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "b63bea1d-7318-4e51-98ea-3861f61593d5"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "4b5aee51-2204-4f52-93ef-4697c4f3f533"
+        }
+      },
+      "409": {
+        "error": {
+          "type": "request_error",
+          "code": "conflict",
+          "detail": "A role named \"{{name}}\" already exists in this organization",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "e61833ff-b9a6-442e-97fe-da77ee26f27f"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organization/transfer-ownership": {
+    "request_body": {
+      "new_owner_user_id": "usr_example00000000000000"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "id": "rol_example00000000000000",
+          "user_id": "usr_example00000000000000",
+          "organization_id": "org_example00000000000000",
+          "role_id": "rol_example00000000000000",
+          "status": "ACTIVE",
+          "joined_at": "2026-01-01T00:00:00.000Z",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "ae8bd4e8-e9c2-4350-9734-02852261e511"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid input",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "new_owner_user_id",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "2c55132c-de9a-40ba-936c-aaf079b68ab9"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Only the organization owner can transfer ownership",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "a19c4436-c27d-4f52-91aa-bdb1d87b126c"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "e84e3a23-7a1c-46ce-92fb-7be5fc841b80"
+        }
+      },
+      "422": {
+        "error": {
+          "type": "request_error",
+          "code": "unprocessable_entity",
+          "detail": "Idempotency-Key header is required for this operation",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "e95f957e-a6c0-4e57-9786-82779af50c0b"
+        }
+      }
+    }
+  },
+  "POST /api/v1/uploads": {
+    "request_body": {
+      "purpose": "avatar",
+      "for": "user",
+      "contentType": "image/png",
+      "fileName": "happy-path.png",
+      "fileSize": 1024
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "id": "upl_example00000000000000",
+          "uploadUrl": "https://example.com/resource",
+          "key": "avatars/usr_qdh0ar0rmn37chmhizykm/47f0f778-a6d5-4e5b-9913-4df96bcaef94.png",
+          "expiresAt": "2026-01-01T00:00:00.000Z",
+          "uploadMethod": "POST",
+          "fields": {
+            "key": "fake-policy-key"
+          }
+        },
+        "meta": {
+          "request_id": "6e61c48e-0129-4985-96d8-1bda4ff3d7e5"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.purpose",
+              "message": "Invalid option: expected one of \"avatar\"|\"organization-logo\"|\"user-file\"|\"organization-file\""
+            },
+            {
+              "field": "body.for",
+              "message": "Invalid option: expected one of \"user\"|\"organization\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "fa22ad85-4317-4da9-9e96-7d62b8d48b92"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "f1e69cc2-1922-45da-9b76-008a541a43bb"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions for upload",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "196eb3d0-e871-4385-9ba8-5b2a22fbf22a"
+        }
+      }
+    }
+  },
+  "POST /api/v1/uploads/:upload_id/confirm": {
+    "request_body": {},
+    "responses": {
+      "201": {
+        "data": {
+          "id": "upl_example00000000000000",
+          "fileName": "verified.png",
+          "mimeType": "image/png",
+          "fileSize": 1024,
+          "status": "UPLOADED",
+          "storageProvider": "s3",
+          "organizationId": null,
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "f0c11d31-5f84-4d20-9ae4-3b473fab5adc"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "db28c50b-21b8-4f88-900f-9a15d19dddb6"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "6889f6f0-10eb-4191-9439-cbad1afa239b"
+        }
+      }
+    }
+  },
+  "POST /api/v1/users/:user_id/suspend": {
+    "responses": {
+      "201": {
+        "data": {
+          "id": "usr_example00000000000000",
+          "email": "user@example.com",
+          "is_email_verified": false,
+          "is_mfa_enabled": false,
+          "first_name": "Kirk",
+          "last_name": "Herzog",
+          "avatar_url": null,
+          "status": "SUSPENDED",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "af333bef-e461-44de-9f00-e00e039eda19"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "02be5cf9-d557-4b62-9657-309a2b4d1ac4"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient role privileges",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "2553f0f1-c876-49ac-9c91-af287fc1fd72"
+        }
+      }
+    }
+  },
+  "POST /api/v1/users/:user_id/unsuspend": {
+    "responses": {
+      "201": {
+        "data": {
+          "id": "usr_example00000000000000",
+          "email": "user@example.com",
+          "is_email_verified": false,
+          "is_mfa_enabled": false,
+          "first_name": "Kirk",
+          "last_name": "Herzog",
+          "avatar_url": null,
+          "status": "ACTIVE",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "0d7df023-770e-4129-9ede-e346ca3c8e34"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "58eceee4-8bf5-4ea0-9261-5d7c4b24e6aa"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient role privileges",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "c5aaa492-183a-438a-9d2d-919204606b11"
+        }
+      }
+    }
+  },
+  "POST /api/v1/users/me/data-export": {
+    "request_body": {},
+    "responses": {
+      "201": {
+        "data": {
+          "export_id": "exp_example00000000000000",
+          "status": "pending",
+          "download_url": null,
+          "expires_at": "2026-01-01T00:00:00.000Z",
+          "completed_at": null,
+          "failed_at": null,
+          "error_code": null,
+          "created_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "c30bc79f-11bb-48df-9a5f-10dae4fbd6fc"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "e91bccd4-6f7e-4334-94a2-2b332487ae82"
+        }
+      }
+    }
+  },
+  "POST /internal/ops/circuit-breakers/:circuit_name/reset": {
+    "responses": {
+      "201": {
+        "name": "stripe",
+        "state": "CLOSED"
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Invalid or missing metrics token",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "354113f7-b772-413d-9300-bd75cf4d63de"
+        }
+      }
+    }
+  },
+  "PUT /api/v1/tenancy/organization/logo": {
+    "request_body": {
+      "key": "organization-logos/org_6hdmsko6prwmrzwjdydz2/fd466c1c-7156-4ff9-8009-c56215d43930.png"
+    },
+    "responses": {
+      "200": {
+        "data": {
+          "id": "org_example00000000000000",
+          "name": "Schaden LLC",
+          "slug": "schaden-llc-6hdmsko6pr",
+          "status": "ACTIVE",
+          "logo_url": "https://example.com/resource",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "410831b9-9b62-482f-94ca-2381632aa720"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Logo key does not belong to this organization",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "key",
+              "message": "Logo key does not belong to this organization"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "b1e7e85e-8b16-4a56-9a38-86f9b39ca335"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "8ee6e999-069d-4d99-9309-836bb5a2df59"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "93a6ede1-f8e9-48f2-90ac-28ea95c45a54"
+        }
+      }
+    }
+  },
+  "PUT /api/v1/tenancy/organization/roles/:role_id/permissions": {
+    "request_body": {
+      "permission_codes": ["organization:read"]
+    },
+    "responses": {
+      "200": {
+        "data": [
+          {
+            "role_id": "rol_example00000000000000",
+            "permission_code": "organization:read",
+            "created_at": "2026-01-01T00:00:00.000Z"
+          }
+        ],
+        "meta": {
+          "request_id": "1cfbcd24-0232-4316-9c01-1a3b25287524"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid input",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "permission_codes",
+              "message": "Invalid input: expected array, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "a0caad77-d298-4219-9975-250bc6ca33ed"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "dbcfe798-6315-40ad-9d8f-dd783f8a906d"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "c5952525-59f3-4f69-946e-9ed728e46df8"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "d642e622-7a82-45fb-97e6-8ff6d2e72951"
+        }
+      }
+    }
+  },
+  "PUT /api/v1/users/me/avatar": {
+    "request_body": {
+      "avatarKey": "avatars/usr_arzi19wy5c5xomc3qvr4r/25a86e0e-45e5-4d13-b9fa-7f0e30f07860.png"
+    },
+    "responses": {
+      "200": {
+        "data": {
+          "id": "usr_example00000000000000",
+          "email": "user@example.com",
+          "is_email_verified": false,
+          "is_mfa_enabled": false,
+          "first_name": "Bradford",
+          "last_name": "Rath",
+          "avatar_url": "avatars/usr_arzi19wy5c5xomc3qvr4r/25a86e0e-45e5-4d13-b9fa-7f0e30f07860.png",
+          "status": "ACTIVE",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "1d4f687d-d8e7-4128-9a5e-b49bf83a4ff5"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.avatarKey",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body",
+              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "1a014c5f-d724-4b71-980e-1022473eb9df"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "39b5fa7f-5682-4b15-9fd2-016846eea3de"
+        }
+      }
+    }
+  },
+  "PUT /api/v1/users/me/notification-preferences": {
+    "request_body": {
+      "preferences": [
+        {
+          "notification_type": "billing",
+          "channel": "EMAIL",
+          "is_enabled": true
+        }
+      ]
+    },
+    "responses": {
+      "200": {
+        "data": [
+          {
+            "notification_type": "billing",
+            "channel": "EMAIL",
+            "is_enabled": true
+          }
+        ],
+        "meta": {
+          "request_id": "00fb479c-0b2f-41f8-923a-c848435577da"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.preferences",
+              "message": "Invalid input: expected array, received undefined"
+            },
+            {
+              "field": "body",
+              "message": "Unrecognized key: \"unknown_field\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "000287f5-bea8-42df-94d8-eeee7bc8ea58"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "278870db-d493-41e3-9f12-b296afd9ac45"
+        }
+      }
+    }
+  }
+}

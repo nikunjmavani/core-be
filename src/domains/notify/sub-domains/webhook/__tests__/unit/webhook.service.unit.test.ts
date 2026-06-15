@@ -11,7 +11,12 @@ vi.mock('@/infrastructure/database/contexts/organization-database.context.js', (
   ),
 }));
 
-import { ConfigurationError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import {
+  ConfigurationError,
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from '@/shared/errors/index.js';
 import { WebhookService } from '@/domains/notify/sub-domains/webhook/webhook.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { WebhookRepository } from '@/domains/notify/sub-domains/webhook/webhook.repository.js';
@@ -67,6 +72,8 @@ describe('WebhookService', () => {
       next_cursor: null,
     }),
     findByPublicId: vi.fn().mockResolvedValue(webhook),
+    // NOTIFY-11: the secret-rotation gate reads under a FOR UPDATE row lock.
+    findByPublicIdForUpdate: vi.fn().mockResolvedValue(webhook),
     create: vi.fn().mockResolvedValue(webhook),
     update: vi.fn().mockResolvedValue(webhook),
     softDelete: vi.fn().mockResolvedValue(webhook),
@@ -74,6 +81,8 @@ describe('WebhookService', () => {
     // sec-N4: service consults this before insert; default to 0 so existing
     // happy-path tests stay below the cap.
     countActiveByOrganization: vi.fn().mockResolvedValue(0),
+    // audit-#8: per-org creation quota advisory lock (no-op in unit tests).
+    acquireCreationQuotaLock: vi.fn().mockResolvedValue(undefined),
   } as unknown as WebhookRepository;
 
   const deliveryAttemptRepository = {
@@ -98,6 +107,7 @@ describe('WebhookService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(webhookRepository.findByPublicId).mockResolvedValue(webhook as never);
+    vi.mocked(webhookRepository.findByPublicIdForUpdate).mockResolvedValue(webhook as never);
     vi.mocked(webhookRepository.update).mockResolvedValue(webhook as never);
     vi.mocked(webhookRepository.softDelete).mockResolvedValue(webhook as never);
     createPinnedWebhookFetchMock.mockResolvedValue(mockPinnedFetch);
@@ -357,7 +367,37 @@ describe('WebhookService', () => {
       organization.id,
       expect.objectContaining({ encrypted_secret: expect.stringMatching(/^v1:/) }),
       10,
+      // audit-#9: the eligibility cutoff is forwarded so the rotation predicate is enforced atomically.
+      expect.objectContaining({ secretRotationOverlapCutoff: expect.any(Date) }),
     );
+  });
+
+  it('route-audit/NOTIFY-11: rejects a re-rotation while the previous rotation is still in its overlap window', async () => {
+    // secret_rotated_at 1h ago is well within the 24h default dual-sign overlap; rotating again now
+    // would evict the still-valid previous secret, so refuse with a conflict and no write. The gate
+    // reads under FOR UPDATE so concurrent rotations serialize.
+    vi.mocked(webhookRepository.findByPublicId).mockResolvedValueOnce({
+      ...webhook,
+      secret_rotated_at: new Date(Date.now() - 60 * 60 * 1000),
+    } as never);
+    await expect(
+      service.update('org_public', 'webhook_public', { secret: 'another-new-secret-value' }, 'u'),
+    ).rejects.toBeInstanceOf(ConflictError);
+    expect(webhookRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('route-audit/NOTIFY-11: allows a re-rotation once the previous overlap window has elapsed', async () => {
+    vi.mocked(webhookRepository.findByPublicId).mockResolvedValueOnce({
+      ...webhook,
+      secret_rotated_at: new Date(Date.now() - 48 * 60 * 60 * 1000), // past the 24h window
+    } as never);
+    await service.update(
+      'org_public',
+      'webhook_public',
+      { secret: 'another-new-secret-value' },
+      'user_public',
+    );
+    expect(webhookRepository.update).toHaveBeenCalled();
   });
 
   it('listDeliveryAttempts throws when webhook id is undefined', async () => {

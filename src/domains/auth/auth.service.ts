@@ -1,11 +1,17 @@
 import { createHash } from 'node:crypto';
 import type { Redis } from 'ioredis';
-import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import {
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from '@/shared/errors/index.js';
 import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { DUMMY_ARGON2_HASH, verifyPassword } from '@/shared/utils/security/password.util.js';
+import { enforceMinimumDuration } from '@/shared/utils/security/anti-enumeration.util.js';
 import {
   ACCOUNT_LOCKOUT_MINUTES,
   IP_FAILED_LOGIN_THRESHOLD,
@@ -14,12 +20,20 @@ import {
 } from '@/shared/constants/index.js';
 import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { incrementWithExpiryOnFirst } from '@/shared/utils/infrastructure/redis-counter.util.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import type { AuthSessionService } from './sub-domains/auth-session/auth-session.service.js';
 import type { MfaService } from './sub-domains/auth-mfa/auth-mfa.service.js';
 import { validateLogin } from './auth.validator.js';
 import { completeFirstFactorAuth } from './shared/complete-first-factor-auth.js';
+import {
+  resolveDefaultActiveOrganizationPublicId,
+  findUserActiveOrganizationByPublicId,
+  findUserActiveOrganizationPublicIdByInternalId,
+  resolvePersonalOrganization,
+} from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
+import type { UserAuthRecord } from '@/domains/user/user.types.js';
 
 const IP_FAILED_LOGIN_KEY_PREFIX = 'auth:failed_login:ip:';
 
@@ -91,10 +105,13 @@ export class AuthService {
   private async recordIpFailedLogin(ipAddress: string): Promise<void> {
     try {
       const key = this.buildIpKey(ipAddress);
-      const count = await this.redis.incr(key);
-      if (count === 1) {
-        await this.redis.expire(key, IP_FAILED_LOGIN_WINDOW_SECONDS);
-      }
+      // Atomic INCR + first-increment EXPIRE (route-audit C5) — a crash between a separate INCR and
+      // EXPIRE would otherwise leave a no-TTL counter that throttles the IP indefinitely.
+      const count = await incrementWithExpiryOnFirst(
+        this.redis,
+        key,
+        IP_FAILED_LOGIN_WINDOW_SECONDS,
+      );
       if (count === IP_FAILED_LOGIN_THRESHOLD) {
         captureMessage('auth.ip_failed_login.threshold_reached', {
           level: 'warning',
@@ -122,6 +139,14 @@ export class AuthService {
     // Fail open on Redis errors so a Redis outage never locks out legitimate users.
     await this.checkIpLoginLimit(ipAddress);
 
+    // audit-#15d: floor every failure branch to a common minimum duration. argon2 is
+    // equalized between unknown-email and wrong-password, but the wrong-password branch
+    // additionally performs a Postgres write (registerFailedLoginAttempt) that the
+    // unknown-email branch lacks — a residual timing oracle the other anti-enumeration
+    // endpoints (magic-link, forgot-password) already mask. Measure from before the
+    // branch divergence (the user lookup) so both paths share the same floor.
+    const startedAtMillis = Date.now();
+
     const user = await this.userService.findByEmail(parsed.email);
     if (!user?.password_hash) {
       // Run a verification against a fixed dummy hash and discard the result so
@@ -129,6 +154,7 @@ export class AuthService {
       // preventing user enumeration via response timing.
       await verifyPassword(parsed.password, DUMMY_ARGON2_HASH);
       await this.recordIpFailedLogin(ipAddress);
+      await enforceMinimumDuration(startedAtMillis);
       throw new UnauthorizedError('errors:invalidEmailOrPassword');
     }
 
@@ -166,6 +192,9 @@ export class AuthService {
       if (isLockedOut) {
         logger.info({ user_public_id: user.public_id }, 'auth.login.attempt_during_lockout');
       }
+      // audit-#15d: same floor as the unknown-email branch so the extra Postgres write
+      // above is not observable as a latency difference.
+      await enforceMinimumDuration(startedAtMillis);
       throw new UnauthorizedError('errors:invalidEmailOrPassword');
     }
 
@@ -242,6 +271,18 @@ export class AuthService {
       throw new UnauthorizedError('errors:accountNotActive');
     }
 
+    // audit-#3: preserve the organization the caller switched to. The selected org is
+    // persisted on the session (`organization_id`) by `rebindAccessToken`; refresh must
+    // revalidate it (the user could have lost membership, or the org could have been
+    // deleted/suspended) and only fall back to the default when it is no longer valid —
+    // never silently move the caller to a different tenant while the UI still shows A.
+    const persistedOrganizationPublicId =
+      session.organization_id != null
+        ? await findUserActiveOrganizationPublicIdByInternalId(user.id, session.organization_id)
+        : undefined;
+    const organizationPublicId =
+      persistedOrganizationPublicId ?? (await resolveDefaultActiveOrganizationPublicId(user.id));
+
     const jsonWebToken = await signAccessToken({
       userId: user.public_id,
       role: resolveAccessTokenRoleForUser({
@@ -249,6 +290,7 @@ export class AuthService {
         status: user.status,
         isEmailVerified: user.is_email_verified,
       }),
+      organizationPublicId,
     });
 
     const rotated = await this.authSessionService.refreshSessionCredentials({
@@ -258,5 +300,72 @@ export class AuthService {
     });
 
     return { access_token: jsonWebToken, refresh_secret: rotated.refresh_secret };
+  }
+
+  /**
+   * Switch the active organization to a TEAM (or any) organization the caller is an active
+   * member of: validate membership, re-mint the access token with the new `org` claim, and
+   * re-bind the session to it. Rejects with 403 when the caller is not an active member.
+   */
+  async switchToOrganization({
+    userPublicId,
+    sessionPublicId,
+    organizationPublicId,
+  }: {
+    userPublicId: string;
+    sessionPublicId: string;
+    organizationPublicId: string;
+  }): Promise<{ access_token: string }> {
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    if (user.status !== 'ACTIVE') throw new UnauthorizedError('errors:accountNotActive');
+    const resolved = await findUserActiveOrganizationByPublicId(user.id, organizationPublicId);
+    if (!resolved) throw new ForbiddenError('errors:insufficientOrganizationPermissions');
+    return this.mintForActiveOrganization(user, sessionPublicId, resolved);
+  }
+
+  /**
+   * Switch the active organization to the caller's own PERSONAL organization. No body — the
+   * server resolves the personal organization from the authenticated user; it can never 403
+   * (you always own your personal organization). 404 only if personal is disabled / missing.
+   */
+  async switchToPersonal({
+    userPublicId,
+    sessionPublicId,
+  }: {
+    userPublicId: string;
+    sessionPublicId: string;
+  }): Promise<{ access_token: string }> {
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    if (user.status !== 'ACTIVE') throw new UnauthorizedError('errors:accountNotActive');
+    const personal = await resolvePersonalOrganization(user.id);
+    if (!personal) throw new NotFoundError('Personal organization');
+    return this.mintForActiveOrganization(user, sessionPublicId, personal);
+  }
+
+  /**
+   * Mint an access token scoped to the given organization and re-bind the session
+   * to it, persisting the active organization's internal id on the session so a
+   * later `/auth/refresh` preserves the selection (audit-#3).
+   */
+  private async mintForActiveOrganization(
+    user: UserAuthRecord,
+    sessionPublicId: string,
+    organization: { id: number; public_id: string },
+  ): Promise<{ access_token: string }> {
+    const jsonWebToken = await signAccessToken({
+      userId: user.public_id,
+      role: resolveAccessTokenRoleForUser({
+        email: user.email,
+        status: user.status,
+        isEmailVerified: user.is_email_verified,
+      }),
+      organizationPublicId: organization.public_id,
+    });
+    await this.authSessionService.rebindAccessToken({
+      sessionPublicId,
+      nextAccessToken: jsonWebToken,
+      activeOrganizationId: organization.id,
+    });
+    return { access_token: jsonWebToken };
   }
 }

@@ -5,18 +5,19 @@ import {
   getRequestIdentifier,
   requireAuth,
   requirePrincipal,
+  resolveActiveOrganizationId,
 } from '@/shared/utils/http/request.util.js';
-import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { OrganizationService } from './organization.service.js';
 import type { AuditService } from '@/domains/audit/audit.service.js';
 import { AuditSerializer } from '@/domains/audit/audit.serializer.js';
 
 /**
- * Builds the Fastify handler map for `/organizations` routes (CRUD, logo
- * upload/delete, slug lookup, audit-log listing). Wraps service calls with
- * `requireAuth`, public-id validation, and `successResponse` /
- * `paginatedResponse` shaping. The optional {@link AuditService} is required
- * only by `listOrganizationAuditLogs`.
+ * Builds the Fastify handler map for the organization routes — account-level
+ * `/organizations` (list, create, by-slug lookup) and the active-organization
+ * `/organization` resource (get/update/delete, logo upload/delete, audit-log
+ * listing). Wraps service calls with `requireAuth`, public-id validation, and
+ * `successResponse` / `paginatedResponse` shaping. The optional
+ * {@link AuditService} is required only by `listOrganizationAuditLogs`.
  */
 export function createOrganizationController(
   service: OrganizationService,
@@ -35,7 +36,7 @@ export function createOrganizationController(
     },
     getOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const id = validatePublicIdParam((request.params as { id: string }).id ?? '', 'id');
+      const id = resolveActiveOrganizationId(request);
       const data = await service.getByPublicId(id, auth.userId, auth.role);
       return successResponse(data, getRequestIdentifier(request));
     },
@@ -53,34 +54,31 @@ export function createOrganizationController(
     },
     updateOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const id = validatePublicIdParam((request.params as { id: string }).id ?? '', 'id');
+      const id = resolveActiveOrganizationId(request);
       const data = await service.update(id, request.body, getActingUserPublicId(auth));
       return successResponse(data, getRequestIdentifier(request));
     },
     deleteOrganization: async (request: FastifyRequest, reply: FastifyReply) => {
       requirePrincipal(request);
-      const id = validatePublicIdParam((request.params as { id: string }).id ?? '', 'id');
+      const id = resolveActiveOrganizationId(request);
       await service.delete(id);
       return reply.code(204).send();
     },
     uploadLogo: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const id = validatePublicIdParam((request.params as { id: string }).id ?? '', 'id');
+      const id = resolveActiveOrganizationId(request);
       const data = await service.uploadLogo(id, request.body, getActingUserPublicId(auth));
       return successResponse(data, getRequestIdentifier(request));
     },
-    deleteLogo: async (request: FastifyRequest, _reply: FastifyReply) => {
+    deleteLogo: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const id = validatePublicIdParam((request.params as { id: string }).id ?? '', 'id');
-      const data = await service.deleteLogo(id, getActingUserPublicId(auth));
-      return successResponse(data, getRequestIdentifier(request));
+      const id = resolveActiveOrganizationId(request);
+      await service.deleteLogo(id, getActingUserPublicId(auth));
+      return reply.code(204).send();
     },
     listOrganizationAuditLogs: async (request: FastifyRequest, _reply: FastifyReply) => {
       if (!auditService) throw new Error('Audit service not configured');
-      const organizationId = validatePublicIdParam(
-        (request.params as { id: string }).id ?? '',
-        'id',
-      );
+      const organizationId = resolveActiveOrganizationId(request);
       const query = {
         ...(request.query as Record<string, unknown>),
         organization_id: organizationId,

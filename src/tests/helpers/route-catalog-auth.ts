@@ -21,7 +21,7 @@ const PATH_PARAM_PLACEHOLDER = '000000000000000000000';
  * Replaces OpenAPI-style path params with a stable placeholder for smoke requests.
  */
 export function materializeRouteCatalogPath(path: string): string {
-  return path.replace(/:[a-zA-Z]+/g, PATH_PARAM_PLACEHOLDER).replace(/\/+$/, '') || '/';
+  return path.replace(/:[a-zA-Z_]+/g, PATH_PARAM_PLACEHOLDER).replace(/\/+$/, '') || '/';
 }
 
 /**

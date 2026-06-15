@@ -28,33 +28,52 @@ TEST_PASSWORD=DemoPassword123!
 | Demo organization slug | `demo-org`                                          |
 | Demo organization name | Demo Organization                                   |
 
-After seed, note **public IDs** from logs (`userId`, `organizationId`) or fetch them via the flows below. Example from a recent seed:
+After seed, note the resource ids from logs or fetch them via the flows below. Every id is prefixed by entity (`org_…`, `usr_…`, `pln_…`):
 
-- Organization public id: use `GET /api/v1/tenancy/organizations` (first item)
-- User public id: use `GET /api/v1/users/me`
+- Organization id: use `GET /api/v1/tenancy/organizations` (first item) — needed only to **switch** the active org (see below), not as a path/header on every call
+- User id: use `GET /api/v1/users/me`
 
 Permissions, plans, demo org, admin role, membership, an extra org/user, and one pending invitation are created. See `src/scripts/seed/full.ts`.
 
 ## Headers (authenticated routes)
 
-| Header              | Value                                           |
-| ------------------- | ----------------------------------------------- |
-| `Authorization`     | `Bearer <access_token>` from login              |
-| `X-Organization-Id` | Organization **public id** (see behavior below) |
-| `Content-Type`      | `application/json`                              |
-| `Accept-Language`   | `en` or `es` (optional)                         |
+| Header            | Value                                |
+| ----------------- | ------------------------------------ |
+| `Authorization`   | `Bearer <access_token>` from login   |
+| `Content-Type`    | `application/json`                   |
+| `Accept-Language` | `en` or `es` (optional)              |
 
-### `X-Organization-Id` behavior
+### Active organization (token `org` claim)
 
-| Scenario                                                | Effect on `request.organizationId` / RLS                                                                                                                           |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Org-scoped route, valid header**                      | Set to the 21-character public id; Postgres RLS session variable is set for the request. **Send this header on all org-scoped calls** for reliable tenant context. |
-| **Invalid format** (not exactly 21 URL-safe characters) | Header is **ignored**; organization context stays unset (may yield 403 or empty RLS scope — not a data leak to another tenant).                                    |
-| **Header absent, URL contains `/organizations/:id/`**   | Organization id is **inferred from the path** when `:id` matches the public id format.                                                                             |
-| **Header and path both present but differ**             | **Header wins**; path id is not used for RLS.                                                                                                                      |
-| **Neither valid header nor inferrable path id**         | Organization context unset; permission checks and RLS still apply per route.                                                                                       |
+Org-scoped routes are **flat** — there is no per-organization path segment and no
+`X-Organization-Id` header on org-scoped calls. The active organization rides the signed `org`
+claim inside the access token, so the active-org resource is singular: `/api/v1/tenancy/organization`
+(sub-resources nest under it). The claim is **scope, not authority** — membership and RLS are
+re-checked per request.
 
-Route handlers also validate `:id` path params with the shared public-id validator (400 on malformed ids).
+| Scenario                                | Effect                                                                                                                          |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Org-scoped route, valid `org` claim** | Resolved to the `org_<21 chars>` id; Postgres RLS session variable is set for the request. No header or path id needed.        |
+| **Caller is not a member of the claim** | Membership recheck fails → `403` (the claim cannot grant access to an org the caller does not belong to).                      |
+| **Switching the active org**            | Call a switch endpoint (below) to re-mint the access token with a new `org` claim; the old token fails immediately after.      |
+
+Switch the active organization (each re-mints the access token):
+
+```bash
+# Switch to your personal organization (no body)
+curl -s -X POST http://localhost:3000/api/v1/auth/switch-to-personal \
+  -H "Authorization: Bearer $TOKEN" | jq .
+
+# Switch to a specific team organization
+curl -s -X POST http://localhost:3000/api/v1/auth/switch-to-organization \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d "{\"organization_id\":\"$ORG_ID\"}" | jq -r '.data.access_token'
+```
+
+> `X-Organization-Id` is **legacy** and used only by the upload domain; org-scoped tenancy,
+> billing, and notify routes read the active org from the token claim. Status policy reference:
+> [response-codes.md](../reference/api/response-codes.md).
 
 ## Manual test checklist
 
@@ -78,7 +97,7 @@ curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/readyz
 
 | #   | Method | Path                                  | Expected                 |
 | --- | ------ | ------------------------------------- | ------------------------ |
-| 2.1 | POST   | `/api/v1/auth/login`                  | 200, `data.access_token` |
+| 2.1 | POST   | `/api/v1/auth/login`                  | 201, `data.access_token` |
 | 2.2 | POST   | `/api/v1/auth/login` (wrong password) | 401                      |
 | 2.3 | GET    | `/api/v1/users/me` (no token)         | 401                      |
 
@@ -106,12 +125,16 @@ curl -s http://localhost:3000/api/v1/users/me \
 
 ### 4. Tenancy — organizations
 
-| #   | Method | Path                                            | Expected                         |
-| --- | ------ | ----------------------------------------------- | -------------------------------- |
-| 4.1 | GET    | `/api/v1/tenancy/organizations`                 | 200, includes demo org           |
-| 4.2 | GET    | `/api/v1/tenancy/organizations/:id`             | 200 (use org public id + header) |
-| 4.3 | GET    | `/api/v1/tenancy/organizations/:id/memberships` | 200                              |
-| 4.4 | GET    | `/api/v1/tenancy/organizations/:id/roles`       | 200, includes Admin              |
+The active organization comes from the token's `org` claim. Account-level routes stay plural
+(`/tenancy/organizations`, list/create); the active-org resource is singular
+(`/tenancy/organization`, with sub-resources nested under it).
+
+| #   | Method | Path                                          | Expected                              |
+| --- | ------ | --------------------------------------------- | ------------------------------------- |
+| 4.1 | GET    | `/api/v1/tenancy/organizations`               | 200, includes demo org (account list) |
+| 4.2 | GET    | `/api/v1/tenancy/organization`                | 200, the active org from the claim    |
+| 4.3 | GET    | `/api/v1/tenancy/organization/memberships`    | 200                                   |
+| 4.4 | GET    | `/api/v1/tenancy/organization/roles`          | 200, includes Admin                   |
 
 ```bash
 ORGS=$(curl -s http://localhost:3000/api/v1/tenancy/organizations \
@@ -119,37 +142,40 @@ ORGS=$(curl -s http://localhost:3000/api/v1/tenancy/organizations \
 echo "$ORGS" | jq .
 export ORG_ID=$(echo "$ORGS" | jq -r '.data[0].id')
 
-curl -s "http://localhost:3000/api/v1/tenancy/organizations/$ORG_ID" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "X-Organization-Id: $ORG_ID" | jq .
+# The active org is whatever the token's `org` claim points to — read it directly,
+# no path id or header. Switch first (see above) if you need a different active org.
+curl -s http://localhost:3000/api/v1/tenancy/organization \
+  -H "Authorization: Bearer $TOKEN" | jq .
 ```
 
-### 5. Billing (org context)
+### 5. Billing (active-org context)
 
-| #   | Method | Path                                              | Expected           |
-| --- | ------ | ------------------------------------------------- | ------------------ |
-| 5.1 | GET    | `/api/v1/billing/plans`                           | 200 (seeded plans) |
-| 5.2 | GET    | `/api/v1/billing/organizations/:id/subscriptions` | 200 (may be empty) |
-| 5.3 | GET    | `/api/v1/billing/organizations/:id/entitlements`  | 200                |
+Billing routes are top-level under the token claim — the active org comes from `org`, not the path.
+
+| #   | Method | Path                                  | Expected           |
+| --- | ------ | ------------------------------------- | ------------------ |
+| 5.1 | GET    | `/api/v1/billing/plans`               | 200 (seeded plans) |
+| 5.2 | GET    | `/api/v1/billing/subscriptions`       | 200 (may be empty) |
+| 5.3 | GET    | `/api/v1/billing/entitlements`        | 200                |
 
 ```bash
-curl -s http://localhost:3000/api/v1/billing/plans \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "X-Organization-Id: $ORG_ID" | jq .
+curl -s http://localhost:3000/api/v1/billing/subscriptions \
+  -H "Authorization: Bearer $TOKEN" | jq .
 ```
 
-### 6. Notify (org context)
+### 6. Notify (active-org context)
 
-| #   | Method | Path                                        | Expected                 |
-| --- | ------ | ------------------------------------------- | ------------------------ |
-| 6.1 | GET    | `/api/v1/notify/organizations/:id/webhooks` | 200 (list, may be empty) |
+| #   | Method | Path                          | Expected                 |
+| --- | ------ | ----------------------------- | ------------------------ |
+| 6.1 | GET    | `/api/v1/notify/webhooks`     | 200 (list, may be empty) |
 
 ### 7. Negative cases
 
-| #   | Method | Path                                                                        | Expected   |
-| --- | ------ | --------------------------------------------------------------------------- | ---------- |
-| 7.1 | GET    | `/api/v1/tenancy/organizations/:id/memberships` without `X-Organization-Id` | 403 or 400 |
-| 7.2 | POST   | `/api/v1/auth/login` with `{}` body                                         | 400 or 422 |
+| #   | Method | Path                                                                | Expected |
+| --- | ------ | ------------------------------------------------------------------- | -------- |
+| 7.1 | GET    | `/api/v1/tenancy/organization/memberships` without a Bearer token   | 401      |
+| 7.2 | POST   | `/api/v1/auth/switch-to-organization` with an org you don't belong to | 403    |
+| 7.3 | POST   | `/api/v1/auth/login` with `{}` body                                 | 400      |
 
 ## Automated smoke test (all domains)
 

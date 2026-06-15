@@ -47,6 +47,16 @@ type/ticket-description
 - fix/API-205-login-error
 - refactor/SYS-88-clean-architecture
 
+### Accepted type prefixes (enforced)
+
+`feature` · `feat` · `fix` · `hotfix` · `refactor` · `docs` · `test` · `chore` · `ci` · `perf` · `build` · `style` · `revert` (`feat` and `feature` are both accepted; the set mirrors the conventional-commit types).
+
+[`.husky/pre-push`](../../.husky/pre-push) rejects any branch whose name is not `dev`, `main`, `claude/*`, or `<type>/<description>` using a type above. Bypass a single push with `SKIP_BRANCH_CHECK=1 git push` (prefer renaming the branch instead). Canonical AI rule: [`agent-os/rules/git-branch-naming.mdc`](../../agent-os/rules/git-branch-naming.mdc).
+
+### AI / automation branches (`claude/*`)
+
+Claude Code **web/cloud** sessions run on a platform-assigned `claude/<slug>` branch (e.g. `claude/vigilant-hopper-cbl23b`) — **not** a `feature/`/`fix/` branch. The name is created by the platform **before** the sandbox starts, and the cloud git proxy restricts each session to pushing only that working branch, so repo skills, rules, and hooks cannot rename it. `claude/*` is therefore allowlisted by the pre-push policy by design (blocking it would break every web session's push). To land that work under a `feature/`/`fix/` name, rename at the PR/merge layer or teleport the session to a local checkout — do not switch branches from inside the session without explicit permission.
+
 ---
 
 ## Full workflow: merge flow
@@ -96,6 +106,8 @@ git add .
 git commit -m "feat: add AI streaming response"
 ```
 
+> The commit **type** also drives the release version — `fix:` → patch, `feat:` → minor, `feat!:` (or a `BREAKING CHANGE:` footer) → major. See [release-versioning.md](release-versioning.md) for the full cheat-sheet.
+
 ### 3. Push branch
 
 ```bash
@@ -108,9 +120,18 @@ git push origin feature/ai-stream-response
 - PR title must follow conventional commits (e.g. `feat: add AI streaming response`).
 - CI runs automatically (quality, tests, security, Docker build). All must pass.
 - **Protected branches:** Required checks and merge rules for `main` and `dev` are documented in [branch-protection.md](../deployment/ci-cd/branch-protection.md).
-- After review and approval, merge into `dev`.
 
-### 5. Promote to production
+### 5. Watch CI to green, then merge
+
+Opening the PR is not the finish line — drive it to merged:
+
+- **Watch CI to completion.** Never merge on a partial or red run.
+- If the branch falls **behind `dev`** (protection requires up-to-date branches), update it (merge/rebase `dev`); this re-runs CI.
+- For a **transient** infra failure (e.g. a registry/image-pull timeout), re-run the failed job or re-trigger CI rather than editing code. Fix **real** failures in scope.
+- **Merge only when every required check is green and the PR is mergeable** (`mergeable_state: clean`), after review/approval. Prefer **squash** so `dev` gets one conventional commit (release-please derives the version bump from it).
+- AI sessions: keep watching until the PR is **merged or closed**. Webhooks do not deliver CI *success*, so re-check on a timer / self check-in rather than assuming green.
+
+### 6. Promote to production
 
 - Open a PR **dev → main** when changes are ready for production.
 - After merge, production deploys (Railway). Ensure migrations and runbook steps are done.

@@ -9,7 +9,10 @@ import type { StripeWebhookJobData } from '@/domains/billing/sub-domains/stripe-
 // sec-r4-Q1 regression: parseBullMQJobData must NOT be called by the processor.
 // Validation belongs at the worker boundary (parseJobDataOrDeadLetter in
 // stripe-webhook.worker.ts); a second parse here would bypass DLQ routing.
-const parseBullMQJobDataSpy = vi.fn();
+// vi.hoisted: the spy must initialize before any vi.mock factory runs, because importing
+// StripeWebhookService now transitively loads the queue module (which imports
+// parseBullMQJobData) during this file's import phase — before a plain `const` would be set.
+const { parseBullMQJobDataSpy } = vi.hoisted(() => ({ parseBullMQJobDataSpy: vi.fn() }));
 vi.mock('@/shared/utils/validation/bullmq-job-validation.util.js', () => ({
   parseBullMQJobData: parseBullMQJobDataSpy,
 }));

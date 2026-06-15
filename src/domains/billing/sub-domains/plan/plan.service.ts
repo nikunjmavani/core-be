@@ -59,7 +59,10 @@ export class PlanService {
 
   async getByPublicId(public_id: string): Promise<PlanOutput> {
     const row = await this.repository.findByPublicId(public_id);
-    if (!row) throw new NotFoundError('Plan');
+    // route-#7: this backs the PUBLIC GET /billing/plans/:plan_id. An inactive (retired/draft) plan is
+    // not part of the public catalog — the list endpoint hides it, so the detail endpoint must 404
+    // it too rather than leaking its name + monthly/yearly pricing to anonymous callers.
+    if (!row?.is_active) throw new NotFoundError('Plan');
     return toOutput(row);
   }
 }

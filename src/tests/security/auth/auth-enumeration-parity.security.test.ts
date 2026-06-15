@@ -100,7 +100,7 @@ describe('Security: auth account-enumeration resistance', () => {
     const known = await forgotPassword('enumeration-forgot@example.com');
     const unknown = await forgotPassword('enumeration-forgot-absent@example.com');
 
-    expect(known.statusCode).toBe(200);
+    expect(known.statusCode).toBe(201);
     expect(unknown.statusCode).toBe(known.statusCode);
     expect(responseData(unknown)).toEqual(responseData(known));
   });

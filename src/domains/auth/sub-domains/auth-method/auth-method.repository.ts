@@ -4,6 +4,14 @@ import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { AuthMethodCreateData, AuthMethodProviderLookup } from './auth-method.types.js';
 
+/**
+ * Postgres advisory-lock namespace (`classid`, ASCII `ACRD`) serializing per-user credential
+ * mutations. Combined with the user's internal id as `objid` in the two-key
+ * `pg_advisory_xact_lock(classid, objid)` form so it occupies a distinct lock space from other
+ * advisory locks (e.g. the upload-quota namespace). Only its stability matters.
+ */
+const CREDENTIAL_MUTATION_ADVISORY_LOCK_NAMESPACE = 0x41_43_52_44;
+
 /** Drizzle repository for the {@link auth_methods} table; reads and writes use the request-scoped database handle so Postgres RLS enforces organization isolation. Soft-deletes via `revoked_at` rather than physical deletion. */
 export class AuthMethodRepository {
   async listByUserId(userId: number) {
@@ -120,7 +128,7 @@ export class AuthMethodRepository {
   async create(data: AuthMethodCreateData) {
     const rows = await getRequestDatabase()
       .insert(auth_methods)
-      .values({ ...data, public_id: generatePublicId() })
+      .values({ ...data, public_id: generatePublicId('authMethod') })
       .returning();
     return rows[0]!;
   }
@@ -130,6 +138,63 @@ export class AuthMethodRepository {
       .update(auth_methods)
       .set({ revoked_at: new Date() })
       .where(and(eq(auth_methods.id, id), eq(auth_methods.user_id, userId)))
+      .returning();
+    return rows[0] ?? null;
+  }
+
+  /**
+   * Atomically revokes an auth method, refusing to revoke the user's LAST login-capable credential.
+   *
+   * @remarks
+   * The "is there another login-capable method?" check and the revoke happen in ONE `UPDATE`
+   * statement (an `EXISTS` sub-select over the user's other active rows), so two concurrent deletes
+   * cannot each read "one other method left" and both succeed — the count-then-act lockout race
+   * (route-audit C1). Returns the revoked row, or `null` when the row is already gone/revoked OR
+   * revoking it would leave the user with zero login-capable methods. Pass the login-capable
+   * `method_type` values so the repository need not depend on the service's policy constant.
+   */
+  /**
+   * Takes a transaction-scoped advisory lock serializing concurrent credential mutations for one
+   * user. Released automatically at COMMIT/ROLLBACK, so it must be acquired inside the same
+   * `withUserDatabaseContext` transaction as a subsequent count-then-mutate (e.g. the MFA-delete
+   * "would this remove the last factor?" check), closing that race (route-audit C1 / deleteMfa).
+   */
+  async acquireCredentialMutationLock(userId: number): Promise<void> {
+    await getRequestDatabase().execute(
+      sql`SELECT pg_advisory_xact_lock(${CREDENTIAL_MUTATION_ADVISORY_LOCK_NAMESPACE}::int, ${userId}::int)`,
+    );
+  }
+
+  async revokeUnlessLastLoginCapable(
+    id: number,
+    userId: number,
+    loginCapableMethodTypes: readonly string[],
+  ) {
+    const loginCapableList = sql.join(
+      loginCapableMethodTypes.map((methodType) => sql`${methodType}`),
+      sql`, `,
+    );
+    const rows = await getRequestDatabase()
+      .update(auth_methods)
+      .set({ revoked_at: new Date() })
+      .where(
+        and(
+          eq(auth_methods.id, id),
+          eq(auth_methods.user_id, userId),
+          isNull(auth_methods.revoked_at),
+          sql`(
+            ${auth_methods.method_type} NOT IN (${loginCapableList})
+            OR EXISTS (
+              SELECT 1
+              FROM ${auth_methods} AS other
+              WHERE other.user_id = ${userId}
+                AND other.id <> ${id}
+                AND other.revoked_at IS NULL
+                AND other.method_type IN (${loginCapableList})
+            )
+          )`,
+        ),
+      )
       .returning();
     return rows[0] ?? null;
   }

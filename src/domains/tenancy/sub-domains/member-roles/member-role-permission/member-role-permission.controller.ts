@@ -4,25 +4,23 @@ import {
   getActingUserPublicId,
   getRequestIdentifier,
   requirePrincipal,
+  resolveActiveOrganizationId,
 } from '@/shared/utils/http/request.util.js';
-import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { MemberRolePermissionService } from './member-role-permission.service.js';
 import { serializeMemberRolePermission } from './member-role-permission.serializer.js';
 
 /**
  * Builds the HTTP handler map for role-to-permission assignment endpoints
- * (`GET /organizations/:id/roles/:roleId/permissions` and the matching `PUT`).
- * Resolves the organization and role public ids from path params and forwards
- * to {@link MemberRolePermissionService}.
+ * (`GET /organization/roles/:role_id/permissions` and the matching `PUT`).
+ * Resolves the active organization from the signed JWT `org` claim and the
+ * role public id from the path param, then forwards to
+ * {@link MemberRolePermissionService}.
  */
 export function createMemberRolePermissionController(service: MemberRolePermissionService) {
   return {
     listRolePermissions: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const organizationId = validatePublicIdParam(
-        (request.params as { id: string }).id ?? '',
-        'id',
-      );
-      const { roleId } = request.params as { roleId: string };
+      const organizationId = resolveActiveOrganizationId(request);
+      const { role_id: roleId } = request.params as { role_id: string };
       const rows = await service.list(organizationId, roleId);
       const data = rows.map((row) => serializeMemberRolePermission(row, roleId));
       return paginatedResponse(data, getRequestIdentifier(request), {
@@ -34,11 +32,8 @@ export function createMemberRolePermissionController(service: MemberRolePermissi
     },
     putRolePermissions: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const organizationId = validatePublicIdParam(
-        (request.params as { id: string }).id ?? '',
-        'id',
-      );
-      const { roleId } = request.params as { roleId: string };
+      const organizationId = resolveActiveOrganizationId(request);
+      const { role_id: roleId } = request.params as { role_id: string };
       const rows = await service.put(
         organizationId,
         roleId,

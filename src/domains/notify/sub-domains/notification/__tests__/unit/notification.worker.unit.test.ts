@@ -5,8 +5,8 @@ import type { NotificationRepository } from '@/domains/notify/sub-domains/notifi
 const recordOutboxEmailMock = vi.fn();
 const dispatchOutboxEmailMock = vi.fn();
 const isMailConfiguredMock = vi.fn();
-const claimNotificationEmailDispatchMock = vi.fn();
-const releaseNotificationEmailDispatchMock = vi.fn();
+const isNotificationEmailDispatchedMock = vi.fn();
+const markNotificationEmailDispatchedMock = vi.fn();
 
 const withGlobalAdminDatabaseContextMock = vi.fn();
 const withUserDatabaseContextMock = vi.fn();
@@ -21,10 +21,10 @@ vi.mock('@/infrastructure/mail/queues/mail.queue.js', () => ({
 vi.mock(
   '@/domains/notify/sub-domains/notification/workers/notification-email-idempotency.js',
   () => ({
-    claimNotificationEmailDispatch: (...parameters: unknown[]) =>
-      claimNotificationEmailDispatchMock(...parameters),
-    releaseNotificationEmailDispatch: (...parameters: unknown[]) =>
-      releaseNotificationEmailDispatchMock(...parameters),
+    isNotificationEmailDispatched: (...parameters: unknown[]) =>
+      isNotificationEmailDispatchedMock(...parameters),
+    markNotificationEmailDispatched: (...parameters: unknown[]) =>
+      markNotificationEmailDispatchedMock(...parameters),
   }),
 );
 
@@ -82,13 +82,13 @@ describe('notification.worker', () => {
     recordOutboxEmailMock.mockReset();
     dispatchOutboxEmailMock.mockReset();
     isMailConfiguredMock.mockReset();
-    claimNotificationEmailDispatchMock.mockReset();
-    releaseNotificationEmailDispatchMock.mockReset();
+    isNotificationEmailDispatchedMock.mockReset();
+    markNotificationEmailDispatchedMock.mockReset();
     isMailConfiguredMock.mockReturnValue(true);
     recordOutboxEmailMock.mockResolvedValue(501);
     dispatchOutboxEmailMock.mockResolvedValue(undefined);
-    claimNotificationEmailDispatchMock.mockResolvedValue(true);
-    releaseNotificationEmailDispatchMock.mockResolvedValue(undefined);
+    isNotificationEmailDispatchedMock.mockResolvedValue(false);
+    markNotificationEmailDispatchedMock.mockResolvedValue(undefined);
   });
 
   it('queues email and returns in-app channel result when both channels are requested', async () => {
@@ -112,8 +112,8 @@ describe('notification.worker', () => {
     expect(result).toEqual({ channels: ['email:queued', 'in_app:persisted'] });
   });
 
-  it('does not enqueue a duplicate email when a prior attempt already claimed dispatch', async () => {
-    claimNotificationEmailDispatchMock.mockResolvedValue(false);
+  it('does not enqueue a duplicate email when a prior run already durably dispatched (audit-#7)', async () => {
+    isNotificationEmailDispatchedMock.mockResolvedValue(true);
     const repository = createNotificationRepository(buildNotificationRow());
 
     const result = await processNotificationDispatchJob(
@@ -123,22 +123,20 @@ describe('notification.worker', () => {
       repository,
     );
 
-    expect(claimNotificationEmailDispatchMock).toHaveBeenCalledWith({
+    expect(isNotificationEmailDispatchedMock).toHaveBeenCalledWith({
       notificationId: 10,
       recipient: 'user@example.com',
     });
     expect(recordOutboxEmailMock).not.toHaveBeenCalled();
     expect(dispatchOutboxEmailMock).not.toHaveBeenCalled();
+    expect(markNotificationEmailDispatchedMock).not.toHaveBeenCalled();
     expect(result).toEqual({ channels: ['email:deduplicated', 'in_app:persisted'] });
   });
 
-  it('keeps the dispatch claim and DOES NOT throw when the BullMQ enqueue fails after the outbox row is persisted', async () => {
-    // sec-Q regression: the outbox row IS the durability commit. Releasing the claim
-    // after a dispatch failure would let a BullMQ retry of THIS notification job INSERT
-    // a SECOND outbox row whose Idempotency-Key=mail-outbox-<newId> differs from row #1's
-    // key, and Resend would accept both — duplicate email at the recipient. The mail-
-    // outbox sweeper re-enqueues stale pending rows, so the notification worker's
-    // responsibility is fulfilled the moment the Postgres row lands.
+  it('marks dispatched AFTER persisting the outbox row, and does not throw when the BullMQ enqueue fails (audit-#7)', async () => {
+    // Durability-first: the outbox row is written, the dedup marker is set, then the
+    // (best-effort) enqueue runs. A dispatch failure after the durable row lands must
+    // not throw — the mail-outbox sweeper re-enqueues stale pending rows.
     dispatchOutboxEmailMock.mockRejectedValueOnce(new Error('redis down'));
     const repository = createNotificationRepository(buildNotificationRow());
 
@@ -150,17 +148,22 @@ describe('notification.worker', () => {
     );
 
     expect(recordOutboxEmailMock).toHaveBeenCalledTimes(1);
+    // The dedup marker is set ONLY after the durable insert succeeds.
+    expect(markNotificationEmailDispatchedMock).toHaveBeenCalledWith({
+      notificationId: 10,
+      recipient: 'user@example.com',
+    });
+    expect(recordOutboxEmailMock.mock.invocationCallOrder[0]!).toBeLessThan(
+      markNotificationEmailDispatchedMock.mock.invocationCallOrder[0]!,
+    );
     expect(dispatchOutboxEmailMock).toHaveBeenCalledTimes(1);
-    expect(releaseNotificationEmailDispatchMock).not.toHaveBeenCalled();
-    // The notification job still reports email:queued because the durability commit
-    // (outbox row) succeeded — only the BullMQ enqueue failed.
     expect(result.channels).toContain('email:queued');
   });
 
-  it('releases the dispatch claim and rethrows when the outbox INSERT itself fails so BullMQ can retry', async () => {
-    // The recordOutboxEmail path is the durability commit; if it fails, NO outbox row
-    // exists and the claim must be released so a BullMQ retry can try again. This is the
-    // ONLY failure regime where releasing the claim is safe.
+  it('rethrows and does NOT mark dispatched when the outbox INSERT itself fails so BullMQ retries (audit-#7)', async () => {
+    // The recordOutboxEmail call is the durability commit; if it fails, NO outbox row
+    // exists and NO marker is written, so a BullMQ retry re-inserts — the email is never
+    // lost (the previous claim-before-insert model would have skipped the retry).
     recordOutboxEmailMock.mockRejectedValueOnce(new Error('postgres down'));
     const repository = createNotificationRepository(buildNotificationRow());
 
@@ -168,10 +171,7 @@ describe('notification.worker', () => {
       processNotificationDispatchJob(10, 'organization_public_id', { id: 'job-1' }, repository),
     ).rejects.toThrow('postgres down');
 
-    expect(releaseNotificationEmailDispatchMock).toHaveBeenCalledWith({
-      notificationId: 10,
-      recipient: 'user@example.com',
-    });
+    expect(markNotificationEmailDispatchedMock).not.toHaveBeenCalled();
     // Dispatch was never reached because the INSERT failed first.
     expect(dispatchOutboxEmailMock).not.toHaveBeenCalled();
   });

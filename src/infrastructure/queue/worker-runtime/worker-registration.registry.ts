@@ -19,10 +19,16 @@ import { createSessionCleanupWorker } from '@/domains/auth/sub-domains/auth-sess
 import { SESSION_CLEANUP_QUEUE_NAME } from '@/domains/auth/sub-domains/auth-session/workers/session-cleanup.constants.js';
 import { createWebhookTombstoneRetentionWorker } from '@/domains/notify/sub-domains/webhook/workers/webhook-tombstone-retention.worker.js';
 import { WEBHOOK_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/workers/webhook-tombstone-retention.constants.js';
+import { createWebhookDeliveryAttemptRetentionWorker } from '@/domains/notify/sub-domains/webhook/workers/webhook-delivery-attempt-retention.worker.js';
+import { WEBHOOK_DELIVERY_ATTEMPT_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/workers/webhook-delivery-attempt-retention.constants.js';
 import { createOrganizationNotificationPolicyTombstoneRetentionWorker } from '@/domains/tenancy/sub-domains/organization/organization-notification-policy/workers/organization-notification-policy-tombstone-retention.worker.js';
 import { ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/organization-notification-policy/workers/organization-notification-policy-tombstone-retention.constants.js';
 import { createUserTombstoneRetentionWorker } from '@/domains/user/workers/user-tombstone-retention.worker.js';
 import { USER_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/user/workers/user-tombstone-retention.constants.js';
+import { createUserOffboardingReconcileWorker } from '@/domains/user/workers/user-offboarding-reconcile.worker.js';
+import { USER_OFFBOARDING_RECONCILE_QUEUE_NAME } from '@/domains/user/workers/user-offboarding-reconcile.constants.js';
+import { createOrganizationOffboardingReconcileWorker } from '@/domains/tenancy/sub-domains/organization/workers/organization-offboarding-reconcile.worker.js';
+import { ORGANIZATION_OFFBOARDING_RECONCILE_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/workers/organization-offboarding-reconcile.constants.js';
 import { createOrganizationTombstoneRetentionWorker } from '@/domains/tenancy/sub-domains/organization/workers/organization-tombstone-retention.worker.js';
 import { ORGANIZATION_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/workers/organization-tombstone-retention.constants.js';
 import { createMembershipTombstoneRetentionWorker } from '@/domains/tenancy/sub-domains/membership/workers/membership-tombstone-retention.worker.js';
@@ -253,6 +259,22 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
     create: () => createNotificationRetentionWorker(),
   }),
   retentionDefinition({
+    queueName: USER_OFFBOARDING_RECONCILE_QUEUE_NAME,
+    family: 'retention',
+    logLabel: 'user offboarding reconcile worker',
+    create: (workerContainers) =>
+      createUserOffboardingReconcileWorker(workerContainers.userDomain.userService),
+  }),
+  retentionDefinition({
+    queueName: ORGANIZATION_OFFBOARDING_RECONCILE_QUEUE_NAME,
+    family: 'retention',
+    logLabel: 'organization offboarding reconcile worker',
+    create: (workerContainers) =>
+      createOrganizationOffboardingReconcileWorker(
+        workerContainers.tenancyDomain.organizationService,
+      ),
+  }),
+  retentionDefinition({
     queueName: STRIPE_WEBHOOK_EVENT_RETENTION_QUEUE_NAME,
     family: 'stripe',
     logLabel: 'stripe webhook event retention worker',
@@ -269,6 +291,12 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
     family: 'retention',
     logLabel: 'webhook tombstone retention worker',
     create: () => createWebhookTombstoneRetentionWorker(),
+  }),
+  retentionDefinition({
+    queueName: WEBHOOK_DELIVERY_ATTEMPT_RETENTION_QUEUE_NAME,
+    family: 'retention',
+    logLabel: 'webhook delivery attempt retention worker',
+    create: () => createWebhookDeliveryAttemptRetentionWorker(),
   }),
   retentionDefinition({
     queueName: ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_QUEUE_NAME,

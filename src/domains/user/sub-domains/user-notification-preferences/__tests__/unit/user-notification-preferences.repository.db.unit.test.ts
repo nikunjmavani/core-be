@@ -56,6 +56,33 @@ describe('UserNotificationPreferencesRepository (database)', () => {
     expect(cleared).toHaveLength(0);
   });
 
+  it('audit-#11: replaceAll dedupes duplicate (type, channel) tuples — last wins — so the unique index holds', async () => {
+    const user = await createTestUser();
+
+    // A payload that repeats the same (notification_type, channel) tuple would
+    // previously insert two conflicting rows (and now would violate the new
+    // idx_user_notif_prefs_user_type_channel_unique). The repository collapses it.
+    const rows = await repository.replaceAll(user.id, [
+      {
+        notification_type: 'SUBSCRIPTION_UPDATED',
+        channel: 'EMAIL',
+        organization_id: null,
+        is_enabled: true,
+      },
+      {
+        notification_type: 'SUBSCRIPTION_UPDATED',
+        channel: 'EMAIL',
+        organization_id: null,
+        is_enabled: false,
+      },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.is_enabled).toBe(false); // last occurrence wins
+    const listed = await repository.listByUserId(user.id);
+    expect(listed).toHaveLength(1);
+  });
+
   // sec-U7: defense-in-depth pin on `organization_id`. The original RLS
   // policy carried an org branch that only verified the `app.current_organization_id`
   // GUC matched, NOT membership — a future route wrapping this table in

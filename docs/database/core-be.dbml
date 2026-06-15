@@ -29,6 +29,7 @@ TableGroup auth {
 
 TableGroup billing {
   billing.plans
+  billing.stripe_subscription_tombstones
   billing.stripe_webhook_events
   billing.subscriptions
 }
@@ -100,7 +101,7 @@ Note audit.logs {
 
 Table audit.outbox {
   action varchar(100) [not null]
-  actor_api_key_public_id varchar(21)
+  actor_api_key_public_id varchar(28)
   actor_user_public_id is [not null]
   attempt_count smallint [not null]
   created_at timestamptz [not null]
@@ -108,13 +109,13 @@ Table audit.outbox {
   ip_address varchar(45)
   last_error text
   metadata jsonb [not null]
-  organization_public_id varchar(21)
+  organization_public_id varchar(28)
   processed_at timestamptz
   resource_id bigint
   resource_type varchar(50) [not null]
   severity varchar(20) [not null]
   status varchar(20) [not null]
-  target_user_public_id varchar(21)
+  target_user_public_id varchar(28)
   updated_at timestamptz [not null]
   user_agent text
 }
@@ -134,7 +135,7 @@ Table auth.auth_methods {
   phone_number varchar(20)
   provider varchar(50)
   provider_user_id varchar(255)
-  public_id varchar(21)
+  public_id varchar(28)
   revoked_at timestamptz
   user_id bigint [not null]
   verified_at timestamptz
@@ -146,6 +147,7 @@ Note auth.auth_methods {
 
 Table auth.mail_outbox {
   created_at timestamptz [not null]
+  dedupe_key varchar(255)
   html text [not null]
   id bigint [pk, increment, not null]
   reply_to varchar(320)
@@ -173,7 +175,7 @@ Table auth.mfa_methods {
   last_used_at timestamptz
   method_type varchar(20) [not null]
   phone_number varchar(20)
-  public_id varchar(21) [not null, unique]
+  public_id varchar(28) [not null, unique]
   revoked_at timestamptz
   updated_at timestamptz [not null]
   user_id bigint [not null]
@@ -204,8 +206,10 @@ Table auth.sessions {
   is_revoked boolean [not null]
   last_active_at timestamptz [not null]
   organization_id bigint
-  public_id varchar(21) [not null, unique]
+  previous_refresh_token_hash varchar(64)
+  public_id varchar(28) [not null, unique]
   refresh_token_hash varchar(64)
+  refresh_token_rotated_at timestamptz
   token_hash varchar(64) [not null, unique]
   user_agent text
   user_id bigint [not null]
@@ -222,7 +226,7 @@ Table auth.user_data_exports {
   expires_at timestamptz
   failed_at timestamptz
   id bigint [pk, increment, not null]
-  public_id varchar(21) [not null, unique]
+  public_id varchar(28) [not null, unique]
   s3_key varchar(512)
   status varchar(20) [not null]
   updated_at timestamptz [not null]
@@ -278,10 +282,11 @@ Table auth.users {
   is_email_verified boolean [not null]
   is_mfa_enabled boolean [not null]
   last_active_at timestamptz
+  last_active_organization_id bigint
   last_name varchar(100)
   last_password_change_at timestamptz
   password_hash varchar(255)
-  public_id varchar(21) [not null]
+  public_id varchar(28) [not null]
   status varchar(20) [not null]
   updated_at timestamptz [not null]
 }
@@ -334,7 +339,7 @@ Table billing.plans {
   name varchar(100) [not null]
   price_monthly numeric(10, 2) [not null]
   price_yearly numeric(10, 2) [not null]
-  public_id varchar(21) [not null]
+  public_id varchar(28) [not null]
   stripe_price_monthly_id varchar(255)
   stripe_price_yearly_id varchar(255)
   stripe_product_id varchar(255)
@@ -343,7 +348,18 @@ Table billing.plans {
 }
 
 Note billing.plans {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: plans_deny_all, plans_app_access\nFORCE ROW LEVEL SECURITY'
+}
+
+Table billing.stripe_subscription_tombstones {
+  created_at timestamptz [not null]
+  deleted_event_created_at timestamptz [not null]
+  provider_subscription_id varchar(255) [pk]
+  updated_at timestamptz [not null]
+}
+
+Note billing.stripe_subscription_tombstones {
+  'RLS: enabled\nPolicies: stripe_subscription_tombstones_deny_all, stripe_subscription_tombstones_app_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table billing.stripe_webhook_events {
@@ -378,7 +394,7 @@ Table billing.subscriptions {
   provider varchar(50)
   provider_customer_id varchar(255)
   provider_subscription_id varchar(255)
-  public_id varchar(21) [not null]
+  public_id varchar(28) [not null]
   status varchar(20) [not null]
   trial_end timestamptz
   updated_at timestamptz [not null]
@@ -398,7 +414,7 @@ Table notify.notifications {
   is_read boolean [not null]
   message text [not null]
   organization_id bigint
-  public_id varchar(21) [not null]
+  public_id varchar(28) [not null]
   read_at timestamptz
   title varchar(255) [not null]
   type varchar(50) [not null]
@@ -418,7 +434,7 @@ Table notify.webhook_delivery_attempts {
   id bigint [pk, increment, not null]
   next_retry_at timestamptz
   payload jsonb [not null]
-  public_id varchar(21)
+  public_id varchar(28)
   response_body text
   sent_at timestamptz
   status varchar(20) [not null]
@@ -439,7 +455,7 @@ Table notify.webhooks {
   id bigint [pk, increment, not null]
   is_enabled boolean [not null]
   organization_id bigint [not null]
-  public_id varchar(21) [not null]
+  public_id varchar(28) [not null]
   secret_rotated_at timestamptz
   updated_at timestamptz [not null]
   updated_by_user_id bigint
@@ -461,7 +477,7 @@ Table tenancy.api_keys {
   last_used_at timestamptz
   name varchar(255) [not null]
   organization_id bigint [not null]
-  public_id varchar(21) [not null]
+  public_id varchar(28) [not null]
   scopes jsonb [not null]
   status varchar(20) [not null]
   updated_at timestamptz [not null]
@@ -481,7 +497,7 @@ Table tenancy.member_invitations {
   id bigint [pk, increment, not null]
   invited_by_user_id bigint [not null]
   membership_id bigint [not null]
-  public_id varchar(21) [not null]
+  public_id varchar(28) [not null]
   revoked_at timestamptz
   token_hash varchar(64) [not null]
 }
@@ -498,7 +514,7 @@ Table tenancy.memberships {
   invited_by_user_id bigint
   joined_at timestamptz
   organization_id bigint [not null]
-  public_id varchar(21) [not null]
+  public_id varchar(28) [not null]
   role_id bigint [not null]
   status varchar(20) [not null]
   updated_at timestamptz [not null]
@@ -521,7 +537,7 @@ Table tenancy.organization_notification_policies {
   muted_until timestamptz
   notification_type varchar(50) [not null]
   organization_id bigint [not null]
-  public_id varchar(21) [not null]
+  public_id varchar(28) [not null]
   updated_at timestamptz [not null]
   updated_by_user_id bigint
 }
@@ -554,10 +570,11 @@ Table tenancy.organizations {
   logo_url varchar(512)
   name varchar(255) [not null]
   owner_user_id bigint [not null]
-  public_id varchar(21) [not null]
-  slug varchar(100) [not null]
+  public_id varchar(28) [not null]
+  slug varchar(100)
   status varchar(20) [not null]
   stripe_customer_id varchar(255)
+  type varchar(20) [not null]
   updated_at timestamptz [not null]
   updated_by_user_id bigint
 }
@@ -575,7 +592,7 @@ Table tenancy.permissions {
 }
 
 Note tenancy.permissions {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: permissions_deny_all, permissions_app_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table tenancy.role_permissions {
@@ -601,7 +618,7 @@ Table tenancy.roles {
   is_system boolean [not null]
   name varchar(100) [not null]
   organization_id bigint [not null]
-  public_id varchar(21) [not null]
+  public_id varchar(28) [not null]
   updated_at timestamptz [not null]
   updated_by_user_id bigint
 }
@@ -622,7 +639,7 @@ Table upload.uploads {
   metadata jsonb [not null]
   mime_type varchar(100) [not null]
   organization_id bigint
-  public_id varchar(21) [not null]
+  public_id varchar(28) [not null]
   status varchar(20) [not null]
   storage_provider varchar(20) [not null]
   updated_at timestamptz [not null]
@@ -640,6 +657,8 @@ Ref: audit.logs.organization_id > tenancy.organizations.id [delete: set null]
 Ref: audit.logs.target_user_id > auth.users.id [delete: set null]
 Ref: auth.auth_methods.created_by_user_id > auth.users.id [delete: no action]
 Ref: auth.auth_methods.user_id > auth.users.id [delete: cascade]
+Ref: auth.mfa_methods.created_by_user_id > auth.users.id [delete: set null]
+Ref: auth.mfa_methods.user_id > auth.users.id [delete: cascade]
 Ref: auth.mfa_recovery_codes.user_id > auth.users.id [delete: cascade]
 Ref: auth.sessions.organization_id > tenancy.organizations.id [delete: set null]
 Ref: auth.sessions.user_id > auth.users.id [delete: cascade]

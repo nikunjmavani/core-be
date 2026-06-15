@@ -20,9 +20,9 @@
  *
  * Notes:
  *   The matcher tolerates path-parameter substitution: a route declared as
- *   `/api/v1/tenancy/organizations/:id` is considered exercised by a test that
- *   contains `/tenancy/organizations/${ORG_ID}`, `/tenancy/organizations/test-org`,
- *   `/tenancy/organizations/:id`, `organizations/\${organization.public_id}`,
+ *   `/api/v1/tenancy/organization/api-keys/:api_key_id` is considered exercised by a test that
+ *   contains `/tenancy/organization/api-keys/${API_KEY_ID}`, `/tenancy/organization/api-keys/test-key`,
+ *   `/tenancy/organization/api-keys/:api_key_id`, `api-keys/\${apiKey.public_id}`,
  *   etc. The path is normalised by stripping `/api/v1/` and lowercasing.
  */
 import { readFileSync } from 'node:fs';
@@ -71,9 +71,8 @@ const CHECK_MODE = process.argv.includes('--check');
  * task chips so the gap is owned, not silently ignored.
  */
 const JUSTIFIED_GAPS = new Set<string>([
-  // Operational endpoint protected by `METRICS_SCRAPE_TOKEN`. Not a
-  // business flow; covered by ops procedures, not by application tests.
-  'POST /internal/ops/circuit-breakers/:circuitName/reset',
+  // (empty — every route currently has an explicit test reference; add entries
+  // only with a written justification)
 ]);
 
 function parseRoutesFile(): RouteEntry[] {
@@ -322,8 +321,8 @@ async function main(): Promise<void> {
   reportLines.push(
     [
       '- Match is anchored on the full URL after stripping `/api/v1/` and replacing param tokens (`:id`, `:publicId`, etc.) with `[^/]+`, so a test that hits ',
-      '`/tenancy/organizations/' + '$' + '{organization.public_id}/api-keys` ',
-      'is correctly associated with `GET /api/v1/tenancy/organizations/:id/api-keys`.',
+      '`/tenancy/organization/api-keys/' + '$' + '{apiKey.public_id}` ',
+      'is correctly associated with `GET /api/v1/tenancy/organization/api-keys/:api_key_id`.',
     ].join(''),
   );
   reportLines.push(

@@ -54,11 +54,11 @@ export function createAuthMfaHandlers({ mfaService }: AuthMfaHandlersDependencie
       return successResponse(AuthSerializer.mfaEnrollConfirm(data), getRequestIdentifier(request));
     },
     deleteMfa: async (
-      request: FastifyRequest<{ Params: { mfaMethodId: string } }>,
+      request: FastifyRequest<{ Params: { mfa_method_id: string } }>,
       reply: FastifyReply,
     ) => {
       const auth = requireAuth(request);
-      const mfaMethodId = validateMfaMethodIdParam(request.params.mfaMethodId);
+      const mfaMethodId = validateMfaMethodIdParam(request.params.mfa_method_id);
       await mfaService.deleteMfa(auth.userId, mfaMethodId);
       await recordScopedAuditEvent(request, {
         actorUserPublicId: auth.userId,

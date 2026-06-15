@@ -98,7 +98,7 @@ describe('auth.middleware', () => {
 
   it('sets request.auth for valid bearer tokens', async () => {
     application = await createAuthMiddlewareApplication();
-    const userPublicId = generatePublicId();
+    const userPublicId = generatePublicId('user');
     /** Session lookup is mocked on `authSessionService.verifyActiveAccessToken`, so we
      * sign the JWT directly instead of using `generateTestToken` (which persists a real
      * session row via `database.select`). Keeps this a true unit test of the middleware. */
@@ -121,7 +121,7 @@ describe('auth.middleware', () => {
 
   it('omits role on request.auth when JWT payload has no role', async () => {
     application = await createAuthMiddlewareApplication();
-    const userPublicId = generatePublicId();
+    const userPublicId = generatePublicId('user');
     const { signAccessToken } = await import('@/shared/utils/security/jwt.util.js');
     const accessToken = await signAccessToken({ userId: userPublicId });
 
@@ -142,7 +142,7 @@ describe('auth.middleware', () => {
 
   it('rejects bearer when session is revoked or missing in database', async () => {
     application = await createAuthMiddlewareApplication();
-    const userPublicId = generatePublicId();
+    const userPublicId = generatePublicId('user');
     const accessToken = await signAccessToken({ userId: userPublicId, role: 'user' });
 
     const authSessionService = application.authDomain?.authSessionService;

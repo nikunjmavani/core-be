@@ -3,7 +3,6 @@ import { ConflictError, ForbiddenError, NotFoundError } from '@/shared/errors/in
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
-import type { MembershipRepository } from '@/domains/tenancy/sub-domains/membership/membership.repository.js';
 import type { MemberRoleRepository } from './member-role.repository.js';
 import type { MemberRoleOutput, MemberRoleRow } from './member-role.types.js';
 import {
@@ -44,7 +43,6 @@ export class MemberRoleService {
   constructor(
     private readonly organizationService: OrganizationService,
     private readonly memberRoleRepository: MemberRoleRepository,
-    private readonly membershipRepository: MembershipRepository,
   ) {}
 
   async list(organization_public_id: string, pagination: CursorPaginationInput) {
@@ -155,10 +153,16 @@ export class MemberRoleService {
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
         );
-      // sec-r5-followup-ratelimit-dos-2: enforce the per-org custom-role cap
-      // before insert. Mirrors `WEBHOOK_MAX_PER_ORG` in webhook.service.ts —
-      // a stability cap, not a security boundary; the per-route rate limit
-      // bounds concurrency so the inherent race ("one extra row") is acceptable.
+      // Capability matrix: a PERSONAL organization is single-member by definition, so custom roles
+      // (which exist to grant scoped permissions to OTHER members) are meaningless there. Reject —
+      // role management is a TEAM-organization feature.
+      if (organization.type === 'PERSONAL') {
+        throw new ConflictError('errors:personalOrganizationNoRoles');
+      }
+      // sec-r5-followup-ratelimit-dos-2 + audit-#8: serialize the per-org count + insert with a
+      // transaction-scoped advisory lock so concurrent creates cannot both pass the same count
+      // and overshoot MEMBER_ROLE_MAX_PER_ORG. The lock auto-releases at commit.
+      await this.memberRoleRepository.acquireCreationQuotaLock(organization.id);
       const activeCount = await this.memberRoleRepository.countActiveByOrganization(
         organization.id,
       );
@@ -252,15 +256,19 @@ export class MemberRoleService {
       if (role.is_system) {
         throw new ForbiddenError('errors:cannotDeleteSystemRole');
       }
-      const activeMembershipCount = await this.membershipRepository.countActiveByRoleId(
-        role.id,
+      // Atomic guarded delete: the "no active members?" check and the soft-delete run in ONE
+      // statement (a NOT EXISTS over memberships), so a concurrent member-assignment to this role
+      // cannot interleave a separate count and the delete and leave a member on a deleted role —
+      // which permission resolution would then silently strip of all permissions (route-audit C2).
+      // `role` was found above, so a zero-row result means active members remain (or a concurrent
+      // delete) → surface the actionable conflict rather than NotFound.
+      const deleted = await this.memberRoleRepository.softDeleteIfNoActiveMembers(
+        role_public_id,
         organization.id,
       );
-      if (activeMembershipCount > 0) {
+      if (!deleted) {
         throw new ConflictError('errors:roleHasActiveMembers');
       }
-      const deleted = await this.memberRoleRepository.softDelete(role_public_id, organization.id);
-      if (!deleted) throw new NotFoundError('Role');
       await invalidateOrganizationPermissions(organization_public_id);
     });
   }

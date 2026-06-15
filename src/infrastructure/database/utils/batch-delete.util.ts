@@ -1,4 +1,4 @@
-import { eq, inArray, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn, AnyPgTable } from 'drizzle-orm/pg-core';
 import type { PostgresDatabaseHandle } from '@/infrastructure/database/utils/database-handle.types.js';
 import { isPostgresForeignKeyViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
@@ -46,6 +46,10 @@ async function deleteRowsIndividually(options: {
  * and long idle-in-transaction windows on retention workers.
  * On FK violation, falls back to per-row deletes and counts blocked rows.
  *
+ * Batches are keyset-paged on `idColumn` (ascending), so FK-blocked rows — which remain in the
+ * table and keep matching `whereCondition` — are scanned once and then skipped, guaranteeing the
+ * loop terminates after a single forward pass even when a whole batch is permanently blocked.
+ *
  * Callers must pass an explicit `databaseHandle` (from `connection.ts` or a worker context wrapper).
  */
 export async function deleteInBatchesByCondition(options: {
@@ -69,12 +73,20 @@ export async function deleteInBatchesByCondition(options: {
   } = options;
   let deletedCount = 0;
   let blockedCount = 0;
+  // Keyset cursor on `idColumn`. FK-blocked rows stay in the table and keep matching
+  // `whereCondition`; without paging past them, a full batch (>= batchSize) of permanently-blocked
+  // rows would be re-selected every iteration and the loop would never terminate. Advancing the
+  // cursor past every scanned id guarantees a single forward pass.
+  let cursor: number | string | undefined;
 
   for (;;) {
+    const scanCondition =
+      cursor === undefined ? whereCondition : and(whereCondition, gt(idColumn, cursor));
     const batchIds = await databaseHandle
       .select({ id: idColumn })
       .from(table)
-      .where(whereCondition)
+      .where(scanCondition)
+      .orderBy(asc(idColumn))
       .limit(batchSize);
 
     if (batchIds.length === 0) {
@@ -82,6 +94,9 @@ export async function deleteInBatchesByCondition(options: {
     }
 
     const identifiers = batchIds.map((row) => row.id as number | string);
+    // Advance the cursor to the highest id scanned BEFORE deleting, so blocked rows (which remain)
+    // are excluded from the next scan.
+    cursor = identifiers[identifiers.length - 1];
 
     try {
       await databaseHandle.delete(table).where(inArray(idColumn, identifiers));

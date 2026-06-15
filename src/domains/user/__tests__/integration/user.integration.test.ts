@@ -7,9 +7,6 @@ import {
   injectUnauthenticated,
 } from '@/tests/helpers/test-http-inject.helper.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
-import { database } from '@/infrastructure/database/connection.js';
-import { eq } from 'drizzle-orm';
-import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method.schema.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import {
   generateTestToken,
@@ -109,7 +106,7 @@ describe('User Domain — Integration', () => {
         token: token,
         payload: { method_type: 'MFA_TOTP' },
       });
-      expect(enrollResponse.statusCode).toBe(200);
+      expect(enrollResponse.statusCode).toBe(201);
       const enrollSecret = (enrollResponse.json() as { data: { secret: string } }).data.secret;
       const confirmResponse = await injectAuthenticated(app, {
         method: 'POST',
@@ -117,23 +114,13 @@ describe('User Domain — Integration', () => {
         token: token,
         payload: { code: await generateTotp({ secret: enrollSecret }) },
       });
-      expect(confirmResponse.statusCode).toBe(200);
-      // sec-new-B4: serializer was renamed to return `method_public_id: string`
-      // (the bigserial id is no longer exposed). The DELETE /auth/mfa/:mfaMethodId
-      // route still validates numeric ids though, so we look up the row id from
-      // the returned public id to drive the DELETE below. When/if the DELETE
-      // route migrates to accept public ids, the lookup goes away.
+      expect(confirmResponse.statusCode).toBe(201);
+      // route-#10: the serializer returns `mfa_method_id` and DELETE /auth/mfa/{mfa_method_id}
+      // now accepts that opaque public id directly (the bigserial id is never exposed).
       const methodPublicId = (confirmResponse.json() as { data: Record<string, unknown> }).data
-        .method_public_id as string;
+        .mfa_method_id as string;
       expect(typeof methodPublicId).toBe('string');
-      expect(methodPublicId).toMatch(/^[a-z0-9]{21}$/);
-      const [methodRow] = await database
-        .select({ id: auth_methods.id })
-        .from(auth_methods)
-        .where(eq(auth_methods.public_id, methodPublicId))
-        .limit(1);
-      expect(methodRow).toBeDefined();
-      const methodId = methodRow!.id;
+      expect(methodPublicId).toMatch(/^am_[a-z0-9]{21}$/);
 
       const meAfterEnroll = await getMeWithRetry(app, token);
       expect(meAfterEnroll.statusCode).toBe(200);
@@ -145,7 +132,7 @@ describe('User Domain — Integration', () => {
 
       const deleteResponse = await injectAuthenticated(app, {
         method: 'DELETE',
-        url: testApiPath(`/auth/mfa/${methodId}`),
+        url: testApiPath(`/auth/mfa/${methodPublicId}`),
         token: token,
       });
       expect(deleteResponse.statusCode).toBe(204);
@@ -337,7 +324,7 @@ describe('User Domain — Integration', () => {
     });
   });
 
-  describe('GET /api/v1/users/:userId', () => {
+  describe('GET /api/v1/users/:user_id', () => {
     it('should return 403 for non-admin user', async () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id, role: 'user' });
@@ -350,7 +337,7 @@ describe('User Domain — Integration', () => {
     });
   });
 
-  describe('POST /api/v1/users/:userId/suspend', () => {
+  describe('POST /api/v1/users/:user_id/suspend', () => {
     it('should return 403 for non-admin', async () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id, role: 'user' });
@@ -363,7 +350,7 @@ describe('User Domain — Integration', () => {
     });
   });
 
-  describe('POST /api/v1/users/:userId/unsuspend', () => {
+  describe('POST /api/v1/users/:user_id/unsuspend', () => {
     it('should return 403 for non-admin', async () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id, role: 'user' });

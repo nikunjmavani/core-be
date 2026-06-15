@@ -110,6 +110,37 @@ describe('env-schema', () => {
     }
   });
 
+  it('rejects JWT_LEGACY_KEY_ENABLED=true in production once JWT_PUBLIC_KEYS is configured (audit-#15b)', () => {
+    const parsed = envSchema.safeParse({
+      ...productionRequiredBase,
+      JWT_PUBLIC_KEYS: '[{"kid":"k1","key":"pub"}]',
+      // JWT_LEGACY_KEY_ENABLED defaults to true — must be rejected alongside a keyring.
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(
+        parsed.error.issues.some((issue) => issue.path.includes('JWT_LEGACY_KEY_ENABLED')),
+      ).toBe(true);
+    }
+  });
+
+  it('accepts a JWT keyring in production when the legacy gate is closed (audit-#15b)', () => {
+    const parsed = envSchema.safeParse({
+      ...productionRequiredBase,
+      JWT_PUBLIC_KEYS: '[{"kid":"k1","key":"pub"}]',
+      JWT_LEGACY_KEY_ENABLED: 'false',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('leaves the legacy single-key path available in production without a keyring (audit-#15b)', () => {
+    const parsed = envSchema.safeParse({
+      ...productionRequiredBase,
+      // No JWT_PUBLIC_KEYS — the legacy default must still validate (no breaking change).
+    });
+    expect(parsed.success).toBe(true);
+  });
+
   it('requires EMAIL_FROM_ADDRESS when RESEND_API_KEY is set', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,
@@ -780,6 +811,40 @@ describe('env-schema', () => {
         ? undefined
         : parsed.error.issues.find((i) => i.path.includes('EMAIL_FROM_ADDRESS'));
       expect(issue).toBeDefined();
+    });
+  });
+
+  describe('retention upper bounds (audit-#14)', () => {
+    it.each([
+      ['NOTIFICATION_RETENTION_DAYS', '90000'],
+      ['AUTH_SESSION_RETENTION_DAYS', '90000'],
+      ['TOMBSTONE_RETENTION_DAYS', '90000'],
+      ['STRIPE_WEBHOOK_EVENT_RETENTION_DAYS', '90000'],
+      ['WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS', '36500'],
+    ])('rejects an over-cap %s so a typo cannot disable cleanup', (key, value) => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NODE_ENV: 'test',
+        [key]: value,
+      });
+      expect(parsed.success).toBe(false);
+      const issue = parsed.success
+        ? undefined
+        : parsed.error.issues.find((i) => i.path.includes(key));
+      expect(issue).toBeDefined();
+    });
+
+    it('accepts retention values within the new bounds', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NODE_ENV: 'test',
+        NOTIFICATION_RETENTION_DAYS: '365',
+        AUTH_SESSION_RETENTION_DAYS: '730',
+        TOMBSTONE_RETENTION_DAYS: '730',
+        STRIPE_WEBHOOK_EVENT_RETENTION_DAYS: '730',
+        WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS: '180',
+      });
+      expect(parsed.success).toBe(true);
     });
   });
 });

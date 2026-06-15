@@ -49,7 +49,7 @@ async function seedWebhooksForOrganization(
     await database
       .insert(webhooks)
       .values({
-        public_id: generatePublicId(),
+        public_id: generatePublicId('webhook'),
         organization_id: organization.id,
         url: bulkWebhookUrl(organization.id, index),
         encrypted_secret: encryptFieldSecret('seed-webhook-secret'),

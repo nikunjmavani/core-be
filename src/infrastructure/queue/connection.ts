@@ -45,20 +45,40 @@ export function getBullMQConnectionOptions(): {
 }
 
 /**
+ * Command timeout (ms) for BullMQ **producer** connections (audit-#5).
+ *
+ * @remarks
+ * `maxRetriesPerRequest: null` (required by BullMQ) means an in-flight command to a
+ * connected-but-unresponsive Redis (failover mid-command, swap storm, paused
+ * cluster) never rejects on its own. Producers only issue non-blocking commands
+ * (`add()`), so a bounded `commandTimeout` makes an enqueue fail fast instead of
+ * hanging for the whole incident. It is intentionally NOT applied to the worker /
+ * scheduler connection ({@link getBullMQConnectionOptions}), whose blocking
+ * `BRPOPLPUSH` long-poll legitimately outlives any command timeout.
+ */
+const BULLMQ_PRODUCER_COMMAND_TIMEOUT_MS = 10_000;
+
+/**
  * BullMQ connection options for **queue producers** (the `*.queue.ts` enqueue helpers).
  *
  * @remarks
  * Identical to {@link getBullMQConnectionOptions} but pins `enableOfflineQueue: false` so a
- * producer fails fast during a Redis partition instead of buffering the `add()` in memory.
- * Because `maxRetriesPerRequest` is `null`, a buffered command would otherwise never reject —
- * an enqueue issued from an HTTP request or post-commit event handler would hang for the whole
- * outage rather than surfacing an error the caller can log or convert to a 5xx. Every domain
- * producer queue uses this so the fail-fast behavior is uniform (previously only the mail queue
- * set it inline). Workers and the boot-time scheduler intentionally keep
- * {@link getBullMQConnectionOptions} (blocking consumers / created-and-used-at-boot).
+ * producer fails fast during a Redis partition instead of buffering the `add()` in memory,
+ * and adds a bounded `commandTimeout` (audit-#5) so a command to a connected-but-unresponsive
+ * Redis rejects instead of hanging. Because `maxRetriesPerRequest` is `null`, a buffered or
+ * in-flight command would otherwise never reject — an enqueue issued from an HTTP request or
+ * post-commit event handler would hang for the whole outage rather than surfacing an error the
+ * caller can log or convert to a 5xx. Every domain producer queue uses this so the fail-fast
+ * behavior is uniform (previously only the mail queue set it inline). Workers and the boot-time
+ * scheduler intentionally keep {@link getBullMQConnectionOptions} (blocking consumers /
+ * created-and-used-at-boot) with no command timeout.
  */
 export function getBullMQProducerConnectionOptions(): ReturnType<
   typeof getBullMQConnectionOptions
-> & { enableOfflineQueue: false } {
-  return { ...getBullMQConnectionOptions(), enableOfflineQueue: false };
+> & { enableOfflineQueue: false; commandTimeout: number } {
+  return {
+    ...getBullMQConnectionOptions(),
+    enableOfflineQueue: false,
+    commandTimeout: BULLMQ_PRODUCER_COMMAND_TIMEOUT_MS,
+  };
 }

@@ -20,7 +20,7 @@ import { getEnv } from '@/shared/config/env.config.js';
  * When used with X-Organization-Id header.
  */
 export function generateTestOrganizationId(): string {
-  return generatePublicId();
+  return generatePublicId('organization');
 }
 
 /**
@@ -63,8 +63,12 @@ export async function seedTwoOrganizationsWithSubscriptions(options?: {
 
   await seedPermissions([...billingPermissionCodes, ...uploadPermissionCodes]);
 
-  const userA = await createTestUser({ email: `user-a-${generatePublicId()}@cross-tenant.test` });
-  const userB = await createTestUser({ email: `user-b-${generatePublicId()}@cross-tenant.test` });
+  const userA = await createTestUser({
+    email: `user-a-${generatePublicId('organization')}@cross-tenant.test`,
+  });
+  const userB = await createTestUser({
+    email: `user-b-${generatePublicId('organization')}@cross-tenant.test`,
+  });
   const organizationA = await createTestOrganization({ ownerUserId: userA.id });
   const organizationB = await createTestOrganization({ ownerUserId: userB.id });
   const plan = await createTestPlan();
@@ -134,7 +138,7 @@ export async function seedUploadForOrganization(options: {
   status?: string;
 }): Promise<SeedUploadForOrganizationResult> {
   const bucket = getEnv().S3_BUCKET ?? 'test-bucket';
-  const publicId = generatePublicId();
+  const publicId = generatePublicId('organization');
   const [row] = await database
     .insert(uploads)
     .values({

@@ -4,6 +4,10 @@ import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-tim
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { organization_notification_policies } from '@/domains/tenancy/sub-domains/organization/organization-notification-policy/organization-notification-policy.schema.js';
+import {
+  RESOURCE_QUOTA_LOCK_NAMESPACE,
+  acquireResourceQuotaLock,
+} from '@/infrastructure/database/resource-quota-lock.util.js';
 import type { OrganizationNotificationPolicyRow } from './organization-notification-policy.types.js';
 
 /**
@@ -47,6 +51,19 @@ export class OrganizationNotificationPolicyRepository {
         ),
       );
     return rows[0]?.value ?? 0;
+  }
+
+  /**
+   * audit-#8: transaction-scoped advisory lock serializing the per-org notification-policy
+   * creation quota check + insert so concurrent creates cannot both pass the count and overshoot
+   * `ORGANIZATION_NOTIFICATION_POLICY_MAX_PER_ORG`. Call inside the create transaction before
+   * {@link countActiveByOrganization}.
+   */
+  async acquireCreationQuotaLock(organization_id: number): Promise<void> {
+    await acquireResourceQuotaLock(
+      RESOURCE_QUOTA_LOCK_NAMESPACE.ORGANIZATION_NOTIFICATION_POLICY,
+      organization_id,
+    );
   }
 
   async findByOrganizationId(organization_id: number) {
@@ -105,7 +122,7 @@ export class OrganizationNotificationPolicyRepository {
     const rows = await getRequestDatabase()
       .insert(organization_notification_policies)
       .values({
-        public_id: generatePublicId(),
+        public_id: generatePublicId('organizationNotificationPolicy'),
         organization_id: data.organization_id,
         notification_type: data.notification_type,
         channel: data.channel,

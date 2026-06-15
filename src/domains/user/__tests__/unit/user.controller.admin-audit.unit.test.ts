@@ -5,8 +5,8 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 /**
  * Regression for sec-U9 (Medium): admin user-management actions
- * (PATCH /:userId, POST /:userId/suspend, POST /:userId/unsuspend,
- * DELETE /:userId) and the self-delete (DELETE /me) used to write no audit
+ * (PATCH /:user_id, POST /:user_id/suspend, POST /:user_id/unsuspend,
+ * DELETE /:user_id) and the self-delete (DELETE /me) used to write no audit
  * row. A rogue admin could wipe accounts and leave no platform-visible
  * record; a deleted user complaining "someone deleted my account" was
  * unanswerable.
@@ -18,13 +18,13 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
  */
 describe('createUserController — admin user-management audit (sec-U9)', () => {
   const auditRecord = vi.fn().mockResolvedValue(undefined);
-  const adminPublicId = generatePublicId();
-  const targetUserPublicId = generatePublicId();
+  const adminPublicId = generatePublicId('user');
+  const targetUserPublicId = generatePublicId('user');
 
   function mockAdminRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
     return {
       auth: { kind: 'user' as const, userId: adminPublicId, role: 'super_admin' },
-      params: { userId: targetUserPublicId },
+      params: { user_id: targetUserPublicId },
       body: {},
       query: {},
       headers: {},
@@ -121,7 +121,7 @@ describe('createUserController — admin user-management audit (sec-U9)', () => 
 
   it('deleteMe writes user.self.delete audit at WARNING severity', async () => {
     const reply = { status: vi.fn().mockReturnThis(), send: vi.fn() };
-    const selfPublicId = generatePublicId();
+    const selfPublicId = generatePublicId('user');
     const selfRequest = mockAdminRequest({
       auth: { kind: 'user' as const, userId: selfPublicId, role: 'user' },
       params: {},

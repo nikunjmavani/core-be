@@ -42,7 +42,7 @@ describe('Cross-domain e2e: billing onboarding', () => {
       url: testApiPath('/auth/login'),
       payload: { email: user.email, password },
     });
-    expect(loginResponse.statusCode).toBe(200);
+    expect(loginResponse.statusCode).toBe(201);
     const token =
       (loginResponse.json() as { data?: { access_token?: string } }).data?.access_token ??
       (await generateTestToken({ userId: user.public_id }));
@@ -57,8 +57,6 @@ describe('Cross-domain e2e: billing onboarding', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const organizationPublicId = organization.public_id;
-
     const plansResponse = await injectAuthenticated(app, {
       method: 'GET',
       url: testApiPath('/billing/plans'),
@@ -66,11 +64,18 @@ describe('Cross-domain e2e: billing onboarding', () => {
     });
     expect(plansResponse.statusCode).toBe(200);
 
+    // Flat subscription routes resolve the organization from the JWT `org`
+    // claim, so mint a token scoped to the org created above (the login token
+    // was issued before the org existed and carries no claim).
+    const organizationScopedToken = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
+
     const subscriptionsResponse = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(`/billing/organizations/${organizationPublicId}/subscriptions`),
-      token: token as string,
-      organizationPublicId,
+      url: testApiPath('/billing/subscriptions'),
+      token: organizationScopedToken,
     });
     expect(subscriptionsResponse.statusCode).toBe(200);
   });
