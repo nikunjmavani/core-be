@@ -44,7 +44,7 @@ instinct is right — for code and CI/CD the CLI (or SDK) is the correct tool, n
 | **Semgrep** | — | `semgrep` (`pnpm security:sast`) | ✅ `semgrep-mcp` (scan + structured findings) |
 | **Gitleaks** | — | `gitleaks` (`pnpm security:secrets`) | — |
 | **Postman** | — | Postman CLI / `newman` (`pnpm docs:upload`) | ✅ `mcp.postman.com/mcp` |
-| **Cloudflare Turnstile** | fetch verify | `wrangler` | — (low value) |
+| **Cloudflare Turnstile** | fetch verify | `wrangler` | — no MCP (low value); scope TODO below |
 | **Docker** | — | `docker` (`compose`, `buildx bake`) | — gateway only (Docker MCP Toolkit proxies servers, not a peer) |
 | **Context7** (lib docs) | — | — | ✅ `@upstash/context7-mcp` |
 | **codegraph** (code index) | — | `codegraph` | ✅ `codegraph serve --mcp` |
@@ -52,6 +52,11 @@ instinct is right — for code and CI/CD the CLI (or SDK) is the correct tool, n
 **Stripe is the canonical "all three" case:** the `stripe` SDK runs in the service, the
 `stripe` CLI replays/triggers webhooks against the local `stripe-webhook` domain in dev/CI,
 and the Stripe MCP lets an agent inspect test-mode objects. They coexist; none replaces another.
+
+> **TODO (future scope):** Turnstile appears in the codebase only as server-side CAPTCHA token
+> verification, and there's no agent MCP worth wiring (low value). Bringing **Turnstile / CAPTCHA
+> hardening** into proper scope is parked here as a tracked future item — decision 2026-06-15:
+> skip the agent MCP now, revisit the broader scope later.
 
 ## What the agent already has
 
