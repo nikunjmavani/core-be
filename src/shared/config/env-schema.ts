@@ -18,6 +18,16 @@ const nodeEnvSchema = z
   .enum(['local', 'development', 'staging', 'production', 'test'])
   .default('local');
 
+/**
+ * Whether to apply local-dev convenience defaults for otherwise-required config
+ * (DATABASE_URL, REDIS_URL, ALLOWED_ORIGINS, AUTH_SESSION_RETENTION_DAYS). True for
+ * local/development/test; false for production/staging, so hosted runtimes still fail
+ * loudly when these are unset. Production containers set `NODE_ENV=production` in the
+ * environment (Dockerfile), so the gate holds regardless of env-file load order.
+ * Keep the default values in sync with `.env.example`.
+ */
+const isLocalRuntime = !['production', 'staging'].includes(process.env.NODE_ENV ?? 'local');
+
 const booleanString = (defaultValue: 'true' | 'false') =>
   z
     .string()
@@ -79,11 +89,15 @@ const envSchemaBase = z.object({
   HTTP_SERVER_TIMING_ENABLED: booleanString('true'),
 
   // Database (managed service)
-  DATABASE_URL: z.string().min(1),
+  DATABASE_URL: isLocalRuntime
+    ? z.string().min(1).default('postgresql://core:core@localhost:5432/core')
+    : z.string().min(1),
   DATABASE_MIGRATION_URL: z.string().min(1).optional(), // elevated-privilege user for migrations
 
   // Redis (managed service)
-  REDIS_URL: z.string().min(1),
+  REDIS_URL: isLocalRuntime
+    ? z.string().min(1).default('redis://localhost:6379')
+    : z.string().min(1),
   /**
    * Dedicated Redis endpoint for BullMQ queues. Recommended in production so a queue
    * backlog (e.g. during a worker outage) cannot exhaust the write-critical cache /
@@ -164,7 +178,9 @@ const envSchemaBase = z.object({
   HEALTH_VERBOSE_BODY_ENABLED: booleanString('false'),
 
   // CORS (comma-separated origins; required in every runtime)
-  ALLOWED_ORIGINS: z.string().min(1),
+  ALLOWED_ORIGINS: isLocalRuntime
+    ? z.string().min(1).default('http://localhost:3000')
+    : z.string().min(1),
 
   /** WebAuthn RP ID (hostname). Defaults to first ALLOWED_ORIGINS hostname or localhost. */
   WEBAUTHN_RP_ID: z.string().min(1).optional(),
@@ -446,7 +462,9 @@ const envSchemaBase = z.object({
    * an arbitrary env value.
    */
   NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(90),
-  AUTH_SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).max(730),
+  AUTH_SESSION_RETENTION_DAYS: isLocalRuntime
+    ? z.coerce.number().int().min(1).max(730).default(30)
+    : z.coerce.number().int().min(1).max(730),
   /** Tombstoned-row TTL before purge workers hard-delete (default avoids mandatory deploy secret). */
   TOMBSTONE_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(90),
   /** Terminal Stripe webhook ledger rows older than this are purged (failed rows kept for replay). */
