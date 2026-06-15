@@ -30,9 +30,28 @@ if apt-get update >/dev/null 2>&1 && apt-get install -y gh >/dev/null 2>&1; then
   exit 0
 fi
 
-# 2) Fallback — official GitHub CLI apt repo (needs cli.github.com on the
+# 2) Official release binary from github.com (in the default Trusted allowlist).
+#    No apt repo or extra allowlist entry needed — github.com release assets are
+#    reachable on the default network policy, so this is the reliable cloud path.
+arch="$(dpkg --print-architecture)"
+version="$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+  https://github.com/cli/cli/releases/latest 2>/dev/null | sed 's#.*/tag/v##')"
+if [ -n "${version}" ]; then
+  tarball="gh_${version}_linux_${arch}.tar.gz"
+  if curl -fsSL "https://github.com/cli/cli/releases/download/v${version}/${tarball}" \
+       -o "/tmp/${tarball}" 2>/dev/null; then
+    tar -xzf "/tmp/${tarball}" -C /tmp
+    install -m 0755 "/tmp/gh_${version}_linux_${arch}/bin/gh" /usr/local/bin/gh
+    rm -rf "/tmp/${tarball}" "/tmp/gh_${version}_linux_${arch}"
+    echo "install-gh: installed $(gh --version | head -1) from github.com release binary." >&2
+    exit 0
+  fi
+fi
+echo "install-gh: github.com release binary unavailable — trying the official GitHub CLI apt repo." >&2
+
+# 3) Fallback — official GitHub CLI apt repo (needs cli.github.com on the
 #    network allowlist; add it under Custom access if Trusted blocks it).
-echo "install-gh: gh not in base repos — adding the official GitHub CLI apt repo." >&2
+echo "install-gh: adding the official GitHub CLI apt repo." >&2
 keyring=/etc/apt/keyrings/githubcli-archive-keyring.gpg
 install -m 0755 -d /etc/apt/keyrings
 if curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o "$keyring"; then

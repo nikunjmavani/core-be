@@ -21,7 +21,9 @@
       "Bash(git diff*)",
       "Bash(git log*)",
       "Bash(git branch*)",
-      "Bash(gh pr*)"
+      "Bash(gh pr*)",
+      "mcp__codegraph__codegraph_explore",
+      "mcp__codegraph__codegraph_files"
     ]
   },
   "hooks": {
