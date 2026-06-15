@@ -118,6 +118,16 @@ pnpm db:seed         # or pnpm db:seed:full
 
 ---
 
+### One-command bring-up + verify
+
+To run the whole in-session flow at once — tool installs (gh, Docker mirror, CodeGraph), `compose:up`, `db:migrate`, `db:seed`, then an app healthcheck — use the orchestrator, which logs a ✓/✗ status after each step:
+
+```bash
+bash tooling/setup/agent/bootstrap.sh        # KEEP_APP=1 to leave `pnpm dev` running afterwards
+```
+
+It leaves Postgres + Redis up and starts the app only transiently for the check. To verify health on its own (after the app is up), run [`healthcheck.sh`](../../tooling/setup/agent/healthcheck.sh): it polls `GET /livez` then `GET /readyz` and exits non-zero unless Postgres + Redis + BullMQ are all reachable. Neither belongs in the Setup-script *field* (that runs before any app is listening).
+
 ## Tiers — what to enable for which goal
 
 | Tier | Goal | Network | Services | Env vars |
