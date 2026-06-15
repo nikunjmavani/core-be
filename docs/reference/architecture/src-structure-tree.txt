@@ -1613,6 +1613,7 @@ src/
     │   │       ├── 20250101000001_first.sql
     │   │       └── 20250102000001_second.sql
     ├── global/
+    │   ├── authz-model-coverage.global.test.ts
     │   ├── domain-consistency.global.test.ts
     │   ├── external-sdk-coverage.global.test.ts
     │   ├── import-paths.global.test.ts
@@ -1640,6 +1641,7 @@ src/
     │   ├── object-storage-mock.helper.ts
     │   ├── registered-route.util.ts
     │   ├── rls-matrix.helper.ts
+    │   ├── route-authorization-model.ts
     │   ├── route-catalog-auth.ts
     │   ├── route-catalog-registry.ts
     │   ├── route-http-coverage.helper.ts
