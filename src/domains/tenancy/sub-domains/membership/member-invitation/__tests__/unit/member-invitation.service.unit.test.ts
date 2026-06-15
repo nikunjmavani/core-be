@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('@/infrastructure/database/contexts/organization-database.context.js', () => ({
   withOrganizationDatabaseContext: vi.fn(
@@ -135,6 +135,11 @@ describe('MemberInvitationService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Pin the clock to `now` so the fixed `expires_at` fixture (futureDate) never lapses
+    // against the real wall clock — accept/resend compare expiry to `new Date()`. Fake only
+    // Date (not setTimeout/etc.) to avoid altering the other tests' async behavior.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(now);
     vi.mocked(organizationRepository.findByPublicId).mockResolvedValue(organization as never);
     vi.mocked(membershipRepository.findByPublicId).mockResolvedValue(membership as never);
     vi.mocked(membershipRepository.findById).mockResolvedValue(membership as never);
@@ -184,6 +189,10 @@ describe('MemberInvitationService', () => {
       public_id: 'user_public_id',
       email: 'invitee@example.com',
     } as never);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('list', () => {
