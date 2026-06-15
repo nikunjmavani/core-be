@@ -35,7 +35,7 @@ Proxied defaults: Postgres `25432`, Redis `26379`, Toxiproxy admin `8474`.
 
 ## CI
 
-`reusable/chaos-toxiproxy.yml`: provision → migrate (proxied `DATABASE_URL`) → `pnpm test:chaos`.
+`reusable-chaos-toxiproxy.yml`: provision → migrate (proxied `DATABASE_URL`) → `pnpm test:chaos`.
 
 ## Checklist
 

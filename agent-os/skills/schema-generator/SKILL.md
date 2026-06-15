@@ -26,10 +26,10 @@ Generate co-located Drizzle schema files for new domains or sub-domains, followi
 2. **Create `<sub-domain>.schema.ts`** in the domain/sub-domain folder (e.g. `src/domains/tenancy/sub-domains/organization/organization.schema.ts`).
 3. **Follow column conventions**:
    - Use `snake_case` for all column property names
-   - Standard columns: `id` (bigserial PK), `public_id` (`text`, unique, not null, with `CHECK (char_length(public_id) = 21)` for nanoid), `created_at`, `updated_at` (timestamp with timezone, defaultNow)
+   - Standard columns: `id` (bigserial PK), `public_id` (`varchar(28)`, unique, not null — Paddle-style `<prefix>_<21>` id), `created_at`, `updated_at` (timestamp with timezone, defaultNow)
    - Soft-delete: `deleted_at` (nullable timestamp)
    - Audit: `created_by_user_id`, `updated_by_user_id` (bigint, nullable)
-   - **Strings**: use `text` everywhere — never `varchar(n)`. Enforce real length/format limits with `CHECK` constraints. See `sql-design-guard` section C.
+   - **Strings**: use `varchar(n)` with a sensible max for bounded values (the codebase convention — e.g. `public_id` is `varchar(28)`); reserve `text` for unbounded/free-form content. Add `CHECK` constraints for *format* invariants (ISO codes, regex). See `sql-design-guard` section C.
    - **Case-insensitive lookups**: default to `text` + a unique/regular index on `lower(column)`. Only use `citext` when `lower()` indexes don't fit (case-insensitive `LIKE` / joins) and document why.
    - **Encoding**: rely on the default UTF-8 database encoding — do not set per-column collation unless documented.
 4. **Run sql-design-guard** on the new/changed schema (indexes, constraints, naming).
@@ -53,8 +53,8 @@ export const <table_name> = <domain>Schema.table(
   '<table_name>',
   {
     id: bigserial('id', { mode: 'number' }).primaryKey(),
-    public_id: varchar('public_id', { length: 21 }).notNull().unique(),
-    // ... domain-specific columns (use `text`, not varchar) ...
+    public_id: varchar('public_id', { length: 28 }).notNull().unique(),
+    // ... domain-specific columns (varchar(n) for bounded, text for free-form) ...
     deleted_at: timestamp('deleted_at', { withTimezone: true }),
     created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
