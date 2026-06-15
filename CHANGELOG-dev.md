@@ -6,6 +6,27 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.6.9-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.8-dev.0...v4.6.9-dev.0) (2026-06-15)
+
+
+### Documentation
+
+* **agent-os:** correct stale workflow, seed, and provider paths in skills ([#641](https://github.com/nikunjmavani/core-be/issues/641)) ([5550f4c](https://github.com/nikunjmavani/core-be/commit/5550f4c274b58403008bb98dd4982642565ed110))
+
+## [4.6.8-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.7-dev.0...v4.6.8-dev.0) (2026-06-15)
+
+
+### Documentation
+
+* **agent-os:** align schema skills to varchar(n) codebase convention ([#638](https://github.com/nikunjmavani/core-be/issues/638)) ([e575074](https://github.com/nikunjmavani/core-be/commit/e5750743e7a8af7a59eebd06d552ca8223a598d1))
+
+## [4.6.7-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.6-dev.0...v4.6.7-dev.0) (2026-06-15)
+
+
+### Documentation
+
+* **integrations:** expand Stripe webhook runbook + Turnstile TODO ([#635](https://github.com/nikunjmavani/core-be/issues/635)) ([be08946](https://github.com/nikunjmavani/core-be/commit/be08946a84175689883f858e61e96b928e8c222d))
+
 ## [4.6.6-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.5-dev.0...v4.6.6-dev.0) (2026-06-15)
 
 

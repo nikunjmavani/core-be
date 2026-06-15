@@ -29,7 +29,7 @@ Run this skill **every time** you:
 
 1. **snake_case** — every column name must be lowercase with underscores, matching the actual Postgres column name exactly
 2. **Primary key**: `id` (bigserial, mode: 'number')
-3. **Public identifier**: `public_id` (`text`, unique, not null, with `CHECK (char_length(public_id) = 21)` for nanoid)
+3. **Public identifier**: `public_id` (`varchar(28)`, unique, not null) — Paddle-style `<prefix>_<21-char nanoid>` external id; 28 chars fits the longest prefix
 4. **Foreign keys**: `<referenced_table_singular>_id` — e.g. `organization_id`, `subscription_id`, `user_id`
 5. **Booleans**: always prefix with `is_` or `has_` — e.g. `is_active`, `has_paid`, `is_verified`
 6. **Timestamps** (required on every table):
@@ -45,32 +45,30 @@ Run this skill **every time** you:
 | Concept                  | Correct type                                             | Avoid                                                |
 | ------------------------ | -------------------------------------------------------- | ---------------------------------------------------- |
 | Internal IDs             | `bigserial` / `bigint`                                   | `integer`, `uuid` (unless externally required)       |
-| Public IDs               | `text` + `CHECK (char_length(public_id) = 21)` (nanoid)  | `uuid` as the primary external identifier            |
+| Public IDs               | `varchar(28)` (Paddle-style `<prefix>_<21>` id)  | `uuid` as the primary external identifier            |
 | Money / amounts          | `decimal(10, 2)` or `decimal(12, 2)`                     | `float`, `real`, `double precision`                  |
 | Timestamps               | `timestamp with time zone` (always `withTimezone: true`) | `timestamp` without timezone                         |
-| Short strings            | `text` (optionally + `CHECK (char_length(col) <= N)`)    | `varchar(n)` — no perf gain, painful to grow         |
-| Long text                | `text`                                                   | `varchar` (any form)                                 |
+| Short strings            | `varchar(n)` with a sensible max (codebase convention)   | over-tight limits you'll grow into often             |
+| Long / free-form text    | `text`                                                   | `varchar(n)` for genuinely unbounded text            |
 | Case-insensitive lookups | `text` + `lower()` expression index                      | `citext` (use only when lowercase index doesn't fit) |
 | Flexible / evolving data | `jsonb`                                                  | `json` (not indexable)                               |
 | Booleans                 | `boolean` with explicit default                          | nullable booleans (ambiguous three-state)            |
 | Controlled values        | `text` + CHECK constraint                                | `CREATE TYPE ... AS ENUM` (locks tables on ALTER)    |
 
-**No `varchar(n)`**: in PostgreSQL `text` and `varchar` are stored identically (TOAST-aware varlena) and perform the same; `varchar(n)` only adds a length check that becomes a migration headache when limits grow. Use `text` everywhere and enforce real limits with a `CHECK` constraint when there is a true business invariant (e.g. exact nanoid width, ISO codes).
+**Bounded `varchar(n)` is the convention here**: in PostgreSQL `text` and `varchar` store identically (TOAST-aware varlena) and perform the same, so `varchar(n)` is purely a built-in length guard — not a performance choice. This codebase uses `varchar(n)` for bounded columns (ids, codes, names — e.g. `public_id` is `varchar(28)`) and reserves `text` for genuinely unbounded / free-form content. Pick a generous max so you rarely need to grow it; widening one later is a quick `ALTER TABLE ... ALTER COLUMN ... TYPE varchar(n)`. Use a `CHECK` only for *format* invariants (regex, ISO codes), not for length already enforced by `varchar(n)`.
 
 ```sql
-public_id  TEXT NOT NULL,
-slug       TEXT NOT NULL,
-currency   TEXT NOT NULL,
-CONSTRAINT chk_organizations_public_id_length CHECK (char_length(public_id) = 21),
-CONSTRAINT chk_organizations_slug_length       CHECK (char_length(slug) BETWEEN 1 AND 100),
-CONSTRAINT chk_billing_plans_currency_iso      CHECK (currency ~ '^[A-Z]{3}$')
+public_id  VARCHAR(28) NOT NULL,
+slug       VARCHAR(100) NOT NULL,
+currency   VARCHAR(3)  NOT NULL,
+CONSTRAINT chk_billing_plans_currency_iso CHECK (currency ~ '^[A-Z]{3}$')
 ```
 
-In Drizzle, prefer `text(...)` over `varchar(...)`:
+In Drizzle, use `varchar(name, { length: n })` for bounded columns:
 
 ```typescript
-public_id: text('public_id').notNull(),
-slug: text('slug').notNull(),
+public_id: varchar('public_id', { length: 28 }).notNull(),
+slug: varchar('slug', { length: 100 }).notNull(),
 ```
 
 **No ENUMs**: never use `CREATE TYPE ... AS ENUM`. Instead:
@@ -125,8 +123,8 @@ CREATE EXTENSION IF NOT EXISTS citext;
 
 1. **UTF-8 by default** — all databases are created with `ENCODING 'UTF8'`. Postgres 17 (`postgres:17-alpine` in `docker-compose.yml` and managed providers) defaults to UTF8, so no extra DDL is required. Do **not** create databases or schemas with non-UTF8 encodings.
 2. **Do not override `LC_COLLATE` / `LC_CTYPE` per column** unless you have a documented sort/comparison requirement; rely on the database default (`en_US.UTF-8` or `C.UTF-8`).
-3. **No `varchar(n)` migrations** to "save bytes" — `text` and `varchar(n)` use the same storage; the only thing the length adds is a runtime check.
-4. **Existing tables** already on `varchar(n)` are not auto-migrated: do not propose a churn-only migration. Only convert to `text` when the table is otherwise being modified (new column, new constraint, retype required to grow the limit).
+3. **Don't churn column types for storage** — `text` and `varchar(n)` use the same storage, so never migrate one to the other just to "save bytes"; choose the right type up front (`varchar(n)` for bounded values, `text` for free-form).
+4. **Existing columns keep their type** — do not propose churn-only migrations that flip `varchar(n)` ↔ `text`. Only retype when the table is otherwise being modified and the current type is genuinely wrong (e.g. growing a `varchar` limit via `ALTER COLUMN ... TYPE varchar(n)`).
 
 ### D. Auto-index suggestions
 
@@ -362,7 +360,7 @@ Example:
 ```sql
 CREATE TABLE billing.subscriptions (
   id BIGSERIAL PRIMARY KEY,
-  public_id TEXT NOT NULL,
+  public_id VARCHAR(28) NOT NULL,
   organization_id BIGINT NOT NULL,
   plan_id BIGINT NOT NULL,
   status TEXT NOT NULL DEFAULT 'INCOMPLETE',
@@ -373,7 +371,6 @@ CREATE TABLE billing.subscriptions (
   CONSTRAINT idx_subscriptions_public_id UNIQUE (public_id),
   CONSTRAINT fk_subscriptions_organization_id FOREIGN KEY (organization_id) REFERENCES tenancy.organizations(id) ON DELETE RESTRICT,
   CONSTRAINT fk_subscriptions_plan_id FOREIGN KEY (plan_id) REFERENCES billing.plans(id) ON DELETE RESTRICT,
-  CONSTRAINT chk_subscriptions_public_id_length CHECK (char_length(public_id) = 21),
   CONSTRAINT chk_subscriptions_status CHECK (status IN ('ACTIVE', 'PAST_DUE', 'CANCELED', 'INCOMPLETE', 'TRIALING'))
 );
 
