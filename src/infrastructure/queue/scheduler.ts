@@ -308,6 +308,38 @@ export type RegisterScheduledJobsOptions = {
 };
 
 /**
+ * Removes orphan job schedulers from Redis — any scheduler whose id is not in the canonical set
+ * for its queue is a rename or removal residue that BullMQ would otherwise keep firing forever.
+ * Each queue is opened and closed in its own `try/finally`. Extracted from
+ * {@link registerScheduledJobs} to keep that function's cognitive complexity within budget.
+ */
+async function reconcileOrphanSchedulers(options: {
+  connection: ReturnType<typeof getBullMQConnectionOptions>;
+  canonicalSchedulerIdsByQueueName: ReadonlyMap<string, Set<string>>;
+}): Promise<void> {
+  const { connection, canonicalSchedulerIdsByQueueName } = options;
+  for (const [queueName, canonicalIds] of canonicalSchedulerIdsByQueueName) {
+    const queueForReconcile = new Queue(queueName, {
+      connection,
+      defaultJobOptions: SCHEDULED_QUEUE_DEFAULT_JOB_OPTIONS,
+    });
+    try {
+      // getJobSchedulers takes pagination args; first 1000 schedulers per queue is
+      // far above any realistic count for this app.
+      const existingSchedulers = await queueForReconcile.getJobSchedulers(0, 1000);
+      for (const existing of existingSchedulers) {
+        if (!canonicalIds.has(existing.key)) {
+          await queueForReconcile.removeJobScheduler(existing.key);
+          logger.warn({ queueName, schedulerId: existing.key }, 'scheduler.orphan.removed');
+        }
+      }
+    } finally {
+      await queueForReconcile.close();
+    }
+  }
+}
+
+/**
  * Registers repeatable jobs with BullMQ. No-op when SCHEDULER_ENABLED is false.
  */
 export async function registerScheduledJobs(
@@ -375,26 +407,8 @@ export async function registerScheduledJobs(
     // Drop orphan schedulers — any Redis scheduler whose id is not in the canonical set
     // for its queue is a rename or removal residue, and BullMQ will otherwise keep firing
     // it forever (doubling cron rate after rename, firing into a worker-less queue after
-    // removal). We close+reopen per queue rather than holding all queues open at once.
-    for (const [queueName, canonicalIds] of canonicalSchedulerIdsByQueueName) {
-      const queueForReconcile = new Queue(queueName, {
-        connection,
-        defaultJobOptions: SCHEDULED_QUEUE_DEFAULT_JOB_OPTIONS,
-      });
-      try {
-        // getJobSchedulers takes pagination args; first 1000 schedulers per queue is
-        // far above any realistic count for this app.
-        const existingSchedulers = await queueForReconcile.getJobSchedulers(0, 1000);
-        for (const existing of existingSchedulers) {
-          if (!canonicalIds.has(existing.key)) {
-            await queueForReconcile.removeJobScheduler(existing.key);
-            logger.warn({ queueName, schedulerId: existing.key }, 'scheduler.orphan.removed');
-          }
-        }
-      } finally {
-        await queueForReconcile.close();
-      }
-    }
+    // removal). Inside the try so a failure still closes the registration queues below.
+    await reconcileOrphanSchedulers({ connection, canonicalSchedulerIdsByQueueName });
   } catch (error) {
     await Promise.allSettled(queues.map((queue) => queue.close()));
     throw error;

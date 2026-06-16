@@ -146,7 +146,7 @@ async function processMailOutboxJobInner(
   // sec-new-Q3: parse the JSONB column instead of blindly casting so a
   // corrupt or mis-shaped row throws early (and retries) rather than
   // reaching sendEmail() with a non-array / non-string value.
-  const toAddresses = z.array(z.string().email()).parse(outboxRow.to_addresses);
+  const toAddresses = z.array(z.email()).parse(outboxRow.to_addresses);
   logger.info(
     {
       jobId: options.jobId,
