@@ -1670,7 +1670,6 @@ src/
     │   │   ├── migration-rollback.integration.test.ts
     │   │   ├── migrations-backward.integration.test.ts
     │   │   ├── migrations-forward.integration.test.ts
-    │   │   ├── testcontainers-postgres.integration.test.ts
     │   │   └── transaction-rollback.integration.test.ts
     │   ├── observability/
     │   │   ├── db-pool-metrics.integration.test.ts
