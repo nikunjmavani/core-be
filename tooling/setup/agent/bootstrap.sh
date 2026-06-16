@@ -2,7 +2,7 @@
 # One-shot cloud-session bring-up for core-be on Claude Code on the web.
 #
 # Runs every agent setup helper in order — Node, gh, Docker images (registry
-# mirror), CodeGraph — scaffolds a self-contained `.env.local` (`pnpm setup:local
+# mirror), CodeGraph, Headroom — scaffolds a self-contained `.env.local` (`pnpm setup:local
 # --only-env`), then brings up the local Docker stack (Postgres + Redis), migrates,
 # seeds, and verifies the app is healthy (/livez + /readyz). A single command to
 # make a cloud session "same as local", with a progress log after each step so
@@ -19,7 +19,7 @@ set -uo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.." || exit 1
 readonly AGENT_DIR="tooling/setup/agent"
-readonly TOTAL=9
+readonly TOTAL=10
 start_ts=$(date +%s)
 
 step() { echo ""; echo "▶ $*"; }
@@ -98,33 +98,38 @@ step "[4/${TOTAL}] CodeGraph CLI + index"
 bash "${AGENT_DIR}/install-codegraph.sh" || true
 if command -v codegraph >/dev/null 2>&1; then ok "[4/${TOTAL}] codegraph $(codegraph --version 2>/dev/null)"; else skip "[4/${TOTAL}] codegraph unavailable (non-fatal)"; fi
 
-# 5) Environment files (.env.local) -----------------------------------------
-step "[5/${TOTAL}] Environment (.env.local)"
-pnpm setup:local --only-env >&2 || die "env scaffold failed (pnpm setup:local --only-env)"
-ok "[5/${TOTAL}] .env.local ready"
+# 5) Headroom CLI + MCP register (context compression) ----------------------
+step "[5/${TOTAL}] Headroom CLI (context compression)"
+bash "${AGENT_DIR}/install-headroom.sh" || true
+if command -v headroom >/dev/null 2>&1; then ok "[5/${TOTAL}] headroom $(headroom --version 2>/dev/null)"; else skip "[5/${TOTAL}] headroom unavailable (non-fatal)"; fi
 
-# 6) Postgres + Redis (docker compose) --------------------------------------
-step "[6/${TOTAL}] Postgres + Redis (docker compose)"
+# 6) Environment files (.env.local) -----------------------------------------
+step "[6/${TOTAL}] Environment (.env.local)"
+pnpm setup:local --only-env >&2 || die "env scaffold failed (pnpm setup:local --only-env)"
+ok "[6/${TOTAL}] .env.local ready"
+
+# 7) Postgres + Redis (docker compose) --------------------------------------
+step "[7/${TOTAL}] Postgres + Redis (docker compose)"
 SONAR=0 pnpm compose:up >&2 || die "compose:up failed (is dockerd running? see step 3)"
 pnpm compose:wait >&2 || die "Postgres did not become ready"
-ok "[6/${TOTAL}] Postgres + Redis healthy"
+ok "[7/${TOTAL}] Postgres + Redis healthy"
 
-# 7) Migrations --------------------------------------------------------------
-step "[7/${TOTAL}] Database migrations"
+# 8) Migrations --------------------------------------------------------------
+step "[8/${TOTAL}] Database migrations"
 pnpm db:migrate >&2 || die "db:migrate failed"
-ok "[7/${TOTAL}] migrations applied"
+ok "[8/${TOTAL}] migrations applied"
 
-# 8) Seed --------------------------------------------------------------------
-step "[8/${TOTAL}] Seed (minimal reference data)"
+# 9) Seed --------------------------------------------------------------------
+step "[9/${TOTAL}] Seed (minimal reference data)"
 pnpm db:seed >&2 || die "db:seed failed"
-ok "[8/${TOTAL}] seed complete"
+ok "[9/${TOTAL}] seed complete"
 
-# 9) App health (/livez + /readyz) ------------------------------------------
-step "[9/${TOTAL}] App health (/livez + /readyz)"
+# 10) App health (/livez + /readyz) -----------------------------------------
+step "[10/${TOTAL}] App health (/livez + /readyz)"
 app_log="$(mktemp)"
 pnpm dev >"${app_log}" 2>&1 &
 if bash "${AGENT_DIR}/healthcheck.sh"; then
-  ok "[9/${TOTAL}] app live & ready"
+  ok "[10/${TOTAL}] app live & ready"
   app_ok=1
 else
   echo "---- pnpm dev log (tail) ----" >&2
