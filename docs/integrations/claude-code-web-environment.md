@@ -69,11 +69,14 @@ bash tooling/setup/agent/install-gh.sh              # optional: GitHub CLI (in-s
 bash tooling/setup/agent/install-docker-images.sh   # optional: Docker Hub mirror + pre-pull compose images
 bash tooling/setup/agent/install-codegraph.sh       # optional: CodeGraph CLI + semantic index (MCP)
 bash tooling/setup/agent/install-headroom.sh        # optional: Headroom CLI — context-compression MCP (headroom_compress)
+bash tooling/setup/agent/install-gitleaks.sh        # optional: gitleaks (pre-commit secret scan)
 ```
 
 On the first session the cached Node 24 is already on disk, [`session-start.sh`](../../agent-os/hooks/session-start.sh) switches `PATH` to `/opt/node24`, and runs `pnpm install`. Do **not** start Postgres / Redis here — setup-script processes do not persist; start them per session (below).
 
 **GitHub CLI (optional).** [`install-gh.sh`](../../tooling/setup/agent/install-gh.sh) adds `gh` as an in-session fallback for reading Actions logs, checking CI, and merging (the GitHub MCP tools already cover this). It belongs in the cached **setup script**, not `session-start.sh` — a per-session `apt install` would not cache and would slow every startup. Set `GH_TOKEN` in the environment's **Variables** (least-privilege: `contents` + `pull_requests` + `actions:read`; env vars are not a secrets store). The script first installs the **github.com release binary** (reachable on the default Trusted allowlist, so no extra allowlist entry is normally needed); its `cli.github.com` apt-repo path is only a last resort.
+
+**gitleaks (recommended if you commit).** The pre-commit guard's "Staged secrets scan" step shells out to `gitleaks protect --staged …` and hard-errors when the binary is missing, so a cloud session cannot commit until gitleaks is installed. The cloud image does not ship it. [`install-gitleaks.sh`](../../tooling/setup/agent/install-gitleaks.sh) installs the **github.com release binary** (reachable on the default Trusted allowlist), pinned to the same version as the CI `security-secrets` job. If that download fails it falls back to `go install` — which must use gitleaks's **legacy self-declared module path** `github.com/zricethezav/gitleaks/v8` (the current `github.com/gitleaks` repo path fails Go's module-path check).
 
 ---
 
@@ -121,7 +124,7 @@ pnpm db:seed         # or pnpm db:seed:full
 
 ### One-command bring-up + verify
 
-To run the whole in-session flow at once — tool installs (gh, Docker mirror, CodeGraph), `compose:up`, `db:migrate`, `db:seed`, then an app healthcheck — use the orchestrator, which logs a ✓/✗ status after each step:
+To run the whole in-session flow at once — tool installs (gh, Docker mirror, CodeGraph, Headroom, gitleaks), `compose:up`, `db:migrate`, `db:seed`, then an app healthcheck — use the orchestrator, which logs a ✓/✗ status after each step:
 
 ```bash
 bash tooling/setup/agent/bootstrap.sh        # KEEP_APP=1 to leave `pnpm dev` running afterwards
