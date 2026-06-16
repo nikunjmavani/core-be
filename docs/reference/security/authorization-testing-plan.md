@@ -269,31 +269,15 @@ Reuses existing helpers: `createTestUser`, `createTestOrganization`, `createMemb
 
 ---
 
-## 9. Residual risk and the optional external layer
+## 9. Residual risk
 
 ### 9.1 What in-process tests cannot prove
 
 | Residual | Why | Mitigation |
 | -------- | --- | ---------- |
-| Gateway / proxy / WAF authz | `fastify.inject` bypasses the deployed edge | optional black-box layer (§9.2) |
+| Gateway / proxy / WAF authz | `fastify.inject` bypasses the deployed edge | deferred: deployed-edge / DAST review (out of scope for this matrix) |
 | Env-specific JWT/CORS config | tests run with test config | staging smoke + `production-hardening` review |
-| Shadow / undocumented endpoints | matrix only tests catalog routes | `routes:catalog:check` + discovery scan (§9.2) |
-
-### 9.2 Optional external layer — Hadrian (defense-in-depth, post‑day‑0)
-
-[Hadrian](https://github.com/praetorian-inc/hadrian) (Praetorian, open source) does role-based authorization permutation against a **running** target from an OpenAPI spec — which you already generate (`pnpm docs:generate`), so input cost is near-zero. Run against **staging** for the *infrastructure* and *discovery* dimensions only.
-
-**Hadrian parity (why it is secondary, not primary):**
-
-| Capability | This baseline | Verdict |
-| ---------- | ------------- | ------- |
-| BOLA object-level | cross-user **and** cross-org, white-box state verify | **exceeds** (black-box can't read state) |
-| BFLA function-level | catalog-driven matrix | **already shipped** |
-| BOPLA property-level | mass-assignment + field-leakage | parity |
-| Domain invariants (tier / grant-grantability) | encoded as assertions | **only in-house can express these** |
-| Black-box deployed-stack / discovery | not possible in-process | **Hadrian-only** — the sole reason to add it |
-
-> Hadrian is **blind** to tier and grant-grantability rules (they are not expressible in a spec/roles file). For tenancy specifically it would add almost nothing. Its value is strictly the deployed-infra + discovery edge in §9.1. Its open-source REST templates can also be mined for attack ideas without running it.
+| Shadow / undocumented endpoints | matrix only tests catalog routes | `routes:catalog:check` + periodic discovery scan (deferred) |
 
 ---
 
@@ -306,9 +290,8 @@ Reuses existing helpers: `createTestUser`, `createTestOrganization`, `createMemb
 | **2 — Class A (BOLA)** | `object-ownership.security.test.ts` + matrix cases | all 12 user-owned routes assert cross-user + cross-org |
 | **3 — Class B (tier/grant)** | `tier-and-grant.security.test.ts` e2e | owner-tier + grant-grantability asserted end-to-end |
 | **4 — Enforcement** | coverage ratchet budget + `findByPublicId` static gate | uncovered budget = 0; static gate green |
-| **5 — (optional) external** | Hadrian against staging in a scheduled (not PR) job | findings triaged; SARIF archived |
 
-Phases 0–4 are the **day‑0 enterprise baseline**. Phase 5 is post-launch defense-in-depth.
+Phases 0–4 are the **day‑0 enterprise baseline**.
 
 ---
 
@@ -331,4 +314,3 @@ Phases 0–4 are the **day‑0 enterprise baseline**. Phase 5 is post-launch def
 - `docs/routes.txt` — canonical route catalog (access-control annotated).
 - `tooling/openapi/route-catalog/route-success-statuses.json` — pattern this plan mirrors.
 - OWASP API Security Top 10 (2023): `API1` BOLA, `API2` Broken Auth, `API3` BOPLA, `API5` BFLA.
-- [Praetorian — Meet Hadrian](https://www.praetorian.com/blog/hadrian-api-authorization-testing/) · [github.com/praetorian-inc/hadrian](https://github.com/praetorian-inc/hadrian)
