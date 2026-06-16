@@ -1,5 +1,4 @@
-import { z } from 'zod';
-import { ValidationError } from '@/shared/errors/index.js';
+import { parseWithSchema } from '@/shared/utils/validation/parse-with-schema.util.js';
 import {
   putMemberRolePermissionsDto,
   type PutMemberRolePermissionsInput,
@@ -11,13 +10,5 @@ import {
  * `errors:invalidInput`) with per-field details on failure.
  */
 export function validatePutMemberRolePermissions(data: unknown): PutMemberRolePermissionsInput {
-  const result = putMemberRolePermissionsDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(putMemberRolePermissionsDto, data);
 }

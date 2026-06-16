@@ -68,6 +68,7 @@ bash tooling/setup/agent/install-node.sh
 bash tooling/setup/agent/install-gh.sh              # optional: GitHub CLI (in-session GitHub fallback)
 bash tooling/setup/agent/install-docker-images.sh   # optional: Docker Hub mirror + pre-pull compose images
 bash tooling/setup/agent/install-codegraph.sh       # optional: CodeGraph CLI + semantic index (MCP)
+bash tooling/setup/agent/install-headroom.sh        # optional: Headroom CLI — context-compression MCP (headroom_compress)
 bash tooling/setup/agent/install-gitleaks.sh        # optional: gitleaks (pre-commit secret scan)
 ```
 
@@ -123,7 +124,7 @@ pnpm db:seed         # or pnpm db:seed:full
 
 ### One-command bring-up + verify
 
-To run the whole in-session flow at once — tool installs (gh, Docker mirror, CodeGraph, gitleaks), `compose:up`, `db:migrate`, `db:seed`, then an app healthcheck — use the orchestrator, which logs a ✓/✗ status after each step:
+To run the whole in-session flow at once — tool installs (gh, Docker mirror, CodeGraph, Headroom, gitleaks), `compose:up`, `db:migrate`, `db:seed`, then an app healthcheck — use the orchestrator, which logs a ✓/✗ status after each step:
 
 ```bash
 bash tooling/setup/agent/bootstrap.sh        # KEEP_APP=1 to leave `pnpm dev` running afterwards
@@ -180,13 +181,24 @@ flowchart TD
 
 ---
 
+## GitHub prerequisites (and why creating a PR prompts)
+
+A cloud session can touch GitHub only after the platform is **authorized** on this repo, and opening a PR is a deliberate, gated step — not something the agent does unprompted.
+
+- **One-time authorization (the connect-GitHub prompt).** Install / authorize the platform's GitHub App or connector on `nikunjmavani/core-be` with **least-privilege** scopes — `contents` (read/write the working branch), `pull_requests` (open/update PRs), and `actions: read` (CI status / logs). Without it the session cannot fetch, push, or open a PR.
+- **Pushes are pinned to the session branch.** The cloud git proxy restricts a web session to pushing only its assigned working branch (`claude/<slug>` on Claude Code web; the platform's task branch on Cursor / Codex). Repo hooks run *inside* the session and cannot rename it — `claude/*` is allowlisted by [git-branch-naming.mdc](../../agent-os/rules/git-branch-naming.mdc) by design. To land work under a `feature/` / `fix/` name, rename at the PR / merge layer.
+- **"Create PR" asks first — by design.** Opening a pull request is an outward-facing action, so the agent won't do it unsolicited; it confirms first (Claude Code web uses the scoped **GitHub MCP** tools rather than `gh`). Ask explicitly when you want the PR opened, then drive CI to green per [git-workflow.md](../process/git-workflow.md).
+
+---
+
 ## MCP servers
 
-In Claude Code on the web the live MCP server set is loaded by the **platform at session start** from your account / environment MCP settings — **not** the repo's [`.mcp.json`](../../.mcp.example.json). Installing a server's CLI in-session (e.g. CodeGraph) does not make its tools appear until a fresh session starts with that server configured. [`.mcp.example.json`](../../.mcp.example.json) lists the full local set (`context7`, `neon`, `sentry`, `github`, `slack`, `railway`, `aws`, `stripe`, `semgrep`, `sonarqube`, `redis`, `postman`, `resend`, `codegraph`, `core-be:api`); most need provider tokens (put them in the environment **Variables**) and several need `uvx` / `docker`, so connect only the subset a task needs.
+In Claude Code on the web the live MCP server set is loaded by the **platform at session start** from your account / environment MCP settings — **not** the repo's [`.mcp.json`](../../.mcp.example.json). Installing a server's CLI in-session (e.g. CodeGraph) does not make its tools appear until a fresh session starts with that server configured. [`.mcp.example.json`](../../.mcp.example.json) lists the full local set (`context7`, `neon`, `sentry`, `github`, `slack`, `railway`, `aws`, `stripe`, `semgrep`, `sonarqube`, `redis`, `postman`, `resend`, `codegraph`, `headroom`, `core-be:api`); most need provider tokens (put them in the environment **Variables**) and several need `uvx` / `docker`, so connect only the subset a task needs.
 
 ## Related documentation
 
 - [cursor-cloud-agent-environment.md](cursor-cloud-agent-environment.md) — the Cursor cloud-agent equivalent (`Dockerfile.agent`).
+- [codex-cloud-agent-environment.md](codex-cloud-agent-environment.md) — the OpenAI Codex Cloud equivalent (setup-phase installs, offline agent phase).
 - [SETUP.md](../../SETUP.md) — local human setup, env vars, testing, CI/CD.
 - [agent-os/hooks/README.md](../../agent-os/hooks/README.md) — the SessionStart hook and the other Claude Code hooks in this repo.
 - [Claude Code on the web docs](https://code.claude.com/docs/en/claude-code-on-the-web) — setup scripts, network policies, environment caching.

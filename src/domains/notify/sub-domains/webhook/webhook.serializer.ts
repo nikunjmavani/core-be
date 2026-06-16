@@ -4,17 +4,22 @@
  * #17 (bigserial leakage) and the existing sec-N hardening (`encrypted_secret`,
  * `encrypted_secret_previous` are signing material and must never appear).
  */
+/** Timestamp column as it arrives from Drizzle (`Date`) or after a JSON round-trip (`string`). */
+type SerializableTimestamp = Date | string;
+/** Nullable {@link SerializableTimestamp} for optional / not-yet-set timestamp columns. */
+type NullableSerializableTimestamp = SerializableTimestamp | null;
+
 interface WebhookRow {
   public_id: string;
   url: string;
   events: unknown;
   is_enabled: boolean;
-  secret_rotated_at: Date | string | null;
-  created_at: Date | string;
-  updated_at: Date | string;
+  secret_rotated_at: NullableSerializableTimestamp;
+  created_at: SerializableTimestamp;
+  updated_at: SerializableTimestamp;
 }
 
-function toIsoString(value: Date | string | null | undefined): string | null {
+function toIsoString(value: NullableSerializableTimestamp | undefined): string | null {
   if (value === null || value === undefined) return null;
   if (value instanceof Date) return value.toISOString();
   return value;
@@ -67,10 +72,10 @@ interface WebhookDeliveryAttemptRow {
   status: string;
   http_status_code: number | null;
   response_body: string | null;
-  sent_at: Date | string | null;
+  sent_at: NullableSerializableTimestamp;
   attempt_count: number;
-  next_retry_at: Date | string | null;
-  created_at: Date | string;
+  next_retry_at: NullableSerializableTimestamp;
+  created_at: SerializableTimestamp;
 }
 
 function serializeDeliveryAttempt<T extends WebhookDeliveryAttemptRow>(row: T) {
@@ -99,10 +104,10 @@ interface WebhookDeliveryAttemptListRow {
   event_key: string | null;
   status: string;
   http_status_code: number | null;
-  sent_at: Date | string | null;
+  sent_at: NullableSerializableTimestamp;
   attempt_count: number;
-  next_retry_at: Date | string | null;
-  created_at: Date | string;
+  next_retry_at: NullableSerializableTimestamp;
+  created_at: SerializableTimestamp;
 }
 
 function serializeDeliveryAttemptListItem<T extends WebhookDeliveryAttemptListRow>(row: T) {

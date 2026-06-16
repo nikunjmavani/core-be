@@ -58,6 +58,13 @@ export function normalizeIdempotencyRoutePath(routePath: string): string {
   return withoutQuery.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
 }
 
+/** Lexicographic (code-point) key comparator for the canonical-serialize sort. */
+function compareFingerprintKeys(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
 /**
  * sec-M6: canonicalizing JSON serializer for the fingerprint body segment.
  *
@@ -85,7 +92,7 @@ function canonicalSerializeForFingerprint(value: unknown): string {
     return `[${value.map((entry) => canonicalSerializeForFingerprint(entry)).join(',')}]`;
   }
   const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
-    a < b ? -1 : a > b ? 1 : 0,
+    compareFingerprintKeys(a, b),
   );
   const segments = entries.map(
     ([key, nested]) => `${JSON.stringify(key)}:${canonicalSerializeForFingerprint(nested)}`,

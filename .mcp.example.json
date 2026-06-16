@@ -101,6 +101,14 @@
         "serve",
         "--mcp"
       ]
+    },
+    "headroom": {
+      "type": "stdio",
+      "command": "headroom",
+      "args": [
+        "mcp",
+        "serve"
+      ]
     }
   }
 }

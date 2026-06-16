@@ -2,7 +2,7 @@
 # One-shot cloud-session bring-up for core-be on Claude Code on the web.
 #
 # Runs every agent setup helper in order — Node, gh, Docker images (registry
-# mirror), CodeGraph, gitleaks — scaffolds a self-contained `.env.local` (`pnpm setup:local
+# mirror), CodeGraph, Headroom, gitleaks — scaffolds a self-contained `.env.local` (`pnpm setup:local
 # --only-env`), then brings up the local Docker stack (Postgres + Redis), migrates,
 # seeds, and verifies the app is healthy (/livez + /readyz). A single command to
 # make a cloud session "same as local", with a progress log after each step so
@@ -10,7 +10,7 @@
 #
 #   bash tooling/setup/agent/bootstrap.sh
 #
-# Steps 1-4 (tool installs) are best-effort and log ✓/skip without aborting; the
+# Steps 1-6 (tool installs) are best-effort and log ✓/skip without aborting; the
 # env scaffold, DB bring-up, migrate, seed, and healthcheck are HARD gates
 # (non-zero exit on failure). Leaves Postgres + Redis running. The app is started
 # only transiently for the healthcheck and then stopped — set KEEP_APP=1 to leave
@@ -19,7 +19,7 @@ set -uo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.." || exit 1
 readonly AGENT_DIR="tooling/setup/agent"
-readonly TOTAL=10
+readonly TOTAL=11
 start_ts=$(date +%s)
 
 step() { echo ""; echo "▶ $*"; }
@@ -50,7 +50,7 @@ bash "${AGENT_DIR}/install-node.sh" >&2 || skip "install-node best-effort (using
 # install-node.sh drops the pinned Node into <prefix>/node<major>, but it runs
 # in a child process and so cannot change THIS shell's PATH. Activate it here so
 # every pnpm step below runs on the pinned Node; otherwise the image default
-# (e.g. Node 22) trips pnpm's engineStrict gate at step 5 (compose:up). The
+# (e.g. Node 22) trips pnpm's engineStrict gate at the compose:up step. The
 # SessionStart hook (agent-os/hooks/session-start.sh) does the same switch for
 # interactive sessions, but does not run when bootstrap.sh is the Setup script.
 required_major="24"
@@ -98,38 +98,43 @@ step "[4/${TOTAL}] CodeGraph CLI + index"
 bash "${AGENT_DIR}/install-codegraph.sh" || true
 if command -v codegraph >/dev/null 2>&1; then ok "[4/${TOTAL}] codegraph $(codegraph --version 2>/dev/null)"; else skip "[4/${TOTAL}] codegraph unavailable (non-fatal)"; fi
 
-# 5) gitleaks (pre-commit secret scan) --------------------------------------
-step "[5/${TOTAL}] gitleaks (secret scan)"
+# 5) Headroom CLI + MCP register (context compression) ----------------------
+step "[5/${TOTAL}] Headroom CLI (context compression)"
+bash "${AGENT_DIR}/install-headroom.sh" || true
+if command -v headroom >/dev/null 2>&1; then ok "[5/${TOTAL}] headroom $(headroom --version 2>/dev/null)"; else skip "[5/${TOTAL}] headroom unavailable (non-fatal)"; fi
+
+# 6) gitleaks (pre-commit secret scan) --------------------------------------
+step "[6/${TOTAL}] gitleaks (secret scan)"
 bash "${AGENT_DIR}/install-gitleaks.sh" || true
-if command -v gitleaks >/dev/null 2>&1; then ok "[5/${TOTAL}] gitleaks $(gitleaks version 2>/dev/null)"; else skip "[5/${TOTAL}] gitleaks unavailable — pre-commit secret scan will fail (non-fatal)"; fi
+if command -v gitleaks >/dev/null 2>&1; then ok "[6/${TOTAL}] gitleaks $(gitleaks version 2>/dev/null)"; else skip "[6/${TOTAL}] gitleaks unavailable — pre-commit secret scan will fail (non-fatal)"; fi
 
-# 6) Environment files (.env.local) -----------------------------------------
-step "[6/${TOTAL}] Environment (.env.local)"
+# 7) Environment files (.env.local) -----------------------------------------
+step "[7/${TOTAL}] Environment (.env.local)"
 pnpm setup:local --only-env >&2 || die "env scaffold failed (pnpm setup:local --only-env)"
-ok "[6/${TOTAL}] .env.local ready"
+ok "[7/${TOTAL}] .env.local ready"
 
-# 7) Postgres + Redis (docker compose) --------------------------------------
-step "[7/${TOTAL}] Postgres + Redis (docker compose)"
+# 8) Postgres + Redis (docker compose) --------------------------------------
+step "[8/${TOTAL}] Postgres + Redis (docker compose)"
 SONAR=0 pnpm compose:up >&2 || die "compose:up failed (is dockerd running? see step 3)"
 pnpm compose:wait >&2 || die "Postgres did not become ready"
-ok "[7/${TOTAL}] Postgres + Redis healthy"
+ok "[8/${TOTAL}] Postgres + Redis healthy"
 
-# 8) Migrations --------------------------------------------------------------
-step "[8/${TOTAL}] Database migrations"
+# 9) Migrations --------------------------------------------------------------
+step "[9/${TOTAL}] Database migrations"
 pnpm db:migrate >&2 || die "db:migrate failed"
-ok "[8/${TOTAL}] migrations applied"
+ok "[9/${TOTAL}] migrations applied"
 
-# 9) Seed --------------------------------------------------------------------
-step "[9/${TOTAL}] Seed (minimal reference data)"
+# 10) Seed -------------------------------------------------------------------
+step "[10/${TOTAL}] Seed (minimal reference data)"
 pnpm db:seed >&2 || die "db:seed failed"
-ok "[9/${TOTAL}] seed complete"
+ok "[10/${TOTAL}] seed complete"
 
-# 10) App health (/livez + /readyz) -----------------------------------------
-step "[10/${TOTAL}] App health (/livez + /readyz)"
+# 11) App health (/livez + /readyz) -----------------------------------------
+step "[11/${TOTAL}] App health (/livez + /readyz)"
 app_log="$(mktemp)"
 pnpm dev >"${app_log}" 2>&1 &
 if bash "${AGENT_DIR}/healthcheck.sh"; then
-  ok "[10/${TOTAL}] app live & ready"
+  ok "[11/${TOTAL}] app live & ready"
   app_ok=1
 else
   echo "---- pnpm dev log (tail) ----" >&2

@@ -1,6 +1,5 @@
-import { z } from 'zod';
-import { ValidationError } from '@/shared/errors/index.js';
-import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
+import { parseWithSchema } from '@/shared/utils/validation/parse-with-schema.util.js';
+import { parseCursorPaginatedQuery } from '@/shared/utils/http/pagination.util.js';
 import {
   createOrganizationDto,
   updateOrganizationDto,
@@ -16,28 +15,12 @@ import type {
 
 /** Parses raw `POST /organizations` body via {@link createOrganizationDto}; throws `ValidationError('errors:invalidInput')` on failure. */
 export function validateCreateOrganization(data: unknown): CreateOrganizationInput {
-  const result = createOrganizationDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(createOrganizationDto, data);
 }
 
 /** Parses raw `PATCH /organization` body via {@link updateOrganizationDto}; throws `ValidationError('errors:invalidInput')` on failure. */
 export function validateUpdateOrganization(data: unknown): UpdateOrganizationInput {
-  const result = updateOrganizationDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(updateOrganizationDto, data);
 }
 
 /**
@@ -47,27 +30,14 @@ export function validateUpdateOrganization(data: unknown): UpdateOrganizationInp
  * `ValidationError('errors:validation.invalidPagination')` on failure.
  */
 export function validateListOrganizationsQuery(data: unknown): ListOrganizationsQueryInput {
-  ensureCursorOnlyPagination(data);
-  const result = listOrganizationsQueryDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:validation.invalidPagination',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseCursorPaginatedQuery(
+    listOrganizationsQueryDto,
+    data,
+    'errors:validation.invalidPagination',
+  );
 }
 
 /** Parses raw `PUT /organization/logo` body via {@link uploadLogoDto}; throws `ValidationError('errors:invalidInput')` on failure. */
 export function validateUploadLogo(data: unknown): UploadLogoInput {
-  const result = uploadLogoDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(uploadLogoDto, data);
 }
