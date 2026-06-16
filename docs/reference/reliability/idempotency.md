@@ -1,6 +1,6 @@
 # HTTP idempotency
 
-core-be deduplicates mutating HTTP requests when clients send an **`Idempotency-Key`** header.
+core-be deduplicates mutating HTTP requests when clients send an **`X-Idempotency-Key`** header.
 
 ---
 
@@ -9,7 +9,7 @@ core-be deduplicates mutating HTTP requests when clients send an **`Idempotency-
 | Aspect | Detail |
 | ------ | ------ |
 | **Methods** | `POST`, `PUT`, `PATCH`, `DELETE` |
-| **Header** | `Idempotency-Key` (validated format; see `parseIdempotencyKeyHeader`) |
+| **Header** | `X-Idempotency-Key` (validated format; see `parseIdempotencyKeyHeader`) |
 | **Scope** | Redis key includes organization and user when present: `idempotency:{org}:{user}:{key}` |
 | **TTL** | 24 hours for completed responses; 60s placeholder while in flight |
 | **Redis down** | **503** `service_unavailable` (fail closed) |

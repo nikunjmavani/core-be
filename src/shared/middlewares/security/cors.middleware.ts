@@ -20,7 +20,7 @@ const corsMiddleware: FastifyPluginAsync = async (app) => {
       'Authorization',
       'X-Organization-Id',
       'X-Captcha-Token',
-      'Idempotency-Key',
+      'X-Idempotency-Key',
       'X-Request-Id',
     ],
     // sec-re-17: sec-CM #27 added the server-minted `X-Client-Request-Id`

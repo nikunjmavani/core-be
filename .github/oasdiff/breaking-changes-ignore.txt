@@ -1496,3 +1496,21 @@ api post /api/v1/tenancy/organization/
 api put /api/v1/tenancy/organization/
 api patch /api/v1/tenancy/organization
 api delete /api/v1/tenancy/organization
+
+# 27. X-Idempotency-Key header rename (idempotency contract). The inbound request
+#     idempotency header was renamed from `Idempotency-Key` to the project's custom
+#     `X-Idempotency-Key` form (api-contract.mdc header matrix: project-custom headers
+#     carry the X- prefix; RFC 6648 keeps new headers un-prefixed only for true
+#     standards). The outbound header forwarded to Stripe/Resend is unchanged. oasdiff
+#     sees the rename as a new required `x-idempotency-key` header on the 8
+#     idempotencyRequired writes (the matching `idempotency-key` removals are warnings,
+#     not errors). Pinned by idempotency.security.test.ts +
+#     billing-subscription-mutations.integration.test.ts (X-Idempotency-Key -> 422 when missing).
+api post /api/v1/billing/subscriptions added the new required `header` request parameter `x-idempotency-key`
+api post /api/v1/billing/subscriptions/{subscription_id}/cancel added the new required `header` request parameter `x-idempotency-key`
+api post /api/v1/billing/subscriptions/{subscription_id}/change-plan added the new required `header` request parameter `x-idempotency-key`
+api post /api/v1/billing/subscriptions/{subscription_id}/resume added the new required `header` request parameter `x-idempotency-key`
+api post /api/v1/tenancy/organization/invitations added the new required `header` request parameter `x-idempotency-key`
+api post /api/v1/tenancy/organization/memberships added the new required `header` request parameter `x-idempotency-key`
+api post /api/v1/tenancy/organization/transfer-ownership added the new required `header` request parameter `x-idempotency-key`
+api post /api/v1/tenancy/organizations added the new required `header` request parameter `x-idempotency-key`

@@ -42,7 +42,7 @@ describe('Cross-domain e2e: tenancy + billing organization', () => {
       method: 'POST',
       url: testApiPath('/tenancy/organizations'),
       token,
-      headers: { 'idempotency-key': `idem-${randomUUID()}` },
+      headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
       payload: { name: 'Billing E2E Org', slug: `billing-e2e-${Date.now()}` },
     });
     expect(createResponse.statusCode).toBe(201);

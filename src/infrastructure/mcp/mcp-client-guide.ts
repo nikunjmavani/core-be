@@ -79,7 +79,7 @@ The active organization is implicit (from the token), so routes are flat:
 ## 5. Required headers
 
 - \`Authorization: Bearer <access_token>\` — all authenticated routes.
-- \`Idempotency-Key: <unique, min 16 chars>\` — REQUIRED on the idempotent writes
+- \`X-Idempotency-Key: <unique, min 16 chars>\` — REQUIRED on the idempotent writes
   (team-org create, membership create, transfer-ownership, invitation create,
   subscription create / change-plan / cancel / resume).
 - \`X-CSRF-Token\` — required on \`POST /api/v1/auth/refresh\`.

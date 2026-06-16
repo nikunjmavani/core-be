@@ -62,7 +62,7 @@ import { withOrganizationDatabaseContext } from '@/infrastructure/database/conte
  * - **Notes:** Stripe network calls MUST stay outside the database context to
  *   avoid blocking a Postgres connection on remote I/O. Idempotency for
  *   `create` is forwarded to Stripe via `idempotencyKey` (the
- *   `Idempotency-Key` HTTP header).
+ *   `X-Idempotency-Key` HTTP header).
  */
 export class SubscriptionService {
   constructor(

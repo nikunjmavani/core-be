@@ -74,7 +74,7 @@ Every security- or governance-relevant write produces a row in `audit_logs.audit
 
 ### Purpose
 
-Mutating endpoints (`POST` / `PUT` / `PATCH` / `DELETE`) accept an `Idempotency-Key` header so retries from network errors return the original response instead of executing the operation a second time. For routes marked `idempotencyRequired: true` in their `schema.config`, the header is mandatory.
+Mutating endpoints (`POST` / `PUT` / `PATCH` / `DELETE`) accept an `X-Idempotency-Key` header so retries from network errors return the original response instead of executing the operation a second time. For routes marked `idempotencyRequired: true` in their `schema.config`, the header is mandatory.
 
 ### Where it lives
 
@@ -86,7 +86,7 @@ Mutating endpoints (`POST` / `PUT` / `PATCH` / `DELETE`) accept an `Idempotency-
 
 ```mermaid
 flowchart TD
-    A[Mutating request] --> B{Idempotency-Key present?}
+    A[Mutating request] --> B{X-Idempotency-Key present?}
     B -- No, but required --> R[400 Validation error]
     B -- No, optional --> X[Pass through]
     B -- Yes --> C[GET idempotency:user:org:method:path:key]
@@ -99,7 +99,7 @@ flowchart TD
     F -- not claimed --> E
 ```
 
-Scope key includes `userId` / `organizationId` / `apiKeyPublicId` so two clients can use the same `Idempotency-Key` value without collision.
+Scope key includes `userId` / `organizationId` / `apiKeyPublicId` so two clients can use the same `X-Idempotency-Key` value without collision.
 
 ### How to apply
 

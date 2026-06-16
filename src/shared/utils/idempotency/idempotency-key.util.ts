@@ -29,7 +29,7 @@ export type ParsedIdempotencyKeyHeader =
   | { kind: 'valid'; value: string };
 
 /**
- * Parses and validates `Idempotency-Key` header value.
+ * Parses and validates `X-Idempotency-Key` header value.
  */
 export function parseIdempotencyKeyHeader(
   headerValue: string | string[] | undefined,
@@ -57,7 +57,7 @@ export interface IdempotencyScope {
  * @remarks
  * Idempotency caching is only safe when responses can be scoped to a stable, trusted actor.
  * Unauthenticated callers share the `idempotency:none:anonymous:<key>` bucket, so two distinct
- * anonymous callers presenting the same `Idempotency-Key` would collide and the second caller
+ * anonymous callers presenting the same `X-Idempotency-Key` would collide and the second caller
  * could be served the first caller's cached (possibly token-bearing) response body. The
  * organization segment is intentionally ignored here because an unauthenticated request can set
  * the `X-Organization-Id` header without proving membership.

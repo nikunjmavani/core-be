@@ -80,7 +80,7 @@ The canonical exports live under [src/shared/constants/](src/shared/constants/) 
 
 - **Value**: 102 400 bytes (100 KiB)
 - **Source**: [src/shared/constants/limits.constants.ts](src/shared/constants/limits.constants.ts)
-- **Rationale**: Cap on the response body cached against an `Idempotency-Key`. Above this, the cached response is replaced with a `409` so we never blow up Redis with multi-MB payloads.
+- **Rationale**: Cap on the response body cached against an `X-Idempotency-Key`. Above this, the cached response is replaced with a `409` so we never blow up Redis with multi-MB payloads.
 - **Consequences of change**:
   - Decreasing → more endpoints fall over the cap and lose idempotency replay.
   - Increasing → larger Redis footprint per stored entry.

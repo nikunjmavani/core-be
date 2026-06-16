@@ -98,7 +98,7 @@ describe('Billing subscription — happy paths (mocked payment provider)', () =>
       method: 'POST',
       url: testApiPath('/billing/subscriptions'),
       token,
-      headers: { 'idempotency-key': `subscription-happy-${randomUUID()}` },
+      headers: { 'x-idempotency-key': `subscription-happy-${randomUUID()}` },
       payload: { plan_id: plan.public_id, billing_cycle: 'monthly' },
     });
     expect(response.statusCode, response.body).toBe(201);

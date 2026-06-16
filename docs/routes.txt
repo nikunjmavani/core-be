@@ -222,7 +222,7 @@ Legend:
   Token-guarded   : 3
 
 ================================================================================
-  IDEMPOTENCY (Idempotency-Key header)
+  IDEMPOTENCY (X-Idempotency-Key header)
 ================================================================================
 
   Optional on all POST/PUT/PATCH/DELETE when header is present (24h Redis cache).
