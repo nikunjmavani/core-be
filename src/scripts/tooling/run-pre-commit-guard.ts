@@ -83,6 +83,17 @@ export function shouldRunGlobalTests(stagedFiles: string[]): boolean {
 }
 
 /**
+ * Returns whether staged files touch locale JSON or `src` TypeScript — the inputs to
+ * `validate:locale-keys` (en ↔ es JSON key parity plus the hardcoded user-facing
+ * error-fallback audit over `src/`).
+ */
+export function shouldRunLocaleKeysCheck(stagedFiles: string[]): boolean {
+  return stagedFiles.some(
+    (file) => /^src\/shared\/locales\/.*\.json$/.test(file) || /^src\/.*\.ts$/.test(file),
+  );
+}
+
+/**
  * Returns whether staged files include deployed-surface runtime code that SonarQube analyzes —
  * `src/**\/*.ts` excluding tests (`__tests__/`, `*.test.ts`, `*.spec.ts`, `src/tests/`) and
  * `src/scripts/`. Mirrors the scoping in `sonar-project.properties`.
@@ -236,6 +247,16 @@ export function buildGuardSteps(options: {
     },
     { id: '8', label: 'TSDoc coverage gate', when: 'always', description: 'pnpm tsdoc:check' },
   );
+
+  if (hasPackageScript(scripts, 'validate:locale-keys')) {
+    steps.push({
+      id: '8b',
+      label: 'Locale key parity (en ↔ es)',
+      when: shouldRunLocaleKeysCheck(stagedFiles) ? 'always' : 'conditional',
+      description:
+        'pnpm validate:locale-keys (en↔es JSON parity + no hardcoded error fallbacks — when locale JSON or src/**/*.ts staged)',
+    });
+  }
 
   if (hasPackageScript(scripts, 'validate:test-naming')) {
     steps.push({
@@ -391,6 +412,13 @@ export function runPreCommitGuard(options: RunGuardOptions = {}): number {
     },
     { label: 'TSDoc coverage gate', run: () => runPnpm('tsdoc:check') },
   );
+
+  if (hasPackageScript(scripts, 'validate:locale-keys')) {
+    runnableSteps.push({
+      label: 'Locale key parity (en ↔ es)',
+      run: () => (shouldRunLocaleKeysCheck(stagedFiles) ? runPnpm('validate:locale-keys') : 0),
+    });
+  }
 
   if (hasPackageScript(scripts, 'validate:test-naming')) {
     runnableSteps.push({

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildGuardSteps,
   hasPackageScript,
+  shouldRunLocaleKeysCheck,
   shouldRunMigrationCheck,
   shouldRunOpenApiCheck,
   shouldRunSonarScan,
@@ -56,6 +57,34 @@ describe('run-pre-commit-guard conditionals', () => {
       scripts: baseScripts,
     });
     expect(withoutRuntime.find((step) => step.id === '16')?.when).toBe('conditional');
+  });
+
+  it('detects locale-parity staged paths and marks the step always/conditional', () => {
+    expect(shouldRunLocaleKeysCheck(['src/shared/locales/es/errors.json'])).toBe(true);
+    expect(shouldRunLocaleKeysCheck(['src/domains/auth/auth.service.ts'])).toBe(true);
+    expect(shouldRunLocaleKeysCheck(['docs/README.md'])).toBe(false);
+    expect(shouldRunLocaleKeysCheck(['migrations/20260531000001_test.sql'])).toBe(false);
+
+    const localeScripts = { ...baseScripts, 'validate:locale-keys': 'tsx ...' };
+    const withLocale = buildGuardSteps({
+      stagedFiles: ['src/shared/locales/es/errors.json'],
+      scripts: localeScripts,
+    });
+    expect(withLocale.find((step) => step.id === '8b')?.when).toBe('always');
+
+    const withoutLocale = buildGuardSteps({
+      stagedFiles: ['docs/README.md'],
+      scripts: localeScripts,
+    });
+    expect(withoutLocale.find((step) => step.id === '8b')?.when).toBe('conditional');
+  });
+
+  it('omits the locale-parity step when validate:locale-keys is missing', () => {
+    const steps = buildGuardSteps({
+      stagedFiles: ['src/shared/locales/es/errors.json'],
+      scripts: baseScripts,
+    });
+    expect(steps.some((step) => step.id === '8b')).toBe(false);
   });
 
   it('includes optional steps only when package scripts exist', () => {
