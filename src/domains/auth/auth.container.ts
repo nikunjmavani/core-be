@@ -2,6 +2,8 @@ import { redisConnection } from '@/infrastructure/cache/redis.client.js';
 import type { FastifyInstance } from 'fastify';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
+import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
+import type { AuthorizationService } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
 import { AuthMethodRepository } from './sub-domains/auth-method/auth-method.repository.js';
 import { VerificationTokenRepository } from './sub-domains/auth-method/verification-token/verification-token.repository.js';
 import { AuthSessionRepository } from './sub-domains/auth-session/auth-session.repository.js';
@@ -13,6 +15,7 @@ import { MfaService } from './sub-domains/auth-mfa/auth-mfa.service.js';
 import { WebauthnService } from './sub-domains/auth-webauthn/webauthn.service.js';
 import { WebauthnCredentialRepository } from './sub-domains/auth-webauthn/webauthn-credential.repository.js';
 import { AuthSessionService } from './sub-domains/auth-session/auth-session.service.js';
+import { AuthMeContextService } from './auth-me-context.service.js';
 
 /** DI container shape for the auth domain: aggregates every sub-domain service consumed by routes, handlers, and other domains. */
 export type AuthContainer = {
@@ -23,12 +26,15 @@ export type AuthContainer = {
   mfaService: MfaService;
   webauthnService: WebauthnService;
   authSessionService: AuthSessionService;
+  authMeContextService: AuthMeContextService;
 };
 
 /** Builds the auth-domain {@link AuthContainer}: instantiates auth-method, magic-link, OAuth, MFA, WebAuthn, and session services with their repositories and Redis. */
 export function createAuthContainer(
   userService: UserService,
   organizationSettingsService: OrganizationSettingsService,
+  organizationService: OrganizationService,
+  authorizationService: AuthorizationService,
 ): AuthContainer {
   const authMethodRepository = new AuthMethodRepository();
   const verificationTokenRepository = new VerificationTokenRepository();
@@ -80,6 +86,12 @@ export function createAuthContainer(
     mfaService,
   );
 
+  const authMeContextService = new AuthMeContextService(
+    userService,
+    organizationService,
+    authorizationService,
+  );
+
   return {
     authService,
     authMethodService,
@@ -88,6 +100,7 @@ export function createAuthContainer(
     mfaService,
     webauthnService,
     authSessionService,
+    authMeContextService,
   };
 }
 
@@ -98,6 +111,8 @@ export function registerAuthContainer(application: FastifyInstance): void {
     createAuthContainer(
       application.userDomain.userService,
       application.tenancyDomain.organizationSettingsService,
+      application.tenancyDomain.organizationService,
+      application.tenancyDomain.authorizationService,
     ),
   );
 }

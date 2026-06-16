@@ -428,6 +428,20 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     controller.verifyMfa,
   );
   zodApplication.get(
+    '/me/context',
+    {
+      onRequest: [app.authenticate],
+      ...STRICT_AUTHED_RATE_LIMIT,
+      schema: {
+        summary: 'Get my session context',
+        description:
+          "Returns the authenticated caller's identity, active organization (with type-derived capabilities), the permission codes the caller holds in that organization, their global role, and the organizations they belong to (each flagged is_active). One authoritative call for rendering a permission-aware UI — identical for personal and team organizations.",
+        tags: ['Auth'],
+      },
+    },
+    controller.getMeContext,
+  );
+  zodApplication.get(
     '/me/auth-methods',
     {
       onRequest: [app.authenticate],

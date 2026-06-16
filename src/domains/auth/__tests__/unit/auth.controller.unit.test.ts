@@ -163,6 +163,7 @@ describe('createAuthController', () => {
     mfaService: mfaService as never,
     webauthnService: webauthnService as never,
     authSessionService: authSessionService as never,
+    authMeContextService: { getContext: vi.fn() } as never,
   });
 
   it('login sets session cookie and returns token', async () => {
