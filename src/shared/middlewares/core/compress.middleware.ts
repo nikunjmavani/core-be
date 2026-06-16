@@ -36,10 +36,10 @@ const compressMiddlewareInner: FastifyPluginAsync = async (app) => {
   // {@link responseBodyContainsSecretFields} matcher that gates idempotency caching
   // (sec-C/M #12) — one source of truth.
   app.addHook('onSend', async (_request, reply, payload) => {
-    if (typeof payload !== 'string') return payload;
-    if (!responseBodyContainsSecretFields(payload)) return payload;
-    reply.header('cache-control', 'no-store, no-cache, must-revalidate, private');
-    reply.header('content-encoding', 'identity-no-compress');
+    if (typeof payload === 'string' && responseBodyContainsSecretFields(payload)) {
+      reply.header('cache-control', 'no-store, no-cache, must-revalidate, private');
+      reply.header('content-encoding', 'identity-no-compress');
+    }
     return payload;
   });
 

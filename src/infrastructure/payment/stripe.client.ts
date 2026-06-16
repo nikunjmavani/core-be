@@ -5,7 +5,7 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
 /** Pinned Stripe API version — bump deliberately and verify against Stripe's changelog. */
-const STRIPE_API_VERSION = '2026-05-27.dahlia' as const;
+const STRIPE_API_VERSION = '2026-05-27.dahlia';
 /** SDK-level network retries for Stripe calls (mutations additionally pass an idempotency key). */
 const STRIPE_MAX_NETWORK_RETRIES = 2;
 

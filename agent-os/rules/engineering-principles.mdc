@@ -68,6 +68,10 @@ For layout, layers, routes, events, and Drizzle conventions, follow **[core-be-s
 - Reduce unnecessary API calls and duplicate work.
 - Use existing Redis caching patterns (e.g. permission cache) where appropriate.
 
+## Context efficiency (Headroom)
+
+Route large, low-signal text — long command/CI/test output, logs, whole-file reads, RAG/search chunks — through the **Headroom MCP** (`headroom_compress`) before loading it into context; pull originals with `headroom_retrieve` when exact bytes are needed. Skip compression for small outputs or content applied verbatim (diffs, code to edit, migration SQL, secrets). Shared by all AI agents — see **[headroom-context-compression.mdc](headroom-context-compression.mdc)**.
+
 ## Git and refactoring
 
 - Make minimal, focused changes; do not rewrite unrelated code.

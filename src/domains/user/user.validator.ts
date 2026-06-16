@@ -1,7 +1,5 @@
-import { z } from 'zod';
-import type { ZodType } from 'zod';
-import { ValidationError } from '@/shared/errors/index.js';
-import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
+import { parseWithSchema } from '@/shared/utils/validation/parse-with-schema.util.js';
+import { parseCursorPaginatedQuery } from '@/shared/utils/http/pagination.util.js';
 import {
   UpdateMeDto,
   ListUsersDto,
@@ -13,32 +11,17 @@ import {
   type UploadAvatarInput,
 } from './user.dto.js';
 
-const ERROR_KEY_INVALID_INPUT = 'errors:invalidInput';
-
-function parseWithSchema<T>(schema: ZodType<T>, data: unknown): T {
-  const result = schema.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      ERROR_KEY_INVALID_INPUT,
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
-}
-
-/** Validate the `PATCH /api/v1/users/me` body against {@link UpdateMeDto}; throws {@link ValidationError} on failure. */
+/** Validate the `PATCH /api/v1/users/me` body against {@link UpdateMeDto}; throws `ValidationError` on failure. */
 export function validateUpdateMe(body: unknown): UpdateMeInput {
   return parseWithSchema(UpdateMeDto, body);
 }
 
 /**
- * Validate the admin `GET /api/v1/users` query string. Calls `ensureCursorOnlyPagination` first
- * so legacy `page`/`offset` params are rejected with a typed error before Zod parses the query.
+ * Validate the admin `GET /api/v1/users` query string. Rejects legacy
+ * `page`/`offset` params with a typed error before Zod parses the query.
  */
 export function validateListUsers(query: unknown): ListUsersInput {
-  ensureCursorOnlyPagination(query);
-  return parseWithSchema(ListUsersDto, query);
+  return parseCursorPaginatedQuery(ListUsersDto, query);
 }
 
 /** Validate the admin `PATCH /api/v1/users/:user_id` body against {@link AdminUpdateUserDto}. */

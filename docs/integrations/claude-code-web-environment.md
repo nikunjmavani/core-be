@@ -68,11 +68,15 @@ bash tooling/setup/agent/install-node.sh
 bash tooling/setup/agent/install-gh.sh              # optional: GitHub CLI (in-session GitHub fallback)
 bash tooling/setup/agent/install-docker-images.sh   # optional: Docker Hub mirror + pre-pull compose images
 bash tooling/setup/agent/install-codegraph.sh       # optional: CodeGraph CLI + semantic index (MCP)
+bash tooling/setup/agent/install-headroom.sh        # optional: Headroom CLI — context-compression MCP (headroom_compress)
+bash tooling/setup/agent/install-gitleaks.sh        # optional: gitleaks (pre-commit secret scan)
 ```
 
 On the first session the cached Node 24 is already on disk, [`session-start.sh`](../../agent-os/hooks/session-start.sh) switches `PATH` to `/opt/node24`, and runs `pnpm install`. Do **not** start Postgres / Redis here — setup-script processes do not persist; start them per session (below).
 
 **GitHub CLI (optional).** [`install-gh.sh`](../../tooling/setup/agent/install-gh.sh) adds `gh` as an in-session fallback for reading Actions logs, checking CI, and merging (the GitHub MCP tools already cover this). It belongs in the cached **setup script**, not `session-start.sh` — a per-session `apt install` would not cache and would slow every startup. Set `GH_TOKEN` in the environment's **Variables** (least-privilege: `contents` + `pull_requests` + `actions:read`; env vars are not a secrets store). The script first installs the **github.com release binary** (reachable on the default Trusted allowlist, so no extra allowlist entry is normally needed); its `cli.github.com` apt-repo path is only a last resort.
+
+**gitleaks (recommended if you commit).** The pre-commit guard's "Staged secrets scan" step shells out to `gitleaks protect --staged …` and hard-errors when the binary is missing, so a cloud session cannot commit until gitleaks is installed. The cloud image does not ship it. [`install-gitleaks.sh`](../../tooling/setup/agent/install-gitleaks.sh) installs the **github.com release binary** (reachable on the default Trusted allowlist), pinned to the same version as the CI `security-secrets` job. If that download fails it falls back to `go install` — which must use gitleaks's **legacy self-declared module path** `github.com/zricethezav/gitleaks/v8` (the current `github.com/gitleaks` repo path fails Go's module-path check).
 
 ---
 
@@ -120,7 +124,7 @@ pnpm db:seed         # or pnpm db:seed:full
 
 ### One-command bring-up + verify
 
-To run the whole in-session flow at once — tool installs (gh, Docker mirror, CodeGraph), `compose:up`, `db:migrate`, `db:seed`, then an app healthcheck — use the orchestrator, which logs a ✓/✗ status after each step:
+To run the whole in-session flow at once — tool installs (gh, Docker mirror, CodeGraph, Headroom, gitleaks), `compose:up`, `db:migrate`, `db:seed`, then an app healthcheck — use the orchestrator, which logs a ✓/✗ status after each step:
 
 ```bash
 bash tooling/setup/agent/bootstrap.sh        # KEEP_APP=1 to leave `pnpm dev` running afterwards
@@ -172,18 +176,29 @@ flowchart TD
 
 - **Node 24 is not pre-installed** — the setup script is mandatory; without it the session is stuck on Node 22 and `engines` rejects it.
 - **`nodejs.org` is not in the default Trusted allowlist** — the most common miss.
-- **Husky activates after `pnpm install`** (its `prepare` step), so a properly configured session gets the **same** pre-commit / pre-push gates as local — including the pre-push SonarQube gate, which needs `pnpm sonar:up` or `SKIP_SONAR=1 git push`. Before deps install (e.g. a session still on Node 22) Husky is inactive and commits skip the hooks.
+- **Husky activates after `pnpm install`** (its `prepare` step), so a properly configured session gets the **same** pre-commit / pre-push gates as local — including the pre-commit SonarQube gate (mandatory, no bypass), which needs Docker for `pnpm sonar:up` (the gate auto-starts it on first use). Before deps install (e.g. a session still on Node 22) Husky is inactive and commits skip the hooks.
 - **Pushes are pinned to the session's `claude/*` branch** by the git proxy; the branch-naming policy allowlists `claude/*` for exactly this reason.
+
+---
+
+## GitHub prerequisites (and why creating a PR prompts)
+
+A cloud session can touch GitHub only after the platform is **authorized** on this repo, and opening a PR is a deliberate, gated step — not something the agent does unprompted.
+
+- **One-time authorization (the connect-GitHub prompt).** Install / authorize the platform's GitHub App or connector on `nikunjmavani/core-be` with **least-privilege** scopes — `contents` (read/write the working branch), `pull_requests` (open/update PRs), and `actions: read` (CI status / logs). Without it the session cannot fetch, push, or open a PR.
+- **Pushes are pinned to the session branch.** The cloud git proxy restricts a web session to pushing only its assigned working branch (`claude/<slug>` on Claude Code web; the platform's task branch on Cursor / Codex). Repo hooks run *inside* the session and cannot rename it — `claude/*` is allowlisted by [git-branch-naming.mdc](../../agent-os/rules/git-branch-naming.mdc) by design. To land work under a `feature/` / `fix/` name, rename at the PR / merge layer.
+- **"Create PR" asks first — by design.** Opening a pull request is an outward-facing action, so the agent won't do it unsolicited; it confirms first (Claude Code web uses the scoped **GitHub MCP** tools rather than `gh`). Ask explicitly when you want the PR opened, then drive CI to green per [git-workflow.md](../process/git-workflow.md).
 
 ---
 
 ## MCP servers
 
-In Claude Code on the web the live MCP server set is loaded by the **platform at session start** from your account / environment MCP settings — **not** the repo's [`.mcp.json`](../../.mcp.example.json). Installing a server's CLI in-session (e.g. CodeGraph) does not make its tools appear until a fresh session starts with that server configured. [`.mcp.example.json`](../../.mcp.example.json) lists the full local set (`context7`, `neon`, `sentry`, `github`, `slack`, `railway`, `aws`, `stripe`, `semgrep`, `sonarqube`, `redis`, `postman`, `resend`, `codegraph`, `core-be:api`); most need provider tokens (put them in the environment **Variables**) and several need `uvx` / `docker`, so connect only the subset a task needs.
+In Claude Code on the web the live MCP server set is loaded by the **platform at session start** from your account / environment MCP settings — **not** the repo's [`.mcp.json`](../../.mcp.example.json). Installing a server's CLI in-session (e.g. CodeGraph) does not make its tools appear until a fresh session starts with that server configured. [`.mcp.example.json`](../../.mcp.example.json) lists the full local set (`context7`, `neon`, `sentry`, `github`, `slack`, `railway`, `aws`, `stripe`, `semgrep`, `sonarqube`, `redis`, `postman`, `resend`, `codegraph`, `headroom`, `core-be:api`); most need provider tokens (put them in the environment **Variables**) and several need `uvx` / `docker`, so connect only the subset a task needs.
 
 ## Related documentation
 
 - [cursor-cloud-agent-environment.md](cursor-cloud-agent-environment.md) — the Cursor cloud-agent equivalent (`Dockerfile.agent`).
+- [codex-cloud-agent-environment.md](codex-cloud-agent-environment.md) — the OpenAI Codex Cloud equivalent (setup-phase installs, offline agent phase).
 - [SETUP.md](../../SETUP.md) — local human setup, env vars, testing, CI/CD.
 - [agent-os/hooks/README.md](../../agent-os/hooks/README.md) — the SessionStart hook and the other Claude Code hooks in this repo.
 - [Claude Code on the web docs](https://code.claude.com/docs/en/claude-code-on-the-web) — setup scripts, network policies, environment caching.

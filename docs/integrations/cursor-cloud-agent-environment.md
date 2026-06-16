@@ -46,8 +46,19 @@ This image does **not** start PostgreSQL or Redis. For tests that need a databas
 
 ---
 
+## GitHub prerequisites (and why creating a PR prompts)
+
+A cloud session can touch GitHub only after the platform is **authorized** on this repo, and opening a PR is a deliberate, gated step — not something the agent does unprompted.
+
+- **One-time authorization (the connect-GitHub prompt).** Install / authorize the platform's GitHub App or connector on `nikunjmavani/core-be` with **least-privilege** scopes — `contents` (read/write the working branch), `pull_requests` (open/update PRs), and `actions: read` (CI status / logs). Without it the session cannot fetch, push, or open a PR.
+- **Pushes are pinned to the session branch.** The cloud git proxy restricts a web session to pushing only its assigned working branch (`claude/<slug>` on Claude Code web; the platform's task branch on Cursor / Codex). Repo hooks run *inside* the session and cannot rename it — `claude/*` is allowlisted by [git-branch-naming.mdc](../../agent-os/rules/git-branch-naming.mdc) by design. To land work under a `feature/` / `fix/` name, rename at the PR / merge layer.
+- **"Create PR" asks first — by design.** Opening a pull request is an outward-facing action, so the agent won't do it unsolicited; it confirms first. Ask explicitly when you want the PR opened, then drive CI to green per [git-workflow.md](../process/git-workflow.md).
+
+---
+
 ## Related documentation
 
 - [claude-code-web-environment.md](claude-code-web-environment.md) — the Claude Code on the web equivalent (network access, setup script, env vars).
+- [codex-cloud-agent-environment.md](codex-cloud-agent-environment.md) — the OpenAI Codex Cloud equivalent (setup-phase installs, offline agent phase).
 - [cursor-backend-mcp.md](cursor-backend-mcp.md) — MCP endpoint for tooling in Cursor when the API runs with `ENABLE_MCP_SERVER=true`.
 - [getting-started/setup.md](../getting-started/setup.md) — Local human setup and validation commands.

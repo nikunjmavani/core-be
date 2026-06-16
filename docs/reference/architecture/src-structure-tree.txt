@@ -1523,6 +1523,7 @@ src/
     │   │   ├── bullmq-job-validation.util.ts
     │   │   ├── file-magic.util.ts
     │   │   ├── omit-undefined.util.ts
+    │   │   ├── parse-with-schema.util.ts
     │   │   └── validation.util.ts
     │   └── index.ts
     └── OVERVIEW.md
@@ -2072,6 +2073,7 @@ src/
     │   │   └── validation/
     │   │   │   ├── bullmq-job-validation.unit.test.ts
     │   │   │   ├── file-magic.util.unit.test.ts
+    │   │   │   ├── parse-with-schema.util.unit.test.ts
     │   │   │   └── validation.util.unit.test.ts
     │   ├── validators/
     │   │   ├── idempotency-key.property.unit.test.ts

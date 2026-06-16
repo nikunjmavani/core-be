@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { parseWithSchema } from '@/shared/utils/validation/parse-with-schema.util.js';
 import { ValidationError } from '@/shared/errors/index.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type {
@@ -34,188 +34,74 @@ import {
   OauthCallbackQueryDto,
 } from './auth.dto.js';
 
-const ERROR_KEY_INVALID_INPUT = 'errors:invalidInput';
-
 /** Validates the `POST /api/v1/auth/login` request body against {@link LoginDto}; throws {@link ValidationError} with field errors on failure. */
 export function validateLogin(body: unknown): LoginInput {
-  const result = LoginDto.safeParse(body);
-  if (!result.success) {
-    throw new ValidationError(
-      ERROR_KEY_INVALID_INPUT,
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(LoginDto, body);
 }
 
 /** Validates the `POST /api/v1/auth/magic-link/send` request body against {@link MagicLinkSendDto}. */
 export function validateMagicLinkSend(body: unknown): MagicLinkSendInput {
-  const result = MagicLinkSendDto.safeParse(body);
-  if (!result.success) {
-    throw new ValidationError(
-      ERROR_KEY_INVALID_INPUT,
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(MagicLinkSendDto, body);
 }
 
 /** Validates the `POST /api/v1/auth/magic-link/verify` request body against {@link MagicLinkVerifyDto}. */
 export function validateMagicLinkVerify(body: unknown): MagicLinkVerifyInput {
-  const result = MagicLinkVerifyDto.safeParse(body);
-  if (!result.success) {
-    throw new ValidationError(
-      ERROR_KEY_INVALID_INPUT,
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(MagicLinkVerifyDto, body);
 }
 
 /** Validates the `POST /api/v1/auth/me/mfa/verify` request body against {@link MfaVerifyDto}. */
 export function validateMfaVerify(body: unknown): MfaVerifyInput {
-  const result = MfaVerifyDto.safeParse(body);
-  if (!result.success) {
-    throw new ValidationError(
-      ERROR_KEY_INVALID_INPUT,
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(MfaVerifyDto, body);
 }
 
 /** Validates the `POST /api/v1/auth/me/auth-methods` request body against {@link CreateAuthMethodDto}. */
 export function validateCreateAuthMethod(body: unknown): CreateAuthMethodInput {
-  const result = CreateAuthMethodDto.safeParse(body);
-  if (!result.success) {
-    throw new ValidationError(
-      ERROR_KEY_INVALID_INPUT,
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(CreateAuthMethodDto, body);
 }
 
 /** Validates the `POST /api/v1/auth/password/forgot` request body against {@link ForgotPasswordDto}. */
 export function validateForgotPassword(body: unknown): ForgotPasswordInput {
-  const result = ForgotPasswordDto.safeParse(body);
-  if (!result.success) {
-    throw new ValidationError(
-      ERROR_KEY_INVALID_INPUT,
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(ForgotPasswordDto, body);
 }
 
 /** Validates the `POST /api/v1/auth/password/reset` request body against {@link ResetPasswordDto}. */
 export function validateResetPassword(body: unknown): ResetPasswordInput {
-  const result = ResetPasswordDto.safeParse(body);
-  if (!result.success) {
-    throw new ValidationError(
-      ERROR_KEY_INVALID_INPUT,
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(ResetPasswordDto, body);
 }
 
 /** Validates the authenticated `POST /api/v1/auth/password/change` request body against {@link ChangePasswordDto}. */
 export function validateChangePassword(body: unknown): ChangePasswordInput {
-  const result = ChangePasswordDto.safeParse(body);
-  if (!result.success) {
-    throw new ValidationError(
-      ERROR_KEY_INVALID_INPUT,
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(ChangePasswordDto, body);
 }
 
 /** Validates the authenticated `POST /api/v1/auth/step-up` request body against {@link StepUpVerifyDto}. */
 export function validateStepUpVerify(body: unknown): StepUpVerifyInput {
-  const result = StepUpVerifyDto.safeParse(body);
-  if (!result.success) {
-    throw new ValidationError(
-      ERROR_KEY_INVALID_INPUT,
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(StepUpVerifyDto, body);
 }
 
 /** Validates the `POST /api/v1/auth/email/verify` request body against {@link VerifyEmailDto}. */
 export function validateVerifyEmail(body: unknown): VerifyEmailInput {
-  const result = VerifyEmailDto.safeParse(body);
-  if (!result.success) {
-    throw new ValidationError(
-      ERROR_KEY_INVALID_INPUT,
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(VerifyEmailDto, body);
 }
 
 /** Validates the authenticated `POST /api/v1/auth/me/mfa/enroll` request body against {@link MfaEnrollDto}. */
 export function validateMfaEnroll(body: unknown): MfaEnrollInput {
-  const result = MfaEnrollDto.safeParse(body);
-  if (!result.success) {
-    throw new ValidationError(
-      ERROR_KEY_INVALID_INPUT,
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(MfaEnrollDto, body);
 }
 
 /** Validates the authenticated `POST /api/v1/auth/me/mfa/enroll/confirm` request body against {@link MfaEnrollConfirmDto}. */
 export function validateMfaEnrollConfirm(body: unknown): MfaEnrollConfirmInput {
-  const result = MfaEnrollConfirmDto.safeParse(body);
-  if (!result.success) {
-    throw new ValidationError(
-      ERROR_KEY_INVALID_INPUT,
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(MfaEnrollConfirmDto, body);
 }
 
 /** Validates the public login-flow MFA step body against {@link MfaLoginVerifyDto} (one of `totp_code` / `recovery_code` required). */
 export function validateMfaLoginVerify(body: unknown): MfaLoginVerifyInput {
-  const result = MfaLoginVerifyDto.safeParse(body);
-  if (!result.success) {
-    throw new ValidationError(
-      ERROR_KEY_INVALID_INPUT,
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(MfaLoginVerifyDto, body);
 }
 
 /** Validates the OAuth callback querystring (`code` + `state`) against {@link OauthCallbackQueryDto}. */
 export function validateOauthCallbackQuery(query: unknown): OauthCallbackQueryInput {
-  const result = OauthCallbackQueryDto.safeParse(query);
-  if (!result.success) {
-    throw new ValidationError(
-      ERROR_KEY_INVALID_INPUT,
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(OauthCallbackQueryDto, query);
 }
 
 /**

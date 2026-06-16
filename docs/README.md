@@ -115,6 +115,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [integrations/understand-anything.md](integrations/understand-anything.md)                         | Knowledge graph, dashboard, and learning-curve steps (`/understand`, tour, chat, diff).             |
 | [integrations/cursor-cloud-agent-environment.md](integrations/cursor-cloud-agent-environment.md) | `Dockerfile.agent` vs production image for Cursor cloud agents.                                     |
 | [integrations/claude-code-web-environment.md](integrations/claude-code-web-environment.md)       | Claude Code on the web: network access, setup script (Node 24), env vars, Postgres/Redis via `pnpm compose`. |
+| [integrations/codex-cloud-agent-environment.md](integrations/codex-cloud-agent-environment.md)   | OpenAI Codex Cloud: setup-phase installs (Node 24, deps), offline agent phase, GitHub prerequisites. |
 | [integrations/cursor-agent-system.md](integrations/cursor-agent-system.md)                         | Skills, rules, subagents, and MCP map for Cursor / coding agents.                                   |
 | [reference/runtime/internationalization.md](reference/runtime/internationalization.md)           | Translation keys, locales, error/success messages.                                                  |
 | [reference/testing/load-testing.md](reference/testing/load-testing.md)                           | k6 and Autocannon; keep in sync with [src/tests/load/k6/README.md](../src/tests/load/k6/README.md). |

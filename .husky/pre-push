@@ -47,18 +47,6 @@ else
   echo "Skipping unit tests on pre-push (no unit-relevant changes)."
 fi
 
-# SonarQube quality gate — scans against the local SonarQube server and BLOCKS the push if any
-# unresolved Sonar issue exists. Runs only when the pushed commits touch deployed-surface code
-# (src/ runtime — the only thing Sonar analyzes; tests/scripts/tooling/docs are excluded). The
-# gate auto-starts the server on first use (first boot ~2 min) and provisions a token in
-# .env.local. Skip with SKIP_SONAR=1, or `git push --no-verify` to skip all hooks.
-SONAR_BASE=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo origin/dev)
-PUSHED_RUNTIME=$(git diff --name-only "$SONAR_BASE"...HEAD 2>/dev/null | rg '^src/.*\.ts$' | \
-  rg -v '(__tests__/|\.test\.ts$|\.spec\.ts$|^src/tests/|^src/scripts/)' || true)
-if [ "${SKIP_SONAR:-0}" = "1" ]; then
-  echo "Skipping SonarQube gate on pre-push (SKIP_SONAR=1)."
-elif [ -n "$PUSHED_RUNTIME" ]; then
-  pnpm sonar:scan
-else
-  echo "Skipping SonarQube gate on pre-push (no deployed-surface code changes)."
-fi
+# The SonarQube quality gate runs at pre-commit (pnpm guard:pre-commit, step 16), not here.
+# It is mandatory — every unresolved Sonar issue/hotspot must be cleared and there is no bypass.
+# See docs/reference/quality/sonarqube-local.md.
