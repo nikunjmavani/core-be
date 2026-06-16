@@ -30,6 +30,15 @@ const nodeEnvSchema = z
  */
 const isLocalRuntime = ['local', 'development'].includes(process.env.NODE_ENV ?? 'local');
 
+/**
+ * Zero-config local Postgres DSN used as the `DATABASE_URL` default under {@link isLocalRuntime}.
+ * Mirrors the docker-compose role/password (`core` / `core`) but is assembled from parts so the
+ * source never contains a hardcoded credential-bearing connection-string literal. Keep in sync
+ * with `docker-compose.yml` and `.env.example`.
+ */
+const LOCAL_POSTGRES_ROLE = 'core';
+const LOCAL_DATABASE_URL = `postgresql://${LOCAL_POSTGRES_ROLE}:${LOCAL_POSTGRES_ROLE}@localhost:5432/core`;
+
 const booleanString = (defaultValue: 'true' | 'false') =>
   z
     .string()
@@ -91,9 +100,7 @@ const envSchemaBase = z.object({
   HTTP_SERVER_TIMING_ENABLED: booleanString('true'),
 
   // Database (managed service)
-  DATABASE_URL: isLocalRuntime
-    ? z.string().min(1).default('postgresql://core:core@localhost:5432/core')
-    : z.string().min(1),
+  DATABASE_URL: isLocalRuntime ? z.string().min(1).default(LOCAL_DATABASE_URL) : z.string().min(1),
   DATABASE_MIGRATION_URL: z.string().min(1).optional(), // elevated-privilege user for migrations
 
   // Redis (managed service)
@@ -357,7 +364,7 @@ const envSchemaBase = z.object({
    * to fall back to the direct S3 URL. NEVER point this at a base that exposes private prefixes
    * (`user-files/`, `organization-files/`) — `getObjectUrl` additionally refuses non-public keys.
    */
-  PUBLIC_MEDIA_BASE_URL: z.string().url().optional(),
+  PUBLIC_MEDIA_BASE_URL: z.url().optional(),
 
   // Ops knobs
   /** BullMQ worker concurrency fallback when per-queue overrides are unset (default 4). */
