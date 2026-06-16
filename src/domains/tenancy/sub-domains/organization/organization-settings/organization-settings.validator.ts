@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { parseWithSchema } from '@/shared/utils/validation/parse-with-schema.util.js';
 import { ValidationError } from '@/shared/errors/index.js';
 import {
   PROTO_POLLUTION_KEYS,
@@ -29,13 +29,5 @@ function assertSecurityPolicyHasNoPollutionKeys(data: unknown): void {
 /** Parses raw `PATCH /organization/settings` body via {@link updateOrganizationSettingsDto}; throws `ValidationError('errors:invalidInput')` on failure. */
 export function validateUpdateOrganizationSettings(data: unknown): UpdateOrganizationSettingsInput {
   assertSecurityPolicyHasNoPollutionKeys(data);
-  const result = updateOrganizationSettingsDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(updateOrganizationSettingsDto, data);
 }

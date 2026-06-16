@@ -1,6 +1,5 @@
-import { z } from 'zod';
-import { ValidationError } from '@/shared/errors/index.js';
-import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
+import { parseWithSchema } from '@/shared/utils/validation/parse-with-schema.util.js';
+import { parseCursorPaginatedQuery } from '@/shared/utils/http/pagination.util.js';
 import {
   acceptMemberInvitationDto,
   createMemberInvitationDto,
@@ -20,16 +19,7 @@ import {
  * {@link listMemberInvitationsQueryDto}.
  */
 export function validateListMemberInvitationsQuery(data: unknown): ListMemberInvitationsQueryInput {
-  ensureCursorOnlyPagination(data);
-  const result = listMemberInvitationsQueryDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseCursorPaginatedQuery(listMemberInvitationsQueryDto, data);
 }
 
 /**
@@ -40,16 +30,7 @@ export function validateListMemberInvitationsQuery(data: unknown): ListMemberInv
 export function validateListPendingMemberInvitationsQuery(
   data: unknown,
 ): ListPendingMemberInvitationsQueryInput {
-  ensureCursorOnlyPagination(data);
-  const result = listPendingMemberInvitationsQueryDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseCursorPaginatedQuery(listPendingMemberInvitationsQueryDto, data);
 }
 
 /**
@@ -58,15 +39,7 @@ export function validateListPendingMemberInvitationsQuery(
  * `ValidationError('errors:invalidInput')` with per-field details on failure.
  */
 export function validateCreateMemberInvitation(data: unknown): CreateMemberInvitationInput {
-  const result = createMemberInvitationDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(createMemberInvitationDto, data);
 }
 
 /**
@@ -75,15 +48,7 @@ export function validateCreateMemberInvitation(data: unknown): CreateMemberInvit
  * compared against the stored `token_hash` by the service.
  */
 export function validateAcceptMemberInvitation(data: unknown): AcceptMemberInvitationInput {
-  const result = acceptMemberInvitationDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(acceptMemberInvitationDto, data);
 }
 
 /**
@@ -91,13 +56,5 @@ export function validateAcceptMemberInvitation(data: unknown): AcceptMemberInvit
  * against {@link resendMemberInvitationDto}.
  */
 export function validateResendMemberInvitation(data: unknown): ResendMemberInvitationInput {
-  const result = resendMemberInvitationDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(resendMemberInvitationDto, data);
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { PAGINATION } from '@/shared/constants/index.js';
 import { ValidationError } from '@/shared/errors/index.js';
 import {
@@ -6,6 +7,7 @@ import {
   ensureCursorOnlyPagination,
   LEGACY_PAGE_NOT_SUPPORTED_MESSAGE,
   LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY,
+  parseCursorPaginatedQuery,
   rejectLegacyPagePagination,
 } from '@/shared/utils/http/pagination.util.js';
 
@@ -72,6 +74,34 @@ describe('pagination.util', () => {
       await expect(
         rejectLegacyPagePagination({ query: { page: '1', limit: '10' } }),
       ).rejects.toThrow(ValidationError);
+    });
+  });
+
+  describe('parseCursorPaginatedQuery', () => {
+    it('parses the query with the schema when no legacy page param is present', () => {
+      expect(parseCursorPaginatedQuery(cursorPaginationSchema, { limit: '10' })).toEqual({
+        limit: 10,
+      });
+    });
+
+    it('rejects legacy page pagination before the schema runs', () => {
+      try {
+        parseCursorPaginatedQuery(cursorPaginationSchema, { page: '1' });
+        expect.fail('expected ValidationError');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ValidationError);
+        expect((error as ValidationError).messageKey).toBe(LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY);
+      }
+    });
+
+    it('applies the provided error key to schema failures', () => {
+      const strict = z.object({ name: z.string() });
+      try {
+        parseCursorPaginatedQuery(strict, {}, 'errors:validation.invalidPagination');
+        expect.fail('expected ValidationError');
+      } catch (error) {
+        expect((error as ValidationError).messageKey).toBe('errors:validation.invalidPagination');
+      }
     });
   });
 });

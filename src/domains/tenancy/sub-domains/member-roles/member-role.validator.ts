@@ -1,6 +1,5 @@
-import { z } from 'zod';
-import { ValidationError } from '@/shared/errors/index.js';
-import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
+import { parseWithSchema } from '@/shared/utils/validation/parse-with-schema.util.js';
+import { parseCursorPaginatedQuery } from '@/shared/utils/http/pagination.util.js';
 import {
   createMemberRoleDto,
   updateMemberRoleDto,
@@ -18,15 +17,7 @@ import type {
  * with per-field details on failure.
  */
 export function validateCreateMemberRole(data: unknown): CreateMemberRoleInput {
-  const result = createMemberRoleDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(createMemberRoleDto, data);
 }
 
 /**
@@ -35,15 +26,7 @@ export function validateCreateMemberRole(data: unknown): CreateMemberRoleInput {
  * with per-field details on failure.
  */
 export function validateUpdateMemberRole(data: unknown): UpdateMemberRoleInput {
-  const result = updateMemberRoleDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(updateMemberRoleDto, data);
 }
 
 /**
@@ -52,14 +35,9 @@ export function validateUpdateMemberRole(data: unknown): UpdateMemberRoleInput {
  * against {@link listMemberRolesQueryDto}.
  */
 export function validateListMemberRolesQuery(data: unknown): ListMemberRolesQueryInput {
-  ensureCursorOnlyPagination(data);
-  const result = listMemberRolesQueryDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:validation.invalidPagination',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseCursorPaginatedQuery(
+    listMemberRolesQueryDto,
+    data,
+    'errors:validation.invalidPagination',
+  );
 }

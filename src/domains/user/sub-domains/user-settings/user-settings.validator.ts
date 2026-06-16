@@ -1,21 +1,10 @@
-import { z } from 'zod';
-import { ValidationError } from '@/shared/errors/index.js';
+import { parseWithSchema } from '@/shared/utils/validation/parse-with-schema.util.js';
 import { UpdateUserSettingsDto, type UpdateUserSettingsInput } from './user-settings.dto.js';
-
-const ERROR_KEY_INVALID_INPUT = 'errors:invalidInput';
 
 /**
  * Validate the `PATCH /api/v1/users/me/settings` body against {@link UpdateUserSettingsDto}.
- * Throws {@link ValidationError} (`errors:invalidInput`) with flattened field errors on failure.
+ * Throws `ValidationError` (`errors:invalidInput`) with flattened field errors on failure.
  */
 export function validateUpdateUserSettings(body: unknown): UpdateUserSettingsInput {
-  const result = UpdateUserSettingsDto.safeParse(body);
-  if (!result.success) {
-    throw new ValidationError(
-      ERROR_KEY_INVALID_INPUT,
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(UpdateUserSettingsDto, body);
 }
