@@ -26,7 +26,7 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
  * must NEVER reach the service and silently set that field. These tests are the
  * regression guard for that invariant.
  *
- * Every mutating request carries an `Idempotency-Key` header so the request
+ * Every mutating request carries an `X-Idempotency-Key` header so the request
  * reaches DTO validation (routes with `idempotencyRequired` otherwise short-
  * circuit with 422 for a missing key, which would mask the actual check). With
  * the key present, the only rejection reason is the strict DTO catching the
@@ -39,8 +39,8 @@ const TENANCY_PERMISSIONS = {
 
 const ADMIN_PERMISSIONS = Object.values(TENANCY_PERMISSIONS);
 
-function idempotent(): { 'idempotency-key': string } {
-  return { 'idempotency-key': generatePublicId('organization') };
+function idempotent(): { 'x-idempotency-key': string } {
+  return { 'x-idempotency-key': generatePublicId('organization') };
 }
 
 function expectRejected(statusCode: number): void {

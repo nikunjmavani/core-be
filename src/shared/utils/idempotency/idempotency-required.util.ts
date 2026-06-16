@@ -14,13 +14,13 @@ export function isIdempotencyKeyRequiredForRequest(request: FastifyRequest): boo
 
 /**
  * For routes that opted in via `idempotencyRequired`, throws
- * {@link UnprocessableEntityError} when the `Idempotency-Key` header is
+ * {@link UnprocessableEntityError} when the `X-Idempotency-Key` header is
  * missing or malformed; no-op otherwise.
  */
 export function assertIdempotencyKeyPresentWhenRequired(request: FastifyRequest): void {
   if (!isIdempotencyKeyRequiredForRequest(request)) return;
 
-  const parsed = parseIdempotencyKeyHeader(request.headers['idempotency-key']);
+  const parsed = parseIdempotencyKeyHeader(request.headers['x-idempotency-key']);
   if (parsed.kind === 'absent') {
     throw new UnprocessableEntityError('errors:idempotencyKeyRequired');
   }

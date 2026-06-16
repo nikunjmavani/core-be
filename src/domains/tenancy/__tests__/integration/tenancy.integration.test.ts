@@ -88,7 +88,7 @@ describe('Tenancy Domain — Integration', () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
         url: testApiPath('/tenancy/organizations'),
-        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: {},
       });
       expect(response.statusCode).toBe(401);
@@ -101,7 +101,7 @@ describe('Tenancy Domain — Integration', () => {
         method: 'POST',
         url: testApiPath('/tenancy/organizations'),
         token: token,
-        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: { name: 'Test Org', slug: 'test-org' },
       });
       expect(response.statusCode).toBe(201);

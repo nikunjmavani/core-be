@@ -154,7 +154,7 @@ describe('Security: unique-violation conflict handling', () => {
         method: 'POST',
         url: testApiPath('/tenancy/organization/memberships'),
         token,
-        extraHeaders: { 'idempotency-key': randomUUID() },
+        extraHeaders: { 'x-idempotency-key': randomUUID() },
         // INVITED keeps joined_at null (chk_memberships_joined allows it); the test
         // targets the (user_id, organization_id) unique constraint, not the activation rule.
         payload: { user_id: userPublicId, role_id: rolePublicId, status: 'INVITED' },

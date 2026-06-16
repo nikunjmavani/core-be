@@ -1,6 +1,6 @@
 /**
  * Per-operation request-header documentation. Mirrors the runtime middleware
- * truth: idempotency (`Idempotency-Key`, required on the eight writes that
+ * truth: idempotency (`X-Idempotency-Key`, required on the eight writes that
  * register `idempotencyRequired: true`), captcha on the public auth surface
  * (`X-Captcha-Token`), CSRF on the cookie refresh flow (`X-CSRF-Token`), and
  * Stripe's own `Stripe-Signature` on webhook ingestion.
@@ -52,7 +52,7 @@ export function buildHeaderParameters(method: string, routeKey: string): object[
   ) {
     const required = IDEMPOTENCY_REQUIRED_ROUTE_KEYS.has(routeKey);
     headers.push({
-      name: 'Idempotency-Key',
+      name: 'X-Idempotency-Key',
       in: 'header',
       required,
       description: required

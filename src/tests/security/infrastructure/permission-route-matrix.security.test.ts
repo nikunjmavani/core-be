@@ -118,7 +118,7 @@ function idempotencyHeadersForPermissionRoute(
   route: (typeof organizationPermissionRoutes)[number],
 ): Record<string, string> | undefined {
   if (route.method === 'GET' || route.method === 'DELETE') return undefined;
-  return { 'idempotency-key': `permission-matrix-${randomUUID()}` };
+  return { 'x-idempotency-key': `permission-matrix-${randomUUID()}` };
 }
 
 /**

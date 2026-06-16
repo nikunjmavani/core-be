@@ -33,10 +33,10 @@ When to set which HTTP status — the single contract every route, test, and doc
 | **403** | Authenticated but not allowed: missing organization permission, role too low, suspended membership. | Permission guards |
 | **404** | Resource id (or route) does not exist — including ids of the right shape but no row, and ids that belong to another organization (no existence leak). | Services / repositories |
 | **406** | MCP route only — `Accept` header missing or names an unsupported media type. | MCP transport |
-| **409** | Mutating routes — state conflict: duplicate resource (slug/email already taken), invalid state transition, or an in-flight duplicate request with the same `Idempotency-Key`. | Services + idempotency middleware |
+| **409** | Mutating routes — state conflict: duplicate resource (slug/email already taken), invalid state transition, or an in-flight duplicate request with the same `X-Idempotency-Key`. | Services + idempotency middleware |
 | **413** | POST/PATCH/PUT — request body exceeds the size limit. | Fastify body limit |
 | **415** | POST/PATCH/PUT — `Content-Type` is not `application/json` (where a JSON body is expected). | Fastify content-type parser |
-| **422** | Mutating routes — request is well-formed but violates a business rule, or an `Idempotency-Key` is reused with a **different payload** (fingerprint mismatch). | Services + idempotency middleware |
+| **422** | Mutating routes — request is well-formed but violates a business rule, or an `X-Idempotency-Key` is reused with a **different payload** (fingerprint mismatch). | Services + idempotency middleware |
 | **429** | Any route — global or per-route rate limit exhausted. Response carries `Retry-After` and `X-RateLimit-Limit` / `X-RateLimit-Remaining` / `X-RateLimit-Reset`. | Rate-limit middleware |
 | **500** | Unexpected failure. Never intentional: the never-5xx fuzz gate (`src/tests/security/`) fails CI if any route 5xxes on malformed input. External message is generic; details go to Sentry. | Error handler |
 

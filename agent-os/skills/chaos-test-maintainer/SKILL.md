@@ -43,7 +43,7 @@ Most chaos "failures" on a fresh machine are environment, not code. Check these 
   uses `postgres:5432` / `redis:6379`. Only set `CHAOS_TOXIPROXY_POSTGRES_UPSTREAM` / `..._REDIS_UPSTREAM`
   (e.g. `127.0.0.1:5432`) if you run Toxiproxy outside the compose network.
 - **Idempotency replay tests must resend the *same* body.** The middleware fingerprint is method+route+**body**;
-  a different payload under the same `Idempotency-Key` is a correct **422** (`idempotency_key_reuse`), not a replay.
+  a different payload under the same `X-Idempotency-Key` is a correct **422** (`idempotency_key_reuse`), not a replay.
 - **Teardown that disables a proxy must bound `app.close()`.** Administratively disabling the Postgres proxy can
   leave a severed `postgres.js` connection that `sql.end()` cannot drain, hanging `afterAll` to its timeout.
   Re-enable the proxy, probe once, then `Promise.race` the close against a short cap (see `postgres-health.chaos.test.ts`).

@@ -228,7 +228,7 @@ describe('Security: Privilege escalation', () => {
       method: 'POST',
       url: testApiPath('/tenancy/organization/memberships'),
       token,
-      headers: { 'idempotency-key': randomUUID() },
+      headers: { 'x-idempotency-key': randomUUID() },
       payload: {
         user_id: 'usr_000000000000000000000',
         role_id: 'rol_000000000000000000000',

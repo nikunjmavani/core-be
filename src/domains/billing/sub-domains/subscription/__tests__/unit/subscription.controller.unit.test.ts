@@ -60,7 +60,7 @@ describe('createSubscriptionController', () => {
       mockRequest({
         params: { organization_id: organizationPublicId },
         body: { plan_id: generatePublicId('plan'), billing_cycle: 'monthly' },
-        headers: { 'idempotency-key': 'idem-key-123456789012' },
+        headers: { 'x-idempotency-key': 'idem-key-123456789012' },
       }),
       mockReply(),
     );
@@ -83,7 +83,7 @@ describe('createSubscriptionController', () => {
       mockRequest({
         params: { organization_id: organizationPublicId, subscription_id: subscriptionPublicId },
         body: { plan_id: generatePublicId('plan') },
-        headers: { 'idempotency-key': 'idem-key-123456789012' },
+        headers: { 'x-idempotency-key': 'idem-key-123456789012' },
       }),
       mockReply(),
     );
@@ -99,7 +99,7 @@ describe('createSubscriptionController', () => {
     await controller.cancelSubscription(
       mockRequest({
         params: { organization_id: organizationPublicId, subscription_id: subscriptionPublicId },
-        headers: { 'idempotency-key': 'idem-key-123456789012' },
+        headers: { 'x-idempotency-key': 'idem-key-123456789012' },
       }),
       mockReply(),
     );
@@ -114,7 +114,7 @@ describe('createSubscriptionController', () => {
     await controller.resumeSubscription(
       mockRequest({
         params: { organization_id: organizationPublicId, subscription_id: subscriptionPublicId },
-        headers: { 'idempotency-key': 'idem-key-123456789012' },
+        headers: { 'x-idempotency-key': 'idem-key-123456789012' },
       }),
       mockReply(),
     );
@@ -172,7 +172,7 @@ describe('createSubscriptionController', () => {
                 organization_id: organizationPublicId,
                 subscription_id: malformedSubscriptionId,
               },
-              headers: { 'idempotency-key': 'idem-key-123456789012' },
+              headers: { 'x-idempotency-key': 'idem-key-123456789012' },
             }),
             mockReply(),
           );
@@ -187,7 +187,7 @@ describe('createSubscriptionController', () => {
                 organization_id: organizationPublicId,
                 subscription_id: malformedSubscriptionId,
               },
-              headers: { 'idempotency-key': 'idem-key-123456789012' },
+              headers: { 'x-idempotency-key': 'idem-key-123456789012' },
             }),
             mockReply(),
           );
@@ -202,7 +202,7 @@ describe('createSubscriptionController', () => {
                 organization_id: organizationPublicId,
                 subscription_id: malformedSubscriptionId,
               },
-              headers: { 'idempotency-key': 'idem-key-123456789012' },
+              headers: { 'x-idempotency-key': 'idem-key-123456789012' },
             }),
             mockReply(),
           );

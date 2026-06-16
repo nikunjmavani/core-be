@@ -1,6 +1,6 @@
 ---
 name: idempotency-guard
-description: Keeps core-be request idempotency correct — the 8 idempotencyRequired writes (Idempotency-Key → 422 when missing/reused, 409 in-flight), the post-commit Redis replay write (never in onSend), secret-bearing response bodies excluded from caching, and the client Idempotency-Key forwarded as Stripe's idempotencyKey on customer/subscription mutations. Use when adding or changing a mutating money/state route, the idempotency middleware or utils, the Stripe client, or the subscription controller/service.
+description: Keeps core-be request idempotency correct — the 8 idempotencyRequired writes (X-Idempotency-Key → 422 when missing/reused, 409 in-flight), the post-commit Redis replay write (never in onSend), secret-bearing response bodies excluded from caching, and the client X-Idempotency-Key forwarded as Stripe's idempotencyKey on customer/subscription mutations. Use when adding or changing a mutating money/state route, the idempotency middleware or utils, the Stripe client, or the subscription controller/service.
 ---
 
 # Idempotency guard
@@ -10,7 +10,7 @@ Exactly **8 writes** in core-be are idempotency-required; getting the replay, fi
 ## Mechanism
 
 - Engine: `src/shared/middlewares/core/idempotency.middleware.ts` + `src/shared/utils/idempotency/**`. Applies to `POST/PUT/PATCH/DELETE`.
-- **Required-key gate** (`onRequest`): routes with `config.idempotencyRequired === true` throw `UnprocessableEntityError('errors:idempotencyKeyRequired')` → **422** when the `Idempotency-Key` header is missing, `errors:idempotencyKeyInvalid` → **422** when malformed. Key format: ≤255 chars, `/^[A-Za-z0-9._:~+/=-]+$/`.
+- **Required-key gate** (`onRequest`): routes with `config.idempotencyRequired === true` throw `UnprocessableEntityError('errors:idempotencyKeyRequired')` → **422** when the `X-Idempotency-Key` header is missing, `errors:idempotencyKeyInvalid` → **422** when malformed. Key format: ≤255 chars, `/^[A-Za-z0-9._:~+/=-]+$/`.
 - **Claim/replay** (route `preHandler`, after auth so anonymous callers never occupy keys): scope = active `org` JWT claim + actor (`userId` or `apiKeyPublicId`); **unauthenticated callers get no caching**. Redis key: `idempotency:<org|none>:<actor>:<key>`. Request fingerprint = SHA-256(method + normalized route + canonical body). On a hit: fingerprint mismatch → **422** (`idempotency_key_reuse`); `completed` → replay stored response with header `x-idempotency-replay: true`; `in_flight` → **409**. Over the per-actor cap → **429** + `Retry-After`. Redis error on claim → **fail closed 503** + `Retry-After`.
 - **Completed entry is written only after the DB transaction commits** — dispatched from `src/shared/middlewares/core/request-lifecycle.middleware.ts` (post-commit), never directly in `onSend`. Rollback/settle-failure → `DEL` the placeholder so the client can safely retry. TTL: placeholder = session TTL; completed = 24 h.
 - **Never cache secrets:** `onSend` skips bodies > 100 KB or containing secret fields (`responseBodyContainsSecretFields`); token/secret-issuance routes are in `IDEMPOTENCY_EXCLUDED_ROUTE_PATTERNS` (`idempotency-fingerprint.util.ts`).
@@ -40,7 +40,7 @@ The count of 8 is asserted in `docs/reference/api/frontend-auth-guide.md`.
 
 - [ ] A **new externally-mutating write** (creates/charges/transfers state) gets `config: { idempotencyRequired: true }` — **merge it into the existing `config` object**, don't spread a rate-limit preset at top level or it drops the flag (see the inline warnings in `membership.routes.ts` / `organization.routes.ts`).
 - [ ] Bump the "8 routes" count in `docs/reference/api/frontend-auth-guide.md` (and any idempotency doc) when the set changes.
-- [ ] Document the `Idempotency-Key` header in the route schema (keeps OpenAPI accurate); 409/422 are already in `docs/reference/api/response-codes.md`.
+- [ ] Document the `X-Idempotency-Key` header in the route schema (keeps OpenAPI accurate); 409/422 are already in `docs/reference/api/response-codes.md`.
 - [ ] **Stripe:** new mutation helpers in `stripe.client.ts` accept and forward `options.idempotencyKey` as Stripe's native `RequestOptions.idempotencyKey`; the controller reads the request header via `readIdempotencyKey` and threads it controller → service → client. Add a contract test asserting `matchHeader('idempotency-key', …)`.
 - [ ] **New secret response fields** → add to `IDEMPOTENCY_SECRET_RESPONSE_FIELD_NAMES` / `RESPONSE_BODY_SECRET_FRAGMENTS`; new token-issuance routes → `IDEMPOTENCY_EXCLUDED_ROUTE_PATTERNS`.
 - [ ] Keep cache keys scoped per actor + active org (no anonymous caching); keep the per-actor rate key aligned with the cache-key actor segment.

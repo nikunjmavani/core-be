@@ -4060,7 +4060,7 @@
         "error": {
           "type": "request_error",
           "code": "unprocessable_entity",
-          "detail": "Idempotency-Key header is required for this operation",
+          "detail": "X-Idempotency-Key header is required for this operation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4127,7 +4127,7 @@
         "error": {
           "type": "request_error",
           "code": "unprocessable_entity",
-          "detail": "Idempotency-Key header is required for this operation",
+          "detail": "X-Idempotency-Key header is required for this operation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4218,7 +4218,7 @@
         "error": {
           "type": "request_error",
           "code": "unprocessable_entity",
-          "detail": "Idempotency-Key header is required for this operation",
+          "detail": "X-Idempotency-Key header is required for this operation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4285,7 +4285,7 @@
         "error": {
           "type": "request_error",
           "code": "unprocessable_entity",
-          "detail": "Idempotency-Key header is required for this operation",
+          "detail": "X-Idempotency-Key header is required for this operation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4709,7 +4709,7 @@
         "error": {
           "type": "request_error",
           "code": "unprocessable_entity",
-          "detail": "Idempotency-Key header is required for this operation",
+          "detail": "X-Idempotency-Key header is required for this operation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4911,7 +4911,7 @@
         "error": {
           "type": "request_error",
           "code": "unprocessable_entity",
-          "detail": "Idempotency-Key header is required for this operation",
+          "detail": "X-Idempotency-Key header is required for this operation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5093,7 +5093,7 @@
         "error": {
           "type": "request_error",
           "code": "unprocessable_entity",
-          "detail": "Idempotency-Key header is required for this operation",
+          "detail": "X-Idempotency-Key header is required for this operation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5301,7 +5301,7 @@
         "error": {
           "type": "request_error",
           "code": "unprocessable_entity",
-          "detail": "Idempotency-Key header is required for this operation",
+          "detail": "X-Idempotency-Key header is required for this operation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
