@@ -81,10 +81,7 @@ describe('Chaos resilience: Redis idempotency', () => {
           'idempotency-key': idempotencyKeyWaitingForIsolation,
           'content-type': 'application/json',
         },
-        payload: {
-          name: 'Replay Organization Should Not Matter',
-          slug: uniqueSlugForChaosIsolation('replay-second'),
-        },
+        payload: { name: 'Replay Organization', slug: firstSlugAwaitingIsolation },
       });
 
       expect(secondHttpResponseAwaitingIsolation.statusCode).toBeLessThan(500);

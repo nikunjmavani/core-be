@@ -72,7 +72,14 @@ services:
       LOG_LEVEL: info
 
   toxiproxy:
-    image: ghcr.io/shopify/toxiproxy:2.12.0
+    # Built locally from the official release binary (see tooling/chaos/toxiproxy.Dockerfile):
+    # the ghcr.io/shopify/toxiproxy blob CDN (pkg-containers.githubusercontent.com) is
+    # unreachable from some restricted dev networks, while github.com release assets are.
+    # CI provisions Toxiproxy via a GitHub Actions service container, not this compose service.
+    build:
+      context: ./tooling/chaos
+      dockerfile: toxiproxy.Dockerfile
+    image: core-be-toxiproxy:2.12.0
     container_name: core-be-toxiproxy
     profiles: ['chaos']
     ports:
