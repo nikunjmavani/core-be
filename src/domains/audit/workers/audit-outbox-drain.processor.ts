@@ -43,6 +43,24 @@ interface ResolutionMaps {
   readonly apiKeyIdsByPublicId: ReadonlyMap<string, number>;
 }
 
+/** Collects the distinct user / organization / API-key public ids referenced by a drain batch. */
+function collectAuditOutboxPublicIds(batch: readonly AuditOutboxRow[]): {
+  userPublicIds: Set<string>;
+  orgPublicIds: Set<string>;
+  apiKeyPublicIds: Set<string>;
+} {
+  const userPublicIds = new Set<string>();
+  const orgPublicIds = new Set<string>();
+  const apiKeyPublicIds = new Set<string>();
+  for (const row of batch) {
+    if (row.actor_user_public_id) userPublicIds.add(row.actor_user_public_id);
+    if (row.target_user_public_id) userPublicIds.add(row.target_user_public_id);
+    if (row.organization_public_id) orgPublicIds.add(row.organization_public_id);
+    if (row.actor_api_key_public_id) apiKeyPublicIds.add(row.actor_api_key_public_id);
+  }
+  return { userPublicIds, orgPublicIds, apiKeyPublicIds };
+}
+
 /**
  * Pre-resolves every distinct actor / target / org / API-key public id in the batch
  * to its internal id in 3 round trips (one per table). Done UNDER `app.global_admin = true`
@@ -63,15 +81,7 @@ async function buildResolutionMaps(
 ): Promise<ResolutionMaps> {
   await setLocalDatabaseConfig(databaseHandle, 'app.global_admin', 'true');
 
-  const userPublicIds = new Set<string>();
-  const orgPublicIds = new Set<string>();
-  const apiKeyPublicIds = new Set<string>();
-  for (const row of batch) {
-    if (row.actor_user_public_id) userPublicIds.add(row.actor_user_public_id);
-    if (row.target_user_public_id) userPublicIds.add(row.target_user_public_id);
-    if (row.organization_public_id) orgPublicIds.add(row.organization_public_id);
-    if (row.actor_api_key_public_id) apiKeyPublicIds.add(row.actor_api_key_public_id);
-  }
+  const { userPublicIds, orgPublicIds, apiKeyPublicIds } = collectAuditOutboxPublicIds(batch);
 
   const userIdsByPublicId = new Map<string, number>();
   if (userPublicIds.size > 0) {
@@ -162,6 +172,70 @@ function resolveRowInserts(
   };
 }
 
+/** Outcome of draining a single outbox row, tallied by {@link runAuditOutboxDrainJob}. */
+type DrainOutboxRowOutcome =
+  | { kind: 'success'; id: number }
+  | { kind: 'transient' }
+  | { kind: 'permanent' };
+
+/**
+ * Drains one claimed `audit.outbox` row into `audit.logs`: resolves the row, sets the per-row
+ * tenant GUC (org-scoped or system-audit), inserts, and on failure records a transient or terminal
+ * failure. Extracted from {@link runAuditOutboxDrainJob} so the batch loop stays within complexity
+ * budget; the marking side effects happen here and the caller only tallies the returned outcome.
+ */
+async function drainOutboxRow(options: {
+  databaseHandle: RequestScopedPostgresDatabase;
+  drainRepository: ReturnType<typeof createDrainAuditOutboxRepository>;
+  row: AuditOutboxRow;
+  maps: ResolutionMaps;
+  maxAttempts: number;
+}): Promise<DrainOutboxRowOutcome> {
+  const { databaseHandle, drainRepository, row, maps, maxAttempts } = options;
+  const resolution = resolveRowInserts(row, maps);
+  if ('error' in resolution) {
+    await drainRepository.markPermanentlyFailed(row.id, resolution.error);
+    logger.warn(
+      { outboxId: row.id, error: resolution.error },
+      'audit.outbox.drain.row.unresolvable',
+    );
+    return { kind: 'permanent' };
+  }
+
+  try {
+    if (row.organization_public_id !== null) {
+      await setLocalDatabaseConfig(
+        databaseHandle,
+        'app.current_organization_id',
+        row.organization_public_id,
+      );
+    } else {
+      // Tenantless audit (system events). RLS requires the system arm to be true and
+      // organization_id IS NULL; resolveRowInserts guarantees the latter.
+      await setLocalDatabaseConfig(databaseHandle, 'app.system_audit_insert', 'true');
+    }
+
+    await databaseHandle.insert(logs).values(resolution.row);
+    return { kind: 'success', id: row.id };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (row.attempt_count + 1 >= maxAttempts) {
+      await drainRepository.markPermanentlyFailed(row.id, message);
+      logger.error(
+        { outboxId: row.id, attemptCount: row.attempt_count + 1, error: message },
+        'audit.outbox.drain.row.failed_terminally',
+      );
+      return { kind: 'permanent' };
+    }
+    await drainRepository.recordTransientFailure(row.id, message);
+    logger.warn(
+      { outboxId: row.id, attemptCount: row.attempt_count + 1, error: message },
+      'audit.outbox.drain.row.transient_failure',
+    );
+    return { kind: 'transient' };
+  }
+}
+
 /**
  * Drains a batch of PENDING `audit.outbox` rows into `audit.logs`.
  *
@@ -201,52 +275,22 @@ export async function runAuditOutboxDrainJob(
   let transientFailed = 0;
   let permanentlyFailed = 0;
 
+  // Each row's tenant GUC is a `SET LOCAL` that persists until the next iteration replaces it;
+  // `drainOutboxRow` always re-sets the correct GUC (org-scoped or system-audit) per row.
   for (const row of batch) {
-    const resolution = resolveRowInserts(row, maps);
-    if ('error' in resolution) {
-      await drainRepository.markPermanentlyFailed(row.id, resolution.error);
+    const outcome = await drainOutboxRow({
+      databaseHandle,
+      drainRepository,
+      row,
+      maps,
+      maxAttempts,
+    });
+    if (outcome.kind === 'success') {
+      successIds.push(outcome.id);
+    } else if (outcome.kind === 'transient') {
+      transientFailed += 1;
+    } else {
       permanentlyFailed += 1;
-      logger.warn(
-        { outboxId: row.id, error: resolution.error },
-        'audit.outbox.drain.row.unresolvable',
-      );
-      continue;
-    }
-
-    try {
-      if (row.organization_public_id !== null) {
-        await setLocalDatabaseConfig(
-          databaseHandle,
-          'app.current_organization_id',
-          row.organization_public_id,
-        );
-      } else {
-        // Tenantless audit (system events). RLS requires the system arm to be true and
-        // organization_id IS NULL; resolveRowInserts guarantees the latter.
-        await setLocalDatabaseConfig(databaseHandle, 'app.system_audit_insert', 'true');
-      }
-
-      await databaseHandle.insert(logs).values(resolution.row);
-      successIds.push(row.id);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (row.attempt_count + 1 >= maxAttempts) {
-        await drainRepository.markPermanentlyFailed(row.id, message);
-        permanentlyFailed += 1;
-        logger.error(
-          { outboxId: row.id, attemptCount: row.attempt_count + 1, error: message },
-          'audit.outbox.drain.row.failed_terminally',
-        );
-      } else {
-        await drainRepository.recordTransientFailure(row.id, message);
-        transientFailed += 1;
-        logger.warn(
-          { outboxId: row.id, attemptCount: row.attempt_count + 1, error: message },
-          'audit.outbox.drain.row.transient_failure',
-        );
-      }
-      // Reset to drain-only GUCs for the next row (the per-row org GUC stays in
-      // place inside `SET LOCAL` and is replaced on the next iteration's set).
     }
   }
 

@@ -235,6 +235,123 @@ async function recordWebhookDeliveryOutcome(options: {
 }
 
 /**
+ * Computes the optional `X-Webhook-Signature-Previous` header during the secret-rotation overlap
+ * window, or `undefined` when no previous secret applies or the window has closed.
+ *
+ * @remarks
+ * sec-N8 dual-sign: while `now() < secretRotatedAt + WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS`, sign
+ * with the previous secret too so a customer mid-rotation still sees a matching signature. A
+ * decryption failure on the previous secret is swallowed (drop the header, never fail delivery).
+ */
+function computeWebhookPreviousSignatureHeader(options: {
+  encryptedSecretPrevious: string | null;
+  secretRotatedAt: Date | null;
+  payloadString: string;
+  timestamp: number;
+  webhookId: number;
+}): string | undefined {
+  const { encryptedSecretPrevious, secretRotatedAt, payloadString, timestamp, webhookId } = options;
+  if (
+    encryptedSecretPrevious === null ||
+    encryptedSecretPrevious.length === 0 ||
+    secretRotatedAt === null
+  ) {
+    return undefined;
+  }
+  const overlapWindowMs = env.WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS * 60 * 60 * 1000;
+  const rotatedAtMs =
+    secretRotatedAt instanceof Date ? secretRotatedAt.getTime() : Number(secretRotatedAt);
+  if (!Number.isFinite(rotatedAtMs) || Date.now() >= rotatedAtMs + overlapWindowMs) {
+    return undefined;
+  }
+  try {
+    const previousSecret = decryptFieldSecret(encryptedSecretPrevious);
+    const previousSignature = signPayload(previousSecret, payloadString, timestamp);
+    return `t=${timestamp},v1=${previousSignature}`;
+  } catch (decryptError) {
+    logger.warn(
+      { webhookId, error: decryptError },
+      'webhook.delivery.previous_secret_decrypt_failed',
+    );
+    return undefined;
+  }
+}
+
+/**
+ * Builds the outbound webhook request headers (signature + optional dual-sign / request-id).
+ *
+ * @remarks
+ * sec-N3 + sec-new-B2: `X-Webhook-Delivery-Id` carries the stable per-delivery public id (the same
+ * BullMQ job reads the same row → same public id), so receivers can dedupe at-least-once
+ * redeliveries without the bigserial leaking table cardinality or enabling enumeration.
+ */
+function buildWebhookRequestHeaders(options: {
+  timestamp: number;
+  signature: string;
+  eventType: string;
+  deliveryAttemptPublicId: string;
+  previousSignatureHeader: string | undefined;
+  requestId: string | undefined;
+}): Record<string, string> {
+  const {
+    timestamp,
+    signature,
+    eventType,
+    deliveryAttemptPublicId,
+    previousSignatureHeader,
+    requestId,
+  } = options;
+  return {
+    'Content-Type': 'application/json',
+    'X-Webhook-Signature': `t=${timestamp},v1=${signature}`,
+    'X-Webhook-Event': eventType,
+    'X-Webhook-Timestamp': String(timestamp),
+    'X-Webhook-Delivery-Id': deliveryAttemptPublicId,
+    ...(previousSignatureHeader ? { 'X-Webhook-Signature-Previous': previousSignatureHeader } : {}),
+    ...(requestId ? { 'X-Request-Id': requestId } : {}),
+  };
+}
+
+/**
+ * Reads the delivery response body under the byte cap, returning the stored-form string and never
+ * throwing — a read/parse failure is logged and yields a `'[parse error]'` placeholder so the
+ * delivery outcome is still recorded.
+ *
+ * @remarks
+ * audit-#6: streams at most {@link WEBHOOK_DELIVERY_RESPONSE_BODY_READ_MAX_BYTES} off the wire so a
+ * hostile or broken endpoint cannot OOM the shared worker via a huge / gzip-expanded body.
+ */
+async function readWebhookResponseBodyOrPlaceholder(options: {
+  response: Response;
+  jobContext: WebhookDeliveryJobContext;
+  deliveryAttemptId: number;
+  webhookId: number;
+  webhookUrlLogFields: ReturnType<typeof safeWebhookUrlForLogs>;
+}): Promise<string> {
+  const { response, jobContext, deliveryAttemptId, webhookId, webhookUrlLogFields } = options;
+  try {
+    const capped = await readResponseBodyCapped(
+      response,
+      WEBHOOK_DELIVERY_RESPONSE_BODY_READ_MAX_BYTES,
+    );
+    return formatStoredResponseBody(capped.body, capped.truncated);
+  } catch (parseError) {
+    logger.warn(
+      {
+        jobId: jobContext.id,
+        requestId: jobContext.requestId,
+        deliveryAttemptId,
+        webhookId,
+        ...webhookUrlLogFields,
+        parseError: parseError instanceof Error ? parseError.message : 'Unknown error',
+      },
+      'webhook.response.body.parse.failed',
+    );
+    return '[parse error]';
+  }
+}
+
+/**
  * Phase 2 (no DB context): HMAC-sign the payload and POST it through the per-webhook circuit
  * breaker / DNS-pinned fetch, then record the outcome via a fresh short transaction. Runs with
  * no open Postgres transaction so the up-to-~35s outbound call cannot starve the pool.
@@ -301,33 +418,15 @@ async function deliverClaimedWebhook(options: {
   }
   const signature = signPayload(signingSecret, payloadString, timestamp);
 
-  // sec-N8: dual-sign while inside the rotation overlap window so a customer
-  // who has not yet rolled their verifier still sees a matching signature.
-  // We deliberately swallow decryption errors on the previous secret — if it
-  // is corrupted or unreadable we simply drop the dual-sign header rather
-  // than fail the delivery.
-  let previousSignatureHeader: string | undefined;
-  if (
-    encryptedSecretPrevious !== null &&
-    encryptedSecretPrevious.length > 0 &&
-    secretRotatedAt !== null
-  ) {
-    const overlapWindowMs = env.WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS * 60 * 60 * 1000;
-    const rotatedAtMs =
-      secretRotatedAt instanceof Date ? secretRotatedAt.getTime() : Number(secretRotatedAt);
-    if (Number.isFinite(rotatedAtMs) && Date.now() < rotatedAtMs + overlapWindowMs) {
-      try {
-        const previousSecret = decryptFieldSecret(encryptedSecretPrevious);
-        const previousSignature = signPayload(previousSecret, payloadString, timestamp);
-        previousSignatureHeader = `t=${timestamp},v1=${previousSignature}`;
-      } catch (decryptError) {
-        logger.warn(
-          { webhookId, error: decryptError },
-          'webhook.delivery.previous_secret_decrypt_failed',
-        );
-      }
-    }
-  }
+  // sec-N8: dual-sign while inside the rotation overlap window so a customer who has not yet
+  // rolled their verifier still sees a matching signature (decrypt failures drop the header).
+  const previousSignatureHeader = computeWebhookPreviousSignatureHeader({
+    encryptedSecretPrevious,
+    secretRotatedAt,
+    payloadString,
+    timestamp,
+    webhookId,
+  });
 
   const webhookUrlLogFields = safeWebhookUrlForLogs(webhookUrl);
 
@@ -350,6 +449,15 @@ async function deliverClaimedWebhook(options: {
         ? await createPinnedWebhookFetch(webhookUrl)
         : fetchImplementation;
 
+    const requestHeaders = buildWebhookRequestHeaders({
+      timestamp,
+      signature,
+      eventType,
+      deliveryAttemptPublicId,
+      previousSignatureHeader,
+      requestId: jobContext.requestId,
+    });
+
     const response = await outboundCall(
       buildOutboundCallOptions({
         name: 'webhook',
@@ -361,21 +469,7 @@ async function deliverClaimedWebhook(options: {
             webhookUrl,
             init: {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Webhook-Signature': `t=${timestamp},v1=${signature}`,
-                'X-Webhook-Event': eventType,
-                'X-Webhook-Timestamp': String(timestamp),
-                // sec-N3 + sec-new-B2: stable per-delivery public id (same BullMQ
-                // job reads the same row → same public_id) so receivers can dedupe
-                // at-least-once redeliveries without the bigserial leaking table
-                // cardinality or enabling enumeration.
-                'X-Webhook-Delivery-Id': deliveryAttemptPublicId,
-                ...(previousSignatureHeader
-                  ? { 'X-Webhook-Signature-Previous': previousSignatureHeader }
-                  : {}),
-                ...(jobContext.requestId ? { 'X-Request-Id': jobContext.requestId } : {}),
-              },
+              headers: requestHeaders,
               body: payloadString,
               signal,
             },
@@ -384,31 +478,13 @@ async function deliverClaimedWebhook(options: {
       }),
     );
 
-    let responseBody: string;
-    try {
-      // audit-#6: stream at most WEBHOOK_DELIVERY_RESPONSE_BODY_READ_MAX_BYTES off the wire and
-      // cancel the reader, rather than buffering the entire body via `response.text()` and slicing
-      // afterwards. This bounds worker heap regardless of Content-Length / chunked / gzip-expanded
-      // size, so a hostile endpoint cannot OOM the shared worker (poison-loop across retries).
-      const capped = await readResponseBodyCapped(
-        response,
-        WEBHOOK_DELIVERY_RESPONSE_BODY_READ_MAX_BYTES,
-      );
-      responseBody = formatStoredResponseBody(capped.body, capped.truncated);
-    } catch (parseError) {
-      logger.warn(
-        {
-          jobId: jobContext.id,
-          requestId: jobContext.requestId,
-          deliveryAttemptId,
-          webhookId,
-          ...webhookUrlLogFields,
-          parseError: parseError instanceof Error ? parseError.message : 'Unknown error',
-        },
-        'webhook.response.body.parse.failed',
-      );
-      responseBody = '[parse error]';
-    }
+    const responseBody = await readWebhookResponseBodyOrPlaceholder({
+      response,
+      jobContext,
+      deliveryAttemptId,
+      webhookId,
+      webhookUrlLogFields,
+    });
     const httpStatus = response.status;
     const isSuccess = httpStatus >= 200 && httpStatus < 300;
 

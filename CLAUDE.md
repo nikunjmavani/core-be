@@ -309,6 +309,10 @@ See **[import-paths.mdc](.cursor/rules/import-paths.mdc)** — `@/` in `src/`, `
 
 This repo uses **Context7 MCP** for up-to-date, version-specific documentation. Scope is **backend only** (Fastify, Drizzle, BullMQ, Postgres, Node). Add `use context7` to prompts when asking about library APIs or setup; mention versions (e.g. Fastify 5, Drizzle 0.45) for version-specific docs.
 
+## Headroom (agent context compression)
+
+All AI agents (Claude Code, Cursor, Codex) share the **Headroom MCP** server (wired in `.mcp.example.json` ↔ `agent-os/mcp/mcp.example.json`) as a context-compression layer. Route large, low-signal text — long command/CI/test output, logs, whole-file reads, RAG/search chunks — through `headroom_compress` before loading it into context (same answers, far fewer tokens); use `headroom_retrieve` when exact bytes are needed and `headroom_stats` to check savings. Do **not** compress small outputs or content applied verbatim (diffs, code to edit, migration SQL, secrets). Setup: `pip install "headroom-ai[mcp]"` then `headroom mcp install`. Detail: rule **`agent-os/rules/headroom-context-compression.mdc`** (`alwaysApply`).
+
 ## Keeping Docs and Skills in Sync
 
 When **code or architecture changes**, consult **`.cursor/skills/skill-index/SKILL.md` first** — it maps what changed to which skill(s) to run (no duplicate invocations).
