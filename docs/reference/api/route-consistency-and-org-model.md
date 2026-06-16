@@ -86,7 +86,7 @@ Returning 409 would invite clients to retry a request that is futile by construc
 Three footer sections are derived programmatically — never hand-curated:
 
 1. **IDEMPOTENCY-REQUIRED WRITES (8)** — every route whose `I` column is `req`. A missing or reused `X-Idempotency-Key` is rejected with 422.
-2. **DEPRECATED ROUTES** — routes that emit `Sunset` / `Deprecation` headers (today: the `POST /api/v1/billing/stripe/webhook` alias).
+2. **DEPRECATED ROUTES** — routes that emit `Sunset` / `Deprecation` headers (none currently registered; emitted via `applyDeprecatedEndpointHeaders` when a route is deprecated).
 3. **PERMISSION CODES REFERENCE** — every permission string grouped by domain, **auto-derived from the `*.permissions.ts` constants**. Because it reads the constants rather than a hand-maintained list, newly added codes (e.g. `upload:manage`) appear automatically.
 
 ### 3.2 The `O` column side-table and its gate

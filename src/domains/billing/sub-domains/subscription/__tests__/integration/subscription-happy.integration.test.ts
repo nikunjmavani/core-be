@@ -125,7 +125,7 @@ describe('Billing subscription — happy paths (mocked payment provider)', () =>
   it('POST /billing/webhook (legacy alias) accepts a signed Stripe event (200)', async () => {
     const webhookSigningSecret = env.STRIPE_WEBHOOK_SECRET;
     if (!webhookSigningSecret) {
-      // Mirrors the sibling /billing/stripe/webhook suite: skip without a signing secret.
+      // Mirrors the sibling stripe-webhook suite: skip without a signing secret.
       return;
     }
 

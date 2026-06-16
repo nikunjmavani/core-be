@@ -31,7 +31,6 @@ const NO_BODY_ROUTE_PATH_ALLOWLIST = [
   '/webhooks/',
   '/test',
   '/webhook',
-  '/stripe/webhook',
 ] as const;
 
 const REGISTRAR_ONLY_ROUTE_FILES = new Set([

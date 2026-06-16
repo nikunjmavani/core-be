@@ -172,7 +172,7 @@ Legend:
 These three sections are derived programmatically — never hand-maintained:
 
 1. **IDEMPOTENCY-REQUIRED WRITES** — the 8 routes whose `I` column is `req` (the `idempotencyRequired` set); a missing or reused `X-Idempotency-Key` is rejected with 422.
-2. **DEPRECATED ROUTES** — routes that emit `Sunset` / `Deprecation` headers (currently the `POST /api/v1/billing/stripe/webhook` alias).
+2. **DEPRECATED ROUTES** — routes that emit `Sunset` / `Deprecation` headers (none currently registered).
 3. **PERMISSION CODES REFERENCE** — every permission string grouped by domain, **auto-derived from the `*.permissions.ts` constants**. Because it reads the constants (not a hand-curated list), newly added codes such as `upload:manage` appear automatically.
 
 ## Output

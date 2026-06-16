@@ -13,7 +13,7 @@ When to set which HTTP status — the single contract every route, test, and doc
 | PUT / PATCH | **200** | Updated resource returned. |
 | DELETE | **204** | Deleted/revoked; no body. |
 
-**Exceptions (protocol-owned, stay 200):** `POST /api/v1/billing/webhook`, `POST /api/v1/billing/stripe/webhook` (Stripe expects a 200 acknowledgement) and `POST /api/v1/mcp` (the MCP streamable-HTTP transport owns its codes). The exemption list is `METHOD_STATUS_POLICY_EXEMPT_PREFIXES` in the middleware.
+**Exceptions (protocol-owned, stay 200):** `POST /api/v1/billing/webhook` (Stripe expects a 200 acknowledgement) and `POST /api/v1/mcp` (the MCP streamable-HTTP transport owns its codes). The exemption list is `METHOD_STATUS_POLICY_EXEMPT_PREFIXES` in the middleware.
 
 **PUT vs PATCH, and action verbs:** PUT replaces a resource in full; PATCH merges a partial update (both → 200). A collection-level action that has no target id is a `POST /collection/verb` (e.g. `POST /tenancy/organization/transfer-ownership`); a single-resource state change is a `PATCH /resource/:id/state` (or a dedicated action sub-path). Don't model a named action as a bare PUT/PATCH on the parent resource when it has its own verb.
 
