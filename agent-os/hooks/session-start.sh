@@ -69,6 +69,27 @@ if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && [ -x node_modules/.bin/biome ]; the
   fi
 fi
 
+# --- Best-effort: ensure the Docker daemon is up on remote (web) sessions ----
+# DB / Redis / chaos work needs `docker compose`, but the cloud image ships
+# dockerd without starting it. Start it best-effort so `compose:up` works when
+# invoked on demand; never block or fail the session. No-op locally (Docker
+# Desktop owns the daemon), when the daemon is already reachable, when dockerd is
+# absent, or when passwordless sudo is unavailable. compose:up / migrations /
+# seeds remain on-demand per prompt — only the daemon is started here.
+docker_status="n/a"
+if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && command -v docker >/dev/null 2>&1; then
+  if docker info >/dev/null 2>&1; then
+    docker_status="up"
+  elif command -v dockerd >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+    echo "session-start: Docker daemon down — starting dockerd (best-effort)…" >&2
+    setsid sudo -n dockerd >/tmp/dockerd-session-start.log 2>&1 </dev/null & disown 2>/dev/null || true
+    for _ in 1 2 3 4 5 6 7 8 9 10; do docker info >/dev/null 2>&1 && break; sleep 1; done
+    if docker info >/dev/null 2>&1; then docker_status="started"; else docker_status="start-failed (run: sudo dockerd)"; fi
+  else
+    docker_status="down (start manually: sudo dockerd)"
+  fi
+fi
+
 # --- Build session context: skill routing map + env/commands summary --------
 node_version="$(node -v 2>/dev/null || echo unknown)"
 deps="missing"; [ -x node_modules/.bin/biome ] && deps="installed"
@@ -83,8 +104,8 @@ map_file="$ROOT/agent-os/docs/skill-triggers.md"
 map_section=""
 [ -f "$map_file" ] && map_section="$(cat "$map_file")"
 
-context="$(printf 'core-be session ready — environment provisioned: %s.\n- Node %s (need >=%s) · deps %s · gh %s · codegraph %s · agent-os %s%s\n- Startup is light: Node + deps + agent-os:check only — run compose:up / db:migrate / db:seed / tests on demand per prompt.\n- Gates: pnpm validate · pnpm ci:local   (pre-commit: pnpm guard:pre-commit)\n- Custom commands: /validate · /ci-local · /new-domain · /routes-sync\n\nagent-os skill routing — consult skill-index FIRST, then run the listed skill(s) for the files you change:\n\n%s' \
-  "$provisioned" "$node_version" "$required_major" "$deps" "$gh_cli" "$codegraph" "$agent_os_status" "$node_note" "$map_section")"
+context="$(printf 'core-be session ready — environment provisioned: %s.\n- Node %s (need >=%s) · deps %s · gh %s · codegraph %s · agent-os %s · docker %s%s\n- Startup is light: Node + deps + agent-os:check + (web) Docker daemon — run compose:up / db:migrate / db:seed / tests on demand per prompt.\n- Gates: pnpm validate · pnpm ci:local   (pre-commit: pnpm guard:pre-commit)\n- Custom commands: /validate · /ci-local · /new-domain · /routes-sync\n\nagent-os skill routing — consult skill-index FIRST, then run the listed skill(s) for the files you change:\n\n%s' \
+  "$provisioned" "$node_version" "$required_major" "$deps" "$gh_cli" "$codegraph" "$agent_os_status" "$docker_status" "$node_note" "$map_section")"
 
 # Prefer the structured additionalContext envelope; fall back to plain stdout
 # (also injected as context) when jq is unavailable. Fail-open either way.

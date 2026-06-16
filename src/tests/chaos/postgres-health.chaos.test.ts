@@ -21,8 +21,23 @@ describe('Chaos resilience: Postgres outage on readiness probing', () => {
 
   afterAll(async () => {
     await resetChaosTestingListeningProxyFailuresGloballyViaToxiproxy();
-    await chaosListeningFastifyApplicationListeningForHealthIsolation.close();
-  }, 120_000);
+    // The test administratively disables the Postgres proxy, which can leave the postgres.js
+    // pool holding a severed connection. Probe once (best-effort) so the pool re-establishes a
+    // live connection now that the proxy is re-enabled, then bound `app.close()` so a stuck
+    // `sql.end()` drain can never hang teardown up to the hook timeout. The forked worker exits
+    // immediately afterward, so the OS reclaims any lingering socket.
+    await chaosListeningFastifyApplicationListeningForHealthIsolation
+      .inject({ method: 'GET', url: '/readyz' })
+      .catch(() => undefined);
+    const gracefulCloseAwaitingPoolDrain =
+      chaosListeningFastifyApplicationListeningForHealthIsolation.close().catch(() => undefined);
+    await Promise.race([
+      gracefulCloseAwaitingPoolDrain,
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, 15_000);
+      }),
+    ]);
+  }, 30_000);
 
   it('returns health failure while Postgres is partitioned', async () => {
     await withTemporaryListeningProxyAdministrativelyDisabledForChaosAssertion(

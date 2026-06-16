@@ -1621,6 +1621,7 @@ src/
     │   ├── authz-model-coverage.global.test.ts
     │   ├── authz-runtime-coverage.global.test.ts
     │   ├── domain-consistency.global.test.ts
+    │   ├── ensure-openapi-spec.global-setup.ts
     │   ├── external-sdk-coverage.global.test.ts
     │   ├── import-paths.global.test.ts
     │   ├── no-direct-db-in-services.global.test.ts
@@ -1677,7 +1678,6 @@ src/
     │   │   ├── migration-rollback.integration.test.ts
     │   │   ├── migrations-backward.integration.test.ts
     │   │   ├── migrations-forward.integration.test.ts
-    │   │   ├── testcontainers-postgres.integration.test.ts
     │   │   └── transaction-rollback.integration.test.ts
     │   ├── observability/
     │   │   ├── db-pool-metrics.integration.test.ts
