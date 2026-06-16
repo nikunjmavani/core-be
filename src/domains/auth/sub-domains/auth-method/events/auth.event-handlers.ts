@@ -8,6 +8,7 @@ import {
 import { magicLinkTemplate } from '@/infrastructure/mail/templates/magic-link.template.js';
 import { isMailConfigured } from '@/infrastructure/mail/mail.service.js';
 import { env } from '@/shared/config/env.config.js';
+import { DEFAULT_FRONTEND_URL } from '@/shared/constants/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import {
   AUTH_EVENT,
@@ -40,7 +41,7 @@ async function handleMagicLinkEmail(
     throw new ServiceUnavailableError('errors:mailNotConfigured');
   }
 
-  const frontendUrl = env.FRONTEND_URL ?? 'http://localhost:3000';
+  const frontendUrl = env.FRONTEND_URL ?? DEFAULT_FRONTEND_URL;
   const magicLinkUrl = `${frontendUrl}/auth/magic-link/verify?token=${payload.magic_link_token}&email=${encodeURIComponent(payload.email)}`;
   const html = magicLinkTemplate({
     magicLinkUrl,
@@ -66,7 +67,7 @@ async function handlePasswordResetEmail(
     throw new ServiceUnavailableError('errors:mailNotConfigured');
   }
 
-  const frontendUrl = env.FRONTEND_URL ?? 'http://localhost:3000';
+  const frontendUrl = env.FRONTEND_URL ?? DEFAULT_FRONTEND_URL;
   const resetUrl = `${frontendUrl}/auth/password/reset?token=${payload.reset_token}`;
 
   await recordAndScheduleOutboxEmail(
@@ -92,7 +93,7 @@ async function handleEmailVerificationEmail(
     throw new ServiceUnavailableError('errors:mailNotConfigured');
   }
 
-  const frontendUrl = env.FRONTEND_URL ?? 'http://localhost:3000';
+  const frontendUrl = env.FRONTEND_URL ?? DEFAULT_FRONTEND_URL;
   const verifyUrl = `${frontendUrl}/auth/email/verify?token=${payload.verification_token}`;
 
   await recordAndScheduleOutboxEmail(
