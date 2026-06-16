@@ -1590,8 +1590,13 @@ src/
     │   ├── signup-flow.e2e.test.ts
     │   └── tenancy-billing-org.e2e.test.ts
     ├── factories/
+    │   ├── mfa-method.factory.ts
+    │   ├── notification.factory.ts
+    │   ├── organization-api-key.factory.ts
+    │   ├── organization-notification-policy.factory.ts
     │   ├── organization.factory.ts
     │   ├── plan.factory.ts
+    │   ├── user-data-export.factory.ts
     │   ├── user.factory.ts
     │   └── webhook.factory.ts
     ├── fixtures/
@@ -1613,6 +1618,8 @@ src/
     │   │       ├── 20250101000001_first.sql
     │   │       └── 20250102000001_second.sql
     ├── global/
+    │   ├── authz-model-coverage.global.test.ts
+    │   ├── authz-runtime-coverage.global.test.ts
     │   ├── domain-consistency.global.test.ts
     │   ├── ensure-openapi-spec.global-setup.ts
     │   ├── external-sdk-coverage.global.test.ts
@@ -1641,6 +1648,7 @@ src/
     │   ├── object-storage-mock.helper.ts
     │   ├── registered-route.util.ts
     │   ├── rls-matrix.helper.ts
+    │   ├── route-authorization-model.ts
     │   ├── route-catalog-auth.ts
     │   ├── route-catalog-registry.ts
     │   ├── route-http-coverage.helper.ts
@@ -1764,6 +1772,14 @@ src/
     │   │   ├── open-redirect.security.test.ts
     │   │   ├── privilege-escalation.security.test.ts
     │   │   └── session-invalidation.security.test.ts
+    │   ├── authz/
+    │   │   ├── admin-only.security.test.ts
+    │   │   ├── auth-token-flow.security.test.ts
+    │   │   ├── cross-org-mutation.security.test.ts
+    │   │   ├── cross-org-resource.security.test.ts
+    │   │   ├── invitation-email.security.test.ts
+    │   │   ├── object-ownership.security.test.ts
+    │   │   └── tier-and-grant.security.test.ts
     │   ├── headers/
     │   │   ├── cors.security.test.ts
     │   │   ├── csp.security.test.ts

@@ -1,0 +1,126 @@
+# core-be — Hadrian roles & object model
+#
+# Permission format: action:object:scope  (e.g. read:upload:own, *:*:*)
+# level: higher = more privileged. Hadrian's BOLA templates pick attacker=lower,
+# victim=higher, then try the attacker's token against the victim's resources.
+#
+# Mapping to the core-be threat model (docs/reference/security/authorization-testing-plan.md §2.1):
+#   super_admin → global ROLE: routes      owner → org owner tier
+#   admin       → org member w/ :manage     member → org member w/ :read
+#   user_a/user_b → two peer users for cross-user BOLA on /me resources (b attacks a)
+
+objects:
+  - user
+  - auth_method
+  - session
+  - mfa_method
+  - notification
+  - upload
+  - data_export
+  - invitation
+  - organization
+  - role
+  - membership
+  - api_key
+  - notification_policy
+  - subscription
+  - webhook
+
+roles:
+  - name: super_admin
+    level: 100
+    permissions: ["*:*:*"]
+    auth:
+      token: "${CORE_BE_SUPER_ADMIN_TOKEN}"
+
+  - name: owner
+    level: 50
+    permissions: ["*:*:org"]
+    auth:
+      token: "${CORE_BE_OWNER_TOKEN}"
+
+  - name: admin
+    level: 40
+    permissions:
+      - "read:*:org"
+      - "write:role:org"
+      - "write:membership:org"
+      - "write:webhook:org"
+      - "write:subscription:org"
+      - "write:api_key:org"
+    auth:
+      token: "${CORE_BE_ADMIN_TOKEN}"
+
+  - name: member
+    level: 30
+    permissions:
+      - "read:organization:org"
+      - "read:membership:org"
+      - "read:role:org"
+    auth:
+      token: "${CORE_BE_MEMBER_TOKEN}"
+
+  # Victim peer user — owns the resources targeted by cross-user BOLA tests.
+  - name: user_a
+    level: 20
+    permissions:
+      - "read:user:own"
+      - "write:user:own"
+      - "read:upload:own"
+      - "write:upload:own"
+      - "read:notification:own"
+      - "read:data_export:own"
+      - "read:session:own"
+      - "read:mfa_method:own"
+      - "read:auth_method:own"
+    auth:
+      token: "${CORE_BE_USER_A_TOKEN}"
+
+  # Attacker peer user — lower level so templates treat it as the attacker.
+  - name: user_b
+    level: 10
+    permissions:
+      - "read:user:own"
+    auth:
+      token: "${CORE_BE_USER_B_TOKEN}"
+
+  - name: anonymous
+    level: 0
+    permissions: []
+    auth:
+      token: ""
+
+# Path → object mapping for the by-id / ownership-bearing routes.
+# Paths use OpenAPI {param} style and the /api/v1 prefix; verify against the
+# generated spec (run `tooling/hadrian/run-hadrian.sh local --dry-run`).
+endpoints:
+  # User-owned (cross-user BOLA — the primary target where Hadrian shines)
+  - path: "/api/v1/users/{user_id}"
+    object: user
+  - path: "/api/v1/auth/me/auth-methods/{auth_method_id}"
+    object: auth_method
+  - path: "/api/v1/auth/me/sessions/{session_id}"
+    object: session
+  - path: "/api/v1/auth/mfa/{mfa_method_id}"
+    object: mfa_method
+  - path: "/api/v1/notify/notifications/{notification_id}"
+    object: notification
+  - path: "/api/v1/uploads/{upload_id}"
+    object: upload
+  - path: "/api/v1/users/me/data-export/{export_id}"
+    object: data_export
+  - path: "/api/v1/tenancy/invitations/{invitation_id}/accept"
+    object: invitation
+  # Org-owned (cross-tenant BOLA + BFLA — org resolved from JWT `org` claim)
+  - path: "/api/v1/tenancy/organization/roles/{role_id}"
+    object: role
+  - path: "/api/v1/tenancy/organization/memberships/{membership_id}"
+    object: membership
+  - path: "/api/v1/tenancy/organization/api-keys/{api_key_id}"
+    object: api_key
+  - path: "/api/v1/tenancy/organization/notification-policies/{policy_id}"
+    object: notification_policy
+  - path: "/api/v1/billing/subscriptions/{subscription_id}"
+    object: subscription
+  - path: "/api/v1/notify/webhooks/{webhook_id}"
+    object: webhook
