@@ -33,7 +33,7 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
 import { buildWorkerHandle } from '@/infrastructure/queue/worker-runtime/worker-close.util.js';
 import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
-import { TEN_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
+import { MILLISECONDS_PER_HOUR, TEN_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
 import { env } from '@/shared/config/env.config.js';
 
 /** Maximum response-body length persisted to the delivery-attempt record (bounds storage growth). */
@@ -312,7 +312,7 @@ async function deliverClaimedWebhook(options: {
     encryptedSecretPrevious.length > 0 &&
     secretRotatedAt !== null
   ) {
-    const overlapWindowMs = env.WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS * 60 * 60 * 1000;
+    const overlapWindowMs = env.WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS * MILLISECONDS_PER_HOUR;
     const rotatedAtMs =
       secretRotatedAt instanceof Date ? secretRotatedAt.getTime() : Number(secretRotatedAt);
     if (Number.isFinite(rotatedAtMs) && Date.now() < rotatedAtMs + overlapWindowMs) {

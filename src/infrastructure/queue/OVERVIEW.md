@@ -13,6 +13,7 @@ BullMQ + Redis runtime for the platform. Owns connection management, the worker 
 - **Producer `enableOfflineQueue: false`**: API-side enqueue helpers use `getBullMQProducerConnectionOptions()` ([connection.ts](src/infrastructure/queue/connection.ts)) so a Redis partition fails the add immediately instead of buffering jobs that would never drain (workers keep the shared options from `getBullMQConnectionOptions()`).
 - **Centralized scheduler**: every repeatable retention job is registered through [scheduler.ts](src/infrastructure/queue/scheduler.ts) so the cron index is trivially auditable. Domains export their queue + processor; this module owns the registration moment.
 - **Per-queue DLQ**: every queue has a sibling `<name>-dlq` queue that captures final-retry failures with full job context. Final failures additionally fire a Sentry event from [bootstrap.ts](src/infrastructure/queue/bootstrap.ts).
+- **Shared job-options policy**: cross-queue defaults that are not queue-specific (e.g. completed/failed job retention count) live in [queue.constants.ts](src/infrastructure/queue/queue.constants.ts) so every event-driven domain producer queue stays consistent; queue-specific options (attempts, backoff, failure caps) remain in each domain's queue file.
 - **Workers must use `runTenantScopedWorkerJob` / `runGlobalRetentionWorkerJob` / `runUserScopedWorkerJob`** from [worker-runtime/worker-processor.util.ts](src/infrastructure/queue/worker-runtime/worker-processor.util.ts). Workers are forbidden from importing `request-database.context.ts` (enforced by [worker-runtime/worker-database-guard.util.ts](src/infrastructure/queue/worker-runtime/) and global tests).
 - **Heartbeat keys in Redis**: each worker publishes a heartbeat with `WORKER_QUEUE_HEARTBEAT_TTL_SECONDS = 86 400`; the admin worker-readiness script consumes them.
 
@@ -34,6 +35,7 @@ BullMQ + Redis runtime for the platform. Owns connection management, the worker 
 - `BULLMQ_WEBHOOK_LOCK_DURATION_MS = 60 000`
 - `BULLMQ_RETENTION_LOCK_DURATION_MS = 120 000`
 - `WORKER_QUEUE_HEARTBEAT_TTL_SECONDS = 86 400`
+- `DEFAULT_JOB_RETENTION_COUNT = 1 000` — completed/failed jobs kept per event-driven domain producer queue.
 - `WORKER_CONCURRENCY` (env) — per-worker job parallelism.
 
 ## Failure modes

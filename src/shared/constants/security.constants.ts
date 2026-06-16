@@ -8,6 +8,9 @@
  */
 export const AES_GCM_IV_LENGTH = 12;
 
+/** AES-256-GCM cipher identifier passed to Node `crypto.createCipheriv` / `createDecipheriv`. */
+export const AES_GCM_ALGORITHM = 'aes-256-gcm';
+
 /** Failed login attempts before the account is temporarily locked. */
 export const MAX_FAILED_LOGIN_ATTEMPTS = 10;
 

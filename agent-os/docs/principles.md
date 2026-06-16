@@ -25,7 +25,7 @@ Write production-grade, maintainable, scalable code. Preserve simplicity; avoid 
 
 - Prefer simple solutions over clever ones.
 - Keep functions small and single-purpose; use descriptive naming.
-- Avoid magic numbers and hardcoded values; extract constants when reused.
+- Avoid magic numbers and hardcoded values; extract constants when reused. Place each constant at the **lowest scope that covers its use sites** — one file → a local `const`; one sub-domain/domain → a co-located `*.constants.ts`; cross-cutting primitives only → `src/shared/constants/`. See **[core-be-src-architecture.mdc](../rules/core-be-src-architecture.mdc)**.
 - Add comments only when logic is non-obvious.
 - Remove dead code, unused imports, `console.log`, and commented-out code.
 - Use `logger` from `@/shared/utils/infrastructure/logger.util.js` in application code.
