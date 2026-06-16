@@ -5,6 +5,8 @@ import {
   usesSeparateBullMqRedisDatabase,
 } from '@/infrastructure/cache/redis-url.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { FIVE_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
+import { REDIS_RECONNECT_DELAY_STEP_MS } from '@/infrastructure/cache/redis.constants.js';
 
 const bullMqRedisUrl = resolveBullMqRedisUrl();
 
@@ -25,7 +27,7 @@ export const bullmqRedisConnection = new Redis(bullMqRedisUrl, {
   /** Explicit TLS cert verification when the BullMQ URL is rediss:// (no-op for plaintext redis://). */
   ...buildRedisTlsOptions(bullMqRedisUrl),
   retryStrategy(times: number) {
-    const delay = Math.min(times * 200, 5_000);
+    const delay = Math.min(times * REDIS_RECONNECT_DELAY_STEP_MS, FIVE_SECONDS_MS);
     logger.warn({ attempt: times, delayMs: delay }, 'redis.bullmq.reconnecting');
     return delay;
   },
@@ -88,7 +90,7 @@ export async function closeBullMqRedis(): Promise<void> {
     setTimeout(() => {
       logger.warn('redis.bullmq.close.timeout');
       resolve();
-    }, 5_000);
+    }, FIVE_SECONDS_MS);
   });
   await Promise.race([bullmqRedisConnection.quit(), timeout]);
 }
