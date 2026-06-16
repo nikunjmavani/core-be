@@ -1773,7 +1773,11 @@ src/
     │   │   └── session-invalidation.security.test.ts
     │   ├── authz/
     │   │   ├── admin-only.security.test.ts
-    │   │   └── object-ownership.security.test.ts
+    │   │   ├── auth-token-flow.security.test.ts
+    │   │   ├── cross-org-resource.security.test.ts
+    │   │   ├── invitation-email.security.test.ts
+    │   │   ├── object-ownership.security.test.ts
+    │   │   └── tier-and-grant.security.test.ts
     │   ├── headers/
     │   │   ├── cors.security.test.ts
     │   │   ├── csp.security.test.ts
