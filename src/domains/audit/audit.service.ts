@@ -138,44 +138,14 @@ export class AuditService {
   async list(query: Record<string, unknown>) {
     const parsed = validateListAuditLogsQuery(query);
 
-    let organization_id: number | undefined;
-    let actor_user_id: number | undefined;
-
-    if (parsed.organization_id) {
-      const organization = await this.organizationService.findOrganizationByPublicId(
-        parsed.organization_id,
-      );
-      if (!organization) {
-        return {
-          items: [],
-          resolution: { userPublicIds: new Map(), organizationPublicIds: new Map() },
-          total: parsed.include_total === 'true' ? 0 : null,
-          limit: parsed.limit,
-          has_more: false,
-          next_cursor: null,
-        };
-      }
-      organization_id = organization.id;
-    }
-
-    if (parsed.actor_user_id) {
-      const user = await this.userService.findUserRecordByPublicId(parsed.actor_user_id);
-      if (!user) {
-        return {
-          items: [],
-          resolution: { userPublicIds: new Map(), organizationPublicIds: new Map() },
-          total: parsed.include_total === 'true' ? 0 : null,
-          limit: parsed.limit,
-          has_more: false,
-          next_cursor: null,
-        };
-      }
-      actor_user_id = user.id;
+    const resolvedFilterIds = await this.resolveListFilterIds(parsed);
+    if (resolvedFilterIds === null) {
+      return this.buildEmptyAuditListResult(parsed);
     }
 
     const filters: AuditLogFilters = omitUndefined({
-      organization_id,
-      actor_user_id,
+      organization_id: resolvedFilterIds.organization_id,
+      actor_user_id: resolvedFilterIds.actor_user_id,
       resource_type: parsed.resource_type,
       action: parsed.action,
       from: parsed.from,
@@ -210,6 +180,45 @@ export class AuditService {
       limit: parsed.limit,
       has_more: hasMore,
       next_cursor: nextCursor,
+    };
+  }
+
+  /**
+   * Resolves the optional organization / actor public-id filters to internal ids.
+   * Returns `null` when a referenced entity does not exist (caller returns an empty page).
+   */
+  private async resolveListFilterIds(
+    parsed: ReturnType<typeof validateListAuditLogsQuery>,
+  ): Promise<{ organization_id?: number | undefined; actor_user_id?: number | undefined } | null> {
+    let organization_id: number | undefined;
+    let actor_user_id: number | undefined;
+
+    if (parsed.organization_id) {
+      const organization = await this.organizationService.findOrganizationByPublicId(
+        parsed.organization_id,
+      );
+      if (!organization) return null;
+      organization_id = organization.id;
+    }
+
+    if (parsed.actor_user_id) {
+      const user = await this.userService.findUserRecordByPublicId(parsed.actor_user_id);
+      if (!user) return null;
+      actor_user_id = user.id;
+    }
+
+    return { organization_id, actor_user_id };
+  }
+
+  /** Builds the empty audit-list page returned when a referenced organization/actor is absent. */
+  private buildEmptyAuditListResult(parsed: ReturnType<typeof validateListAuditLogsQuery>) {
+    return {
+      items: [],
+      resolution: { userPublicIds: new Map(), organizationPublicIds: new Map() },
+      total: parsed.include_total === 'true' ? 0 : null,
+      limit: parsed.limit,
+      has_more: false,
+      next_cursor: null,
     };
   }
 

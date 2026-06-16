@@ -235,6 +235,120 @@ async function recordWebhookDeliveryOutcome(options: {
 }
 
 /**
+ * Fail-closed handler for a webhook whose signing secret decrypted to empty: records a terminal
+ * FAILED outcome, pages on-call via Sentry, and throws `UnrecoverableError` so BullMQ skips retries
+ * and the job lands in the DLQ.
+ */
+async function failWebhookOnEmptySigningSecret(options: {
+  deliveryAttemptId: number;
+  organizationPublicId: string;
+  deliveryAttemptRepository?: WebhookDeliveryAttemptRepository | undefined;
+  webhookId: WebhookDeliveryAttemptWithWebhook['webhookId'];
+  eventType: WebhookDeliveryAttemptWithWebhook['eventType'];
+}): Promise<never> {
+  const {
+    deliveryAttemptId,
+    organizationPublicId,
+    deliveryAttemptRepository,
+    webhookId,
+    eventType,
+  } = options;
+  captureMessage('webhook.delivery.empty_signing_secret', {
+    level: 'error',
+    extra: { webhookId, deliveryAttemptId, eventType },
+  });
+  logger.error(
+    { webhookId, deliveryAttemptId, eventType },
+    'webhook.delivery.empty_signing_secret',
+  );
+  await recordWebhookDeliveryOutcome({
+    deliveryAttemptId,
+    organizationPublicId,
+    deliveryAttemptRepository,
+    outcome: {
+      status: 'FAILED',
+      response_body: 'empty_signing_secret',
+      next_retry_at: null,
+    },
+  });
+  throw new UnrecoverableError('webhook.delivery.empty_signing_secret');
+}
+
+/**
+ * Computes the `X-Webhook-Signature-Previous` header during the secret-rotation overlap window, or
+ * `undefined` when there is no usable previous secret. Decryption failures are swallowed (the
+ * dual-sign header is dropped) so they never fail the delivery.
+ */
+function computePreviousSignatureHeader(options: {
+  encryptedSecretPrevious: WebhookDeliveryAttemptWithWebhook['encryptedSecretPrevious'];
+  secretRotatedAt: WebhookDeliveryAttemptWithWebhook['secretRotatedAt'];
+  payloadString: string;
+  timestamp: number;
+  webhookId: WebhookDeliveryAttemptWithWebhook['webhookId'];
+}): string | undefined {
+  const { encryptedSecretPrevious, secretRotatedAt, payloadString, timestamp, webhookId } = options;
+  if (
+    encryptedSecretPrevious === null ||
+    encryptedSecretPrevious.length === 0 ||
+    secretRotatedAt === null
+  ) {
+    return undefined;
+  }
+  const overlapWindowMs = env.WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS * 60 * 60 * 1000;
+  const rotatedAtMs =
+    secretRotatedAt instanceof Date ? secretRotatedAt.getTime() : Number(secretRotatedAt);
+  if (!Number.isFinite(rotatedAtMs) || Date.now() >= rotatedAtMs + overlapWindowMs) {
+    return undefined;
+  }
+  try {
+    const previousSecret = decryptFieldSecret(encryptedSecretPrevious);
+    const previousSignature = signPayload(previousSecret, payloadString, timestamp);
+    return `t=${timestamp},v1=${previousSignature}`;
+  } catch (decryptError) {
+    logger.warn(
+      { webhookId, error: decryptError },
+      'webhook.delivery.previous_secret_decrypt_failed',
+    );
+    return undefined;
+  }
+}
+
+/**
+ * Streams and caps the webhook response body to a stored-form string. A read/parse failure is
+ * logged and yields the `'[parse error]'` sentinel rather than throwing, so the delivery outcome
+ * is still recorded.
+ */
+async function readCappedWebhookResponseBody(options: {
+  response: Response;
+  jobContext: WebhookDeliveryJobContext;
+  deliveryAttemptId: number;
+  webhookId: WebhookDeliveryAttemptWithWebhook['webhookId'];
+  webhookUrlLogFields: ReturnType<typeof safeWebhookUrlForLogs>;
+}): Promise<string> {
+  const { response, jobContext, deliveryAttemptId, webhookId, webhookUrlLogFields } = options;
+  try {
+    const capped = await readResponseBodyCapped(
+      response,
+      WEBHOOK_DELIVERY_RESPONSE_BODY_READ_MAX_BYTES,
+    );
+    return formatStoredResponseBody(capped.body, capped.truncated);
+  } catch (parseError) {
+    logger.warn(
+      {
+        jobId: jobContext.id,
+        requestId: jobContext.requestId,
+        deliveryAttemptId,
+        webhookId,
+        ...webhookUrlLogFields,
+        parseError: parseError instanceof Error ? parseError.message : 'Unknown error',
+      },
+      'webhook.response.body.parse.failed',
+    );
+    return '[parse error]';
+  }
+}
+
+/**
  * Phase 2 (no DB context): HMAC-sign the payload and POST it through the per-webhook circuit
  * breaker / DNS-pinned fetch, then record the outcome via a fresh short transaction. Runs with
  * no open Postgres transaction so the up-to-~35s outbound call cannot starve the pool.
@@ -279,25 +393,13 @@ async function deliverClaimedWebhook(options: {
   // configuration regression: record FAILED terminally, page on-call via Sentry, and
   // mark the BullMQ job UnrecoverableError so it skips retries and lands in the DLQ.
   if (signingSecret.length === 0) {
-    captureMessage('webhook.delivery.empty_signing_secret', {
-      level: 'error',
-      extra: { webhookId, deliveryAttemptId, eventType },
-    });
-    logger.error(
-      { webhookId, deliveryAttemptId, eventType },
-      'webhook.delivery.empty_signing_secret',
-    );
-    await recordWebhookDeliveryOutcome({
+    await failWebhookOnEmptySigningSecret({
       deliveryAttemptId,
       organizationPublicId,
       deliveryAttemptRepository,
-      outcome: {
-        status: 'FAILED',
-        response_body: 'empty_signing_secret',
-        next_retry_at: null,
-      },
+      webhookId,
+      eventType,
     });
-    throw new UnrecoverableError('webhook.delivery.empty_signing_secret');
   }
   const signature = signPayload(signingSecret, payloadString, timestamp);
 
@@ -306,28 +408,13 @@ async function deliverClaimedWebhook(options: {
   // We deliberately swallow decryption errors on the previous secret — if it
   // is corrupted or unreadable we simply drop the dual-sign header rather
   // than fail the delivery.
-  let previousSignatureHeader: string | undefined;
-  if (
-    encryptedSecretPrevious !== null &&
-    encryptedSecretPrevious.length > 0 &&
-    secretRotatedAt !== null
-  ) {
-    const overlapWindowMs = env.WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS * 60 * 60 * 1000;
-    const rotatedAtMs =
-      secretRotatedAt instanceof Date ? secretRotatedAt.getTime() : Number(secretRotatedAt);
-    if (Number.isFinite(rotatedAtMs) && Date.now() < rotatedAtMs + overlapWindowMs) {
-      try {
-        const previousSecret = decryptFieldSecret(encryptedSecretPrevious);
-        const previousSignature = signPayload(previousSecret, payloadString, timestamp);
-        previousSignatureHeader = `t=${timestamp},v1=${previousSignature}`;
-      } catch (decryptError) {
-        logger.warn(
-          { webhookId, error: decryptError },
-          'webhook.delivery.previous_secret_decrypt_failed',
-        );
-      }
-    }
-  }
+  const previousSignatureHeader = computePreviousSignatureHeader({
+    encryptedSecretPrevious,
+    secretRotatedAt,
+    payloadString,
+    timestamp,
+    webhookId,
+  });
 
   const webhookUrlLogFields = safeWebhookUrlForLogs(webhookUrl);
 
@@ -384,31 +471,17 @@ async function deliverClaimedWebhook(options: {
       }),
     );
 
-    let responseBody: string;
-    try {
-      // audit-#6: stream at most WEBHOOK_DELIVERY_RESPONSE_BODY_READ_MAX_BYTES off the wire and
-      // cancel the reader, rather than buffering the entire body via `response.text()` and slicing
-      // afterwards. This bounds worker heap regardless of Content-Length / chunked / gzip-expanded
-      // size, so a hostile endpoint cannot OOM the shared worker (poison-loop across retries).
-      const capped = await readResponseBodyCapped(
-        response,
-        WEBHOOK_DELIVERY_RESPONSE_BODY_READ_MAX_BYTES,
-      );
-      responseBody = formatStoredResponseBody(capped.body, capped.truncated);
-    } catch (parseError) {
-      logger.warn(
-        {
-          jobId: jobContext.id,
-          requestId: jobContext.requestId,
-          deliveryAttemptId,
-          webhookId,
-          ...webhookUrlLogFields,
-          parseError: parseError instanceof Error ? parseError.message : 'Unknown error',
-        },
-        'webhook.response.body.parse.failed',
-      );
-      responseBody = '[parse error]';
-    }
+    // audit-#6: stream at most WEBHOOK_DELIVERY_RESPONSE_BODY_READ_MAX_BYTES off the wire and
+    // cancel the reader, rather than buffering the entire body via `response.text()`. This bounds
+    // worker heap regardless of Content-Length / chunked / gzip-expanded size, so a hostile
+    // endpoint cannot OOM the shared worker (poison-loop across retries).
+    const responseBody = await readCappedWebhookResponseBody({
+      response,
+      jobContext,
+      deliveryAttemptId,
+      webhookId,
+      webhookUrlLogFields,
+    });
     const httpStatus = response.status;
     const isSuccess = httpStatus >= 200 && httpStatus < 300;
 

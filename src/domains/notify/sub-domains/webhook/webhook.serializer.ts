@@ -5,13 +5,14 @@
  * `encrypted_secret_previous` are signing material and must never appear).
  */
 type SerializableTimestamp = Date | string;
+type SerializableTimestampOrNull = SerializableTimestamp | null;
 
 interface WebhookRow {
   public_id: string;
   url: string;
   events: unknown;
   is_enabled: boolean;
-  secret_rotated_at: SerializableTimestamp | null;
+  secret_rotated_at: SerializableTimestampOrNull;
   created_at: SerializableTimestamp;
   updated_at: SerializableTimestamp;
 }
@@ -69,10 +70,10 @@ interface WebhookDeliveryAttemptRow {
   status: string;
   http_status_code: number | null;
   response_body: string | null;
-  sent_at: Date | string | null;
+  sent_at: SerializableTimestampOrNull;
   attempt_count: number;
-  next_retry_at: Date | string | null;
-  created_at: Date | string;
+  next_retry_at: SerializableTimestampOrNull;
+  created_at: SerializableTimestamp;
 }
 
 function serializeDeliveryAttempt<T extends WebhookDeliveryAttemptRow>(row: T) {
@@ -101,10 +102,10 @@ interface WebhookDeliveryAttemptListRow {
   event_key: string | null;
   status: string;
   http_status_code: number | null;
-  sent_at: Date | string | null;
+  sent_at: SerializableTimestampOrNull;
   attempt_count: number;
-  next_retry_at: Date | string | null;
-  created_at: Date | string;
+  next_retry_at: SerializableTimestampOrNull;
+  created_at: SerializableTimestamp;
 }
 
 function serializeDeliveryAttemptListItem<T extends WebhookDeliveryAttemptListRow>(row: T) {

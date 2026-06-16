@@ -372,29 +372,9 @@ export async function registerScheduledJobs(
       );
     }
 
-    // Drop orphan schedulers — any Redis scheduler whose id is not in the canonical set
-    // for its queue is a rename or removal residue, and BullMQ will otherwise keep firing
-    // it forever (doubling cron rate after rename, firing into a worker-less queue after
-    // removal). We close+reopen per queue rather than holding all queues open at once.
-    for (const [queueName, canonicalIds] of canonicalSchedulerIdsByQueueName) {
-      const queueForReconcile = new Queue(queueName, {
-        connection,
-        defaultJobOptions: SCHEDULED_QUEUE_DEFAULT_JOB_OPTIONS,
-      });
-      try {
-        // getJobSchedulers takes pagination args; first 1000 schedulers per queue is
-        // far above any realistic count for this app.
-        const existingSchedulers = await queueForReconcile.getJobSchedulers(0, 1000);
-        for (const existing of existingSchedulers) {
-          if (!canonicalIds.has(existing.key)) {
-            await queueForReconcile.removeJobScheduler(existing.key);
-            logger.warn({ queueName, schedulerId: existing.key }, 'scheduler.orphan.removed');
-          }
-        }
-      } finally {
-        await queueForReconcile.close();
-      }
-    }
+    // Drop orphan schedulers (rename/removal residue) so BullMQ does not keep firing them forever
+    // — doubling the cron rate after a rename, or firing into a worker-less queue after a removal.
+    await reconcileOrphanSchedulers(canonicalSchedulerIdsByQueueName, connection);
   } catch (error) {
     await Promise.allSettled(queues.map((queue) => queue.close()));
     throw error;
@@ -405,4 +385,34 @@ export async function registerScheduledJobs(
       await Promise.allSettled(queues.map((queue) => queue.close()));
     },
   };
+}
+
+/**
+ * Drops orphan BullMQ schedulers — any Redis scheduler whose id is not in the canonical set for
+ * its queue (rename/removal residue that would otherwise keep firing). Each queue is opened only
+ * for its own reconciliation and closed in a `finally`, rather than holding all queues open.
+ */
+async function reconcileOrphanSchedulers(
+  canonicalSchedulerIdsByQueueName: ReadonlyMap<string, ReadonlySet<string>>,
+  connection: ReturnType<typeof getBullMQConnectionOptions>,
+): Promise<void> {
+  for (const [queueName, canonicalIds] of canonicalSchedulerIdsByQueueName) {
+    const queueForReconcile = new Queue(queueName, {
+      connection,
+      defaultJobOptions: SCHEDULED_QUEUE_DEFAULT_JOB_OPTIONS,
+    });
+    try {
+      // getJobSchedulers takes pagination args; first 1000 schedulers per queue is far above any
+      // realistic count for this app.
+      const existingSchedulers = await queueForReconcile.getJobSchedulers(0, 1000);
+      for (const existing of existingSchedulers) {
+        if (!canonicalIds.has(existing.key)) {
+          await queueForReconcile.removeJobScheduler(existing.key);
+          logger.warn({ queueName, schedulerId: existing.key }, 'scheduler.orphan.removed');
+        }
+      }
+    } finally {
+      await queueForReconcile.close();
+    }
+  }
 }

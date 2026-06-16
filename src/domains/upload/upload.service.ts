@@ -470,39 +470,17 @@ export class UploadService {
       });
     }
 
-    let verified = false;
-    try {
-      const metadata = await this.objectStorage.verifyUploadedObject(sourceKey, {
-        contentType: row.mime_type,
-        contentLength: row.file_size,
-      });
-      const objectExists = metadata.contentLength !== undefined;
-      const lengthMatches = metadata.contentLength === row.file_size;
-      // S3 may not echo a content type; only fail on type when one is reported.
-      const typeMatches =
-        metadata.contentType === undefined || metadata.contentType === row.mime_type;
-      verified = objectExists && lengthMatches && typeMatches;
-      if (verified) {
-        verified = await this.publishConfirmedObject(sourceKey, finalKey, row.mime_type);
-      }
-    } catch (error) {
-      // audit-#5: a transient storage failure (timeout / throttle / circuit-open / IAM) must NOT
-      // mark a valid upload FAILED. Re-throw it (surfaces as 503) so the client can retry confirm;
-      // the row stays PENDING and the sweeper / a retry reconciles it. Only genuine verification
-      // failures (not-found, type/size mismatch, magic-byte rejection) fall through to FAILED.
-      if (error instanceof ExternalServiceError) {
-        logger.warn(
-          { id: validatedPublicId, fileKey: sourceKey, error },
-          'upload.confirm.transientStorageError',
-        );
-        throw error;
-      }
-      logger.warn(
-        { id: validatedPublicId, fileKey: sourceKey, error },
-        'upload.confirm.verifyFailed',
-      );
-      verified = false;
-    }
+    // audit-#5: a transient storage failure (timeout / throttle / circuit-open / IAM) must NOT mark
+    // a valid upload FAILED — verifyAndPublishUploadedObject re-throws it (surfaces as 503) so the
+    // client can retry while the row stays PENDING. Only genuine verification failures (not-found,
+    // type/size mismatch, magic-byte rejection) resolve to `false` and fall through to FAILED.
+    const verified = await this.verifyAndPublishUploadedObject({
+      validatedPublicId,
+      sourceKey,
+      finalKey,
+      mimeType: row.mime_type,
+      fileSize: row.file_size,
+    });
 
     if (!verified) {
       const failedRow = await withUserDatabaseContext(userPublicId, () =>
@@ -533,6 +511,49 @@ export class UploadService {
     }
 
     return this.toUploadDetail(updated, userPublicId);
+  }
+
+  /**
+   * Verifies the uploaded object against its declared type/size and, on success, publishes it to
+   * `finalKey`. Returns whether the object is verified-and-published. Re-throws a transient
+   * {@link ExternalServiceError} (so the row stays PENDING and the client retries); genuine
+   * verification failures resolve to `false`.
+   */
+  private async verifyAndPublishUploadedObject(options: {
+    validatedPublicId: string;
+    sourceKey: string;
+    finalKey: string;
+    mimeType: string;
+    fileSize: number;
+  }): Promise<boolean> {
+    const { validatedPublicId, sourceKey, finalKey, mimeType, fileSize } = options;
+    try {
+      const metadata = await this.objectStorage.verifyUploadedObject(sourceKey, {
+        contentType: mimeType,
+        contentLength: fileSize,
+      });
+      const objectExists = metadata.contentLength !== undefined;
+      const lengthMatches = metadata.contentLength === fileSize;
+      // S3 may not echo a content type; only fail on type when one is reported.
+      const typeMatches = metadata.contentType === undefined || metadata.contentType === mimeType;
+      if (!(objectExists && lengthMatches && typeMatches)) {
+        return false;
+      }
+      return await this.publishConfirmedObject(sourceKey, finalKey, mimeType);
+    } catch (error) {
+      if (error instanceof ExternalServiceError) {
+        logger.warn(
+          { id: validatedPublicId, fileKey: sourceKey, error },
+          'upload.confirm.transientStorageError',
+        );
+        throw error;
+      }
+      logger.warn(
+        { id: validatedPublicId, fileKey: sourceKey, error },
+        'upload.confirm.verifyFailed',
+      );
+      return false;
+    }
   }
 
   /**

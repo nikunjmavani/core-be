@@ -73,34 +73,42 @@ async function buildResolutionMaps(
     if (row.actor_api_key_public_id) apiKeyPublicIds.add(row.actor_api_key_public_id);
   }
 
-  const userIdsByPublicId = new Map<string, number>();
-  if (userPublicIds.size > 0) {
-    const rows = await databaseHandle
+  const userIdsByPublicId = await collectIdMapByPublicId(userPublicIds, async (ids) =>
+    databaseHandle
       .select({ id: users.id, public_id: users.public_id })
       .from(users)
-      .where(inArray(users.public_id, [...userPublicIds]));
-    for (const row of rows) userIdsByPublicId.set(row.public_id, row.id);
-  }
-
-  const orgIdsByPublicId = new Map<string, number>();
-  if (orgPublicIds.size > 0) {
-    const rows = await databaseHandle
+      .where(inArray(users.public_id, ids)),
+  );
+  const orgIdsByPublicId = await collectIdMapByPublicId(orgPublicIds, async (ids) =>
+    databaseHandle
       .select({ id: organizations.id, public_id: organizations.public_id })
       .from(organizations)
-      .where(inArray(organizations.public_id, [...orgPublicIds]));
-    for (const row of rows) orgIdsByPublicId.set(row.public_id, row.id);
-  }
-
-  const apiKeyIdsByPublicId = new Map<string, number>();
-  if (apiKeyPublicIds.size > 0) {
-    const rows = await databaseHandle
+      .where(inArray(organizations.public_id, ids)),
+  );
+  const apiKeyIdsByPublicId = await collectIdMapByPublicId(apiKeyPublicIds, async (ids) =>
+    databaseHandle
       .select({ id: api_keys.id, public_id: api_keys.public_id })
       .from(api_keys)
-      .where(inArray(api_keys.public_id, [...apiKeyPublicIds]));
-    for (const row of rows) apiKeyIdsByPublicId.set(row.public_id, row.id);
-  }
+      .where(inArray(api_keys.public_id, ids)),
+  );
 
   return { userIdsByPublicId, orgIdsByPublicId, apiKeyIdsByPublicId };
+}
+
+/**
+ * Resolves a set of public ids to their internal ids via `fetchRows`, returning an empty
+ * map without a round trip when the input set is empty.
+ */
+async function collectIdMapByPublicId(
+  publicIds: ReadonlySet<string>,
+  fetchRows: (ids: string[]) => Promise<{ id: number; public_id: string }[]>,
+): Promise<Map<string, number>> {
+  const idByPublicId = new Map<string, number>();
+  if (publicIds.size === 0) return idByPublicId;
+  for (const row of await fetchRows([...publicIds])) {
+    idByPublicId.set(row.public_id, row.id);
+  }
+  return idByPublicId;
 }
 
 interface ResolvedAuditLogInsertRow {
@@ -202,51 +210,19 @@ export async function runAuditOutboxDrainJob(
   let permanentlyFailed = 0;
 
   for (const row of batch) {
-    const resolution = resolveRowInserts(row, maps);
-    if ('error' in resolution) {
-      await drainRepository.markPermanentlyFailed(row.id, resolution.error);
+    const result = await processAuditOutboxDrainRow({
+      databaseHandle,
+      drainRepository,
+      row,
+      maps,
+      maxAttempts,
+    });
+    if (result.outcome === 'drained') {
+      successIds.push(result.successId);
+    } else if (result.outcome === 'transient') {
+      transientFailed += 1;
+    } else {
       permanentlyFailed += 1;
-      logger.warn(
-        { outboxId: row.id, error: resolution.error },
-        'audit.outbox.drain.row.unresolvable',
-      );
-      continue;
-    }
-
-    try {
-      if (row.organization_public_id !== null) {
-        await setLocalDatabaseConfig(
-          databaseHandle,
-          'app.current_organization_id',
-          row.organization_public_id,
-        );
-      } else {
-        // Tenantless audit (system events). RLS requires the system arm to be true and
-        // organization_id IS NULL; resolveRowInserts guarantees the latter.
-        await setLocalDatabaseConfig(databaseHandle, 'app.system_audit_insert', 'true');
-      }
-
-      await databaseHandle.insert(logs).values(resolution.row);
-      successIds.push(row.id);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (row.attempt_count + 1 >= maxAttempts) {
-        await drainRepository.markPermanentlyFailed(row.id, message);
-        permanentlyFailed += 1;
-        logger.error(
-          { outboxId: row.id, attemptCount: row.attempt_count + 1, error: message },
-          'audit.outbox.drain.row.failed_terminally',
-        );
-      } else {
-        await drainRepository.recordTransientFailure(row.id, message);
-        transientFailed += 1;
-        logger.warn(
-          { outboxId: row.id, attemptCount: row.attempt_count + 1, error: message },
-          'audit.outbox.drain.row.transient_failure',
-        );
-      }
-      // Reset to drain-only GUCs for the next row (the per-row org GUC stays in
-      // place inside `SET LOCAL` and is replaced on the next iteration's set).
     }
   }
 
@@ -267,6 +243,70 @@ export async function runAuditOutboxDrainJob(
     transientFailed,
     permanentlyFailed,
   };
+}
+
+/** Outcome of draining a single `audit.outbox` row. */
+type AuditOutboxDrainRowOutcome =
+  | { outcome: 'drained'; successId: number }
+  | { outcome: 'transient' }
+  | { outcome: 'permanent' };
+
+/**
+ * Drains one claimed `audit.outbox` row into `audit.logs`: resolves its public ids, sets the
+ * per-row tenant GUC, inserts, and classifies the result. Repository bookkeeping and structured
+ * failure logging happen here so {@link runAuditOutboxDrainJob} only tallies outcomes.
+ */
+async function processAuditOutboxDrainRow(options: {
+  databaseHandle: RequestScopedPostgresDatabase;
+  drainRepository: ReturnType<typeof createDrainAuditOutboxRepository>;
+  row: AuditOutboxRow;
+  maps: ResolutionMaps;
+  maxAttempts: number;
+}): Promise<AuditOutboxDrainRowOutcome> {
+  const { databaseHandle, drainRepository, row, maps, maxAttempts } = options;
+
+  const resolution = resolveRowInserts(row, maps);
+  if ('error' in resolution) {
+    await drainRepository.markPermanentlyFailed(row.id, resolution.error);
+    logger.warn(
+      { outboxId: row.id, error: resolution.error },
+      'audit.outbox.drain.row.unresolvable',
+    );
+    return { outcome: 'permanent' };
+  }
+
+  try {
+    if (row.organization_public_id !== null) {
+      await setLocalDatabaseConfig(
+        databaseHandle,
+        'app.current_organization_id',
+        row.organization_public_id,
+      );
+    } else {
+      // Tenantless audit (system events). RLS requires the system arm to be true and
+      // organization_id IS NULL; resolveRowInserts guarantees the latter.
+      await setLocalDatabaseConfig(databaseHandle, 'app.system_audit_insert', 'true');
+    }
+
+    await databaseHandle.insert(logs).values(resolution.row);
+    return { outcome: 'drained', successId: row.id };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (row.attempt_count + 1 >= maxAttempts) {
+      await drainRepository.markPermanentlyFailed(row.id, message);
+      logger.error(
+        { outboxId: row.id, attemptCount: row.attempt_count + 1, error: message },
+        'audit.outbox.drain.row.failed_terminally',
+      );
+      return { outcome: 'permanent' };
+    }
+    await drainRepository.recordTransientFailure(row.id, message);
+    logger.warn(
+      { outboxId: row.id, attemptCount: row.attempt_count + 1, error: message },
+      'audit.outbox.drain.row.transient_failure',
+    );
+    return { outcome: 'transient' };
+  }
 }
 
 /** Re-export so callers do not couple to the constants module. */
