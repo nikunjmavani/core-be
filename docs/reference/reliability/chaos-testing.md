@@ -20,8 +20,20 @@ replay) against **live Postgres + Redis**, with failures injected by
    - `pnpm db:migrate`
    - `pnpm test:chaos`
 
-`docker-compose.yml` pins `ghcr.io/shopify/toxiproxy` on profile `chaos` and publishes ports
-`8474` (admin API), `25432` (Postgres proxy), `26379` (Redis proxy).
+On profile `chaos`, `docker-compose.yml` **builds** the Toxiproxy image locally from the official
+release binary ([`tooling/chaos/toxiproxy.Dockerfile`](../../../tooling/chaos/toxiproxy.Dockerfile),
+version pinned to match CI) and publishes ports `8474` (admin API), `25432` (Postgres proxy),
+`26379` (Redis proxy). We build rather than pull `ghcr.io/shopify/toxiproxy` because that image's
+blob CDN (`pkg-containers.githubusercontent.com`) is unreachable from some restricted dev networks
+(HTTP 403), while `github.com` release assets are reachable. CI uses the `ghcr.io` image directly
+via a GitHub Actions service container (see below), so this local build affects `pnpm chaos:up` only.
+
+> **First-run prerequisites.** The Docker daemon must be running (`docker info`) before `pnpm chaos:up`.
+> `pnpm test:chaos` is self-contained: its `bootstrap-env.ts` hard-forces `NODE_ENV=test` and points
+> `DATABASE_URL` / `REDIS_URL` at the proxied ports itself, so the manual overrides in step 2 are only
+> needed when you run the **API process** by hand against the proxies (not for the test suite). `NODE_ENV`
+> must resolve to `test` for the suite to pass — captcha is only bypassed for `test`/`development`/`staging`,
+> and `cleanupDatabase`/`cleanupTestRedis` only run in `test`/`local`.
 
 ## Continuous integration
 
@@ -77,7 +89,7 @@ flowchart LR
 
 | Command                | Purpose                                                            |
 | ---------------------- | ------------------------------------------------------------------ |
-| `pnpm chaos:up`        | Starts the Toxiproxy container (compose profile `chaos`).          |
+| `pnpm chaos:up`        | Builds (first run) + starts the Toxiproxy container (profile `chaos`). |
 | `pnpm chaos:down`      | Stops Toxiproxy (`docker compose --profile chaos stop toxiproxy`). |
 | `pnpm chaos:provision` | Registers listener proxies via the administration API.             |
 | `pnpm test:chaos`      | Executes `tooling/vitest/chaos.config.ts`.                         |

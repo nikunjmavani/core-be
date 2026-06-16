@@ -1614,6 +1614,7 @@ src/
     │   │       └── 20250102000001_second.sql
     ├── global/
     │   ├── domain-consistency.global.test.ts
+    │   ├── ensure-openapi-spec.global-setup.ts
     │   ├── external-sdk-coverage.global.test.ts
     │   ├── import-paths.global.test.ts
     │   ├── no-direct-db-in-services.global.test.ts
