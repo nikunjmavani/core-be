@@ -1,0 +1,7 @@
+# Generated / secret / vendored artifacts — never commit
+templates/
+.spec.*.json
+.tokens.env
+report.*.md
+report.*.json
+.hadrian/
