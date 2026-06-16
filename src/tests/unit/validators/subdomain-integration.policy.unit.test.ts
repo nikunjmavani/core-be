@@ -34,7 +34,7 @@ describe('subdomain integration policy', () => {
     expect(entries).toEqual([
       'auth/auth-method',
       'auth/auth-session',
-      'auth/me/mfa',
+      'auth/mfa',
       'auth/webauthn',
       'notify/webhook-event',
       'tenancy/member-invitation',
