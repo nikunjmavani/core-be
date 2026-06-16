@@ -4,17 +4,19 @@
  * #17 (bigserial leakage) and the existing sec-N hardening (`encrypted_secret`,
  * `encrypted_secret_previous` are signing material and must never appear).
  */
+type SerializableTimestamp = Date | string;
+
 interface WebhookRow {
   public_id: string;
   url: string;
   events: unknown;
   is_enabled: boolean;
-  secret_rotated_at: Date | string | null;
-  created_at: Date | string;
-  updated_at: Date | string;
+  secret_rotated_at: SerializableTimestamp | null;
+  created_at: SerializableTimestamp;
+  updated_at: SerializableTimestamp;
 }
 
-function toIsoString(value: Date | string | null | undefined): string | null {
+function toIsoString(value: SerializableTimestamp | null | undefined): string | null {
   if (value === null || value === undefined) return null;
   if (value instanceof Date) return value.toISOString();
   return value;

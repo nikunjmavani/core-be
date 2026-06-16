@@ -107,12 +107,14 @@ export async function recordLoginFailureAuditEvent(
     // Capture the i18n message key (when present on a typed AppError) as the
     // error_code so audit rows are consistent across calls — far more useful
     // than the raw stringified message which carries the user's locale.
-    const errorCode =
-      error !== null && typeof error === 'object' && 'messageKey' in error
-        ? (error as { messageKey?: unknown }).messageKey
-        : error !== null && typeof error === 'object' && 'name' in error
-          ? (error as { name?: unknown }).name
-          : 'unknown';
+    let errorCode: unknown = 'unknown';
+    if (error !== null && typeof error === 'object') {
+      if ('messageKey' in error) {
+        errorCode = (error as { messageKey?: unknown }).messageKey;
+      } else if ('name' in error) {
+        errorCode = (error as { name?: unknown }).name;
+      }
+    }
     await recordScopedAuditEvent(request, {
       action: 'auth.login_failure',
       resource_type: 'session',

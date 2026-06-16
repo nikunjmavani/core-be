@@ -357,7 +357,7 @@ const envSchemaBase = z.object({
    * to fall back to the direct S3 URL. NEVER point this at a base that exposes private prefixes
    * (`user-files/`, `organization-files/`) — `getObjectUrl` additionally refuses non-public keys.
    */
-  PUBLIC_MEDIA_BASE_URL: z.string().url().optional(),
+  PUBLIC_MEDIA_BASE_URL: z.url().optional(),
 
   // Ops knobs
   /** BullMQ worker concurrency fallback when per-queue overrides are unset (default 4). */
