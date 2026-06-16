@@ -1,6 +1,5 @@
-import { z } from 'zod';
-import { ValidationError } from '@/shared/errors/index.js';
-import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
+import { parseWithSchema } from '@/shared/utils/validation/parse-with-schema.util.js';
+import { parseCursorPaginatedQuery } from '@/shared/utils/http/pagination.util.js';
 import {
   CreateWebhookDto,
   listWebhookDeliveryAttemptsQueryDto,
@@ -17,16 +16,7 @@ import {
  * string with {@link listWebhooksQueryDto}; throws `ValidationError('errors:invalidInput')`.
  */
 export function validateListWebhooksQuery(data: unknown): ListWebhooksQueryInput {
-  ensureCursorOnlyPagination(data);
-  const result = listWebhooksQueryDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseCursorPaginatedQuery(listWebhooksQueryDto, data);
 }
 
 /**
@@ -36,16 +26,7 @@ export function validateListWebhooksQuery(data: unknown): ListWebhooksQueryInput
 export function validateListWebhookDeliveryAttemptsQuery(
   data: unknown,
 ): ListWebhookDeliveryAttemptsQueryInput {
-  ensureCursorOnlyPagination(data);
-  const result = listWebhookDeliveryAttemptsQueryDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseCursorPaginatedQuery(listWebhookDeliveryAttemptsQueryDto, data);
 }
 
 /**
@@ -53,15 +34,7 @@ export function validateListWebhookDeliveryAttemptsQuery(
  * throws `ValidationError('errors:invalidInput')` with field-level errors on failure.
  */
 export function validateCreateWebhook(data: unknown): CreateWebhookInput {
-  const result = CreateWebhookDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(CreateWebhookDto, data);
 }
 
 /**
@@ -69,13 +42,5 @@ export function validateCreateWebhook(data: unknown): CreateWebhookInput {
  * {@link UpdateWebhookDto}; throws `ValidationError('errors:invalidInput')` on failure.
  */
 export function validateUpdateWebhook(data: unknown): UpdateWebhookInput {
-  const result = UpdateWebhookDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(UpdateWebhookDto, data);
 }
