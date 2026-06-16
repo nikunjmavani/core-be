@@ -48,6 +48,7 @@ instinct is right — for code and CI/CD the CLI (or SDK) is the correct tool, n
 | **Docker** | — | `docker` (`compose`, `buildx bake`) | — gateway only (Docker MCP Toolkit proxies servers, not a peer) |
 | **Context7** (lib docs) | — | — | ✅ `@upstash/context7-mcp` |
 | **codegraph** (code index) | — | `codegraph` | ✅ `codegraph serve --mcp` |
+| **Headroom** (context compression) | — | — | ✅ `headroom mcp serve` (compress large tool output / logs / files before they reach the model) |
 
 **Stripe is the canonical "all three" case:** the `stripe` SDK runs in the service, the
 `stripe` CLI replays/triggers webhooks against the local `stripe-webhook` domain in dev/CI,
@@ -62,7 +63,7 @@ and the Stripe MCP lets an agent inspect test-mode objects. They coexist; none r
 
 The MCP servers in [`.mcp.example.json`](../../.mcp.example.json) (mirrored at
 `agent-os/mcp/mcp.example.json`): **context7, core-be:api, neon, sentry, github, slack,
-railway, aws, stripe, semgrep, sonarqube, redis, postman, resend, codegraph**. These are
+railway, aws, stripe, semgrep, sonarqube, redis, postman, resend, codegraph, headroom**. These are
 *agent-only*; CI/CD and runtime do not use them.
 
 ## Agent MCP server notes (CI/CD keeps the CLIs)
@@ -84,6 +85,14 @@ Postman is a plain remote URL (`https://mcp.postman.com/mcp`; OAuth, or `Authori
 <key>`). **Docker** is deliberately *not* a peer entry: "Docker MCP" is the **MCP
 Toolkit/Gateway** (`docker mcp gateway run`) — an umbrella that proxies other MCP servers, not
 a service to operate, so it sits *in front of* this list, not inside it.
+
+**Headroom** is a different category from the service MCPs above: it is an *agent-only context
+compression layer*, not a peer to any third-party service (no SDK, no CI/CD CLI). It compresses
+large tool output, logs, files, and RAG chunks before they reach the model (`headroom_compress`
+/ `headroom_retrieve` / `headroom_stats`). Local install: `pip install "headroom-ai[mcp]"` then
+`headroom mcp install` (the declarative entry is `{ "command": "headroom", "args": ["mcp",
+"serve"] }`). All agents should use it — see
+[`agent-os/rules/headroom-context-compression.mdc`](../../agent-os/rules/headroom-context-compression.mdc).
 
 > Endpoints and package names move fast — verify against each vendor's current docs before
 > relying on a config. Sources: [Semgrep](https://github.com/semgrep/mcp),
