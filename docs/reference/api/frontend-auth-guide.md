@@ -123,10 +123,27 @@ working** (hash drift). Always swap your in-memory token for the returned one. N
 is issued — the same `session_id` keeps working, and a later refresh re-mints with the now-current
 `org` claim.
 
-**Building an org switcher:** `GET /users/me` returns `capabilities { personal_organizations,
-team_organizations }` and `personal_organization_id`; `GET /tenancy/organizations` lists the team
-orgs the user belongs to. Render those, and on selection call the matching switch endpoint and
-replace the token.
+**One authoritative call — `GET /auth/me/context`.** Instead of stitching several endpoints, this returns everything a permission-aware UI needs in one request:
+
+```json
+{
+  "data": {
+    "user": { "id": "usr_…", "email": "…", "is_mfa_enabled": false },
+    "active_organization": { "id": "org_…", "type": "TEAM", "capabilities": { "can_invite_members": true, "…": "…" } },
+    "my_permissions": ["organization:read", "membership:manage"],
+    "global_role": null,
+    "organizations": [{ "id": "org_…", "type": "TEAM", "capabilities": { "…": "…" }, "is_active": true }]
+  }
+}
+```
+
+- **`capabilities` vs `my_permissions` — render on the intersection.** `capabilities` describes what the org **type** allows (a personal org can never invite members → `can_invite_members: false`); `my_permissions` is what **this caller** may do in the active org (resolved permission codes). Show an action only when the capability is available **and** the caller holds the permission.
+- **`organizations`** is the org-switcher list, each flagged `is_active` — render it directly.
+- **Switch flow:** call `POST /auth/switch-to-organization` (or `…-personal`) → swap your in-memory Bearer for the returned `access_token` → re-fetch `GET /auth/me/context` to repaint identity, capabilities, and permissions for the new org.
+
+This works **identically for personal and team organizations** — there is one route surface, and the `capabilities` flags (not different URLs) tell the UI what to show. See [route-consistency-and-org-model.md](route-consistency-and-org-model.md).
+
+`GET /users/me` (profile + deployment `capabilities`) and `GET /tenancy/organizations` (paginated org list) remain available if you need them individually.
 
 > The org-scoped resources are **flat**: `/api/v1/tenancy/organization` (singular — settings, logo,
 > audit-logs, api-keys, notification-policies, memberships, roles, invitations live under it),

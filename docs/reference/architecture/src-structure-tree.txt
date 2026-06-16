@@ -73,6 +73,7 @@ src/
     │   │   ├── factories/
     │   │   │   └── magic-link-token.factory.ts
     │   │   ├── integration/
+    │   │   │   ├── auth-me-context.integration.test.ts
     │   │   │   ├── auth-recovery-atomicity.integration.test.ts
     │   │   │   ├── auth-route-smoke.integration.test.ts
     │   │   │   ├── auth.integration.test.ts
@@ -80,6 +81,8 @@ src/
     │   │   │   ├── refresh-preserves-active-organization.integration.test.ts
     │   │   │   └── refresh-rotates-token-hash.integration.test.ts
     │   │   ├── unit/
+    │   │   │   ├── auth-me-context.serializer.unit.test.ts
+    │   │   │   ├── auth-me-context.service.unit.test.ts
     │   │   │   ├── auth-mfa.validator.unit.test.ts
     │   │   │   ├── auth-routes-rate-limit.policy.unit.test.ts
     │   │   │   ├── auth.controller.unit.test.ts
@@ -97,6 +100,7 @@ src/
     │   │   ├── auth-auth-method.handlers.ts
     │   │   ├── auth-login.handlers.ts
     │   │   ├── auth-magic-link.handlers.ts
+    │   │   ├── auth-me-context.handlers.ts
     │   │   ├── auth-mfa.handlers.ts
     │   │   ├── auth-oauth.handlers.ts
     │   │   ├── auth-session.handlers.ts
@@ -254,6 +258,9 @@ src/
     │   │   │   ├── webauthn.dto.ts
     │   │   │   ├── webauthn.service.ts
     │   │   │   └── webauthn.validator.ts
+    │   ├── auth-me-context.serializer.ts
+    │   ├── auth-me-context.service.ts
+    │   ├── auth-me-context.types.ts
     │   ├── auth.container.ts
     │   ├── auth.controller.ts
     │   ├── auth.dto.ts
