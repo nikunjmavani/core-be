@@ -30,11 +30,11 @@ describe('Stripe Webhook Sub-Domain — Integration', () => {
     await cleanupDatabase();
   });
 
-  describe('POST /api/v1/billing/stripe/webhook', () => {
+  describe('POST /api/v1/billing/webhook', () => {
     it('should return 400 for missing signature', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/billing/stripe/webhook'),
+        url: testApiPath('/billing/webhook'),
         payload: { type: 'test' },
       });
       expect([400, 401]).toContain(response.statusCode);
@@ -43,7 +43,7 @@ describe('Stripe Webhook Sub-Domain — Integration', () => {
     it('should return 400 for invalid stripe-signature header', async () => {
       const response = await injectRoute(app, {
         method: 'POST',
-        url: testApiPath('/billing/stripe/webhook'),
+        url: testApiPath('/billing/webhook'),
         headers: { 'stripe-signature': 'invalid' },
         payload: { type: 'customer.subscription.updated', data: { object: {} } },
       });
@@ -95,7 +95,7 @@ describe('Stripe Webhook Sub-Domain — Integration', () => {
 
       const firstPost = await injectRoute(app, {
         method: 'POST',
-        url: testApiPath('/billing/stripe/webhook'),
+        url: testApiPath('/billing/webhook'),
         headers: {
           'stripe-signature': stripeSignature,
           'content-type': 'application/json',
@@ -104,7 +104,7 @@ describe('Stripe Webhook Sub-Domain — Integration', () => {
       });
       const secondPost = await injectRoute(app, {
         method: 'POST',
-        url: testApiPath('/billing/stripe/webhook'),
+        url: testApiPath('/billing/webhook'),
         headers: {
           'stripe-signature': stripeSignature,
           'content-type': 'application/json',

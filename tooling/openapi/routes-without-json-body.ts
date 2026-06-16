@@ -23,6 +23,5 @@ export const ROUTES_WITHOUT_JSON_BODY = new Set([
   'POST /api/v1/notify/notifications/mark-all-read',
   'PATCH /api/v1/notify/notifications/{notification_id}/read',
   'POST /api/v1/notify/webhooks/{webhook_id}/test',
-  'POST /api/v1/billing/stripe/webhook',
   'POST /api/v1/mcp',
 ]);

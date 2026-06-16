@@ -44,11 +44,9 @@ describe('route-http-coverage-validation.util', () => {
   });
 
   it('matches allowlist patterns with path parameters', () => {
-    expect(
-      isAllowlisted('POST', '/api/v1/billing/stripe/webhook', [
-        { method: 'POST', path: '/api/v1/billing/stripe/webhook' },
-      ]),
-    ).toBe(true);
+    expect(isAllowlisted('POST', '/api/v1/mcp', [{ method: 'POST', path: '/api/v1/mcp' }])).toBe(
+      true,
+    );
     expect(pathMatchesPattern('/api/v1/foo/bar', '/api/v1/:id/bar')).toBe(true);
     expect(pathMatchesPattern('/api/v1/foo/other', '/api/v1/:id/bar')).toBe(false);
   });

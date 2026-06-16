@@ -6,7 +6,7 @@
 
 Outbound email pipeline: the mail outbox table (transactional outbox pattern), the BullMQ queue, the delivery processor wrapping Resend, and the sweeper that reclaims rows stuck in `sending`. HTML templates for transactional mail (magic link, password reset, email verification, organization invitation) live here too.
 
-This module is **infrastructure**, not a domain — it offers an `enqueueEmail()` primitive that any domain may call. Domains owning content (auth, tenancy, user) provide template inputs; this module owns delivery semantics.
+This module is **infrastructure**, not a domain — it offers `recordOutboxEmail()` + `dispatchOutboxEmail()` primitives (transactional outbox insert, then post-commit BullMQ dispatch) that any domain may call. Domains owning content (auth, tenancy, user) provide template inputs; this module owns delivery semantics.
 
 ## Design decisions
 

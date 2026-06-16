@@ -1,36 +1,17 @@
-import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { WEBHOOK_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
-import { applyDeprecatedEndpointHeaders } from '@/shared/utils/http/api-versioning.util.js';
 import { createStripeWebhookController } from './stripe-webhook.controller.js';
 import type { StripeWebhookService } from './stripe-webhook.service.js';
 import { stripeWebhookIngressPlugin } from './stripe-webhook-ingress.plugin.js';
 import { registerStripeWebhookRawBodyRoute } from './stripe-webhook-raw-body.registry.js';
 
 /**
- * Stripe webhook receiver is registered at two paths that share the same handler:
+ * Stripe webhook receiver, registered at the canonical path:
  *
- *   POST /api/v1/billing/webhook         — Canonical receiver. New Stripe Dashboard
- *                                          endpoints (and Stripe CLI `stripe listen
- *                                          --forward-to`) must be configured against
- *                                          this URL.
- *
- *   POST /api/v1/billing/stripe/webhook  — DEPRECATED backwards-compatibility alias.
- *                                          Retained only for existing Stripe Dashboard
- *                                          endpoints that were configured against the
- *                                          legacy `/stripe/webhook` path before the
- *                                          route was moved to the bare `/webhook`.
- *
- * No fixed sunset date is set yet. Do NOT delete the `/stripe/webhook` registration
- * until every live Stripe webhook endpoint (Dashboard + Stripe CLI forwarders, in
- * every environment) has been migrated to the canonical `/api/v1/billing/webhook`
- * URL — otherwise events from un-migrated Stripe configurations will drop with 404
- * and the asynchronous worker will never see them.
- *
- * When the alias is removed, also clean up the legacy path in downstream references
- * that still point at it: the controller JSDoc, `stripe-webhook.dto.ts` comment,
- * the duplicate route schema literal below (alias `app.register({ prefix: '/stripe' })`),
- * integration tests, k6 load scenarios, and Sentry transaction-name sampling.
+ *   POST /api/v1/billing/webhook  — New Stripe Dashboard endpoints (and Stripe CLI
+ *                                   `stripe listen --forward-to`) must be configured
+ *                                   against this URL.
  */
 export function stripeWebhookRoutes(
   stripeWebhookService: StripeWebhookService,
@@ -75,57 +56,8 @@ export function stripeWebhookRoutes(
       },
       controller.handleWebhook,
     );
-
-    // sec-new-M2: emit RFC 8594 Sunset + RFC 9745 Deprecation response headers on
-    // EVERY response from the deprecated alias, including pre-handler error paths.
-    // `onSend` is used (instead of a wrapper handler) because `stripeWebhookIngressPlugin`
-    // registers a `preHandler` that throws before the route handler runs on invalid
-    // signatures — if headers were set in the handler they would be silently dropped.
-    // The `onSend` lifecycle hook fires on both success and error paths.
-    zodApplication.post(
-      '/stripe/webhook',
-      {
-        ...WEBHOOK_RATE_LIMIT,
-        config: { captureRawBody: true },
-        bodyLimit: STRIPE_WEBHOOK_BODY_LIMIT_BYTES,
-        onSend: [
-          async (_request: FastifyRequest, reply: FastifyReply, payload: unknown) => {
-            applyDeprecatedEndpointHeaders(reply, {
-              sunset: STRIPE_WEBHOOK_ALIAS_SUNSET,
-              deprecation: true,
-            });
-            return payload;
-          },
-        ],
-        schema: {
-          summary: 'Stripe webhook receiver (DEPRECATED alias)',
-          description:
-            'DEPRECATED. Use POST /api/v1/billing/webhook instead. This backwards-compatibility alias will be removed once all Stripe Dashboard and CLI forwarder endpoints have been migrated to the canonical path.',
-          tags: ['Billing', 'Stripe Webhook'],
-        },
-      },
-      controller.handleWebhook,
-    );
   };
 }
 
 /** sec-C/M #29: per-route body limit for Stripe webhook receivers (5 MB). */
 const STRIPE_WEBHOOK_BODY_LIMIT_BYTES = 5 * 1024 * 1024;
-
-/**
- * Sunset date for the deprecated `/api/v1/billing/stripe/webhook` alias
- * (sec-new-M2, audit-#15a).
- *
- * @remarks
- * Replaces the prior `2030-01-01` placeholder, which advertised a ~6-year
- * grace period and meant the redundant unauthenticated money-handler entry
- * point would effectively never be retired. This is a concrete near-term date
- * (~6 months' notice) emitted via the RFC 8594 `Sunset` / RFC 9745
- * `Deprecation` headers so operators migrate to the canonical
- * `/api/v1/billing/webhook`. NOTE: this only advertises the date — the endpoint
- * stays live and functional. Physically removing the alias registration is a
- * deliberate follow-up to be done only after delivery telemetry confirms zero
- * traffic on the legacy path (avoids breaking a still-pointed Stripe forwarder).
- * The exact date is operations-confirmable.
- */
-const STRIPE_WEBHOOK_ALIAS_SUNSET = new Date('2026-12-31T00:00:00Z');

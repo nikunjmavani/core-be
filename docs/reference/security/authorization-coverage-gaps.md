@@ -4,7 +4,7 @@
 
 Answers "is every route — organization-level included — covered, and what is **not** in the codebase/tests yet?" Companion to [`authorization-testing-plan.md`](./authorization-testing-plan.md).
 
-**Total routes: 131.** Every route is classified into one authorization bucket below; the "Gap" column states what is missing.
+**Total routes: 130.** Every route is classified into one authorization bucket below; the "Gap" column states what is missing.
 
 ---
 
@@ -18,7 +18,7 @@ Answers "is every route — organization-level included — covered, and what is
 | `global-role` | 9 | JWT global role claim | admin-only (every `/users/:user_id` route) + privilege-escalation | ✅ all 5 user-by-id admin routes asserted; collection `/users`, audit, mcp still sampled |
 | `auth-self-mutation` | 24 | Auth; acts on caller (/me) | auth-enforcement (401), mass-assignment (subset) | ⚠ caller-scoped; no per-route assertion |
 | `auth-self-list` | 12 | Auth; results scoped to caller | auth-enforcement (401) | ✅ low risk (caller-scoped list) |
-| `public` | 20 | None (some need X-Captcha-Token / Stripe-Signature) | public-routes, captcha, oauth-callback, stripe-webhook | ⚠ business-flow abuse (API6) not systematically tested |
+| `public` | 19 | None (some need X-Captcha-Token / Stripe-Signature) | public-routes, captcha, oauth-callback, stripe-webhook | ⚠ business-flow abuse (API6) not systematically tested |
 | `bearer-token` | 3 | Service/metrics token | api-key-auth, ops route tests | ✅ low |
 
 ---
@@ -84,13 +84,12 @@ Answers "is every route — organization-level included — covered, and what is
 | POST | `/api/v1/auth/webauthn/register/options` | AUTH | `auth-self-mutation` | ⚠ self; not asserted |
 | POST | `/api/v1/auth/webauthn/register/verify` | AUTH | `auth-self-mutation` | ⚠ self; not asserted |
 
-### BILLING (11)
+### BILLING (10)
 
 | Method | Path | Access | Bucket | Status |
 | --- | --- | --- | --- | --- |
 | GET | `/api/v1/billing/plans` | PUBLIC | `public` | — (n/a authz) |
 | GET | `/api/v1/billing/plans/:plan_id` | PUBLIC | `public` | — (n/a authz) |
-| POST | `/api/v1/billing/stripe/webhook` | PUBLIC | `public` | — (n/a authz) |
 | GET | `/api/v1/billing/subscriptions` | PERM: subscription:read | `org-collection` | ✅ BFLA (matrix) |
 | POST | `/api/v1/billing/subscriptions` | PERM: subscription:manage | `org-collection` | ✅ BFLA (matrix) |
 | GET | `/api/v1/billing/subscriptions/:subscription_id` | PERM: subscription:read | `org-by-id` | ✅ BFLA + cross-org |

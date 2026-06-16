@@ -144,7 +144,7 @@ coverage already exists (and was extended where noted).
 | --------- | ---------------------- |
 | NOTIFY-09 / NOTIFY-14 (response buffering) | Outbound webhook delivery + test stream-cap the response at `WEBHOOK_RESPONSE_BODY_MAX_BYTES` (64 KB) and `request.destroy()` on exceed (`webhook-outbound-fetch.util.ts`), then truncate again on persist/return. |
 | UPLOAD-01 (pending quota race) | Create takes a per-user `pg_advisory_xact_lock` then counts + inserts in one transaction (`upload.repository.acquirePendingUploadQuotaLock`). |
-| R3 / BILL-04 / MCP-01 / MCP-02 (catalog↔runtime drift) | `docs/routes.txt` is generated from source + a hard-coded supplemental list that **includes** `/livez`, `/readyz`, `/metrics`, `/internal/ops/*`, and `/api/v1/mcp`; CI fails on drift via `routes:catalog:check`. `POST /api/v1/billing/webhook` **is** registered (the canonical path; `/billing/stripe/webhook` is the deprecated alias). |
+| R3 / BILL-04 / MCP-01 / MCP-02 (catalog↔runtime drift) | `docs/routes.txt` is generated from source + a hard-coded supplemental list that **includes** `/livez`, `/readyz`, `/metrics`, `/internal/ops/*`, and `/api/v1/mcp`; CI fails on drift via `routes:catalog:check`. `POST /api/v1/billing/webhook` **is** registered (the canonical Stripe webhook path). |
 | AUTH-09 (password reset atomic) | Already wrapped in `withTransaction` + `runWithPinnedDatabaseHandle`. |
 
 ---

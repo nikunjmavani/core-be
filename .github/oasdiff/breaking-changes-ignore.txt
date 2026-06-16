@@ -18,6 +18,11 @@ api get /health api path removed without deprecation
 #    route is no longer publicly exposed (auth-mfa.integration.test.ts pins this).
 api post /api/v1/auth/mfa/challenge api path removed without deprecation
 
+# POST /api/v1/billing/stripe/webhook removed — the deprecated Stripe webhook
+#    backwards-compatibility alias was retired; the canonical POST /api/v1/billing/webhook
+#    remains (stripe-webhook-ingress.policy.unit.test.ts pins that it is not re-introduced).
+api post /api/v1/billing/stripe/webhook api path removed without deprecation
+
 # 3. POST /api/v1/auth/me/auth-methods tightened `method_type` to a fixed enum so the
 #    DTO rejects manual provider-identity binding (auth-method.service.unit.test.ts).
 api post /api/v1/auth/me/auth-methods request property `method_type` was restricted to a list of enum values
@@ -228,7 +233,6 @@ api post /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid}/resum
 api post /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid}/resume added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
 api post /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid}/resume added the pattern `^sub_[a-z0-9]{21}$` to the `path` request parameter `subscriptionid`
 api post /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid}/resume removed the success response with the status `200`
-api post /api/v1/billing/stripe/webhook added the new required `header` request parameter `stripe-signature`
 api post /api/v1/billing/webhook added the new required `header` request parameter `stripe-signature`
 api post /api/v1/notify/notifications/mark-all-read removed the success response with the status `200`
 api post /api/v1/notify/organizations/{id}/webhooks added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
@@ -1032,16 +1036,6 @@ api post /api/v1/billing/organizations/{organization_id}/subscriptions/{subscrip
 api post /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id}/resume removed the required property `error/message` from the response with the `422` status
 api post /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id}/resume removed the required property `error/message` from the response with the `429` status
 api post /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id}/resume removed the required property `error/message` from the response with the `500` status
-api post /api/v1/billing/stripe/webhook removed the required property `error/message` from the response with the `400` status
-api post /api/v1/billing/stripe/webhook removed the required property `error/message` from the response with the `401` status
-api post /api/v1/billing/stripe/webhook removed the required property `error/message` from the response with the `403` status
-api post /api/v1/billing/stripe/webhook removed the required property `error/message` from the response with the `404` status
-api post /api/v1/billing/stripe/webhook removed the required property `error/message` from the response with the `409` status
-api post /api/v1/billing/stripe/webhook removed the required property `error/message` from the response with the `413` status
-api post /api/v1/billing/stripe/webhook removed the required property `error/message` from the response with the `415` status
-api post /api/v1/billing/stripe/webhook removed the required property `error/message` from the response with the `422` status
-api post /api/v1/billing/stripe/webhook removed the required property `error/message` from the response with the `429` status
-api post /api/v1/billing/stripe/webhook removed the required property `error/message` from the response with the `500` status
 api post /api/v1/billing/webhook removed the required property `error/message` from the response with the `400` status
 api post /api/v1/billing/webhook removed the required property `error/message` from the response with the `401` status
 api post /api/v1/billing/webhook removed the required property `error/message` from the response with the `403` status

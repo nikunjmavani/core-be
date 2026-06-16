@@ -94,7 +94,7 @@ Check only what the PR touches. Skip categories marked **none** in the PR **Revi
 | Check | What to look for | Typical severity |
 | ----- | ---------------- | ---------------- |
 | Route catalog | `docs/routes.txt` updated (pre-commit/CI enforces) | Blocker |
-| OpenAPI | Route metadata in openapi-enricher + locale `openapi.json` when operations change | Major |
+| OpenAPI | Route metadata on Zod schemas in `*.routes.ts` + locale `openapi.json` when operations change | Major |
 | Versioning | Public routes under `/api/v1`; deprecation headers if applicable | Major |
 | Access documented | New routes match catalog access (public / authenticated / org permission) | Major |
 

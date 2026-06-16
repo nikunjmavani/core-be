@@ -1,6 +1,6 @@
 ---
 description: When changing OpenAPI locale JSON or multilingual doc generation, run openapi-multilingual (after route-schema-doc-guard when routes changed).
-globs: src/shared/locales/*/openapi.json, src/scripts/codegen/generate-openapi.ts, src/scripts/codegen/openapi-enricher.ts
+globs: src/shared/locales/*/openapi.json, src/scripts/codegen/generate-openapi.ts
 alwaysApply: false
 ---
 

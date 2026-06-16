@@ -381,11 +381,6 @@ const envSchemaBase = z.object({
    * Use split services in production so each process pool budget matches its registered workers.
    */
   WORKER_QUEUE_FAMILIES: z.string().min(1).default('all'),
-  /**
-   * @deprecated Superseded by per-queue demand in worker-connection-budget.ts. Kept for
-   * backward-compatible env templates; startup no longer enforces this heuristic.
-   */
-  WORKER_BACKGROUND_POOL_SLOT_RESERVE: z.coerce.number().int().min(0).max(64).default(6),
   /** Postgres pool size per Node process (postgres-js `max`). Not the cluster-wide total. Default 10. */
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
   /** Connections reserved for admin, migrations, and monitoring (subtracted from Postgres max_connections). */

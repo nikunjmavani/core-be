@@ -71,7 +71,6 @@ function isExcluded({ auth, path }) {
     '/auth/password/reset',
     '/auth/webauthn',
     '/auth/refresh',
-    '/billing/stripe/webhook',
     '/billing/webhook',
     '/tenancy/invitations/',
     '/livez',

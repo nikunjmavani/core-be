@@ -177,11 +177,11 @@ describe('Billing Domain — Integration', () => {
 
   // ─── Stripe Webhook ───────────────────────────────────────────
 
-  describe('POST /api/v1/billing/stripe/webhook', () => {
+  describe('POST /api/v1/billing/webhook', () => {
     it('should return 400 for missing signature', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/billing/stripe/webhook'),
+        url: testApiPath('/billing/webhook'),
         payload: { type: 'test' },
       });
       expect([400, 401]).toContain(response.statusCode);
@@ -190,25 +190,11 @@ describe('Billing Domain — Integration', () => {
     it('should return 400 for invalid stripe-signature header', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/billing/stripe/webhook'),
+        url: testApiPath('/billing/webhook'),
         headers: { 'stripe-signature': 'invalid' },
         payload: { type: 'customer.subscription.updated', data: { object: {} } },
       });
       expect([400, 401]).toContain(response.statusCode);
-    });
-
-    it('sec-new-M2: emits Deprecation and Sunset headers on the deprecated alias', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/billing/stripe/webhook'),
-        headers: { 'stripe-signature': 'invalid' },
-        payload: { type: 'test' },
-      });
-      // The Deprecation header must be present regardless of status code
-      expect(response.headers.deprecation).toBe('true');
-      // Sunset must be a well-formed HTTP-date (RFC 7231)
-      expect(typeof response.headers.sunset).toBe('string');
-      expect(response.headers.sunset).toMatch(/\w{3}, \d{2} \w{3} \d{4}/);
     });
   });
 });

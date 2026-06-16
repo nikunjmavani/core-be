@@ -170,7 +170,7 @@ src/infrastructure/
     mail-outbox.repository.ts # Outbox persistence (not domain-owned)
     templates/                # HTML email templates (base, magic-link, invitation)
     queues/
-      mail.queue.ts           # BullMQ queue + enqueueEmail()
+      mail.queue.ts           # BullMQ queue + recordOutboxEmail()/dispatchOutboxEmail()
     workers/
       mail.worker.ts          # BullMQ processor for email delivery
   payment/
@@ -239,13 +239,13 @@ These are **not** the same:
 - **Event bus** (`src/core/events/event-bus.ts`): in-process, runs in the API process immediately after a successful service write. Handlers enqueue side effects and **must not** fail the HTTP request.
 - **BullMQ workers** (`src/infrastructure/queue/bootstrap.ts`, `pnpm dev:worker`): async, durable jobs in Redis processed in a separate worker process (retries, DLQ).
 
-Typical flow: `service` → `eventBus.emit` → handler → `enqueueEmail()` → mail worker. Direct `enqueueEmail()` from a service (without the bus) is also valid for simple side effects.
+Typical flow: `service` → `eventBus.emit` → handler → `recordOutboxEmail()` then `dispatchOutboxEmail()` via `eventBus.onCommit` → mail worker. Worker/runtime paths without a request transaction call `dispatchOutboxEmail()` directly after `recordOutboxEmail()`.
 
 - **Registration (two paths)** — bootstrap order matters:
   1. `buildApp()` → `registerEventHandlers()` ([`register-event-handlers.ts`](src/core/events/register-event-handlers.ts)) **before** routes — auth + tenancy email handlers only.
   2. `registerRoutes()` → [`domain-containers.plugin.ts`](src/domains/domain-containers.plugin.ts) → `registerNotifyContainer()` — notify handlers that need `WebhookRepository` from DI.
-- **Rule:** Handlers that only need `enqueueEmail()` or no container deps → register via `register-event-handlers.ts`. Handlers that need repositories from the composition root → register in the domain’s `register*Container()` (notify today).
-- **Example (core path):** `tenancy/sub-domains/membership/member-invitation/` — service emits; handler calls `enqueueEmail()`.
+- **Rule:** Handlers that only need the mail enqueue primitives (`recordOutboxEmail`/`dispatchOutboxEmail`) or no container deps → register via `register-event-handlers.ts`. Handlers that need repositories from the composition root → register in the domain’s `register*Container()` (notify today).
+- **Example (core path):** `tenancy/sub-domains/membership/member-invitation/` — service emits; handler records the outbox row and dispatches it on commit.
 - **Example (container path):** `notify/events/notify.event-handlers.ts` — `registerBillingWebhookEventHandlers({ webhookRepository })`, webhook delivery enqueue, billing subscription notifications.
 
 | Registrar                               | Event types (examples)                                                    | Side effect                            |

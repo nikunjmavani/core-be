@@ -41,9 +41,9 @@ export function isHealthCheckTransaction(transactionName: string): boolean {
   return HEALTH_TRANSACTION_MARKERS.some((marker) => transactionName === marker);
 }
 
-/** Matches billing API or Stripe webhook routes so they are always kept (revenue-critical). */
+/** Matches billing API routes (including the Stripe webhook) so they are always kept (revenue-critical). */
 export function isBillingOrWebhookTransaction(transactionName: string): boolean {
-  return /\/api\/v1\/billing\b/i.test(transactionName) || /stripe\/webhook/i.test(transactionName);
+  return /\/api\/v1\/billing\b/i.test(transactionName);
 }
 
 /** Heuristic for error-marked transaction names (e.g. `error.handler`) — always sampled at head + tail. */

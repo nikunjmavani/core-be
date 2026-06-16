@@ -1,7 +1,7 @@
 /**
  * Policy: Stripe webhook HTTP ingress must register stripeWebhookIngressPlugin before
- * any handler under /stripe, and billing must not register /stripe/webhook outside
- * stripe-webhook.routes.ts.
+ * the `/webhook` handler, and the removed `/stripe/webhook` deprecated alias must not
+ * be re-introduced in any billing route file.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -34,7 +34,7 @@ function relativePath(absolutePath: string): string {
 }
 
 describe('Stripe webhook ingress policy', () => {
-  it('registers stripeWebhookIngressPlugin before both webhook routes', () => {
+  it('registers stripeWebhookIngressPlugin before the webhook route', () => {
     const source = readFileSync(STRIPE_WEBHOOK_ROUTES, 'utf8');
 
     expect(source).toContain('stripeWebhookIngressPlugin');
@@ -43,28 +43,18 @@ describe('Stripe webhook ingress policy', () => {
     // schema block is large enough to force multi-line formatting.
     const ingressIndex = source.search(/await\s+stripeWebhookIngressPlugin\s*\(\s*app/);
     const postIndex = source.search(/zodApplication\.post\(\s*['"]\/webhook['"]/);
-    const stripeAliasPostIndex = source.search(
-      /zodApplication\.post\(\s*['"]\/stripe\/webhook['"]/,
-    );
 
     expect(ingressIndex).toBeGreaterThanOrEqual(0);
     expect(postIndex).toBeGreaterThan(ingressIndex);
-    expect(stripeAliasPostIndex).toBeGreaterThan(ingressIndex);
   });
 
-  it('does not register /stripe/webhook directly in other billing route files', () => {
+  it('does not re-introduce the removed /stripe/webhook alias in any billing route file', () => {
     const violations: string[] = [];
-    const stripeWebhookRoutesRelative = relativePath(STRIPE_WEBHOOK_ROUTES);
 
     for (const absolutePath of collectBillingRouteFiles(BILLING_DOMAIN_ROOT)) {
-      const relative = relativePath(absolutePath);
-      if (relative === stripeWebhookRoutesRelative) {
-        continue;
-      }
-
       const source = readFileSync(absolutePath, 'utf8');
       if (source.includes('/stripe/webhook')) {
-        violations.push(relative);
+        violations.push(relativePath(absolutePath));
       }
     }
 
