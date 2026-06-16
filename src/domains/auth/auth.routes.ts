@@ -189,12 +189,24 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
   zodApplication.post('/webauthn/authenticate/options', {
     ...STRICT_PUBLIC_RATE_LIMIT,
     preHandler: [perEmailRateLimit, captchaPreHandler],
-    schema: { body: webauthnAuthenticateOptionsDto },
+    schema: {
+      summary: 'Begin passkey authentication',
+      description:
+        'Returns WebAuthn authentication options and an opaque challenge token for a passwordless login ceremony. The client echoes the challenge back at /auth/webauthn/authenticate/verify. Public endpoint used during login.',
+      tags: ['Auth', 'WebAuthn'],
+      body: webauthnAuthenticateOptionsDto,
+    },
     handler: controller.webauthnAuthenticateOptions,
   });
   zodApplication.post('/webauthn/authenticate/verify', {
     ...STRICT_PUBLIC_RATE_LIMIT,
-    schema: { body: webauthnAuthenticateVerifyDto },
+    schema: {
+      summary: 'Complete passkey authentication',
+      description:
+        'Verifies the assertion response from a WebAuthn authentication ceremony and, on success, returns access and refresh tokens and sets the session cookie. Public endpoint used during login.',
+      tags: ['Auth', 'WebAuthn'],
+      body: webauthnAuthenticateVerifyDto,
+    },
     handler: controller.webauthnAuthenticateVerify,
   });
   zodApplication.post(
@@ -289,7 +301,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     controller.resendEmailVerification,
   );
   zodApplication.post(
-    '/mfa/enroll',
+    '/me/mfa/enroll',
     {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
@@ -297,7 +309,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'Begin MFA enrollment (phase 1 of 2)',
         description:
-          'Stages a TOTP secret in Redis and returns it with a provisioning URI for authenticator app setup. Phase 2 (`POST /auth/mfa/enroll/confirm`) verifies a fresh code and atomically persists the auth method, generates recovery codes, and flips is_mfa_enabled. Nothing is written to Postgres at this step.',
+          'Stages a TOTP secret in Redis and returns it with a provisioning URI for authenticator app setup. Phase 2 (`POST /auth/me/mfa/enroll/confirm`) verifies a fresh code and atomically persists the auth method, generates recovery codes, and flips is_mfa_enabled. Nothing is written to Postgres at this step.',
         tags: ['Auth', 'MFA'],
         body: MfaEnrollDto,
       },
@@ -305,7 +317,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     controller.enrollMfa,
   );
   zodApplication.post(
-    '/mfa/enroll/confirm',
+    '/me/mfa/enroll/confirm',
     {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
@@ -313,7 +325,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'Confirm MFA enrollment (phase 2 of 2)',
         description:
-          'Verifies a 6-digit TOTP code against the secret staged by `POST /auth/mfa/enroll`. On success the auth method is persisted, recovery codes are generated and hashed, and is_mfa_enabled is flipped. The plaintext recovery codes are returned EXACTLY ONCE in this response.',
+          'Verifies a 6-digit TOTP code against the secret staged by `POST /auth/me/mfa/enroll`. On success the auth method is persisted, recovery codes are generated and hashed, and is_mfa_enabled is flipped. The plaintext recovery codes are returned EXACTLY ONCE in this response.',
         tags: ['Auth', 'MFA'],
         body: MfaEnrollConfirmDto,
       },
@@ -321,7 +333,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     controller.confirmEnrollMfa,
   );
   zodApplication.post(
-    '/webauthn/register/options',
+    '/me/webauthn/register/options',
     {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
@@ -329,7 +341,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'Begin passkey registration',
         description:
-          'Returns WebAuthn registration options and an opaque challenge token the client echoes back at /webauthn/register/verify. Requires recent step-up authentication.',
+          'Returns WebAuthn registration options and an opaque challenge token the client echoes back at /auth/me/webauthn/register/verify. Requires recent step-up authentication.',
         tags: ['Auth', 'WebAuthn'],
         body: z.object({}).strict(),
       },
@@ -337,7 +349,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     controller.webauthnRegisterOptions,
   );
   zodApplication.post(
-    '/webauthn/register/verify',
+    '/me/webauthn/register/verify',
     {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
@@ -353,7 +365,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     controller.webauthnRegisterVerify,
   );
   zodApplication.get(
-    '/mfa',
+    '/me/mfa',
     {
       onRequest: [app.authenticate],
       ...STRICT_AUTHED_RATE_LIMIT,
@@ -366,7 +378,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     controller.listMfaMethods,
   );
   zodApplication.delete<{ Params: { mfa_method_id: string } }>(
-    '/mfa/:mfa_method_id',
+    '/me/mfa/:mfa_method_id',
     {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
@@ -401,7 +413,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     controller.revokeAllSessions,
   );
   zodApplication.post(
-    '/mfa/verify',
+    '/me/mfa/verify',
     {
       onRequest: [app.authenticate],
       ...STRICT_AUTHED_RATE_LIMIT,

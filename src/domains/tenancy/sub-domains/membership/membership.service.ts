@@ -9,6 +9,7 @@ import {
   preferredLocalesForOrganizationDefaultLocale,
 } from '@/domains/user/sub-domains/user-settings/user-settings-locale-defaults.util.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
+import { assertTeamOrganization } from '@/domains/tenancy/sub-domains/organization/organization-capability.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import type { MemberRoleService } from '@/domains/tenancy/sub-domains/member-roles/member-role.service.js';
 import type { MemberRolePermissionService } from '@/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.service.js';
@@ -239,9 +240,7 @@ export class MembershipService {
       // MEMBERSHIP_MANAGE — which the personal-org owner has — could otherwise seed a second member
       // directly). Reject here so the single-member invariant holds at every door. Collaboration
       // requires a TEAM organization.
-      if (organization.type === 'PERSONAL') {
-        throw new ConflictError('errors:personalOrganizationNoMembers');
-      }
+      assertTeamOrganization(organization, 'MEMBERS');
       const role = await this.memberRoleService.requireRoleRecordByPublicId(
         organization_public_id,
         parsed.role_id,
@@ -451,9 +450,7 @@ export class MembershipService {
           organization_public_id,
         );
       // A PERSONAL organization belongs solely to its owner and cannot be handed off.
-      if (organization.type === 'PERSONAL') {
-        throw new ConflictError('errors:personalOrganizationImmutable');
-      }
+      assertTeamOrganization(organization, 'MUTATION');
       const currentUserId =
         await this.organizationService.resolveUserInternalIdByPublicId(current_user_public_id);
       if (currentUserId === null) throw new NotFoundError('User');

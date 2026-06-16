@@ -19,7 +19,7 @@ describe('Auth MFA integration', () => {
   it('rejects unauthenticated MFA enrollment', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'POST',
-      url: testApiPath('/auth/mfa/enroll'),
+      url: testApiPath('/auth/me/mfa/enroll'),
       payload: { type: 'totp' },
     });
 

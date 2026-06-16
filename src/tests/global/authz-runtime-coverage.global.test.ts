@@ -21,7 +21,7 @@ const RUNTIME_COVERAGE: Readonly<Record<string, string>> = {
   'DELETE /api/v1/auth/me/auth-methods/:auth_method_id':
     'object-ownership: auth methods (step-up gated)',
   'DELETE /api/v1/auth/me/sessions/:session_id': 'object-ownership: sessions (step-up gated)',
-  'DELETE /api/v1/auth/mfa/:mfa_method_id': 'object-ownership: MFA methods (step-up gated)',
+  'DELETE /api/v1/auth/me/mfa/:mfa_method_id': 'object-ownership: MFA methods (step-up gated)',
   'DELETE /api/v1/notify/notifications/:notification_id': 'object-ownership: notifications',
   'GET /api/v1/notify/notifications/:notification_id': 'object-ownership: notifications',
   'PATCH /api/v1/notify/notifications/:notification_id/read': 'object-ownership: notifications',

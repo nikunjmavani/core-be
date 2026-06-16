@@ -30,7 +30,7 @@ export const MagicLinkVerifyDto = z
 /** Inferred input type of {@link MagicLinkVerifyDto}. */
 export type MagicLinkVerifyInput = z.infer<typeof MagicLinkVerifyDto>;
 
-/** Zod schema for the `POST /api/v1/auth/mfa/verify` request body (6-digit TOTP code). */
+/** Zod schema for the `POST /api/v1/auth/me/mfa/verify` request body (6-digit TOTP code). */
 export const MfaVerifyDto = z
   .object({
     code: z.string().trim().length(6).regex(/^\d+$/),
@@ -111,11 +111,11 @@ export type VerifyEmailInput = z.infer<typeof VerifyEmailDto>;
 
 // MFA
 /**
- * Zod schema for the authenticated `POST /api/v1/auth/mfa/enroll` request body
+ * Zod schema for the authenticated `POST /api/v1/auth/me/mfa/enroll` request body
  * (TOTP enrollment INIT — phase 1 of the two-phase ceremony introduced in sec-A
  * finding #3). The init step stages the encrypted TOTP secret in Redis and
  * returns it to the caller; nothing is persisted to Postgres until the matching
- * `POST /auth/mfa/enroll/confirm` request verifies a fresh code.
+ * `POST /auth/me/mfa/enroll/confirm` request verifies a fresh code.
  */
 export const MfaEnrollDto = z
   .object({
@@ -126,7 +126,7 @@ export const MfaEnrollDto = z
 export type MfaEnrollInput = z.infer<typeof MfaEnrollDto>;
 
 /**
- * Zod schema for the authenticated `POST /api/v1/auth/mfa/enroll/confirm` request body
+ * Zod schema for the authenticated `POST /api/v1/auth/me/mfa/enroll/confirm` request body
  * (TOTP enrollment CONFIRM — phase 2 of the two-phase ceremony). The caller submits a
  * 6-digit TOTP code generated from the secret returned by INIT; on success the server
  * atomically persists the auth_methods row, generates and hashes the recovery codes, and
@@ -180,7 +180,7 @@ export const oauthProviderParamsDto = z
 export type OauthProviderParamsInput = z.infer<typeof oauthProviderParamsDto>;
 
 /**
- * Zod schema for the `:mfa_method_id` path parameter on `/api/v1/auth/mfa/:mfa_method_id`.
+ * Zod schema for the `:mfa_method_id` path parameter on `/api/v1/auth/me/mfa/:mfa_method_id`.
  *
  * route-#10: the param is an opaque 21-char public id (not the sequential DB id). `GET /mfa`
  * returns each method's public id as `id`, so this is round-trip compatible; it stops leaking

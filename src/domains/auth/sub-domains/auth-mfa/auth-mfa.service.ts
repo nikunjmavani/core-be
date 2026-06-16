@@ -197,7 +197,7 @@ export class MfaService {
    * {@link MAX_MFA_VERIFICATION_ATTEMPTS} is exhausted (audit-#12 + route-audit-#4).
    *
    * @remarks
-   * Closes the brute-force gap on `/auth/mfa/verify` + `/auth/mfa/login`, which had only a rate
+   * Closes the brute-force gap on `/auth/me/mfa/verify` + `/auth/mfa/login`, which had only a rate
    * limit and no account-level lockout. route-audit-#4: the previous design did a read-only GET
    * check BEFORE verifying the code and INCR'd the counter separately on failure, so N concurrent
    * wrong codes all passed the gate before any increment landed — a burst could spend far more
@@ -312,7 +312,7 @@ export class MfaService {
    * plaintext secret + provisioning URI to the caller. **Nothing is written to
    * Postgres** and `is_mfa_enabled` is **NOT** flipped — the user has not yet
    * proved their authenticator can produce a valid code from this secret. The
-   * matching `POST /auth/mfa/enroll/confirm` request consumes the staged secret,
+   * matching `POST /auth/me/mfa/enroll/confirm` request consumes the staged secret,
    * verifies a fresh code, and only then atomically persists the auth_methods row,
    * generates and hashes the recovery codes, and flips `is_mfa_enabled`. Without
    * this proof-of-possession gate, a user who closes the dialog or mis-transcribes

@@ -75,7 +75,7 @@ export function validateMagicLinkVerify(body: unknown): MagicLinkVerifyInput {
   return result.data;
 }
 
-/** Validates the `POST /api/v1/auth/mfa/verify` request body against {@link MfaVerifyDto}. */
+/** Validates the `POST /api/v1/auth/me/mfa/verify` request body against {@link MfaVerifyDto}. */
 export function validateMfaVerify(body: unknown): MfaVerifyInput {
   const result = MfaVerifyDto.safeParse(body);
   if (!result.success) {
@@ -166,7 +166,7 @@ export function validateVerifyEmail(body: unknown): VerifyEmailInput {
   return result.data;
 }
 
-/** Validates the authenticated `POST /api/v1/auth/mfa/enroll` request body against {@link MfaEnrollDto}. */
+/** Validates the authenticated `POST /api/v1/auth/me/mfa/enroll` request body against {@link MfaEnrollDto}. */
 export function validateMfaEnroll(body: unknown): MfaEnrollInput {
   const result = MfaEnrollDto.safeParse(body);
   if (!result.success) {
@@ -179,7 +179,7 @@ export function validateMfaEnroll(body: unknown): MfaEnrollInput {
   return result.data;
 }
 
-/** Validates the authenticated `POST /api/v1/auth/mfa/enroll/confirm` request body against {@link MfaEnrollConfirmDto}. */
+/** Validates the authenticated `POST /api/v1/auth/me/mfa/enroll/confirm` request body against {@link MfaEnrollConfirmDto}. */
 export function validateMfaEnrollConfirm(body: unknown): MfaEnrollConfirmInput {
   const result = MfaEnrollConfirmDto.safeParse(body);
   if (!result.success) {

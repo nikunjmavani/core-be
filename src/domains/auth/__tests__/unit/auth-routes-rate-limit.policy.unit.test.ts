@@ -37,14 +37,22 @@ describe('auth routes rate-limit policy (sec-r5-followup-tc-3)', () => {
     { method: 'post', url: '/password/change', description: 'authenticated password change' },
     { method: 'post', url: '/step-up', description: 'recent-step-up re-auth' },
     { method: 'post', url: '/email/resend-verification', description: 'resend email verification' },
-    { method: 'post', url: '/mfa/enroll', description: 'MFA enrollment phase 1' },
+    { method: 'post', url: '/me/mfa/enroll', description: 'MFA enrollment phase 1' },
     {
       method: 'post',
-      url: '/mfa/enroll/confirm',
+      url: '/me/mfa/enroll/confirm',
       description: 'MFA enrollment phase 2 (returns recovery codes)',
     },
-    { method: 'post', url: '/webauthn/register/options', description: 'WebAuthn register options' },
-    { method: 'post', url: '/webauthn/register/verify', description: 'WebAuthn register verify' },
+    {
+      method: 'post',
+      url: '/me/webauthn/register/options',
+      description: 'WebAuthn register options',
+    },
+    {
+      method: 'post',
+      url: '/me/webauthn/register/verify',
+      description: 'WebAuthn register verify',
+    },
   ];
 
   for (const route of STRICT_AUTHED_ROUTES) {

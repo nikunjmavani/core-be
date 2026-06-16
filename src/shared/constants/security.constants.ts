@@ -19,7 +19,7 @@ export const ACCOUNT_LOCKOUT_MINUTES = 30;
  * verification is temporarily locked (audit-#12).
  *
  * @remarks
- * The `/auth/mfa/verify` step-up and `/auth/mfa/login` second factor were gated only by
+ * The `/auth/me/mfa/verify` step-up and `/auth/mfa/login` second factor were gated only by
  * a per-user rate limit with no account-level lockout, unlike the password path. With a
  * stolen-but-valid bearer token an attacker could keep guessing TOTP codes indefinitely.
  * This per-user counter mirrors {@link MAX_FAILED_LOGIN_ATTEMPTS} and locks verification

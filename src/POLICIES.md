@@ -312,6 +312,17 @@ The canonical exports live under [src/shared/constants/](src/shared/constants/) 
   - Removing a role → audit every Postgres row + JWT in flight; never remove without a multi-deploy migration window.
 - **Last reviewed**: 2026-05-28
 
+## ORGANIZATION_TYPE_CAPABILITY_MATRIX
+
+- **Value**: `PERSONAL` → all capabilities `false`; `TEAM` → all capabilities `true`. Capabilities: `can_invite_members`, `can_manage_members`, `can_manage_roles`, `can_transfer_ownership`, `can_delete`.
+- **Source**: [src/domains/tenancy/sub-domains/organization/organization-capability.ts](src/domains/tenancy/sub-domains/organization/organization-capability.ts) (`organizationCapabilities(type)` derives the flags; `assertTeamOrganization(organization, capability)` enforces them).
+- **Rationale**: There is **one** route surface for both organization types — no personal-only / team-only paths. A personal organization is a single-owner workspace, so the five team-only capabilities (invite members, manage members, manage roles, transfer ownership, delete) are structurally unavailable to it. Rather than fork the URL space or have clients probe-and-handle errors, every serialized organization carries a `capabilities` object describing what its **type** permits (not what the caller is permitted), and the five team-only routes are backstopped by a single centralized guard. The five routes: `DELETE /api/v1/tenancy/organization`, `POST /api/v1/tenancy/organization/invitations`, `POST /api/v1/tenancy/organization/memberships`, `POST /api/v1/tenancy/organization/transfer-ownership`, `POST /api/v1/tenancy/organization/roles`.
+- **422-on-personal-org policy**: `assertTeamOrganization` rejects a personal organization with **HTTP 422** (`unprocessable_entity`), not 409. The org `type` is **immutable**, so an identical retry can never succeed — 409 (transient state conflict) would mislead clients into retrying. The `capabilities` flags and the guard share one source module so the discoverable booleans and the enforced rejection can never drift. See [docs/reference/api/response-codes.md](docs/reference/api/response-codes.md) (`409 vs 422`) and [docs/reference/api/route-consistency-and-org-model.md](docs/reference/api/route-consistency-and-org-model.md).
+- **Consequences of change**:
+  - Adding a capability flag → add it to `OrganizationCapabilities`, `organizationCapabilities()`, the serializer, and the OpenAPI schema in the same commit; audit every team-only route to confirm it calls `assertTeamOrganization`.
+  - Allowing a personal org to gain a team capability → would require making the org `type` mutable; that changes the 422 rationale (a retry could then succeed) and must be reviewed against the response-code policy.
+- **Last reviewed**: 2026-06-16
+
 ## SLUG_REGEX / UUID_REGEX
 
 - **Value**: `^[a-z0-9]+(?:-[a-z0-9]+)*$` / standard 36-char UUID

@@ -266,7 +266,7 @@ describe('Security: object-ownership BOLA matrix', () => {
         .returning();
       const res = await injectAuthenticated(app, {
         method: 'DELETE',
-        url: testApiPath(`/auth/mfa/${victimMfa!.public_id}`),
+        url: testApiPath(`/auth/me/mfa/${victimMfa!.public_id}`),
         token: attacker.token,
       });
       // step-up is satisfied, so a denial here is the ownership check, not the step-up gate
@@ -284,7 +284,7 @@ describe('Security: object-ownership BOLA matrix', () => {
       const token = await generateTestToken({ userId: user.public_id });
       const res = await injectAuthenticated(app, {
         method: 'DELETE',
-        url: testApiPath(`/auth/mfa/${generatePublicId('authMethod')}`),
+        url: testApiPath(`/auth/me/mfa/${generatePublicId('authMethod')}`),
         token,
       });
       expect(res.statusCode).toBe(403);

@@ -1,13 +1,104 @@
 import { DOMAIN_LABELS, METHOD_ORDER } from './constants.js';
-import type { ParsedRoute, RouteAccess } from './types.js';
+import { loadPermissionConstantMap } from './prefix-map.js';
+import type { ParsedRoute } from './types.js';
 
-function formatRouteLine(method: string, path: string, access: RouteAccess): string {
-  const methodColumn = method.padEnd(6, ' ');
-  const pathColumn = path.padEnd(55, ' ');
-  return `  ${methodColumn} ${pathColumn} ${access}`;
+const SEPARATOR =
+  '================================================================================';
+
+/** Order permission-code groups by domain familiarity; unknown groups sort last, then alphabetically. */
+const PERMISSION_DOMAIN_ORDER = ['Tenancy', 'Billing', 'Notify', 'Audit', 'Upload'];
+
+function formatRouteLine(route: ParsedRoute): string {
+  const methodColumn = route.method.padEnd(6, ' ');
+  const pathColumn = route.fullPath.padEnd(55, ' ');
+  const statusColumn = (
+    route.successStatus !== undefined ? String(route.successStatus) : '???'
+  ).padEnd(3, ' ');
+  const idempotencyColumn = (route.idempotencyRequired ? 'req' : '-').padEnd(3, ' ');
+  const orgScopeColumn = (route.orgScope ?? '???').padEnd(4, ' ');
+  return `  ${methodColumn} ${pathColumn}  ${statusColumn}  ${idempotencyColumn}  ${orgScopeColumn}  ${route.access}`;
+}
+
+function permissionDomainLabel(objectName: string): string {
+  const base = objectName.replace(/_PERMISSIONS$/, '');
+  return base.length > 0 ? base.charAt(0) + base.slice(1).toLowerCase() : objectName;
+}
+
+function buildPermissionCodesSection(permissionMap: Map<string, string>): string[] {
+  const codesByDomain = new Map<string, Set<string>>();
+  for (const [constantKey, code] of permissionMap) {
+    const objectName = constantKey.split('.')[0] ?? '';
+    const label = permissionDomainLabel(objectName);
+    const codes = codesByDomain.get(label) ?? new Set<string>();
+    codes.add(code);
+    codesByDomain.set(label, codes);
+  }
+
+  const orderedLabels = [...codesByDomain.keys()].sort((left, right) => {
+    const leftIndex = PERMISSION_DOMAIN_ORDER.indexOf(left);
+    const rightIndex = PERMISSION_DOMAIN_ORDER.indexOf(right);
+    return (
+      (leftIndex === -1 ? 99 : leftIndex) - (rightIndex === -1 ? 99 : rightIndex) ||
+      left.localeCompare(right)
+    );
+  });
+
+  const lines: string[] = [SEPARATOR, '  PERMISSION CODES REFERENCE', SEPARATOR, ''];
+  for (const label of orderedLabels) {
+    lines.push(`  ${label}:`);
+    const codes = [...(codesByDomain.get(label) ?? new Set<string>())].sort();
+    for (let index = 0; index < codes.length; index += 3) {
+      const row = codes
+        .slice(index, index + 3)
+        .map((code) => code.padEnd(30, ' '))
+        .join('')
+        .trimEnd();
+      lines.push(`    ${row}`);
+    }
+    lines.push('');
+  }
+  lines.push('  Global Roles:');
+  lines.push('    super_admin                   admin                          user');
+  lines.push('');
+  return lines;
+}
+
+function buildIdempotencySection(routes: ParsedRoute[]): string[] {
+  const required = routes
+    .filter((route) => route.idempotencyRequired)
+    .map((route) => `    ${route.method} ${route.fullPath}`);
+  return [
+    SEPARATOR,
+    `  IDEMPOTENCY-REQUIRED WRITES (${required.length}) — X-Idempotency-Key required`,
+    SEPARATOR,
+    '',
+    '  Routes flagged I = req reject a missing or reused key (422); every other write',
+    '  accepts an optional key (24h Redis cache).',
+    '',
+    ...required,
+    '',
+    '  See docs/reference/reliability/idempotency.md and OpenAPI operation descriptions.',
+    '',
+  ];
+}
+
+function buildDeprecatedSection(routes: ParsedRoute[]): string[] {
+  const deprecated = routes
+    .filter((route) => route.deprecated)
+    .map((route) => `    ${route.method} ${route.fullPath}`);
+  return [
+    SEPARATOR,
+    `  DEPRECATED ROUTES (${deprecated.length}) — Sunset / Deprecation headers`,
+    SEPARATOR,
+    '',
+    ...(deprecated.length > 0 ? deprecated : ['  (none)']),
+    '',
+  ];
 }
 
 export function buildCatalogContent(routes: ParsedRoute[]): string {
+  const permissionMap = loadPermissionConstantMap();
+
   const sortedRoutes = [...routes].sort((left, right) => {
     if (left.domainKey !== right.domainKey) return left.domainKey.localeCompare(right.domainKey);
     if ((left.subDomainLabel ?? '') !== (right.subDomainLabel ?? '')) {
@@ -21,10 +112,10 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
   });
 
   const lines: string[] = [
-    '================================================================================',
+    SEPARATOR,
     '  ROUTE CATALOG — core-be',
     `  Total routes: ${sortedRoutes.length}`,
-    '================================================================================',
+    SEPARATOR,
     '',
     'Legend:',
     '  PUBLIC  = No authentication required',
@@ -32,15 +123,16 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
     '  ROLE    = Global role required (super_admin, admin, user)',
     '  PERM    = Organization-scoped permission required',
     '  TOKEN   = Non-JWT bearer token required',
+    '  Columns after the path: S = success status · I = idempotency (req | -) · O = org scope (both | team-only, 422 on personal)',
     '',
   ];
 
   const flushDomainHeader = (domain: string, count: number) => {
     const label = DOMAIN_LABELS[domain] ?? domain;
-    lines.push('================================================================================');
+    lines.push(SEPARATOR);
     lines.push(`  DOMAIN: ${label} (${domain})`);
     lines.push(`  Routes: ${count}`);
-    lines.push('================================================================================');
+    lines.push(SEPARATOR);
     lines.push('');
   };
 
@@ -62,7 +154,7 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
         lines.push(`  — ${route.subDomainLabel} —`);
         lastSubDomain = route.subDomainLabel;
       }
-      lines.push(formatRouteLine(route.method, route.fullPath, route.access));
+      lines.push(formatRouteLine(route));
     }
     lines.push('');
   }
@@ -72,11 +164,12 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
   const roleCount = sortedRoutes.filter((route) => route.access.startsWith('ROLE:')).length;
   const permCount = sortedRoutes.filter((route) => route.access.startsWith('PERM:')).length;
   const tokenCount = sortedRoutes.filter((route) => route.access.startsWith('TOKEN:')).length;
+  const teamScopedCount = sortedRoutes.filter((route) => route.orgScope === 'team').length;
 
   lines.push(
-    '================================================================================',
+    SEPARATOR,
     '  SUMMARY',
-    '================================================================================',
+    SEPARATOR,
     '',
     `  Total routes    : ${sortedRoutes.length}`,
     `  Public          : ${publicCount}`,
@@ -84,42 +177,13 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
     `  Role-guarded    : ${roleCount}`,
     `  Perm-guarded    : ${permCount}`,
     `  Token-guarded   : ${tokenCount}`,
-    '',
-    '================================================================================',
-    '  IDEMPOTENCY (X-Idempotency-Key header)',
-    '================================================================================',
-    '',
-    '  Optional on all POST/PUT/PATCH/DELETE when header is present (24h Redis cache).',
-    '  Strongly recommended (forwarded to Stripe) on:',
-    '    POST /api/v1/billing/subscriptions',
-    '',
-    '  See docs/reference/reliability/idempotency.md and OpenAPI operation descriptions.',
-    '',
-    '================================================================================',
-    '  PERMISSION CODES REFERENCE',
-    '================================================================================',
-    '',
-    '  Tenancy:',
-    '    organization:read             organization:update            organization:delete',
-    '    membership:read               membership:manage',
-    '    invitation:manage',
-    '    role:read                     role:manage',
-    '    api-key:read                  api-key:manage',
-    '    notification-policy:read      notification-policy:manage',
-    '',
-    '  Billing:',
-    '    subscription:read             subscription:manage',
-    '',
-    '  Notify:',
-    '    webhook:read                  webhook:manage',
-    '',
-    '  Audit:',
-    '    audit-log:read',
-    '',
-    '  Global Roles:',
-    '    super_admin                   admin                          user',
+    `  Team-only (O)   : ${teamScopedCount}`,
     '',
   );
+
+  lines.push(...buildIdempotencySection(sortedRoutes));
+  lines.push(...buildDeprecatedSection(sortedRoutes));
+  lines.push(...buildPermissionCodesSection(permissionMap));
 
   return lines.join('\n');
 }
