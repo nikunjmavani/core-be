@@ -68,6 +68,7 @@ bash tooling/setup/agent/install-node.sh
 bash tooling/setup/agent/install-gh.sh              # optional: GitHub CLI (in-session GitHub fallback)
 bash tooling/setup/agent/install-docker-images.sh   # optional: Docker Hub mirror + pre-pull compose images
 bash tooling/setup/agent/install-codegraph.sh       # optional: CodeGraph CLI + semantic index (MCP)
+bash tooling/setup/agent/install-headroom.sh        # optional: Headroom CLI — context-compression MCP (headroom_compress)
 ```
 
 On the first session the cached Node 24 is already on disk, [`session-start.sh`](../../agent-os/hooks/session-start.sh) switches `PATH` to `/opt/node24`, and runs `pnpm install`. Do **not** start Postgres / Redis here — setup-script processes do not persist; start them per session (below).
@@ -189,7 +190,7 @@ A cloud session can touch GitHub only after the platform is **authorized** on th
 
 ## MCP servers
 
-In Claude Code on the web the live MCP server set is loaded by the **platform at session start** from your account / environment MCP settings — **not** the repo's [`.mcp.json`](../../.mcp.example.json). Installing a server's CLI in-session (e.g. CodeGraph) does not make its tools appear until a fresh session starts with that server configured. [`.mcp.example.json`](../../.mcp.example.json) lists the full local set (`context7`, `neon`, `sentry`, `github`, `slack`, `railway`, `aws`, `stripe`, `semgrep`, `sonarqube`, `redis`, `postman`, `resend`, `codegraph`, `core-be:api`); most need provider tokens (put them in the environment **Variables**) and several need `uvx` / `docker`, so connect only the subset a task needs.
+In Claude Code on the web the live MCP server set is loaded by the **platform at session start** from your account / environment MCP settings — **not** the repo's [`.mcp.json`](../../.mcp.example.json). Installing a server's CLI in-session (e.g. CodeGraph) does not make its tools appear until a fresh session starts with that server configured. [`.mcp.example.json`](../../.mcp.example.json) lists the full local set (`context7`, `neon`, `sentry`, `github`, `slack`, `railway`, `aws`, `stripe`, `semgrep`, `sonarqube`, `redis`, `postman`, `resend`, `codegraph`, `headroom`, `core-be:api`); most need provider tokens (put them in the environment **Variables**) and several need `uvx` / `docker`, so connect only the subset a task needs.
 
 ## Related documentation
 
