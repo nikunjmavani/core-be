@@ -58,9 +58,11 @@ describe('Security: global-role admin routes reject non-admins (model: global-ro
   });
 
   it('baseline: global admin GET /users/:user_id → not 403', async () => {
-    const adminUser = await createTestUser({ email: globalAdminEmail });
+    // SUPER_ADMIN is re-derived per request from GLOBAL_ADMIN_EMAILS (sec-A6): the actor's
+    // email must be allowlisted AND verified, and the token must carry the admin role.
+    const adminUser = await createTestUser({ email: globalAdminEmail, isEmailVerified: true });
     const targetUser = await createTestUser();
-    const token = await generateTestToken({ userId: adminUser.public_id });
+    const token = await generateTestToken({ userId: adminUser.public_id, role: 'super_admin' });
     const response = await injectAuthenticated(app, {
       method: 'GET',
       url: testApiPath(`/users/${targetUser.public_id}`),

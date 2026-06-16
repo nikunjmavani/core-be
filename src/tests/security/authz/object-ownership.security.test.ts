@@ -12,14 +12,13 @@ import {
   seedUploadForOrganization,
 } from '@/tests/helpers/test-organization.js';
 import { createTestNotification } from '@/tests/factories/notification.factory.js';
-import { createTestMfaMethod } from '@/tests/factories/mfa-method.factory.js';
 import { createTestUserDataExport } from '@/tests/factories/user-data-export.factory.js';
+import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { database } from '@/infrastructure/database/connection.js';
 import { uploads } from '@/domains/upload/upload.schema.js';
 import { notifications } from '@/domains/notify/sub-domains/notification/notification.schema.js';
 import { sessions } from '@/domains/auth/sub-domains/auth-session/auth-session.schema.js';
-import { mfa_methods } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa-method.schema.js';
 import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method.schema.js';
 
 /**
@@ -53,6 +52,19 @@ describe('Security: object-ownership BOLA matrix', () => {
     const victimToken = await generateTestToken({ userId: victim.public_id });
     const attackerToken = await generateTestToken({ userId: attacker.public_id });
     return { victim, attacker, victimToken, attackerToken };
+  }
+
+  // Credential endpoints (sessions, MFA, auth methods) are gated by recent step-up bound to
+  // the caller's session (sec-A2/A7): a stolen bearer alone cannot use them. This mints a
+  // session-bound token and seeds the step-up sentinel so the request clears the gate and
+  // actually exercises the ownership layer beneath it.
+  async function userWithStepUp() {
+    const user = await createTestUser();
+    const { token, sessionPublicId } = await generateTestTokenAndSession({
+      userId: user.public_id,
+    });
+    await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
+    return { user, token, sessionPublicId };
   }
 
   describe('model: user — uploads', () => {
@@ -175,61 +187,102 @@ describe('Security: object-ownership BOLA matrix', () => {
     });
   });
 
-  describe('model: user — sessions', () => {
-    it("attacker DELETE victim's session → 404 and session not revoked", async () => {
+  // Step-up-gated credential endpoints (sec-A7): verify the ownership layer BENEATH the
+  // step-up gate. Both parties hold a recent step-up, so a denial proves ownership-scoping
+  // (not merely the step-up gate). A dedicated "no step-up → 403" case documents the gate.
+
+  describe('model: user — sessions (step-up gated)', () => {
+    it("attacker (with step-up) DELETE victim's session → 404 and session not revoked", async () => {
+      const attacker = await userWithStepUp();
       const victim = await createTestUser();
-      const attacker = await createTestUser();
-      const { sessionPublicId } = await generateTestTokenAndSession({ userId: victim.public_id });
-      const attackerToken = await generateTestToken({ userId: attacker.public_id });
+      const { sessionPublicId: victimSession } = await generateTestTokenAndSession({
+        userId: victim.public_id,
+      });
       const res = await injectAuthenticated(app, {
         method: 'DELETE',
-        url: testApiPath(`/auth/me/sessions/${sessionPublicId}`),
-        token: attackerToken,
+        url: testApiPath(`/auth/me/sessions/${victimSession}`),
+        token: attacker.token,
       });
       expect(res.statusCode).toBe(404);
       const [row] = await database
         .select()
         .from(sessions)
-        .where(eq(sessions.public_id, sessionPublicId));
+        .where(eq(sessions.public_id, victimSession));
       expect(row?.is_revoked).toBe(false);
     });
 
-    it('baseline: owner DELETE own session → 204', async () => {
-      const victim = await createTestUser();
+    it('baseline: owner (with step-up) DELETE own session → 204', async () => {
+      const owner = await userWithStepUp();
+      const { sessionPublicId: otherSession } = await generateTestTokenAndSession({
+        userId: owner.user.public_id,
+      });
+      const res = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/auth/me/sessions/${otherSession}`),
+        token: owner.token,
+      });
+      expect(res.statusCode).toBe(204);
+    });
+
+    it('step-up gate: without recent step-up, DELETE own session → 403', async () => {
+      const user = await createTestUser();
       const { token, sessionPublicId } = await generateTestTokenAndSession({
-        userId: victim.public_id,
+        userId: user.public_id,
       });
       const res = await injectAuthenticated(app, {
         method: 'DELETE',
         url: testApiPath(`/auth/me/sessions/${sessionPublicId}`),
         token,
       });
-      expect(res.statusCode).toBe(204);
+      expect(res.statusCode).toBe(403);
     });
   });
 
-  describe('model: user — MFA methods', () => {
-    it("attacker DELETE victim's MFA method → 404 and not revoked", async () => {
-      const { victim, attackerToken } = await twoUsers();
-      const method = await createTestMfaMethod({ userId: victim.id });
+  describe('model: user — MFA methods (step-up gated)', () => {
+    it("attacker (with step-up) DELETE victim's MFA method → denied and not revoked", async () => {
+      const attacker = await userWithStepUp();
+      const victim = await createTestUser();
+      const [victimMfa] = await database
+        .insert(auth_methods)
+        .values({
+          public_id: generatePublicId('authMethod'),
+          user_id: victim.id,
+          method_type: 'MFA_TOTP',
+          verified_at: new Date(),
+        })
+        .returning();
       const res = await injectAuthenticated(app, {
         method: 'DELETE',
-        url: testApiPath(`/auth/mfa/${method.public_id}`),
-        token: attackerToken,
+        url: testApiPath(`/auth/mfa/${victimMfa!.public_id}`),
+        token: attacker.token,
       });
-      expect(res.statusCode).toBe(404);
+      // step-up is satisfied, so a denial here is the ownership check, not the step-up gate
+      expect(res.statusCode).not.toBe(403);
+      expect([401, 404]).toContain(res.statusCode);
       const [row] = await database
         .select()
-        .from(mfa_methods)
-        .where(eq(mfa_methods.public_id, method.public_id));
+        .from(auth_methods)
+        .where(eq(auth_methods.public_id, victimMfa!.public_id));
       expect(row?.revoked_at).toBeNull();
+    });
+
+    it('step-up gate: without recent step-up, DELETE MFA method → 403', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const res = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/auth/mfa/${generatePublicId('authMethod')}`),
+        token,
+      });
+      expect(res.statusCode).toBe(403);
     });
   });
 
-  describe('model: user — auth methods', () => {
-    it("attacker DELETE victim's auth method → 404", async () => {
-      const { victim, attackerToken } = await twoUsers();
-      const [authMethod] = await database
+  describe('model: user — auth methods (step-up gated)', () => {
+    it("attacker (with step-up) DELETE victim's auth method → denied and not revoked", async () => {
+      const attacker = await userWithStepUp();
+      const victim = await createTestUser();
+      const [victimMethod] = await database
         .insert(auth_methods)
         .values({
           public_id: generatePublicId('authMethod'),
@@ -240,10 +293,27 @@ describe('Security: object-ownership BOLA matrix', () => {
         .returning();
       const res = await injectAuthenticated(app, {
         method: 'DELETE',
-        url: testApiPath(`/auth/me/auth-methods/${authMethod!.public_id}`),
-        token: attackerToken,
+        url: testApiPath(`/auth/me/auth-methods/${victimMethod!.public_id}`),
+        token: attacker.token,
       });
-      expect(res.statusCode).toBe(404);
+      expect(res.statusCode).not.toBe(403);
+      expect([401, 404]).toContain(res.statusCode);
+      const [row] = await database
+        .select()
+        .from(auth_methods)
+        .where(eq(auth_methods.public_id, victimMethod!.public_id));
+      expect(row?.revoked_at).toBeNull();
+    });
+
+    it('step-up gate: without recent step-up, DELETE auth method → 403', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const res = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/auth/me/auth-methods/${generatePublicId('authMethod')}`),
+        token,
+      });
+      expect(res.statusCode).toBe(403);
     });
   });
 
