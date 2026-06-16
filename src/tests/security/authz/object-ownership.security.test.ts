@@ -105,6 +105,19 @@ describe('Security: object-ownership BOLA matrix', () => {
         .where(eq(uploads.public_id, upload.public_id));
       expect(row?.deleted_at).toBeNull();
     });
+
+    it("attacker POST confirm on victim's upload → 404", async () => {
+      // Finalizing someone else's pending upload is owner-scoped: the lookup is
+      // filtered to the caller's user_id, so the attacker never resolves the row.
+      const { victim, attackerToken } = await twoUsers();
+      const upload = await seedUploadForOrganization({ userId: victim.id });
+      const res = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/uploads/${upload.public_id}/confirm`),
+        token: attackerToken,
+      });
+      expect(res.statusCode).toBe(404);
+    });
   });
 
   describe('model: user — notifications', () => {

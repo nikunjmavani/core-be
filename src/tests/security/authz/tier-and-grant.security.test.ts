@@ -65,7 +65,7 @@ describe('Security: privilege-boundary matrix (tier:owner + grant)', () => {
       permissionCodes: OWNER_PERMISSION_CODES,
       createdByUserId: owner.id,
     });
-    await createMembership({
+    const ownerMembership = await createMembership({
       userId: owner.id,
       organizationId: organization.id,
       roleId: ownerRole.id,
@@ -95,6 +95,7 @@ describe('Security: privilege-boundary matrix (tier:owner + grant)', () => {
       ownerRole,
       memberRole,
       membership,
+      ownerMembership,
       ownerToken,
       memberToken,
     };
@@ -231,6 +232,38 @@ describe('Security: privilege-boundary matrix (tier:owner + grant)', () => {
         payload: { permission_codes: [] },
       });
       expect(res.statusCode).toBe(404);
+    });
+  });
+
+  describe('model: tier:owner — the owner membership is protected (lock-out prevention)', () => {
+    it("member with membership:manage PATCH the owner's membership → 403", async () => {
+      // Even a full membership:manage grant must not let a member suspend the
+      // owner (which would strip the org of its only owner). The scoped lookup
+      // succeeds, then the owner-guard rejects: `errors:ownerMembershipCannotBeModified`.
+      const { ownerMembership, memberToken } = await setupOrgWithMember([
+        TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE,
+      ]);
+      const res = await injectAuthenticated(app, {
+        method: 'PATCH',
+        url: testApiPath(`/tenancy/organization/memberships/${ownerMembership.public_id}`),
+        token: memberToken,
+        payload: { status: 'SUSPENDED' },
+      });
+      expect(res.statusCode).toBe(403);
+    });
+
+    it("member with membership:manage DELETE the owner's membership → 403", async () => {
+      // Removing the owner is likewise blocked (`errors:ownerCannotBeRemoved`):
+      // ownership must be transferred first, never deleted out from under the org.
+      const { ownerMembership, memberToken } = await setupOrgWithMember([
+        TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE,
+      ]);
+      const res = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/tenancy/organization/memberships/${ownerMembership.public_id}`),
+        token: memberToken,
+      });
+      expect(res.statusCode).toBe(403);
     });
   });
 });

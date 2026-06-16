@@ -111,8 +111,22 @@ Every protected by-id route (plus the two owner-tier routes) and the authorizati
 4. **Phase 3 hardening** — extend the coverage gate to every mutation (models `self`/`public`/`function`), add the static `findByPublicId` ban.
 5. **Verify** — typecheck locally; the e2e attacks run in CI (`reusable-vitest-postgres-redis`, Postgres + Redis). This environment has no Docker, so green is confirmed in CI.
 
-## Already built (committed, pending CI verification)
+## Built (Phase 2 complete — all 48 routes, verified green)
 
-- `object-ownership.security.test.ts`: `user`/uploads (cross-user) + `org`/subscriptions (cross-org).
-- `admin-only.security.test.ts`: `global-role` on `/users/:user_id`.
-- `authz-model-coverage.global.test.ts`: the coverage gate (runs DB-free; green).
+Every modelled route now has a dedicated attacker test. The suite is **80 tests
+across 7 files** under `src/tests/security/authz/` (e2e, Postgres + Redis):
+
+| Suite | Models | Coverage |
+| --- | --- | --- |
+| `object-ownership.security.test.ts` | `user` (10) + `org`/subscription read | cross-user 404 + baselines + `verifyNoMutation`; step-up-gated session/MFA/auth-method |
+| `cross-org-resource.security.test.ts` | `org` reads (10) | cross-org GET → 404 + same-org 200 baseline; by-slug scoped separately |
+| `cross-org-mutation.security.test.ts` | `org` writes (16) | cross-org PATCH/DELETE/POST/rotate → 404 (valid bodies + Idempotency-Key); subscriptions via two-org fixture |
+| `tier-and-grant.security.test.ts` | `tier:owner` (4) + `grant` (1) | non-owner/owner-membership protection; grant-grantability + cross-org PUT |
+| `admin-only.security.test.ts` | `global-role` (5) | every `/users/:user_id` admin route: regular user → 401/403 + admin baseline |
+| `invitation-email.security.test.ts` | `email` (2) | email-mismatch accept/decline → 403 + invitee baseline |
+| `auth-token-flow.security.test.ts` | (authn lifecycle) | bearer-contract + revoked-session 401 (complements `jwt-attacks`) |
+
+**Gates (both DB-free, run in the `global` project):**
+
+- `authz-model-coverage.global.test.ts` — every object-by-id route *declares* a model (no missing/orphan/unknown).
+- `authz-runtime-coverage.global.test.ts` — every modelled route is *exercised* by a mapped runtime test; a new by-id route fails CI until both a model entry and an attack test exist.

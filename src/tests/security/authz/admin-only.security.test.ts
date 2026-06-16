@@ -33,26 +33,40 @@ describe('Security: global-role admin routes reject non-admins (model: global-ro
     await cleanupDatabase();
   });
 
-  it('regular user GET /users/:user_id → denied (401/403)', async () => {
-    const regularUser = await createTestUser();
-    const targetUser = await createTestUser();
-    const token = await generateTestToken({ userId: regularUser.public_id });
-    const response = await injectAuthenticated(app, {
-      method: 'GET',
-      url: testApiPath(`/users/${targetUser.public_id}`),
-      token,
-    });
-    expect([401, 403]).toContain(response.statusCode);
-  });
+  // Every by-id admin route is gated by the same `requireRole` preHandler. A
+  // valid body is supplied for the PATCH so the role guard (preHandler) is what
+  // produces the denial — not Fastify body validation, which runs first and
+  // would otherwise mask the 403 with a 422 on an invalid body.
+  const adminRouteCases: ReadonlyArray<{
+    label: string;
+    method: 'GET' | 'PATCH' | 'DELETE' | 'POST';
+    path: (userPublicId: string) => string;
+    body?: Record<string, unknown>;
+  }> = [
+    { label: 'GET /users/:user_id', method: 'GET', path: (id) => `/users/${id}` },
+    { label: 'PATCH /users/:user_id', method: 'PATCH', path: (id) => `/users/${id}`, body: {} },
+    { label: 'DELETE /users/:user_id', method: 'DELETE', path: (id) => `/users/${id}` },
+    { label: 'POST /users/:user_id/suspend', method: 'POST', path: (id) => `/users/${id}/suspend` },
+    {
+      label: 'POST /users/:user_id/unsuspend',
+      method: 'POST',
+      path: (id) => `/users/${id}/unsuspend`,
+    },
+  ];
 
-  it('regular user DELETE /users/:user_id → denied (401/403)', async () => {
+  it.each(adminRouteCases)('regular user $label → denied (401/403)', async ({
+    method,
+    path,
+    body,
+  }) => {
     const regularUser = await createTestUser();
     const targetUser = await createTestUser();
     const token = await generateTestToken({ userId: regularUser.public_id });
     const response = await injectAuthenticated(app, {
-      method: 'DELETE',
-      url: testApiPath(`/users/${targetUser.public_id}`),
+      method,
+      url: testApiPath(path(targetUser.public_id)),
       token,
+      ...(body ? { payload: body } : {}),
     });
     expect([401, 403]).toContain(response.statusCode);
   });

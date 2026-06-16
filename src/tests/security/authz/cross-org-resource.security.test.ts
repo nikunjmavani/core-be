@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
@@ -104,6 +105,18 @@ describe('Security: cross-organization resource isolation (model: org)', () => {
       path: (org) => `/tenancy/organization/memberships/${org.membership.public_id}`,
     },
     { label: 'webhook', path: (org) => `/notify/webhooks/${org.webhook.public_id}` },
+    {
+      label: 'webhook delivery-attempts',
+      path: (org) => `/notify/webhooks/${org.webhook.public_id}/delivery-attempts`,
+    },
+    {
+      label: 'membership permissions',
+      path: (org) => `/tenancy/organization/memberships/${org.membership.public_id}/permissions`,
+    },
+    {
+      label: 'role permissions',
+      path: (org) => `/tenancy/organization/roles/${org.role.public_id}/permissions`,
+    },
   ];
 
   describe('cross-org reads are scoped out (404)', () => {
@@ -125,6 +138,56 @@ describe('Security: cross-organization resource isolation (model: org)', () => {
       const res = await injectAuthenticated(app, {
         method: 'GET',
         url: testApiPath(path(org)),
+        token: org.memberToken,
+      });
+      expect(res.statusCode).toBe(200);
+    });
+  });
+
+  // by-slug is auth-only (no permission preHandler); the service rejects a
+  // non-member with 404. Driven separately from the by-id cases above with an
+  // explicit, route-valid slug (the auto-generated factory slug can violate the
+  // stricter SLUG_REGEX the :slug param enforces).
+  describe('organization by-slug is org-scoped', () => {
+    async function orgWithMemberAndSlug(slug: string) {
+      await seedPermissions(READER_PERMISSION_CODES);
+      const owner = await createTestUser();
+      const member = await createTestUser();
+      const organization = await createTestOrganization({ ownerUserId: owner.id, slug });
+      const role = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: READER_PERMISSION_CODES,
+        createdByUserId: owner.id,
+      });
+      await createMembership({
+        userId: member.id,
+        organizationId: organization.id,
+        roleId: role.id,
+      });
+      const memberToken = await generateTestToken({
+        userId: member.public_id,
+        organizationPublicId: organization.public_id,
+      });
+      return { organization, memberToken };
+    }
+    const uniqueSlug = () => `authz-slug-${randomUUID().slice(0, 8)}`;
+
+    it("member of org A GET org B's organization by-slug → 404", async () => {
+      const orgA = await orgWithMemberAndSlug(uniqueSlug());
+      const orgB = await orgWithMemberAndSlug(uniqueSlug());
+      const res = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(`/tenancy/organizations/by-slug/${orgB.organization.slug}`),
+        token: orgA.memberToken,
+      });
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('baseline: member GET own organization by-slug → 200', async () => {
+      const org = await orgWithMemberAndSlug(uniqueSlug());
+      const res = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(`/tenancy/organizations/by-slug/${org.organization.slug}`),
         token: org.memberToken,
       });
       expect(res.statusCode).toBe(200);
