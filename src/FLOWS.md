@@ -31,7 +31,7 @@ sequenceDiagram
   alt user exists
     ML->>DB: insert verification_tokens (MAGIC_LINK, sha256(token), expires_at = now + 15m)
     ML->>Bus: emit AUTH_EVENT.MAGIC_LINK_REQUESTED {email, magic_link_token, expires_in_minutes}
-    Bus->>Mail: enqueueEmail (via event handler)
+    Bus->>Mail: recordOutboxEmail (via event handler)
   else user does not exist
     Note over ML: silent success — no token, no event, no email
   end
@@ -176,7 +176,7 @@ sequenceDiagram
   Inv->>DB: insert member_invitations (token_hash, expires_at, status=pending)
   Inv->>DB: COMMIT
   Inv->>Bus: emit MEMBER_INVITATION_EVENT.CREATED {email, raw_token, organization_name, ...}
-  Bus->>Mail: enqueueEmail (via event handler)
+  Bus->>Mail: recordOutboxEmail (via event handler)
   Mail-->>Invitee: invitation email (raw_token in URL)
 
   Invitee->>Auth: POST /auth/magic-link {email} (signup-flow if new user)
@@ -247,7 +247,7 @@ sequenceDiagram
   Ingest-->>Stripe: 200
 
   Bus->>Notify: notification fan-out (in-app + email)
-  Notify->>Mail: enqueueEmail
+  Notify->>Mail: recordOutboxEmail + dispatchOutboxEmail
 ```
 
 ### Side effects
@@ -290,7 +290,7 @@ sequenceDiagram
   Sub->>DB: UPDATE subscriptions SET status=past_due
   Sub->>Bus: emit BILLING_EVENT.SUBSCRIPTION_PAST_DUE
   Bus->>Notify: enqueue notification (in-app)
-  Bus->>Mail: enqueueEmail (payment-failed template)
+  Bus->>Mail: recordOutboxEmail (payment-failed template)
   Notify-->>Org: in-app banner
   Mail-->>Org: payment-failed email (with hosted billing link)
 

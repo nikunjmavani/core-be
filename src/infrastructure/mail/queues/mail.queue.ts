@@ -117,23 +117,6 @@ export async function dispatchOutboxEmail(
 }
 
 /**
- * Persist email to mail_outbox and enqueue async delivery via the mail worker.
- *
- * @deprecated Prefer `recordOutboxEmail` + `eventBus.onCommit(() => dispatchOutboxEmail(...))`
- * in HTTP handlers so BullMQ dispatch runs only after the request transaction commits.
- * Safe for worker/runtime paths without a request transaction.
- *
- * @throws when outbox insert or Redis enqueue fails (callers should handle or log).
- */
-export async function enqueueEmail(
-  data: MailEnqueueInput,
-  options?: { requestId?: string },
-): Promise<void> {
-  const mailOutboxId = await recordOutboxEmail(data);
-  await dispatchOutboxEmail(mailOutboxId, options);
-}
-
-/**
  * Close the mail queue connection (for graceful shutdown).
  */
 export async function closeMailQueue(): Promise<void> {
