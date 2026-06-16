@@ -1,6 +1,5 @@
-import { z } from 'zod';
-import { ValidationError } from '@/shared/errors/index.js';
-import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
+import { parseWithSchema } from '@/shared/utils/validation/parse-with-schema.util.js';
+import { parseCursorPaginatedQuery } from '@/shared/utils/http/pagination.util.js';
 import {
   createMembershipDto,
   updateMembershipDto,
@@ -20,15 +19,7 @@ import type {
  * with per-field details on failure.
  */
 export function validateCreateMembership(data: unknown): CreateMembershipInput {
-  const result = createMembershipDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(createMembershipDto, data);
 }
 
 /**
@@ -37,15 +28,7 @@ export function validateCreateMembership(data: unknown): CreateMembershipInput {
  * `ValidationError('errors:invalidInput')` on failure.
  */
 export function validateUpdateMembership(data: unknown): UpdateMembershipInput {
-  const result = updateMembershipDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(updateMembershipDto, data);
 }
 
 /**
@@ -54,16 +37,11 @@ export function validateUpdateMembership(data: unknown): UpdateMembershipInput {
  * {@link listMembershipsQueryDto}.
  */
 export function validateListMembershipsQuery(data: unknown): ListMembershipsQueryInput {
-  ensureCursorOnlyPagination(data);
-  const result = listMembershipsQueryDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:validation.invalidPagination',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseCursorPaginatedQuery(
+    listMembershipsQueryDto,
+    data,
+    'errors:validation.invalidPagination',
+  );
 }
 
 /**
@@ -72,13 +50,5 @@ export function validateListMembershipsQuery(data: unknown): ListMembershipsQuer
  * on failure.
  */
 export function validateTransferOwnership(data: unknown): TransferOwnershipInput {
-  const result = transferOwnershipDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(transferOwnershipDto, data);
 }
