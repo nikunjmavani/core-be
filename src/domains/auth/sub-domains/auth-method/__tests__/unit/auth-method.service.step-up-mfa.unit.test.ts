@@ -27,7 +27,7 @@ import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session
  * password is enough to delete MFA, register a passkey, and convert the stolen window into
  * permanent account access.
  *
- * MFA users must step up via `/auth/mfa/verify` (which already records `recordRecentStepUp`)
+ * MFA users must step up via `/auth/me/mfa/verify` (which already records `recordRecentStepUp`)
  * — not via password-only re-verification.
  */
 describe('AuthMethodService.verifyPasswordForStepUp — MFA bypass guard (sec-A1)', () => {

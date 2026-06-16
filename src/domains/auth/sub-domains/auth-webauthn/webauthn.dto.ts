@@ -71,7 +71,7 @@ const assertionResponseSchema = z.object({
 });
 
 /**
- * Zod schema for the `POST /api/v1/auth/webauthn/register/verify` request body.
+ * Zod schema for the `POST /api/v1/auth/me/webauthn/register/verify` request body.
  * The `response` field mirrors `RegistrationResponseJSON` from `@simplewebauthn/server`
  * with explicit bounds on all binary fields, eliminating the need for an unsafe cast
  * in the service layer.

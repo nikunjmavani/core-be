@@ -683,6 +683,7 @@ src/
     │   │   │   │   ├── integration/
     │   │   │   │   │   └── organization.integration.test.ts
     │   │   │   │   └── unit/
+    │   │   │   │   │   ├── organization-capability.unit.test.ts
     │   │   │   │   │   ├── organization-offboarding-reconcile.processor.unit.test.ts
     │   │   │   │   │   ├── organization-routes-rate-limit.policy.unit.test.ts
     │   │   │   │   │   ├── organization-tombstone-retention.processor.boundary.unit.test.ts
@@ -776,6 +777,7 @@ src/
     │   │   │   │   ├── organization-tombstone-retention.constants.ts
     │   │   │   │   ├── organization-tombstone-retention.processor.ts
     │   │   │   │   └── organization-tombstone-retention.worker.ts
+    │   │   │   ├── organization-capability.ts
     │   │   │   ├── organization-provisioning.ts
     │   │   │   ├── organization.controller.ts
     │   │   │   ├── organization.dto.ts
@@ -1347,8 +1349,11 @@ src/
     │   ├── routes/
     │       ├── route-http-coverage-validation.util.ts
     │       ├── route-http-coverage.allowlist.ts
+    │       ├── route-schema-docs-validation.util.ts
     │       ├── route-success-coverage.util.ts
     │       ├── validate-route-http-coverage.ts
+    │       ├── validate-route-org-scope.ts
+    │       ├── validate-route-schema-docs.ts
     │       ├── validate-route-success-coverage.ts
     │       └── validate-route-success-statuses.ts
     │   └── tests/
@@ -1652,6 +1657,7 @@ src/
     │   ├── route-catalog-auth.ts
     │   ├── route-catalog-registry.ts
     │   ├── route-http-coverage.helper.ts
+    │   ├── route-org-scope.helper.ts
     │   ├── route-status-observer.ts
     │   ├── route-success-status.helper.ts
     │   ├── test-api-prefix.helper.ts
@@ -1978,6 +1984,7 @@ src/
     │   │   ├── rotate-field-secrets.unit.test.ts
     │   │   ├── route-catalog-registry.unit.test.ts
     │   │   ├── route-http-coverage-validation.unit.test.ts
+    │   │   ├── route-schema-docs-validation.unit.test.ts
     │   │   ├── route-success-coverage.unit.test.ts
     │   │   ├── route-success-status.unit.test.ts
     │   │   ├── run-ci-local-guard.unit.test.ts

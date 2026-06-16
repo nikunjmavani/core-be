@@ -116,7 +116,7 @@
       }
     }
   },
-  "DELETE /api/v1/auth/mfa/:mfa_method_id": {
+  "DELETE /api/v1/auth/me/mfa/:mfa_method_id": {
     "responses": {
       "401": {
         "error": {
@@ -640,7 +640,7 @@
       }
     }
   },
-  "GET /api/v1/auth/mfa": {
+  "GET /api/v1/auth/me/mfa": {
     "responses": {
       "200": {
         "data": [],
@@ -3371,7 +3371,7 @@
       }
     }
   },
-  "POST /api/v1/auth/mfa/enroll": {
+  "POST /api/v1/auth/me/mfa/enroll": {
     "request_body": {
       "method_type": "MFA_TOTP"
     },
@@ -3430,7 +3430,7 @@
       }
     }
   },
-  "POST /api/v1/auth/mfa/enroll/confirm": {
+  "POST /api/v1/auth/me/mfa/enroll/confirm": {
     "request_body": {
       "code": "009308"
     },
@@ -3523,7 +3523,7 @@
       }
     }
   },
-  "POST /api/v1/auth/mfa/verify": {
+  "POST /api/v1/auth/me/mfa/verify": {
     "request_body": {
       "code": "696343"
     },
@@ -3856,7 +3856,7 @@
       }
     }
   },
-  "POST /api/v1/auth/webauthn/register/options": {
+  "POST /api/v1/auth/me/webauthn/register/options": {
     "request_body": {},
     "responses": {
       "201": {
@@ -3931,7 +3931,7 @@
       }
     }
   },
-  "POST /api/v1/auth/webauthn/register/verify": {
+  "POST /api/v1/auth/me/webauthn/register/verify": {
     "request_body": {
       "challenge_token": "<redacted>",
       "response": {

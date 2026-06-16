@@ -20,8 +20,8 @@ WebAuthn / passkey enrolment and authentication ceremonies, backed by [@simplewe
 
 ```mermaid
 stateDiagram-v2
-  [*] --> registration_challenged: GET /auth/webauthn/register-options
-  registration_challenged --> credential_registered: POST /auth/webauthn/register-verify
+  [*] --> registration_challenged: GET /auth/me/webauthn/register/options
+  registration_challenged --> credential_registered: POST /auth/me/webauthn/register/verify
   registration_challenged --> challenge_expired: TTL passes
   credential_registered --> auth_challenged: GET /auth/webauthn/authenticate-options
   auth_challenged --> session: POST /auth/webauthn/authenticate-verify ok

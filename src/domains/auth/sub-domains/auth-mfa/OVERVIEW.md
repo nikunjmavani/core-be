@@ -20,7 +20,7 @@ TOTP-based multi-factor authentication: enrolment (generate secret, return provi
 ```mermaid
 stateDiagram-v2
   [*] --> not_enrolled
-  not_enrolled --> enrolment_pending: POST /auth/mfa/enrol
+  not_enrolled --> enrolment_pending: POST /auth/me/mfa/enrol
   enrolment_pending --> enrolled: client confirms with first TOTP code
   enrolled --> challenged: login produces MFA ticket
   challenged --> session: TOTP / backup-code verified within 5 min

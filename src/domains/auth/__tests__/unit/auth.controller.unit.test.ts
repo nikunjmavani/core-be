@@ -227,7 +227,7 @@ describe('createAuthController', () => {
   it('MFA handlers delegate to mfa service', async () => {
     const loginReply = mockReply();
     await controller.enrollMfa(mockRequest({ body: { method_type: 'MFA_TOTP' } }), mockReply());
-    // sec-A finding #3: confirm is a separate handler at POST /auth/mfa/enroll/confirm.
+    // sec-A finding #3: confirm is a separate handler at POST /auth/me/mfa/enroll/confirm.
     await controller.confirmEnrollMfa(mockRequest({ body: { code: '123456' } }), mockReply());
     await controller.verifyMfa(mockRequest({ body: { code: '123456' } }), mockReply());
     await controller.verifyMfaLogin(

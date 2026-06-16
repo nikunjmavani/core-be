@@ -13,7 +13,7 @@ export interface CreateMfaMethodOptions {
  * Create a test MFA method owned by `userId` (auth.mfa_methods).
  */
 export async function createTestMfaMethod(options: CreateMfaMethodOptions) {
-  const publicId = generatePublicId('authMfaMethod');
+  const publicId = generatePublicId('authMethod');
   const [method] = await database
     .insert(mfa_methods)
     .values({

@@ -22,7 +22,7 @@ import type { FastifyInstance } from 'fastify';
  * codes, empty inputs, and missing MFA-session tokens on the public login flow.
  *
  * Routes covered:
- *   POST /api/v1/auth/mfa/verify      — authenticated; verifies a TOTP code
+ *   POST /api/v1/auth/me/mfa/verify      — authenticated; verifies a TOTP code
  *   POST /api/v1/auth/mfa/login       — public; completes MFA login with session token
  */
 describe('Security: MFA', () => {
@@ -58,14 +58,14 @@ describe('Security: MFA', () => {
     return { user, organization, token };
   }
 
-  describe('POST /auth/mfa/verify (authenticated TOTP verification)', () => {
+  describe('POST /auth/me/mfa/verify (authenticated TOTP verification)', () => {
     // NEGATIVE — wrong TOTP code (6 digits, but incorrect value) returns 401
     it('should return 401 for a wrong TOTP code when MFA is not enrolled', async () => {
       const { token } = await createActiveUserWithToken();
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/mfa/verify'),
+        url: testApiPath('/auth/me/mfa/verify'),
         token,
         payload: { code: '000000' },
       });
@@ -80,7 +80,7 @@ describe('Security: MFA', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/mfa/verify'),
+        url: testApiPath('/auth/me/mfa/verify'),
         token,
         payload: { code: '' },
       });
@@ -94,7 +94,7 @@ describe('Security: MFA', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/mfa/verify'),
+        url: testApiPath('/auth/me/mfa/verify'),
         token,
         payload: {},
       });
@@ -108,7 +108,7 @@ describe('Security: MFA', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/mfa/verify'),
+        url: testApiPath('/auth/me/mfa/verify'),
         token,
         payload: { code: '1234567' },
       });
@@ -122,7 +122,7 @@ describe('Security: MFA', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/mfa/verify'),
+        url: testApiPath('/auth/me/mfa/verify'),
         token,
         payload: { code: 'abcdef' },
       });
@@ -134,7 +134,7 @@ describe('Security: MFA', () => {
     it('should return 401 when no bearer token is provided to the authenticated verify endpoint', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/mfa/verify'),
+        url: testApiPath('/auth/me/mfa/verify'),
         payload: { code: '123456' },
       });
 

@@ -27,7 +27,7 @@ describe('Auth WebAuthn — Integration', () => {
     await cleanupDatabase();
   });
 
-  describe('POST /api/v1/auth/webauthn/register/options', () => {
+  describe('POST /api/v1/auth/me/webauthn/register/options', () => {
     it('should return registration options for authenticated user', async () => {
       const user = await createTestUser();
       const { token, sessionPublicId } = await generateTestTokenWithActiveSession(
@@ -38,7 +38,7 @@ describe('Auth WebAuthn — Integration', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/webauthn/register/options'),
+        url: testApiPath('/auth/me/webauthn/register/options'),
         token,
         payload: {},
       });
@@ -54,17 +54,17 @@ describe('Auth WebAuthn — Integration', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/webauthn/register/options'),
+        url: testApiPath('/auth/me/webauthn/register/options'),
       });
       expect(response.statusCode).toBe(401);
     });
   });
 
-  describe('POST /api/v1/auth/webauthn/register/verify', () => {
+  describe('POST /api/v1/auth/me/webauthn/register/verify', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/webauthn/register/verify'),
+        url: testApiPath('/auth/me/webauthn/register/verify'),
         payload: { challenge_token: 'a'.repeat(64), response: { id: 'x', type: 'public-key' } },
       });
       expect(response.statusCode).toBe(401);
@@ -75,7 +75,7 @@ describe('Auth WebAuthn — Integration', () => {
       const { token } = await generateTestTokenWithActiveSession(app, user.public_id);
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/webauthn/register/verify'),
+        url: testApiPath('/auth/me/webauthn/register/verify'),
         token,
         payload: {},
       });

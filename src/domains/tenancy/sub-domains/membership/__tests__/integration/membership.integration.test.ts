@@ -1091,15 +1091,15 @@ describe('Membership Sub-Domain — Integration', () => {
     // The error handler translates `error.messageKey` via `request.t`. The standard test app does
     // not initialize i18next resources, so the wire `detail` is the raw key; but if a sibling
     // integration test initialized i18next first (same worker), it is the English string. Accept
-    // either form so the assertion is robust to test-ordering — the 409 + `code: 'conflict'` are
-    // the load-bearing contract, and either detail value uniquely identifies this guard.
-    function expectPersonalNoMembersConflict(response: {
+    // either form so the assertion is robust to test-ordering — the 422 + `code: 'unprocessable_entity'`
+    // are the load-bearing contract, and either detail value uniquely identifies this guard.
+    function expectPersonalNoMembersUnprocessableEntity(response: {
       statusCode: number;
       json: () => unknown;
     }) {
-      expect(response.statusCode).toBe(409);
+      expect(response.statusCode).toBe(422);
       const body = response.json() as { error?: { code?: string; detail?: string } };
-      expect(body.error?.code).toBe('conflict');
+      expect(body.error?.code).toBe('unprocessable_entity');
       expect([
         'errors:personalOrganizationNoMembers',
         enErrors.personalOrganizationNoMembers,
@@ -1157,10 +1157,10 @@ describe('Membership Sub-Domain — Integration', () => {
       return row?.value ?? 0;
     }
 
-    it('rejects POST /memberships on a PERSONAL org with 409 (errors:personalOrganizationNoMembers) and creates no row', async () => {
+    it('rejects POST /memberships on a PERSONAL org with 422 (errors:personalOrganizationNoMembers) and creates no row', async () => {
       const { owner, organization, ownerRoleId, token } = await setupPersonalOrganizationOwner();
       // A valid body that PASSES validation and reaches the guard: a real second user + the real
-      // owner role's public id. The single-member guard runs before role resolution, so the 409
+      // owner role's public id. The single-member guard runs before role resolution, so the 422
       // is the guard, not a 400/404 over the body.
       const newMember = await createTestUser({ email: `personal-member-${randomUUID()}@test.com` });
       const ownerRolePublicId = await rolePublicId(ownerRoleId);
@@ -1180,7 +1180,7 @@ describe('Membership Sub-Domain — Integration', () => {
         },
       });
 
-      expectPersonalNoMembersConflict(response);
+      expectPersonalNoMembersUnprocessableEntity(response);
 
       // No second membership was created — the personal org is still single-member.
       const membershipsAfter = await countMemberships(organization.id);
@@ -1194,7 +1194,7 @@ describe('Membership Sub-Domain — Integration', () => {
       expect(owner.id).toBeDefined();
     });
 
-    it('rejects POST /invitations on a PERSONAL org with 409 (errors:personalOrganizationNoMembers) and creates no invitation', async () => {
+    it('rejects POST /invitations on a PERSONAL org with 422 (errors:personalOrganizationNoMembers) and creates no invitation', async () => {
       const { owner, organization, token } = await setupPersonalOrganizationOwner();
       // The owner's own membership is the only membership_id available — supply it so the body is
       // valid and the request reaches the single-member guard rather than a 404 for the membership.
@@ -1212,7 +1212,7 @@ describe('Membership Sub-Domain — Integration', () => {
         },
       });
 
-      expectPersonalNoMembersConflict(response);
+      expectPersonalNoMembersUnprocessableEntity(response);
 
       const invitations = await database.select({ value: count() }).from(member_invitations);
       expect(invitations[0]?.value ?? 0).toBe(0);

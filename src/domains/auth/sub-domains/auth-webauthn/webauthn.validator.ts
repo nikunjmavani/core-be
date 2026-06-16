@@ -19,7 +19,7 @@ export function validateWebauthnAuthenticateOptions(body: unknown) {
   return parsed.data;
 }
 
-/** Validates the `POST /api/v1/auth/webauthn/register/verify` request body against {@link webauthnRegisterVerifyDto}; throws {@link ValidationError} on failure. */
+/** Validates the `POST /api/v1/auth/me/webauthn/register/verify` request body against {@link webauthnRegisterVerifyDto}; throws {@link ValidationError} on failure. */
 export function validateWebauthnRegisterVerify(body: unknown) {
   const parsed = webauthnRegisterVerifyDto.safeParse(body);
   if (!parsed.success) {

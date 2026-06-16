@@ -44,7 +44,16 @@ export const uploadRoutesPlugin: FastifyPluginAsync = async (app) => {
   );
   zodApplication.post(
     '/:upload_id/confirm',
-    { onRequest: [app.authenticate], ...MODERATE_AUTHED_RATE_LIMIT },
+    {
+      onRequest: [app.authenticate],
+      ...MODERATE_AUTHED_RATE_LIMIT,
+      schema: {
+        summary: 'Confirm uploaded object',
+        description:
+          'Confirms a previously requested upload after the client has PUT the file to the pre-signed URL. Verifies the object exists in storage and marks the upload record complete.',
+        tags: ['Upload'],
+      },
+    },
     controller.confirmUpload,
   );
   zodApplication.delete(

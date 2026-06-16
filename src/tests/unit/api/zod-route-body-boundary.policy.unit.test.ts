@@ -15,7 +15,7 @@ const NO_BODY_ROUTE_PATH_ALLOWLIST = [
   '/refresh',
   '/switch-to-personal',
   '/resend-verification',
-  '/webauthn/register/options',
+  '/me/webauthn/register/options',
   '/me/sessions',
   '/me/data-export',
   '/suspend',
