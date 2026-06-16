@@ -42,7 +42,7 @@ export function idempotencyStorm() {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
-        'Idempotency-Key': idempotencyKey,
+        'X-Idempotency-Key': idempotencyKey,
       },
       tags: { name: 'idempotency-storm' },
       responseCallback: http.expectedStatuses(200, 201, 409, 422),

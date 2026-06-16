@@ -151,7 +151,7 @@ describe('Membership Sub-Domain — Integration', () => {
         url: testApiPath(`/tenancy/organization/memberships`),
         token: adminToken,
         organizationPublicId: organization.public_id,
-        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: {
           user_id: newMember.public_id,
           role_id: memberRole.public_id,
@@ -202,7 +202,7 @@ describe('Membership Sub-Domain — Integration', () => {
         url: testApiPath(`/tenancy/organization/memberships`),
         token: adminToken,
         organizationPublicId: organization.public_id,
-        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: {
           user_id: newMember.public_id,
           role_id: memberRole.public_id,
@@ -217,7 +217,7 @@ describe('Membership Sub-Domain — Integration', () => {
         url: testApiPath(`/tenancy/organization/memberships`),
         token: adminToken,
         organizationPublicId: organization.public_id,
-        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: {
           user_id: newMember.public_id,
           role_id: memberRole.public_id,
@@ -322,7 +322,7 @@ describe('Membership Sub-Domain — Integration', () => {
         url: testApiPath(`/tenancy/organization/invitations`),
         token,
         organizationPublicId: organization.public_id,
-        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: {
           membership_id: membership.public_id,
           expires_in_days: 7,
@@ -672,7 +672,7 @@ describe('Membership Sub-Domain — Integration', () => {
         url: testApiPath(`/tenancy/organization/invitations/${invitation.public_id}/resend`),
         token: adminToken,
         organizationPublicId: organization.public_id,
-        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: { expires_in_days: 10 },
       });
       expect(response.statusCode).toBe(201);
@@ -699,7 +699,7 @@ describe('Membership Sub-Domain — Integration', () => {
         url: testApiPath(`/tenancy/organization/invitations/${invitation.public_id}/resend`),
         token: adminToken,
         organizationPublicId: organization.public_id,
-        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: { expires_in_days: 10 },
       });
       expect(response.statusCode).toBe(400);
@@ -714,7 +714,7 @@ describe('Membership Sub-Domain — Integration', () => {
         url: testApiPath(`/tenancy/organization/invitations/${invitation.public_id}/resend`),
         token: orgBAdminToken,
         organizationPublicId: orgB.public_id,
-        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: { expires_in_days: 10 },
       });
       expect(response.statusCode).toBe(404);
@@ -969,7 +969,7 @@ describe('Membership Sub-Domain — Integration', () => {
         url: testApiPath(`/tenancy/organization/transfer-ownership`),
         token: ownerToken,
         organizationPublicId: organization.public_id,
-        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: { new_owner_user_id: newOwner.public_id },
       });
       expect(response.statusCode).toBe(201);
@@ -1010,7 +1010,7 @@ describe('Membership Sub-Domain — Integration', () => {
         url: testApiPath(`/tenancy/organization/transfer-ownership`),
         token: nonOwnerToken,
         organizationPublicId: organization.public_id,
-        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: { new_owner_user_id: target.public_id },
       });
       expect(response.statusCode).toBe(403);
@@ -1031,7 +1031,7 @@ describe('Membership Sub-Domain — Integration', () => {
         url: testApiPath(`/tenancy/organization/transfer-ownership`),
         token: ownerToken,
         organizationPublicId: organization.public_id,
-        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: { new_owner_user_id: outsider.public_id },
       });
       expect(response.statusCode).toBe(404);
@@ -1173,7 +1173,7 @@ describe('Membership Sub-Domain — Integration', () => {
         url: testApiPath('/tenancy/organization/memberships'),
         token,
         organizationPublicId: organization.public_id,
-        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: {
           user_id: newMember.public_id,
           role_id: ownerRolePublicId,
@@ -1205,7 +1205,7 @@ describe('Membership Sub-Domain — Integration', () => {
         url: testApiPath('/tenancy/organization/invitations'),
         token,
         organizationPublicId: organization.public_id,
-        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: {
           membership_id: ownerMembershipPublicId,
           expires_in_days: 7,
@@ -1240,7 +1240,7 @@ describe('Membership Sub-Domain — Integration', () => {
         url: testApiPath('/tenancy/organization/memberships'),
         token,
         organizationPublicId: team.organization.public_id,
-        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: {
           user_id: newMember.public_id,
           role_id: ownerRolePublicId,

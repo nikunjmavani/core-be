@@ -11,7 +11,7 @@ import { ChangePlanDto, CreateSubscriptionDto, UpdateSubscriptionDto } from './s
  * Fastify plugin factory that mounts the organization-scoped subscription
  * endpoints (CRUD + change-plan / cancel / resume). All routes require auth
  * and a {@link BILLING_PERMISSIONS} permission; create additionally enforces
- * the `Idempotency-Key` header (`idempotencyRequired: true`) on externally
+ * the `X-Idempotency-Key` header (`idempotencyRequired: true`) on externally
  * mutating billing routes.
  */
 export function subscriptionRoutes(service: SubscriptionService): FastifyPluginAsync {
@@ -54,7 +54,7 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
         schema: {
           summary: 'Create subscription',
           description:
-            'Creates a new subscription for the organization. Only one active subscription is allowed. Requires SUBSCRIPTION_MANAGE permission. Send an `Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
+            'Creates a new subscription for the organization. Only one active subscription is allowed. Requires SUBSCRIPTION_MANAGE permission. Send an `X-Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
           tags: ['Billing', 'Subscription'],
           body: CreateSubscriptionDto,
         },
@@ -86,7 +86,7 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
         schema: {
           summary: 'Change subscription plan',
           description:
-            'Upgrades or downgrades the subscription to a different plan. Proration is applied automatically. Requires SUBSCRIPTION_MANAGE permission. Send an `Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
+            'Upgrades or downgrades the subscription to a different plan. Proration is applied automatically. Requires SUBSCRIPTION_MANAGE permission. Send an `X-Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
           tags: ['Billing', 'Subscription'],
           body: ChangePlanDto,
         },
@@ -104,7 +104,7 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
         schema: {
           summary: 'Cancel subscription',
           description:
-            'Cancels the subscription. By default, access continues until the end of the current billing period. Requires SUBSCRIPTION_MANAGE permission. Send an `Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
+            'Cancels the subscription. By default, access continues until the end of the current billing period. Requires SUBSCRIPTION_MANAGE permission. Send an `X-Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
           tags: ['Billing', 'Subscription'],
         },
       },
@@ -119,7 +119,7 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
         schema: {
           summary: 'Resume cancelled subscription',
           description:
-            'Resumes a subscription that was previously cancelled but has not yet expired. Requires SUBSCRIPTION_MANAGE permission. Send an `Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
+            'Resumes a subscription that was previously cancelled but has not yet expired. Requires SUBSCRIPTION_MANAGE permission. Send an `X-Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
           tags: ['Billing', 'Subscription'],
         },
       },

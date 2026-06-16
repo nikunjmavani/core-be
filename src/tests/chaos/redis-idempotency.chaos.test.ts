@@ -49,7 +49,7 @@ describe('Chaos resilience: Redis idempotency', () => {
       url: testApiPath('/tenancy/organizations'),
       headers: {
         authorization: `Bearer ${authenticationTokenWaitingForIsolation}`,
-        'idempotency-key': idempotencyKeyWaitingForIsolation,
+        'x-idempotency-key': idempotencyKeyWaitingForIsolation,
         'content-type': 'application/json',
       },
       payload: { name: 'Replay Organization', slug: firstSlugAwaitingIsolation },
@@ -78,7 +78,7 @@ describe('Chaos resilience: Redis idempotency', () => {
         url: testApiPath('/tenancy/organizations'),
         headers: {
           authorization: `Bearer ${authenticationTokenWaitingForIsolation}`,
-          'idempotency-key': idempotencyKeyWaitingForIsolation,
+          'x-idempotency-key': idempotencyKeyWaitingForIsolation,
           'content-type': 'application/json',
         },
         payload: { name: 'Replay Organization', slug: firstSlugAwaitingIsolation },
@@ -91,7 +91,7 @@ describe('Chaos resilience: Redis idempotency', () => {
     }
   });
 
-  it('fails closed when Redis is partitioned while issuing an Idempotency-Key', async () => {
+  it('fails closed when Redis is partitioned while issuing an X-Idempotency-Key', async () => {
     await withTemporaryListeningProxyAdministrativelyDisabledForChaosAssertion(
       CHAOS_REDIS_PROXY_NAME,
       async () => {
@@ -106,7 +106,7 @@ describe('Chaos resilience: Redis idempotency', () => {
           url: testApiPath('/tenancy/organizations'),
           headers: {
             authorization: `Bearer ${authenticationTokenWaitingForIsolation}`,
-            'idempotency-key': uniqueIdempotencyKeyForChaosScenario('redis-downidem'),
+            'x-idempotency-key': uniqueIdempotencyKeyForChaosScenario('redis-downidem'),
             'content-type': 'application/json',
           },
           payload: { name: 'Chaos Postgres Organization', slug: slugWaitingForIsolation },

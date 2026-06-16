@@ -31,7 +31,7 @@ What it does not own: anti-virus / malware scanning (handled outside the platfor
 
 This domain implements the contracts documented in [src/PATTERNS.md](src/PATTERNS.md):
 
-- `idempotency` — the presign + confirm endpoints accept `Idempotency-Key` so retries don't issue duplicate presigns or re-confirm a row.
+- `idempotency` — the presign + confirm endpoints accept `X-Idempotency-Key` so retries don't issue duplicate presigns or re-confirm a row.
 - `soft-delete` — upload rows tombstone with `deleted_at`; a retention worker purges the S3 object and the row after the retention window.
 - `audit-emission` — confirm and delete record audit rows so file lifecycle is forensically traceable.
 

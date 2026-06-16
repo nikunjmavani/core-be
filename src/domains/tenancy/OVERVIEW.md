@@ -39,7 +39,7 @@ This domain is the **owner** of `tenant-isolation` and `rls-context`; every othe
 - `tenant-isolation` — the defining domain. Every read/write either runs through HTTP `tenant.middleware` or worker `withOrganizationContext`.
 - `rls-context` — same; this domain emits the GUC that RLS policies on every other table consume.
 - `audit-emission` — every membership change, role change, and invitation event records an audit row.
-- `idempotency` — invitation create + organization API key issuance accept `Idempotency-Key`.
+- `idempotency` — invitation create + organization API key issuance accept `X-Idempotency-Key`.
 - `soft-delete` — organizations, memberships, member roles, and invitations tombstone with `deleted_at`. Tombstone retention workers purge after the window.
 - `transactional-outbox` — invitation emails flow through `event-bus` → mail outbox → mail processor.
 

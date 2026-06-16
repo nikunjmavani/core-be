@@ -44,7 +44,7 @@ Search and verify; add any findings to the plan:
 
 - **TODOs / placeholders**: Search `src/` for `TODO`, `FIXME`, `HACK`, `XXX`, `placeholder`, `not implemented`. If any affect production behavior or security, list them as items to fix or document.
 - **i18n**: Ensure no raw user-facing strings in API error/success responses (e.g. `detail: '...'` in middleware or error handler). All should use translation keys and `request.t()`. See **`agent-os/skills/i18n-message-guard/SKILL.md`**.
-- **Stripe idempotency**: For billing write operations (e.g. subscription create), confirm `Idempotency-Key` from the request is passed through to Stripe when the client sends it. Note if it is missing as an optional improvement.
+- **Stripe idempotency**: For billing write operations (e.g. subscription create), confirm `X-Idempotency-Key` from the request is passed through to Stripe when the client sends it. Note if it is missing as an optional improvement.
 - **Organization / RLS**: Confirm documentation or code exists for organization context: HTTP requests get organization context via tenant middleware; workers/scripts should not rely on RLS for organization isolation and should pass organization identifiers explicitly. Note if undocumented as a documentation task.
 - **Sensitive defaults**: Check that no production secrets or unsafe defaults are hardcoded (e.g. JWT secret, CORS origins in production).
 

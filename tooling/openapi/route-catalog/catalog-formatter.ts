@@ -86,7 +86,7 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
     `  Token-guarded   : ${tokenCount}`,
     '',
     '================================================================================',
-    '  IDEMPOTENCY (Idempotency-Key header)',
+    '  IDEMPOTENCY (X-Idempotency-Key header)',
     '================================================================================',
     '',
     '  Optional on all POST/PUT/PATCH/DELETE when header is present (24h Redis cache).',

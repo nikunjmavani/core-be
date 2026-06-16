@@ -90,7 +90,7 @@ describe('Subscription Sub-Domain — Integration', () => {
   });
 
   describe('POST /api/v1/billing/subscriptions', () => {
-    it('should return 422 when Idempotency-Key header is missing', async () => {
+    it('should return 422 when X-Idempotency-Key header is missing', async () => {
       const { token } = await createAuthorizedContext();
       const response = await injectAuthenticated(app, {
         method: 'POST',
@@ -110,7 +110,7 @@ describe('Subscription Sub-Domain — Integration', () => {
         method: 'POST',
         url: testApiPath('/billing/subscriptions'),
         token,
-        headers: { 'idempotency-key': 'subscription-create-missing-body-key' },
+        headers: { 'x-idempotency-key': 'subscription-create-missing-body-key' },
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);

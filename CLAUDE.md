@@ -30,7 +30,7 @@ See **`agent-os/skills/api-contract-guard/SKILL.md`** (rule: `agent-os/rules/api
 - Public ids: Paddle-style `<prefix>_<21 [a-z0-9]>` via `generatePublicId(entity)`; external field is always `id`
 - Method→status policy (middleware-enforced): GET 200 · POST 201 · PUT/PATCH 200 · DELETE 204; webhooks + MCP stay 200
 - Error codes: when to set 400/401/403/404/406/409/413/415/422/429 — see **`docs/reference/api/response-codes.md`** (400 on all POST/PATCH/PUT, omitted only when truly nothing to validate; 409/422 mutating only; never invent statuses)
-- Headers: `Authorization: Bearer`, `X-Organization-Id`, `Idempotency-Key` (required on the 8 `idempotencyRequired` writes), `X-Captcha-Token` (public auth forms), `X-CSRF-Token` (refresh only), `Stripe-Signature` (Stripe-sent); ecosystem X- forms kept (`X-Request-Id`, `X-Api-Key`, `X-RateLimit-*`, …)
+- Headers: `Authorization: Bearer`, `X-Organization-Id`, `X-Idempotency-Key` (required on the 8 `idempotencyRequired` writes), `X-Captcha-Token` (public auth forms), `X-CSRF-Token` (refresh only), `Stripe-Signature` (Stripe-sent); ecosystem X- forms kept (`X-Request-Id`, `X-Api-Key`, `X-RateLimit-*`, …)
 
 ## Architecture Rules (Non-Negotiable)
 
