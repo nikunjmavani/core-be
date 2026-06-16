@@ -36,7 +36,7 @@ Before marking ready for production, confirm the following primary local gate co
 
 - `pnpm ci:local` — full PR gate: validate + domain + routes + migrate lint + env example + full test suite.
 - `pnpm verify:base` — end-to-end gate: migrate → seed → API smoke → validate.
-- **SonarQube gate**: `pnpm sonar:up && pnpm sonar:scan && pnpm sonar:down`. Fix any open issues on the deployed-app surface before release. (`SKIP_SONAR=1 git push` bypasses only the pre-push SonarQube gate — do not use to skip pre-release review.)
+- **SonarQube gate**: `pnpm sonar:up && pnpm sonar:scan && pnpm sonar:down`. Fix any open issues on the deployed-app surface before release. The same gate is enforced at pre-commit (`pnpm guard:pre-commit`, step 16) and is mandatory — there is no bypass.
 
 ### 3. Run additional codebase checks
 

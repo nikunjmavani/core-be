@@ -172,7 +172,7 @@ flowchart TD
 
 - **Node 24 is not pre-installed** — the setup script is mandatory; without it the session is stuck on Node 22 and `engines` rejects it.
 - **`nodejs.org` is not in the default Trusted allowlist** — the most common miss.
-- **Husky activates after `pnpm install`** (its `prepare` step), so a properly configured session gets the **same** pre-commit / pre-push gates as local — including the pre-push SonarQube gate, which needs `pnpm sonar:up` or `SKIP_SONAR=1 git push`. Before deps install (e.g. a session still on Node 22) Husky is inactive and commits skip the hooks.
+- **Husky activates after `pnpm install`** (its `prepare` step), so a properly configured session gets the **same** pre-commit / pre-push gates as local — including the pre-commit SonarQube gate (mandatory, no bypass), which needs Docker for `pnpm sonar:up` (the gate auto-starts it on first use). Before deps install (e.g. a session still on Node 22) Husky is inactive and commits skip the hooks.
 - **Pushes are pinned to the session's `claude/*` branch** by the git proxy; the branch-naming policy allowlists `claude/*` for exactly this reason.
 
 ---

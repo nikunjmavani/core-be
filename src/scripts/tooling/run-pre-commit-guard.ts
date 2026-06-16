@@ -82,6 +82,19 @@ export function shouldRunGlobalTests(stagedFiles: string[]): boolean {
   return stagedFiles.some((file) => file.startsWith('src/domains/') && file.endsWith('.ts'));
 }
 
+/**
+ * Returns whether staged files include deployed-surface runtime code that SonarQube analyzes —
+ * `src/**\/*.ts` excluding tests (`__tests__/`, `*.test.ts`, `*.spec.ts`, `src/tests/`) and
+ * `src/scripts/`. Mirrors the scoping in `sonar-project.properties`.
+ */
+export function shouldRunSonarScan(stagedFiles: string[]): boolean {
+  return stagedFiles.some(
+    (file) =>
+      /^src\/.*\.ts$/.test(file) &&
+      !/(__tests__\/|\.test\.ts$|\.spec\.ts$|^src\/tests\/|^src\/scripts\/)/.test(file),
+  );
+}
+
 function runPnpm(scriptName: string, scriptArgs: string[] = []): number {
   const result = spawnSync('pnpm', [scriptName, ...scriptArgs], { stdio: 'inherit', shell: false });
   return result.status ?? 1;
@@ -276,6 +289,13 @@ export function buildGuardSteps(options: {
       when: 'always',
       description: 'reject staged files over 1MB',
     },
+    {
+      id: '16',
+      label: 'SonarQube quality gate',
+      when: shouldRunSonarScan(stagedFiles) ? 'always' : 'conditional',
+      description:
+        'pnpm sonar:scan — blocks the commit on any unresolved SonarQube issue/hotspot (when deployed-surface src/**/*.ts staged)',
+    },
   );
 
   return steps;
@@ -425,6 +445,10 @@ export function runPreCommitGuard(options: RunGuardOptions = {}): number {
       {
         label: 'Large staged files (>1MB)',
         run: () => checkLargeStagedFiles(stagedFiles),
+      },
+      {
+        label: 'SonarQube quality gate',
+        run: () => (shouldRunSonarScan(stagedFiles) ? runPnpm('sonar:scan') : 0),
       },
     );
   }

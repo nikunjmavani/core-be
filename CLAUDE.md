@@ -355,7 +355,7 @@ See [docs/reference/architecture/documentation-system.md](docs/reference/archite
 
 Script namespaces: `ci:*`, `compose:*`, `test:*`, `db:*`, `docs:*`, `routes:*`, `load:*`, `chaos:*`, `tool:*`, `setup:infra:*`, `security:*`, `sonar:*`, `deps:*`. Legacy: `route-catalog`, `scripts:*`. List all: `pnpm run`.
 
-Local SonarQube quality gate (pre-push): `pnpm sonar:up` / `sonar:scan` / `sonar:down` / `sonar:reset`. The pre-push hook blocks a push when SonarQube has any open issue on the deployed-app surface; `SKIP_SONAR=1 git push` bypasses just that gate. See **`docs/reference/quality/sonarqube-local.md`**.
+Local SonarQube quality gate (pre-commit): `pnpm sonar:up` / `sonar:scan` / `sonar:down` / `sonar:reset`. The pre-commit hook (`pnpm guard:pre-commit`, step 16) blocks a commit when SonarQube has any open issue on the deployed-app surface; the gate is mandatory — there is no bypass, every issue must be resolved. See **`docs/reference/quality/sonarqube-local.md`**.
 
 - `pnpm build` — compile to `dist/` (`tsc` + `tsc-alias`); `pnpm build:check` fails if `@/` aliases remain
 - `pnpm dev` — run Fastify server (tsx watch)

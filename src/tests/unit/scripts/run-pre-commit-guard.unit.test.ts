@@ -4,6 +4,7 @@ import {
   hasPackageScript,
   shouldRunMigrationCheck,
   shouldRunOpenApiCheck,
+  shouldRunSonarScan,
   shouldRunStructureTreeCheck,
 } from '@/scripts/tooling/run-pre-commit-guard.js';
 
@@ -27,6 +28,34 @@ describe('run-pre-commit-guard conditionals', () => {
     expect(shouldRunStructureTreeCheck(['src/domains/auth/auth.routes.ts'])).toBe(true);
     expect(shouldRunStructureTreeCheck(['tooling/ci/run-named-step.sh'])).toBe(true);
     expect(shouldRunStructureTreeCheck(['docs/README.md'])).toBe(false);
+  });
+
+  it('detects deployed-surface staged paths for the SonarQube gate', () => {
+    expect(shouldRunSonarScan(['src/domains/auth/auth.service.ts'])).toBe(true);
+    expect(shouldRunSonarScan(['src/shared/utils/http/response.util.ts'])).toBe(true);
+    // Tests, scripts, and tooling are excluded from Sonar analysis.
+    expect(shouldRunSonarScan(['src/domains/auth/__tests__/auth.test.ts'])).toBe(false);
+    expect(shouldRunSonarScan(['src/domains/auth/auth.service.test.ts'])).toBe(false);
+    expect(shouldRunSonarScan(['src/tests/unit/scripts/run-pre-commit-guard.unit.test.ts'])).toBe(
+      false,
+    );
+    expect(shouldRunSonarScan(['src/scripts/tooling/run-pre-commit-guard.ts'])).toBe(false);
+    expect(shouldRunSonarScan(['tooling/sonar/sonar-gate.ts'])).toBe(false);
+    expect(shouldRunSonarScan(['docs/README.md'])).toBe(false);
+  });
+
+  it('marks the SonarQube step always/conditional based on staged runtime code', () => {
+    const withRuntime = buildGuardSteps({
+      stagedFiles: ['src/domains/auth/auth.service.ts'],
+      scripts: baseScripts,
+    });
+    expect(withRuntime.find((step) => step.id === '16')?.when).toBe('always');
+
+    const withoutRuntime = buildGuardSteps({
+      stagedFiles: ['docs/README.md'],
+      scripts: baseScripts,
+    });
+    expect(withoutRuntime.find((step) => step.id === '16')?.when).toBe('conditional');
   });
 
   it('includes optional steps only when package scripts exist', () => {
