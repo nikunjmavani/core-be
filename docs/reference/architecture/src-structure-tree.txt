@@ -1027,7 +1027,8 @@ src/
     │   ├── redis-topology-warn.util.ts
     │   ├── redis-url.parse.util.ts
     │   ├── redis-url.util.ts
-    │   └── redis.client.ts
+    │   ├── redis.client.ts
+    │   └── redis.constants.ts
     ├── database/
     │   ├── __tests__/
     │   │   └── unit/

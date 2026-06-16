@@ -1,6 +1,7 @@
 import { resolveRedisKeyPrefix } from '@/infrastructure/cache/redis-prefix.util.js';
 import { parseRedisUrl, resolveBullMqRedisUrl } from '@/infrastructure/cache/redis-url.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { TEN_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
 
 /**
  * Queue connection re-exports the shared Redis connection.
@@ -56,7 +57,7 @@ export function getBullMQConnectionOptions(): {
  * scheduler connection ({@link getBullMQConnectionOptions}), whose blocking
  * `BRPOPLPUSH` long-poll legitimately outlives any command timeout.
  */
-const BULLMQ_PRODUCER_COMMAND_TIMEOUT_MS = 10_000;
+const BULLMQ_PRODUCER_COMMAND_TIMEOUT_MS = TEN_SECONDS_MS;
 
 /**
  * BullMQ connection options for **queue producers** (the `*.queue.ts` enqueue helpers).
