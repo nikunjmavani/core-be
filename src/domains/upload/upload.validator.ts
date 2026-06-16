@@ -1,6 +1,6 @@
-import { z } from 'zod';
 import path from 'node:path';
 import { ValidationError } from '@/shared/errors/index.js';
+import { parseWithSchema } from '@/shared/utils/validation/parse-with-schema.util.js';
 import { createUploadDto, uploadPublicIdParamDto } from './upload.dto.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import {
@@ -23,16 +23,7 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
  * {@link UPLOAD_PURPOSE_CONFIG}. Throws {@link ValidationError} on any failure.
  */
 export function validateCreateUpload(data: unknown): CreateUploadInput {
-  const result = createUploadDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidUploadInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-
-  const input = result.data;
+  const input = parseWithSchema(createUploadDto, data, 'errors:invalidUploadInput');
   const config = UPLOAD_PURPOSE_CONFIG[input.purpose];
   const allowedTypes = getAllowedContentTypesForPurpose(input.purpose);
 
@@ -164,13 +155,6 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
  * and the shared public-id format check; returns the normalized public id.
  */
 export function validateUploadPublicIdParam(public_id: string): string {
-  const parsed = uploadPublicIdParamDto.safeParse({ upload_id: public_id });
-  if (!parsed.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(parsed.error).fieldErrors,
-    );
-  }
-  return validatePublicIdParam(parsed.data.upload_id, 'publicId');
+  const parsed = parseWithSchema(uploadPublicIdParamDto, { upload_id: public_id });
+  return validatePublicIdParam(parsed.upload_id, 'publicId');
 }
