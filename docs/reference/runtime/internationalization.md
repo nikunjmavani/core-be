@@ -65,7 +65,7 @@ Services and validators throw typed errors with a **messageKey** (for example `e
 pnpm validate:locale-keys
 ```
 
-This runs JSON parity (`en` ↔ `es`) for all four files and fails if application code passes a redundant English **fallback** string when an `errors:` messageKey is already set. Legacy alias: `pnpm validate:locale-errors-parity` (errors.json only).
+This runs JSON parity (`en` ↔ `es`) for all four files and fails if application code passes a redundant English **fallback** string when an `errors:` messageKey is already set.
 
 CI runs `validate:locale-keys` in `ci:quality`. When adding a key, update **every** locale file in the same change.
 
