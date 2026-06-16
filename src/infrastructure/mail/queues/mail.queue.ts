@@ -1,5 +1,6 @@
 import { Queue } from 'bullmq';
 import { getBullMQProducerConnectionOptions } from '@/infrastructure/queue/connection.js';
+import { DEFAULT_JOB_RETENTION_COUNT } from '@/infrastructure/queue/queue.constants.js';
 import { insertMailOutbox } from '@/infrastructure/mail/mail-outbox.repository.js';
 import { captureTraceContextForPropagation } from '@/infrastructure/observability/tracing/trace-context.util.js';
 import { FIFTEEN_SECONDS_MS, SEVEN_DAYS_SECONDS } from '@/shared/constants/ttl.constants.js';
@@ -43,7 +44,7 @@ function getMailQueue(): Queue<MailJobData> {
     // additionally bounds how long a single enqueue can wait during graceful shutdown.
     connection: getBullMQProducerConnectionOptions(),
     defaultJobOptions: {
-      removeOnComplete: { count: 1000, age: SEVEN_DAYS_SECONDS },
+      removeOnComplete: { count: DEFAULT_JOB_RETENTION_COUNT, age: SEVEN_DAYS_SECONDS },
       removeOnFail: { count: 500, age: SEVEN_DAYS_SECONDS },
       attempts: MAIL_QUEUE_MAX_ATTEMPTS,
       backoff: { type: 'custom' },

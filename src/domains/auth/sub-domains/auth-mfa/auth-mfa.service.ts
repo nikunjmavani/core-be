@@ -19,6 +19,7 @@ import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import {
   MAX_MFA_VERIFICATION_ATTEMPTS,
+  MILLISECONDS_PER_DAY,
   MFA_RECOVERY_CODE_COUNT,
   MFA_TOTP_CODE_REPLAY_TTL_SECONDS,
   MFA_TOTP_ENROLLMENT_STAGE_TTL_SECONDS,
@@ -254,7 +255,7 @@ export class MfaService {
     });
     const tokenHash = createHash('sha256').update(jsonWebToken).digest('hex');
     const sessionMaxAgeDays = env.AUTH_SESSION_MAX_AGE_DAYS;
-    const expiresAt = new Date(Date.now() + sessionMaxAgeDays * 86_400_000);
+    const expiresAt = new Date(Date.now() + sessionMaxAgeDays * MILLISECONDS_PER_DAY);
     const authSession = await this.authSessionService.createSessionForUser(
       user.public_id,
       omitUndefined({

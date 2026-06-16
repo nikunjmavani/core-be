@@ -5,6 +5,11 @@ import {
   isMetricsEnabled,
 } from '@/infrastructure/observability/metrics/metrics-registry.js';
 
+/** Default latency histogram buckets (seconds) for fast HTTP / DB-checkout operations. */
+const DEFAULT_LATENCY_BUCKETS_SECONDS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
+/** Coarser histogram buckets (seconds) for slower BullMQ job durations. */
+const JOB_DURATION_BUCKETS_SECONDS = [0.1, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300];
+
 let registeredMetricsRegistry: Registry | null = null;
 
 type HttpRequestMetricLabel = 'method' | 'route' | 'status_code';
@@ -42,7 +47,7 @@ function registerOn(registry: Registry): void {
     name: 'http_request_duration_seconds',
     help: 'HTTP request duration in seconds',
     labelNames: ['method', 'route', 'status_code'],
-    buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+    buckets: DEFAULT_LATENCY_BUCKETS_SECONDS,
     registers: [registry],
   });
 
@@ -78,7 +83,7 @@ function registerOn(registry: Registry): void {
     name: 'bullmq_job_duration_seconds',
     help: 'BullMQ job processing duration in seconds',
     labelNames: ['queue', 'job_name'],
-    buckets: [0.1, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300],
+    buckets: JOB_DURATION_BUCKETS_SECONDS,
     registers: [registry],
   });
 
@@ -160,7 +165,7 @@ function registerOn(registry: Registry): void {
     name: 'database_rls_checkout_hold_seconds',
     help: 'Wall-clock seconds an org-scoped RLS transaction held a pooled connection, by path (scoped_context | request_transaction)',
     labelNames: ['path'],
-    buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+    buckets: DEFAULT_LATENCY_BUCKETS_SECONDS,
     registers: [registry],
   });
 
