@@ -32,7 +32,7 @@ import { member_invitations } from '@/domains/tenancy/sub-domains/membership/mem
  * lookup resolves the resource by `(public_id, active_org_id)`), so no
  * cross-tenant write is possible — the handler never resolves the row. Minimal
  * valid bodies are sent where a route validates a body (so a denial is the
- * 404 scoping result, not a 422), and an Idempotency-Key is supplied so
+ * 404 scoping result, not a 422), and an X-Idempotency-Key is supplied so
  * idempotency-required writes reach the scoping check rather than the
  * missing-key 422 gate. e2e — runs in CI (Postgres + Redis required).
  */
@@ -224,7 +224,7 @@ describe('Security: cross-organization mutation isolation (model: org — writes
       method,
       url: testApiPath(target(orgB)),
       token: orgA.memberToken,
-      extraHeaders: { 'Idempotency-Key': randomUUID() },
+      extraHeaders: { 'x-idempotency-key': randomUUID() },
       ...(body ? { payload: body } : {}),
     });
     expect(res.statusCode).toBe(404);
@@ -267,7 +267,7 @@ describe('Security: cross-organization mutation isolation (model: org — writes
       url: testApiPath(`/billing/subscriptions/${fixture.subscriptionInB.public_id}${suffix}`),
       token: tokenScopedToOrgA,
       organizationPublicId: fixture.organizationA.public_id,
-      extraHeaders: { 'Idempotency-Key': randomUUID() },
+      extraHeaders: { 'x-idempotency-key': randomUUID() },
       payload,
     });
     expect(res.statusCode).toBe(404);

@@ -33,7 +33,7 @@ Answers "is every route — organization-level included — covered, and what is
 4. **Global-role denial — `global-role`.** **RESOLVED for the by-id surface (Phase 2):** `admin-only.security.test.ts` asserts a regular user is denied on all five `/users/:user_id` admin routes (GET/PATCH/DELETE/suspend/unsuspend). Residual: the collection `GET /users`, `audit/logs`, and `mcp` admin routes are still only sampled.
 5. **Caller-scope on `auth-self-mutation` (24 routes).** Guarded by auth + `/me` scoping, but there is no per-route assertion that the body cannot redirect the action to another user (mass-assignment covers a subset only).
 6. **Business-flow abuse (OWASP API6) on `public`/auth flows.** Rate-limit + captcha exist; multi-step flow abuse (e.g. invitation/checkout sequencing) is not systematically tested.
-7. **Spec validity (found while wiring Hadrian).** The generated OpenAPI sets `example`+`examples` together and uses PCRE-lookahead `pattern`s — invalid for strict parsers. Tracked in `tooling/hadrian/README.md`.
+7. **Spec validity.** The generated OpenAPI sets `example`+`examples` together and uses PCRE-lookahead `pattern`s — invalid for strict (RE2) parsers. Worth fixing in the spec generator so the spec is portable to strict tooling, not just Swagger UI.
 
 ---
 

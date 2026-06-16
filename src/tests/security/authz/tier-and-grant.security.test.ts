@@ -113,7 +113,7 @@ describe('Security: privilege-boundary matrix (tier:owner + grant)', () => {
         token: memberToken,
         // transfer-ownership is an idempotency-required write; supply the key so the
         // request reaches the owner-only authorization check rather than the 422 gate.
-        extraHeaders: { 'Idempotency-Key': randomUUID() },
+        extraHeaders: { 'x-idempotency-key': randomUUID() },
         payload: { new_owner_user_id: member.public_id },
       });
       expect(res.statusCode).toBe(403);
