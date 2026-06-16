@@ -1284,7 +1284,6 @@ src/
     │   ├── generate-route-catalog.ts
     │   ├── generate-route-examples.ts
     │   ├── hosted-docs-upload.util.ts
-    │   ├── openapi-enricher.ts
     │   ├── project-structure-tree.constants.ts
     │   ├── upload-postman-collection.ts
     │   └── upload-scalar-registry.ts
@@ -1347,7 +1346,6 @@ src/
     │       └── sync-env-example.ts
     │   ├── locale/
     │       ├── locale-key-parity.util.ts
-    │       ├── validate-locale-errors-parity.ts
     │       ├── validate-locale-hardcoded-fallbacks.ts
     │       ├── validate-locale-key-parity.ts
     │       └── validate-locale-keys.ts
