@@ -21,5 +21,8 @@ ADD --chmod=755 \
 RUN addgroup -S toxiproxy && adduser -S -G toxiproxy toxiproxy
 USER toxiproxy
 EXPOSE 8474
+# Readiness probe via the admin API (also retires Trivy AVD-DS-0026); busybox wget ships in alpine.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:8474/version || exit 1
 # Bind the REST API to all interfaces so the published 8474 port is reachable from the host.
 ENTRYPOINT ["/usr/local/bin/toxiproxy-server", "-host", "0.0.0.0"]
