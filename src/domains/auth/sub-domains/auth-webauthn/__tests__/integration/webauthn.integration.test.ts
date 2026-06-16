@@ -103,5 +103,45 @@ describe('Auth WebAuthn — Integration', () => {
       });
       expect([400, 422]).toContain(response.statusCode);
     });
+
+    it('does not mint a session for a schema-valid but forged assertion', async () => {
+      // Black-box guard for the public, unauthenticated passkey login endpoint. The body below
+      // passes DTO validation (so the request reaches the service) but carries a fabricated
+      // challenge token and bogus assertion. The ceremony must fail and — critically — no session
+      // cookie or access/refresh token may be issued for any user. A wiring regression that trusted
+      // client input here would be a full account-takeover primitive, and the @simplewebauthn
+      // verifier is mocked in the unit suite, so this end-to-end no-session-mint check is the guard.
+      const base64Url = 'AAAA';
+      const response = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/webauthn/authenticate/verify'),
+        payload: {
+          challenge_token: 'f'.repeat(64),
+          response: {
+            id: base64Url,
+            rawId: base64Url,
+            response: {
+              clientDataJSON: base64Url,
+              authenticatorData: base64Url,
+              signature: base64Url,
+              userHandle: base64Url,
+            },
+            type: 'public-key',
+          },
+        },
+      });
+
+      // A clean rejection (never a 201 success, never a 5xx crash) ...
+      expect(response.statusCode).not.toBe(201);
+      expect(response.statusCode).toBeGreaterThanOrEqual(400);
+      expect(response.statusCode).toBeLessThan(500);
+      // ... and no session / tokens minted regardless of the rejection status.
+      expect(response.cookies.session_id).toBeUndefined();
+      const body = response.json() as {
+        data?: { access_token?: string; refresh_token?: string };
+      };
+      expect(body?.data?.access_token).toBeUndefined();
+      expect(body?.data?.refresh_token).toBeUndefined();
+    });
   });
 });
