@@ -3,6 +3,9 @@ import { ForbiddenError } from '@/shared/errors/index.js';
 import { WEBAUTHN_RP_NAME_DEFAULT } from '@/shared/constants/project-identity.constants.js';
 import { parseAllowedOriginsList } from '@/shared/utils/security/allowed-origins.util.js';
 
+/** Expected WebAuthn origin for local development when the RP id resolves to `localhost`. */
+const WEBAUTHN_LOCALHOST_ORIGIN = 'http://localhost:3000';
+
 /** Resolves the WebAuthn Relying Party ID: prefers `WEBAUTHN_RP_ID`, falls back to the first parseable hostname in `ALLOWED_ORIGINS`, then `localhost`. */
 export function resolveWebauthnRelyingPartyId(): string {
   if (env.WEBAUTHN_RP_ID && env.WEBAUTHN_RP_ID.length > 0) {
@@ -53,7 +56,7 @@ export function resolveWebauthnExpectedOrigin(requestOrigin?: string): string | 
 
   if (allowedOrigins.length === 0) {
     const relyingPartyId = resolveWebauthnRelyingPartyId();
-    return relyingPartyId === 'localhost' ? 'http://localhost:3000' : `https://${relyingPartyId}`;
+    return relyingPartyId === 'localhost' ? WEBAUTHN_LOCALHOST_ORIGIN : `https://${relyingPartyId}`;
   }
 
   if (requestOrigin && requestOrigin.length > 0) {

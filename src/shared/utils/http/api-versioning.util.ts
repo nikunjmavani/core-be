@@ -1,6 +1,7 @@
 import type { FastifyReply } from 'fastify';
 import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { MILLISECONDS_PER_MINUTE } from '@/shared/constants/ttl.constants.js';
 
 /** Major path segment for the current stable public HTTP API (e.g. `/api/v1/...`). */
 export const PUBLIC_API_VERSION_SEGMENT_V1 = 'v1';
@@ -18,7 +19,7 @@ export const PUBLIC_API_VERSION_VALUE_V1 = '1';
 export const PUBLIC_API_V1_SUNSET: Date | null = null;
 
 const sunsetAlertLastSentAt = new Map<string, number>();
-const SUNSET_ALERT_THROTTLE_MS = 5 * 60 * 1000;
+const SUNSET_ALERT_THROTTLE_MS = 5 * MILLISECONDS_PER_MINUTE;
 
 /** @internal Clears sunset alert throttle state between Vitest cases. */
 export function resetSunsetAlertThrottleForTests(): void {
