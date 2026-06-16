@@ -1,22 +1,23 @@
 # SonarQube — local quality gate
 
-SonarQube runs **locally** (Docker) and is enforced as a **pre-push gate**: when you push commits
-that touch deployed-surface code (`src/` runtime), the hook scans the project and **blocks the
-push if SonarQube reports any unresolved issue or hotspot**. Everything is local — there is no
-hosted SonarQube and no CI dependency.
+SonarQube runs **locally** (Docker) and is enforced as a **pre-commit gate**: when you commit
+changes that touch deployed-surface code (`src/` runtime), the hook scans the project and **blocks
+the commit if SonarQube reports any unresolved issue or hotspot**. The gate is **mandatory — there
+is no bypass**; every finding must be resolved. Everything is local — there is no hosted SonarQube
+and no CI dependency.
 
 ## TL;DR
 
 ```bash
 pnpm compose:up    # starts the app stack AND SonarQube (SONAR=0 pnpm compose:up skips Sonar)
 pnpm sonar:scan    # scan now + print the report; exits non-zero if anything is open
-git push           # the pre-push hook runs the same gate automatically
+git commit         # the pre-commit hook runs the same gate automatically
 ```
 
 `pnpm compose:up` brings SonarQube up with the rest of the local stack — detached, so it boots in
 the background and the gate waits for readiness only when needed. First boot is ~2 min and
 provisions an analysis token into `.env.local` (gitignored); after that a scan is ~60–90s.
-`pnpm sonar:up` starts only SonarQube, and the pre-push gate auto-starts it if it is down.
+`pnpm sonar:up` starts only SonarQube, and the pre-commit gate auto-starts it if it is down.
 
 ## Commands (`sonar:*` namespace)
 
@@ -30,12 +31,12 @@ provisions an analysis token into `.env.local` (gitignored); after that a scan i
 The server UI is at <http://localhost:9000>. Admin credentials are generated on first run and
 stored in `.env.local` as `SONAR_ADMIN_PASSWORD` / `SONAR_TOKEN`.
 
-## How the pre-push gate works
+## How the pre-commit gate works
 
-The `.husky/pre-push` hook runs the gate **only when the pushed commits include deployed-surface
-code** — `src/**/*.ts` excluding tests, `src/scripts/**`, and `__tests__/`. Pushes that touch only
-tests, tooling, docs, or migrations skip the scan (Sonar excludes those anyway — see
-[Scope](#what-sonarqube-analyzes)).
+The `pnpm guard:pre-commit` hook (`.husky/pre-commit`, step 16) runs the gate **only when the
+staged changes include deployed-surface code** — `src/**/*.ts` excluding tests, `src/scripts/**`,
+and `__tests__/`. Commits that touch only tests, tooling, docs, or migrations skip the scan (Sonar
+excludes those anyway — see [Scope](#what-sonarqube-analyzes)).
 
 The gate ([`tooling/sonar/sonar-gate.ts`](../../../tooling/sonar/sonar-gate.ts)):
 
@@ -44,15 +45,16 @@ The gate ([`tooling/sonar/sonar-gate.ts`](../../../tooling/sonar/sonar-gate.ts))
    one, mints a token, saves both to `.env.local`). Idempotent afterwards.
 3. **Scans** via the `sonar-scanner-cli` container.
 4. **Waits** for the server to finish processing the report.
-5. **Reports** every unresolved issue + hotspot and **exits 1** (blocking the push) if there is at
-   least one; exits 0 when clean.
+5. **Reports** every unresolved issue + hotspot and **exits 1** (blocking the commit) if there is
+   at least one; exits 0 when clean.
 
-### Escape hatches
+### No bypass
 
-```bash
-SKIP_SONAR=1 git push    # skip only the Sonar gate (still runs typecheck/build/tests)
-git push --no-verify     # skip all pre-push hooks
-```
+The gate is mandatory: there is no `SKIP_SONAR` env var and no app-level escape hatch. Every
+SonarQube issue and hotspot on the deployed-app surface must be resolved before the commit is
+accepted. After a fix, re-run `pnpm sonar:scan` to re-check against the local server. A finding you
+believe is a genuine false positive should be marked resolved / won't-fix in the SonarQube UI
+(<http://localhost:9000>) so the gate stops reporting it.
 
 ## What SonarQube analyzes
 
@@ -72,4 +74,5 @@ So a clean gate means **zero issues in the code that ships to production**.
 - **"admin password is unknown"** — the instance was provisioned outside this flow. Run
   `pnpm sonar:reset` to start fresh, or set `SONAR_ADMIN_PASSWORD` in `.env.local`.
 - **Server slow / stuck after an upgrade** — `pnpm sonar:reset`.
-- **Need to bypass once** — `SKIP_SONAR=1 git push` (see above), then fix and re-push.
+- **A finding you believe is a false positive** — mark it resolved / won't-fix in the SonarQube UI
+  (<http://localhost:9000>) so the gate stops reporting it. There is no env bypass.

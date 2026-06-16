@@ -1,11 +1,11 @@
 /**
- * Local SonarQube quality gate (used by the pre-push hook and `pnpm sonar:scan`).
+ * Local SonarQube quality gate (used by the pre-commit hook and `pnpm sonar:scan`).
  *
  * Ensures the local SonarQube server is running (auto-starts it if not), provisions an analysis
  * token on first run (stored in the gitignored `.env.local`), runs a scan, waits for the server
  * to finish processing, and then prints any unresolved issues and FAILS (exit 1) if there is at
- * least one — so every Sonar finding on the deployed-app surface must be cleared before code is
- * pushed. Exits 0 when the project is clean.
+ * least one — so every Sonar finding on the deployed-app surface must be cleared before the commit
+ * is accepted. Exits 0 when the project is clean.
  *
  * Run directly with `pnpm sonar:scan`. See docs/reference/quality/sonarqube-local.md.
  */
@@ -271,7 +271,7 @@ function reportAndExit(issues: SonarIssue[], hotspots: number): never {
 
   process.stderr.write(
     `\n[sonar-gate] ✗ SonarQube found ${issues.length} issue(s)` +
-      `${hotspots > 0 ? ` and ${hotspots} security hotspot(s) to review` : ''} — fix them before pushing.\n\n`,
+      `${hotspots > 0 ? ` and ${hotspots} security hotspot(s) to review` : ''} — fix them before committing.\n\n`,
   );
   for (const issue of issues.slice(0, 50)) {
     const file = issue.component.includes(':')
