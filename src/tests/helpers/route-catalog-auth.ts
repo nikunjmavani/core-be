@@ -11,8 +11,10 @@ export type ProtectedRouteFromCatalog = {
 
 const ROUTE_CATALOG_PATH = join(process.cwd(), 'docs', 'routes.txt');
 
+// docs/routes.txt columns: METHOD  PATH  <status>  <idem>  <org>  ACCESS.
+// The three middle columns (status / idem / org) sit between path and access.
 const ROUTE_LINE_PATTERN =
-  /^\s+(GET|POST|PATCH|PUT|DELETE)\s+(\S+)\s+(PUBLIC|AUTH|ROLE:|PERM:|TOKEN:)/;
+  /^\s+(GET|POST|PATCH|PUT|DELETE)\s+(\/\S*)\s+(?:\d{3}|\?{3})\s+(?:req|-)\s+(?:both|team)\s+(PUBLIC|AUTH|ROLE:|PERM:|TOKEN:)/;
 
 /** Placeholder for path params (21-char public_id style). */
 const PATH_PARAM_PLACEHOLDER = '000000000000000000000';

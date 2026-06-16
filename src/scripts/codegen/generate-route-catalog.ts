@@ -27,6 +27,10 @@ export {
   loadDomainPrefixMap,
   loadPermissionConstantMap,
 } from '@tooling/openapi/route-catalog/prefix-map.js';
+export {
+  resolveOrgScope,
+  TEAM_ONLY_ROUTE_KEYS,
+} from '@tooling/openapi/route-catalog/org-scope.js';
 
 function main(): void {
   const checkOnly = process.argv.includes('--check');

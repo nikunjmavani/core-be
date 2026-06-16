@@ -263,7 +263,7 @@ Domain folder = DB schema; each **sub-domain** is a folder with its own controll
 ### 4.1 auth — sub-domain: users
 
 - **Path:** `src/domains/auth/` (controller, service, repos; sub-domains: auth-method, auth-session, auth-mfa, auth-webauthn).
-- **Routes:** Auth flows `POST /api/v1/auth/login`, `logout`, `magic-link`, `oauth/:provider`, `mfa/verify`; current user `GET|PATCH /api/v1/auth/me`; under me: `GET|PATCH /api/v1/auth/me/settings`, `GET|PUT /api/v1/auth/me/notification-preferences`, `GET|POST|DELETE /api/v1/auth/me/auth-methods`, `GET /api/v1/auth/me/sessions`, `DELETE /api/v1/auth/me/sessions/:session_id`.
+- **Routes:** Auth flows `POST /api/v1/auth/login`, `logout`, `magic-link`, `oauth/:provider`; public login-flow second factors stay off `/me`: `POST /auth/mfa/login`, `POST /auth/webauthn/authenticate/{options,verify}`. **Every authenticated self-service account route lives under `/auth/me/`:** `GET|POST|DELETE /api/v1/auth/me/auth-methods`, `GET|DELETE /api/v1/auth/me/sessions` (+ `/:session_id`), MFA `GET /auth/me/mfa` · `POST /auth/me/mfa/enroll` · `.../enroll/confirm` · `.../verify` · `DELETE /auth/me/mfa/:mfa_method_id`, and passkeys `POST /auth/me/webauthn/register/{options,verify}`. (Profile, settings, and notification preferences live under `/users/me/*`.)
 
 ### 4.2 tenancy — sub-domains: organizations, roles, permissions, membership
 
@@ -275,12 +275,14 @@ Domain folder = DB schema; each **sub-domain** is a folder with its own controll
   - Notification policies: `GET|POST /api/v1/tenancy/organization/notification-policies`, `PATCH|DELETE .../notification-policies/:policy_id`.
   - Roles: `GET|POST /api/v1/tenancy/organization/roles`, `GET|PATCH|DELETE .../roles/:role_id`; role permissions `GET|PUT .../roles/:role_id/permissions`.
   - Memberships: `GET|POST /api/v1/tenancy/organization/memberships`, `GET|PATCH|DELETE .../memberships/:membership_id`; `POST /api/v1/tenancy/organization/leave`, `POST /api/v1/tenancy/organization/transfer-ownership`.
-  - Invitations: `GET|POST /api/v1/tenancy/organization/invitations`, `.../invitations/:invitation_id/revoke`; cross-org accept/decline are account-level: `POST /api/v1/tenancy/invitations/:invitation_id/accept|decline`.
+  - Invitations: `GET|POST /api/v1/tenancy/organization/invitations`, revoke `DELETE .../invitations/:invitation_id`, resend `POST .../invitations/:invitation_id/resend`; cross-org accept/decline/pending are account-level: `POST /api/v1/tenancy/invitations/:invitation_id/accept|decline`, `GET /api/v1/tenancy/invitations/pending`. ("Revoke" is the term everywhere — DB `revoked_at`, audit event, route summary.)
   - Permissions (global): `GET /api/v1/tenancy/permissions`.
 
 All `:id` params are **public_id**. Organization **slug** is unique; `getBySlug(slug)` returns same shape as the active-org get.
 
 **Organization context (HTTP):** The active organization rides the signed `org` token claim — not a path parameter or header. The tenant middleware resolves it post-auth and re-checks membership + RLS per request; switch with `POST /api/v1/auth/switch-to-personal` or `POST /api/v1/auth/switch-to-organization { organization_id }` (both re-mint the access token). `X-Organization-Id` is legacy (upload domain only). See **[api-testing.md](../../getting-started/api-testing.md)** (active-organization section). Avatars and logos are attached only via presigned upload keys (`avatarKey` / logo `key`), not arbitrary URLs on PATCH.
+
+**Personal vs team (one surface):** Both organization types share these routes. A **personal** organization (`type: "PERSONAL"`, single-member, slug-less, immutable) rejects the five team-only actions — invite/add member, custom roles, transfer ownership, delete org — with **422**. The org response embeds a type-derived `capabilities` object so clients branch without trial-and-error. Full matrix and rationale: **[../api/route-consistency-and-org-model.md](../api/route-consistency-and-org-model.md)**.
 
 ### 4.3 billing — sub-domains: plans, subscriptions
 

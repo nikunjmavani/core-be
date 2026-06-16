@@ -1496,3 +1496,17 @@ api post /api/v1/tenancy/organization/
 api put /api/v1/tenancy/organization/
 api patch /api/v1/tenancy/organization
 api delete /api/v1/tenancy/organization
+
+# Authenticated self-service MFA + passkey-registration routes moved under
+# /auth/me/* (pre-first-release namespace cleanup: everything that acts on your
+# own account lives under /me, matching auth-methods + sessions). The public
+# login-flow routes (/auth/mfa/login, /auth/webauthn/authenticate/*) stayed put.
+# New /auth/me/* paths are additive (non-breaking); only the old paths' removal
+# is flagged. Pinned by auth + user + security integration tests.
+api get /api/v1/auth/mfa api path removed without deprecation
+api post /api/v1/auth/mfa/enroll api path removed without deprecation
+api post /api/v1/auth/mfa/enroll/confirm api path removed without deprecation
+api post /api/v1/auth/mfa/verify api path removed without deprecation
+api delete /api/v1/auth/mfa/{mfa_method_id} api path removed without deprecation
+api post /api/v1/auth/webauthn/register/options api path removed without deprecation
+api post /api/v1/auth/webauthn/register/verify api path removed without deprecation

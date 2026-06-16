@@ -7,12 +7,36 @@ import {
   METHOD_ORDER,
   ROUTE_METHOD_PATTERN,
   ROUTE_PATH_PATTERN,
+  ROUTE_SUCCESS_STATUS_PATH,
   ROUTES_TS_PATH,
   SUPPLEMENTAL_ROUTES,
 } from './constants.js';
+import { detectDeprecated, detectIdempotencyRequired } from './facet-classifier.js';
 import { listDomainRouteFiles } from './file-collectors.js';
+import { resolveOrgScope } from './org-scope.js';
 import { loadDomainPrefixMap, loadPermissionConstantMap } from './prefix-map.js';
 import type { ParsedRoute, RegistryAccess, RouteAccess } from './types.js';
+
+/** Loads the declared success-status map keyed by `METHOD /full/path`. */
+function loadSuccessStatusMap(): Record<string, number> {
+  return JSON.parse(readFileSync(ROUTE_SUCCESS_STATUS_PATH, 'utf-8')) as Record<string, number>;
+}
+
+/**
+ * Enriches a route with the catalog facets that are not derived from its source
+ * snippet: the declared success status and the active-organization scope.
+ */
+function enrichRouteFacets(
+  route: ParsedRoute,
+  successStatuses: Record<string, number>,
+): ParsedRoute {
+  const key = `${route.method} ${route.fullPath}`;
+  return omitUndefined({
+    ...route,
+    successStatus: successStatuses[key],
+    orgScope: resolveOrgScope(route.method, route.fullPath),
+  });
+}
 
 export function inferSubDomain(relativePath: string): string | undefined {
   const parts = relativePath.split('/');
@@ -91,6 +115,8 @@ function parseRouteFile(
         domain: inferDomainSlug(domainFolder, fullPath),
         subDomain,
         subDomainLabel,
+        idempotencyRequired: detectIdempotencyRequired(snippet) || undefined,
+        deprecated: detectDeprecated(snippet) || undefined,
       }),
     );
   }
@@ -122,5 +148,8 @@ export function collectAllParsedRoutes(): ParsedRoute[] {
     allRoutes.push(...parseRouteFile(filePath, permissionMap, prefixByDomainFolder));
   }
 
-  return sortParsedRoutes(allRoutes);
+  const successStatuses = loadSuccessStatusMap();
+  const enrichedRoutes = allRoutes.map((route) => enrichRouteFacets(route, successStatuses));
+
+  return sortParsedRoutes(enrichedRoutes);
 }

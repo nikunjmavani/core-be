@@ -16,6 +16,7 @@ import {
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
+import { provisionPersonalOrganization } from '@/domains/tenancy/sub-domains/organization/organization-provisioning.js';
 
 const ORGANIZATION_PERMISSIONS = [
   TENANCY_PERMISSIONS.ORGANIZATION_READ,
@@ -77,6 +78,59 @@ describe('Organization Sub-Domain — Integration', () => {
         token,
       });
       expect(response.statusCode).toBe(200);
+    });
+  });
+
+  describe('GET /api/v1/tenancy/organization (capabilities discovery)', () => {
+    it('returns all-true capabilities for a TEAM organization', async () => {
+      const { token } = await createAuthorizedContext();
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/tenancy/organization'),
+        token,
+      });
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as {
+        data?: { type?: string; capabilities?: Record<string, boolean> };
+      };
+      expect(body.data?.type).toBe('TEAM');
+      expect(body.data?.capabilities).toEqual({
+        can_invite_members: true,
+        can_manage_members: true,
+        can_manage_roles: true,
+        can_transfer_ownership: true,
+        can_delete: true,
+      });
+    });
+
+    it('returns all-false capabilities for a PERSONAL organization', async () => {
+      // Provisioning writes a role_permissions row per tenancy code (FK → permissions.code),
+      // so the full tenancy set must exist before provisioning the personal org.
+      await seedPermissions(Object.values(TENANCY_PERMISSIONS));
+      const owner = await createTestUser();
+      const provisioned = await provisionPersonalOrganization(owner.id);
+      const token = await generateTestToken({
+        userId: owner.public_id,
+        organizationPublicId: provisioned.organization.public_id,
+      });
+
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/tenancy/organization'),
+        token,
+      });
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as {
+        data?: { type?: string; capabilities?: Record<string, boolean> };
+      };
+      expect(body.data?.type).toBe('PERSONAL');
+      expect(body.data?.capabilities).toEqual({
+        can_invite_members: false,
+        can_manage_members: false,
+        can_manage_roles: false,
+        can_transfer_ownership: false,
+        can_delete: false,
+      });
     });
   });
 

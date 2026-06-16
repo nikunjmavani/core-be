@@ -29,7 +29,8 @@ See **`agent-os/skills/api-contract-guard/SKILL.md`** (rule: `agent-os/rules/api
 - Route params: snake_case + semantic (`{plan_id}`, `{subscription_id}`, never `{id}`); registered in `PARAM_NAME_TO_ENTITY`. The active organization is the signed `org` JWT claim — routes carry NO `{organization_id}` path segment; the active-org resource is singular `/tenancy/organization` (sub-resources nest under it); switch active org via `/auth/switch-to-personal` / `/auth/switch-to-organization`
 - Public ids: Paddle-style `<prefix>_<21 [a-z0-9]>` via `generatePublicId(entity)`; external field is always `id`
 - Method→status policy (middleware-enforced): GET 200 · POST 201 · PUT/PATCH 200 · DELETE 204; webhooks + MCP stay 200
-- Error codes: when to set 400/401/403/404/406/409/413/415/422/429 — see **`docs/reference/api/response-codes.md`** (400 on all POST/PATCH/PUT, omitted only when truly nothing to validate; 409/422 mutating only; never invent statuses)
+- Error codes: when to set 400/401/403/404/406/409/413/415/422/429 — see **`docs/reference/api/response-codes.md`** (400 on all POST/PATCH/PUT, omitted only when truly nothing to validate; 409/422 mutating only; capability-not-available-for-resource-type, e.g. a personal-org team-only action, is **422**; never invent statuses)
+- Personal vs team org (one surface): both share `/tenancy/organization/*`; a PERSONAL org rejects the 5 team-only mutations (invite/add member, custom roles, transfer-ownership, delete) with 422, and the org response carries a type-derived `capabilities` object. Authenticated self-service routes live under `/auth/me/*` (MFA, passkey register); login-flow stays public off `/me`. See **`docs/reference/api/route-consistency-and-org-model.md`**
 - Headers: `Authorization: Bearer`, `X-Organization-Id`, `Idempotency-Key` (required on the 8 `idempotencyRequired` writes), `X-Captcha-Token` (public auth forms), `X-CSRF-Token` (refresh only), `Stripe-Signature` (Stripe-sent); ecosystem X- forms kept (`X-Request-Id`, `X-Api-Key`, `X-RateLimit-*`, …)
 
 ## Architecture Rules (Non-Negotiable)
@@ -390,6 +391,7 @@ Local SonarQube quality gate (pre-push): `pnpm sonar:up` / `sonar:scan` / `sonar
 - `pnpm verify:base` — end-to-end gate: migrate → seed (minimal + full) → API smoke (auto-detects/launches server + worker) → validate
 - `pnpm routes:catalog` / `pnpm routes:catalog:check` — regenerate or verify `docs/routes.txt` (legacy: `route-catalog`, `route-catalog:check`)
 - `pnpm validate:route-success-statuses` — verify `tooling/openapi/route-catalog/route-success-statuses.json` (declared happy-path status per route) stays in sync with `docs/routes.txt`
+- `pnpm validate:route-schema-docs` — verify every route registration carries `schema: { summary, description, tags }` (fails closed; CI gate in `ci:local` / `ci:quality`)
 - `pnpm validate:route-success-coverage` — observed-status gate after a full `pnpm test`: fails on declared-vs-observed drift; uncovered-routes count ratchets via `tooling/route-coverage/route-success-coverage-budget.json`; also verifies every observed sub-500 status is documented in the generated OpenAPI spec
 - `pnpm routes:examples` — refresh `tooling/openapi/route-examples/route-examples.json` (sanitized request/response samples per route+status, embedded in OpenAPI as `captured` examples) from a capture run: `ROUTE_EXAMPLE_CAPTURE=1 pnpm test && pnpm routes:examples`
 - `pnpm ci:local` — PR gate: validate + domain + routes + migrate lint + env example + full test

@@ -112,7 +112,10 @@ describe('MemberRoleService', () => {
     } as never);
     await expect(
       service.create(organization.public_id, { name: 'Editor' }, 'creator_public'),
-    ).rejects.toMatchObject({ messageKey: 'errors:personalOrganizationNoRoles' });
+    ).rejects.toMatchObject({
+      messageKey: 'errors:personalOrganizationNoRoles',
+      statusCode: 422,
+    });
     expect(memberRoleRepository.create).not.toHaveBeenCalled();
   });
 

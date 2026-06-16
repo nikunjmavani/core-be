@@ -34,7 +34,7 @@ The policy is enforced centrally in `method-status-policy.middleware.ts`; declar
 - **406** MCP only (Accept negotiation).
 - **409** mutating only — state conflict: duplicate resource, bad state transition, in-flight duplicate Idempotency-Key.
 - **413 / 415** POST/PATCH/PUT only — body too large / wrong Content-Type.
-- **422** mutating only — business-rule rejection, or Idempotency-Key reused with a different payload.
+- **422** mutating only — business-rule rejection, or Idempotency-Key reused with a different payload. **Also**: a route rejected because the active resource is the wrong *kind* — chiefly a **personal organization** rejecting a team-only action (invite/add member, custom roles, transfer-ownership, delete org) — is **422, not 409** (the org `type` is immutable, so retrying always fails). Throw `UnprocessableEntityError`; keep the `errors:personalOrganization*` keys.
 - **429** every route — with `Retry-After` + `X-RateLimit-*` headers.
 - **500** never intentional — the never-5xx fuzz gate fails CI on any 5xx from malformed input.
 - Rules of thumb: 400 = malformed shape, 422 = valid shape wrong meaning; 409 = conflicts with current state, 422 = payload logic always wrong. Never invent a status outside this list.
@@ -52,6 +52,17 @@ The policy is enforced centrally in `method-status-policy.middleware.ts`; declar
 ## Headers kept in X- form (ecosystem standards)
 
 `X-Request-Id`, `X-Client-Request-Id`, `X-Api-Key`, `X-CSRF-Token`, `X-RateLimit-*` (server-emitted with `Retry-After` on 429), Helmet's security headers, `X-Forwarded-For`. Custom headers use the X- form for visual consistency with the infrastructure headers: `X-Organization-Id`, `X-Idempotency-Replay` (response marker), `X-Captcha-Token`. Standards keep their fixed names: `Authorization`, `Idempotency-Key`, `Stripe-Signature`, `Retry-After`.
+
+## Self-service namespace, org scope & capabilities
+
+- **`/auth/me/*`** holds every authenticated self-service account route — auth-methods, sessions, MFA (`/auth/me/mfa…`), and passkey registration (`/auth/me/webauthn/register/…`). Public login-flow routes stay off `/me`: `POST /auth/mfa/login`, `POST /auth/webauthn/authenticate/{options,verify}`.
+- **One surface for both org types.** Personal and team organizations share `/tenancy/organization/*`; never fork `/personal` vs `/team`. The five team-only mutations 422 on a personal org and are listed in `TEAM_ONLY_ROUTE_KEYS` (`tooling/openapi/route-catalog/org-scope.ts`); the org response exposes a type-derived `capabilities` object (`organizationCapabilities()` in the org serializer).
+- **`audit/logs` vs `audit-logs`** spellings are intentional (platform-admin `audit` domain vs org-scoped sub-resource) — do not unify.
+- **Verb rules:** PUT = full replace, PATCH = partial merge; collection action with no id → `POST /collection/<verb>`, single-resource state change → `PATCH /resource/:id/<state>`; invitation kill = **revoke** (`DELETE …/invitations/:invitation_id`).
+
+## Route schema docs (enforced)
+
+Every route registration needs `schema: { summary, description, tags }` — gated by `pnpm validate:route-schema-docs` (wired into `ci:local` / `ci:quality`). The enriched `docs/routes.txt` carries per-route `status` / `idem` / `org` columns plus auto-generated idempotency / team-only / deprecated footer sections; full reference: `docs/reference/api/route-consistency-and-org-model.md`.
 
 ## Sync checklist when touching any of the above
 

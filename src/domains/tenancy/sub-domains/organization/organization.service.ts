@@ -2,6 +2,7 @@ import {
   ConflictError,
   ForbiddenError,
   NotFoundError,
+  UnprocessableEntityError,
   ValidationError,
 } from '@/shared/errors/index.js';
 import { env } from '@/shared/config/env.config.js';
@@ -509,7 +510,7 @@ export class OrganizationService {
       // A PERSONAL organization is the user's own account-level workspace — it is never
       // deletable on its own; it cascades only when the account itself is deleted.
       if (found.type === 'PERSONAL') {
-        throw new ConflictError('errors:personalOrganizationImmutable');
+        throw new UnprocessableEntityError('errors:personalOrganizationImmutable');
       }
       const marked = await this.repository.markDeletionStarted(public_id);
       if (!(marked || found.deletion_started_at)) {

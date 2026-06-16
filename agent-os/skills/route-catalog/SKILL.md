@@ -5,7 +5,7 @@ description: Generates a docs/routes.txt file listing every API route grouped by
 
 # Route catalog generator (core-be)
 
-Produces **`docs/routes.txt`** — a single-file overview of **every** HTTP route (method, path, access). Auto-generated; do not edit by hand. Tests parse this file via `@/tests/helpers/route-catalog-registry.js`.
+Produces **`docs/routes.txt`** — a single-file overview of **every** HTTP route with four machine-readable facets per line (`METHOD PATH <status> <idem> <org> ACCESS`) plus auto-generated idempotency / team-only / deprecated footer sections. Auto-generated; do not edit by hand. Tests parse this file via `@/tests/helpers/route-catalog-registry.js` and `@/tests/helpers/route-catalog-auth.js` — **both must be updated in lockstep with any line-format change** (ACCESS stays the last column).
 
 ## When to run
 
@@ -69,18 +69,19 @@ Use this exact format:
 ================================================================================
 
 Legend:
-  PUBLIC  = No authentication required
-  AUTH    = JWT authentication required
-  ROLE    = Global role required (super_admin, admin, user)
-  PERM    = Organization-scoped permission required
+  Columns:  METHOD  PATH  <status>  <idem>  <org>  ACCESS
+    status = documented happy-path HTTP status (200 / 201 / 204)
+    idem   = 'req' when the Idempotency-Key header is required, else '-'
+    org    = 'team' (rejected with 422 on a personal organization) or 'both'
+  ACCESS (last column): PUBLIC | AUTH | ROLE: … | PERM: … | TOKEN: …
 
 ================================================================================
   DOMAIN: AUTH (/api/v1/auth)
   Routes: <count>
 ================================================================================
 
-  POST   /api/v1/auth/login                                     PUBLIC
-  POST   /api/v1/auth/logout                                    PUBLIC
+  POST   /api/v1/auth/login                                     201 -   both PUBLIC
+  POST   /api/v1/auth/logout                                    201 -   both PUBLIC
   ...
   POST   /api/v1/auth/password/change                           AUTH
   ...
@@ -140,12 +141,25 @@ Legend:
 
 ### Formatting rules
 
-- **Method** column: left-aligned, padded to 6 chars wide (e.g. `GET` padded to `GET___`, `DELETE` already 6 chars; underscores show where spaces go)
-- **Path** column: left-aligned, padded to align access labels (use at least 55 chars width)
-- **Access** column: right-aligned label
-- Group routes within a domain by sub-domain using `— Sub-domain Name —` dividers
-- Within each group, order routes by path alphabetically, then by method (GET, POST, PATCH, PUT, DELETE)
-- Include a summary section at the end with counts
+- **Method** column: left-aligned, padded to 6 chars wide.
+- **Path** column: left-aligned, padded to 55 chars.
+- **status / idem / org** columns sit between path and access (see Legend).
+- **ACCESS** is always the **last** column (variable width; may contain spaces/commas) so the parsers can anchor on it.
+- Group routes within a domain by sub-domain using `— Sub-domain Name —` dividers.
+- Within each group, order routes by path alphabetically, then by method (GET, POST, PATCH, PUT, DELETE).
+- Footer sections (after SUMMARY): **IDEMPOTENCY** (the writes with `config.idempotencyRequired`), **ACTIVE-ORGANIZATION SCOPE** (team-only routes), **DEPRECATED ROUTES**, **PERMISSION CODES REFERENCE**.
+
+### Enriched facet sources
+
+The generator (`tooling/openapi/route-catalog/`) derives each facet automatically:
+
+| Facet | Source |
+| ----- | ------ |
+| status | `route-success-statuses.json` (gate: `pnpm validate:route-success-statuses`) |
+| idem / deprecated | route snippet — `config.idempotencyRequired` / `applyDeprecatedEndpointHeaders` (`facet-classifier.ts`) |
+| org scope | `TEAM_ONLY_ROUTE_KEYS` in `org-scope.ts` (gate: `route-catalog-org-scope.unit.test.ts`) |
+
+Adding a new route facet means updating `types.ts` (`ParsedRoute`), the parser/enrichment in `route-parser.ts`, the formatter, **both** test parsers, and `route-completeness.global.test.ts`.
 
 ## Output
 

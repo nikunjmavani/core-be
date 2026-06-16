@@ -33,25 +33,18 @@ function parseRouteCatalogLine(line: string): {
   const method = methodMatch[1] as RouteEntry['method'];
   const remainder = line.slice(methodMatch[0].length);
 
-  const spacedAccessMatch = /\s+(PUBLIC|AUTH|ROLE:.+|PERM:.+|TOKEN:.+)\s*$/.exec(remainder);
-  if (spacedAccessMatch?.[1]) {
-    return {
-      method,
-      path: remainder.slice(0, spacedAccessMatch.index).trimEnd(),
-      accessToken: spacedAccessMatch[1],
-    };
-  }
+  // ACCESS is always the last column; the new status/idem/org columns sit between
+  // path and access, so the path is the leading `/…` token rather than "everything
+  // before access".
+  const accessMatch =
+    /\s+(PUBLIC|AUTH|ROLE:.+|PERM:.+|TOKEN:.+)\s*$/.exec(remainder) ??
+    /(PERM:.+|ROLE:.+|TOKEN:.+)\s*$/.exec(remainder);
+  if (!accessMatch?.[1]) return null;
 
-  const gluedAccessMatch = /(PERM:.+|ROLE:.+|TOKEN:.+)\s*$/.exec(remainder);
-  if (gluedAccessMatch?.[1]) {
-    return {
-      method,
-      path: remainder.slice(0, gluedAccessMatch.index).trimEnd(),
-      accessToken: gluedAccessMatch[1],
-    };
-  }
+  const pathMatch = /(\/\S*)/.exec(remainder);
+  if (!pathMatch?.[1]) return null;
 
-  return null;
+  return { method, path: pathMatch[1], accessToken: accessMatch[1] };
 }
 
 function domainSlugFromPrefix(prefix: string): string {

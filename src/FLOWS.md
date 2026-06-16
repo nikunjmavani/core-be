@@ -115,7 +115,7 @@ sequenceDiagram
 
 ### Trigger
 
-Organization admin invites a teammate: `POST /api/v1/tenancy/organizations/:id/invitations`.
+Organization admin invites a teammate: `POST /api/v1/tenancy/organization/invitations` (active org from the `org` token claim). Only **team** organizations support this — a personal org rejects it with 422 (`errors:personalOrganizationNoMembers`), advertised by `capabilities.can_invite_members: false` on the org response. Revoke is `DELETE /api/v1/tenancy/organization/invitations/:invitation_id`.
 
 ### Sequence
 
@@ -129,7 +129,7 @@ sequenceDiagram
   participant Mail as mail.processor
   participant Invitee as Invitee Client
   participant Auth as auth.controller
-  Admin->>Tenancy: POST /organizations/:id/invitations {email, member_role}
+  Admin->>Tenancy: POST /organization/invitations {email, member_role}
   Tenancy->>Inv: create(orgId, body, invitedByUserId)
   Inv->>DB: BEGIN; SET LOCAL app.current_organization_id
   Inv->>DB: insert member_invitations (token_hash, expires_at, status=pending)

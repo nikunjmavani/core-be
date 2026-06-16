@@ -39,6 +39,7 @@ stateDiagram-v2
 
 ## Failure modes
 
+- **Personal organization** (single-member, immutable) → 422 on add-member / invite / transfer-ownership (`errors:personalOrganizationNoMembers` / `errors:personalOrganizationImmutable`); collaboration requires a team org. The org response `capabilities` object advertises this.
 - **Invitee already a member** → 409 `errors:invitationAlreadyMember`.
 - **Disposable email blocked on invite** → 400 `errors:disposableEmail`.
 - **Invitation token expired** → 401 `errors:invitationTokenExpired`.

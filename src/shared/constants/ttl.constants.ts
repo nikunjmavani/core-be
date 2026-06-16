@@ -111,9 +111,9 @@ export const WEBAUTHN_CHALLENGE_TTL_SECONDS = MFA_SESSION_TTL_SECONDS;
  *
  * @remarks
  * The two-phase enrollment ceremony (sec-A finding #3) stores the encrypted TOTP seed
- * under a per-user Redis key after `POST /auth/mfa/enroll`. The user has this window to
+ * under a per-user Redis key after `POST /auth/me/mfa/enroll`. The user has this window to
  * scan the QR, configure their authenticator, and POST a verified code at
- * `/auth/mfa/enroll/confirm`. Long enough for a careful user; short enough that an
+ * `/auth/me/mfa/enroll/confirm`. Long enough for a careful user; short enough that an
  * abandoned enrollment evicts cheaply. 10 minutes mirrors the OAuth state window
  * ({@link OAUTH_STATE_TTL_SECONDS}).
  */

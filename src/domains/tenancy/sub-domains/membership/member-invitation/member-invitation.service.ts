@@ -1,8 +1,8 @@
 import {
   ConfigurationError,
-  ConflictError,
   ForbiddenError,
   NotFoundError,
+  UnprocessableEntityError,
   ValidationError,
 } from '@/shared/errors/index.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
@@ -192,7 +192,7 @@ export class MemberInvitationService {
       // Capability matrix: a PERSONAL organization is single-member by definition — it cannot
       // issue invitations. Collaboration requires a TEAM organization.
       if (organization.type === 'PERSONAL') {
-        throw new ConflictError('errors:personalOrganizationNoMembers');
+        throw new UnprocessableEntityError('errors:personalOrganizationNoMembers');
       }
       const membership = await this.membershipRepository.findByPublicId(
         parsed.membership_id,

@@ -44,6 +44,17 @@ When to set which HTTP status — the single contract every route, test, and doc
 
 **400 vs 422:** 400 = the request itself is malformed (shape). 422 = the request parses fine but the system rejects its meaning (semantics). **409 vs 422:** 409 = conflict with existing state (try again may succeed after state changes). 422 = the payload's logic is wrong (retrying identical payload always fails).
 
+**Capability not available for a resource type → 422 (not 409).** When a route is rejected because the active resource is the wrong *kind* — most importantly a **personal organization** rejecting a team-only action (invite/add member, custom roles, transfer ownership, delete org) — use **422**. The organization `type` is immutable, so retrying the identical request always fails; that is the 422 rule, not the 409 "conflict with current state" rule (which implies a later retry could succeed). These rejections keep their i18n keys (`errors:personalOrganizationNoMembers` / `NoRoles` / `Immutable`). Clients can avoid the 422 entirely by reading the `capabilities` object on the organization response (see [route-consistency-and-org-model.md](./route-consistency-and-org-model.md)).
+
+## Method and verb conventions
+
+The HTTP method and any action suffix follow fixed rules so the surface reads predictably (enforced by review + the route catalog):
+
+- **PUT = full replace** of a set or singleton (`/users/me/notification-preferences`, `/organization/roles/:role_id/permissions`, avatar/logo). **PATCH = partial merge** of fields (`/organization/settings`, `/organization/memberships/:membership_id`, subscriptions). Returns 200 either way.
+- **Single-resource state change → `PATCH /resource/:id/<state>`** (e.g. `PATCH /notifications/:id/read`). **Collection action with no id → `POST /collection/<verb>`** (e.g. `POST /notifications/mark-all-read`). Both are intentional; do not "fix" one to match the other.
+- **Lifecycle actions are `POST /resource/:id/<verb>`** (`/subscriptions/:id/cancel|resume|change-plan`, `/api-keys/:id/rotate`, `/invitations/:id/accept|decline|resend`, `/memberships` `leave` / `transfer-ownership`). The invitation "kill" action is **revoke** (`DELETE /organization/invitations/:invitation_id`) — the term is "revoke" everywhere (DB `revoked_at`, audit `member_invitation.revoke`, route summary), never "cancel".
+- **`audit/logs` vs `audit-logs` is intentional:** `GET /api/v1/audit/logs` is the platform-admin global feed (the flat `audit` domain); `GET /api/v1/tenancy/organization/audit-logs` is the org-scoped feed (a sub-resource of the active organization). Different domains, different audiences — the spellings are not unified on purpose.
+
 ## Error body shape
 
 All error statuses share one envelope (`src/shared/middlewares/core/error-handler.middleware.ts`):

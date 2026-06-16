@@ -63,11 +63,27 @@ describe('MFA Sub-Domain — Integration', () => {
     });
   });
 
-  describe('GET /api/v1/auth/mfa', () => {
+  describe('legacy MFA paths moved under /auth/me (404 at old paths)', () => {
+    const legacy: Array<{ method: 'GET' | 'POST' | 'DELETE'; url: string }> = [
+      { method: 'GET', url: '/auth/mfa' },
+      { method: 'POST', url: '/auth/mfa/enroll' },
+      { method: 'POST', url: '/auth/mfa/enroll/confirm' },
+      { method: 'POST', url: '/auth/mfa/verify' },
+      { method: 'DELETE', url: '/auth/mfa/test-id' },
+    ];
+    for (const { method, url } of legacy) {
+      it(`${method} ${url} is no longer registered (moved to /auth/me/...)`, async () => {
+        const response = await injectUnauthenticated(app, { method, url: testApiPath(url) });
+        expect(response.statusCode).toBe(404);
+      });
+    }
+  });
+
+  describe('GET /api/v1/auth/me/mfa', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'GET',
-        url: testApiPath('/auth/mfa'),
+        url: testApiPath('/auth/me/mfa'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -77,18 +93,18 @@ describe('MFA Sub-Domain — Integration', () => {
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath('/auth/mfa'),
+        url: testApiPath('/auth/me/mfa'),
         token,
       });
       expect(response.statusCode).toBe(200);
     });
   });
 
-  describe('DELETE /api/v1/auth/mfa/:mfa_method_id', () => {
+  describe('DELETE /api/v1/auth/me/mfa/:mfa_method_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'DELETE',
-        url: testApiPath('/auth/mfa/test-id'),
+        url: testApiPath('/auth/me/mfa/test-id'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -109,7 +125,7 @@ describe('MFA Sub-Domain — Integration', () => {
 
       const enroll = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/mfa/enroll'),
+        url: testApiPath('/auth/me/mfa/enroll'),
         token,
         payload: { method_type: 'MFA_TOTP' },
       });
@@ -119,7 +135,7 @@ describe('MFA Sub-Domain — Integration', () => {
 
       const confirm = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/mfa/enroll/confirm'),
+        url: testApiPath('/auth/me/mfa/enroll/confirm'),
         token,
         payload: { code: await generateTotpCode({ secret }) },
       });
@@ -129,7 +145,7 @@ describe('MFA Sub-Domain — Integration', () => {
       // within their window, so use the NEXT 30s window (server tolerance ±1 step).
       const verify = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/mfa/verify'),
+        url: testApiPath('/auth/me/mfa/verify'),
         token,
         payload: {
           // otplib `epoch` is in SECONDS; +30s = next TOTP window (server tolerance ±1 step).

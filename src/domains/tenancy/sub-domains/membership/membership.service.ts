@@ -1,4 +1,9 @@
-import { ConflictError, ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  UnprocessableEntityError,
+} from '@/shared/errors/index.js';
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
@@ -240,7 +245,7 @@ export class MembershipService {
       // directly). Reject here so the single-member invariant holds at every door. Collaboration
       // requires a TEAM organization.
       if (organization.type === 'PERSONAL') {
-        throw new ConflictError('errors:personalOrganizationNoMembers');
+        throw new UnprocessableEntityError('errors:personalOrganizationNoMembers');
       }
       const role = await this.memberRoleService.requireRoleRecordByPublicId(
         organization_public_id,
@@ -452,7 +457,7 @@ export class MembershipService {
         );
       // A PERSONAL organization belongs solely to its owner and cannot be handed off.
       if (organization.type === 'PERSONAL') {
-        throw new ConflictError('errors:personalOrganizationImmutable');
+        throw new UnprocessableEntityError('errors:personalOrganizationImmutable');
       }
       const currentUserId =
         await this.organizationService.resolveUserInternalIdByPublicId(current_user_public_id);

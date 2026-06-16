@@ -21,13 +21,13 @@ import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session
 
 /**
  * Regression for sec-A1 (High): the `/auth/step-up` route — gate in front of every sensitive
- * credential mutation (`mfa/enroll`, `mfa/:id` delete, `webauthn/register/*`, `me/auth-methods`
+ * credential mutation (`me/mfa/enroll`, `me/mfa/:id` delete, `me/webauthn/register/*`, `me/auth-methods`
  * create/delete, `password/change`) — must NOT accept a password-only step-up when the user
  * has MFA enabled. Otherwise a transient stolen-session compromise plus knowledge of the
  * password is enough to delete MFA, register a passkey, and convert the stolen window into
  * permanent account access.
  *
- * MFA users must step up via `/auth/mfa/verify` (which already records `recordRecentStepUp`)
+ * MFA users must step up via `/auth/me/mfa/verify` (which already records `recordRecentStepUp`)
  * — not via password-only re-verification.
  */
 describe('AuthMethodService.verifyPasswordForStepUp — MFA bypass guard (sec-A1)', () => {

@@ -1,10 +1,15 @@
 import { DOMAIN_LABELS, METHOD_ORDER } from './constants.js';
-import type { ParsedRoute, RouteAccess } from './types.js';
+import type { ParsedRoute } from './types.js';
 
-function formatRouteLine(method: string, path: string, access: RouteAccess): string {
-  const methodColumn = method.padEnd(6, ' ');
-  const pathColumn = path.padEnd(55, ' ');
-  return `  ${methodColumn} ${pathColumn} ${access}`;
+function formatRouteLine(route: ParsedRoute): string {
+  const methodColumn = route.method.padEnd(6, ' ');
+  const pathColumn = route.fullPath.padEnd(55, ' ');
+  const status = String(route.successStatus ?? '???').padEnd(3, ' ');
+  const idempotency = (route.idempotencyRequired ? 'req' : '-').padEnd(3, ' ');
+  const orgScope = (route.orgScope ?? 'both').padEnd(4, ' ');
+  // ACCESS stays the LAST column (variable width, may contain spaces) so the
+  // catalog parsers can anchor on it. New columns sit between path and access.
+  return `  ${methodColumn} ${pathColumn} ${status} ${idempotency} ${orgScope} ${route.access}`;
 }
 
 export function buildCatalogContent(routes: ParsedRoute[]): string {
@@ -27,11 +32,16 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
     '================================================================================',
     '',
     'Legend:',
-    '  PUBLIC  = No authentication required',
-    '  AUTH    = JWT authentication required',
-    '  ROLE    = Global role required (super_admin, admin, user)',
-    '  PERM    = Organization-scoped permission required',
-    '  TOKEN   = Non-JWT bearer token required',
+    '  Columns:  METHOD  PATH  <status>  <idem>  <org>  ACCESS',
+    '    status = documented happy-path HTTP status (200 / 201 / 204)',
+    "    idem   = 'req' when the Idempotency-Key header is required, else '-'",
+    "    org    = 'team' (rejected with 422 on a personal organization) or 'both'",
+    '  ACCESS (last column):',
+    '    PUBLIC  = No authentication required',
+    '    AUTH    = JWT authentication required',
+    '    ROLE    = Global role required (super_admin, admin, user)',
+    '    PERM    = Organization-scoped permission required',
+    '    TOKEN   = Non-JWT bearer token required',
     '',
   ];
 
@@ -62,7 +72,7 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
         lines.push(`  — ${route.subDomainLabel} —`);
         lastSubDomain = route.subDomainLabel;
       }
-      lines.push(formatRouteLine(route.method, route.fullPath, route.access));
+      lines.push(formatRouteLine(route));
     }
     lines.push('');
   }
@@ -72,6 +82,13 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
   const roleCount = sortedRoutes.filter((route) => route.access.startsWith('ROLE:')).length;
   const permCount = sortedRoutes.filter((route) => route.access.startsWith('PERM:')).length;
   const tokenCount = sortedRoutes.filter((route) => route.access.startsWith('TOKEN:')).length;
+
+  const formatKey = (route: ParsedRoute) => `    ${route.method} ${route.fullPath}`;
+  const idempotencyRequiredRoutes = sortedRoutes
+    .filter((route) => route.idempotencyRequired)
+    .map(formatKey);
+  const teamOnlyRoutes = sortedRoutes.filter((route) => route.orgScope === 'team').map(formatKey);
+  const deprecatedRoutes = sortedRoutes.filter((route) => route.deprecated).map(formatKey);
 
   lines.push(
     '================================================================================',
@@ -89,11 +106,26 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
     '  IDEMPOTENCY (Idempotency-Key header)',
     '================================================================================',
     '',
-    '  Optional on all POST/PUT/PATCH/DELETE when header is present (24h Redis cache).',
-    '  Strongly recommended (forwarded to Stripe) on:',
-    '    POST /api/v1/billing/subscriptions',
+    '  Optional on all POST/PUT/PATCH/DELETE when the header is present (24h Redis cache).',
+    `  REQUIRED (the write fails without it) on these ${idempotencyRequiredRoutes.length} routes:`,
+    ...idempotencyRequiredRoutes,
     '',
     '  See docs/reference/reliability/idempotency.md and OpenAPI operation descriptions.',
+    '',
+    '================================================================================',
+    '  ACTIVE-ORGANIZATION SCOPE (org column)',
+    '================================================================================',
+    '',
+    '  TEAM-only routes — a PERSONAL (single-member) organization rejects these with',
+    '  422. The active-org GET response exposes a `capabilities` object so clients can',
+    '  branch without trial-and-error. See docs/reference/api/route-consistency-and-org-model.md.',
+    ...(teamOnlyRoutes.length > 0 ? teamOnlyRoutes : ['    (none)']),
+    '',
+    '================================================================================',
+    '  DEPRECATED ROUTES (Sunset / Deprecation headers)',
+    '================================================================================',
+    '',
+    ...(deprecatedRoutes.length > 0 ? deprecatedRoutes : ['    (none)']),
     '',
     '================================================================================',
     '  PERMISSION CODES REFERENCE',

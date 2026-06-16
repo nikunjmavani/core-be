@@ -168,7 +168,10 @@ describe('MembershipService', () => {
         { user_id: 'user_public', role_id: 'role_public', status: 'INVITED' },
         'inviter_public',
       ),
-    ).rejects.toMatchObject({ messageKey: 'errors:personalOrganizationNoMembers' });
+    ).rejects.toMatchObject({
+      messageKey: 'errors:personalOrganizationNoMembers',
+      statusCode: 422,
+    });
     expect(membershipRepository.create).not.toHaveBeenCalled();
   });
 

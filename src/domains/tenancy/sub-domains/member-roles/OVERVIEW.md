@@ -28,6 +28,7 @@ stateDiagram-v2
 
 ## Failure modes
 
+- **Personal organization** → 422 on create-role (`errors:personalOrganizationNoRoles`); custom roles are a team-org feature (the org `capabilities.can_manage_roles` is `false`).
 - **Soft-deleting a role with active members** → 409; admin must reassign members first.
 - **Granting a permission constant that doesn't exist** → 400.
 - **Concurrent role-permission writes** → second write merges; the organization permission cache version is bumped so every affected member re-resolves.

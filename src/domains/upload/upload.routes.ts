@@ -44,7 +44,16 @@ export const uploadRoutesPlugin: FastifyPluginAsync = async (app) => {
   );
   zodApplication.post(
     '/:upload_id/confirm',
-    { onRequest: [app.authenticate], ...MODERATE_AUTHED_RATE_LIMIT },
+    {
+      onRequest: [app.authenticate],
+      ...MODERATE_AUTHED_RATE_LIMIT,
+      schema: {
+        summary: 'Confirm upload',
+        description:
+          'Confirms a completed direct-to-S3 upload: verifies the object exists in storage and marks the upload record as confirmed.',
+        tags: ['Upload'],
+      },
+    },
     controller.confirmUpload,
   );
   zodApplication.delete(

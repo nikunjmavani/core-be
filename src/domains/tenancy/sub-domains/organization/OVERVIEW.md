@@ -34,6 +34,7 @@ This sub-domain neither emits nor consumes domain events directly. State changes
 - **Slug collision** on create or rename → 409.
 - **API key prefix collision** (cosmetic) → service rotates the prefix and retries.
 - **Soft-delete with active subscription** → 409; admin must cancel the subscription first.
+- **Deleting a personal organization** → 422 `errors:personalOrganizationImmutable`; a personal org is removed only when its owning account is deleted (`capabilities.can_delete` is `false`). The serializer adds a type-derived `capabilities` object to every organization response.
 
 ## Policy constants
 

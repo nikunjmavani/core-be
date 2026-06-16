@@ -1349,6 +1349,7 @@ src/
     │       ├── route-http-coverage.allowlist.ts
     │       ├── route-success-coverage.util.ts
     │       ├── validate-route-http-coverage.ts
+    │       ├── validate-route-schema-docs.ts
     │       ├── validate-route-success-coverage.ts
     │       └── validate-route-success-statuses.ts
     │   └── tests/
@@ -1989,6 +1990,7 @@ src/
     │   │   ├── github-environments.util.unit.test.ts
     │   │   ├── project-identity.policy.unit.test.ts
     │   │   ├── route-catalog-auth.unit.test.ts
+    │   │   ├── route-catalog-org-scope.unit.test.ts
     │   │   └── validate-github-env.unit.test.ts
     │   ├── utils/
     │   │   ├── auth/

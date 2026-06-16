@@ -118,7 +118,8 @@ describe('Member Roles Sub-Domain — Integration', () => {
 
   // A PERSONAL organization is single-member by definition, so custom roles (which exist to
   // grant scoped permissions to OTHER members) are meaningless there. The service rejects role
-  // creation with a 409 ConflictError. This is unit-tested in member-role.service.unit.test.ts;
+  // creation with a 422 UnprocessableEntityError (the org type is immutable, so retrying always
+  // fails — 422, not 409). This is unit-tested in member-role.service.unit.test.ts;
   // these tests prove the rejection survives over real HTTP — the owner holds ROLE_MANAGE (the
   // full tenancy set, via provisioning), so the request passes RBAC and lands on the no-roles
   // guard rather than a 403.
@@ -138,7 +139,7 @@ describe('Member Roles Sub-Domain — Integration', () => {
       return row?.value ?? 0;
     }
 
-    it('rejects POST /roles on a PERSONAL org with 409 (errors:personalOrganizationNoRoles) and creates no role', async () => {
+    it('rejects POST /roles on a PERSONAL org with 422 (errors:personalOrganizationNoRoles) and creates no role', async () => {
       await seedAllTenancyPermissions();
       const owner = await createTestUser();
       const provisioned = await provisionPersonalOrganization(owner.id);
@@ -158,12 +159,12 @@ describe('Member Roles Sub-Domain — Integration', () => {
         payload: { name: `Personal Custom Role ${randomUUID()}` },
       });
 
-      expect(response.statusCode).toBe(409);
+      expect(response.statusCode).toBe(422);
       const body = response.json() as { error?: { code?: string; detail?: string } };
-      expect(body.error?.code).toBe('conflict');
+      expect(body.error?.code).toBe('unprocessable_entity');
       // The standard test app does not initialize i18next resources, so the wire `detail` is the
       // raw key; a sibling test that initialized i18next first (same worker) yields the English
-      // string. Accept either — 409 + `code: 'conflict'` + this key uniquely identify the guard.
+      // string. Accept either — 422 + `code: 'unprocessable_entity'` + this key identify the guard.
       expect([
         'errors:personalOrganizationNoRoles',
         enErrors.personalOrganizationNoRoles,

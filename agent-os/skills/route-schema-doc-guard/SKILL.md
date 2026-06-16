@@ -7,6 +7,8 @@ description: Ensures every Fastify route registration in src/**/*.routes.ts (plu
 
 Owns the **`schema`** block on every Fastify route registration. The block is the single source of truth for the OpenAPI document and the route catalog descriptions.
 
+**Enforced by `pnpm validate:route-schema-docs`** (`src/scripts/validators/routes/validate-route-schema-docs.ts`, wired into `ci:local` + `ci:quality`) — it fails closed if any registration is missing `summary`, `description`, or `tags`. Run it after touching routes; fix the gap rather than suppressing it.
+
 ## When to run
 
 Run this skill **every time** you:

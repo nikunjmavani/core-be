@@ -1,5 +1,10 @@
 import { env } from '@/shared/config/env.config.js';
-import { ConflictError, ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  UnprocessableEntityError,
+} from '@/shared/errors/index.js';
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
@@ -157,7 +162,7 @@ export class MemberRoleService {
       // (which exist to grant scoped permissions to OTHER members) are meaningless there. Reject —
       // role management is a TEAM-organization feature.
       if (organization.type === 'PERSONAL') {
-        throw new ConflictError('errors:personalOrganizationNoRoles');
+        throw new UnprocessableEntityError('errors:personalOrganizationNoRoles');
       }
       // sec-r5-followup-ratelimit-dos-2 + audit-#8: serialize the per-org count + insert with a
       // transaction-scoped advisory lock so concurrent creates cannot both pass the same count
