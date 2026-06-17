@@ -38,7 +38,7 @@ instinct is right — for code and CI/CD the CLI (or SDK) is the correct tool, n
 | **Stripe** | `stripe` | `stripe` (`listen` / `trigger` / `fixtures`) | ✅ `mcp.stripe.com` |
 | **Resend** | `resend` | — (curl/API) | ✅ `mcp/resend` (Docker) |
 | **Sentry** | `@sentry/node` | `sentry-cli` (releases/sourcemaps) | ✅ `mcp.sentry.dev/mcp` (+ Seer root-cause) |
-| **GitHub** | Actions / Octokit | `gh` | ✅ `api.githubcopilot.com/mcp/` |
+| **GitHub** | Actions / Octokit | `gh` | — `gh` CLI (peer MCP `api.githubcopilot.com/mcp/` exists but is intentionally **not** wired at project level) |
 | **Railway** | — | `railway` (`redeploy`) | ✅ `@railway/mcp-server` |
 | **SonarQube** | — | `sonar-scanner` (`pnpm sonar:scan`) | ✅ `mcp/sonarqube` (read findings + quality gate) |
 | **Semgrep** | — | `semgrep` (`pnpm security:sast`) | ✅ `semgrep-mcp` (scan + structured findings) |
@@ -62,9 +62,11 @@ and the Stripe MCP lets an agent inspect test-mode objects. They coexist; none r
 ## What the agent already has
 
 The MCP servers in [`.mcp.example.json`](../../.mcp.example.json) (mirrored at
-`agent-os/mcp/mcp.example.json`): **context7, core-be:api, neon, sentry, github, slack,
-railway, aws, stripe, semgrep, sonarqube, redis, postman, resend, codegraph, headroom**. These are
-*agent-only*; CI/CD and runtime do not use them.
+`agent-os/mcp/mcp.example.json`): **context7, core-be:api, neon, sentry, railway, aws,
+stripe, semgrep, sonarqube, redis, postman, resend, codegraph, headroom**. These are
+*agent-only*; CI/CD and runtime do not use them. (The **GitHub** and **Slack** MCPs are
+intentionally left out of the project config — use `gh` for GitHub; Slack, if wanted, is
+configured at the user/local level so personal-account servers stay separate from the repo.)
 
 ## Agent MCP server notes (CI/CD keeps the CLIs)
 
