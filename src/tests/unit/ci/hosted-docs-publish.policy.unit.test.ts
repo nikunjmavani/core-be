@@ -32,5 +32,8 @@ describe('hosted docs publish policy (Postman + Scalar Registry)', () => {
     // the Scalar API key is wired into the step from the GitHub Environment secret.
     expect(scalarStep).toContain('SCALAR_API_KEY:');
     expect(scalarStep).toContain('secrets.SCALAR_API_KEY');
+    // namespace/slug are non-sensitive registry identifiers → read from Variables, not Secrets.
+    expect(scalarStep).toContain('vars.SCALAR_NAMESPACE');
+    expect(scalarStep).not.toContain('secrets.SCALAR_NAMESPACE');
   });
 });

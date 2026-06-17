@@ -27,10 +27,6 @@ on:
         required: false
       SCALAR_API_KEY:
         required: false
-      SCALAR_NAMESPACE:
-        required: false
-      SCALAR_SLUG:
-        required: false
   workflow_dispatch:
     inputs:
       merge_commit_sha:
@@ -119,7 +115,10 @@ jobs:
         if: inputs.publish_hosted_docs
         continue-on-error: true
         env:
+          # API key is the only sensitive value → secret. The namespace/slug appear in the
+          # public registry URL (@<namespace>/apis/<slug>) and ship as GitHub Variables, which
+          # is exactly how `pnpm github:sync` classifies them (classifyKey → variable).
           SCALAR_API_KEY: ${{ secrets.SCALAR_API_KEY }}
-          SCALAR_NAMESPACE: ${{ secrets.SCALAR_NAMESPACE }}
-          SCALAR_SLUG: ${{ secrets.SCALAR_SLUG }}
+          SCALAR_NAMESPACE: ${{ vars.SCALAR_NAMESPACE }}
+          SCALAR_SLUG: ${{ vars.SCALAR_SLUG }}
         run: pnpm docs:upload:scalar
