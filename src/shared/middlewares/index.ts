@@ -6,6 +6,7 @@ import helmetMiddleware from './security/helmet.middleware.js';
 import corsMiddleware from './security/cors.middleware.js';
 import rateLimitMiddleware from './rate-limit/rate-limit.middleware.js';
 import errorHandlerMiddleware from './core/error-handler.middleware.js';
+import overloadGuardMiddleware from './core/overload-guard.middleware.js';
 import responseFormatMiddleware from './core/response-format.middleware.js';
 import apiVersioningMiddleware from './core/api-versioning.middleware.js';
 import requestContextMiddleware from './core/request-context.middleware.js';
@@ -51,6 +52,10 @@ export const middlewarePlugins = [
   helmetMiddleware,
   corsMiddleware,
   errorHandlerMiddleware,
+  // Load-shed valve: 503 fast when the event loop is saturated so the tail latency stays bounded
+  // instead of growing an unbounded queue. Early (right after the error handler that formats its
+  // thrown ServiceUnavailableError) so it sheds before auth / tenant / DB work.
+  overloadGuardMiddleware,
   responseFormatMiddleware,
   apiVersioningMiddleware,
   requestContextMiddleware,

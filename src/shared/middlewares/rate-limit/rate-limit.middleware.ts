@@ -7,6 +7,7 @@ import { redisConnection } from '@/infrastructure/cache/redis.client.js';
 import { Sentry } from '@/infrastructure/observability/sentry/sentry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { createRedisFallbackRateLimitStore } from '@/shared/middlewares/rate-limit/rate-limit-fallback-store.js';
+import { shouldEmitRateLimitTelemetry } from '@/shared/middlewares/rate-limit/rate-limit-telemetry-throttle.js';
 
 /**
  * Observes a request that is about to be throttled by the global limiter: emits a structured
@@ -15,6 +16,12 @@ import { createRedisFallbackRateLimitStore } from '@/shared/middlewares/rate-lim
  * does not alter limiter behavior. Matches the `onExceeding` signature `(request, key)`.
  */
 function recordGlobalRateLimitExceeded(request: FastifyRequest, key: string): void {
+  // Throttle the WARN + Sentry breadcrumb per key so a single hot IP/NAT cannot flood logs
+  // and Sentry under load (see rate-limit-telemetry-throttle.ts). Still allowed to throttle
+  // the actual request — this only governs the observability emission.
+  if (!shouldEmitRateLimitTelemetry(key)) {
+    return;
+  }
   const url = request.routeOptions?.url ?? request.url;
   logger.warn({
     event: 'rate_limit.exceeded',
