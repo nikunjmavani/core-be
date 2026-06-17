@@ -1,0 +1,67 @@
+{
+  "description": "Capability registry — one row per AI coding agent. tooling/agent-os/generate.ts iterates this to compile each agent's native wiring FROM the common agent-os/ dirs (skills, agents, rules, hooks, commands, mcp, docs). Onboarding a new or upgraded agent = add a row here (and a platforms/<agent>/ recipe if needed); the generator emits only the capabilities the agent supports and skips the rest. hookEvents lists what each platform supports today — the generator emits a hook only when its event is in this list.",
+  "agents": {
+    "claude": {
+      "label": "Claude Code",
+      "entrypoint": ".claude/",
+      "consumes": ["skills", "agents", "commands", "hooks", "mcp", "docs"],
+      "hooksTarget": ".claude/settings.json",
+      "capabilities": {
+        "skills": true,
+        "subagents": true,
+        "plugins": true,
+        "outputStyles": true,
+        "mcpFormat": "json",
+        "hookEvents": [
+          "SessionStart",
+          "UserPromptSubmit",
+          "PreToolUse",
+          "PostToolUse",
+          "PostToolUseFailure",
+          "Stop",
+          "SessionEnd",
+          "PreCompact",
+          "SubagentStop"
+        ],
+        "agentsMd": { "linkFollow": true, "maxBytes": null, "overrideFile": null }
+      }
+    },
+    "cursor": {
+      "label": "Cursor",
+      "entrypoint": ".cursor/",
+      "consumes": ["skills", "agents", "rules", "commands", "hooks", "mcp"],
+      "hooksTarget": ".cursor/hooks.json",
+      "capabilities": {
+        "skills": true,
+        "subagents": true,
+        "plugins": false,
+        "outputStyles": false,
+        "mcpFormat": "json",
+        "hookEvents": [
+          "beforeShellExecution",
+          "afterFileEdit",
+          "beforeReadFile",
+          "beforeMCPExecution",
+          "beforeSubmitPrompt",
+          "stop"
+        ],
+        "agentsMd": { "linkFollow": true, "maxBytes": null, "overrideFile": null }
+      }
+    },
+    "codex": {
+      "label": "Codex",
+      "entrypoint": "AGENTS.md",
+      "consumes": ["skills", "commands", "mcp", "docs"],
+      "hooksTarget": null,
+      "capabilities": {
+        "skills": true,
+        "subagents": false,
+        "plugins": false,
+        "outputStyles": false,
+        "mcpFormat": "toml",
+        "hookEvents": [],
+        "agentsMd": { "linkFollow": false, "maxBytes": 32768, "overrideFile": "AGENTS.override.md" }
+      }
+    }
+  }
+}

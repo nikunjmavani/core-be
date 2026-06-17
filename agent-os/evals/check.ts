@@ -193,25 +193,78 @@ const isPathCandidate = (token: string): boolean => {
   const hasKnownExtension = pathExtensions.some((extension) => token.endsWith(extension))
   return underRoot && hasKnownExtension
 }
-const scanForPaths = (absoluteDirectory: string, extension: string) => {
-  for (const file of listFilesWithExtension(absoluteDirectory, extension)) {
-    const displayPath = relative(repositoryRoot, join(absoluteDirectory, file))
-    const text = readText(join(absoluteDirectory, file))
-    const seen = new Set<string>()
-    for (const inline of text.matchAll(/`([^`\n]+)`/g)) {
-      const token = inline[1].trim()
-      if (seen.has(token) || !isPathCandidate(token)) continue
-      seen.add(token)
-      if (!existsSync(join(repositoryRoot, token)))
-        // Gated: the reference corpus is clean, so a missing path is a real dead reference.
-        // Add genuinely-absent paths (gitignored / generated / illustrative) to evals/ignore.json.
-        error('referenced-path', `${displayPath} → \`${token}\` does not exist (fix the ref, or add to evals/ignore.json if intentional)`)
-    }
+const scanOneFile = (absolutePath: string) => {
+  const displayPath = relative(repositoryRoot, absolutePath)
+  const text = readText(absolutePath)
+  const seen = new Set<string>()
+  for (const inline of text.matchAll(/`([^`\n]+)`/g)) {
+    const token = inline[1].trim()
+    if (seen.has(token) || !isPathCandidate(token)) continue
+    seen.add(token)
+    if (!existsSync(join(repositoryRoot, token)))
+      // Gated: the reference corpus is clean, so a missing path is a real dead reference.
+      // Add genuinely-absent paths (gitignored / generated / illustrative) to evals/ignore.json.
+      error('referenced-path', `${displayPath} → \`${token}\` does not exist (fix the ref, or add to evals/ignore.json if intentional)`)
   }
+}
+const scanForPaths = (absoluteDirectory: string, extension: string) => {
+  for (const file of listFilesWithExtension(absoluteDirectory, extension)) scanOneFile(join(absoluteDirectory, file))
 }
 scanForPaths(join(agentOsDirectory, 'docs'), '.md')
 scanForPaths(join(agentOsDirectory, 'rules'), '.mdc')
 for (const skill of skillNames) scanForPaths(join(agentOsDirectory, 'skills', skill), '.md')
+// Repo-wide: the canonical entry-point docs at the root are scanned too, so a
+// dead `src/...` / `agent-os/...` reference there fails the gate like any other.
+for (const rootDoc of ['CLAUDE.md', 'AGENTS.md'])
+  if (existsSync(join(repositoryRoot, rootDoc))) scanOneFile(join(repositoryRoot, rootDoc))
+
+// ── Check 10: root docs (CLAUDE.md, AGENTS.md) state counts that match disk ──
+// These root files sit outside the per-component scans above (skill-index,
+// skill-triggers, agents-catalog), so a stale count there ("22 sync rules",
+// "All 8 agents", "36 project skills") drifts unseen. Same patterns, applied
+// at the repo root so the canonical entry-point docs cannot silently diverge.
+for (const rootDoc of ['CLAUDE.md', 'AGENTS.md']) {
+  const rootDocFile = join(repositoryRoot, rootDoc)
+  if (!existsSync(rootDocFile)) continue
+  const rootText = readText(rootDocFile)
+  for (const count of new Set(allNumbers(rootText, /(\d+)\s+project skills/g)))
+    if (count !== skillNames.length)
+      error('root-doc-count', `${rootDoc} states ${count} project skills; ${skillNames.length} exist on disk`)
+  for (const count of new Set(allNumbers(rootText, /(\d+)\s+sync rules/g)))
+    if (count !== syncRuleCount)
+      error('root-doc-count', `${rootDoc} states ${count} sync rules; ${syncRuleCount} *-sync.mdc files exist`)
+  for (const count of new Set(allNumbers(rootText, /[Aa]ll\s+(\d+)\s+(?:project\s+)?agents/g)))
+    if (count !== agentFiles.length)
+      error('root-doc-count', `${rootDoc} states ${count} agents; ${agentFiles.length} agent files exist`)
+}
+
+// ── Check 11: backbone manifests — hook scripts exist, capability registry is well-formed ──
+// The generator (tooling/agent-os/generate.ts) owns drift between these manifests
+// and the derived .claude/.cursor wiring (pnpm agent-os:generate:check); here we
+// assert the source manifests themselves are structurally sound.
+const hooksManifestFile = join(agentOsDirectory, 'hooks', 'hooks.json')
+if (existsSync(hooksManifestFile)) {
+  try {
+    const manifest = JSON.parse(readText(hooksManifestFile)) as { hooks?: Array<{ id?: string; script?: string }> }
+    for (const entry of manifest.hooks ?? []) {
+      if (!entry.script) error('hooks-manifest', `hooks.json entry "${entry.id ?? '∅'}" has no script`)
+      else if (!existsSync(join(agentOsDirectory, 'hooks', entry.script)))
+        error('hooks-manifest', `hooks.json references agent-os/hooks/${entry.script} which does not exist`)
+    }
+  } catch {
+    error('hooks-manifest', 'agent-os/hooks/hooks.json is not valid JSON')
+  }
+}
+const targetsRegistryFile = join(agentOsDirectory, 'platforms', 'targets.json')
+if (existsSync(targetsRegistryFile)) {
+  try {
+    const registry = JSON.parse(readText(targetsRegistryFile)) as { agents?: Record<string, unknown> }
+    if (!registry.agents || Object.keys(registry.agents).length === 0)
+      error('targets-registry', 'platforms/targets.json declares no agents')
+  } catch {
+    error('targets-registry', 'agent-os/platforms/targets.json is not valid JSON')
+  }
+}
 
 // ── Report ──
 const errors = findings.filter((finding) => finding.level === 'error')
@@ -228,6 +281,9 @@ const checkLabels: Record<string, string> = {
   'hook-portability': 'Hook portability',
   'hook-script': 'Hook scripts exist',
   'referenced-path': 'Referenced paths exist',
+  'root-doc-count': 'Root-doc counts (CLAUDE/AGENTS)',
+  'hooks-manifest': 'Hook manifest scripts exist',
+  'targets-registry': 'Capability registry valid',
 }
 
 console.log('\nagent-os integrity evals (Tier 1)\n')
