@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.8.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.7.0-dev.0...v4.8.0-dev.0) (2026-06-17)
+
+
+### Added
+
+* **mcp:** two-tier MCP setup — default codegraph+headroom pair + on-demand `pnpm mcp:setup` ([#683](https://github.com/nikunjmavani/core-be/issues/683)) ([b8331aa](https://github.com/nikunjmavani/core-be/commit/b8331aa63bb26adcfe81f55983614f31d7617b1b))
+
 ## [4.7.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.9-dev.0...v4.7.0-dev.0) (2026-06-17)
 
 
