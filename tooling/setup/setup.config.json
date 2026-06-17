@@ -95,6 +95,9 @@
     },
     "postman": {
       "enabled": true
+    },
+    "scalar": {
+      "enabled": true
     }
   },
   "app": {

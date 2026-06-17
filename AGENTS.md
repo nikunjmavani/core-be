@@ -20,7 +20,9 @@ Before changing this repository:
 
 ## Additional resources
 
+- **Codex Cloud agent** — hosted Codex environment: setup-phase installs (Node 24, deps), offline agent phase, GitHub prerequisites: **[docs/integrations/codex-cloud-agent-environment.md](docs/integrations/codex-cloud-agent-environment.md)**
 - **Cursor cloud agent** — Linux environments with full dev dependencies (separate from production image): **[docs/integrations/cursor-cloud-agent-environment.md](docs/integrations/cursor-cloud-agent-environment.md)**
+- **Claude Code on the web** — network access, setup script, env vars, Postgres/Redis: **[docs/integrations/claude-code-web-environment.md](docs/integrations/claude-code-web-environment.md)**
 - **Agent map** — skills, rules, subagents, MCP: **[docs/integrations/cursor-agent-system.md](docs/integrations/cursor-agent-system.md)**
 
 ## Custom subagents
@@ -34,3 +36,28 @@ Project-defined subagents in [`agent-os/agents/`](agent-os/agents/) run in isola
 
 To add a subagent, use global **create-subagent**
 (see [cursor-global-skills](agent-os/skills/cursor-global-skills/SKILL.md)).
+
+## Custom commands
+
+Reusable slash commands live in [`agent-os/commands/`](agent-os/commands/) (single
+source of truth). Claude Code reads them via `.claude/commands`, Cursor via
+`.cursor/commands`; for Codex, symlink them into `~/.codex/prompts/` (see
+[agent-os/commands/README.md](agent-os/commands/README.md)). Available: `/validate`,
+`/ci-local`, `/new-domain`, `/routes-sync`.
+
+## Guardrails
+
+Executable guardrails enforce the repo's safety rules per platform
+(see [`agent-os/hooks/README.md`](agent-os/hooks/README.md)):
+
+- **Claude Code** — `SessionStart` + `PreToolUse` hooks in [`agent-os/hooks/`](agent-os/hooks/)
+  (wired in `.claude/settings.json`): verify env + install deps on the web; block
+  destructive shell and secret writes; warn on protected paths and cross-domain imports.
+- **Cursor** — `beforeShellExecution` hook (`.cursor/hooks.json`) blocks destructive
+  shell; file-level rules are advisory in [`.cursor/rules/ai-guardrails.mdc`](.cursor/rules/ai-guardrails.mdc).
+- **Codex** — enforce via sandbox + approvals in `~/.codex/config.toml`
+  (`sandbox_mode = "workspace-write"`, `approval_policy = "on-request"`) plus the policy below.
+
+Policy (all agents): never write secrets to source (`.env*` except `.env.example`);
+no `rm -rf` / `git push --force`; treat `migrations/*.sql` and billing ledgers as
+immutable (add-only); cross-domain access goes through services, not repositories/schemas.

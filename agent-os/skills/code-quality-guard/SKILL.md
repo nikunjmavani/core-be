@@ -22,7 +22,7 @@ Layer 3 (CI)      -- Full validation, Semgrep SAST, Gitleaks full-repo, tests
 | `biome.json`                        | 1 + 2 | Biome lint + format rules and per-path overrides                                                                                                                                                              |
 | `.biomeignore`                      | 1 + 2 | Paths Biome skips (e.g. migrations, lockfile)                                                                                                                                                                 |
 | `.vscode/settings.json`             | 1     | Editor format on save, Biome fix on save                                                                                                                                                                      |
-| `.husky/pre-commit`                 | 2     | Pre-commit hook script (subset of CI quality job; fast local sync gate)                                                                                                                                       |
+| `.husky/pre-commit`                 | 2     | Pre-commit hook script (static sync checks + local SonarQube quality gate)                                                                                                                                    |
 | `.husky/pre-push`                   | 2     | Pre-push: typecheck, build, build:check, unit tests                                                                                                                                                           |
 | `.husky/commit-msg`                 | 2     | Validates commit messages with commitlint (conventional commits)                                                                                                                                              |
 | `commitlint.config.cjs`             | 2 + 3 | Commitlint rules (extends `@commitlint/config-conventional`); same config as CI on push to `main`                                                                                                             |
@@ -90,6 +90,7 @@ Pre-commit mirrors a **subset** of the static checks in [`.github/workflows/pr-c
 | 12 | `pnpm tool:sync-env-example` | `.env.example` drift |
 | 13 | `gitleaks protect --staged` | Secrets in staged files (**required** locally) |
 | 14–15 | Conflict markers + large files | Accidental merges / >1MB staged files |
+| 16 | `pnpm sonar:scan` (conditional) | SonarQube quality gate — blocks the commit on any unresolved issue/hotspot; runs when deployed-surface `src/**/*.ts` is staged. **Mandatory — no bypass.** |
 
 ### Pre-push (`.husky/pre-push`)
 
@@ -101,7 +102,8 @@ Pre-commit mirrors a **subset** of the static checks in [`.github/workflows/pr-c
 | 3    | `pnpm build:check` | Unresolved `@/` aliases in `dist/` |
 | 4    | `pnpm test:unit`   | Failing shared unit tests          |
 | 5    | `pnpm docs:lint:changed` | Markdown lint (changed files only) — conditional on pushed markdown file changes |
-| 6    | `pnpm sonar:scan`  | SonarQube gate — conditional on deployed-surface `.ts` changes; bypass: `SKIP_SONAR=1 git push` |
+
+> The SonarQube quality gate runs at **pre-commit** (`pnpm guard:pre-commit`, step 16), not pre-push. It is mandatory and has no bypass.
 
 ### Commit message hook (`.husky/commit-msg`)
 

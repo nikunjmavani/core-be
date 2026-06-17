@@ -8,6 +8,9 @@
  */
 export const AES_GCM_IV_LENGTH = 12;
 
+/** AES-256-GCM cipher identifier passed to Node `crypto.createCipheriv` / `createDecipheriv`. */
+export const AES_GCM_ALGORITHM = 'aes-256-gcm';
+
 /** Failed login attempts before the account is temporarily locked. */
 export const MAX_FAILED_LOGIN_ATTEMPTS = 10;
 
@@ -19,7 +22,7 @@ export const ACCOUNT_LOCKOUT_MINUTES = 30;
  * verification is temporarily locked (audit-#12).
  *
  * @remarks
- * The `/auth/mfa/verify` step-up and `/auth/mfa/login` second factor were gated only by
+ * The `/auth/me/mfa/verify` step-up and `/auth/mfa/login` second factor were gated only by
  * a per-user rate limit with no account-level lockout, unlike the password path. With a
  * stolen-but-valid bearer token an attacker could keep guessing TOTP codes indefinitely.
  * This per-user counter mirrors {@link MAX_FAILED_LOGIN_ATTEMPTS} and locks verification

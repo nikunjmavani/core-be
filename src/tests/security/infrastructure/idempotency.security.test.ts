@@ -23,7 +23,7 @@ function uniqueKey(prefix: string): string {
 }
 
 /**
- * Idempotency key tests — verify the Idempotency-Key header is respected
+ * Idempotency key tests — verify the X-Idempotency-Key header is respected
  * for write operations to prevent duplicate processing.
  */
 describe('Security: Idempotency', () => {
@@ -42,7 +42,7 @@ describe('Security: Idempotency', () => {
     await cleanupDatabase();
   });
 
-  it('should accept requests with Idempotency-Key header', async () => {
+  it('should accept requests with X-Idempotency-Key header', async () => {
     const user = await createTestUser();
     const token = await generateTestToken({ userId: user.public_id });
 
@@ -50,7 +50,7 @@ describe('Security: Idempotency', () => {
       method: 'POST',
       url: testApiPath('/tenancy/organizations'),
       token,
-      headers: { 'idempotency-key': uniqueKey('idem-accept') },
+      headers: { 'x-idempotency-key': uniqueKey('idem-accept') },
       payload: { name: 'Idempotent Org', slug: uniqueSlug('idempotent-org') },
     });
 
@@ -58,7 +58,7 @@ describe('Security: Idempotency', () => {
     expect(response.statusCode).toBeLessThan(500);
   });
 
-  it('should process requests without Idempotency-Key normally', async () => {
+  it('should process requests without X-Idempotency-Key normally', async () => {
     const user = await createTestUser();
     const token = await generateTestToken({ userId: user.public_id });
 
@@ -72,7 +72,7 @@ describe('Security: Idempotency', () => {
     expect(response.statusCode).toBeLessThan(500);
   });
 
-  it('should reject malformed Idempotency-Key', async () => {
+  it('should reject malformed X-Idempotency-Key', async () => {
     const user = await createTestUser();
     const token = await generateTestToken({ userId: user.public_id });
 
@@ -80,7 +80,7 @@ describe('Security: Idempotency', () => {
       method: 'POST',
       url: testApiPath('/tenancy/organizations'),
       token,
-      headers: { 'idempotency-key': 'a'.repeat(500) },
+      headers: { 'x-idempotency-key': 'a'.repeat(500) },
       payload: { name: 'Bad Key Org', slug: uniqueSlug('bad-key-org') },
     });
 
@@ -93,12 +93,34 @@ describe('Security: Idempotency', () => {
       method: 'POST',
       url: testApiPath('/tenancy/organizations'),
       token,
-      headers: { 'idempotency-key': 'bad key' },
+      headers: { 'x-idempotency-key': 'bad key' },
       payload: { name: 'Bad Key Org 2', slug: uniqueSlug('bad-key-org-2') },
     });
 
     expect(spaceKeyResponse.statusCode).toBe(422);
     expect((spaceKeyResponse.json() as { error?: { code?: string } }).error?.code).toBe(
+      'unprocessable_entity',
+    );
+  });
+
+  it('rejects a MISSING X-Idempotency-Key on an idempotency-required write (422)', async () => {
+    // POST /tenancy/organizations is one of the 8 `idempotencyRequired` writes
+    // (organization.routes.ts sets config.idempotencyRequired = true). Omitting the header must
+    // fail closed with 422 — proving the requirement is enforced on a real required route, not
+    // only that malformed keys are rejected. Without this, a regression dropping the flag would
+    // let a duplicate create slip through and no test would catch it.
+    const user = await createTestUser();
+    const token = await generateTestToken({ userId: user.public_id });
+
+    const response = await injectAuthenticated(app, {
+      method: 'POST',
+      url: testApiPath('/tenancy/organizations'),
+      token,
+      payload: { name: 'Requires Key Org', slug: uniqueSlug('requires-key-org') },
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect((response.json() as { error?: { code?: string } }).error?.code).toBe(
       'unprocessable_entity',
     );
   });
@@ -114,7 +136,7 @@ describe('Security: Idempotency', () => {
     const response = await injectUnauthenticated(app, {
       method: 'POST',
       url: testApiPath('/tenancy/organizations'),
-      headers: { 'idempotency-key': key },
+      headers: { 'x-idempotency-key': key },
       payload: { name: 'Unauth Org', slug: uniqueSlug('unauth-org') },
     });
 
@@ -131,7 +153,7 @@ describe('Security: Idempotency', () => {
       method: 'POST',
       url: testApiPath('/tenancy/organizations'),
       token,
-      headers: { 'idempotency-key': uniqueKey('delete-setup') },
+      headers: { 'x-idempotency-key': uniqueKey('delete-setup') },
       payload: { name: 'Delete Idempotent Org', slug },
     });
     if (createRes.statusCode !== 201) throw new Error('Setup: create organization failed');
@@ -142,10 +164,10 @@ describe('Security: Idempotency', () => {
     //
     // NOTE: the org DELETE is NOT in the idempotency-required write set and
     // returns 204 (empty body). The idempotency `onSend` hook currently crashes
-    // on an empty 204 body when an Idempotency-Key header is present (a separate,
+    // on an empty 204 body when an X-Idempotency-Key header is present (a separate,
     // pre-existing shared-middleware defect, flagged out of band). This test
     // asserts the flat route's actual contract — a clean 204 — without sending
-    // an Idempotency-Key so it does not depend on that unrelated bug.
+    // an X-Idempotency-Key so it does not depend on that unrelated bug.
     const tokenScopedToOrg = await generateTestToken({
       userId: user.public_id,
       organizationPublicId: organizationId,
@@ -168,7 +190,7 @@ describe('Security: Idempotency', () => {
       method: 'POST',
       url: testApiPath('/tenancy/organizations'),
       token,
-      headers: { 'idempotency-key': key },
+      headers: { 'x-idempotency-key': key },
       payload: { name: 'Replay Org', slug: uniqueSlug('replay-org') },
     });
 
@@ -182,7 +204,7 @@ describe('Security: Idempotency', () => {
       method: 'POST',
       url: testApiPath('/tenancy/organizations'),
       token,
-      headers: { 'idempotency-key': key },
+      headers: { 'x-idempotency-key': key },
       payload: { name: 'Replay Org Again', slug: uniqueSlug('replay-org-again') },
     });
 
@@ -206,7 +228,7 @@ describe('Security: Idempotency', () => {
         url: testApiPath('/tenancy/organizations'),
         headers: {
           authorization: `Bearer ${token}`,
-          'idempotency-key': key,
+          'x-idempotency-key': key,
         },
         payload: { name: 'Concurrent A', slug: slugA },
       }),
@@ -215,7 +237,7 @@ describe('Security: Idempotency', () => {
         url: testApiPath('/tenancy/organizations'),
         headers: {
           authorization: `Bearer ${token}`,
-          'idempotency-key': key,
+          'x-idempotency-key': key,
         },
         payload: { name: 'Concurrent B', slug: slugB },
       }),

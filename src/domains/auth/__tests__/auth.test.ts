@@ -630,7 +630,7 @@ describe('Auth Domain — Integration', () => {
       // Fresh login / token must NOT carry a step-up window: a gated mutation is rejected.
       const beforeStepUp = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/mfa/enroll'),
+        url: testApiPath('/auth/me/mfa/enroll'),
         token,
         payload: { method_type: 'MFA_TOTP' },
       });
@@ -647,7 +647,7 @@ describe('Auth Domain — Integration', () => {
       // After an explicit step-up the same gated route is reachable.
       const afterStepUp = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/mfa/enroll'),
+        url: testApiPath('/auth/me/mfa/enroll'),
         token,
         payload: { method_type: 'MFA_TOTP' },
       });
@@ -806,20 +806,20 @@ describe('Auth Domain — Integration', () => {
     });
   });
 
-  describe('POST /api/v1/auth/mfa/enroll', () => {
+  describe('POST /api/v1/auth/me/mfa/enroll', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/mfa/enroll'),
+        url: testApiPath('/auth/me/mfa/enroll'),
         payload: {},
       });
       expect(response.statusCode).toBe(401);
     });
   });
 
-  describe('GET /api/v1/auth/mfa', () => {
+  describe('GET /api/v1/auth/me/mfa', () => {
     it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, { url: testApiPath('/auth/mfa') });
+      const response = await injectUnauthenticated(app, { url: testApiPath('/auth/me/mfa') });
       expect(response.statusCode).toBe(401);
     });
 
@@ -827,29 +827,29 @@ describe('Auth Domain — Integration', () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
-        url: testApiPath('/auth/mfa'),
+        url: testApiPath('/auth/me/mfa'),
         token,
       });
       expect(response.statusCode).toBe(200);
     });
   });
 
-  describe('POST /api/v1/auth/mfa/verify', () => {
+  describe('POST /api/v1/auth/me/mfa/verify', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/mfa/verify'),
+        url: testApiPath('/auth/me/mfa/verify'),
         payload: {},
       });
       expect(response.statusCode).toBe(401);
     });
   });
 
-  describe('DELETE /api/v1/auth/mfa/:mfa_method_id', () => {
+  describe('DELETE /api/v1/auth/me/mfa/:mfa_method_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'DELETE',
-        url: testApiPath('/auth/mfa/test-id'),
+        url: testApiPath('/auth/me/mfa/test-id'),
       });
       expect(response.statusCode).toBe(401);
     });

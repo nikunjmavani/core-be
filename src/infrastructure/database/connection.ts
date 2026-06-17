@@ -8,7 +8,12 @@ import {
   parseSslMode,
 } from '@/infrastructure/database/utils/connection-url.util.js';
 
-import { DEFAULT_DATABASE_POOL_MAX } from '@/infrastructure/database/pool/pool.constants.js';
+import {
+  DEFAULT_DATABASE_POOL_CONNECT_TIMEOUT_SECONDS,
+  DEFAULT_DATABASE_POOL_IDLE_TIMEOUT_SECONDS,
+  DEFAULT_DATABASE_POOL_MAX,
+  DEFAULT_DATABASE_POOL_MAX_LIFETIME_SECONDS,
+} from '@/infrastructure/database/pool/pool.constants.js';
 
 export { isNeonPoolerConnection };
 export { DEFAULT_DATABASE_POOL_MAX };
@@ -49,9 +54,12 @@ export function buildPostgresOptions(databaseUrl: string) {
 
   return {
     max: env.DATABASE_POOL_MAX,
-    idle_timeout: env.DATABASE_POOL_IDLE_TIMEOUT_SECONDS ?? 30,
-    connect_timeout: env.DATABASE_POOL_CONNECT_TIMEOUT_SECONDS ?? 10,
-    max_lifetime: env.DATABASE_POOL_MAX_LIFETIME_SECONDS ?? 1800,
+    idle_timeout:
+      env.DATABASE_POOL_IDLE_TIMEOUT_SECONDS ?? DEFAULT_DATABASE_POOL_IDLE_TIMEOUT_SECONDS,
+    connect_timeout:
+      env.DATABASE_POOL_CONNECT_TIMEOUT_SECONDS ?? DEFAULT_DATABASE_POOL_CONNECT_TIMEOUT_SECONDS,
+    max_lifetime:
+      env.DATABASE_POOL_MAX_LIFETIME_SECONDS ?? DEFAULT_DATABASE_POOL_MAX_LIFETIME_SECONDS,
     ssl,
     connection: connectionParameters,
     ...(isNeonPoolerConnection(databaseUrl) ? { prepare: false as const } : {}),

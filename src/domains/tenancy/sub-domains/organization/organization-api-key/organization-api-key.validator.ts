@@ -1,6 +1,5 @@
-import { z } from 'zod';
-import { ValidationError } from '@/shared/errors/index.js';
-import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
+import { parseWithSchema } from '@/shared/utils/validation/parse-with-schema.util.js';
+import { parseCursorPaginatedQuery } from '@/shared/utils/http/pagination.util.js';
 import {
   createOrganizationApiKeyDto,
   updateOrganizationApiKeyDto,
@@ -12,28 +11,12 @@ import {
 
 /** Parses raw `POST /organization/api-keys` body via {@link createOrganizationApiKeyDto}; throws `ValidationError('errors:invalidInput')` on failure. */
 export function validateCreateOrganizationApiKey(data: unknown): CreateOrganizationApiKeyInput {
-  const result = createOrganizationApiKeyDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(createOrganizationApiKeyDto, data);
 }
 
 /** Parses raw `PATCH /organization/api-keys/:api_key_id` body via {@link updateOrganizationApiKeyDto}; throws `ValidationError('errors:invalidInput')` on failure. */
 export function validateUpdateOrganizationApiKey(data: unknown): UpdateOrganizationApiKeyInput {
-  const result = updateOrganizationApiKeyDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseWithSchema(updateOrganizationApiKeyDto, data);
 }
 
 /**
@@ -45,14 +28,9 @@ export function validateUpdateOrganizationApiKey(data: unknown): UpdateOrganizat
 export function validateListOrganizationApiKeysQuery(
   data: unknown,
 ): ListOrganizationApiKeysQueryInput {
-  ensureCursorOnlyPagination(data);
-  const result = listOrganizationApiKeysQueryDto.safeParse(data);
-  if (!result.success) {
-    throw new ValidationError(
-      'errors:validation.invalidPagination',
-      undefined,
-      z.flattenError(result.error).fieldErrors,
-    );
-  }
-  return result.data;
+  return parseCursorPaginatedQuery(
+    listOrganizationApiKeysQueryDto,
+    data,
+    'errors:validation.invalidPagination',
+  );
 }

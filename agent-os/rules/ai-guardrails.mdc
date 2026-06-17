@@ -1,0 +1,35 @@
+---
+description: core-be guardrails (advisory) — protected paths, secrets, cross-domain imports, env
+alwaysApply: true
+---
+
+# core-be guardrails (advisory)
+
+These complement the executable hooks (Claude `PreToolUse`, Cursor
+`beforeShellExecution`). Cursor cannot block file writes, so treat the
+file-level rules below as hard policy.
+
+## Never
+- **Secrets** — never write real secrets to source. `.env*` files (except
+  `.env.example`) are gitignored; put template keys in `.env.example` and real
+  values in the environment. Never paste private keys, `sk_live_…`, AWS `AKIA…`,
+  GitHub `ghp_…`, or Slack `xox…` tokens into tracked files.
+- **Destructive shell** — no `rm -rf`, no `git push --force` (use
+  `--force-with-lease`), avoid `git reset --hard` / `git clean -f` on work you
+  did not create; never `mkfs` or `dd if=`.
+
+## Confirm first (protected paths)
+- **Migrations** (`migrations/*.sql`) — applied migrations are immutable; add a
+  NEW migration instead of editing one. Run `pnpm db:migrate:lint`.
+- **Billing ledgers** (`src/domains/billing/**` ledger/invoice/charge) —
+  append-only; changes must be additive.
+
+## Architecture
+- **Cross-domain imports** — a `*.service.ts` must reach other domains through
+  their **service**, never their `*.repository` or `*.schema` (see CLAUDE.md
+  dependency rules).
+
+## Environment
+- Repo needs **Node >= 24** (`.nvmrc` 24.13.0) and **pnpm >= 11.1.1**. If
+  `pnpm install` fails with an engines error, switch Node first. Gates:
+  `pnpm validate`, `pnpm ci:local`.

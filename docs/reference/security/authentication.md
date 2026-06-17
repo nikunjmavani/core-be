@@ -64,8 +64,8 @@ Passkeys use `@simplewebauthn/server` with challenges stored in Redis (`webauthn
 
 | Route                                             | Auth   | Purpose                                                 |
 | ------------------------------------------------- | ------ | ------------------------------------------------------- |
-| `POST /api/v1/auth/webauthn/register/options`     | JWT    | Begin enrolment (returns `options` + `challenge_token`) |
-| `POST /api/v1/auth/webauthn/register/verify`      | JWT    | Complete enrolment; persists public key                 |
+| `POST /api/v1/auth/me/webauthn/register/options`     | JWT    | Begin enrolment (returns `options` + `challenge_token`) |
+| `POST /api/v1/auth/me/webauthn/register/verify`      | JWT    | Complete enrolment; persists public key                 |
 | `POST /api/v1/auth/webauthn/authenticate/options` | Public | Begin sign-in (`email` required)                        |
 | `POST /api/v1/auth/webauthn/authenticate/verify`  | Public | Complete sign-in; issues JWT + session cookie           |
 

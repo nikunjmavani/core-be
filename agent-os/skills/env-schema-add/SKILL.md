@@ -5,12 +5,15 @@ description: Walk through adding, renaming, or removing an env var safely. Decid
 
 # Env schema add (core-be)
 
-Use this skill whenever you **add, rename, or remove** an environment variable. The
-file structure of `.env.example` is the **single source of truth** for whether each
-key is a GitHub Secret (credential) or a GitHub Variable (plaintext config) — there
-is no classifier function, no override list, and no CI guard to keep in sync. Get
-the section right and the rest of the toolchain (github:sync, deploy) just
-works.
+Use this skill whenever you **add, rename, or remove** an environment variable.
+Adding a key is **two aligned decisions**: its **classification** (GitHub Secret vs
+Variable) and — wherever a workflow consumes it — its **access context**
+(`secrets.NAME` vs `vars.NAME`). `pnpm github:sync` classifies each key by **name**
+via `classifyKey()` (`tooling/setup/github/sync-github-environments.ts`); the
+`.env.example` half is the human-readable mirror of that decision, so keep the half
+you place a key under in agreement with what `classifyKey` will do. Get the
+classification right **and** read it from the matching context in every workflow,
+and the rest of the toolchain (github:sync, deploy, Actions) just works.
 
 ## The two-half rule
 
@@ -37,7 +40,9 @@ related keys for readability. Hosted environments are listed in
 `tooling/setup/setup.config.json` (canonical); `pnpm tool:generate-project-identity`
 regenerates project identity constants and the CI composite action. `pnpm github:sync`
 reads `setup.config.json` directly and creates missing `.env.<environment>` files.
-The structure IS the classification.
+The half you choose must agree with `classifyKey()` (name-based): `pnpm github:sync`
+parses `.env.<environment>` flat and classifies each key by name, so the section is
+the **human-readable mirror** of that rule — not an independent override.
 
 ## Decision tree — Secret or Variable
 
@@ -65,6 +70,34 @@ Apply in order; the first rule that matches wins.
 5. **Still unsure?** Default to **Secret** — wrong-direction Secret-vs-Variable is
    the bigger risk (Variables are plaintext and world-readable inside the repo's
    GitHub Actions context, so a credential leaked there is a real breach).
+
+## Accessing the var — runtime vs GitHub Actions
+
+A key is read differently depending on where it is consumed. **Decide the
+classification first, then read it from the matching context.**
+
+- **App / worker runtime** (Node): `getEnv().NAME` — Zod-validated from
+  `process.env` by `src/shared/config/env-schema.ts`.
+- **GitHub Actions** (`.github/workflows/**`): the access context **must match the
+  classification** —
+  - **Secret** → `${{ secrets.NAME }}`
+  - **Variable** → `${{ vars.NAME }}`
+
+A mismatch fails **silently**: reading a Variable through `secrets.NAME` (or a Secret
+through `vars.NAME`) returns an **empty string**, not an error. The step runs with
+`NAME=""` and whatever consumes it (an upload, an API call) quietly misbehaves. This
+is exactly what hid `SCALAR_NAMESPACE` — a Variable that the workflow read via
+`secrets.SCALAR_NAMESPACE` — and silently skipped the Scalar Registry publish.
+
+Rule of thumb: if `classifyKey()` calls it a Secret, read `secrets.NAME`; otherwise
+read `vars.NAME`. Whenever you add a key or change its classification, **grep
+`.github/workflows/` for the name** and confirm every reference uses the matching
+context.
+
+Related Actions gotcha: a step's own `env:` block is **not** available to that same
+step's `if:` condition. Never gate a step on `env.NAME` defined in that step's `env:`
+— gate on `inputs.*` / `vars.*` / job-level env, or let the consuming script
+self-skip when the value is absent.
 
 ## Workflow when adding a new env var
 
@@ -160,6 +193,9 @@ A rename is a delete + add, atomic in the same PR:
       (`GitHub Secrets` vs `GitHub Variables`) and the correct **sub-section**.
 - [ ] Description comment above the key explains what it controls and what
       a sensible value looks like.
+- [ ] Every workflow that consumes the key reads it from the matching context
+      (`secrets.NAME` for a Secret, `vars.NAME` for a Variable) — `grep` the name
+      under `.github/workflows/`.
 - [ ] `pnpm tool:sync-env-example` exits 0 (and reports both halves present).
 - [ ] `tooling/setup/setup.config.json` lists every hosted environment; `pnpm tool:generate-project-identity:check` passes (new hosted env: update `NODE_ENV`, manifest, regenerate, then `pnpm github:sync`).
 - [ ] Local `.env.<environment>` files were updated manually without discarding real values.

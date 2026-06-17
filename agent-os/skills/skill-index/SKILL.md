@@ -256,6 +256,7 @@ These attach when matching files are open or edited — detail lives in each rul
 | `object-params.mdc` | `src/**/*.ts` | Options objects for 2+ params (repos exempt) |
 | `no-placeholder-files.mdc` | domain DTOs, validators, serializers | No empty placeholder files |
 | `context7-backend.mdc` | `src/**/*.ts` | Context7 for backend library docs |
+| `headroom-context-compression.mdc` | always on | Headroom MCP — compress large tool output / logs / files before loading into context |
 | `seed-conventions.mdc` | `src/domains/**`, `src/scripts/seed/**` | `seed/` dir layout + `SeedContribution` / `DomainSeedModule` contract |
 
 ## Enforcement layers (no duplicate work)

@@ -248,6 +248,22 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
         '8. Save the file',
       ],
     },
+    {
+      providerName: 'Scalar',
+      enabledCheck: (configuration) => configuration.providers.scalar.enabled,
+      secretsCheck: (secrets) =>
+        isSecretFilled(secrets.scalar?.apiKey) && isSecretFilled(secrets.scalar?.namespace),
+      browserUrls: ['https://dashboard.scalar.com'],
+      instructions: [
+        '1. Log in to Scalar (or sign up at scalar.com)',
+        '2. Go to Settings → API keys and create a key',
+        `3. Name it: ${config.project.name}`,
+        '4. Copy the key and note your team namespace',
+        `5. In ${secretsPath} set: SCALAR_API_KEY=... SCALAR_NAMESPACE=... (optional SCALAR_SLUG=...)`,
+        '',
+        '6. Save the file',
+      ],
+    },
   ];
 
   return steps;

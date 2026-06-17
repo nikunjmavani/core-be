@@ -3,6 +3,7 @@ import { recordOutboxEmail } from '@/infrastructure/mail/queues/mail.queue.js';
 import { invitationTemplate } from '@/infrastructure/mail/templates/invitation.template.js';
 import { isMailConfigured } from '@/infrastructure/mail/mail.service.js';
 import { env } from '@/shared/config/env.config.js';
+import { DEFAULT_FRONTEND_URL } from '@/shared/constants/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import {
   MEMBER_INVITATION_EVENT,
@@ -18,7 +19,7 @@ async function handleMemberInvitationEmail(
     return;
   }
 
-  const frontendUrl = env.FRONTEND_URL ?? 'http://localhost:3000';
+  const frontendUrl = env.FRONTEND_URL ?? DEFAULT_FRONTEND_URL;
   const acceptUrl = `${frontendUrl}/invitations/${payload.invitation_public_id}/accept?token=${payload.token}`;
 
   const html = invitationTemplate({

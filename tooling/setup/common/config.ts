@@ -100,6 +100,7 @@ export const setupConfigSchema = z.object({
       repository: z.string().regex(/^[^/]+\/[^/]+$/),
     }),
     postman: z.object({ enabled: z.boolean() }),
+    scalar: z.object({ enabled: z.boolean() }),
   }),
   app: z.object({
     port: z.number().int().default(3000),

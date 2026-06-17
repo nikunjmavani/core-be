@@ -127,6 +127,14 @@ export const setupStateSchema = z.object({
       collectionId: z.string().optional(),
     })
     .optional(),
+  scalar: z
+    .object({
+      namespace: z.string().optional(),
+      slug: z.string().optional(),
+      version: z.string().optional(),
+      registryUrl: z.string().optional(),
+    })
+    .optional(),
 });
 
 const STATE_PATH = resolve(import.meta.dirname, '../../../.setup-state.json');

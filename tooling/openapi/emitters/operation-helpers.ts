@@ -61,7 +61,6 @@ const PUBLIC_ROUTE_KEYS = new Set<string>([
   'GET /api/v1/auth/oauth/{provider}/callback',
   'GET /api/v1/auth/oauth/providers',
   'POST /api/v1/billing/webhook',
-  'POST /api/v1/billing/stripe/webhook',
 ]);
 
 export function getRouteSecurity(tags: string[], routeKey: string): object[] | undefined {

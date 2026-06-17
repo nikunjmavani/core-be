@@ -1,8 +1,8 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { getEnv } from '@/shared/config/env.config.js';
-import { AES_GCM_IV_LENGTH } from '@/shared/constants/security.constants.js';
+import { AES_GCM_ALGORITHM, AES_GCM_IV_LENGTH } from '@/shared/constants/security.constants.js';
 
-const ALGORITHM = 'aes-256-gcm';
+const ALGORITHM = AES_GCM_ALGORITHM;
 const AUTH_TAG_LENGTH = 16;
 
 /** Supported field-secret key versions, newest last. The stored prefix is `<version>:`. */

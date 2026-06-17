@@ -6,6 +6,13 @@ import { connectRedis, redisConnection } from '@/infrastructure/cache/redis.clie
 const TEST_REDIS_PREFIXES = ['perm:', 'idempotency:', 'oauth:state:', 'session:tok:'] as const;
 
 /**
+ * Environments where flushing test-scoped Redis keys is acceptable: the ephemeral `test`
+ * database and a developer's `local` Docker Compose stack. The chaos suite runs with
+ * `NODE_ENV=local` (`.env.local` is layered as an override), so `local` must be permitted.
+ */
+const REDIS_WIPE_ALLOWED_ENVIRONMENTS = new Set(['test', 'local']);
+
+/**
  * `@fastify/rate-limit` stores counters under `<keyPrefix>fastify-rate-limit-<key>`. Every
  * test injects from the same socket, so the global limiter and the per-route presets all key on
  * IP `127.0.0.1`; on a fast machine a single 60s window accumulates enough requests across cases
@@ -42,8 +49,8 @@ async function clearRateLimitCounters(): Promise<void> {
  * do not leak across Vitest cases in the same worker process.
  */
 export async function cleanupTestRedis(): Promise<void> {
-  if (process.env.NODE_ENV !== 'test') {
-    throw new Error('cleanupTestRedis can only be called in test environment');
+  if (!REDIS_WIPE_ALLOWED_ENVIRONMENTS.has(process.env.NODE_ENV ?? '')) {
+    throw new Error('cleanupTestRedis can only be called in the test or local environment');
   }
 
   try {

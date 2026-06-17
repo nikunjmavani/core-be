@@ -7,6 +7,7 @@ import { resolveDefaultActiveOrganizationPublicId } from '@/domains/tenancy/sub-
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
+import { MILLISECONDS_PER_DAY } from '@/shared/constants/ttl.constants.js';
 
 /** User fields required to decide MFA policy and mint a session after first-factor success. */
 export interface FirstFactorAuthUser {
@@ -61,7 +62,7 @@ export async function completeFirstFactorAuth(options: {
 
   const tokenHash = createHash('sha256').update(jsonWebToken).digest('hex');
   const sessionMaxAgeDays = env.AUTH_SESSION_MAX_AGE_DAYS;
-  const expiresAt = new Date(Date.now() + sessionMaxAgeDays * 86_400_000);
+  const expiresAt = new Date(Date.now() + sessionMaxAgeDays * MILLISECONDS_PER_DAY);
 
   const session = await options.authSessionService.createSessionForUser(
     options.user.public_id,

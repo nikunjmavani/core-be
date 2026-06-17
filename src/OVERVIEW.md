@@ -86,7 +86,7 @@ These patterns are implemented identically across the codebase. See [src/PATTERN
 
 - **`tenant-isolation`** — every read/write under an organization scope is filtered by `organization_id`, with Postgres RLS as defense-in-depth.
 - **`audit-emission`** — security- and governance-relevant writes produce a row in `audit_logs.audit_log`; failures never fail the originating request.
-- **`idempotency`** — mutating endpoints accept (and some require) an `Idempotency-Key` header backed by a 24 h Redis cache.
+- **`idempotency`** — mutating endpoints accept (and some require) an `X-Idempotency-Key` header backed by a 24 h Redis cache.
 - **`soft-delete`** — most user/org-owned tables tombstone with `deleted_at`; immutable ledgers (audit, billing) hard-delete only after retention windows.
 - **`rls-context`** — workers and request handlers wrap DB I/O in context helpers that `SET LOCAL app.current_organization_id`. Workers must not import request-scoped DB context.
 - **`transactional-outbox`** — outbound side effects (mail, webhook delivery) are written to an outbox table inside the originating transaction and dispatched by a separate worker with at-least-once semantics.

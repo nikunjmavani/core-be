@@ -6,13 +6,16 @@ import {
   DOMAINS_ROOT,
   METHOD_ORDER,
   ROUTE_METHOD_PATTERN,
+  ROUTE_ORG_SCOPE_PATH,
   ROUTE_PATH_PATTERN,
+  ROUTE_SUCCESS_STATUS_PATH,
   ROUTES_TS_PATH,
   SUPPLEMENTAL_ROUTES,
 } from './constants.js';
 import { listDomainRouteFiles } from './file-collectors.js';
+import { classifyDeprecated, classifyIdempotency } from './idempotency-classifier.js';
 import { loadDomainPrefixMap, loadPermissionConstantMap } from './prefix-map.js';
-import type { ParsedRoute, RegistryAccess, RouteAccess } from './types.js';
+import type { OrgScope, ParsedRoute, RegistryAccess, RouteAccess } from './types.js';
 
 export function inferSubDomain(relativePath: string): string | undefined {
   const parts = relativePath.split('/');
@@ -91,6 +94,8 @@ function parseRouteFile(
         domain: inferDomainSlug(domainFolder, fullPath),
         subDomain,
         subDomainLabel,
+        idempotencyRequired: classifyIdempotency(snippet) || undefined,
+        deprecated: classifyDeprecated(snippet) || undefined,
       }),
     );
   }
@@ -116,11 +121,29 @@ export function collectAllParsedRoutes(): ParsedRoute[] {
   const permissionMap = loadPermissionConstantMap();
   const routesTsContent = readFileSync(ROUTES_TS_PATH, 'utf-8');
   const prefixByDomainFolder = loadDomainPrefixMap(routesTsContent);
+  const successStatusMap = JSON.parse(readFileSync(ROUTE_SUCCESS_STATUS_PATH, 'utf-8')) as Record<
+    string,
+    number
+  >;
+  const orgScopeMap = JSON.parse(readFileSync(ROUTE_ORG_SCOPE_PATH, 'utf-8')) as Record<
+    string,
+    OrgScope
+  >;
 
-  const allRoutes: ParsedRoute[] = [...SUPPLEMENTAL_ROUTES];
+  const rawRoutes: ParsedRoute[] = [...SUPPLEMENTAL_ROUTES];
   for (const filePath of listDomainRouteFiles()) {
-    allRoutes.push(...parseRouteFile(filePath, permissionMap, prefixByDomainFolder));
+    rawRoutes.push(...parseRouteFile(filePath, permissionMap, prefixByDomainFolder));
   }
 
-  return sortParsedRoutes(allRoutes);
+  const enriched = rawRoutes.map((route): ParsedRoute => {
+    const key = `${route.method} ${route.fullPath}`;
+    const copy: ParsedRoute = { ...route };
+    const status = successStatusMap[key];
+    if (status !== undefined) copy.successStatus = status;
+    const scope = orgScopeMap[key];
+    if (scope !== undefined) copy.orgScope = scope;
+    return copy;
+  });
+
+  return sortParsedRoutes(enriched);
 }

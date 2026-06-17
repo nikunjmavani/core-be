@@ -91,6 +91,7 @@ Configure once — all platforms read the same file.
 | **codegraph** | Local semantic index — see [codegraph.md](codegraph.md) |
 | **context7** | Version-specific backend library docs |
 | **core-be:api** | Local Fastify MCP at `/api/v1/mcp` |
+| **headroom** | Context compression — compress large tool output / logs / files before loading into context |
 | **neon**, **sentry**, **github**, **slack**, **railway**, **aws**, **stripe** | Optional hosted integrations |
 
 CodeGraph is provisioned in `pnpm setup:local` (phase 7/9).

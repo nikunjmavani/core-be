@@ -26,6 +26,7 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { WEBHOOK_ORGANIZATION_FANOUT_CONCURRENCY } from '@/domains/notify/sub-domains/webhook/webhook-delivery/webhook-delivery.constants.js';
 import { PAGINATION } from '@/shared/constants/pagination.constants.js';
+import { MILLISECONDS_PER_HOUR } from '@/shared/constants/ttl.constants.js';
 import { env } from '@/shared/config/env.config.js';
 
 /** Maximum response body length returned to client (prevents leaking sensitive data from target) */
@@ -200,7 +201,7 @@ export class WebhookService {
       const organization =
         await this.organizationService.requireOrganizationByPublicId(organization_public_id);
 
-      const overlapWindowMs = env.WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS * 60 * 60 * 1000;
+      const overlapWindowMs = env.WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS * MILLISECONDS_PER_HOUR;
       const rotatingSecret = parsed.secret !== undefined;
       if (rotatingSecret) {
         await this.assertSecretRotationEligible(

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyServerOptions } from 'fastify';
 import type { IncomingMessage } from 'node:http';
 import { env } from '@/shared/config/env.config.js';
-import { THIRTY_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
+import { TEN_SECONDS_MS, THIRTY_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
 import { redactSensitive } from '@/shared/utils/security/sensitive-redaction.util.js';
 
 /**
@@ -50,6 +50,9 @@ export function resolveTrustProxy(): boolean | number {
  * comfortably covers a canonical UUID (36 chars) plus common tracing token formats.
  */
 const MAX_INBOUND_REQUEST_IDENTIFIER_LENGTH = 128;
+
+/** Maximum inbound request body size (bytes) accepted by Fastify (1 MiB). */
+const DEFAULT_BODY_LIMIT_BYTES = 1_048_576;
 
 /**
  * Strict allow-list for inbound `x-request-id` values: a non-empty token of safe correlation-id
@@ -136,8 +139,8 @@ export function buildFastifyServerOptions(): FastifyServerOptions {
     },
     trustProxy: resolveTrustProxy(),
     genReqId: (request) => resolveIncomingRequestIdentifier(request),
-    bodyLimit: 1_048_576,
+    bodyLimit: DEFAULT_BODY_LIMIT_BYTES,
     requestTimeout: env.FASTIFY_REQUEST_TIMEOUT_MS ?? THIRTY_SECONDS_MS,
-    connectionTimeout: env.FASTIFY_CONNECTION_TIMEOUT_MS ?? 10_000,
+    connectionTimeout: env.FASTIFY_CONNECTION_TIMEOUT_MS ?? TEN_SECONDS_MS,
   };
 }

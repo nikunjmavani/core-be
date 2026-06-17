@@ -42,6 +42,7 @@ The hook in `.husky/pre-commit` delegates to **`pnpm guard:pre-commit`** (labele
 | 13 | `gitleaks protect --staged` | Secrets in staged files (**required** — install gitleaks or run `pnpm setup:infra`). |
 | 14 | Conflict markers | Resolve `<<<<<<<` / `>>>>>>>` in staged files. |
 | 15 | Large files (>1MB) | Unstage or use LFS. |
+| 16 | When deployed-surface `src/**/*.ts` staged: `pnpm sonar:scan` | SonarQube quality gate — blocks the commit on any unresolved issue/hotspot. **Mandatory — no bypass.** Run `pnpm sonar:up && pnpm sonar:scan` locally and fix every finding (or mark a genuine false positive resolved in the SonarQube UI at <http://localhost:9000>). |
 
 ## Pre-push hook (`.husky/pre-push`)
 
@@ -54,13 +55,10 @@ Runs before `git push` (fast compile gate; full suite is CI):
 | 3    | `pnpm build:check` | Fix unresolved `@/` path aliases in `dist/`.    |
 | 4    | `pnpm test:unit`   | Fix failing unit tests under `src/tests/unit/`. |
 | 5    | Markdown lint: `pnpm docs:lint:changed` (conditional) | runs when pushed commits include `*.md` changes |
-| 6    | SonarQube gate: `pnpm sonar:scan` (conditional) | runs when pushed commits touch deployed-surface `.ts` files; bypass with `SKIP_SONAR=1 git push` |
+
+> The SonarQube quality gate runs at **pre-commit** (step 16 above), not pre-push. It is mandatory and has no bypass.
 
 Full PR gate: `pnpm ci:local` or wait for CI (`quality` + `test` + `api-smoke` + …).
-
-### Pre-push fix hints
-
-- **SonarQube**: Run `pnpm sonar:up && pnpm sonar:scan` locally to check. Bypass non-blocking issues with `SKIP_SONAR=1 git push`.
 
 ## Commit message hook (after pre-commit)
 
@@ -82,6 +80,7 @@ pnpm docs:lint:fix             # auto-fix the markdown nits markdownlint can rep
 pnpm db:migrate:lint           # when editing migrations/*.sql (CI always runs full migrations/)
 pnpm tool:generate-project-identity:check  # manifest ↔ constants ↔ workflows
 pnpm tool:sync-env-example     # .env.example vs env schema
+pnpm sonar:up && pnpm sonar:scan  # SonarQube gate (hook step 16; when deployed-surface src/**/*.ts staged) — mandatory, no bypass
 pnpm deps:audit                # optional; CI runs this (may have known moderate in dev deps)
 ```
 

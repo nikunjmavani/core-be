@@ -44,7 +44,7 @@ describe('Integration: idempotency in-flight returns 409', () => {
       method: 'POST',
       url: requestUrl,
       headers: {
-        'Idempotency-Key': idempotencyKey,
+        'X-Idempotency-Key': idempotencyKey,
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
@@ -74,7 +74,7 @@ describe('Integration: idempotency in-flight returns 409', () => {
       method: 'POST',
       url: requestUrl,
       headers: {
-        'Idempotency-Key': idempotencyKey,
+        'X-Idempotency-Key': idempotencyKey,
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },

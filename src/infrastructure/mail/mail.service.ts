@@ -7,6 +7,11 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { isTransientNetworkError } from '@/infrastructure/resilience/retry-with-backoff.util.js';
 
+/** Resend send retry attempts for transient network failures. */
+const MAIL_SEND_RETRY_MAX_ATTEMPTS = 3;
+/** Base delay (ms) for the Resend send retry backoff. */
+const MAIL_SEND_RETRY_BASE_DELAY_MS = 500;
+
 let resendClient: Resend | null = null;
 
 /** Resend typings omit `signal`, but options are spread into `fetch` (see resend-node post()). */
@@ -135,8 +140,8 @@ export async function sendEmail(options: SendEmailOptions): Promise<string> {
         requestId: options.requestId,
         rethrowIf: (error) => error instanceof ResendApiError,
         retry: {
-          maxAttempts: 3,
-          baseDelayMs: 500,
+          maxAttempts: MAIL_SEND_RETRY_MAX_ATTEMPTS,
+          baseDelayMs: MAIL_SEND_RETRY_BASE_DELAY_MS,
           shouldRetry: (error) =>
             !(error instanceof ResendApiError || error instanceof CircuitBreakerOpenError) &&
             isTransientNetworkError(error),

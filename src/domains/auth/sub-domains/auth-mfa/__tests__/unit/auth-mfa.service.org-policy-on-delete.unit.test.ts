@@ -16,7 +16,7 @@ import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/
 
 /**
  * Regression for sec-A4 (High): when an organization the user belongs to requires MFA via
- * its `organization_settings.require_mfa` policy, `DELETE /auth/mfa/:id` must NOT allow
+ * its `organization_settings.require_mfa` policy, `DELETE /auth/me/mfa/:id` must NOT allow
  * the user to remove their last MFA method — that would silently downgrade them to
  * password-only authentication in direct contradiction of org policy. Removing any
  * non-last MFA method (i.e. another factor remains) is still allowed; this guard fires

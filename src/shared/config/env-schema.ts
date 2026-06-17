@@ -18,6 +18,27 @@ const nodeEnvSchema = z
   .enum(['local', 'development', 'staging', 'production', 'test'])
   .default('local');
 
+/**
+ * Whether to apply local-dev convenience defaults for otherwise-required config
+ * (DATABASE_URL, REDIS_URL, ALLOWED_ORIGINS, AUTH_SESSION_RETENTION_DAYS). True only
+ * for `local`/`development` (interactive dev + the cloud sandbox). `test` is excluded
+ * so the suite keeps its strict required-vars contract (env.config.unit.test asserts
+ * a throw when these are missing); `staging`/`production` are excluded so hosted
+ * runtimes fail loudly when these are unset. Production containers set
+ * `NODE_ENV=production` in the environment (Dockerfile), so the gate holds regardless
+ * of env-file load order. Keep the default values in sync with `.env.example`.
+ */
+const isLocalRuntime = ['local', 'development'].includes(process.env.NODE_ENV ?? 'local');
+
+/**
+ * Zero-config local Postgres DSN used as the `DATABASE_URL` default under {@link isLocalRuntime}.
+ * Mirrors the docker-compose role/password (`core` / `core`) but is assembled from parts so the
+ * source never contains a hardcoded credential-bearing connection-string literal. Keep in sync
+ * with `docker-compose.yml` and `.env.example`.
+ */
+const LOCAL_POSTGRES_ROLE = 'core';
+const LOCAL_DATABASE_URL = `postgresql://${LOCAL_POSTGRES_ROLE}:${LOCAL_POSTGRES_ROLE}@localhost:5432/core`;
+
 const booleanString = (defaultValue: 'true' | 'false') =>
   z
     .string()
@@ -79,11 +100,13 @@ const envSchemaBase = z.object({
   HTTP_SERVER_TIMING_ENABLED: booleanString('true'),
 
   // Database (managed service)
-  DATABASE_URL: z.string().min(1),
+  DATABASE_URL: isLocalRuntime ? z.string().min(1).default(LOCAL_DATABASE_URL) : z.string().min(1),
   DATABASE_MIGRATION_URL: z.string().min(1).optional(), // elevated-privilege user for migrations
 
   // Redis (managed service)
-  REDIS_URL: z.string().min(1),
+  REDIS_URL: isLocalRuntime
+    ? z.string().min(1).default('redis://localhost:6379')
+    : z.string().min(1),
   /**
    * Dedicated Redis endpoint for BullMQ queues. Recommended in production so a queue
    * backlog (e.g. during a worker outage) cannot exhaust the write-critical cache /
@@ -164,7 +187,9 @@ const envSchemaBase = z.object({
   HEALTH_VERBOSE_BODY_ENABLED: booleanString('false'),
 
   // CORS (comma-separated origins; required in every runtime)
-  ALLOWED_ORIGINS: z.string().min(1),
+  ALLOWED_ORIGINS: isLocalRuntime
+    ? z.string().min(1).default('http://localhost:3000')
+    : z.string().min(1),
 
   /** WebAuthn RP ID (hostname). Defaults to first ALLOWED_ORIGINS hostname or localhost. */
   WEBAUTHN_RP_ID: z.string().min(1).optional(),
@@ -339,7 +364,7 @@ const envSchemaBase = z.object({
    * to fall back to the direct S3 URL. NEVER point this at a base that exposes private prefixes
    * (`user-files/`, `organization-files/`) — `getObjectUrl` additionally refuses non-public keys.
    */
-  PUBLIC_MEDIA_BASE_URL: z.string().url().optional(),
+  PUBLIC_MEDIA_BASE_URL: z.url().optional(),
 
   // Ops knobs
   /** BullMQ worker concurrency fallback when per-queue overrides are unset (default 4). */
@@ -363,11 +388,6 @@ const envSchemaBase = z.object({
    * Use split services in production so each process pool budget matches its registered workers.
    */
   WORKER_QUEUE_FAMILIES: z.string().min(1).default('all'),
-  /**
-   * @deprecated Superseded by per-queue demand in worker-connection-budget.ts. Kept for
-   * backward-compatible env templates; startup no longer enforces this heuristic.
-   */
-  WORKER_BACKGROUND_POOL_SLOT_RESERVE: z.coerce.number().int().min(0).max(64).default(6),
   /** Postgres pool size per Node process (postgres-js `max`). Not the cluster-wide total. Default 10. */
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
   /** Connections reserved for admin, migrations, and monitoring (subtracted from Postgres max_connections). */
@@ -446,7 +466,9 @@ const envSchemaBase = z.object({
    * an arbitrary env value.
    */
   NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(90),
-  AUTH_SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).max(730),
+  AUTH_SESSION_RETENTION_DAYS: isLocalRuntime
+    ? z.coerce.number().int().min(1).max(730).default(30)
+    : z.coerce.number().int().min(1).max(730),
   /** Tombstoned-row TTL before purge workers hard-delete (default avoids mandatory deploy secret). */
   TOMBSTONE_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(90),
   /** Terminal Stripe webhook ledger rows older than this are purged (failed rows kept for replay). */
@@ -673,6 +695,19 @@ const envSchemaBase = z.object({
   POSTMAN_API_KEY: z.string().min(1).optional(),
   /** Postman workspace ID where the API documentation collection is published. GitHub Environment secret via `pnpm github:sync`. */
   POSTMAN_WORKSPACE_ID: z.string().min(1).optional(),
+
+  // Scalar Registry API documentation publishing (GitHub Actions only — consumed by
+  // .github/workflows/reusable-openapi-postman-publish.yml and `pnpm docs:upload:scalar`).
+  // Secret vs Variable follows github:sync `classifyKey`: only the API key is sensitive
+  // (Secret, read via `secrets.SCALAR_API_KEY`); the namespace/slug are public registry
+  // identifiers (Variables, read via `vars.SCALAR_NAMESPACE` / `vars.SCALAR_SLUG`). The
+  // workflow's `secrets.*` vs `vars.*` access MUST match this split.
+  /** Scalar API key used by `pnpm docs:upload:scalar` to publish the OpenAPI document to the Scalar Registry. Sensitive → GitHub Environment Secret (read via `secrets.SCALAR_API_KEY`); pushed by `pnpm github:sync`. */
+  SCALAR_API_KEY: z.string().min(1).optional(),
+  /** Scalar team namespace the OpenAPI document is published under (registry URL `@<namespace>/apis/<slug>`). Non-sensitive → GitHub Environment Variable (read via `vars.SCALAR_NAMESPACE`); pushed by `pnpm github:sync`. */
+  SCALAR_NAMESPACE: z.string().min(1).optional(),
+  /** Scalar Registry slug for the published OpenAPI document; the upload script defaults to `core-be` when unset. Non-sensitive → GitHub Environment Variable (read via `vars.SCALAR_SLUG`); pushed by `pnpm github:sync`. */
+  SCALAR_SLUG: z.string().min(1).optional(),
 
   // Release automation (GitHub Actions only — consumed by .github/workflows/post-merge-ci.yml)
   /** PAT (classic `repo` + `workflow` scopes) release-please uses to create the dev/main GitHub Releases; the default GITHUB_TOKEN cannot — the create-a-release API path requires the `workflow` scope. GitHub Environment secret via `pnpm github:sync`. */

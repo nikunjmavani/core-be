@@ -31,7 +31,7 @@ sequenceDiagram
   alt user exists
     ML->>DB: insert verification_tokens (MAGIC_LINK, sha256(token), expires_at = now + 15m)
     ML->>Bus: emit AUTH_EVENT.MAGIC_LINK_REQUESTED {email, magic_link_token, expires_in_minutes}
-    Bus->>Mail: enqueueEmail (via event handler)
+    Bus->>Mail: recordOutboxEmail (via event handler)
   else user does not exist
     Note over ML: silent success — no token, no event, no email
   end
@@ -111,6 +111,47 @@ sequenceDiagram
 - **MFA challenge expired** → 401 `errors:mfaSessionExpired`; client must re-login.
 - **Disabled or unverified user** → 401 with the appropriate message key; behavior identical to wrong-password from the client's perspective for non-existent emails (anti-enumeration).
 
+## organization-switch-and-capability-discovery-flow
+
+### Trigger
+
+A signed-in user switches which organization is active — `POST /api/v1/auth/switch-to-organization { organization_id }` (or back to their personal workspace via `POST /api/v1/auth/switch-to-personal`).
+
+### Sequence
+
+```mermaid
+sequenceDiagram
+  participant Client
+  participant Auth as auth.controller
+  participant Sess as AuthSessionService
+  participant Tenancy as tenancy.controller
+  participant Org as OrganizationService
+  participant Cap as organization-capability
+  participant DB as Postgres
+  Client->>Auth: POST /auth/switch-to-organization {organization_id}
+  Auth->>Sess: re-check membership, re-mint access token with org claim
+  Sess-->>Auth: {access_token} (org = target organization)
+  Auth-->>Client: 201 + new access token
+  Client->>Tenancy: GET /api/v1/tenancy/organization (Bearer new token)
+  Tenancy->>Org: get active organization (from org claim)
+  Org->>DB: SELECT organization
+  Org->>Cap: organizationCapabilities(type)
+  Cap-->>Org: {can_invite_members, can_manage_members, can_manage_roles, can_transfer_ownership, can_delete}
+  Org-->>Tenancy: organization + capabilities
+  Tenancy-->>Client: 200 {data: {..., capabilities}}
+  Note over Client: client reads capabilities to enable/disable team-only actions — no 422 probing
+```
+
+### Side effects
+
+- A new access token is minted with the target organization in the `org` claim (the prior token's org is replaced). No DB write to the organization itself.
+- Every serialized organization response (this `GET`, list, create, patch) carries a `capabilities` object derived from the org `type` (`organizationCapabilities(type)` in `src/domains/tenancy/sub-domains/organization/organization-capability.ts`). `TEAM` → all flags `true`; `PERSONAL` → all `false`.
+
+### Failure modes
+
+- **Not a member of the target organization** → switch is rejected (the token is not re-minted); the active org is unchanged.
+- **Client ignores `capabilities` and calls a team-only route on a personal org** → the centralized guard `assertTeamOrganization` rejects with **422** (`unprocessable_entity`), not 409, because the org `type` is immutable and retrying is futile. The `capabilities` object exists precisely so clients hide/disable those actions up front instead of probing for the 422. The five team-only routes: `DELETE /api/v1/tenancy/organization`, `POST .../organization/invitations`, `POST .../organization/memberships`, `POST .../organization/transfer-ownership`, `POST .../organization/roles`.
+
 ## organization-invitation-flow
 
 ### Trigger
@@ -135,7 +176,7 @@ sequenceDiagram
   Inv->>DB: insert member_invitations (token_hash, expires_at, status=pending)
   Inv->>DB: COMMIT
   Inv->>Bus: emit MEMBER_INVITATION_EVENT.CREATED {email, raw_token, organization_name, ...}
-  Bus->>Mail: enqueueEmail (via event handler)
+  Bus->>Mail: recordOutboxEmail (via event handler)
   Mail-->>Invitee: invitation email (raw_token in URL)
 
   Invitee->>Auth: POST /auth/magic-link {email} (signup-flow if new user)
@@ -206,7 +247,7 @@ sequenceDiagram
   Ingest-->>Stripe: 200
 
   Bus->>Notify: notification fan-out (in-app + email)
-  Notify->>Mail: enqueueEmail
+  Notify->>Mail: recordOutboxEmail + dispatchOutboxEmail
 ```
 
 ### Side effects
@@ -249,7 +290,7 @@ sequenceDiagram
   Sub->>DB: UPDATE subscriptions SET status=past_due
   Sub->>Bus: emit BILLING_EVENT.SUBSCRIPTION_PAST_DUE
   Bus->>Notify: enqueue notification (in-app)
-  Bus->>Mail: enqueueEmail (payment-failed template)
+  Bus->>Mail: recordOutboxEmail (payment-failed template)
   Notify-->>Org: in-app banner
   Mail-->>Org: payment-failed email (with hosted billing link)
 

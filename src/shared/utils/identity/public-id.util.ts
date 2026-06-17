@@ -20,7 +20,6 @@ export const PUBLIC_ID_PREFIXES = {
   organizationNotificationPolicy: 'pol',
   authSession: 'ses',
   authMethod: 'am',
-  authMfaMethod: 'mfa',
   notification: 'ntf',
   webhook: 'whk',
   plan: 'pln',

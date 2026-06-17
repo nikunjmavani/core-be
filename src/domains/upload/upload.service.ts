@@ -418,6 +418,56 @@ export class UploadService {
   }
 
   /**
+   * Verifies the uploaded object against its declared content type/length and, when valid,
+   * publishes the bytes from the pending key to the immutable final key.
+   *
+   * @remarks
+   * - **Algorithm:** HEAD the object; require it to exist, match the declared length, and (when S3
+   *   echoes one) match the declared content type; on success publish/sanitize to `finalKey`.
+   * - **Failure modes:** rethrows a transient {@link ExternalServiceError} (surfaces as 503; the
+   *   row stays PENDING for retry); any other verification failure resolves to `false` so the
+   *   caller marks the row FAILED.
+   * - **Side effects:** one storage HEAD; on success the publish/sanitize copy plus structured logs.
+   */
+  private async verifyAndPublishUploadedObject(options: {
+    sourceKey: string;
+    finalKey: string;
+    mimeType: string;
+    fileSize: number;
+    publicId: string;
+  }): Promise<boolean> {
+    const { sourceKey, finalKey, mimeType, fileSize, publicId } = options;
+    try {
+      const metadata = await this.objectStorage.verifyUploadedObject(sourceKey, {
+        contentType: mimeType,
+        contentLength: fileSize,
+      });
+      const objectExists = metadata.contentLength !== undefined;
+      const lengthMatches = metadata.contentLength === fileSize;
+      // S3 may not echo a content type; only fail on type when one is reported.
+      const typeMatches = metadata.contentType === undefined || metadata.contentType === mimeType;
+      if (!(objectExists && lengthMatches && typeMatches)) {
+        return false;
+      }
+      return await this.publishConfirmedObject(sourceKey, finalKey, mimeType);
+    } catch (error) {
+      // audit-#5: a transient storage failure (timeout / throttle / circuit-open / IAM) must NOT
+      // mark a valid upload FAILED. Re-throw it (surfaces as 503) so the client can retry confirm;
+      // the row stays PENDING and the sweeper / a retry reconciles it. Only genuine verification
+      // failures (not-found, type/size mismatch, magic-byte rejection) fall through to FAILED.
+      if (error instanceof ExternalServiceError) {
+        logger.warn(
+          { id: publicId, fileKey: sourceKey, error },
+          'upload.confirm.transientStorageError',
+        );
+        throw error;
+      }
+      logger.warn({ id: publicId, fileKey: sourceKey, error }, 'upload.confirm.verifyFailed');
+      return false;
+    }
+  }
+
+  /**
    * Server-side finalization: HEAD the uploaded object and compare its content type/length
    * against the values declared at create time. On success the row moves PENDING → UPLOADED;
    * on mismatch/missing it moves to FAILED and a validation error is surfaced. SVG objects are
@@ -470,39 +520,13 @@ export class UploadService {
       });
     }
 
-    let verified = false;
-    try {
-      const metadata = await this.objectStorage.verifyUploadedObject(sourceKey, {
-        contentType: row.mime_type,
-        contentLength: row.file_size,
-      });
-      const objectExists = metadata.contentLength !== undefined;
-      const lengthMatches = metadata.contentLength === row.file_size;
-      // S3 may not echo a content type; only fail on type when one is reported.
-      const typeMatches =
-        metadata.contentType === undefined || metadata.contentType === row.mime_type;
-      verified = objectExists && lengthMatches && typeMatches;
-      if (verified) {
-        verified = await this.publishConfirmedObject(sourceKey, finalKey, row.mime_type);
-      }
-    } catch (error) {
-      // audit-#5: a transient storage failure (timeout / throttle / circuit-open / IAM) must NOT
-      // mark a valid upload FAILED. Re-throw it (surfaces as 503) so the client can retry confirm;
-      // the row stays PENDING and the sweeper / a retry reconciles it. Only genuine verification
-      // failures (not-found, type/size mismatch, magic-byte rejection) fall through to FAILED.
-      if (error instanceof ExternalServiceError) {
-        logger.warn(
-          { id: validatedPublicId, fileKey: sourceKey, error },
-          'upload.confirm.transientStorageError',
-        );
-        throw error;
-      }
-      logger.warn(
-        { id: validatedPublicId, fileKey: sourceKey, error },
-        'upload.confirm.verifyFailed',
-      );
-      verified = false;
-    }
+    const verified = await this.verifyAndPublishUploadedObject({
+      sourceKey,
+      finalKey,
+      mimeType: row.mime_type,
+      fileSize: row.file_size,
+      publicId: validatedPublicId,
+    });
 
     if (!verified) {
       const failedRow = await withUserDatabaseContext(userPublicId, () =>

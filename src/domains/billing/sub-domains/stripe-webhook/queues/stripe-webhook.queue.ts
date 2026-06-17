@@ -1,6 +1,7 @@
 import { Queue } from 'bullmq';
 import type Stripe from 'stripe';
 import { getBullMQProducerConnectionOptions } from '@/infrastructure/queue/connection.js';
+import { DEFAULT_JOB_RETENTION_COUNT } from '@/infrastructure/queue/queue.constants.js';
 import { captureTraceContextForPropagation } from '@/infrastructure/observability/tracing/trace-context.util.js';
 import { parseBullMQJobData } from '@/shared/utils/validation/bullmq-job-validation.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
@@ -23,8 +24,8 @@ function getStripeWebhookQueue(): Queue<StripeWebhookJobData> {
   stripeWebhookQueue = new Queue<StripeWebhookJobData>(STRIPE_WEBHOOK_QUEUE_NAME, {
     connection: getBullMQProducerConnectionOptions(),
     defaultJobOptions: {
-      removeOnComplete: { count: 1000, age: SEVEN_DAYS_SECONDS },
-      removeOnFail: { count: 1000, age: SEVEN_DAYS_SECONDS },
+      removeOnComplete: { count: DEFAULT_JOB_RETENTION_COUNT, age: SEVEN_DAYS_SECONDS },
+      removeOnFail: { count: DEFAULT_JOB_RETENTION_COUNT, age: SEVEN_DAYS_SECONDS },
       attempts: 5,
       backoff: { type: 'custom' },
     },

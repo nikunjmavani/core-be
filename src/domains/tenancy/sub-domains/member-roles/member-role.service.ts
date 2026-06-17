@@ -3,6 +3,7 @@ import { ConflictError, ForbiddenError, NotFoundError } from '@/shared/errors/in
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
+import { assertTeamOrganization } from '@/domains/tenancy/sub-domains/organization/organization-capability.js';
 import type { MemberRoleRepository } from './member-role.repository.js';
 import type { MemberRoleOutput, MemberRoleRow } from './member-role.types.js';
 import {
@@ -156,9 +157,7 @@ export class MemberRoleService {
       // Capability matrix: a PERSONAL organization is single-member by definition, so custom roles
       // (which exist to grant scoped permissions to OTHER members) are meaningless there. Reject —
       // role management is a TEAM-organization feature.
-      if (organization.type === 'PERSONAL') {
-        throw new ConflictError('errors:personalOrganizationNoRoles');
-      }
+      assertTeamOrganization(organization, 'ROLES');
       // sec-r5-followup-ratelimit-dos-2 + audit-#8: serialize the per-org count + insert with a
       // transaction-scoped advisory lock so concurrent creates cannot both pass the same count
       // and overshoot MEMBER_ROLE_MAX_PER_ORG. The lock auto-releases at commit.

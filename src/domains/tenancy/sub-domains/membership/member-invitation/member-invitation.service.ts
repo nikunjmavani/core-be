@@ -1,6 +1,5 @@
 import {
   ConfigurationError,
-  ConflictError,
   ForbiddenError,
   NotFoundError,
   ValidationError,
@@ -8,6 +7,7 @@ import {
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
+import { assertTeamOrganization } from '@/domains/tenancy/sub-domains/organization/organization-capability.js';
 import type { MembershipRepository } from '@/domains/tenancy/sub-domains/membership/membership.repository.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { MemberInvitationRepository } from './member-invitation.repository.js';
@@ -191,9 +191,7 @@ export class MemberInvitationService {
       if (!organization) throw new NotFoundError('Organization');
       // Capability matrix: a PERSONAL organization is single-member by definition — it cannot
       // issue invitations. Collaboration requires a TEAM organization.
-      if (organization.type === 'PERSONAL') {
-        throw new ConflictError('errors:personalOrganizationNoMembers');
-      }
+      assertTeamOrganization(organization, 'MEMBERS');
       const membership = await this.membershipRepository.findByPublicId(
         parsed.membership_id,
         organization.id,

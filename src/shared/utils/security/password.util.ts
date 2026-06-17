@@ -7,9 +7,12 @@ import argon2 from 'argon2';
  *   memoryCost: 19456 KiB (~19 MB), timeCost: 2, parallelism: 1
  */
 
+/** Argon2id memory cost in KiB (~19 MB) — OWASP 2024 recommended minimum. */
+const ARGON2_MEMORY_COST_KIB = 19_456;
+
 const ARGON2_OPTIONS: argon2.Options & { raw?: false } = {
   type: argon2.argon2id,
-  memoryCost: 19_456, // ~19 MB (OWASP recommended minimum)
+  memoryCost: ARGON2_MEMORY_COST_KIB, // ~19 MB (OWASP recommended minimum)
   timeCost: 2,
   parallelism: 1,
 };

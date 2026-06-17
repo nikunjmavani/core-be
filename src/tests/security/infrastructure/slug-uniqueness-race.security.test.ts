@@ -19,7 +19,7 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
  * is a clean 409 conflict, and NONE leak a 5xx — i.e. the race is serialized by
  * the DB constraint and handled gracefully.
  *
- * Each concurrent request carries a DISTINCT Idempotency-Key so the idempotency
+ * Each concurrent request carries a DISTINCT X-Idempotency-Key so the idempotency
  * layer does not dedupe them — the slug constraint is the only thing that may
  * serialize them.
  */
@@ -58,7 +58,7 @@ describe('Security: organization-slug uniqueness race (TOCTOU)', () => {
       url: testApiPath('/tenancy/organizations'),
       token: authToken,
       payload: { name: 'Race Org', slug },
-      headers: { 'idempotency-key': generatePublicId('organization') },
+      headers: { 'x-idempotency-key': generatePublicId('organization') },
     });
     return response.statusCode;
   }

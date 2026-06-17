@@ -114,7 +114,7 @@ describe('resolveTracesSampleRate (head / tracesSampler)', () => {
     expect(
       resolveTracesSampleRate(
         {
-          name: 'POST /api/v1/billing/stripe/webhook',
+          name: 'POST /api/v1/billing/webhook',
           attributes: { 'http.response.status_code': 200 },
         },
         BASELINE,

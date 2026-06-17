@@ -25,7 +25,7 @@
   "conflict": "Conflict",
   "idempotencyKeyConflict": "Concurrent request with same idempotency key",
   "idempotencyKeyInFlight": "A request with this idempotency key is still in flight. Retry once the original request completes.",
-  "idempotencyKeyInvalid": "Idempotency-Key must be 1–255 characters and use only letters, digits, and . _ : ~ + / = -",
+  "idempotencyKeyInvalid": "X-Idempotency-Key must be 1–255 characters and use only letters, digits, and . _ : ~ + / = -",
   "idempotencyKeyReuse": "This idempotency key was already used with a different request payload",
   "idempotencyPerActorCapExceeded": "Too many idempotent requests. Reuse a key for retries or wait for the window to reset.",
   "notImplemented": "Please raise a feature request",
@@ -157,6 +157,6 @@
   "captchaInvalid": "CAPTCHA verification failed",
   "captchaProviderUnavailable": "CAPTCHA verification is temporarily unavailable",
   "queueDashboardReadOnly": "Queue dashboard mutations are disabled in this environment",
-  "idempotencyKeyRequired": "Idempotency-Key header is required for this operation",
+  "idempotencyKeyRequired": "X-Idempotency-Key header is required for this operation",
   "invalidMetricsToken": "Invalid or missing metrics token"
 }

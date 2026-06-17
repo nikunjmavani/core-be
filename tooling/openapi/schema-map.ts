@@ -99,8 +99,8 @@ export const routeSchemaMap: Record<string, ZodTypeAny> = {
   'POST /api/v1/auth/login': LoginDto,
   'POST /api/v1/auth/magic-link/send': MagicLinkSendDto,
   'POST /api/v1/auth/magic-link/verify': MagicLinkVerifyDto,
-  'POST /api/v1/auth/mfa/verify': MfaVerifyDto,
-  'POST /api/v1/auth/mfa/enroll': MfaEnrollDto,
+  'POST /api/v1/auth/me/mfa/verify': MfaVerifyDto,
+  'POST /api/v1/auth/me/mfa/enroll': MfaEnrollDto,
   'POST /api/v1/auth/mfa/login': MfaLoginVerifyDto,
   'POST /api/v1/auth/password/forgot': ForgotPasswordDto,
   'POST /api/v1/auth/password/reset': ResetPasswordDto,
@@ -108,7 +108,7 @@ export const routeSchemaMap: Record<string, ZodTypeAny> = {
   'POST /api/v1/auth/email/verify': VerifyEmailDto,
   'POST /api/v1/auth/webauthn/authenticate/options': webauthnAuthenticateOptionsDto,
   'POST /api/v1/auth/webauthn/authenticate/verify': webauthnAuthenticateVerifyDto,
-  'POST /api/v1/auth/webauthn/register/verify': webauthnRegisterVerifyDto,
+  'POST /api/v1/auth/me/webauthn/register/verify': webauthnRegisterVerifyDto,
 
   // ── Auth: Me (auth-specific) ──
   'POST /api/v1/auth/me/auth-methods': CreateAuthMethodDto,
