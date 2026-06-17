@@ -90,7 +90,6 @@ Answers "is every route — organization-level included — covered, and what is
 | --- | --- | --- | --- | --- |
 | GET | `/api/v1/billing/plans` | PUBLIC | `public` | — (n/a authz) |
 | GET | `/api/v1/billing/plans/:plan_id` | PUBLIC | `public` | — (n/a authz) |
-| POST | `/api/v1/billing/stripe/webhook` | PUBLIC | `public` | — (n/a authz) |
 | GET | `/api/v1/billing/subscriptions` | PERM: subscription:read | `org-collection` | ✅ BFLA (matrix) |
 | POST | `/api/v1/billing/subscriptions` | PERM: subscription:manage | `org-collection` | ✅ BFLA (matrix) |
 | GET | `/api/v1/billing/subscriptions/:subscription_id` | PERM: subscription:read | `org-by-id` | ✅ BFLA + cross-org |

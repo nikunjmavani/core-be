@@ -8,10 +8,9 @@ Parent: [billing](../../OVERVIEW.md)
 
 Inbound endpoint for every Stripe billing event. Verifies the `Stripe-Signature` header against `STRIPE_WEBHOOK_SECRET`, persists the event idempotently keyed on `event.id`, dispatches the work to the appropriate `subscription` sub-domain method, and reclaims rows stuck in `processing` after worker crashes.
 
-The receiver is registered at two paths sharing the same handler:
+The receiver is registered at the canonical path:
 
-- `POST /api/v1/billing/webhook` — canonical; new Stripe Dashboard endpoints must use this URL.
-- `POST /api/v1/billing/stripe/webhook` — deprecated alias retained while live Stripe configurations migrate.
+- `POST /api/v1/billing/webhook` — Stripe Dashboard endpoints and the Stripe CLI (`stripe listen --forward-to`) must use this URL.
 
 ## Key invariants
 

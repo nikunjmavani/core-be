@@ -1770,8 +1770,6 @@ src/
     │   ├── OVERVIEW.md
     │   └── worker-bulkheads.performance.test.ts
     ├── security/
-    │   ├── api-versioning/
-    │   │   └── deprecated-route-headers.security.test.ts
     │   ├── auth/
     │   │   ├── api-key-auth.security.test.ts
     │   │   ├── auth-enforcement.security.test.ts

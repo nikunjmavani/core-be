@@ -4090,50 +4090,6 @@
       }
     }
   },
-  "POST /api/v1/billing/stripe/webhook": {
-    "request_body": {
-      "id": "evt_dup_1781595927513",
-      "object": "event",
-      "type": "customer.subscription.updated",
-      "created": 1781595927,
-      "data": {
-        "object": {
-          "id": "<redacted>",
-          "object": "subscription",
-          "status": "active",
-          "items": {
-            "data": [
-              {
-                "current_period_start": 1781595927,
-                "current_period_end": 1781682327
-              }
-            ]
-          }
-        }
-      }
-    },
-    "responses": {
-      "200": {
-        "data": {
-          "received": true
-        },
-        "meta": {
-          "request_id": "33edd8f1-b878-4582-9bd9-da284307c980"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Missing stripe-signature header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "09fcfa40-9913-44ba-93fc-a458396e5aec"
-        }
-      }
-    }
-  },
   "POST /api/v1/billing/subscriptions": {
     "request_body": {
       "plan_id": "pln_example00000000000000",
