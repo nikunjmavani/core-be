@@ -76,10 +76,10 @@ async function createUploadAndConfirm(options: {
     payload: {
       purpose,
       for: target,
-      ...(organizationPublicId ? { organizationId: organizationPublicId } : {}),
-      contentType: 'image/png',
-      fileName: 'happy-path.png',
-      fileSize: FAKE_CONTENT_LENGTH,
+      ...(organizationPublicId ? { organization_id: organizationPublicId } : {}),
+      content_type: 'image/png',
+      file_name: 'happy-path.png',
+      file_size: FAKE_CONTENT_LENGTH,
     },
   });
   expect(create.statusCode, create.body).toBe(201);
@@ -151,7 +151,7 @@ describe('Storage-backed routes — happy paths (mocked S3 port)', () => {
       method: 'PUT',
       url: testApiPath('/users/me/avatar'),
       token,
-      payload: { avatarKey: key },
+      payload: { avatar_key: key },
     });
     expect(response.statusCode, response.body).toBe(200);
   });

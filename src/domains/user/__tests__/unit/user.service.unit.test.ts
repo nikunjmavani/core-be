@@ -154,7 +154,7 @@ describe('UserService', () => {
   it('uploadAvatar stores the key and returns a signed read URL (USER-10)', async () => {
     const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
     vi.mocked(repository.update).mockResolvedValue({ ...userRow, avatar_url: avatarKey } as never);
-    const result = await service.uploadAvatar(userRow.public_id, { avatarKey });
+    const result = await service.uploadAvatar(userRow.public_id, { avatar_key: avatarKey });
     // The raw object KEY is persisted…
     expect(repository.update).toHaveBeenCalledWith(userRow.public_id, { avatar_url: avatarKey });
     // …but the response carries a short-lived signed read URL, never the raw key.
@@ -163,7 +163,7 @@ describe('UserService', () => {
 
   it('uploadAvatar rejects keys outside avatars prefix', async () => {
     await expect(
-      service.uploadAvatar(userRow.public_id, { avatarKey: 'wrong/prefix.png' }),
+      service.uploadAvatar(userRow.public_id, { avatar_key: 'wrong/prefix.png' }),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
@@ -183,9 +183,9 @@ describe('UserService', () => {
       userDataExportService: { deleteAllExportsForUser: vi.fn() } as never,
     });
     const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
-    await expect(service.uploadAvatar(userRow.public_id, { avatarKey })).rejects.toBeInstanceOf(
-      ValidationError,
-    );
+    await expect(
+      service.uploadAvatar(userRow.public_id, { avatar_key: avatarKey }),
+    ).rejects.toBeInstanceOf(ValidationError);
     expect(repository.update).not.toHaveBeenCalled();
   });
 
@@ -341,9 +341,9 @@ describe('UserService', () => {
   it('uploadAvatar rejects missing storage object', async () => {
     vi.mocked(objectStorage.headObject).mockResolvedValueOnce(null);
     const avatarKey = `avatars/${userRow.public_id}/missing.png`;
-    await expect(service.uploadAvatar(userRow.public_id, { avatarKey })).rejects.toBeInstanceOf(
-      ValidationError,
-    );
+    await expect(
+      service.uploadAvatar(userRow.public_id, { avatar_key: avatarKey }),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it('uploadAvatar rejects invalid content type from storage metadata', async () => {
@@ -352,15 +352,18 @@ describe('UserService', () => {
       contentLength: 10,
     });
     const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
-    await expect(service.uploadAvatar(userRow.public_id, { avatarKey })).rejects.toBeInstanceOf(
-      ValidationError,
-    );
+    await expect(
+      service.uploadAvatar(userRow.public_id, { avatar_key: avatarKey }),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it('updateMe can set avatar from storage key (stored as key, returned as signed URL)', async () => {
     const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
     vi.mocked(repository.update).mockResolvedValue({ ...userRow, avatar_url: avatarKey } as never);
-    const result = await service.updateMe(userRow.public_id, { avatarKey, first_name: 'New' });
+    const result = await service.updateMe(userRow.public_id, {
+      avatar_key: avatarKey,
+      first_name: 'New',
+    });
     expect(result.avatar_url).toBe('https://presigned.example/download');
   });
 
@@ -505,7 +508,7 @@ describe('UserService', () => {
 
   it('updateMe rejects avatar keys outside the user prefix', async () => {
     await expect(
-      service.updateMe(userRow.public_id, { avatarKey: 'wrong/prefix.png' }),
+      service.updateMe(userRow.public_id, { avatar_key: 'wrong/prefix.png' }),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
@@ -573,7 +576,7 @@ describe('UserService', () => {
       contentLength: 100,
     });
     const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
-    await service.uploadAvatar(userRow.public_id, { avatarKey });
+    await service.uploadAvatar(userRow.public_id, { avatar_key: avatarKey });
     expect(repository.update).toHaveBeenCalled();
   });
 

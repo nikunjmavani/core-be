@@ -7,9 +7,9 @@ describe('upload.validator', () => {
     const input = {
       purpose: 'avatar',
       for: 'user',
-      contentType: 'image/png',
-      fileName: 'photo.png',
-      fileSize: 1024,
+      content_type: 'image/png',
+      file_name: 'photo.png',
+      file_size: 1024,
     };
     expect(validateCreateUpload(input)).toEqual(input);
   });
@@ -19,9 +19,9 @@ describe('upload.validator', () => {
       validateCreateUpload({
         purpose: 'invalid',
         for: 'user',
-        contentType: 'image/png',
-        fileName: 'photo.png',
-        fileSize: 1024,
+        content_type: 'image/png',
+        file_name: 'photo.png',
+        file_size: 1024,
       }),
     ).toThrow(ValidationError);
   });
@@ -30,14 +30,14 @@ describe('upload.validator', () => {
     expect(() => validateCreateUpload({})).toThrow(ValidationError);
   });
 
-  it('validateCreateUpload rejects non-positive fileSize', () => {
+  it('validateCreateUpload rejects non-positive file_size', () => {
     expect(() =>
       validateCreateUpload({
         purpose: 'avatar',
         for: 'user',
-        contentType: 'image/png',
-        fileName: 'photo.png',
-        fileSize: 0,
+        content_type: 'image/png',
+        file_name: 'photo.png',
+        file_size: 0,
       }),
     ).toThrow(ValidationError);
   });
@@ -47,9 +47,9 @@ describe('upload.validator', () => {
       validateCreateUpload({
         purpose: 'avatar',
         for: 'user',
-        contentType: 'image/png',
-        fileName: 'photo.png',
-        fileSize: 1024,
+        content_type: 'image/png',
+        file_name: 'photo.png',
+        file_size: 1024,
         extra: true,
       }),
     ).toThrow(ValidationError);
@@ -62,9 +62,9 @@ describe('upload.validator', () => {
       validateCreateUpload({
         purpose: 'organization-logo',
         for: 'user',
-        contentType: 'image/png',
-        fileName: 'logo.png',
-        fileSize: 1024,
+        content_type: 'image/png',
+        file_name: 'logo.png',
+        file_size: 1024,
       }),
     ).toThrow(ValidationError);
   });
@@ -74,10 +74,10 @@ describe('upload.validator', () => {
       validateCreateUpload({
         purpose: 'avatar',
         for: 'organization',
-        organizationId: 'org_abcdefghijklmnopqrstu',
-        contentType: 'image/png',
-        fileName: 'photo.png',
-        fileSize: 1024,
+        organization_id: 'org_abcdefghijklmnopqrstu',
+        content_type: 'image/png',
+        file_name: 'photo.png',
+        file_size: 1024,
       }),
     ).toThrow(ValidationError);
   });
@@ -86,10 +86,10 @@ describe('upload.validator', () => {
     const input = {
       purpose: 'organization-logo',
       for: 'organization',
-      organizationId: 'org_abcdefghijklmnopqrstu',
-      contentType: 'image/png',
-      fileName: 'logo.png',
-      fileSize: 1024,
+      organization_id: 'org_abcdefghijklmnopqrstu',
+      content_type: 'image/png',
+      file_name: 'logo.png',
+      file_size: 1024,
     };
     expect(validateCreateUpload(input)).toEqual(input);
   });

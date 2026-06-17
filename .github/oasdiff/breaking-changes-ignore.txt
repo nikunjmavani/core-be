@@ -1534,3 +1534,15 @@ api post /api/v1/auth/webauthn/register/verify api path removed without deprecat
 # Dashboard endpoints and CLI forwarders use the canonical path. Pinned by the billing e2e
 # + stripe-webhook integration tests (retargeted to /billing/webhook).
 api post /api/v1/billing/stripe/webhook api path removed without deprecation
+
+# 29. Upload + avatar request bodies were renamed to snake_case to match the API
+#     contract (every request/response body property is snake_case; the external id
+#     stays `id`). The old camelCase properties (`contentType`/`fileName`/`fileSize`/
+#     `organizationId` on POST /uploads, `avatarKey` on PATCH /users/me and
+#     PUT /users/me/avatar) were removed and the snake_case replacements are now
+#     required. Enforced by snake-case-body-keys.policy.unit.test.ts and pinned by the
+#     upload + user + storage-routes tests.
+api post /api/v1/uploads added the new required request property `content_type`
+api post /api/v1/uploads added the new required request property `file_name`
+api post /api/v1/uploads added the new required request property `file_size`
+api put /api/v1/users/me/avatar added the new required request property `avatar_key`

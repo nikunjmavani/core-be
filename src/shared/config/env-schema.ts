@@ -317,7 +317,7 @@ const envSchemaBase = z.object({
     .transform((value) => value === 'true' || value === '1'),
   /**
    * Use presigned POST (with an S3-enforced content-length-range) instead of presigned PUT
-   * for direct client uploads. On by default; the response carries `uploadMethod` and,
+   * for direct client uploads. On by default; the response carries `upload_method` and,
    * for POST, the policy `fields` clients must submit with the file.
    */
   UPLOAD_USE_PRESIGNED_POST: booleanString('true'),

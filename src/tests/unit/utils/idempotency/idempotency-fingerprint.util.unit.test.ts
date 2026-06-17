@@ -83,7 +83,7 @@ describe('responseBodyContainsSecretFields', () => {
     ).toBe(true);
     // Upload presign URL.
     expect(
-      responseBodyContainsSecretFields(JSON.stringify({ data: { uploadUrl: 'https://s3/...' } })),
+      responseBodyContainsSecretFields(JSON.stringify({ data: { upload_url: 'https://s3/...' } })),
     ).toBe(true);
   });
 

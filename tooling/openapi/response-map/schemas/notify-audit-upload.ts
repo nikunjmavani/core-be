@@ -132,16 +132,16 @@ export const auditLogExample = {
 export const uploadSchema = {
   type: 'object',
   properties: {
-    uploadUrl: { type: 'string', format: 'uri' },
+    upload_url: { type: 'string', format: 'uri' },
     key: { type: 'string' },
-    expiresAt: { type: 'string', format: 'date-time' },
+    expires_at: { type: 'string', format: 'date-time' },
   },
 };
 
 export const uploadExample = {
-  uploadUrl: 'https://s3.amazonaws.com/bucket/avatars/usr_abc123.png?X-Amz-Algorithm=...',
+  upload_url: 'https://s3.amazonaws.com/bucket/avatars/usr_abc123.png?X-Amz-Algorithm=...',
   key: 'avatars/usr_k7x9m2pqr4w8n1v3a1b2c.png',
-  expiresAt: '2026-02-14T11:30:00.000Z',
+  expires_at: '2026-02-14T11:30:00.000Z',
 };
 
 // ── Test webhook response ──

@@ -2042,14 +2042,14 @@
       "200": {
         "data": {
           "id": "upl_example00000000000000",
-          "fileName": "avatar.png",
-          "mimeType": "image/png",
-          "fileSize": 1024,
+          "file_name": "avatar.png",
+          "mime_type": "image/png",
+          "file_size": 1024,
           "status": "PENDING",
-          "storageProvider": "s3",
-          "organizationId": null,
-          "createdAt": "2026-01-01T00:00:00.000Z",
-          "updatedAt": "2026-01-01T00:00:00.000Z"
+          "storage_provider": "s3",
+          "organization_id": null,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
           "request_id": "6307e917-f182-4365-9cf1-485e86822e9a"
@@ -5405,18 +5405,18 @@
     "request_body": {
       "purpose": "avatar",
       "for": "user",
-      "contentType": "image/png",
-      "fileName": "happy-path.png",
-      "fileSize": 1024
+      "content_type": "image/png",
+      "file_name": "happy-path.png",
+      "file_size": 1024
     },
     "responses": {
       "201": {
         "data": {
           "id": "upl_example00000000000000",
-          "uploadUrl": "https://example.com/resource",
+          "upload_url": "https://example.com/resource",
           "key": "avatars/usr_iropfbed59ongcj9i6ynm/65b3d4bd-0726-49ae-84a6-0b2c72e1b667.png",
-          "expiresAt": "2026-01-01T00:00:00.000Z",
-          "uploadMethod": "POST",
+          "expires_at": "2026-01-01T00:00:00.000Z",
+          "upload_method": "POST",
           "fields": {
             "key": "fake-policy-key"
           }
@@ -5475,14 +5475,14 @@
       "201": {
         "data": {
           "id": "upl_example00000000000000",
-          "fileName": "happy-path.png",
-          "mimeType": "image/png",
-          "fileSize": 1024,
+          "file_name": "happy-path.png",
+          "mime_type": "image/png",
+          "file_size": 1024,
           "status": "UPLOADED",
-          "storageProvider": "s3",
-          "organizationId": null,
-          "createdAt": "2026-01-01T00:00:00.000Z",
-          "updatedAt": "2026-01-01T00:00:00.000Z"
+          "storage_provider": "s3",
+          "organization_id": null,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
           "request_id": "f0c11d31-5f84-4d20-9ae4-3b473fab5adc"
@@ -5791,7 +5791,7 @@
   },
   "PUT /api/v1/users/me/avatar": {
     "request_body": {
-      "avatarKey": "avatars/usr_o1qwa9ujcs5kgzjly69oa/4c7a2162-fac0-45f0-ab31-e80b1a54db0d.png"
+      "avatar_key": "avatars/usr_o1qwa9ujcs5kgzjly69oa/4c7a2162-fac0-45f0-ab31-e80b1a54db0d.png"
     },
     "responses": {
       "200": {
@@ -5819,7 +5819,7 @@
           "documentation_url": "https://example.com/resource",
           "errors": [
             {
-              "field": "body.avatarKey",
+              "field": "body.avatar_key",
               "message": "Invalid input: expected string, received undefined"
             },
             {

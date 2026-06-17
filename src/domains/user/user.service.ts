@@ -353,7 +353,7 @@ export class UserService {
     const expectedPrefix = buildUserAvatarKeyPrefix(ownerPublicId);
     if (!avatarKey.startsWith(expectedPrefix)) {
       throw new ValidationError('errors:validation.avatarKeyNotOwned', undefined, {
-        avatarKey: ['Avatar key does not belong to this user'],
+        avatar_key: ['Avatar key does not belong to this user'],
       });
     }
     if (!this.offboardingUploadService) {
@@ -428,7 +428,7 @@ export class UserService {
   async updateMe(publicId: string, body: unknown): Promise<UserOutput> {
     const parsed = validateUpdateMe(body);
 
-    const { avatarKey, ...profileFields } = parsed;
+    const { avatar_key: avatarKey, ...profileFields } = parsed;
     let avatarUrl: string | undefined;
     let previousAvatarUrl: string | null = null;
     if (avatarKey) {
@@ -480,7 +480,7 @@ export class UserService {
   }
 
   async uploadAvatar(publicId: string, body: unknown): Promise<UserOutput> {
-    const { avatarKey } = validateUploadAvatar(body);
+    const { avatar_key: avatarKey } = validateUploadAvatar(body);
     await this.assertAvatarObjectInStorage(avatarKey, publicId);
     const previous = await withUserDatabaseContext(publicId, () =>
       this.repository.findByPublicId(publicId),
