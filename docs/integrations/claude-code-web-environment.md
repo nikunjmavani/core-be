@@ -151,7 +151,7 @@ Everything else runs **on demand, driven by your prompt** — `pnpm compose:up` 
 
 ## How to tell a session is provisioned
 
-The `session-start.sh` banner (top of every session) leads with **`environment provisioned: yes|no`** — `yes` means the cached toolchain the Setup script builds (Node ≥ `.nvmrc` + installed deps) is live in this session. The same line reports `Node`, `deps`, `gh`, `codegraph`, and `agent-os` status. Manual cross-checks: `node -v` (expect 24.x), `gh --version`, `ls /opt/node24`.
+The `session-start.sh` banner (top of every session) leads with **`environment provisioned: yes|no`** — `yes` means the cached toolchain the Setup script builds (Node ≥ `.nvmrc` + installed deps) is live in this session. The same line reports `Node`, `deps`, `gh`, `codegraph`, `gitleaks`, `agent-os`, and `docker` status. Manual cross-checks: `node -v` (expect 24.x), `gh --version`, `ls /opt/node24`.
 
 A `no` means the Setup script has not built this cache yet (e.g. Node still 22, deps missing) — configure the Setup script + `nodejs.org` allowlist, then start a fresh session.
 

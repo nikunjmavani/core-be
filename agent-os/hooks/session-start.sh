@@ -90,6 +90,26 @@ if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && command -v docker >/dev/null 2>&1; 
   fi
 fi
 
+# --- Self-heal: ensure gitleaks is present for the pre-commit secret scan ----
+# The pre-commit guard's "Staged secrets scan" shells out to `gitleaks` and
+# hard-errors when it is missing, so a web session cannot commit without it. The
+# cached Setup script installs it (tooling/setup/agent/install-gitleaks.sh), but
+# an older cached image can predate that wiring — install on demand when absent
+# so commits never block. No-op when already present (the common case): just a
+# `command -v`, so startup stays light. Best-effort and fail-open, like above.
+gitleaks_status="absent"
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks_status="present"
+elif [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && [ -f tooling/setup/agent/install-gitleaks.sh ]; then
+  echo "session-start: gitleaks missing — installing for the pre-commit secret scan (best-effort)…" >&2
+  bash tooling/setup/agent/install-gitleaks.sh >&2 || true
+  if command -v gitleaks >/dev/null 2>&1; then
+    gitleaks_status="installed"
+  else
+    gitleaks_status="install-failed (run: bash tooling/setup/agent/install-gitleaks.sh)"
+  fi
+fi
+
 # --- Build session context: skill routing map + env/commands summary --------
 node_version="$(node -v 2>/dev/null || echo unknown)"
 deps="missing"; [ -x node_modules/.bin/biome ] && deps="installed"
@@ -104,8 +124,8 @@ map_file="$ROOT/agent-os/docs/skill-triggers.md"
 map_section=""
 [ -f "$map_file" ] && map_section="$(cat "$map_file")"
 
-context="$(printf 'core-be session ready — environment provisioned: %s.\n- Node %s (need >=%s) · deps %s · gh %s · codegraph %s · agent-os %s · docker %s%s\n- Startup is light: Node + deps + agent-os:check + (web) Docker daemon — run compose:up / db:migrate / db:seed / tests on demand per prompt.\n- Gates: pnpm validate · pnpm ci:local   (pre-commit: pnpm guard:pre-commit)\n- Custom commands: /validate · /ci-local · /new-domain · /routes-sync\n\nagent-os skill routing — consult skill-index FIRST, then run the listed skill(s) for the files you change:\n\n%s' \
-  "$provisioned" "$node_version" "$required_major" "$deps" "$gh_cli" "$codegraph" "$agent_os_status" "$docker_status" "$node_note" "$map_section")"
+context="$(printf 'core-be session ready — environment provisioned: %s.\n- Node %s (need >=%s) · deps %s · gh %s · codegraph %s · gitleaks %s · agent-os %s · docker %s%s\n- Startup is light: Node + deps + agent-os:check + (web) Docker daemon — run compose:up / db:migrate / db:seed / tests on demand per prompt.\n- Gates: pnpm validate · pnpm ci:local   (pre-commit: pnpm guard:pre-commit)\n- Custom commands: /validate · /ci-local · /new-domain · /routes-sync\n\nagent-os skill routing — consult skill-index FIRST, then run the listed skill(s) for the files you change:\n\n%s' \
+  "$provisioned" "$node_version" "$required_major" "$deps" "$gh_cli" "$codegraph" "$gitleaks_status" "$agent_os_status" "$docker_status" "$node_note" "$map_section")"
 
 # Prefer the structured additionalContext envelope; fall back to plain stdout
 # (also injected as context) when jq is unavailable. Fail-open either way.
