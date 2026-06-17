@@ -68,9 +68,10 @@ stripe, semgrep, sonarqube, redis, postman, resend, codegraph, headroom**. These
 
 They split into two tiers:
 
-- **Default auto-start pair — `codegraph` + `headroom`.** Zero-config, no token (local
-  CLIs); declared in `.mcp.json` by `pnpm setup:local` and the cloud bootstrap so they
-  are available before the first prompt.
+- **Default auto-start pair — `codegraph` + `headroom`** (committed in
+  [`.mcp.default.json`](../../.mcp.default.json)). Zero-config, no token (local CLIs);
+  declared in `.mcp.json` by `pnpm setup:local`, the session-start hook, and the cloud
+  bootstrap so they are available before the first prompt.
 - **On-demand set — the other twelve.** Most need a provider token. Scaffold them into
   `.mcp.json` with **`pnpm mcp:setup`** (`pnpm mcp:setup:default` for just the pair;
   `pnpm mcp:setup --list` for status). On Claude Code web the live set is configured in

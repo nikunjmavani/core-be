@@ -4,7 +4,8 @@
  *
  * The full set of MCP servers (context7, core-be:api, neon, sentry, railway, aws,
  * stripe, semgrep, sonarqube, redis, postman, resend, codegraph, headroom) lives in the
- * committed template `.mcp.example.json`. This command copies them into a local,
+ * committed template `.mcp.example.json`; the default auto-start pair (codegraph +
+ * headroom) lives in `.mcp.default.json`. This command copies them into a local,
  * gitignored `.mcp.json` so the agent's MCP clients can connect. Most servers need a
  * provider token (set via env / `${VAR}` placeholders); servers whose key or CLI is
  * missing simply stay disconnected.
@@ -23,8 +24,8 @@
  * `docs/integrations/claude-code-web-environment.md`.
  */
 import {
-  DEFAULT_MCP_SERVER_KEYS,
   type EnsureResult,
+  ensureDefaultMcpServers,
   ensureMcpServers,
   listMcpServers,
   MCP_CONFIG_PATH,
@@ -101,14 +102,16 @@ function main(): void {
   }
   const dryRun = argv.includes('--check') || argv.includes('--dry-run');
   const defaultOnly = argv.includes('--default');
-  const keys = defaultOnly ? DEFAULT_MCP_SERVER_KEYS : 'all';
 
   const scope = defaultOnly ? 'default pair (codegraph + headroom)' : 'full set';
   process.stdout.write(
     `${ANSI.bold}Scaffolding .mcp.json — ${scope}${dryRun ? ' (dry run)' : ''}${ANSI.reset}\n`,
   );
   try {
-    reportResult(ensureMcpServers({ keys, dryRun }), dryRun);
+    const result = defaultOnly
+      ? ensureDefaultMcpServers({ dryRun })
+      : ensureMcpServers({ keys: 'all', dryRun });
+    reportResult(result, dryRun);
   } catch (error) {
     process.stderr.write(
       `${ANSI.yellow}mcp:setup failed${ANSI.reset}: ${error instanceof Error ? error.message : String(error)}\n`,

@@ -311,10 +311,10 @@ This repo uses **Context7 MCP** for up-to-date, version-specific documentation. 
 
 ## MCP servers (agent tooling)
 
-The committed [`.mcp.example.json`](.mcp.example.json) (mirror [`agent-os/mcp/mcp.example.json`](agent-os/mcp/mcp.example.json)) is the full agent-only MCP set: `context7`, `core-be:api`, `neon`, `sentry`, `railway`, `aws`, `stripe`, `semgrep`, `sonarqube`, `redis`, `postman`, `resend`, `codegraph`, `headroom`. Two tiers:
+Two committed, secret-free templates define the agent-only MCP set (each mirrored under [`agent-os/mcp/`](agent-os/mcp/)):
 
-- **Default auto-start pair — `codegraph` + `headroom`** (zero-config local CLIs, no token). `pnpm setup:local`, the session-start hook, and the cloud bootstrap declare both in the gitignored `.mcp.json` so they are present before the first prompt.
-- **On-demand set — the rest** (most need a provider token). Scaffold with **`pnpm mcp:setup`** (`pnpm mcp:setup:default` for just the pair; `pnpm mcp:setup --list` for status).
+- **Default auto-start pair — [`.mcp.default.json`](.mcp.default.json): `codegraph` + `headroom`** (zero-config local CLIs, no token). `pnpm setup:local`, the session-start hook, and the cloud bootstrap declare both in the gitignored `.mcp.json` so they are present before the first prompt.
+- **On-demand set — [`.mcp.example.json`](.mcp.example.json): the full set** (`context7`, `core-be:api`, `neon`, `sentry`, `railway`, `aws`, `stripe`, `semgrep`, `sonarqube`, `redis`, `postman`, `resend`, `codegraph`, `headroom`; most need a provider token). Scaffold with **`pnpm mcp:setup`** (`pnpm mcp:setup:default` for just the pair; `pnpm mcp:setup --list` for status). The pair in `.mcp.default.json` mirrors its entries in `.mcp.example.json` — the `mcp-config` global test blocks drift.
 
 On **Claude Code web** the live MCP set is loaded by the platform from the environment's MCP settings (web UI), **not** `.mcp.json` — configure `codegraph` + `headroom` there to auto-start, and add others as needed. `Composio`, `Descript`, and `Slack` are intentionally **not** part of this project. See **`docs/integrations/claude-code-web-environment.md`** and **`docs/integrations/agentic-third-party-tooling.md`**.
 

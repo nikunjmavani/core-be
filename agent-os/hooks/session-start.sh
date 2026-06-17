@@ -111,13 +111,12 @@ elif [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && [ -f tooling/setup/agent/install-
 fi
 
 # --- MCP config: declare the default server pair before the first prompt ------
-# Claude Code reads `.mcp.json` at startup; the committed `.mcp.example.json` is the
-# full agent-only set (source of truth). On local sessions, scaffold `.mcp.json` with
-# just the default auto-start pair — codegraph + headroom (zero-config, no token) —
-# when it is absent, mirroring how setup:local does. The other hosted servers are
-# opt-in via `pnpm mcp:setup` (most need a provider token). Web sessions load MCP from
-# the platform environment settings (web UI), NOT this file, so we only report there.
-# Best-effort and fail-open.
+# Claude Code reads `.mcp.json` at startup. On local sessions, scaffold it from the
+# committed `.mcp.default.json` (the default auto-start pair — codegraph + headroom,
+# zero-config, no token) when it is absent, mirroring how setup:local does. The other
+# hosted servers (in `.mcp.example.json`) are opt-in via `pnpm mcp:setup` (most need a
+# provider token). Web sessions load MCP from the platform environment settings (web
+# UI), NOT this file, so we only report there. Best-effort and fail-open.
 mcp_status="n/a"
 if [ -f .mcp.json ]; then
   if command -v jq >/dev/null 2>&1; then
@@ -125,14 +124,11 @@ if [ -f .mcp.json ]; then
   else
     mcp_status="declared"
   fi
-elif [ "${CLAUDE_CODE_REMOTE:-}" != "true" ] && [ -f .mcp.example.json ]; then
-  if command -v jq >/dev/null 2>&1 \
-    && jq '{mcpServers: (.mcpServers | {codegraph, headroom})}' .mcp.example.json > .mcp.json.tmp 2>/dev/null; then
-    mv .mcp.json.tmp .mcp.json
+elif [ "${CLAUDE_CODE_REMOTE:-}" != "true" ] && [ -f .mcp.default.json ]; then
+  if cp .mcp.default.json .mcp.json 2>/dev/null; then
     mcp_status="scaffolded default pair (codegraph + headroom)"
-    echo "session-start: scaffolded .mcp.json with the default pair (codegraph + headroom); add the rest with \`pnpm mcp:setup\`." >&2
+    echo "session-start: scaffolded .mcp.json from .mcp.default.json (codegraph + headroom); add the rest with \`pnpm mcp:setup\`." >&2
   else
-    rm -f .mcp.json.tmp 2>/dev/null
     mcp_status="template only (run: pnpm mcp:setup:default)"
   fi
 else
