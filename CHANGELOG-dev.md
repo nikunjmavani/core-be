@@ -6,6 +6,48 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.8.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.7.0-dev.0...v4.8.0-dev.0) (2026-06-17)
+
+
+### Added
+
+* **mcp:** two-tier MCP setup — default codegraph+headroom pair + on-demand `pnpm mcp:setup` ([#683](https://github.com/nikunjmavani/core-be/issues/683)) ([b8331aa](https://github.com/nikunjmavani/core-be/commit/b8331aa63bb26adcfe81f55983614f31d7617b1b))
+
+## [4.7.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.9-dev.0...v4.7.0-dev.0) (2026-06-17)
+
+
+### Added
+
+* **ai:** cross-platform AI commands, SessionStart hook, and guardrails ([#643](https://github.com/nikunjmavani/core-be/issues/643)) ([b6fccf1](https://github.com/nikunjmavani/core-be/commit/b6fccf1630257d2920ba3831f625bbeeca7cad41))
+* **auth:** GET /auth/me/context — frontend-ready effective context ([#659](https://github.com/nikunjmavani/core-be/issues/659)) ([d08bb35](https://github.com/nikunjmavani/core-be/commit/d08bb35049c443015b3d53be0f13c7a80f4a845a))
+* **config:** gated local-dev defaults for DB/Redis/origins/retention ([#651](https://github.com/nikunjmavani/core-be/issues/651)) ([773e427](https://github.com/nikunjmavani/core-be/commit/773e427ca11bd44d1a65fea996ebbc92a629c236))
+* **mcp:** scope project MCP servers and wire MCP setup into the session-start flow ([#675](https://github.com/nikunjmavani/core-be/issues/675)) ([9ed07b4](https://github.com/nikunjmavani/core-be/commit/9ed07b4ba576db0ac5849d9c7de76b4c2c91af73))
+* **scalar:** publish OpenAPI to Scalar Registry (CI docs pipeline + interactive setup) ([#672](https://github.com/nikunjmavani/core-be/issues/672)) ([3ddc9b2](https://github.com/nikunjmavani/core-be/commit/3ddc9b2325a8cc8417bfe679c748a64f5c510da2))
+
+
+### Fixed
+
+* **ci:** publish API docs (incl. Scalar Registry) independently of release-please ([#676](https://github.com/nikunjmavani/core-be/issues/676)) ([7c4fe62](https://github.com/nikunjmavani/core-be/commit/7c4fe62027431e4d79e006afb84cc24c61e5fc67))
+* **ci:** publish Scalar registry from GitHub Variables ([#677](https://github.com/nikunjmavani/core-be/issues/677)) ([cfaaef8](https://github.com/nikunjmavani/core-be/commit/cfaaef883eb57327cfd3f558597407250d3a752c))
+* **config:** make .env.local the self-contained primary local env file ([#650](https://github.com/nikunjmavani/core-be/issues/650)) ([aeb32e7](https://github.com/nikunjmavani/core-be/commit/aeb32e7c60d4686f71b2f14f46efe873404652c3))
+* **setup:** activate pinned Node on PATH in agent bootstrap step 1 ([#649](https://github.com/nikunjmavani/core-be/issues/649)) ([968d54f](https://github.com/nikunjmavani/core-be/commit/968d54fae13b6e8cb9c40c39e565c116739dd479))
+
+
+### Changed
+
+* **api:** rename inbound Idempotency-Key header to X-Idempotency-Key ([#656](https://github.com/nikunjmavani/core-be/issues/656)) ([b595c1b](https://github.com/nikunjmavani/core-be/commit/b595c1b0ed35a9248f1dd53660c7b3afb849eee4))
+* **billing:** remove deprecated /stripe/webhook alias ([#670](https://github.com/nikunjmavani/core-be/issues/670)) ([e0a4c8b](https://github.com/nikunjmavani/core-be/commit/e0a4c8bfac04fcbe041c6b6c1e47a5585d411820))
+* **constants:** centralize scope-localized config constants ([#667](https://github.com/nikunjmavani/core-be/issues/667)) ([f6dad66](https://github.com/nikunjmavani/core-be/commit/f6dad66887513bd519c020794526b3b32c8c728a))
+* **quality:** clear SonarQube debt on the deployed surface ([#663](https://github.com/nikunjmavani/core-be/issues/663)) ([8f5116a](https://github.com/nikunjmavani/core-be/commit/8f5116a5ddb29ac435078922ed7188ca4f6f1df3))
+* route consistency + personal/team org model ([#658](https://github.com/nikunjmavani/core-be/issues/658)) ([d304b88](https://github.com/nikunjmavani/core-be/commit/d304b88439d8611d7b7d668f4b0d1f15c9a7a2dc))
+* **validation:** extract shared parseWithSchema + parseCursorPaginatedQuery helpers ([#661](https://github.com/nikunjmavani/core-be/issues/661)) ([7831156](https://github.com/nikunjmavani/core-be/commit/78311567eb27b6676b63fa3dec89ab3d1bab3130))
+
+
+### Documentation
+
+* **integrations:** add Codex Cloud agent environment guide and GitHub prerequisites ([#660](https://github.com/nikunjmavani/core-be/issues/660)) ([d2128de](https://github.com/nikunjmavani/core-be/commit/d2128de716f1f19c25d934c87ecb517baf05d04e))
+* **integrations:** common Claude Code session-setup overview ([#674](https://github.com/nikunjmavani/core-be/issues/674)) ([9052152](https://github.com/nikunjmavani/core-be/commit/90521520c34495a066342656f1ba104beb827f54))
+
 ## [4.6.9-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.8-dev.0...v4.6.9-dev.0) (2026-06-15)
 
 

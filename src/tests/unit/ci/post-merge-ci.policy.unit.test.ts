@@ -43,6 +43,18 @@ describe('post-merge CI trigger policy', () => {
     expect(workflow).toMatch(/deploy:[\s\S]*?needs:\s*[\s\S]*-\s*release-sbom/);
   });
 
+  it('publishes API docs independently of release-please (a release-please failure must not skip Scalar/Postman publishing)', () => {
+    const workflow = readFileSync(POST_MERGE_WORKFLOW, 'utf8');
+    const apiDocsBlock =
+      workflow.match(/^ {2}api-docs:\n([\s\S]*?)\n {2}release-please:/m)?.[1] ?? '';
+    expect(apiDocsBlock).not.toBe('');
+    // api-docs must not depend on the release-please job result …
+    expect(apiDocsBlock).toMatch(/needs:\s*\[changes\]/);
+    expect(apiDocsBlock).not.toMatch(/needs\.release-please\.result/);
+    // … and still publishes via the reusable docs workflow.
+    expect(apiDocsBlock).toContain('reusable-openapi-postman-publish.yml');
+  });
+
   it('reuses sbom artifact for release-sbom (no duplicate generation)', () => {
     const workflow = readFileSync(POST_MERGE_WORKFLOW, 'utf8');
     expect(workflow).toContain('Download SBOM artifact from sbom job');

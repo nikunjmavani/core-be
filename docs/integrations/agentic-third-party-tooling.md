@@ -64,9 +64,63 @@ and the Stripe MCP lets an agent inspect test-mode objects. They coexist; none r
 The MCP servers in [`.mcp.example.json`](../../.mcp.example.json) (mirrored at
 `agent-os/mcp/mcp.example.json`): **context7, core-be:api, neon, sentry, railway, aws,
 stripe, semgrep, sonarqube, redis, postman, resend, codegraph, headroom**. These are
-*agent-only*; CI/CD and runtime do not use them. (The **GitHub** and **Slack** MCPs are
-intentionally left out of the project config — use `gh` for GitHub; Slack, if wanted, is
-configured at the user/local level so personal-account servers stay separate from the repo.)
+*agent-only*; CI/CD and runtime do not use them.
+
+They split into two tiers:
+
+- **Default auto-start pair — `codegraph` + `headroom`** (committed in
+  [`.mcp.default.json`](../../.mcp.default.json)). Zero-config, no token (local CLIs);
+  declared in `.mcp.json` by `pnpm setup:local`, the session-start hook, and the cloud
+  bootstrap so they are available before the first prompt.
+- **On-demand set — the other twelve.** Most need a provider token. Scaffold them into
+  `.mcp.json` with **`pnpm mcp:setup`** — all at once, or a subset by name
+  (`pnpm mcp:setup stripe sentry`); `pnpm mcp:setup:default` for just the pair, and
+  `pnpm mcp:setup --list` for status. On Claude Code web the live set is configured in
+  the environment MCP settings (web UI), not `.mcp.json` — see
+  [claude-code-web-environment.md](claude-code-web-environment.md).
+
+The **GitHub**, **Composio**, **Descript**, and **Slack** MCPs are intentionally **not**
+part of this project's config — use `gh` / the GitHub MCP for GitHub, and keep any
+personal-account servers at the user level so they stay separate from the repo.
+
+## Setting up MCP locally (`pnpm mcp:setup`)
+
+`.mcp.json` (gitignored) is scaffolded from the committed templates — pick the scope:
+
+| Command | Scaffolds |
+| ------- | --------- |
+| `pnpm mcp:setup` | the full set (default pair + the 12 on-demand servers) |
+| `pnpm mcp:setup <name>…` | only the named servers, e.g. `pnpm mcp:setup stripe sentry redis` |
+| `pnpm mcp:setup:default` | only the auto-start pair (codegraph + headroom) |
+| `pnpm mcp:setup --list` | every server + whether it is declared (the canonical list) |
+| `pnpm mcp:setup --check` | dry run — report what would change, no write |
+
+Merges are **non-destructive**: existing `.mcp.json` entries (with real keys) are kept, and a
+server whose token or CLI is missing simply stays disconnected until you fill its `${VAR}` in
+`.env.local`. Unknown names are ignored with a hint. On Claude Code web the live set is
+configured in the environment MCP settings (web UI), not this file.
+
+### On-demand servers (everything except the default pair)
+
+`pnpm mcp:setup --list` prints the live list; this snapshot shows what each needs to connect:
+
+| Server | Purpose | Runtime | Token / env |
+| ------ | ------- | ------- | ----------- |
+| `context7` | version-specific backend library docs | `npx` | `CONTEXT7_API_KEY` |
+| `core-be:api` | the app's own MCP at `/api/v1/mcp` | local URL | none — needs `pnpm dev` running |
+| `neon` | Neon Postgres management | remote URL | OAuth at connect |
+| `sentry` | error tracking / Seer root-cause | remote URL | OAuth at connect |
+| `railway` | deploy / redeploy | `npx` | Railway login / token |
+| `aws` | AWS API access | `uvx` | ambient AWS creds / SSO |
+| `stripe` | inspect test-mode Stripe objects | remote URL | OAuth at connect |
+| `semgrep` | SAST scan + structured findings | `uvx` | none |
+| `sonarqube` | read findings + quality gate | `docker` | `SONARQUBE_TOKEN`, `SONARQUBE_URL` |
+| `redis` | inspect Redis | `uvx` | `REDIS_URL` |
+| `postman` | Postman workspace / API | remote URL | OAuth or bearer |
+| `resend` | send test emails | `docker` | `RESEND_API_KEY` |
+
+Runtime prerequisites: node / `npx` (always present), `uvx` (from `uv`) for `aws` / `semgrep` /
+`redis`, and `docker` for `sonarqube` / `resend`.
 
 ## Agent MCP server notes (CI/CD keeps the CLIs)
 
@@ -103,11 +157,3 @@ large tool output, logs, files, and RAG chunks before they reach the model (`hea
 > [Resend](https://github.com/resend/mcp-send-email),
 > [Postman](https://learning.postman.com/docs/developer/postman-api/postman-mcp-server/set-up-postman-mcp-server),
 > [Docker MCP](https://docs.docker.com/ai/mcp-catalog-and-toolkit/toolkit/).
-
-## Umbrella option — Composio
-
-Composio is a single MCP layer over 500+ apps. It is an **alternative** to wiring each
-vendor's first-party MCP, useful for cross-app glue (e.g. post Sonar findings to Slack/Notion).
-Trade-off: one auth/governance plane vs. the deeper first-party tools (Sentry Seer, Stripe test
-fixtures). For this backend, keep the first-party MCP servers above and reach for Composio only
-for cross-app workflows.

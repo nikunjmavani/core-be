@@ -193,12 +193,15 @@ jobs:
 
   api-docs:
     name: API docs
-    needs: [release-please, changes]
+    # API docs (OpenAPI + Postman + Scalar Registry) publish from the merged source at
+    # github.sha and are intentionally decoupled from release-please: a release-please
+    # failure (e.g. an expired RELEASE_PLEASE_TOKEN) must NOT skip docs publishing.
+    # release-please only opens a release PR — it does not bump package.json in this run,
+    # so there is nothing for the docs job to wait on.
+    needs: [changes]
     if: |
       always() &&
       inputs.skip_docs != true &&
-      needs.release-please.result != 'failure' &&
-      needs.release-please.result != 'cancelled' &&
       (
         needs.changes.outputs.docs-artifacts == 'true' ||
         needs.changes.outputs.src-code == 'true'

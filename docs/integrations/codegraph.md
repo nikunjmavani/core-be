@@ -56,12 +56,12 @@ npm i -g @colbymchenry/codegraph
 codegraph install --target=cursor,claude --location=local --yes   # configure agents + build index
 ```
 
-Or copy the committed templates and fill in your own keys (both real configs are gitignored):
+Or scaffold the committed templates and fill in your own keys (both real configs are gitignored):
 
 ```bash
 cp .cursor/mcp.example.json .cursor/mcp.json   # Cursor
-cp .mcp.example.json .mcp.json                 # Claude Code
-# replace ${CONTEXT7_API_KEY} with your key; the codegraph entry needs no edits
+pnpm mcp:setup:default                         # Claude Code — codegraph + headroom (default pair)
+# `pnpm mcp:setup` for the full set; then replace ${CONTEXT7_API_KEY} etc. — the codegraph entry needs no edits
 ```
 
 Non-interactive variants:

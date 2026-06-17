@@ -1,6 +1,6 @@
 ---
 description: Auto-triggers structure-maintainer skill when project documentation, rules, or skill files change.
-globs: AGENTS.md, CLAUDE.md, README.md, agent-os/rules/**/*.mdc, agent-os/skills/**/SKILL.md, agent-os/agents/*.md, agent-os/mcp/*.json, .mcp.example.json
+globs: AGENTS.md, CLAUDE.md, README.md, agent-os/rules/**/*.mdc, agent-os/skills/**/SKILL.md, agent-os/agents/*.md, agent-os/mcp/*.json, .mcp.example.json, .mcp.default.json
 alwaysApply: false
 ---
 

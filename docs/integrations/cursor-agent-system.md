@@ -92,9 +92,9 @@ Configure once — all platforms read the same file.
 | **context7** | Version-specific backend library docs |
 | **core-be:api** | Local Fastify MCP at `/api/v1/mcp` |
 | **headroom** | Context compression — compress large tool output / logs / files before loading into context |
-| **neon**, **sentry**, **github**, **slack**, **railway**, **aws**, **stripe** | Optional hosted integrations |
+| **neon**, **sentry**, **railway**, **aws**, **stripe**, **semgrep**, **sonarqube**, **redis**, **postman**, **resend** | On-demand hosted integrations — scaffold with `pnpm mcp:setup` |
 
-CodeGraph is provisioned in `pnpm setup:local` (phase 7/9).
+`codegraph` + `headroom` are the **default auto-start pair** (zero-config, no token), provisioned in `pnpm setup:local` (phase 7/9); the on-demand servers above are opt-in via `pnpm mcp:setup`. The `github`, `composio`, `descript`, and `slack` MCPs are intentionally not part of this project.
 
 ---
 

@@ -703,12 +703,17 @@ const envSchemaBase = z.object({
   /** Postman workspace ID where the API documentation collection is published. GitHub Environment secret via `pnpm github:sync`. */
   POSTMAN_WORKSPACE_ID: z.string().min(1).optional(),
 
-  // Scalar Registry API documentation publishing (GitHub Actions only — consumed by .github/workflows/reusable-openapi-postman-publish.yml and `pnpm docs:upload:scalar`)
-  /** Scalar API key used by `pnpm docs:upload:scalar` to publish the OpenAPI document to the Scalar Registry. GitHub Environment secret via `pnpm github:sync`. */
+  // Scalar Registry API documentation publishing (GitHub Actions only — consumed by
+  // .github/workflows/reusable-openapi-postman-publish.yml and `pnpm docs:upload:scalar`).
+  // Secret vs Variable follows github:sync `classifyKey`: only the API key is sensitive
+  // (Secret, read via `secrets.SCALAR_API_KEY`); the namespace/slug are public registry
+  // identifiers (Variables, read via `vars.SCALAR_NAMESPACE` / `vars.SCALAR_SLUG`). The
+  // workflow's `secrets.*` vs `vars.*` access MUST match this split.
+  /** Scalar API key used by `pnpm docs:upload:scalar` to publish the OpenAPI document to the Scalar Registry. Sensitive → GitHub Environment Secret (read via `secrets.SCALAR_API_KEY`); pushed by `pnpm github:sync`. */
   SCALAR_API_KEY: z.string().min(1).optional(),
-  /** Scalar team namespace the OpenAPI document is published under (registry URL `@<namespace>/apis/<slug>`). GitHub Environment secret via `pnpm github:sync`. */
+  /** Scalar team namespace the OpenAPI document is published under (registry URL `@<namespace>/apis/<slug>`). Non-sensitive → GitHub Environment Variable (read via `vars.SCALAR_NAMESPACE`); pushed by `pnpm github:sync`. */
   SCALAR_NAMESPACE: z.string().min(1).optional(),
-  /** Scalar Registry slug for the published OpenAPI document; the upload script defaults to `core-be` when unset. GitHub Environment secret via `pnpm github:sync`. */
+  /** Scalar Registry slug for the published OpenAPI document; the upload script defaults to `core-be` when unset. Non-sensitive → GitHub Environment Variable (read via `vars.SCALAR_SLUG`); pushed by `pnpm github:sync`. */
   SCALAR_SLUG: z.string().min(1).optional(),
 
   // Release automation (GitHub Actions only — consumed by .github/workflows/post-merge-ci.yml)
