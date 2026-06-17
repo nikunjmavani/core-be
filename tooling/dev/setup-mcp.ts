@@ -11,6 +11,7 @@
  * missing simply stay disconnected.
  *
  *   pnpm mcp:setup              # all servers (on-demand hosted integrations)
+ *   pnpm mcp:setup <name>...    # only the named servers (e.g. stripe sentry redis)
  *   pnpm mcp:setup:default      # only the auto-start pair (codegraph + headroom)
  *   pnpm mcp:setup --check      # report what would change; no write
  *   pnpm mcp:setup --list       # list template servers + .mcp.json status
@@ -44,6 +45,7 @@ function printHelp(): void {
   process.stdout.write(
     `${ANSI.bold}pnpm mcp:setup${ANSI.reset} — scaffold .mcp.json from .mcp.example.json\n\n` +
       `  pnpm mcp:setup            scaffold ALL template servers (on-demand integrations)\n` +
+      `  pnpm mcp:setup <name>...  scaffold only the named servers (e.g. stripe sentry)\n` +
       `  pnpm mcp:setup:default    scaffold only codegraph + headroom (auto-start pair)\n` +
       `  pnpm mcp:setup --default  same as mcp:setup:default\n` +
       `  pnpm mcp:setup --check    dry run: report what would change, no write\n` +
@@ -71,7 +73,7 @@ function printList(): void {
 function reportResult(result: EnsureResult, dryRun: boolean): void {
   if (result.missingFromTemplate.length > 0) {
     process.stdout.write(
-      `${ANSI.yellow}!${ANSI.reset} not in template (ignored): ${result.missingFromTemplate.join(', ')}\n`,
+      `${ANSI.yellow}!${ANSI.reset} unknown server(s) ignored: ${result.missingFromTemplate.join(', ')} — run \`pnpm mcp:setup --list\` for valid names\n`,
     );
   }
   if (result.alreadyPresent.length > 0) {
@@ -101,16 +103,21 @@ function main(): void {
     return;
   }
   const dryRun = argv.includes('--check') || argv.includes('--dry-run');
-  const defaultOnly = argv.includes('--default');
+  const names = argv.filter((arg) => !arg.startsWith('-'));
+  const defaultOnly = names.length === 0 && argv.includes('--default');
 
-  const scope = defaultOnly ? 'default pair (codegraph + headroom)' : 'full set';
+  let scope = 'full set';
+  if (names.length > 0) scope = `selected: ${names.join(', ')}`;
+  else if (defaultOnly) scope = 'default pair (codegraph + headroom)';
+
   process.stdout.write(
     `${ANSI.bold}Scaffolding .mcp.json — ${scope}${dryRun ? ' (dry run)' : ''}${ANSI.reset}\n`,
   );
   try {
-    const result = defaultOnly
-      ? ensureDefaultMcpServers({ dryRun })
-      : ensureMcpServers({ keys: 'all', dryRun });
+    let result: EnsureResult;
+    if (names.length > 0) result = ensureMcpServers({ keys: names, dryRun });
+    else if (defaultOnly) result = ensureDefaultMcpServers({ dryRun });
+    else result = ensureMcpServers({ keys: 'all', dryRun });
     reportResult(result, dryRun);
   } catch (error) {
     process.stderr.write(
