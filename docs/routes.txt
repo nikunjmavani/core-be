@@ -1,6 +1,6 @@
 ================================================================================
   ROUTE CATALOG — core-be
-  Total routes: 132
+  Total routes: 131
 ================================================================================
 
 Legend:
@@ -59,13 +59,12 @@ Legend:
 
 ================================================================================
   DOMAIN: BILLING (/api/v1/billing)
-  Routes: 11
+  Routes: 10
 ================================================================================
 
   — Sub Domains —
   GET    /api/v1/billing/plans                                    200  -    both  PUBLIC
   GET    /api/v1/billing/plans/:plan_id                           200  -    both  PUBLIC
-  POST   /api/v1/billing/stripe/webhook                           200  -    both  PUBLIC
   GET    /api/v1/billing/subscriptions                            200  -    both  PERM: subscription:read
   POST   /api/v1/billing/subscriptions                            201  req  both  PERM: subscription:manage
   GET    /api/v1/billing/subscriptions/:subscription_id           200  -    both  PERM: subscription:read
@@ -216,8 +215,8 @@ Legend:
   SUMMARY
 ================================================================================
 
-  Total routes    : 132
-  Public          : 20
+  Total routes    : 131
+  Public          : 19
   Authenticated   : 50
   Role-guarded    : 9
   Perm-guarded    : 50
@@ -243,10 +242,10 @@ Legend:
   See docs/reference/reliability/idempotency.md and OpenAPI operation descriptions.
 
 ================================================================================
-  DEPRECATED ROUTES (1) — Sunset / Deprecation headers
+  DEPRECATED ROUTES (0) — Sunset / Deprecation headers
 ================================================================================
 
-    POST /api/v1/billing/stripe/webhook
+  (none)
 
 ================================================================================
   PERMISSION CODES REFERENCE

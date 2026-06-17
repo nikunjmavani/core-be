@@ -1027,7 +1027,8 @@ src/
     │   ├── redis-topology-warn.util.ts
     │   ├── redis-url.parse.util.ts
     │   ├── redis-url.util.ts
-    │   └── redis.client.ts
+    │   ├── redis.client.ts
+    │   └── redis.constants.ts
     ├── database/
     │   ├── __tests__/
     │   │   └── unit/
@@ -1239,6 +1240,7 @@ src/
     │   ├── health.ts
     │   ├── OVERVIEW.md
     │   ├── queue-dashboard.ts
+    │   ├── queue.constants.ts
     │   └── scheduler.ts
     ├── resilience/
     │   ├── lua/
@@ -1769,8 +1771,6 @@ src/
     │   ├── OVERVIEW.md
     │   └── worker-bulkheads.performance.test.ts
     ├── security/
-    │   ├── api-versioning/
-    │   │   └── deprecated-route-headers.security.test.ts
     │   ├── auth/
     │   │   ├── api-key-auth.security.test.ts
     │   │   ├── auth-enforcement.security.test.ts

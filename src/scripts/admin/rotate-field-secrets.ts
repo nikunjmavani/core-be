@@ -17,8 +17,9 @@ import {
   encryptFieldSecret,
 } from '@/shared/utils/security/field-secret-encryption.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { AES_GCM_ALGORITHM } from '@/shared/constants/security.constants.js';
 
-const ALGORITHM = 'aes-256-gcm';
+const ALGORITHM = AES_GCM_ALGORITHM;
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
 const VERSION_PREFIX = 'v1:';

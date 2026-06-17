@@ -2,6 +2,10 @@ import type { FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
 import fastifyHelmet from '@fastify/helmet';
 import { env } from '@/shared/config/env.config.js';
+import { SECONDS_PER_DAY } from '@/shared/constants/ttl.constants.js';
+
+/** HSTS `max-age` (seconds): one year — the standard, preload-eligible duration. */
+const HSTS_MAX_AGE_SECONDS = 365 * SECONDS_PER_DAY;
 
 const helmetMiddleware: FastifyPluginAsync = async (app) => {
   await app.register(fastifyHelmet, {
@@ -31,7 +35,7 @@ const helmetMiddleware: FastifyPluginAsync = async (app) => {
     // strict-origin-when-cross-origin referrer policy give the standard
     // HSTS protection without those traps.
     hsts: {
-      maxAge: 31_536_000,
+      maxAge: HSTS_MAX_AGE_SECONDS,
       includeSubDomains: env.HSTS_INCLUDE_SUBDOMAINS,
       preload: env.HSTS_PRELOAD_REGISTERED,
     },

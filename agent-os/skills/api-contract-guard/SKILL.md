@@ -23,7 +23,7 @@ description: Enforces the core-be public API contract conventions — snake_case
 |-----|------|-----------|--------|
 | 200 | 201  | 200       | 204    |
 
-Exceptions (protocol-owned, stay 200): `POST /billing/webhook`, `POST /billing/stripe/webhook`, `POST /api/v1/mcp`.
+Exceptions (protocol-owned, stay 200): `POST /billing/webhook`, `POST /api/v1/mcp`.
 The policy is enforced centrally in `method-status-policy.middleware.ts`; declared statuses live in `tooling/openapi/route-catalog/route-success-statuses.json` and are runtime-verified by `pnpm validate:route-success-coverage` (drift fails CI).
 
 ## Error status — when to set which (full guide: docs/reference/api/response-codes.md)

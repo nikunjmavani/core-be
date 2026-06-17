@@ -1528,3 +1528,9 @@ api post /api/v1/auth/mfa/verify api path removed without deprecation
 api delete /api/v1/auth/mfa/{mfa_method_id} api path removed without deprecation
 api post /api/v1/auth/webauthn/register/options api path removed without deprecation
 api post /api/v1/auth/webauthn/register/verify api path removed without deprecation
+
+# The deprecated POST /api/v1/billing/stripe/webhook backwards-compat alias was removed.
+# The canonical receiver POST /api/v1/billing/webhook (same handler) remains — new Stripe
+# Dashboard endpoints and CLI forwarders use the canonical path. Pinned by the billing e2e
+# + stripe-webhook integration tests (retargeted to /billing/webhook).
+api post /api/v1/billing/stripe/webhook api path removed without deprecation

@@ -11,6 +11,9 @@ import { captureException } from '@/infrastructure/observability/sentry/sentry.j
 const PERMISSION_CACHE_PREFIX = 'perm';
 const PERMISSION_CACHE_ORGANIZATION_VERSION_PREFIX = 'perm:org';
 
+/** Upper bound (exclusive) for the 0..60s jitter smeared over permission-cache expirations. */
+const PERMISSION_CACHE_JITTER_MAX_SECONDS = 61;
+
 /**
  * Number of stampede poll iterations before a waiter falls through to its own
  * recompute (audit-#9).
@@ -126,7 +129,7 @@ export async function setCachedPermissions(
   try {
     const version = await getOrganizationCacheVersion(organizationId);
     /** Small jitter so many users do not expire and recompute in the same second. */
-    const jitterSeconds = randomInt(61);
+    const jitterSeconds = randomInt(PERMISSION_CACHE_JITTER_MAX_SECONDS);
     await redisConnection.set(
       buildKey(version, userId, organizationId),
       JSON.stringify(codes),
@@ -167,7 +170,7 @@ async function commitCachedPermissionsIfLockHeld(
   try {
     const version = await getOrganizationCacheVersion(organizationId);
     /** Small jitter so many users do not expire and recompute in the same second. */
-    const jitterSeconds = randomInt(61);
+    const jitterSeconds = randomInt(PERMISSION_CACHE_JITTER_MAX_SECONDS);
     await redisConnection.eval(
       PERMISSION_CACHE_COMMIT_IF_LOCK_HELD_LUA,
       2,

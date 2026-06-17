@@ -89,14 +89,4 @@ export const notifyRouteResponses: Record<string, ResponseDefinition> = {
     schema: wrapSuccess(schemas.webhookTestSchema, schemas.webhookTestExample),
     example: null,
   },
-
-  // ── Stripe Webhook ──
-  'POST /api/v1/billing/stripe/webhook': {
-    statusCode: 200,
-    schema: wrapSuccess(
-      { type: 'object', properties: { received: { type: 'boolean' } } },
-      { received: true },
-    ),
-    example: null,
-  },
 };

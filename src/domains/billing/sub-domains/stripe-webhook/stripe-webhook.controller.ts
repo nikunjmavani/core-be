@@ -15,7 +15,7 @@ import type { StripeWebhookService } from './stripe-webhook.service.js';
 export function createStripeWebhookController(stripeWebhookService: StripeWebhookService) {
   return {
     /**
-     * POST /api/v1/billing/webhook (and the deprecated /stripe/webhook alias).
+     * POST /api/v1/billing/webhook.
      * Signature verification runs in stripeWebhookIngressPlugin before this handler;
      * because the raw body is validated by the signature, no Zod request validator applies.
      */

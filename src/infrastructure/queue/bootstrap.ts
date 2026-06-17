@@ -17,6 +17,7 @@ import {
 import { getSelectedWorkerQueueFamilies } from '@/infrastructure/queue/worker-runtime/worker-queue-family.util.js';
 import { getWorkerRegistrationsForFamilies } from '@/infrastructure/queue/worker-runtime/worker-registration.registry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { THIRTY_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
 import type { DomainContainers } from '@/worker-containers.js';
 
 export { closeDeadLetterQueues } from '@/infrastructure/queue/dlq/dead-letter.js';
@@ -34,7 +35,8 @@ export interface WorkerHandle {
   queueName?: string;
 }
 
-const RSS_WARNING_THRESHOLD_BYTES = 512 * 1024 * 1024; // 512 MB
+const RSS_WARNING_THRESHOLD_MEGABYTES = 512;
+const RSS_WARNING_THRESHOLD_BYTES = RSS_WARNING_THRESHOLD_MEGABYTES * 1024 * 1024;
 let rssMonitorInterval: ReturnType<typeof setInterval> | null = null;
 
 /**
@@ -46,9 +48,12 @@ function startRssMonitoring(): void {
     const rssBytes = process.memoryUsage().rss;
     if (rssBytes > RSS_WARNING_THRESHOLD_BYTES) {
       const rssMegabytes = Math.round(rssBytes / 1024 / 1024);
-      logger.warn({ rssMegabytes, thresholdMegabytes: 512 }, 'worker.rss.exceeds.threshold');
+      logger.warn(
+        { rssMegabytes, thresholdMegabytes: RSS_WARNING_THRESHOLD_MEGABYTES },
+        'worker.rss.exceeds.threshold',
+      );
     }
-  }, 30_000); // Check every 30 seconds
+  }, THIRTY_SECONDS_MS); // Check every 30 seconds
 }
 
 /**

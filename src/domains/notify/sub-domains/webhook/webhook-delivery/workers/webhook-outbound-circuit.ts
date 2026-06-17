@@ -2,13 +2,30 @@ import CircuitBreaker from 'opossum';
 import type { WebhookDeliveryFetch } from '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-delivery.worker.js';
 import { safeWebhookUrlForLogs } from '@/shared/utils/security/safe-webhook-url-for-logs.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import {
+  FIVE_SECONDS_MS,
+  MILLISECONDS_PER_HOUR,
+  MILLISECONDS_PER_MINUTE,
+  TEN_SECONDS_MS,
+} from '@/shared/constants/ttl.constants.js';
 
 const WEBHOOK_FETCH_TIMEOUT_MS = 30_000;
 
 /** Maximum number of per-webhook circuit breakers kept resident (LRU eviction beyond this). */
 const WEBHOOK_CIRCUIT_CACHE_MAX_ENTRIES = 5_000;
 /** Idle time after which an unused breaker is evicted and shut down (1 hour). */
-const WEBHOOK_CIRCUIT_CACHE_IDLE_TTL_MS = 60 * 60 * 1_000;
+const WEBHOOK_CIRCUIT_CACHE_IDLE_TTL_MS = MILLISECONDS_PER_HOUR;
+
+/** Extra request budget beyond the fetch timeout before Opossum trips the breaker (ms). */
+const WEBHOOK_CIRCUIT_TIMEOUT_BUFFER_MS = FIVE_SECONDS_MS;
+/** Opossum error-rate threshold (percent) over the rolling volume before the breaker opens. */
+const WEBHOOK_CIRCUIT_ERROR_THRESHOLD_PERCENTAGE = 50;
+/** Time the breaker stays open before allowing a half-open trial request (ms). */
+const WEBHOOK_CIRCUIT_RESET_TIMEOUT_MS = MILLISECONDS_PER_MINUTE;
+/** Minimum calls in the rolling window before the error percentage is evaluated. */
+const WEBHOOK_CIRCUIT_VOLUME_THRESHOLD = 5;
+/** Maximum jitter added to delivery backoff, as a fraction of the base delay. */
+const WEBHOOK_DELIVERY_BACKOFF_JITTER_RATIO = 0.3;
 
 /** Cache entry pairing a breaker with the last time it was accessed (for idle-TTL eviction). */
 type WebhookCircuitCacheEntry = {
@@ -95,10 +112,10 @@ function getWebhookOutboundCircuit(webhookId: string, webhookUrl: string): Circu
   evictLeastRecentlyUsedIfFull();
 
   const circuit = new CircuitBreaker(executeWebhookFetch, {
-    timeout: WEBHOOK_FETCH_TIMEOUT_MS + 5_000,
-    errorThresholdPercentage: 50,
-    resetTimeout: 60_000,
-    volumeThreshold: 5,
+    timeout: WEBHOOK_FETCH_TIMEOUT_MS + WEBHOOK_CIRCUIT_TIMEOUT_BUFFER_MS,
+    errorThresholdPercentage: WEBHOOK_CIRCUIT_ERROR_THRESHOLD_PERCENTAGE,
+    resetTimeout: WEBHOOK_CIRCUIT_RESET_TIMEOUT_MS,
+    volumeThreshold: WEBHOOK_CIRCUIT_VOLUME_THRESHOLD,
     name: `webhook-outbound:${webhookId}`,
   });
 
@@ -174,8 +191,8 @@ export function invalidateWebhookOutboundCircuit(webhookId: number | string): vo
  */
 export function webhookDeliveryBackoffWithJitter(attemptsMade: number): number {
   const attemptIndex = Math.max(attemptsMade, 1);
-  const baseDelayMs = 10_000 * 2 ** (attemptIndex - 1);
-  const jitterMs = Math.floor(Math.random() * baseDelayMs * 0.3);
+  const baseDelayMs = TEN_SECONDS_MS * 2 ** (attemptIndex - 1);
+  const jitterMs = Math.floor(Math.random() * baseDelayMs * WEBHOOK_DELIVERY_BACKOFF_JITTER_RATIO);
   return baseDelayMs + jitterMs;
 }
 
