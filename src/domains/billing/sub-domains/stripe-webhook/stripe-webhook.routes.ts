@@ -52,7 +52,7 @@ export function stripeWebhookRoutes(
           summary: 'Stripe webhook receiver',
           description:
             'Public endpoint for Stripe billing events. Verifies the `Stripe-Signature` header against `STRIPE_WEBHOOK_SECRET` and enqueues durable processing. Raw JSON body is required for signature verification.',
-          tags: ['Billing', 'Stripe Webhook'],
+          tags: ['Stripe Webhook'],
         },
       },
       controller.handleWebhook,

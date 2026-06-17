@@ -22,7 +22,6 @@
     "User": "Current user profile management",
     "User Settings": "User personal settings (dark mode, language, etc.)",
     "Notification Preferences": "Per-user notification type and channel preferences",
-    "Admin": "Platform administration endpoints (requires admin role)",
     "User Management": "Admin user management — list, update, suspend, delete users",
     "Organization": "Organization CRUD and management",
     "Organization Settings": "Organization-level settings and policies",
@@ -33,9 +32,9 @@
     "Invitation": "Member invitations — create, accept, decline, resend",
     "Role": "Custom role management within organizations",
     "Permission": "Available permissions that can be assigned to roles",
-    "Billing": "Billing and subscription management",
     "Plan": "Subscription plans and pricing",
     "Subscription": "Subscription lifecycle — create, upgrade, cancel, resume",
+    "Stripe Webhook": "Stripe billing webhook receiver (raw body, signature verified)",
     "Notification": "User notification feed",
     "Webhook": "Webhook endpoint management and delivery history",
     "Upload": "Pre-signed URL generation for file uploads"

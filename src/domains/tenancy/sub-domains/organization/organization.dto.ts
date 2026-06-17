@@ -23,10 +23,10 @@ export const apiKeyIdParamsDto = z
   })
   .strict();
 
-/** Path params for notification-policy routes (`/organization/notification-policies/:policy_id`). */
-export const policyIdParamsDto = z
+/** Path params for notification-policy routes (`/organization/notification-policies/:notification_policy_id`). */
+export const notificationPolicyIdParamsDto = z
   .object({
-    policy_id: trimmedStringMinMax(1, 28),
+    notification_policy_id: trimmedStringMinMax(1, 28),
   })
   .strict();
 
@@ -73,8 +73,8 @@ export type OrganizationSlugParamsInput = z.infer<typeof organizationSlugParamsD
 export type RoleIdParamsInput = z.infer<typeof roleIdParamsDto>;
 /** DTO inferred from {@link apiKeyIdParamsDto}. */
 export type ApiKeyIdParamsInput = z.infer<typeof apiKeyIdParamsDto>;
-/** DTO inferred from {@link policyIdParamsDto}. */
-export type PolicyIdParamsInput = z.infer<typeof policyIdParamsDto>;
+/** DTO inferred from {@link notificationPolicyIdParamsDto}. */
+export type NotificationPolicyIdParamsInput = z.infer<typeof notificationPolicyIdParamsDto>;
 /** DTO inferred from {@link createOrganizationDto}. */
 export type CreateOrganizationInput = z.infer<typeof createOrganizationDto>;
 /** DTO inferred from {@link updateOrganizationDto}. */

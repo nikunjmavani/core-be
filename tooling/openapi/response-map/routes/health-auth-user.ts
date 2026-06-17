@@ -301,7 +301,7 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     ),
     example: null,
   },
-  'GET /api/v1/users/me/data-export/{export_id}': {
+  'GET /api/v1/users/me/data-export/{data_export_id}': {
     statusCode: 200,
     schema: wrapSuccess(
       {

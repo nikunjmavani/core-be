@@ -18,7 +18,7 @@ export const createOrganizationNotificationPolicyDto = z
   .strict();
 
 /**
- * Zod schema for `PATCH /api/v1/organization/notification-policies/:policy_id`.
+ * Zod schema for `PATCH /api/v1/organization/notification-policies/:notification_policy_id`.
  * Notification type and channel are immutable; only delivery flags and the
  * mute window can be updated.
  */

@@ -31,7 +31,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'List all users (admin)',
         description: 'Returns a paginated list of all users. Requires SUPER_ADMIN or ADMIN role.',
-        tags: ['Admin', 'User Management'],
+        tags: ['User Management'],
       },
     },
     controller.listUsers,
@@ -44,7 +44,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'Get user by ID (admin)',
         description: "Returns a specific user's profile. Requires SUPER_ADMIN or ADMIN role.",
-        tags: ['Admin', 'User Management'],
+        tags: ['User Management'],
       },
     },
     controller.getUser,
@@ -59,7 +59,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'Update user (admin)',
         description: "Updates a user's profile or status. Requires SUPER_ADMIN or ADMIN role.",
-        tags: ['Admin', 'User Management'],
+        tags: ['User Management'],
         body: AdminUpdateUserDto,
       },
     },
@@ -75,7 +75,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'Delete user (admin)',
         description: 'Permanently deletes a user account. Requires SUPER_ADMIN or ADMIN role.',
-        tags: ['Admin', 'User Management'],
+        tags: ['User Management'],
       },
     },
     controller.deleteUser,
@@ -90,7 +90,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Suspend user (admin)',
         description:
           'Suspends a user account, preventing login. Requires SUPER_ADMIN or ADMIN role.',
-        tags: ['Admin', 'User Management'],
+        tags: ['User Management'],
       },
     },
     controller.suspendUser,
@@ -104,7 +104,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'Unsuspend user (admin)',
         description: 'Reactivates a suspended user account. Requires SUPER_ADMIN or ADMIN role.',
-        tags: ['Admin', 'User Management'],
+        tags: ['User Management'],
       },
     },
     controller.unsuspendUser,
@@ -169,7 +169,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Get my settings',
         description:
           "Returns the authenticated user's personal settings (dark mode, language, notification preferences).",
-        tags: ['User', 'User Settings'],
+        tags: ['User Settings'],
       },
     },
     controller.getSettings,
@@ -184,7 +184,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'Update my settings',
         description: "Updates the authenticated user's personal settings.",
-        tags: ['User', 'User Settings'],
+        tags: ['User Settings'],
         body: UpdateUserSettingsDto,
       },
     },
@@ -198,7 +198,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Get my notification preferences',
         description:
           "Returns the authenticated user's notification preferences per type and channel.",
-        tags: ['User', 'Notification Preferences'],
+        tags: ['Notification Preferences'],
       },
     },
     controller.getNotificationPreferences,
@@ -215,7 +215,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Replace notification preferences',
         description:
           'Replaces all notification preferences for the authenticated user. Sends a complete set of preferences.',
-        tags: ['User', 'Notification Preferences'],
+        tags: ['Notification Preferences'],
         body: PutNotificationPreferencesDto,
       },
     },
@@ -263,14 +263,14 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'Request GDPR data export',
         description:
-          'Enqueues an async export of all personal data. Poll GET /users/me/data-export/{export_id} for status and a time-limited download URL (15-minute lifetime).',
-        tags: ['User', 'Privacy'],
+          'Enqueues an async export of all personal data. Poll GET /users/me/data-export/{data_export_id} for status and a time-limited download URL (15-minute lifetime).',
+        tags: ['Privacy'],
       },
     },
     dataExportController.requestExport,
   );
   zodApplication.get(
-    '/me/data-export/:export_id',
+    '/me/data-export/:data_export_id',
     {
       onRequest: [app.authenticate],
       // sec-U6: every successful poll while status === COMPLETED mints a fresh
@@ -284,7 +284,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Get GDPR data export status',
         description:
           'Returns export job status. When completed, includes a presigned download URL for the gzip JSON artifact (15-minute lifetime; every mint is audited as `user.data_export.url_minted`).',
-        tags: ['User', 'Privacy'],
+        tags: ['Privacy'],
       },
     },
     dataExportController.getExportStatus,

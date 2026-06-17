@@ -87,7 +87,7 @@ export const PARAM_NAME_TO_ENTITY = {
   invitation_id: 'memberInvitation',
   role_id: 'memberRole',
   api_key_id: 'organizationApiKey',
-  policy_id: 'organizationNotificationPolicy',
+  notification_policy_id: 'organizationNotificationPolicy',
   session_id: 'authSession',
   mfa_method_id: 'authMethod',
   notification_id: 'notification',
@@ -95,7 +95,7 @@ export const PARAM_NAME_TO_ENTITY = {
   plan_id: 'plan',
   subscription_id: 'subscription',
   upload_id: 'upload',
-  export_id: 'userDataExport',
+  data_export_id: 'userDataExport',
   auth_method_id: 'authMethod',
 } as const satisfies Record<string, PublicIdEntity>;
 
