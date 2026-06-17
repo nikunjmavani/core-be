@@ -4,6 +4,13 @@ import { enterOnCommitScope } from '@/core/events/event-bus.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { extractClientSuppliedRequestIdentifier } from '@/shared/utils/http/fastify-server.util.js';
 
+/**
+ * Wall-clock duration (ms) at or above which a request-completion line is logged at `warn`
+ * (`request.complete.slow`) even though routine completions are demoted to `debug`, so latency
+ * outliers stay visible without the per-request `info` flood.
+ */
+const SLOW_REQUEST_LOG_THRESHOLD_MS = 1000;
+
 const requestContextMiddleware: FastifyPluginAsync = async (app) => {
   app.addHook('onRequest', async (request, reply) => {
     enterOnCommitScope();
@@ -33,17 +40,26 @@ const requestContextMiddleware: FastifyPluginAsync = async (app) => {
 
     const routeTemplate = request.routeOptions?.url ?? request.url.split('?')[0];
 
-    logger.info(
-      {
-        requestId: request.id,
-        ...(clientRequestId !== undefined ? { clientRequestId } : {}),
-        method: request.method,
-        route: routeTemplate,
-        statusCode: reply.statusCode,
-        durationMs,
-      },
-      'request.complete',
-    );
+    // Per-request completion telemetry is already captured by Prometheus (request count + status
+    // + latency histograms), so emitting this line at `info` on EVERY request is largely
+    // redundant — and a load test attributed a large share of event-loop CPU to it. Routine
+    // 2xx/3xx completions are demoted to `debug` (off at the default `info` level); 5xx errors
+    // and slow requests stay at `error`/`warn` so the signal you act on is never hidden.
+    const completionLog = {
+      requestId: request.id,
+      ...(clientRequestId !== undefined ? { clientRequestId } : {}),
+      method: request.method,
+      route: routeTemplate,
+      statusCode: reply.statusCode,
+      durationMs,
+    };
+    if (reply.statusCode >= 500) {
+      logger.error(completionLog, 'request.complete');
+    } else if (durationMs !== undefined && durationMs >= SLOW_REQUEST_LOG_THRESHOLD_MS) {
+      logger.warn(completionLog, 'request.complete.slow');
+    } else {
+      logger.debug(completionLog, 'request.complete');
+    }
   });
 };
 
