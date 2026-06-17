@@ -36,11 +36,10 @@ const EXPECTED_PUBLIC_ROUTES: readonly string[] = [
   'POST /api/v1/auth/webauthn/authenticate/options',
   'POST /api/v1/auth/webauthn/authenticate/verify',
   // Billing — public plan catalog + Stripe-signature-verified webhook ingress
-  // (`/billing/webhook` is canonical; `/billing/stripe/webhook` is the deprecated alias —
-  // both sit behind the raw-body HMAC verification preHandler, see stripe-webhook.routes.ts).
+  // (`/billing/webhook` sits behind the raw-body HMAC verification preHandler;
+  // see stripe-webhook.routes.ts).
   'GET /api/v1/billing/plans',
   'GET /api/v1/billing/plans/:plan_id',
-  'POST /api/v1/billing/stripe/webhook',
   'POST /api/v1/billing/webhook',
 ];
 
