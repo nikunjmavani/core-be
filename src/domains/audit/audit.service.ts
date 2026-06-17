@@ -11,6 +11,28 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
 /**
+ * Collects the distinct internal user ids (actor + target) and organization ids referenced by a
+ * page of audit-log rows, so {@link AuditService.list} can batch-resolve them to public ids in two
+ * round trips. Extracted to keep that method's cognitive complexity within budget.
+ */
+function collectReferencedInternalIds(
+  rows: readonly {
+    actor_user_id: number | null;
+    target_user_id: number | null;
+    organization_id: number | null;
+  }[],
+): { userInternalIds: Set<number>; organizationInternalIds: Set<number> } {
+  const userInternalIds = new Set<number>();
+  const organizationInternalIds = new Set<number>();
+  for (const row of rows) {
+    if (row.actor_user_id != null) userInternalIds.add(row.actor_user_id);
+    if (row.target_user_id != null) userInternalIds.add(row.target_user_id);
+    if (row.organization_id != null) organizationInternalIds.add(row.organization_id);
+  }
+  return { userInternalIds, organizationInternalIds };
+}
+
+/**
  * Owns the canonical write + read paths for the audit log.
  *
  * @remarks
@@ -191,13 +213,7 @@ export class AuditService {
     // referenced on this page to its public id. The serializer surfaces those public
     // ids in place of the bigserials (which sec-re-08 drops). One SECURITY DEFINER
     // query + one in-context SELECT, no N+1 — and an empty page short-circuits both.
-    const userInternalIds = new Set<number>();
-    const organizationInternalIds = new Set<number>();
-    for (const row of items) {
-      if (row.actor_user_id != null) userInternalIds.add(row.actor_user_id);
-      if (row.target_user_id != null) userInternalIds.add(row.target_user_id);
-      if (row.organization_id != null) organizationInternalIds.add(row.organization_id);
-    }
+    const { userInternalIds, organizationInternalIds } = collectReferencedInternalIds(items);
     const [userPublicIds, organizationPublicIds] = await Promise.all([
       this.repository.resolveUserPublicIdsByInternalIds([...userInternalIds]),
       this.repository.resolveOrganizationPublicIdsByInternalIds([...organizationInternalIds]),

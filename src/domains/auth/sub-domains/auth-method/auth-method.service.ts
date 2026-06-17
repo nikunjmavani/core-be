@@ -399,9 +399,9 @@ export class AuthMethodService {
    * MFA-enabled users are rejected with `ForbiddenError('errors:mfaStepUpRequired')` BEFORE
    * the password hash is even compared. Without this, a transient stolen-session + known
    * password defeats the MFA invariant — the attacker could open the step-up window with
-   * `/auth/step-up` and then immediately `DELETE /auth/mfa/:id` to convert a 15-minute
+   * `/auth/step-up` and then immediately `DELETE /auth/me/mfa/:id` to convert a 15-minute
    * stolen bearer into permanent password-only access. MFA users must step up via
-   * `/auth/mfa/verify` (which records the same recent-step-up sentinel). The check fires
+   * `/auth/me/mfa/verify` (which records the same recent-step-up sentinel). The check fires
    * before `verifyPassword` to avoid a password-timing oracle for MFA users (sec-A1).
    */
   async verifyPasswordForStepUp(options: {

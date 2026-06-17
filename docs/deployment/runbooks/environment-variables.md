@@ -41,11 +41,37 @@ There is **one** source of truth for which keys exist and what kind each one is:
         ...
 ```
 
-The **section a key sits in IS its classification**. There is no separate
-classifier file, no override list, no CI guard to keep in sync. The runtime
-schema (`src/shared/config/env-schema.ts`) declares Zod validation for every
-key; `.env.example` declares its identity (Secret vs Variable) and its
-neighbours (sub-section grouping for readability).
+`pnpm github:sync` classifies each key by **name** via `classifyKey()`
+(`tooling/setup/github/sync-github-environments.ts`): `*_API_KEY`, `*_TOKEN`,
+`*_SECRET`, `*_PRIVATE_KEY`, `*_DSN`, `*_WEBHOOK_SECRET`, `*_ACCESS_KEY_ID`,
+`*_SECRET_ACCESS_KEY`, `*_ENCRYPTION_KEY`, `*_WORKSPACE_ID`, `*_SERVICE_ID`,
+`*_CLIENT_SECRET`, connection URLs (`DATABASE_URL`, `REDIS_URL`), `JWT_SECRET`,
+`CAPTCHA_SECRET` → **Secret**; everything else → **Variable**. The `.env.example`
+half is the **human-readable mirror** of that rule — place each key under the half
+its name resolves to (the two halves are validated for existence, not per-key
+placement). The runtime schema (`src/shared/config/env-schema.ts`) declares Zod
+validation for every key; `.env.example` declares its identity (Secret vs Variable)
+and its neighbours (sub-section grouping for readability).
+
+### Where each kind is read
+
+A key is consumed in two places, each with its own access syntax — **decide the
+classification first, then read it from the matching context:**
+
+| Consumer                                   | Read it as                          |
+| ------------------------------------------ | ----------------------------------- |
+| App / worker runtime (Node)                | `getEnv().NAME` (Zod-validated)     |
+| GitHub Actions — **Secret**                | `${{ secrets.NAME }}`               |
+| GitHub Actions — **Variable**              | `${{ vars.NAME }}`                  |
+
+In a workflow the access context **must match the classification**. Reading a
+Variable through `secrets.NAME` (or a Secret through `vars.NAME`) returns an
+**empty string silently** — no error, the step just runs with `NAME=""`. This is
+what hid `SCALAR_NAMESPACE` (a Variable read via `secrets.SCALAR_NAMESPACE`) and
+skipped the Scalar Registry publish. When you add or reclassify a key, `grep`
+`.github/workflows/` for the name and confirm every reference uses the matching
+context. (Related gotcha: a step's own `env:` is not available to that step's
+`if:` — gate on `inputs`/`vars`/job-level env instead.)
 
 ```mermaid
 flowchart LR
@@ -253,7 +279,8 @@ Run `pnpm github:sync --check`, `pnpm tool:sync-env-example`, and (when pushing 
 | Zod refuses `KEY=""` for an `.optional()` field                                                         | Empty string is not `undefined`                                   | Loader strips empty values automatically; if you still hit this, ensure the key has no inline comment (e.g. `KEY= # foo` parses as a value with a comment) |
 | `pnpm github:sync` says `Missing .env.<env>`                                                            | The environment is not in `tooling/setup/setup.config.json`, or dry-run cannot scaffold files | Add it to `tooling/setup/setup.config.json`, run `pnpm tool:generate-project-identity`, then `pnpm github:sync` without `--dry-run`                          |
 | `pnpm github:sync` errors on the secret push                                                            | `gh auth status` failing or insufficient scope                    | Run `gh auth login` and grant `repo` + `admin:org` if it's an org repo                                                                                     |
-| A new env var landed in GitHub as a Variable but should be a Secret                                     | The key was placed in the wrong half of `.env.example`            | Move it under `# GitHub Secrets ###`, regen templates, delete the existing GitHub Variable, re-sync                                                        |
+| A new env var landed in GitHub as a Variable but should be a Secret                                     | `classifyKey()` decides by **name**, not by `.env.example` half — the name has no Secret suffix | Rename the key to carry a Secret suffix (`*_TOKEN` / `*_SECRET` / `*_API_KEY` / `*_KEY`) or add it to `classifyKey()`; moving the `.env.example` half alone does nothing. Then delete the stale Variable and re-sync |
+| A workflow step acts as if a secret/variable is empty (e.g. an upload silently skips, an API call 401s)  | The step reads it from the wrong context — `secrets.NAME` for a Variable, or `vars.NAME` for a Secret | Match the access context to the classification: Secret → `${{ secrets.NAME }}`, Variable → `${{ vars.NAME }}`. `grep .github/workflows/` for the name      |
 | Local tests fail with `REDIS_BULLMQ_URL must be unset or point to the same Redis endpoint as REDIS_URL` | `REDIS_BULLMQ_URL` is set to a different host than `REDIS_URL`    | Leave `REDIS_BULLMQ_URL=` empty in `.env.development` (single-Redis topology)                                                                              |
 
 ## 10. Adding a new hosted environment
@@ -270,7 +297,8 @@ see the dedicated runbook: **[add-new-environment.md](./add-new-environment.md)*
 - **Loader:** `src/shared/config/load-env-files.ts`
 - **Setup manifest (canonical):** `tooling/setup/setup.config.json`
 - **GitHub push:** `tooling/setup/github/sync.ts` (`pnpm github:sync`)
-- **Section parser shared by both:** `tooling/setup/envs/parse-env-sections.ts`
+- **Secret/Variable classifier (by name):** `tooling/setup/github/sync-github-environments.ts` (`classifyKey`)
+- **`.env.example` section scaffolder:** `tooling/setup/envs/parse-env-sections.ts`
 - **Validator: schema ↔ template:** `src/scripts/validators/env/sync-env-example.ts` (`pnpm tool:sync-env-example`)
 - **Consistency (in github:sync):** `tooling/setup/github/sync-config.ts` (`validateGithubSyncConsistency`; run via `pnpm github:sync --check`)
 - **Validator: GitHub deploy-required keys:** `tooling/setup/github/validate.ts` (`pnpm validate:github-env`)

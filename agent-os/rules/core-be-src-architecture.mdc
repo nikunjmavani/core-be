@@ -23,7 +23,7 @@ alwaysApply: false
 - **Import paths**: use `@/` for all cross-folder imports in `src/`; same-folder `./` only. Never `../`. See **[import-paths.mdc](import-paths.mdc)**.
 - **Routes**: All route files use `FastifyPluginAsync` pattern. Route files create controllers from services and register HTTP handlers. Route files should NOT instantiate repositories or services — that belongs in containers.
 - **Central routes.ts**: imports domain containers and domain routes, wires them together. Should be thin (~50 lines).
-- **Event bus vs BullMQ**: In-process `eventBus.emit` (API process) is not the same as BullMQ workers (`pnpm dev:worker`). Typical: service → emit → handler → `enqueueEmail()` → mail worker. See `CLAUDE.md` § Domain events vs BullMQ workers.
+- **Event bus vs BullMQ**: In-process `eventBus.emit` (API process) is not the same as BullMQ workers (`pnpm dev:worker`). Typical: service → emit → handler → `recordOutboxEmail()` (+ `dispatchOutboxEmail()` on commit) → mail worker. See `CLAUDE.md` § Domain events vs BullMQ workers.
 - **Mail outbox**: `src/infrastructure/mail/mail-outbox.schema.ts` + repository are shared infrastructure (transactional outbox), not domain-owned.
 - **Events/queues/workers**:
   - `domains/<domain>/events/index.ts`: aggregates `register<SubDomain>EventHandlers()` from sub-domains (and cross-resource handlers when needed)
@@ -39,5 +39,6 @@ alwaysApply: false
 - **Object parameters only** outside repositories: services, controllers, validators, serializers, workers/processors, queue helpers, event handlers, shared utils, scripts and their tests must accept a single named options object when they take 2+ inputs. Repositories (`*.repository.ts`) and repository unit tests (`*.repository.unit.test.ts`) keep positional params. Framework callbacks (Fastify, BullMQ, DI constructors, Vitest/Zod) stay as the framework requires. See **[object-params.mdc](object-params.mdc)**.
 - Prefer `src/shared/utils/infrastructure/logger.util.ts` logger; avoid `console.log` in production code.
 - **Middleware** (Fastify plugins) in `src/shared/middlewares/` — grouped under `core/`, `security/`, `session/`, `tenant/`, `rate-limit/`; register via `@/shared/middlewares/index.js`.
-- **Config** in `src/shared/config/env.config.ts`. Errors in `src/shared/errors/`. Types in `src/shared/types/`. Constants in `src/shared/constants/`.
+- **Config** in `src/shared/config/env.config.ts`. Errors in `src/shared/errors/`. Types in `src/shared/types/`.
+- **Constants placement** — put each constant at the **lowest scope that covers its use sites**: used in one file → a `const` in that file; one sub-domain/domain → a co-located `<name>.constants.ts`; one infrastructure area → `src/infrastructure/<area>/*.constants.ts` (e.g. `queue/queue.constants.ts`); only genuinely cross-cutting primitives (time units, pagination defaults, global security thresholds) belong in `src/shared/constants/`. Reuse existing constants (e.g. `MILLISECONDS_PER_HOUR`, `SEVEN_DAYS_SECONDS`) instead of re-deriving literals.
 - **Build-time scripts**: `src/scripts/` for tooling (e.g. `generate-openapi.ts` → `docs/openapi/openapi.json` for ApiDog).

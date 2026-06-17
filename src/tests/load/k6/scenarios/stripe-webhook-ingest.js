@@ -24,7 +24,7 @@ export function stripeWebhookIngest() {
     data: { object: { id: 'sub_k6' } },
   });
 
-  const response = http.post(`${API_PREFIX}/billing/stripe/webhook`, payload, {
+  const response = http.post(`${API_PREFIX}/billing/webhook`, payload, {
     headers: { 'Content-Type': 'application/json' },
     tags: { name: 'stripe-webhook-ingest' },
     responseCallback: http.expectedStatuses(400),

@@ -5,6 +5,7 @@ import { env } from '@/shared/config/env.config.js';
 import { getAuthenticatedActorId } from '@/shared/utils/http/request.util.js';
 import { Sentry } from '@/infrastructure/observability/sentry/sentry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { MILLISECONDS_PER_MINUTE } from '@/shared/constants/ttl.constants.js';
 
 /**
  * Per-route rate limit presets for high-risk endpoints.
@@ -141,7 +142,7 @@ export const STRICT_PUBLIC_RATE_LIMIT = {
   config: {
     rateLimit: {
       max: STRICT_PUBLIC_ROUTE_MAX_REQUESTS_PER_WINDOW,
-      timeWindow: 60_000,
+      timeWindow: MILLISECONDS_PER_MINUTE,
       keyGenerator: buildRateLimitKeyFromIpAddress,
       onExceeding: recordRouteRateLimitExceeded,
     },
@@ -158,7 +159,7 @@ export const STRICT_PUBLIC_RATE_LIMIT = {
  */
 const STRICT_PUBLIC_PER_EMAIL_MAX_REQUESTS_PER_WINDOW =
   NODE_ENV_FOR_RATE_LIMIT_CAPS === 'test' ? 5000 : 5;
-const STRICT_PUBLIC_PER_EMAIL_WINDOW_MS = 15 * 60_000;
+const STRICT_PUBLIC_PER_EMAIL_WINDOW_MS = 15 * MILLISECONDS_PER_MINUTE;
 
 /**
  * Options for an `app.rateLimit(...)` preHandler that throttles per normalized email/identity,
@@ -185,7 +186,7 @@ export const STRICT_AUTHED_RATE_LIMIT = {
   config: {
     rateLimit: {
       max: STRICT_AUTHED_MAX_REQUESTS_PER_WINDOW,
-      timeWindow: 60_000,
+      timeWindow: MILLISECONDS_PER_MINUTE,
       hook: 'preHandler' as const,
       keyGenerator: buildRateLimitKeyFromAuthenticatedUserOrIpAddress,
       onExceeding: recordRouteRateLimitExceeded,
@@ -198,7 +199,7 @@ export const MODERATE_AUTHED_RATE_LIMIT = {
   config: {
     rateLimit: {
       max: MODERATE_AUTHED_MAX_REQUESTS_PER_WINDOW,
-      timeWindow: 60_000,
+      timeWindow: MILLISECONDS_PER_MINUTE,
       hook: 'preHandler' as const,
       keyGenerator: buildRateLimitKeyFromAuthenticatedUserOrIpAddress,
       onExceeding: recordRouteRateLimitExceeded,
@@ -211,7 +212,7 @@ export const REFRESH_RATE_LIMIT = {
   config: {
     rateLimit: {
       max: 30,
-      timeWindow: 60_000,
+      timeWindow: MILLISECONDS_PER_MINUTE,
       keyGenerator: buildRateLimitKeyFromIpAddress,
       onExceeding: recordRouteRateLimitExceeded,
     },
@@ -223,7 +224,7 @@ export const WEBHOOK_RATE_LIMIT = {
   config: {
     rateLimit: {
       max: NODE_ENV_FOR_RATE_LIMIT_CAPS === 'test' ? 5000 : 60,
-      timeWindow: 60_000,
+      timeWindow: MILLISECONDS_PER_MINUTE,
       keyGenerator: buildRateLimitKeyFromIpAddress,
       onExceeding: recordRouteRateLimitExceeded,
     },
@@ -242,7 +243,7 @@ export const ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT = {
   config: {
     rateLimit: {
       max: 100,
-      timeWindow: 60_000,
+      timeWindow: MILLISECONDS_PER_MINUTE,
       hook: 'preHandler' as const,
       keyGenerator: buildRateLimitKeyFromOrganizationActorOrIpAddress,
       onExceeding: recordRouteRateLimitExceeded,
@@ -255,7 +256,7 @@ export const EXPENSIVE_AUTHED_RATE_LIMIT = {
   config: {
     rateLimit: {
       max: 5,
-      timeWindow: 5 * 60_000,
+      timeWindow: 5 * MILLISECONDS_PER_MINUTE,
       hook: 'preHandler' as const,
       keyGenerator: buildRateLimitKeyFromAuthenticatedUserOrIpAddress,
       onExceeding: recordRouteRateLimitExceeded,

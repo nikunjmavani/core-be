@@ -1,9 +1,11 @@
 import { and, eq, gt, lt, ne, or, type AnyColumn, type SQL } from 'drizzle-orm';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import type { ZodType } from 'zod';
 import { PAGINATION } from '@/shared/constants/pagination.constants.js';
 import { ValidationError } from '@/shared/errors/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { parseWithSchema } from '@/shared/utils/validation/parse-with-schema.util.js';
 
 /** i18n key for the friendly error when a legacy `page` query parameter is sent. */
 export const LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY = 'errors:validation.legacyPageNotSupported';
@@ -43,6 +45,26 @@ export async function rejectLegacyPagePagination(
   request: Pick<FastifyRequest, 'query'>,
 ): Promise<void> {
   ensureCursorOnlyPagination(request.query);
+}
+
+/**
+ * Reject legacy `page` pagination, then parse `query` with `schema` — the
+ * combined form of the `ensureCursorOnlyPagination(query)` + `parseWithSchema(...)`
+ * pair that every list-query validator repeated.
+ *
+ * @remarks
+ * The legacy-`page` guard runs first, so offset-style requests fail with the
+ * dedicated {@link LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY} before Zod parses the
+ * query; `errorKey` (default `errors:invalidInput`) applies to the schema-parse
+ * failure.
+ */
+export function parseCursorPaginatedQuery<T>(
+  schema: ZodType<T>,
+  query: unknown,
+  errorKey?: string,
+): T {
+  ensureCursorOnlyPagination(query);
+  return parseWithSchema(schema, query, errorKey);
 }
 
 /**

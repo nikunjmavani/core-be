@@ -1,46 +1,21 @@
-import { z } from 'zod';
-import { ValidationError } from '@/shared/errors/index.js';
+import { parseWithSchema } from '@/shared/utils/validation/parse-with-schema.util.js';
 import {
   webauthnAuthenticateOptionsDto,
   webauthnAuthenticateVerifyDto,
   webauthnRegisterVerifyDto,
 } from './webauthn.dto.js';
 
-/** Validates the `POST /api/v1/auth/webauthn/authenticate/options` request body against {@link webauthnAuthenticateOptionsDto}; throws {@link ValidationError} on failure. */
+/** Validates the `POST /api/v1/auth/webauthn/authenticate/options` request body against {@link webauthnAuthenticateOptionsDto}; throws `ValidationError` on failure. */
 export function validateWebauthnAuthenticateOptions(body: unknown) {
-  const parsed = webauthnAuthenticateOptionsDto.safeParse(body ?? {});
-  if (!parsed.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(parsed.error).fieldErrors,
-    );
-  }
-  return parsed.data;
+  return parseWithSchema(webauthnAuthenticateOptionsDto, body ?? {});
 }
 
-/** Validates the `POST /api/v1/auth/webauthn/register/verify` request body against {@link webauthnRegisterVerifyDto}; throws {@link ValidationError} on failure. */
+/** Validates the `POST /api/v1/auth/me/webauthn/register/verify` request body against {@link webauthnRegisterVerifyDto}; throws `ValidationError` on failure. */
 export function validateWebauthnRegisterVerify(body: unknown) {
-  const parsed = webauthnRegisterVerifyDto.safeParse(body);
-  if (!parsed.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(parsed.error).fieldErrors,
-    );
-  }
-  return parsed.data;
+  return parseWithSchema(webauthnRegisterVerifyDto, body);
 }
 
-/** Validates the `POST /api/v1/auth/webauthn/authenticate/verify` request body against {@link webauthnAuthenticateVerifyDto}; throws {@link ValidationError} on failure. */
+/** Validates the `POST /api/v1/auth/webauthn/authenticate/verify` request body against {@link webauthnAuthenticateVerifyDto}; throws `ValidationError` on failure. */
 export function validateWebauthnAuthenticateVerify(body: unknown) {
-  const parsed = webauthnAuthenticateVerifyDto.safeParse(body);
-  if (!parsed.success) {
-    throw new ValidationError(
-      'errors:invalidInput',
-      undefined,
-      z.flattenError(parsed.error).fieldErrors,
-    );
-  }
-  return parsed.data;
+  return parseWithSchema(webauthnAuthenticateVerifyDto, body);
 }

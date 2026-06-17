@@ -113,7 +113,7 @@ describe('Security: route fuzz — authenticated junk never 5xx', () => {
         ...(isMutating
           ? {
               payload: FUZZ_PAYLOAD,
-              headers: { 'idempotency-key': `route-fuzz-${randomUUID()}` },
+              headers: { 'x-idempotency-key': `route-fuzz-${randomUUID()}` },
             }
           : {}),
       });

@@ -1,0 +1,53 @@
+---
+description: Use the Headroom MCP to compress large tool output, logs, files, and RAG chunks before loading them into context. Always active for every AI agent.
+alwaysApply: true
+---
+
+# Headroom — agent context compression (all AI agents)
+
+This repo wires the **Headroom MCP** server (`agent-os/mcp/mcp.example.json` ↔
+`.mcp.example.json`) as a shared, agent-only context-compression layer. **Every AI
+agent** (Claude Code, Cursor, Codex) should route large, low-signal text through
+Headroom before loading it into the model context — it preserves the same answers
+for far fewer tokens.
+
+## Tools
+
+- `headroom_compress` — compress a large blob (tool output, log dump, file, RAG
+  chunk, search result) into a compact, information-preserving form.
+- `headroom_retrieve` — fetch the original bytes for a compressed reference when
+  exact detail is needed.
+- `headroom_stats` — inspect token savings for the current session.
+
+## When to use (all agents)
+
+Reach for `headroom_compress` **before** reasoning over bulky, repetitive, or
+low-signal content:
+
+- Long command / test / CI output, stack traces, and logs.
+- Whole-file or multi-file reads where only part is relevant.
+- RAG / search-result chunks and large JSON payloads.
+- Prior conversation context that no longer needs full fidelity.
+
+Use `headroom_retrieve` to pull back the exact original when a step needs
+byte-level precision; use `headroom_stats` to confirm savings.
+
+## When NOT to compress
+
+- Small outputs (a few lines) — compression overhead is not worth it.
+- Content applied verbatim where exact bytes matter: diffs / patches, code you
+  are about to edit, migration SQL, secrets / tokens, checksums.
+- Anything already short enough to reason over directly.
+
+## Setup (agent host)
+
+Install once on the agent host, then the MCP entry above is live:
+
+```bash
+pip install "headroom-ai[mcp]"
+headroom mcp install   # auto-registers the MCP server with the client
+```
+
+`headroom mcp install` is the authoritative way to wire the server; the
+`.mcp.example.json` entry (`headroom mcp serve`) is the declarative equivalent.
+Compression runs locally — no API key required.

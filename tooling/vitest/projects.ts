@@ -135,6 +135,8 @@ export const vitestProjects = [
     test: {
       name: 'global',
       include: ['src/tests/global/**/*.global.test.ts'],
+      // Generate the gitignored OpenAPI spec if missing so openapi-*.global.test.ts pass on a fresh clone.
+      globalSetup: ['./src/tests/global/ensure-openapi-spec.global-setup.ts'],
     },
   },
 

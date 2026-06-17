@@ -58,7 +58,7 @@ export async function seedAuthMfaBulk(context: SeedContext): Promise<void> {
     await database
       .insert(mfa_methods)
       .values({
-        public_id: generatePublicId('authMfaMethod'),
+        public_id: generatePublicId('authMethod'),
         user_id: user.id,
         method_type: profile.method_type,
         encrypted_secret: profile.encrypted_secret,

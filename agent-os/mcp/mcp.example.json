@@ -20,14 +20,6 @@
       "url": "https://mcp.sentry.dev/mcp",
       "headers": {}
     },
-    "github": {
-      "url": "https://api.githubcopilot.com/mcp/",
-      "headers": {}
-    },
-    "slack": {
-      "url": "https://slack.com/api/mcp",
-      "headers": {}
-    },
     "railway": {
       "command": "npx",
       "args": [
@@ -100,6 +92,14 @@
       "args": [
         "serve",
         "--mcp"
+      ]
+    },
+    "headroom": {
+      "type": "stdio",
+      "command": "headroom",
+      "args": [
+        "mcp",
+        "serve"
       ]
     }
   }

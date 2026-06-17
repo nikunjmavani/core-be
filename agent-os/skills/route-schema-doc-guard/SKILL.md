@@ -45,6 +45,8 @@ Rules:
 - **`tags`** is required, in title case, drawn from the platform's tag vocabulary. New tags need a matching translation entry in `src/shared/locales/en/openapi.json` (and other locales).
 - The `schema` block lives on the **route registration's options object**, not in a side table. There is no `routeMetadataMap` — that side table was retired.
 
+**Enforced by `pnpm validate:route-schema-docs`** ([`src/scripts/validators/routes/validate-route-schema-docs.ts`](../../../src/scripts/validators/routes/validate-route-schema-docs.ts), wired into `ci:local` + `ci:quality`) — the gate fails closed if any registration (including the two non-routes files) is missing `summary`, `description`, or `tags`. Fix the gap; never suppress it.
+
 ## Spread operators
 
 When the route options use a shared rate-limit / config spread, wrap the spread inside an object literal so the `schema` field has somewhere to live:

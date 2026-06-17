@@ -65,7 +65,7 @@ flowchart LR
 |--------|---------|-----------|-------|
 | `Authorization: Bearer <access_token>` | every authenticated request | **Yes** (authed routes) | The in-memory access token. Carries the active `org` claim. |
 | `Content-Type: application/json` | any request with a JSON body | **Yes** for JSON bodies | — |
-| `Idempotency-Key: <uuid>` | `POST`/`PUT`/`PATCH` writes | **Required on 8 routes**, optional elsewhere | `422` if missing on a required route. See [Idempotency keys](#idempotency-keys). |
+| `X-Idempotency-Key: <uuid>` | `POST`/`PUT`/`PATCH` writes | **Required on 8 routes**, optional elsewhere | `422` if missing on a required route. See [Idempotency keys](#idempotency-keys). |
 | `X-Captcha-Token: <widget token>` | public auth forms | **Required only when Turnstile is configured** (production) | From the Cloudflare Turnstile widget. Routes: `login`, `mfa/login`, `magic-link/send`, `password/forgot`, `password/reset`, `email/verify`, OAuth init. |
 | `X-CSRF-Token: <csrf_token cookie value>` | `POST /auth/refresh` **only**, **only if you don't send `Origin`** | Browsers: **not needed** | Browsers always send `Origin`, which satisfies the refresh origin check. This is a fallback for non-browser clients. |
 | `X-Organization-Id: <org_…>` | **upload domain routes only** | Upload only | The flat org-scoped routes **ignore** it (org comes from the token claim). Do **not** send it elsewhere. |
@@ -123,10 +123,27 @@ working** (hash drift). Always swap your in-memory token for the returned one. N
 is issued — the same `session_id` keeps working, and a later refresh re-mints with the now-current
 `org` claim.
 
-**Building an org switcher:** `GET /users/me` returns `capabilities { personal_organizations,
-team_organizations }` and `personal_organization_id`; `GET /tenancy/organizations` lists the team
-orgs the user belongs to. Render those, and on selection call the matching switch endpoint and
-replace the token.
+**One authoritative call — `GET /auth/me/context`.** Instead of stitching several endpoints, this returns everything a permission-aware UI needs in one request:
+
+```json
+{
+  "data": {
+    "user": { "id": "usr_…", "email": "…", "is_mfa_enabled": false },
+    "active_organization": { "id": "org_…", "type": "TEAM", "capabilities": { "can_invite_members": true, "…": "…" } },
+    "my_permissions": ["organization:read", "membership:manage"],
+    "global_role": null,
+    "organizations": [{ "id": "org_…", "type": "TEAM", "capabilities": { "…": "…" }, "is_active": true }]
+  }
+}
+```
+
+- **`capabilities` vs `my_permissions` — render on the intersection.** `capabilities` describes what the org **type** allows (a personal org can never invite members → `can_invite_members: false`); `my_permissions` is what **this caller** may do in the active org (resolved permission codes). Show an action only when the capability is available **and** the caller holds the permission.
+- **`organizations`** is the org-switcher list, each flagged `is_active` — render it directly.
+- **Switch flow:** call `POST /auth/switch-to-organization` (or `…-personal`) → swap your in-memory Bearer for the returned `access_token` → re-fetch `GET /auth/me/context` to repaint identity, capabilities, and permissions for the new org.
+
+This works **identically for personal and team organizations** — there is one route surface, and the `capabilities` flags (not different URLs) tell the UI what to show. See [route-consistency-and-org-model.md](route-consistency-and-org-model.md).
+
+`GET /users/me` (profile + deployment `capabilities`) and `GET /tenancy/organizations` (paginated org list) remain available if you need them individually.
 
 > The org-scoped resources are **flat**: `/api/v1/tenancy/organization` (singular — settings, logo,
 > audit-logs, api-keys, notification-policies, memberships, roles, invitations live under it),
@@ -160,7 +177,7 @@ export async function apiFetch(path, opts = {}) {
         ...opts.headers,
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         // required on 8 write routes, ignored elsewhere; fresh key per call
-        ...(isWrite ? { 'Idempotency-Key': crypto.randomUUID() } : {}),
+        ...(isWrite ? { 'X-Idempotency-Key': crypto.randomUUID() } : {}),
       },
     });
 
@@ -278,7 +295,7 @@ The four rules that keep it correct:
 
 ## Idempotency keys
 
-The server **requires** `Idempotency-Key` on these **8 write routes** (returns `422
+The server **requires** `X-Idempotency-Key` on these **8 write routes** (returns `422
 idempotencyKeyRequired` / `idempotencyKeyInvalid` without it):
 
 1. Create team organization — `POST /tenancy/organizations`
@@ -287,7 +304,7 @@ idempotencyKeyRequired` / `idempotencyKeyInvalid` without it):
 4. Create invitation — `POST /tenancy/organization/invitations`
 5–8. Subscription writes — create / cancel / resume / change-plan under `/billing/subscriptions`
 
-On any other route, an `Idempotency-Key` is **optional**: if you send one, the response is cached and
+On any other route, an `X-Idempotency-Key` is **optional**: if you send one, the response is cached and
 replayed for that key; if you don't, nothing happens. The wrapper above sends a **fresh** UUID on
 every write, which satisfies the requirement and never causes a false replay.
 

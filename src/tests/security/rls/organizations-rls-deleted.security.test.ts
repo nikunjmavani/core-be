@@ -56,12 +56,13 @@ describe('Security: organizations RLS — soft-deleted orgs excluded (sec-new-D3
   });
 
   it('sec-new-D3: hides soft-deleted org from a tenant-scoped query', async () => {
-    if (!migrationApplied) {
-      console.warn(
-        'Skipping sec-new-D3 RLS test: apply migrations/20260608010000_rls_organizations_exclude_soft_deleted.sql',
-      );
-      return;
-    }
+    // Fail closed: this tenant-isolation guarantee must never be silently skipped. If the
+    // migration is missing the suite fails loudly (with the fix instruction) rather than passing
+    // with zero coverage — exactly the gap a "skip when absent" guard would leave on a fresh DB.
+    expect(
+      migrationApplied,
+      'Required RLS migration 20260608010000_rls_organizations_exclude_soft_deleted.sql is not applied — apply it (pnpm db:migrate) so soft-deleted-org isolation is actually verified.',
+    ).toBe(true);
 
     const owner = await createTestUser();
     const organization = await createTestOrganization({ ownerUserId: owner.id });
@@ -90,9 +91,10 @@ describe('Security: organizations RLS — soft-deleted orgs excluded (sec-new-D3
   });
 
   it('sec-new-D3: active org remains visible to a tenant-scoped query', async () => {
-    if (!migrationApplied) {
-      return;
-    }
+    expect(
+      migrationApplied,
+      'Required RLS migration 20260608010000_rls_organizations_exclude_soft_deleted.sql is not applied.',
+    ).toBe(true);
 
     const owner = await createTestUser();
     const organization = await createTestOrganization({ ownerUserId: owner.id });
@@ -114,9 +116,10 @@ describe('Security: organizations RLS — soft-deleted orgs excluded (sec-new-D3
   });
 
   it('sec-new-D3: global_retention_cleanup bypass still shows soft-deleted orgs to retention workers', async () => {
-    if (!migrationApplied) {
-      return;
-    }
+    expect(
+      migrationApplied,
+      'Required RLS migration 20260608010000_rls_organizations_exclude_soft_deleted.sql is not applied.',
+    ).toBe(true);
 
     const owner = await createTestUser();
     const organization = await createTestOrganization({ ownerUserId: owner.id });

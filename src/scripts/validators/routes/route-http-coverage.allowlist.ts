@@ -9,7 +9,6 @@ export const ROUTE_HTTP_COVERAGE_ALLOWLIST: Array<{ method: string; path: string
   // inspects the first `/mcp` occurrence, so allowlist the bare form explicitly.
   { method: 'GET', path: '/mcp' },
   { method: 'POST', path: '/mcp' },
-  { method: 'POST', path: '/api/v1/billing/stripe/webhook' },
   { method: 'GET', path: '/api/v1/auth/oauth/:provider/callback' },
   { method: 'GET', path: '/api/v1/auth/oauth/:provider' },
 ];

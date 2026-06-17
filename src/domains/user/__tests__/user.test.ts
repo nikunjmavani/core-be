@@ -119,7 +119,7 @@ describe('User Domain — Integration', () => {
 
       const enrollResponse = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/mfa/enroll'),
+        url: testApiPath('/auth/me/mfa/enroll'),
         token,
         payload: { method_type: 'MFA_TOTP' },
       });
@@ -127,12 +127,12 @@ describe('User Domain — Integration', () => {
       const enrollBody = enrollResponse.json() as { data: { secret: string } };
       const confirmResponse = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/mfa/enroll/confirm'),
+        url: testApiPath('/auth/me/mfa/enroll/confirm'),
         token,
         payload: { code: await generateTotp({ secret: enrollBody.data.secret }) },
       });
       expect(confirmResponse.statusCode).toBe(201);
-      // route-#10: the serializer returns `mfa_method_id` and DELETE /auth/mfa/{mfa_method_id}
+      // route-#10: the serializer returns `mfa_method_id` and DELETE /auth/me/mfa/{mfa_method_id}
       // now accepts that opaque public id directly (the bigserial id is never exposed).
       const confirmBody = confirmResponse.json() as { data: { mfa_method_id: string } };
       const methodPublicId = confirmBody.data.mfa_method_id;
@@ -148,7 +148,7 @@ describe('User Domain — Integration', () => {
 
       const deleteResponse = await injectAuthenticated(app, {
         method: 'DELETE',
-        url: testApiPath(`/auth/mfa/${methodPublicId}`),
+        url: testApiPath(`/auth/me/mfa/${methodPublicId}`),
         token,
       });
       expect(deleteResponse.statusCode).toBe(204);

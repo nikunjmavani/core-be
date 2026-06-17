@@ -1496,3 +1496,41 @@ api post /api/v1/tenancy/organization/
 api put /api/v1/tenancy/organization/
 api patch /api/v1/tenancy/organization
 api delete /api/v1/tenancy/organization
+
+# 27. X-Idempotency-Key header rename (idempotency contract). The inbound request
+#     idempotency header was renamed from `Idempotency-Key` to the project's custom
+#     `X-Idempotency-Key` form (api-contract.mdc header matrix: project-custom headers
+#     carry the X- prefix; RFC 6648 keeps new headers un-prefixed only for true
+#     standards). The outbound header forwarded to Stripe/Resend is unchanged. oasdiff
+#     sees the rename as a new required `x-idempotency-key` header on the 8
+#     idempotencyRequired writes (the matching `idempotency-key` removals are warnings,
+#     not errors). Pinned by idempotency.security.test.ts +
+#     billing-subscription-mutations.integration.test.ts (X-Idempotency-Key -> 422 when missing).
+api post /api/v1/billing/subscriptions added the new required `header` request parameter `x-idempotency-key`
+api post /api/v1/billing/subscriptions/{subscription_id}/cancel added the new required `header` request parameter `x-idempotency-key`
+api post /api/v1/billing/subscriptions/{subscription_id}/change-plan added the new required `header` request parameter `x-idempotency-key`
+api post /api/v1/billing/subscriptions/{subscription_id}/resume added the new required `header` request parameter `x-idempotency-key`
+api post /api/v1/tenancy/organization/invitations added the new required `header` request parameter `x-idempotency-key`
+api post /api/v1/tenancy/organization/memberships added the new required `header` request parameter `x-idempotency-key`
+api post /api/v1/tenancy/organization/transfer-ownership added the new required `header` request parameter `x-idempotency-key`
+api post /api/v1/tenancy/organizations added the new required `header` request parameter `x-idempotency-key`
+
+# 28. Authenticated self-service MFA + passkey-registration routes moved under
+#     /auth/me/* (pre-first-release namespace cleanup: everything that acts on your
+#     own account lives under /me, matching /auth/me/auth-methods + /auth/me/sessions).
+#     The public login-flow routes (/auth/mfa/login, /auth/webauthn/authenticate/*)
+#     stayed. The new /auth/me/* paths are additive (non-breaking); only the old paths'
+#     removal is flagged. Pinned by auth + user + security integration tests.
+api get /api/v1/auth/mfa api path removed without deprecation
+api post /api/v1/auth/mfa/enroll api path removed without deprecation
+api post /api/v1/auth/mfa/enroll/confirm api path removed without deprecation
+api post /api/v1/auth/mfa/verify api path removed without deprecation
+api delete /api/v1/auth/mfa/{mfa_method_id} api path removed without deprecation
+api post /api/v1/auth/webauthn/register/options api path removed without deprecation
+api post /api/v1/auth/webauthn/register/verify api path removed without deprecation
+
+# The deprecated POST /api/v1/billing/stripe/webhook backwards-compat alias was removed.
+# The canonical receiver POST /api/v1/billing/webhook (same handler) remains — new Stripe
+# Dashboard endpoints and CLI forwarders use the canonical path. Pinned by the billing e2e
+# + stripe-webhook integration tests (retargeted to /billing/webhook).
+api post /api/v1/billing/stripe/webhook api path removed without deprecation

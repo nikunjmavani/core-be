@@ -1,0 +1,9 @@
+{
+  "$schema": "https://unpkg.com/cursor-hooks@latest/schema/hooks.schema.json",
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      { "command": "node ../agent-os/hooks/cursor-shell-guard.mjs" }
+    ]
+  }
+}

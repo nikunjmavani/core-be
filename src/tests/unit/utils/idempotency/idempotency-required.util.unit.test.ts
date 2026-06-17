@@ -19,7 +19,7 @@ describe('idempotency required util', () => {
     const request = {
       method: 'POST',
       routeOptions: { config: { idempotencyRequired: true } },
-      headers: { 'idempotency-key': 'test-key-1234567890' },
+      headers: { 'x-idempotency-key': 'test-key-1234567890' },
     };
 
     expect(() => assertIdempotencyKeyPresentWhenRequired(request as never)).not.toThrow();

@@ -1,9 +1,11 @@
+import { organizationCapabilities } from './organization-capability.js';
 import type { OrganizationOutput } from './organization.types.js';
 
 /**
  * Maps an organization Drizzle row to the public {@link OrganizationOutput}
  * shape — exposes `public_id` as `id`, drops internal numeric and audit
- * columns, and serialises timestamps as ISO 8601 strings.
+ * columns, derives type-based `capabilities`, and serialises timestamps as
+ * ISO 8601 strings.
  */
 export function serializeOrganization(row: {
   public_id: string;
@@ -22,6 +24,7 @@ export function serializeOrganization(row: {
     type: row.type,
     status: row.status,
     logo_url: row.logo_url,
+    capabilities: organizationCapabilities(row.type),
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
   };

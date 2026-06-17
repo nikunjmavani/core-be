@@ -36,7 +36,7 @@ describe('mfa.validator', () => {
   });
 
   it('validateMfaMethodIdParam accepts a valid public id (route-#10)', () => {
-    expect(validateMfaMethodIdParam('mfa_a1b2c3d4e5f6g7h8i9j0k')).toBe('mfa_a1b2c3d4e5f6g7h8i9j0k');
+    expect(validateMfaMethodIdParam('am_a1b2c3d4e5f6g7h8i9j0k')).toBe('am_a1b2c3d4e5f6g7h8i9j0k');
   });
 
   it('validateMfaMethodIdParam throws ValidationError for invalid id', () => {

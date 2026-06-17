@@ -1,7 +1,7 @@
 import { createCipheriv, randomBytes } from 'node:crypto';
-import { AES_GCM_IV_LENGTH } from '@/shared/constants/security.constants.js';
+import { AES_GCM_ALGORITHM, AES_GCM_IV_LENGTH } from '@/shared/constants/security.constants.js';
 
-const ALGORITHM = 'aes-256-gcm';
+const ALGORITHM = AES_GCM_ALGORITHM;
 
 /** AES-256-GCM ciphertext, IV, and authentication tag (all base64); returned by {@link encryptPayload}. */
 export interface EncryptedPayload {

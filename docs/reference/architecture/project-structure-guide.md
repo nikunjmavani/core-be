@@ -206,9 +206,9 @@ Always use `.js` extensions in import specifiers. CI gate: `src/tests/global/imp
 
 ### Queues and email
 
-- `magic-link.service.ts` → `enqueueEmail()` from `@/infrastructure/mail/queues/mail.queue.js`
-- `auth-method.service.ts` → `enqueueEmail()` from same
-- `member-invitation.service.ts` → `eventBus.emit()` → handler → `enqueueEmail()` (see Event bus)
+- `magic-link.service.ts` → `eventBus.emit()` → handler → `recordOutboxEmail()` (see Event bus)
+- `auth-method.service.ts` → `eventBus.emit()` → handler → `recordOutboxEmail()`
+- `member-invitation.service.ts` → `eventBus.emit()` → handler → `recordOutboxEmail()` (see Event bus)
 
 ### Event bus
 

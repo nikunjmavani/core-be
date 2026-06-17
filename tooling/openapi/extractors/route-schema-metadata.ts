@@ -92,19 +92,28 @@ function extractMetadataFromOptionsBody(optionsBody: string): RouteSchemaMetadat
   };
 }
 
-function collectFromFile({
+/** A single route registration paired with its (possibly incomplete) extracted schema metadata. */
+export interface RouteSchemaEntry {
+  method: string;
+  fullPath: string;
+  /** `${METHOD} ${OPENAPI_PATH}` lookup key (Fastify `:param` → OpenAPI `{param}`). */
+  lookupKey: string;
+  metadata: RouteSchemaMetadata;
+}
+
+function scanRouteSchemaEntries({
   absolutePath,
   prefix,
 }: {
   absolutePath: string;
   prefix: string;
-}): Map<string, RouteSchemaMetadata> {
-  const collected = new Map<string, RouteSchemaMetadata>();
+}): RouteSchemaEntry[] {
+  const entries: RouteSchemaEntry[] = [];
   let sourceText: string;
   try {
     sourceText = readFileSync(absolutePath, 'utf-8');
   } catch {
-    return collected;
+    return entries;
   }
 
   for (const methodMatch of sourceText.matchAll(ROUTE_METHOD_PATTERN_BROAD)) {
@@ -123,33 +132,46 @@ function collectFromFile({
     if (!optionsRange) continue;
     const optionsBody = sourceText.slice(optionsRange.bodyStart, optionsRange.bodyEnd);
     const metadata = extractMetadataFromOptionsBody(optionsBody);
-    if (metadata.summary || metadata.description || metadata.tags) {
-      collected.set(buildLookupKey(method, fullPath), metadata);
-    }
+    entries.push({ method, fullPath, lookupKey: buildLookupKey(method, fullPath), metadata });
   }
 
-  return collected;
+  return entries;
 }
 
-export function collectRouteSchemaMetadata(): Map<string, RouteSchemaMetadata> {
-  const metadataByLookupKey = new Map<string, RouteSchemaMetadata>();
-
+function collectAllEntries(): RouteSchemaEntry[] {
+  const entries: RouteSchemaEntry[] = [];
   for (const routeFileAbsolutePath of listDomainRouteFiles()) {
     const domainPrefix = inferDomainPrefixForFile(routeFileAbsolutePath);
     if (!domainPrefix) continue;
-    for (const [key, metadata] of collectFromFile({
-      absolutePath: routeFileAbsolutePath,
-      prefix: domainPrefix,
-    })) {
-      metadataByLookupKey.set(key, metadata);
-    }
+    entries.push(
+      ...scanRouteSchemaEntries({ absolutePath: routeFileAbsolutePath, prefix: domainPrefix }),
+    );
   }
-
   for (const supplementalFile of SUPPLEMENTAL_ROUTE_FILES) {
-    for (const [key, metadata] of collectFromFile(supplementalFile)) {
-      metadataByLookupKey.set(key, metadata);
+    entries.push(...scanRouteSchemaEntries(supplementalFile));
+  }
+  return entries;
+}
+
+/**
+ * Every route registration with its (possibly incomplete) schema metadata —
+ * including routes that declare no `summary`/`description`/`tags` at all.
+ *
+ * @remarks Used by the `validate:route-schema-docs` gate to flag undocumented
+ * routes; {@link collectRouteSchemaMetadata} filters empty entries out, so it
+ * cannot surface a route that is missing every field.
+ */
+export function collectAllRouteSchemaEntries(): RouteSchemaEntry[] {
+  return collectAllEntries();
+}
+
+/** Map of `${METHOD} ${OPENAPI_PATH}` → schema metadata for routes that declare at least one of summary/description/tags. */
+export function collectRouteSchemaMetadata(): Map<string, RouteSchemaMetadata> {
+  const metadataByLookupKey = new Map<string, RouteSchemaMetadata>();
+  for (const entry of collectAllEntries()) {
+    if (entry.metadata.summary || entry.metadata.description || entry.metadata.tags) {
+      metadataByLookupKey.set(entry.lookupKey, entry.metadata);
     }
   }
-
   return metadataByLookupKey;
 }

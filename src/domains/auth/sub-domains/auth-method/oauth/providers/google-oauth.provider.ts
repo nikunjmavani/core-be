@@ -1,5 +1,6 @@
 import { NotImplementedError, UnauthorizedError } from '@/shared/errors/index.js';
 import { env } from '@/shared/config/env.config.js';
+import { DEFAULT_FRONTEND_URL } from '@/shared/constants/index.js';
 import { buildOutboundFetchOptions, outboundFetch } from '@/infrastructure/outbound/index.js';
 import { ExternalServiceError } from '@/infrastructure/outbound/outbound-error.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
@@ -12,7 +13,7 @@ const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo';
 function getGoogleRedirectUri(): string {
   return (
     env.OAUTH_GOOGLE_REDIRECT_URI ??
-    `${env.FRONTEND_URL ?? 'http://localhost:3000'}/auth/oauth/google/callback`
+    `${env.FRONTEND_URL ?? DEFAULT_FRONTEND_URL}/auth/oauth/google/callback`
   );
 }
 

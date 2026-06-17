@@ -24,8 +24,10 @@ import {
   completeFirstFactorAuth,
   type FirstFactorAuthResult,
 } from '@/domains/auth/shared/complete-first-factor-auth.js';
-
-const MAGIC_LINK_EXPIRES_IN_MINUTES = 15;
+import {
+  MAGIC_LINK_EXPIRES_IN_MINUTES,
+  MILLISECONDS_PER_MINUTE,
+} from '@/shared/constants/ttl.constants.js';
 
 /**
  * Issues and verifies one-shot magic-link tokens used by the signup and
@@ -110,7 +112,9 @@ export class MagicLinkService {
 
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
-    const expiresAt = new Date(Date.now() + MAGIC_LINK_EXPIRES_IN_MINUTES * 60_000);
+    const expiresAt = new Date(
+      Date.now() + MAGIC_LINK_EXPIRES_IN_MINUTES * MILLISECONDS_PER_MINUTE,
+    );
 
     // audit-#11: invalidating prior links, persisting the new token, and recording the outbound
     // mail-outbox row (done inside the MAGIC_LINK_REQUESTED handler via recordOutboxEmail) must be

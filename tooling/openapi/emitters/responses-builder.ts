@@ -198,7 +198,7 @@ export function buildResponses(
               headers: {
                 'X-Idempotency-Replay': {
                   description:
-                    'Present and `true` when this response was replayed from the idempotency cache for a reused Idempotency-Key.',
+                    'Present and `true` when this response was replayed from the idempotency cache for a reused X-Idempotency-Key.',
                   schema: { type: 'string', enum: ['true'] },
                 },
               },
@@ -304,7 +304,7 @@ export function buildResponses(
   const isMutating = ['POST', 'PATCH', 'PUT', 'DELETE'].includes(method);
   if (isMutating) {
     // 409 covers resource/state conflicts AND the idempotency middleware's
-    // in-flight duplicate (same Idempotency-Key while the first request runs).
+    // in-flight duplicate (same X-Idempotency-Key while the first request runs).
     responses['409'] = {
       description: translate('conflict', 'Conflict'),
       content: {
@@ -320,7 +320,7 @@ export function buildResponses(
     };
     // 422 covers business-rule rejections (UnprocessableEntityError) and the
     // idempotency middleware's key-reuse-with-different-payload fingerprint check,
-    // which guards every mutating route accepting Idempotency-Key.
+    // which guards every mutating route accepting X-Idempotency-Key.
     responses['422'] = {
       description: translate('unprocessableEntity', 'Unprocessable Entity'),
       content: {
@@ -329,7 +329,7 @@ export function buildResponses(
           example: errorExample(
             'request_error',
             'unprocessable_entity',
-            'Business rule violation or Idempotency-Key reused with a different payload',
+            'Business rule violation or X-Idempotency-Key reused with a different payload',
           ),
         }),
       },

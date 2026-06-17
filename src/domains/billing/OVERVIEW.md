@@ -21,7 +21,7 @@ What it does not own: invoicing UI, dunning emails (those flow through `notify`)
 - **Inbound idempotency on `event.id`**: Stripe retries are safe — a `UNIQUE (provider_event_id)` constraint on `stripe_webhook_events` rejects duplicates.
 - **Stale-event rejection**: if a webhook arrives with `event.created_at` older than the row's last update, we reject the change so out-of-order delivery doesn't roll state backwards.
 - **Network I/O outside RLS contexts**: Stripe API calls **must not** run inside `withOrganizationDatabaseContext` (would hold a pool checkout across a remote round trip). Enforced by `pnpm test:global` (`rls-context-network-isolation.global.test.ts`).
-- **One subscription per organization**: enforced at the service layer; many concurrent attempts to create a second subscription resolve to a single Stripe subscription via `Idempotency-Key`.
+- **One subscription per organization**: enforced at the service layer; many concurrent attempts to create a second subscription resolve to a single Stripe subscription via the forwarded idempotency key.
 
 ## Sub-domains
 
@@ -36,7 +36,7 @@ What it does not own: invoicing UI, dunning emails (those flow through `notify`)
 This domain implements the contracts documented in [src/PATTERNS.md](src/PATTERNS.md):
 
 - `tenant-isolation` / `rls-context` — subscriptions are organization-scoped; reads/writes run inside `withOrganizationDatabaseContext`.
-- `idempotency` — every mutating subscription endpoint requires `Idempotency-Key`; the same key is forwarded to Stripe.
+- `idempotency` — every mutating subscription endpoint requires `X-Idempotency-Key`; the same key is forwarded to Stripe.
 - `transactional-outbox` — applied **inbound** to Stripe webhooks (claim row, process, mark processed; reclaim if stuck).
 - `audit-emission` — every state transition records an audit row.
 - `soft-delete` does **not** apply to subscriptions or plans (immutable billing ledger).

@@ -146,12 +146,12 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     schema: wrapSuccess(schemas.messageSchema, { message: 'Verification email sent' }),
     example: null,
   },
-  'POST /api/v1/auth/mfa/enroll': {
+  'POST /api/v1/auth/me/mfa/enroll': {
     statusCode: 201,
     schema: wrapSuccess(schemas.mfaEnrollSchema, schemas.mfaEnrollExample),
     example: null,
   },
-  'POST /api/v1/auth/mfa/verify': {
+  'POST /api/v1/auth/me/mfa/verify': {
     statusCode: 201,
     schema: wrapSuccess(schemas.mfaVerifiedSchema, { verified: true }),
     example: null,
@@ -161,14 +161,14 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
     example: null,
   },
-  'GET /api/v1/auth/mfa': {
+  'GET /api/v1/auth/me/mfa': {
     statusCode: 200,
     schema: wrapSuccess({ type: 'array', items: schemas.mfaMethodSchema }, [
       schemas.mfaMethodExample,
     ]),
     example: null,
   },
-  'DELETE /api/v1/auth/mfa/{mfa_method_id}': { statusCode: 204, schema: null, example: null },
+  'DELETE /api/v1/auth/me/mfa/{mfa_method_id}': { statusCode: 204, schema: null, example: null },
   'POST /api/v1/auth/refresh': {
     statusCode: 201,
     schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),

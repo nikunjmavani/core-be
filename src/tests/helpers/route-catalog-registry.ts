@@ -33,25 +33,18 @@ function parseRouteCatalogLine(line: string): {
   const method = methodMatch[1] as RouteEntry['method'];
   const remainder = line.slice(methodMatch[0].length);
 
-  const spacedAccessMatch = /\s+(PUBLIC|AUTH|ROLE:.+|PERM:.+|TOKEN:.+)\s*$/.exec(remainder);
-  if (spacedAccessMatch?.[1]) {
-    return {
-      method,
-      path: remainder.slice(0, spacedAccessMatch.index).trimEnd(),
-      accessToken: spacedAccessMatch[1],
-    };
-  }
+  // Path is the leading token. The optional S/I/O columns (success status,
+  // idempotency, org scope) and the access token that follow are matched
+  // separately — access is end-anchored — so the middle columns are ignored and
+  // both the legacy `PATH  ACCESS` and the columnar `PATH  S  I  O  ACCESS`
+  // formats parse identically here.
+  const pathMatch = /^(\S+)/.exec(remainder);
+  if (!pathMatch?.[1]) return null;
 
-  const gluedAccessMatch = /(PERM:.+|ROLE:.+|TOKEN:.+)\s*$/.exec(remainder);
-  if (gluedAccessMatch?.[1]) {
-    return {
-      method,
-      path: remainder.slice(0, gluedAccessMatch.index).trimEnd(),
-      accessToken: gluedAccessMatch[1],
-    };
-  }
+  const accessMatch = /(PUBLIC|AUTH|ROLE:.+|PERM:.+|TOKEN:.+)\s*$/.exec(remainder);
+  if (!accessMatch?.[1]) return null;
 
-  return null;
+  return { method, path: pathMatch[1], accessToken: accessMatch[1].trimEnd() };
 }
 
 function domainSlugFromPrefix(prefix: string): string {

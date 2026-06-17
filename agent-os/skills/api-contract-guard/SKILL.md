@@ -23,7 +23,7 @@ description: Enforces the core-be public API contract conventions — snake_case
 |-----|------|-----------|--------|
 | 200 | 201  | 200       | 204    |
 
-Exceptions (protocol-owned, stay 200): `POST /billing/webhook`, `POST /billing/stripe/webhook`, `POST /api/v1/mcp`.
+Exceptions (protocol-owned, stay 200): `POST /billing/webhook`, `POST /api/v1/mcp`.
 The policy is enforced centrally in `method-status-policy.middleware.ts`; declared statuses live in `tooling/openapi/route-catalog/route-success-statuses.json` and are runtime-verified by `pnpm validate:route-success-coverage` (drift fails CI).
 
 ## Error status — when to set which (full guide: docs/reference/api/response-codes.md)
@@ -32,26 +32,33 @@ The policy is enforced centrally in `method-status-policy.middleware.ts`; declar
 - **401** missing/expired/revoked access token — message must tell the developer how to recover (login → `Authorization: Bearer <ACCESS_TOKEN>`).
 - **403** authenticated but lacking permission/role. **404** id or route doesn't exist (incl. other-org ids — no existence leak).
 - **406** MCP only (Accept negotiation).
-- **409** mutating only — state conflict: duplicate resource, bad state transition, in-flight duplicate Idempotency-Key.
+- **409** mutating only — state conflict: duplicate resource, bad state transition, in-flight duplicate X-Idempotency-Key.
 - **413 / 415** POST/PATCH/PUT only — body too large / wrong Content-Type.
-- **422** mutating only — business-rule rejection, or Idempotency-Key reused with a different payload.
+- **422** mutating only — business-rule rejection (incl. a capability unavailable for an **immutable resource type**, e.g. a personal organization that cannot gain members/roles/ownership-transfer/deletion — enforced by the shared `assertTeamOrganization(...)` guard, **not** 409), or X-Idempotency-Key reused with a different payload.
 - **429** every route — with `Retry-After` + `X-RateLimit-*` headers.
 - **500** never intentional — the never-5xx fuzz gate fails CI on any 5xx from malformed input.
-- Rules of thumb: 400 = malformed shape, 422 = valid shape wrong meaning; 409 = conflicts with current state, 422 = payload logic always wrong. Never invent a status outside this list.
+- Rules of thumb: 400 = malformed shape, 422 = valid shape wrong meaning; 409 = conflicts with current state, 422 = payload logic always wrong (incl. a capability blocked by an immutable resource type — personal vs team org). Never invent a status outside this list.
+
+## Personal vs team organizations (one route surface, discoverable capabilities)
+
+- The route surface is identical for personal and team organizations — there are **no** personal-only or team-only paths.
+- Team-only capabilities (invite/manage members, manage roles, transfer ownership, delete the org) reject a **personal** organization with **422** via `assertTeamOrganization(organization, capability)` (`src/domains/tenancy/sub-domains/organization/organization-capability.ts`).
+- Every serialized organization carries a `capabilities` object (`can_invite_members`, `can_manage_members`, `can_manage_roles`, `can_transfer_ownership`, `can_delete`) describing the **org type's** capability (not the caller's permission), so clients discover this without probing for a 422.
+- The route catalog encodes this as the `O` column (`both` | `team`), kept in sync with `tooling/openapi/route-catalog/route-org-scope.json` by `pnpm validate:route-org-scope`.
 
 ## Header matrix (client-sent)
 
 - `Authorization: Bearer <ACCESS_TOKEN>` — every authed route (OpenAPI security scheme; Postman collection-level bearer `{{ACCESS_TOKEN}}`).
 - `Content-Type: application/json` — any body.
 - `X-Organization-Id` — legacy header read directly by a few consumers (e.g. the upload domain); org-scoped routes resolve the active organization from the signed `org` JWT claim, NOT this header. Switch the active org via `/auth/switch-to-personal` / `/auth/switch-to-organization` (which re-mint the access token).
-- `Idempotency-Key` — all mutating routes (optional, auto-generate in clients); REQUIRED on the 8 writes registered with `config.idempotencyRequired: true` (org create, memberships, transfer-ownership, invitations, subscription create/change-plan/cancel/resume).
+- `X-Idempotency-Key` — all mutating routes (optional, auto-generate in clients); REQUIRED on the 8 writes registered with `config.idempotencyRequired: true` (org create, memberships, transfer-ownership, invitations, subscription create/change-plan/cancel/resume).
 - `X-Captcha-Token` — public auth forms only (login, magic-link send, password forgot/reset, email verify, webauthn authenticate options, oauth authorize).
 - `X-CSRF-Token` — POST /auth/refresh only (double-submit of the csrf_token cookie). Keeps the X- form (frontend-framework default).
 - `Stripe-Signature` — sent BY Stripe to the webhook routes; the app never sends it.
 
 ## Headers kept in X- form (ecosystem standards)
 
-`X-Request-Id`, `X-Client-Request-Id`, `X-Api-Key`, `X-CSRF-Token`, `X-RateLimit-*` (server-emitted with `Retry-After` on 429), Helmet's security headers, `X-Forwarded-For`. Custom headers use the X- form for visual consistency with the infrastructure headers: `X-Organization-Id`, `X-Idempotency-Replay` (response marker), `X-Captcha-Token`. Standards keep their fixed names: `Authorization`, `Idempotency-Key`, `Stripe-Signature`, `Retry-After`.
+`X-Request-Id`, `X-Client-Request-Id`, `X-Api-Key`, `X-CSRF-Token`, `X-RateLimit-*` (server-emitted with `Retry-After` on 429), Helmet's security headers, `X-Forwarded-For`. Custom headers use the X- form for visual consistency with the infrastructure headers: `X-Organization-Id`, `X-Idempotency-Key`, `X-Idempotency-Replay` (response marker), `X-Captcha-Token`. Standards keep their fixed names: `Authorization`, `Stripe-Signature`, `Retry-After`.
 
 ## Sync checklist when touching any of the above
 

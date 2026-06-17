@@ -13,7 +13,9 @@ When to set which HTTP status — the single contract every route, test, and doc
 | PUT / PATCH | **200** | Updated resource returned. |
 | DELETE | **204** | Deleted/revoked; no body. |
 
-**Exceptions (protocol-owned, stay 200):** `POST /api/v1/billing/webhook`, `POST /api/v1/billing/stripe/webhook` (Stripe expects a 200 acknowledgement) and `POST /api/v1/mcp` (the MCP streamable-HTTP transport owns its codes). The exemption list is `METHOD_STATUS_POLICY_EXEMPT_PREFIXES` in the middleware.
+**Exceptions (protocol-owned, stay 200):** `POST /api/v1/billing/webhook` (Stripe expects a 200 acknowledgement) and `POST /api/v1/mcp` (the MCP streamable-HTTP transport owns its codes). The exemption list is `METHOD_STATUS_POLICY_EXEMPT_PREFIXES` in the middleware.
+
+**PUT vs PATCH, and action verbs:** PUT replaces a resource in full; PATCH merges a partial update (both → 200). A collection-level action that has no target id is a `POST /collection/verb` (e.g. `POST /tenancy/organization/transfer-ownership`); a single-resource state change is a `PATCH /resource/:id/state` (or a dedicated action sub-path). Don't model a named action as a bare PUT/PATCH on the parent resource when it has its own verb.
 
 **Where the truth lives and how it is enforced:**
 
@@ -33,16 +35,16 @@ When to set which HTTP status — the single contract every route, test, and doc
 | **403** | Authenticated but not allowed: missing organization permission, role too low, suspended membership. | Permission guards |
 | **404** | Resource id (or route) does not exist — including ids of the right shape but no row, and ids that belong to another organization (no existence leak). | Services / repositories |
 | **406** | MCP route only — `Accept` header missing or names an unsupported media type. | MCP transport |
-| **409** | Mutating routes — state conflict: duplicate resource (slug/email already taken), invalid state transition, or an in-flight duplicate request with the same `Idempotency-Key`. | Services + idempotency middleware |
+| **409** | Mutating routes — state conflict: duplicate resource (slug/email already taken), invalid state transition, or an in-flight duplicate request with the same `X-Idempotency-Key`. | Services + idempotency middleware |
 | **413** | POST/PATCH/PUT — request body exceeds the size limit. | Fastify body limit |
 | **415** | POST/PATCH/PUT — `Content-Type` is not `application/json` (where a JSON body is expected). | Fastify content-type parser |
-| **422** | Mutating routes — request is well-formed but violates a business rule, or an `Idempotency-Key` is reused with a **different payload** (fingerprint mismatch). | Services + idempotency middleware |
+| **422** | Mutating routes — request is well-formed but violates a business rule (including a capability unavailable for an **immutable resource type** — e.g. a personal organization cannot gain members, roles, ownership transfer, or deletion), or an `X-Idempotency-Key` is reused with a **different payload** (fingerprint mismatch). | Services + idempotency middleware |
 | **429** | Any route — global or per-route rate limit exhausted. Response carries `Retry-After` and `X-RateLimit-Limit` / `X-RateLimit-Remaining` / `X-RateLimit-Reset`. | Rate-limit middleware |
 | **500** | Unexpected failure. Never intentional: the never-5xx fuzz gate (`src/tests/security/`) fails CI if any route 5xxes on malformed input. External message is generic; details go to Sentry. | Error handler |
 
 **Decision guide for a new failure path:** is the request unreadable → 400/413/415; unauthenticated → 401; authenticated but not allowed → 403; thing doesn't exist → 404; valid request colliding with current state → 409; valid request breaking a business rule → 422; too fast → 429. If none fit, you are probably about to invent a status — don't; map it to the closest above.
 
-**400 vs 422:** 400 = the request itself is malformed (shape). 422 = the request parses fine but the system rejects its meaning (semantics). **409 vs 422:** 409 = conflict with existing state (try again may succeed after state changes). 422 = the payload's logic is wrong (retrying identical payload always fails).
+**400 vs 422:** 400 = the request itself is malformed (shape). 422 = the request parses fine but the system rejects its meaning (semantics). **409 vs 422:** 409 = conflict with existing state (try again may succeed after state changes). 422 = the payload's logic is wrong, or the target resource **type** makes the capability permanently unavailable — retrying an identical payload always fails (e.g. a personal organization can never have members/roles/ownership-transfer/deletion because the org `type` is immutable; the centralized guard is `assertTeamOrganization(...)`).
 
 ## Error body shape
 

@@ -14,6 +14,9 @@ import {
   type StripeWebhookProcessingStatus,
 } from './stripe-webhook.schema.js';
 
+/** Max characters persisted for a Stripe webhook failure reason (bounds ledger storage). */
+const FAILURE_REASON_MAX_LENGTH = 2000;
+
 /**
  * Outcome of {@link StripeWebhookEventRepository.tryClaimEvent}: `claimed` for a
  * brand-new event, `processed_duplicate` for an at-least-once redelivery,
@@ -255,7 +258,9 @@ export class StripeWebhookEventRepository {
     // sec-new-D2: return whether a row was actually updated so the caller can
     // detect and log a no-op (e.g. the ledger row was unexpectedly absent).
     const truncatedReason =
-      failure_reason.length > 2000 ? failure_reason.slice(0, 2000) : failure_reason;
+      failure_reason.length > FAILURE_REASON_MAX_LENGTH
+        ? failure_reason.slice(0, FAILURE_REASON_MAX_LENGTH)
+        : failure_reason;
     const rows = await stripeWebhookLedgerDatabase()
       .update(stripe_webhook_events)
       .set({

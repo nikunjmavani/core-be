@@ -15,7 +15,10 @@ import type {
 } from '@tooling/setup/common/types.js';
 
 const POSTMAN_API_BASE = 'https://api.getpostman.com';
-const COLLECTION_PATH = resolve(import.meta.dirname, '../../../../docs/postman-collection.json');
+// import.meta.dirname is tooling/setup/infra/providers/setup-postman — five levels
+// below the repository root.
+const PROJECT_ROOT = resolve(import.meta.dirname, '../../../../../');
+const COLLECTION_PATH = resolve(PROJECT_ROOT, 'docs', 'postman-collection.json');
 
 function toProcessEnvironment(
   variables: ReturnType<typeof buildEnvironmentVariables>,
@@ -46,7 +49,7 @@ export async function provision(
 
   try {
     execSync('pnpm docs:all', {
-      cwd: resolve(import.meta.dirname, '../../../../'),
+      cwd: PROJECT_ROOT,
       stdio: 'pipe',
       encoding: 'utf-8',
       timeout: 60000,

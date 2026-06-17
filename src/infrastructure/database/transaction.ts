@@ -1,5 +1,6 @@
 import { sql as drizzleSql } from 'drizzle-orm';
 import { database } from '@/infrastructure/database/connection.js';
+import { TEN_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
 
 /** Options passed to {@link withTransaction} — per-transaction statement timeout and isolation level. */
 export interface TransactionOptions {
@@ -22,7 +23,7 @@ export async function withTransaction<T>(
   callback: (transaction: unknown) => Promise<T>,
   options?: TransactionOptions,
 ): Promise<T> {
-  const timeoutMs = options?.timeoutMs ?? 10_000;
+  const timeoutMs = options?.timeoutMs ?? TEN_SECONDS_MS;
   const isolationLevel = options?.isolationLevel ?? 'read committed';
 
   return database.transaction(

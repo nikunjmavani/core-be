@@ -4,6 +4,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '@/shared/errors/index.js';
+import { assertTeamOrganization } from './organization-capability.js';
 import { env } from '@/shared/config/env.config.js';
 import { GLOBAL_ROLES, type GlobalRole } from '@/shared/constants/roles.constants.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
@@ -508,9 +509,7 @@ export class OrganizationService {
       if (!found) throw new NotFoundError('Organization');
       // A PERSONAL organization is the user's own account-level workspace — it is never
       // deletable on its own; it cascades only when the account itself is deleted.
-      if (found.type === 'PERSONAL') {
-        throw new ConflictError('errors:personalOrganizationImmutable');
-      }
+      assertTeamOrganization(found, 'MUTATION');
       const marked = await this.repository.markDeletionStarted(public_id);
       if (!(marked || found.deletion_started_at)) {
         throw new NotFoundError('Organization');

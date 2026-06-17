@@ -1,7 +1,7 @@
 /**
  * Policy: Stripe webhook HTTP ingress must register stripeWebhookIngressPlugin before
- * any handler under /stripe, and billing must not register /stripe/webhook outside
- * stripe-webhook.routes.ts.
+ * the webhook route, and no billing route file may register a `/stripe/webhook` path
+ * (the deprecated alias was removed; only the canonical `/webhook` remains).
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -34,7 +34,7 @@ function relativePath(absolutePath: string): string {
 }
 
 describe('Stripe webhook ingress policy', () => {
-  it('registers stripeWebhookIngressPlugin before both webhook routes', () => {
+  it('registers stripeWebhookIngressPlugin before the webhook route', () => {
     const source = readFileSync(STRIPE_WEBHOOK_ROUTES, 'utf8');
 
     expect(source).toContain('stripeWebhookIngressPlugin');
@@ -43,13 +43,9 @@ describe('Stripe webhook ingress policy', () => {
     // schema block is large enough to force multi-line formatting.
     const ingressIndex = source.search(/await\s+stripeWebhookIngressPlugin\s*\(\s*app/);
     const postIndex = source.search(/zodApplication\.post\(\s*['"]\/webhook['"]/);
-    const stripeAliasPostIndex = source.search(
-      /zodApplication\.post\(\s*['"]\/stripe\/webhook['"]/,
-    );
 
     expect(ingressIndex).toBeGreaterThanOrEqual(0);
     expect(postIndex).toBeGreaterThan(ingressIndex);
-    expect(stripeAliasPostIndex).toBeGreaterThan(ingressIndex);
   });
 
   it('does not register /stripe/webhook directly in other billing route files', () => {

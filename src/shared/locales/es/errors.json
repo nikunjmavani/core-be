@@ -25,7 +25,7 @@
   "conflict": "Conflicto",
   "idempotencyKeyConflict": "Solicitud simultánea con la misma clave de idempotencia",
   "idempotencyKeyInFlight": "Una solicitud con esta clave de idempotencia aún está en curso. Vuelve a intentarlo cuando se complete la solicitud original.",
-  "idempotencyKeyInvalid": "Idempotency-Key debe tener entre 1 y 255 caracteres y solo puede contener letras, dígitos y . _ : ~ + / = -",
+  "idempotencyKeyInvalid": "X-Idempotency-Key debe tener entre 1 y 255 caracteres y solo puede contener letras, dígitos y . _ : ~ + / = -",
   "idempotencyKeyReuse": "Esta clave de idempotencia ya se usó con una carga de solicitud diferente",
   "idempotencyPerActorCapExceeded": "Demasiadas solicitudes idempotentes. Reutiliza una clave para reintentos o espera a que se restablezca la ventana.",
   "notImplemented": "Por favor, solicite esta función",
@@ -157,6 +157,6 @@
   "captchaInvalid": "La verificación CAPTCHA falló",
   "captchaProviderUnavailable": "La verificación CAPTCHA no está disponible temporalmente",
   "queueDashboardReadOnly": "Las mutaciones del panel de colas están deshabilitadas en este entorno",
-  "idempotencyKeyRequired": "El encabezado Idempotency-Key es obligatorio para esta operación",
+  "idempotencyKeyRequired": "El encabezado X-Idempotency-Key es obligatorio para esta operación",
   "invalidMetricsToken": "Token de métricas inválido o ausente"
 }

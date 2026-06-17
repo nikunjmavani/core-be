@@ -98,7 +98,7 @@ describe('Billing subscription — happy paths (mocked payment provider)', () =>
       method: 'POST',
       url: testApiPath('/billing/subscriptions'),
       token,
-      headers: { 'idempotency-key': `subscription-happy-${randomUUID()}` },
+      headers: { 'x-idempotency-key': `subscription-happy-${randomUUID()}` },
       payload: { plan_id: plan.public_id, billing_cycle: 'monthly' },
     });
     expect(response.statusCode, response.body).toBe(201);
@@ -125,7 +125,7 @@ describe('Billing subscription — happy paths (mocked payment provider)', () =>
   it('POST /billing/webhook (legacy alias) accepts a signed Stripe event (200)', async () => {
     const webhookSigningSecret = env.STRIPE_WEBHOOK_SECRET;
     if (!webhookSigningSecret) {
-      // Mirrors the sibling /billing/stripe/webhook suite: skip without a signing secret.
+      // Mirrors the sibling stripe-webhook suite: skip without a signing secret.
       return;
     }
 
