@@ -24,8 +24,10 @@ const REQUIRED_FILES: RequiredFile[] = [
       'github_environment',
       'development',
       'production',
-      "env.POSTMAN_API_KEY != ''",
-      "env.SCALAR_API_KEY != ''",
+      // Uploads gate on the workflow input only; the upload scripts self-skip when the
+      // API keys are unset (a step's own env is not available to its own `if:`).
+      'if: inputs.publish_hosted_docs',
+      'secrets.SCALAR_API_KEY',
     ],
   },
   {

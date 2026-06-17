@@ -102,18 +102,21 @@ jobs:
             docs/postman-collection.json
           retention-days: 30
 
+      # Credential gating lives inside the upload scripts (shouldSkipHostedUpload): they log a
+      # clear "Skipping…" warning and exit 0 when the API keys are unset. The previous `if:`
+      # tested a step-level env mapped from a secret, but GitHub does not populate a step's own
+      # env before evaluating that same step's `if`, so the step was skipped even when the
+      # secrets were set. `continue-on-error: true` keeps a publish failure from blocking deploy.
       - name: Upload Postman Collection to workspace
-        if: inputs.publish_hosted_docs && env.POSTMAN_API_KEY != ''
+        if: inputs.publish_hosted_docs
         continue-on-error: true
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           POSTMAN_WORKSPACE_ID: ${{ secrets.POSTMAN_WORKSPACE_ID }}
-          SCALAR_NAMESPACE: ${{ secrets.SCALAR_NAMESPACE }}
-          SCALAR_SLUG: ${{ secrets.SCALAR_SLUG }}
         run: pnpm docs:upload
 
       - name: Upload OpenAPI to Scalar Registry
-        if: inputs.publish_hosted_docs && env.SCALAR_API_KEY != ''
+        if: inputs.publish_hosted_docs
         continue-on-error: true
         env:
           SCALAR_API_KEY: ${{ secrets.SCALAR_API_KEY }}
