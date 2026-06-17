@@ -78,6 +78,9 @@ export interface EnvironmentVariables {
   RAILWAY_WORKER_SERVICE_ID?: string;
   POSTMAN_API_KEY?: string;
   POSTMAN_WORKSPACE_ID?: string;
+  SCALAR_API_KEY?: string;
+  SCALAR_NAMESPACE?: string;
+  SCALAR_SLUG?: string;
 }
 
 export interface GuideStep {

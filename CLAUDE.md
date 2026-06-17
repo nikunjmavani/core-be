@@ -376,6 +376,8 @@ Local SonarQube quality gate (pre-commit): `pnpm sonar:up` / `sonar:scan` / `son
 - `pnpm docs:check` — verify OpenAPI generator output is in sync (works on fresh clones; specs are gitignored)
 - `pnpm docs:postman` — convert OpenAPI spec to Postman Collection at `docs/postman-collection.json`
 - `pnpm docs:upload` — upload Postman Collection to workspace (requires `POSTMAN_API_KEY` + `POSTMAN_WORKSPACE_ID`)
+- `pnpm docs:upload:scalar` — publish the OpenAPI document to the Scalar Registry (requires `SCALAR_API_KEY` + `SCALAR_NAMESPACE`; optional `SCALAR_SLUG`, default `core-be`)
+- `pnpm docs:upload:hosted` — run both hosted uploads (Postman workspace + Scalar Registry)
 - `pnpm docs:all` — generate OpenAPI spec + Postman Collection in one step
 - `pnpm docs:breaking` — local mirror of the CI oasdiff breaking-change gate (pinned checksum-verified binary in `.cache/oasdiff/`; base spec from `origin/dev` worktree; honors `.github/oasdiff/breaking-changes-ignore.txt`)
 - `pnpm test` — run all Vitest tests (serial)
