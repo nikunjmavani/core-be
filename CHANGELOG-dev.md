@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.8.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.8.0-dev.0...v4.8.1-dev.0) (2026-06-17)
+
+
+### Performance
+
+* **http:** cut per-request logging cost and add event-loop overload valve ([#687](https://github.com/nikunjmavani/core-be/issues/687)) ([3dda668](https://github.com/nikunjmavani/core-be/commit/3dda668b6aff80de7feccac8e4304a014055069c))
+
 ## [4.8.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.7.0-dev.0...v4.8.0-dev.0) (2026-06-17)
 
 
