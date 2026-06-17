@@ -113,6 +113,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [integrations/cursor-backend-mcp.md](integrations/cursor-backend-mcp.md)                         | Connect frontend to core-be MCP.                                                                    |
 | [integrations/codegraph.md](integrations/codegraph.md)                                           | Semantic code index for AI agents (MCP); auto-set-up in `setup:local` (phase 7/9).                  |
 | [integrations/understand-anything.md](integrations/understand-anything.md)                         | Knowledge graph, dashboard, and learning-curve steps (`/understand`, tour, chat, diff).             |
+| [integrations/claude-code-sessions.md](integrations/claude-code-sessions.md)                     | Claude Code session setup: the common hooks, gates, and skill routing every session runs. |
 | [integrations/cursor-cloud-agent-environment.md](integrations/cursor-cloud-agent-environment.md) | `Dockerfile.agent` vs production image for Cursor cloud agents.                                     |
 | [integrations/claude-code-web-environment.md](integrations/claude-code-web-environment.md)       | Claude Code on the web: network access, setup script (Node 24), env vars, Postgres/Redis via `pnpm compose`. |
 | [integrations/codex-cloud-agent-environment.md](integrations/codex-cloud-agent-environment.md)   | OpenAI Codex Cloud: setup-phase installs (Node 24, deps), offline agent phase, GitHub prerequisites. |
