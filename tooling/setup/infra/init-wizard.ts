@@ -158,6 +158,7 @@ export function buildConfig(
         repository: `${organization}/${projectName}`,
       },
       postman: { enabled: true },
+      scalar: { enabled: true },
     },
     app: {
       port: 3000,
