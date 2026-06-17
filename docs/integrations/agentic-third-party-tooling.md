@@ -64,9 +64,22 @@ and the Stripe MCP lets an agent inspect test-mode objects. They coexist; none r
 The MCP servers in [`.mcp.example.json`](../../.mcp.example.json) (mirrored at
 `agent-os/mcp/mcp.example.json`): **context7, core-be:api, neon, sentry, railway, aws,
 stripe, semgrep, sonarqube, redis, postman, resend, codegraph, headroom**. These are
-*agent-only*; CI/CD and runtime do not use them. (The **GitHub** and **Slack** MCPs are
-intentionally left out of the project config — use `gh` for GitHub; Slack, if wanted, is
-configured at the user/local level so personal-account servers stay separate from the repo.)
+*agent-only*; CI/CD and runtime do not use them.
+
+They split into two tiers:
+
+- **Default auto-start pair — `codegraph` + `headroom`.** Zero-config, no token (local
+  CLIs); declared in `.mcp.json` by `pnpm setup:local` and the cloud bootstrap so they
+  are available before the first prompt.
+- **On-demand set — the other twelve.** Most need a provider token. Scaffold them into
+  `.mcp.json` with **`pnpm mcp:setup`** (`pnpm mcp:setup:default` for just the pair;
+  `pnpm mcp:setup --list` for status). On Claude Code web the live set is configured in
+  the environment MCP settings (web UI), not `.mcp.json` — see
+  [claude-code-web-environment.md](claude-code-web-environment.md).
+
+The **GitHub**, **Composio**, **Descript**, and **Slack** MCPs are intentionally **not**
+part of this project's config — use `gh` / the GitHub MCP for GitHub, and keep any
+personal-account servers at the user level so they stay separate from the repo.
 
 ## Agent MCP server notes (CI/CD keeps the CLIs)
 
@@ -103,11 +116,3 @@ large tool output, logs, files, and RAG chunks before they reach the model (`hea
 > [Resend](https://github.com/resend/mcp-send-email),
 > [Postman](https://learning.postman.com/docs/developer/postman-api/postman-mcp-server/set-up-postman-mcp-server),
 > [Docker MCP](https://docs.docker.com/ai/mcp-catalog-and-toolkit/toolkit/).
-
-## Umbrella option — Composio
-
-Composio is a single MCP layer over 500+ apps. It is an **alternative** to wiring each
-vendor's first-party MCP, useful for cross-app glue (e.g. post Sonar findings to Slack/Notion).
-Trade-off: one auth/governance plane vs. the deeper first-party tools (Sentry Seer, Stripe test
-fixtures). For this backend, keep the first-party MCP servers above and reach for Composio only
-for cross-app workflows.
