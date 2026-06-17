@@ -1,0 +1,46 @@
+{
+  "description": "Skill taxonomy — every project skill belongs to exactly one group. Single source for grouped rendering of the skill index and for group-level operations ('run all docs maintainers'). agent-os/evals/check.ts asserts this stays in sync with the skills on disk (every skill grouped exactly once; no unknown names).",
+  "groups": {
+    "api-routes": [
+      "api-contract-guard",
+      "route-schema-doc-guard",
+      "route-catalog",
+      "openapi-multilingual",
+      "openapi-route-sync",
+      "idempotency-guard",
+      "i18n-message-guard"
+    ],
+    "database": ["schema-generator", "sql-design-guard", "db-migration-maintainer"],
+    "domain": ["domain-generator", "workers-events", "supabase-porting"],
+    "testing": ["test-generator", "chaos-test-maintainer", "contract-test-maintainer"],
+    "docs": [
+      "tsdoc-export-guard",
+      "docs-maintainer",
+      "docs-audit",
+      "overview-doc-maintainer",
+      "system-narrative-maintainer"
+    ],
+    "quality": [
+      "code-quality-guard",
+      "code-smells-and-best-practices",
+      "lint-warnings-handler",
+      "before-commit-guard"
+    ],
+    "security-hardening": [
+      "rls-tenant-isolation-guard",
+      "dependency-security",
+      "production-hardening-guard",
+      "path-to-production-gate"
+    ],
+    "infra-config": ["env-schema-add", "setup-infra-maintainer", "ide-productivity-guard"],
+    "seed": ["seed-maintainer"],
+    "workflow": [
+      "ci-investigator",
+      "pr-babysit",
+      "split-to-prs",
+      "skill-index",
+      "cursor-global-skills",
+      "structure-maintainer"
+    ]
+  }
+}

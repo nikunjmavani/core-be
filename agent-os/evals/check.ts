@@ -285,6 +285,45 @@ if (existsSync(targetsRegistryFile)) {
   }
 }
 
+// ── Check 13: skill groups + chains stay in sync with the skills on disk ──
+// groups.json must place every skill in exactly one known group; chains.json
+// steps must each reference a real skill — so the orchestration manifests cannot
+// drift as skills are added or renamed.
+const groupsFile = join(agentOsDirectory, 'skills', 'groups.json')
+if (existsSync(groupsFile)) {
+  try {
+    const groups = (JSON.parse(readText(groupsFile)) as { groups?: Record<string, string[]> }).groups ?? {}
+    const membership = new Map<string, number>()
+    for (const [group, members] of Object.entries(groups))
+      for (const member of members) {
+        if (!skillNames.includes(member))
+          error('skill-groups', `groups.json group "${group}" lists "${member}" which has no skill directory`)
+        membership.set(member, (membership.get(member) ?? 0) + 1)
+      }
+    for (const skill of skillNames) {
+      const count = membership.get(skill) ?? 0
+      if (count === 0) error('skill-groups', `skill "${skill}" is in no group in groups.json`)
+      else if (count > 1) error('skill-groups', `skill "${skill}" is in ${count} groups in groups.json (expected exactly 1)`)
+    }
+  } catch {
+    error('skill-groups', 'agent-os/skills/groups.json is not valid JSON')
+  }
+}
+const chainsFile = join(agentOsDirectory, 'skills', 'chains.json')
+if (existsSync(chainsFile)) {
+  try {
+    const chains =
+      (JSON.parse(readText(chainsFile)) as { chains?: Record<string, { steps?: string[]; optional?: string[] }> })
+        .chains ?? {}
+    for (const [chain, definition] of Object.entries(chains))
+      for (const step of [...(definition.steps ?? []), ...(definition.optional ?? [])])
+        if (!skillNames.includes(step))
+          error('skill-chains', `chains.json chain "${chain}" references "${step}" which has no skill directory`)
+  } catch {
+    error('skill-chains', 'agent-os/skills/chains.json is not valid JSON')
+  }
+}
+
 // ── Report ──
 const errors = findings.filter((finding) => finding.level === 'error')
 const warnings = findings.filter((finding) => finding.level === 'warn')
@@ -304,6 +343,8 @@ const checkLabels: Record<string, string> = {
   'root-doc-count': 'Root-doc counts (CLAUDE/AGENTS)',
   'hooks-manifest': 'Hook manifest scripts exist',
   'targets-registry': 'Capability registry valid',
+  'skill-groups': 'Skill groups ↔ disk',
+  'skill-chains': 'Skill chains ↔ disk',
 }
 
 console.log('\nagent-os integrity evals (Tier 1)\n')
