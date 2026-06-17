@@ -1867,6 +1867,7 @@ src/
     │   ├── ci/
     │   │   ├── dependabot-ci-triage.policy.unit.test.ts
     │   │   ├── github-actions-node24.policy.unit.test.ts
+    │   │   ├── hosted-docs-publish.policy.unit.test.ts
     │   │   ├── k6-coverage.policy.unit.test.ts
     │   │   ├── openapi-drift-check.policy.unit.test.ts
     │   │   ├── password-hashing-dependency.policy.unit.test.ts
