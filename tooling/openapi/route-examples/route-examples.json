@@ -42,6 +42,32 @@
       }
     }
   },
+  "DELETE /api/v1/auth/me/mfa/:mfa_method_id": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "93d6377d-2ef0-4b92-90d7-5334cac6e082"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Recent step-up authentication is required for this action",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "fe62983f-0784-4957-975e-4c7a937d3a56"
+        }
+      }
+    }
+  },
   "DELETE /api/v1/auth/me/sessions": {
     "responses": {
       "401": {
@@ -116,32 +142,6 @@
       }
     }
   },
-  "DELETE /api/v1/auth/mfa/:mfa_method_id": {
-    "responses": {
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "b93b8e58-90dd-4aad-9f94-a41295e77089"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Recent step-up authentication is required for this action",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "2e771d0c-ffb2-4fdb-9ead-3aa1903fb89f"
-        }
-      }
-    }
-  },
   "DELETE /api/v1/notify/notifications/:notification_id": {
     "responses": {
       "401": {
@@ -178,7 +178,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "8571b12b-2fa4-421f-9669-59a2b4fc8761"
+          "request_id": "4fa6b584-6e81-40ab-9abe-159713b1e647"
         }
       },
       "403": {
@@ -189,7 +189,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "00d3adcf-82da-4236-9827-166990cd56c1"
+          "request_id": "0a43c95a-2fa9-4c01-906d-b25703768aa0"
         }
       },
       "404": {
@@ -200,7 +200,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "09e792c2-5a40-4b41-92cd-2308f2f839d2"
+          "request_id": "80f6416a-e285-47d1-91b9-8a63084671a3"
         }
       }
     }
@@ -215,7 +215,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "f49cae50-2635-4a6e-9af8-5229496bec6b"
+          "request_id": "44458313-7b56-410a-98d2-57a3801bf88e"
         }
       },
       "403": {
@@ -226,7 +226,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "f71d769a-f30d-4076-929b-0937896e7067"
+          "request_id": "46ab0743-d0bb-446f-9a6f-15d24120351a"
         }
       }
     }
@@ -241,7 +241,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "9300be29-dffc-4c9e-9a3c-359a22fce173"
+          "request_id": "000da910-4fbc-46f5-9d0f-94fe93a55b83"
         }
       },
       "403": {
@@ -252,7 +252,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "4ab3f563-c758-4e7e-96f1-6f58517f2ae8"
+          "request_id": "94d6feff-6054-4da4-9a22-e1ebcc80f2aa"
         }
       },
       "404": {
@@ -263,7 +263,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "ab726f68-19e1-4e0c-9f42-effc666a60c2"
+          "request_id": "a3fe821d-8a0b-4d66-93e7-de918d4ce117"
         }
       }
     }
@@ -278,7 +278,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "474d7046-45b3-4f52-964e-63560883bcd2"
+          "request_id": "e7ac9109-109f-4f59-9a8a-0a2af63f9ab4"
         }
       },
       "403": {
@@ -289,7 +289,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "f6b4509b-1bdb-43dd-960f-5ca02fdb0c29"
+          "request_id": "77b926f1-b2bf-4e60-9ac6-a1034949bbbd"
         }
       },
       "404": {
@@ -300,7 +300,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "743d2568-50f8-48b7-96a2-791dfe64c275"
+          "request_id": "f4870703-224f-4d16-985d-34375882302b"
         }
       }
     }
@@ -315,7 +315,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "50653ec1-1c7c-4397-9941-3b2769de8a20"
+          "request_id": "9de27479-e2a3-466f-91c0-cdfae2e5c4c5"
         }
       },
       "403": {
@@ -326,7 +326,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "c77be790-8dea-4291-97e2-8dd1cec7ae50"
+          "request_id": "4bcd1e3b-665f-44fd-926c-6d1fd3aa4668"
         }
       }
     }
@@ -341,7 +341,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "9c48b924-242f-4c2e-9cd4-a44fab25ce3b"
+          "request_id": "79d7cf18-a60a-486b-9235-3879700deb21"
         }
       },
       "403": {
@@ -352,7 +352,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "b3989284-0610-4dfa-94a7-bc2ecd57d492"
+          "request_id": "d644d324-6b93-4e65-92be-82eae14d499c"
         }
       },
       "404": {
@@ -363,7 +363,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "26af1153-d654-49a0-9262-441e8f074b74"
+          "request_id": "2a3a2d80-8eda-403f-9e82-fb7046b53815"
         }
       }
     }
@@ -378,7 +378,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "1197b0bb-6571-49fb-9194-2e44abbe653e"
+          "request_id": "b7fa3565-3ac9-4fba-9886-c1e25198607e"
         }
       },
       "403": {
@@ -389,7 +389,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "45f79f44-a395-4303-970f-219f7c9c489a"
+          "request_id": "4af5b39c-8843-4f5f-9b37-ad9a7c0a1f01"
         }
       },
       "404": {
@@ -400,7 +400,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "62d86d23-2c70-4523-9de1-de02b55d0d15"
+          "request_id": "3fbfa624-5a8d-4f4c-9c16-0485902b0f98"
         }
       }
     }
@@ -415,7 +415,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "50b3925c-fd44-47c5-9e7a-3a436ddaebec"
+          "request_id": "2b77334d-d5f3-41e8-916f-0f43f91f2aab"
         }
       },
       "403": {
@@ -426,7 +426,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "b1cfb462-fce1-4500-9a02-9a027ae33b45"
+          "request_id": "4952aea8-6561-4ff8-9884-c8b61d105e19"
         }
       },
       "404": {
@@ -437,7 +437,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "97681188-be6b-4d2d-9feb-b28cba9a8305"
+          "request_id": "87fe4ed0-29d1-4d26-9f9c-3d7de2d6a9ba"
         }
       }
     }
@@ -548,23 +548,6 @@
           }
         }
       },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid input",
-          "documentation_url": "https://example.com/resource",
-          "errors": [
-            {
-              "field": "limit",
-              "message": "Too big: expected number to be <=100"
-            }
-          ]
-        },
-        "meta": {
-          "request_id": "02b0389e-0077-48a0-9a2a-87684b12af13"
-        }
-      },
       "401": {
         "error": {
           "type": "request_error",
@@ -610,6 +593,27 @@
       }
     }
   },
+  "GET /api/v1/auth/me/mfa": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "5265cf2e-7ea3-4512-9c4a-f28ce7b264d0"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "d1f82538-e0ea-4ad6-9980-7561acb0b73a"
+        }
+      }
+    }
+  },
   "GET /api/v1/auth/me/sessions": {
     "responses": {
       "200": {
@@ -636,27 +640,6 @@
         },
         "meta": {
           "request_id": "1209340e-a23b-4924-96d3-e3ad6917ebf8"
-        }
-      }
-    }
-  },
-  "GET /api/v1/auth/mfa": {
-    "responses": {
-      "200": {
-        "data": [],
-        "meta": {
-          "request_id": "4fa14ab6-4e2c-44a7-9e83-823b3da02ec8"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "ac1f8b1d-76ab-4b4d-9209-832299db77fe"
         }
       }
     }
@@ -694,12 +677,8 @@
           "documentation_url": "https://example.com/resource",
           "errors": [
             {
-              "field": "querystring.code",
-              "message": "Invalid input: expected string, received undefined"
-            },
-            {
-              "field": "querystring.state",
-              "message": "Invalid input: expected string, received undefined"
+              "field": "querystring",
+              "message": "Unrecognized key: \"redirect_to\""
             }
           ]
         },
@@ -732,12 +711,59 @@
       }
     }
   },
+  "GET /api/v1/billing/plans": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "5df4024f-8fdd-4fce-9e3e-9dab5c43b179",
+          "pagination": {
+            "per_page": 0,
+            "next": null,
+            "has_more": false,
+            "estimated_total": 0
+          }
+        }
+      }
+    }
+  },
+  "GET /api/v1/billing/plans/:plan_id": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "pln_example00000000000000",
+          "name": "Test Plan pln_6ho8f4xrx3v4ynn3kbteh",
+          "description": null,
+          "price_monthly": "9.99",
+          "price_yearly": "99.99",
+          "currency": "USD",
+          "is_active": true,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "76855ee2-d21d-4ee3-9469-c42eedb3f4d3"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "beff4dfb-d882-439d-9177-c90b6aaee1b0"
+        }
+      }
+    }
+  },
   "GET /api/v1/billing/subscriptions": {
     "responses": {
       "200": {
         "data": [],
         "meta": {
-          "request_id": "ea84ee3b-4d70-485a-96c0-1c3f116f7f75"
+          "request_id": "04a85de8-f186-4b8a-9694-e5321378ac4a"
         }
       },
       "401": {
@@ -748,7 +774,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "e321980c-0608-49eb-9ddf-b90ed257143b"
+          "request_id": "dd9ecc03-8c71-4f09-93c4-9947660669c2"
         }
       },
       "403": {
@@ -759,7 +785,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "b8fe2cc8-da95-4279-92e1-7652015fe04f"
+          "request_id": "c289153c-3599-4a56-919e-c846f12dad6d"
         }
       }
     }
@@ -782,7 +808,7 @@
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
-          "request_id": "1f94d8da-177a-467a-953b-c74b894346d5"
+          "request_id": "58e2e92f-8999-478d-9f16-d9f90999aede"
         }
       },
       "401": {
@@ -793,7 +819,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "f085b0e9-def2-48b2-9421-a86618a726b4"
+          "request_id": "18c9bacd-c93f-4812-9325-1b0307015db9"
         }
       },
       "403": {
@@ -804,7 +830,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "41a0b12f-4edf-4fe7-9d85-214eac67f718"
+          "request_id": "9891e6e1-36ad-4b60-9b11-f3e8805a0015"
         }
       },
       "404": {
@@ -815,54 +841,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "ab6a6698-cf0e-4044-9fba-29a5d5278928"
-        }
-      }
-    }
-  },
-  "GET /api/v1/billing/plans": {
-    "responses": {
-      "200": {
-        "data": [],
-        "meta": {
-          "request_id": "5df4024f-8fdd-4fce-9e3e-9dab5c43b179",
-          "pagination": {
-            "per_page": 0,
-            "next": null,
-            "has_more": false,
-            "estimated_total": 0
-          }
-        }
-      }
-    }
-  },
-  "GET /api/v1/billing/plans/:plan_id": {
-    "responses": {
-      "200": {
-        "data": {
-          "id": "pln_example00000000000000",
-          "name": "Test Plan pln_ctjw0xe82pw6qre10mf5j",
-          "description": null,
-          "price_monthly": "9.99",
-          "price_yearly": "99.99",
-          "currency": "USD",
-          "is_active": true,
-          "created_at": "2026-01-01T00:00:00.000Z",
-          "updated_at": "2026-01-01T00:00:00.000Z"
-        },
-        "meta": {
-          "request_id": "76855ee2-d21d-4ee3-9469-c42eedb3f4d3"
-        }
-      },
-      "404": {
-        "error": {
-          "type": "request_error",
-          "code": "not_found",
-          "detail": "{{resource}} not found",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "beff4dfb-d882-439d-9177-c90b6aaee1b0"
+          "request_id": "9be0c00a-d7e4-406f-991b-52714b964cc9"
         }
       }
     }
@@ -1016,7 +995,7 @@
           }
         ],
         "meta": {
-          "request_id": "dcab1ee3-80e1-48db-95a6-b5d8c0a19a7b"
+          "request_id": "8185f5b5-765e-441a-9863-317bee572be8"
         }
       },
       "401": {
@@ -1027,7 +1006,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "d4de2208-9026-4617-988a-a9d31317f2ab"
+          "request_id": "9e197705-8085-4fe9-9b8f-0f26a0109bd9"
         }
       },
       "403": {
@@ -1038,7 +1017,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "db82d7e7-c838-4dcb-938d-7395a1cb133a"
+          "request_id": "c6f27eff-5f38-4a98-9cfb-8648c55e920f"
         }
       }
     }
@@ -1048,7 +1027,7 @@
       "200": {
         "data": [],
         "meta": {
-          "request_id": "d83a80a5-6379-49eb-9bcf-5dcfc8eee568",
+          "request_id": "ba7f671a-6cb6-4e75-9a03-446159bfc842",
           "pagination": {
             "per_page": 25,
             "next": null,
@@ -1064,7 +1043,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "1bb58a09-a6c3-446c-97c0-7e347dbcbd27"
+          "request_id": "fd7b4dbb-798b-4a4e-93a8-409d65584e59"
         }
       },
       "403": {
@@ -1075,7 +1054,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "597b56e1-6981-4ec9-9ed2-86f3325ce951"
+          "request_id": "93cbca94-bc7b-46a9-9890-82edb231e9ec"
         }
       }
     }
@@ -1093,7 +1072,7 @@
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
-          "request_id": "877373da-1b28-4e2d-9962-a8612e6df684"
+          "request_id": "f251ee53-7364-4fed-9363-36492eaabc8e"
         }
       },
       "401": {
@@ -1104,7 +1083,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "d52afcca-68cc-4f52-9f96-1b09388d1f2d"
+          "request_id": "2481ca52-a297-48d2-9867-124f172e906c"
         }
       },
       "403": {
@@ -1115,7 +1094,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "96736368-c846-479d-92ff-2d3483e63c1f"
+          "request_id": "38ff2c98-31b8-4b2f-9f9f-7b6756811336"
         }
       },
       "404": {
@@ -1126,7 +1105,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "8d7ae1ff-ce95-42a5-9bcc-cbb034697544"
+          "request_id": "a9fdf1ff-fb06-4db0-9863-e2dfaec73458"
         }
       }
     }
@@ -1157,7 +1136,7 @@
           }
         ],
         "meta": {
-          "request_id": "7f790520-5e4f-4417-9243-79e8fb8db109",
+          "request_id": "468ac47c-6f1f-4604-9688-9742b00c6dbc",
           "pagination": {
             "per_page": 2,
             "next": "<opaque-cursor>",
@@ -1173,7 +1152,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "4227841d-030f-4ec1-949b-e065c46774ed"
+          "request_id": "93594a20-2c1f-492f-9cee-27cdae97e6a9"
         }
       },
       "403": {
@@ -1184,7 +1163,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "0c309551-6332-4599-976f-a4ff44c53957"
+          "request_id": "5fc09efd-100f-4d99-936c-fbb83489bb0a"
         }
       },
       "404": {
@@ -1195,7 +1174,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "393122da-669d-4c08-99b5-5008df99c043"
+          "request_id": "de8ca9e0-6548-4e33-958c-007fad5836c5"
         }
       }
     }
@@ -1205,7 +1184,12 @@
       "200": {
         "data": [],
         "meta": {
-          "request_id": "68d6888b-9934-4dc3-9b0e-2cda59fc9932"
+          "request_id": "68d6888b-9934-4dc3-9b0e-2cda59fc9932",
+          "pagination": {
+            "per_page": 25,
+            "next": null,
+            "has_more": false
+          }
         }
       },
       "401": {
@@ -1217,6 +1201,705 @@
         },
         "meta": {
           "request_id": "7b642e75-38ab-4285-9b59-4f5de6bbefa6"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "org_example00000000000000",
+          "name": "Ebert Inc",
+          "slug": "ebert-inc-4xahfxmeok",
+          "type": "TEAM",
+          "status": "ACTIVE",
+          "logo_url": null,
+          "capabilities": {
+            "can_invite_members": true,
+            "can_manage_members": true,
+            "can_manage_roles": true,
+            "can_transfer_ownership": true,
+            "can_delete": true
+          },
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "26dd3a68-0b86-4d84-9931-1ad6f583a369"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Invalid or expired session",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "fe6a9dde-2599-4d1e-90a1-82f3ac887690"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Organization context required",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "a7504414-00fa-41cb-9eda-e682290aa436"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "b90b2f38-9cd3-4a68-9080-66de98444b26"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/api-keys": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "7fff26e0-b93a-447a-9ef2-0defd2438ff9",
+          "pagination": {
+            "per_page": 25,
+            "next": null,
+            "has_more": false
+          }
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "cbe08c07-0eeb-4a12-94e5-c0bf9f905b5b"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "46903e08-7f7e-461e-98be-5f94c84bd173"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/api-keys/:api_key_id": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "key_example00000000000000",
+          "organization_id": "org_example00000000000000",
+          "name": "Listing Test Key",
+          "key_prefix": "ak_49029",
+          "last_used_at": null,
+          "expires_at": "2026-01-01T00:00:00.000Z",
+          "status": "ACTIVE",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "27f836fa-7025-42ab-9ef3-c54b164bde68"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "bcd1a1d1-86e5-477a-9edf-5248b317d59f"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "ef21634b-b52e-41d0-9ddf-28eb8629d03d"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "8a122877-daaf-40ac-9203-59195f780f59"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/audit-logs": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "9e46c6f5-429e-411a-9749-9b74bbb1eaa7",
+          "pagination": {
+            "per_page": 25,
+            "next": null,
+            "has_more": false
+          }
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "ffdcbad6-6935-4e74-98fc-978ede1d1ab6"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "82a913d8-0aa3-41f9-990f-2a24aab9c1ff"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/invitations": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "36803b40-4bdf-4f2a-99c1-915100730028",
+          "pagination": {
+            "per_page": 25,
+            "next": null,
+            "has_more": false
+          }
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "querystring.limit",
+              "message": "Too big: expected number to be <=100"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "5d084f6d-0593-47b7-90c1-fecadbf5242c"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "7ab86994-378a-4ba0-9501-9dbb33b09e7c"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "2573e556-830c-41fc-9df5-8dacb3d903c6"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/memberships": {
+    "responses": {
+      "200": {
+        "data": [
+          {
+            "id": "rol_example00000000000000",
+            "user_id": "usr_example00000000000000",
+            "organization_id": "org_example00000000000000",
+            "role_id": "rol_example00000000000000",
+            "status": "ACTIVE",
+            "joined_at": "2026-01-01T00:00:00.000Z",
+            "created_at": "2026-01-01T00:00:00.000Z",
+            "updated_at": "2026-01-01T00:00:00.000Z"
+          }
+        ],
+        "meta": {
+          "request_id": "eb823ec1-229f-40a3-9bec-3016bfda7728",
+          "pagination": {
+            "per_page": 25,
+            "next": null,
+            "has_more": false
+          }
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "b9a47413-a8a4-4156-9aa6-98fee6c2f724"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "7df74706-5cf2-400b-9905-537d29848672"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/memberships/:membership_id": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "rol_example00000000000000",
+          "user_id": "usr_example00000000000000",
+          "organization_id": "org_example00000000000000",
+          "role_id": "rol_example00000000000000",
+          "status": "ACTIVE",
+          "joined_at": "2026-01-01T00:00:00.000Z",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "82e3877d-4696-4b7f-9731-c7e134a6b2a2"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "cd576d51-2903-444e-9114-d1ce78576bff"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "ebdc847c-fc1d-44dd-91dc-e42e313f5e01"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "45ad6129-7ae2-499e-9db5-90e7f25fa593"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/memberships/:membership_id/permissions": {
+    "responses": {
+      "200": {
+        "data": {
+          "permissions": ["membership:read", "membership:manage"]
+        },
+        "meta": {
+          "request_id": "721b2902-1881-4b74-9b38-6179f9eda952"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "23223f2a-6f62-4faa-9866-c11108e103d1"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "7c2d39d6-b261-469c-9f98-4717c321015f"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "88b532b4-e777-4a7b-9dc2-2433beeeac72"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/notification-policies": {
+    "responses": {
+      "200": {
+        "data": [],
+        "meta": {
+          "request_id": "f96742c2-b467-421b-94d9-74e3edb0712c"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "d662bbb2-493c-404b-96c1-f5b12d13907d"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "e0b4111a-0e48-4119-923f-9950dde120ca"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/notification-policies/:policy_id": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "pol_example00000000000000",
+          "organization_id": "org_example00000000000000",
+          "notification_type": "IN_APP",
+          "channel": "EMAIL",
+          "default_enabled": true,
+          "is_mandatory": false,
+          "muted_until": null,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "d3b5b0d6-4a76-4fef-9e69-d4cc0b406c90"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid input",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "policy_id",
+              "message": "Must be a valid id (entity prefix + 21 lowercase alphanumerics, e.g. org_a1b2c3d4e5f6g7h8i9j0k)"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "eb5fd99d-69f9-4b22-96bf-756539275249"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "9639a57f-db95-41e4-9ae5-daa10fecf836"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "f1069913-94b7-4138-9cb1-044efd7730a4"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "9f03c84f-abef-4390-9416-0a5e6baf5250"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/roles": {
+    "responses": {
+      "200": {
+        "data": [
+          {
+            "id": "rol_example00000000000000",
+            "name": "Test Role rol_rednu3elz5n6xw3hcte8y",
+            "description": null,
+            "is_system": false,
+            "created_at": "2026-01-01T00:00:00.000Z",
+            "updated_at": "2026-01-01T00:00:00.000Z"
+          }
+        ],
+        "meta": {
+          "request_id": "5d9ff5d2-8682-4e73-953a-fb46a2c80ffd",
+          "pagination": {
+            "per_page": 25,
+            "next": null,
+            "has_more": false
+          }
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "c20e4d5c-c49b-4e4c-9eca-8a90cce10dab"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "4e51199d-1ec4-4ff5-9a7a-762983e68753"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/roles/:role_id": {
+    "responses": {
+      "200": {
+        "data": {
+          "id": "rol_example00000000000000",
+          "name": "Detail Target Role",
+          "description": null,
+          "is_system": false,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "255065f9-945d-4607-9519-66c6ba61f391"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid input",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "role_id",
+              "message": "Must be a valid id (entity prefix + 21 lowercase alphanumerics, e.g. org_a1b2c3d4e5f6g7h8i9j0k)"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "b0bcb3b8-bfb7-4090-9f21-a6b8994c4ca9"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "c82a39e2-4937-47f1-925f-87bd76fa47f1"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "d61e606e-5c05-4559-9863-264172e04dc9"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "800aeb70-dd25-4973-931e-ea55bd086255"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/roles/:role_id/permissions": {
+    "responses": {
+      "200": {
+        "data": [
+          {
+            "role_id": "rol_example00000000000000",
+            "permission_code": "organization:read",
+            "created_at": "2026-01-01T00:00:00.000Z"
+          },
+          {
+            "role_id": "rol_example00000000000000",
+            "permission_code": "organization:update",
+            "created_at": "2026-01-01T00:00:00.000Z"
+          }
+        ],
+        "meta": {
+          "request_id": "42d9f8c4-f545-4dc5-9921-d03408b64cd1",
+          "pagination": {
+            "per_page": 12,
+            "next": null,
+            "has_more": false,
+            "estimated_total": 12
+          }
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "34923be8-45a4-48e9-97b1-c9307efdfbbb"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "b69b9a2f-eb8c-485f-9ed4-33be13d89f6f"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "4a733bc3-a4da-4f4e-9b86-5d9a95761d62"
+        }
+      }
+    }
+  },
+  "GET /api/v1/tenancy/organization/settings": {
+    "responses": {
+      "200": {
+        "data": {
+          "organization_id": "org_example00000000000000",
+          "is_email_notifications_enabled": true,
+          "default_locale": "en",
+          "security_policy": {},
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "4d9bd140-69f5-454a-9ab5-bf0df8b4e542"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "b3fdb249-97aa-4e0d-9407-96e839140892"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "8319ff63-663f-483a-97a8-6bf8b2620d09"
         }
       }
     }
@@ -1264,695 +1947,23 @@
       }
     }
   },
-  "GET /api/v1/tenancy/organization": {
-    "responses": {
-      "200": {
-        "data": {
-          "id": "org_example00000000000000",
-          "name": "Satterfield Inc",
-          "slug": "satterfield-inc-p0uuwdjblq",
-          "status": "ACTIVE",
-          "logo_url": null,
-          "created_at": "2026-01-01T00:00:00.000Z",
-          "updated_at": "2026-01-01T00:00:00.000Z"
-        },
-        "meta": {
-          "request_id": "9cf1eed3-a80d-440d-9eed-ade5dcf8952d"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid input",
-          "documentation_url": "https://example.com/resource",
-          "errors": [
-            {
-              "field": "organization_id",
-              "message": "Must be a valid id (entity prefix + 21 lowercase alphanumerics, e.g. org_a1b2c3d4e5f6g7h8i9j0k)"
-            }
-          ]
-        },
-        "meta": {
-          "request_id": "6eba69ff-ad44-475d-938e-8a5c12f94911"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "77acf908-6dcd-4af8-9f6d-c6773aad325a"
-        }
-      },
-      "404": {
-        "error": {
-          "type": "request_error",
-          "code": "not_found",
-          "detail": "{{resource}} not found",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "c6425e94-a43e-4de7-987a-9dfd132e0d8d"
-        }
-      }
-    }
-  },
-  "GET /api/v1/tenancy/organization/api-keys": {
-    "responses": {
-      "200": {
-        "data": [],
-        "meta": {
-          "request_id": "3ffd315f-1e7c-471a-9282-34f7c3a5265f",
-          "pagination": {
-            "per_page": 25,
-            "next": null,
-            "has_more": false
-          }
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "c1678f50-5960-44ce-96a2-4436273da811"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "fbeb31aa-7787-4e74-916a-68a081eee5ee"
-        }
-      }
-    }
-  },
-  "GET /api/v1/tenancy/organization/api-keys/:api_key_id": {
-    "responses": {
-      "200": {
-        "data": {
-          "id": "key_example00000000000000",
-          "organization_id": "org_example00000000000000",
-          "name": "Listing Test Key",
-          "key_prefix": "ak_f9c02",
-          "last_used_at": null,
-          "expires_at": "2026-01-01T00:00:00.000Z",
-          "status": "ACTIVE",
-          "created_at": "2026-01-01T00:00:00.000Z",
-          "updated_at": "2026-01-01T00:00:00.000Z"
-        },
-        "meta": {
-          "request_id": "fe219b34-fbaf-4606-922b-f427afcaf669"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "6c2d3da4-66ce-4f34-9811-c52c2f83e9bb"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "132dcbe2-c10d-4da7-988c-7963f5fc843a"
-        }
-      },
-      "404": {
-        "error": {
-          "type": "request_error",
-          "code": "not_found",
-          "detail": "{{resource}} not found",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "ffa83f3b-308f-4e35-9b83-9353a712dda8"
-        }
-      }
-    }
-  },
-  "GET /api/v1/tenancy/organization/audit-logs": {
-    "responses": {
-      "200": {
-        "data": [],
-        "meta": {
-          "request_id": "4fcecc29-a2d6-4511-942a-7508623ffd33",
-          "pagination": {
-            "per_page": 25,
-            "next": null,
-            "has_more": false
-          }
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "2ae16ac8-1ee8-443f-9e32-d6f108e767a2"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "b9a7e53e-d915-4f9f-9a97-315dccfc320d"
-        }
-      }
-    }
-  },
-  "GET /api/v1/tenancy/organization/invitations": {
-    "responses": {
-      "200": {
-        "data": [],
-        "meta": {
-          "request_id": "c61e4ad9-6d46-46e4-955a-9ba16667f471",
-          "pagination": {
-            "per_page": 25,
-            "next": null,
-            "has_more": false
-          }
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid values for fields in request",
-          "documentation_url": "https://example.com/resource",
-          "errors": [
-            {
-              "field": "querystring.limit",
-              "message": "Too big: expected number to be <=100"
-            }
-          ]
-        },
-        "meta": {
-          "request_id": "9910ce74-c513-4650-94fb-0c5be3813224"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "36f718c0-c65c-4c5d-94a9-055097f8b3b9"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "5c832b67-31b3-40da-97a7-49d0d7060b5b"
-        }
-      }
-    }
-  },
-  "GET /api/v1/tenancy/organization/memberships": {
-    "responses": {
-      "200": {
-        "data": [
-          {
-            "id": "rol_example00000000000000",
-            "user_id": "usr_example00000000000000",
-            "organization_id": "org_example00000000000000",
-            "role_id": "rol_example00000000000000",
-            "status": "ACTIVE",
-            "joined_at": "2026-01-01T00:00:00.000Z",
-            "created_at": "2026-01-01T00:00:00.000Z",
-            "updated_at": "2026-01-01T00:00:00.000Z"
-          }
-        ],
-        "meta": {
-          "request_id": "b9576a2b-0487-4f70-956a-743e58f1ea65",
-          "pagination": {
-            "per_page": 25,
-            "next": null,
-            "has_more": false
-          }
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "5972ebba-3649-4308-9d6a-110716006e0f"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "39f88c1b-4a45-41ee-9053-a6c892361c8d"
-        }
-      }
-    }
-  },
-  "GET /api/v1/tenancy/organization/memberships/:membership_id": {
-    "responses": {
-      "200": {
-        "data": {
-          "id": "rol_example00000000000000",
-          "user_id": "usr_example00000000000000",
-          "organization_id": "org_example00000000000000",
-          "role_id": "rol_example00000000000000",
-          "status": "ACTIVE",
-          "joined_at": "2026-01-01T00:00:00.000Z",
-          "created_at": "2026-01-01T00:00:00.000Z",
-          "updated_at": "2026-01-01T00:00:00.000Z"
-        },
-        "meta": {
-          "request_id": "4a3df4ba-4e87-4328-9093-c4036cb281a4"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "2e973130-e908-4207-9966-56634129ecaa"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "11485fad-e55c-46a1-9342-d2cd8eac0cd1"
-        }
-      },
-      "404": {
-        "error": {
-          "type": "request_error",
-          "code": "not_found",
-          "detail": "{{resource}} not found",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "05977655-6601-4b9e-94ba-c39caaf92630"
-        }
-      }
-    }
-  },
-  "GET /api/v1/tenancy/organization/memberships/:membership_id/permissions": {
-    "responses": {
-      "200": {
-        "data": {
-          "permissions": ["membership:read", "membership:manage"]
-        },
-        "meta": {
-          "request_id": "312c7dd3-bfe4-42c3-99d3-04c4f675269e"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "4cab77df-7c7f-4aaa-9638-bf5fad1286c1"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "57378971-6013-4e51-901e-6961e7d8ffe0"
-        }
-      },
-      "404": {
-        "error": {
-          "type": "request_error",
-          "code": "not_found",
-          "detail": "{{resource}} not found",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "df44c01d-cef5-4bc6-9059-ebe8d3961864"
-        }
-      }
-    }
-  },
-  "GET /api/v1/tenancy/organization/notification-policies": {
-    "responses": {
-      "200": {
-        "data": [],
-        "meta": {
-          "request_id": "8fb59f46-5b46-487b-95e7-6dd68d2b7502"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "71faf23f-09d9-463a-9499-0d2596e2d32b"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "00b9367f-3951-4111-9d80-65e5af6a8f72"
-        }
-      }
-    }
-  },
-  "GET /api/v1/tenancy/organization/notification-policies/:policy_id": {
-    "responses": {
-      "200": {
-        "data": {
-          "id": "pol_example00000000000000",
-          "organization_id": "org_example00000000000000",
-          "notification_type": "IN_APP",
-          "channel": "EMAIL",
-          "default_enabled": true,
-          "is_mandatory": false,
-          "muted_until": null,
-          "created_at": "2026-01-01T00:00:00.000Z",
-          "updated_at": "2026-01-01T00:00:00.000Z"
-        },
-        "meta": {
-          "request_id": "cec8a61b-6430-407d-9b30-c36718b0e220"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid input",
-          "documentation_url": "https://example.com/resource",
-          "errors": [
-            {
-              "field": "policy_id",
-              "message": "Must be a valid id (entity prefix + 21 lowercase alphanumerics, e.g. org_a1b2c3d4e5f6g7h8i9j0k)"
-            }
-          ]
-        },
-        "meta": {
-          "request_id": "b43293f8-16e5-443f-9949-0abd7425db21"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "29e1ca22-c905-4e2a-941a-e977ede8253f"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "d1147efe-14ce-49d2-9e62-5a37ff0855f9"
-        }
-      },
-      "404": {
-        "error": {
-          "type": "request_error",
-          "code": "not_found",
-          "detail": "{{resource}} not found",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "e8108512-0ed3-40d5-9291-5f2e2f9005bc"
-        }
-      }
-    }
-  },
-  "GET /api/v1/tenancy/organization/roles": {
-    "responses": {
-      "200": {
-        "data": [
-          {
-            "id": "rol_example00000000000000",
-            "name": "Test Role rol_lxd3el324rc63dxa5fkph",
-            "description": null,
-            "is_system": false,
-            "created_at": "2026-01-01T00:00:00.000Z",
-            "updated_at": "2026-01-01T00:00:00.000Z"
-          }
-        ],
-        "meta": {
-          "request_id": "c49549c9-c66f-42d2-968c-d91256c7f988",
-          "pagination": {
-            "per_page": 25,
-            "next": null,
-            "has_more": false
-          }
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "1fff0ee8-6daa-43d6-94b6-7158d7e1bdcc"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "7e49c551-3529-4eaf-9597-0b8e7b944a80"
-        }
-      }
-    }
-  },
-  "GET /api/v1/tenancy/organization/roles/:role_id": {
-    "responses": {
-      "200": {
-        "data": {
-          "id": "rol_example00000000000000",
-          "name": "Detail Target Role",
-          "description": null,
-          "is_system": false,
-          "created_at": "2026-01-01T00:00:00.000Z",
-          "updated_at": "2026-01-01T00:00:00.000Z"
-        },
-        "meta": {
-          "request_id": "4d94a4dc-0b5e-4a9b-9c81-6cf3cbdeeee7"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "75bb6f6c-2daf-43e6-9189-3162d237e650"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "a1db0941-0b68-429d-9d3a-027886ff59c5"
-        }
-      },
-      "404": {
-        "error": {
-          "type": "request_error",
-          "code": "not_found",
-          "detail": "{{resource}} not found",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "bd0563ea-bee8-4f8e-974a-9e0c077ca498"
-        }
-      }
-    }
-  },
-  "GET /api/v1/tenancy/organization/roles/:role_id/permissions": {
-    "responses": {
-      "200": {
-        "data": [
-          {
-            "role_id": "rol_example00000000000000",
-            "permission_code": "organization:read",
-            "created_at": "2026-01-01T00:00:00.000Z"
-          },
-          {
-            "role_id": "rol_example00000000000000",
-            "permission_code": "organization:update",
-            "created_at": "2026-01-01T00:00:00.000Z"
-          }
-        ],
-        "meta": {
-          "request_id": "3e5151bb-ec6a-4910-90fe-d5d9d3f2ac69",
-          "pagination": {
-            "per_page": 12,
-            "next": null,
-            "has_more": false,
-            "estimated_total": 12
-          }
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "da76cd13-b253-46d8-9e85-27ad5f76dbba"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "364ccb91-b3c6-47be-9e3c-798e8162231c"
-        }
-      },
-      "404": {
-        "error": {
-          "type": "request_error",
-          "code": "not_found",
-          "detail": "{{resource}} not found",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "c77f73e6-2c29-44f7-90c6-bc393238a4f0"
-        }
-      }
-    }
-  },
-  "GET /api/v1/tenancy/organization/settings": {
-    "responses": {
-      "200": {
-        "data": {
-          "organization_id": "org_example00000000000000",
-          "is_email_notifications_enabled": true,
-          "default_locale": "en",
-          "security_policy": {},
-          "created_at": "2026-01-01T00:00:00.000Z",
-          "updated_at": "2026-01-01T00:00:00.000Z"
-        },
-        "meta": {
-          "request_id": "d63c66b6-dbc9-4bfe-9ca7-e7ffb64c0187"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "306f35eb-b54d-4852-9e83-56dca7d626d5"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "bb605887-e76b-44e7-9329-bc3ffb626e5f"
-        }
-      }
-    }
-  },
   "GET /api/v1/tenancy/organizations/by-slug/:slug": {
     "responses": {
       "200": {
         "data": {
           "id": "org_example00000000000000",
-          "name": "Zieme, Gusikowski and Hickle",
+          "name": "Treutel Group",
           "slug": "my-org",
+          "type": "TEAM",
           "status": "ACTIVE",
           "logo_url": null,
+          "capabilities": {
+            "can_invite_members": true,
+            "can_manage_members": true,
+            "can_manage_roles": true,
+            "can_transfer_ownership": true,
+            "can_delete": true
+          },
           "created_at": "2026-01-01T00:00:00.000Z",
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
@@ -1989,27 +2000,27 @@
       "200": {
         "data": [
           {
-            "code": "api-key:manage",
-            "name": "api key manage",
+            "code": "audit-log:read",
+            "name": "View Audit Logs",
             "description": null,
-            "category": "api-key",
+            "category": "audit",
             "created_at": "2026-01-01T00:00:00.000Z"
           },
           {
-            "code": "api-key:read",
-            "name": "api key read",
+            "code": "subscription:manage",
+            "name": "Manage Subscription",
             "description": null,
-            "category": "api-key",
+            "category": "billing",
             "created_at": "2026-01-01T00:00:00.000Z"
           }
         ],
         "meta": {
           "request_id": "eca2600a-4f0c-4418-9654-d855eeeaec21",
           "pagination": {
-            "per_page": 21,
+            "per_page": 19,
             "next": null,
             "has_more": false,
-            "estimated_total": 21
+            "estimated_total": 19
           }
         }
       },
@@ -2113,8 +2124,8 @@
           "email": "user@example.com",
           "is_email_verified": false,
           "is_mfa_enabled": false,
-          "first_name": "Cameron",
-          "last_name": "Hahn",
+          "first_name": "Dayton",
+          "last_name": "Lehner",
           "avatar_url": null,
           "status": "ACTIVE",
           "created_at": "2026-01-01T00:00:00.000Z",
@@ -2156,12 +2167,17 @@
           "email": "user@example.com",
           "is_email_verified": false,
           "is_mfa_enabled": false,
-          "first_name": "Sandra",
-          "last_name": "Schoen",
+          "first_name": "Norman",
+          "last_name": "Marks",
           "avatar_url": null,
           "status": "ACTIVE",
           "created_at": "2026-01-01T00:00:00.000Z",
-          "updated_at": "2026-01-01T00:00:00.000Z"
+          "updated_at": "2026-01-01T00:00:00.000Z",
+          "capabilities": {
+            "personal_organizations": true,
+            "team_organizations": true
+          },
+          "personal_organization_id": null
         },
         "meta": {
           "request_id": "44b212d5-7a5f-40b9-9a3b-f2b174ff0577"
@@ -2325,9 +2341,9 @@
         "redis": "connected",
         "bullmq": "connected",
         "latencyMs": {
-          "database": 55,
+          "database": 19,
           "redis": 1,
-          "bullmq": 20
+          "bullmq": 9
         }
       }
     }
@@ -2351,7 +2367,7 @@
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
-          "request_id": "e3e3c6f5-2ad7-4ebd-9ffc-c93013bbe2a8"
+          "request_id": "544afc62-ce31-41ee-9bbb-5ee2d78fb394"
         }
       },
       "400": {
@@ -2363,12 +2379,12 @@
           "errors": [
             {
               "field": "body",
-              "message": "Unrecognized key: \"cancel_at_period_end\""
+              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
             }
           ]
         },
         "meta": {
-          "request_id": "82ed681e-7fd3-4cea-974f-5c28e8e748ec"
+          "request_id": "e2f59228-3acb-4c83-991f-078b58d170aa"
         }
       },
       "401": {
@@ -2379,7 +2395,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "aa932f63-0b2b-4aee-97d2-c9143cb290ed"
+          "request_id": "0f0f188c-b161-4aa3-90d7-c305acfaca63"
         }
       },
       "403": {
@@ -2390,7 +2406,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "28751fd8-c02c-4beb-95f9-1827210e3b42"
+          "request_id": "ec437715-892d-4248-9975-8b5f033e09ee"
         }
       },
       "404": {
@@ -2401,7 +2417,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "2fcab032-1052-41cb-95c6-f90e4b7d27d6"
+          "request_id": "19564cd7-4fb4-47dc-95a8-5db460b2b375"
         }
       }
     }
@@ -2465,18 +2481,7 @@
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
-          "request_id": "f728de1a-46fb-433f-98ed-a10abc2d39c6"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid input",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "8d9921ff-5128-456f-9d62-89af593bd0a7"
+          "request_id": "245f8a66-cbd3-4db4-93d8-efdfcfa11820"
         }
       },
       "401": {
@@ -2487,7 +2492,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "09b89471-347b-49ec-9c66-d7cb6d21c989"
+          "request_id": "1492f6a6-2b33-4a7d-9ec9-a35c436ad970"
         }
       },
       "403": {
@@ -2498,7 +2503,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "77515dff-208a-4120-9602-325c92733e20"
+          "request_id": "f07edebc-ea88-484a-9cee-2ea77b50e31b"
         }
       },
       "404": {
@@ -2509,7 +2514,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "8eb7c118-b9e3-41ff-9996-dfc714d5331d"
+          "request_id": "c15fd90f-56e5-4c59-9f74-7b9b06b0c1c7"
         }
       },
       "409": {
@@ -2520,7 +2525,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "aad65a15-9d6a-4bcb-98f1-605f451ff41b"
+          "request_id": "d02760dc-7ad3-4c78-9337-61ee5c219f46"
         }
       }
     }
@@ -2534,14 +2539,22 @@
         "data": {
           "id": "org_example00000000000000",
           "name": "Updated Org",
-          "slug": "bayer-and-sons-k0bm46iqvi",
+          "slug": "shields---schulist-8pe493zw5h",
+          "type": "TEAM",
           "status": "ACTIVE",
           "logo_url": null,
+          "capabilities": {
+            "can_invite_members": true,
+            "can_manage_members": true,
+            "can_manage_roles": true,
+            "can_transfer_ownership": true,
+            "can_delete": true
+          },
           "created_at": "2026-01-01T00:00:00.000Z",
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
-          "request_id": "89d28c1a-0468-462f-9772-e24d40c8f3a5"
+          "request_id": "e2f36c39-22bc-4a26-9ece-a1ebc293dd21"
         }
       },
       "400": {
@@ -2558,7 +2571,7 @@
           ]
         },
         "meta": {
-          "request_id": "385266c3-602c-4bf8-9aec-ce2b3baf5a55"
+          "request_id": "988d0f25-3fd9-4df1-932d-7aa410a9e411"
         }
       },
       "401": {
@@ -2569,7 +2582,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "4d28d94d-3ae8-4a69-9dd6-b9b1bc5d5aa2"
+          "request_id": "10ba36e0-68c6-41f2-9130-8d8214184a92"
         }
       },
       "403": {
@@ -2580,7 +2593,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "116860d2-01e5-4188-9ffd-18faef90c52d"
+          "request_id": "705e46d8-b0d7-4c2c-9d78-08a35affb353"
         }
       },
       "409": {
@@ -2591,7 +2604,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "b4ec5beb-cba4-4ed9-95cc-0475b19bb480"
+          "request_id": "4146e029-3f93-4c82-9e08-ad414128261f"
         }
       }
     }
@@ -2607,7 +2620,7 @@
           "id": "key_example00000000000000",
           "organization_id": "org_example00000000000000",
           "name": "After Rename",
-          "key_prefix": "ak_47095",
+          "key_prefix": "ak_d0ef7",
           "last_used_at": null,
           "expires_at": null,
           "status": "REVOKED",
@@ -2615,7 +2628,7 @@
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
-          "request_id": "731c3203-0ccf-469b-95bb-4720d3654185"
+          "request_id": "88edceee-42b8-4159-9d8a-17fa0cc73f40"
         }
       },
       "400": {
@@ -2632,7 +2645,7 @@
           ]
         },
         "meta": {
-          "request_id": "48c96a02-2eb5-4dd7-98f5-e7f4f1c8723b"
+          "request_id": "9852e57b-f306-4c04-9803-f58dbca3cc99"
         }
       },
       "401": {
@@ -2643,7 +2656,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "ec5d3f74-18ea-49be-9179-48c4fbd4e313"
+          "request_id": "0cf94700-fb38-4a42-950a-37a086891724"
         }
       },
       "403": {
@@ -2654,7 +2667,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "4754c461-96a9-4eec-9a1e-6e227891afb9"
+          "request_id": "de1928f4-3b0b-4032-996c-78e20dc757c0"
         }
       },
       "404": {
@@ -2665,7 +2678,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "1766f15d-c794-4f83-955e-363e6e1dbbcb"
+          "request_id": "94ec2d99-c99b-4e7d-9d6d-5dc8ba869007"
         }
       }
     }
@@ -2687,18 +2700,24 @@
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
-          "request_id": "e143c881-91d7-4b50-9620-165fb439e7a3"
+          "request_id": "f23c3008-7583-4466-942b-e99a006babde"
         }
       },
       "400": {
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "Invalid input",
-          "documentation_url": "https://example.com/resource"
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body",
+              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
+            }
+          ]
         },
         "meta": {
-          "request_id": "ede28d56-ba4c-4ee1-9959-18b5637ab9af"
+          "request_id": "463bcc0d-e02e-46c1-9762-1445166cfbc3"
         }
       },
       "401": {
@@ -2709,7 +2728,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "eb52514a-e9d6-4f52-94da-6771279d865c"
+          "request_id": "1e0684d0-42f8-4bcd-90e5-ad3e99fd9acc"
         }
       },
       "403": {
@@ -2720,7 +2739,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "e3976832-8ce8-46b6-9143-5407c778e111"
+          "request_id": "d145ee9d-c28c-4b6a-98bd-b0042741e525"
         }
       },
       "404": {
@@ -2731,7 +2750,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "3ec8a37e-5676-4a91-91ef-df21168e9480"
+          "request_id": "8c83433e-e429-4ba7-9f6f-51e352b48fcf"
         }
       }
     }
@@ -2755,7 +2774,7 @@
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
-          "request_id": "be711db4-c11a-43c9-95d2-45d562352b35"
+          "request_id": "08945219-bc7e-4e40-944d-a31690ac494a"
         }
       },
       "400": {
@@ -2772,7 +2791,7 @@
           ]
         },
         "meta": {
-          "request_id": "e970be73-6e1c-42ab-9928-0e6c19dee772"
+          "request_id": "3fa97874-e4e5-4aa7-978d-04d330300952"
         }
       },
       "401": {
@@ -2783,7 +2802,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "338d5f1c-0b49-4a44-9017-9a61f2dd74cb"
+          "request_id": "b8c2d50a-b272-4be4-9e0b-4f6853a6c723"
         }
       },
       "403": {
@@ -2794,7 +2813,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "2f275839-84f3-461f-9a55-efa059e3c122"
+          "request_id": "218af3c6-87f3-41a2-93eb-fe97071d6bec"
         }
       },
       "404": {
@@ -2805,7 +2824,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "e0c29732-ef16-496b-99d4-6ffc6e59cb95"
+          "request_id": "83e432e1-7a86-4283-9a6d-39575abe21c2"
         }
       }
     }
@@ -2825,18 +2844,24 @@
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
-          "request_id": "a53b669c-b474-4825-9c1c-8ef0a2ee60bd"
+          "request_id": "2ce78416-378f-4c19-912b-377170bbf39c"
         }
       },
       "400": {
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "Invalid input",
-          "documentation_url": "https://example.com/resource"
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body",
+              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
+            }
+          ]
         },
         "meta": {
-          "request_id": "f009d774-e0ba-4b1b-98fc-f07fbdb161e4"
+          "request_id": "ecf35364-235f-4b9a-9f86-98c30ed339cb"
         }
       },
       "401": {
@@ -2847,7 +2872,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "4214ca7a-8fa1-4b59-9f21-77bbc8dcaf60"
+          "request_id": "2a9f31c1-8cb1-4af2-9965-55cac2c7560a"
         }
       },
       "403": {
@@ -2858,7 +2883,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "b07da21c-a716-4491-9813-6420c5478ffe"
+          "request_id": "204654f3-0dab-4c2c-9686-23e4e356e0ed"
         }
       },
       "404": {
@@ -2869,7 +2894,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "f6979df8-3d86-4af9-9aa4-81f6a6e9a485"
+          "request_id": "78602775-0a80-4c12-93f0-c0963e112d77"
         }
       }
     }
@@ -2894,7 +2919,7 @@
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
-          "request_id": "a90278c8-e593-4f60-9252-57d26a1d1ab0"
+          "request_id": "5fadc487-3ddd-4554-9f19-4c6868440a45"
         }
       },
       "400": {
@@ -2911,7 +2936,7 @@
           ]
         },
         "meta": {
-          "request_id": "9c331094-67b4-4d9f-9050-8205f6a95bc5"
+          "request_id": "04799373-ab40-43ca-9938-cc35a9abbeae"
         }
       },
       "401": {
@@ -2922,7 +2947,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "201dfeca-d4dc-42f8-91fb-30a91ca9fd04"
+          "request_id": "a97d417c-e53a-4c5f-9846-8961e0617161"
         }
       },
       "403": {
@@ -2933,7 +2958,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "5246e60a-48dd-4b25-9223-09d2e7f0e58a"
+          "request_id": "d609b2e1-6fa9-430a-9b83-0d29f889e73c"
         }
       }
     }
@@ -2950,7 +2975,7 @@
           "is_email_verified": false,
           "is_mfa_enabled": false,
           "first_name": "Updated",
-          "last_name": "Douglas",
+          "last_name": "Yundt",
           "avatar_url": null,
           "status": "ACTIVE",
           "created_at": "2026-01-01T00:00:00.000Z",
@@ -3002,7 +3027,7 @@
           "is_email_verified": false,
           "is_mfa_enabled": false,
           "first_name": "Updated",
-          "last_name": "Fritsch",
+          "last_name": "Cremin",
           "avatar_url": null,
           "status": "ACTIVE",
           "created_at": "2026-01-01T00:00:00.000Z",
@@ -3200,28 +3225,6 @@
         "meta": {
           "request_id": "37734922-29f2-4e30-9743-8f6b422ca926"
         }
-      },
-      "413": {
-        "error": {
-          "type": "request_error",
-          "code": "payload_too_large",
-          "detail": "Payload too large",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "7dbffc0f-4f8e-451d-92e3-6a8ade2e7790"
-        }
-      },
-      "415": {
-        "error": {
-          "type": "request_error",
-          "code": "unsupported_media_type",
-          "detail": "Unsupported media type",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "50c08034-ccca-460b-9eff-da8339642e39"
-        }
       }
     }
   },
@@ -3371,7 +3374,7 @@
       }
     }
   },
-  "POST /api/v1/auth/mfa/enroll": {
+  "POST /api/v1/auth/me/mfa/enroll": {
     "request_body": {
       "method_type": "MFA_TOTP"
     },
@@ -3382,7 +3385,7 @@
           "provisioning_uri": "<redacted>"
         },
         "meta": {
-          "request_id": "d29041e2-fb55-494d-9c09-80a9123eb17b"
+          "request_id": "25703031-de92-4b13-95b5-760d5e255e8e"
         }
       },
       "400": {
@@ -3403,7 +3406,7 @@
           ]
         },
         "meta": {
-          "request_id": "dacce848-994a-4c78-988d-9e1d6946f9db"
+          "request_id": "acd0fe4c-c2b4-4557-9f22-57769630496f"
         }
       },
       "401": {
@@ -3414,7 +3417,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "2d8265c5-65f0-48c0-974b-9beaf7c24495"
+          "request_id": "391f5abd-2300-41c6-9ed6-74e6e95199df"
         }
       },
       "403": {
@@ -3425,14 +3428,14 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "dd612ea6-9bbe-432b-9890-ad539e87cd70"
+          "request_id": "98d15967-86e7-49e4-996f-2befd0e32281"
         }
       }
     }
   },
-  "POST /api/v1/auth/mfa/enroll/confirm": {
+  "POST /api/v1/auth/me/mfa/enroll/confirm": {
     "request_body": {
-      "code": "009308"
+      "code": "398582"
     },
     "responses": {
       "201": {
@@ -3441,7 +3444,7 @@
           "mfa_method_id": "am_example00000000000000"
         },
         "meta": {
-          "request_id": "8330647d-4bc0-4e36-97bb-92dce95cde4b"
+          "request_id": "3b717bcf-28d0-4b87-9fc9-92dc14e3227c"
         }
       },
       "400": {
@@ -3462,7 +3465,7 @@
           ]
         },
         "meta": {
-          "request_id": "e2296861-eceb-4104-95d9-1d45d490a6fa"
+          "request_id": "9d844831-0f4a-4401-90b7-2c3ff1ac9f66"
         }
       },
       "401": {
@@ -3473,7 +3476,197 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "0f23dee3-b4f2-4eec-9f7c-016db47e5791"
+          "request_id": "27e6b5a8-cc34-41f5-969f-69f95dbd70f4"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/me/mfa/verify": {
+    "request_body": {
+      "code": "311950"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "verified": true
+        },
+        "meta": {
+          "request_id": "021e14c7-879f-42a6-9349-7006a59775b4"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.code",
+              "message": "Too small: expected string to have >=6 characters"
+            },
+            {
+              "field": "body.code",
+              "message": "Invalid string: must match pattern /^\\d+$/"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "6666760e-29eb-4959-9def-76e49fb8074f"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "ffcfb73f-ca32-45bb-9527-0502a20342d5"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/me/webauthn/register/options": {
+    "request_body": {},
+    "responses": {
+      "201": {
+        "data": {
+          "options": {
+            "challenge": "Ik4oIon-oq81WEaTanMl-okW-pDuD02n34lm70GVO_E",
+            "rp": {
+              "name": "YourApp",
+              "id": "localhost"
+            },
+            "user": {
+              "id": "dXNyX20wcjhhMHBsem9seWJxNDYwZnN6OQ",
+              "name": "user@example.com",
+              "displayName": "user@example.com"
+            },
+            "pubKeyCredParams": [
+              {
+                "alg": -8,
+                "type": "public-key"
+              },
+              {
+                "alg": -7,
+                "type": "public-key"
+              }
+            ],
+            "timeout": 60000,
+            "attestation": "none",
+            "excludeCredentials": [],
+            "authenticatorSelection": {
+              "residentKey": "preferred",
+              "userVerification": "required",
+              "requireResidentKey": false
+            },
+            "extensions": {
+              "credProps": true
+            },
+            "hints": []
+          },
+          "challenge_token": "<redacted>"
+        },
+        "meta": {
+          "request_id": "5e4549eb-3e2e-465f-9151-e9542123a903"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body",
+              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "42a9b9de-5049-4f04-9646-07b9d0030463"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "70de8dad-d5ae-4f35-9652-ec2b469e01ed"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/me/webauthn/register/verify": {
+    "request_body": {
+      "challenge_token": "<redacted>",
+      "response": {
+        "id": "e2e-test-credential-id",
+        "rawId": "e2e-test-credential-id",
+        "response": {
+          "clientDataJSON": "dGVzdA",
+          "attestationObject": "dGVzdA"
+        },
+        "type": "public-key"
+      }
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "verified": true,
+          "credential_id": "e2e-test-credential-id"
+        },
+        "meta": {
+          "request_id": "728723e9-cbf0-4b48-9f39-43ea2db1bbab"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.challenge_token",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body.response",
+              "message": "Invalid input: expected object, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "9aef9569-3fdb-4910-9faf-c486a7123a80"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "b7b4d101-eeb2-4241-92d8-164fe080b975"
+        }
+      },
+      "409": {
+        "error": {
+          "type": "request_error",
+          "code": "conflict",
+          "detail": "This passkey is already registered",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "f0bc3a46-e36b-4989-964d-f34798e91126"
         }
       }
     }
@@ -3481,7 +3674,7 @@
   "POST /api/v1/auth/mfa/login": {
     "request_body": {
       "mfa_session_token": "<redacted>",
-      "totp_code": "340065"
+      "totp_code": "332220"
     },
     "responses": {
       "201": {
@@ -3519,53 +3712,6 @@
         },
         "meta": {
           "request_id": "1b295090-6054-4243-9c02-d560061fd23c"
-        }
-      }
-    }
-  },
-  "POST /api/v1/auth/mfa/verify": {
-    "request_body": {
-      "code": "696343"
-    },
-    "responses": {
-      "201": {
-        "data": {
-          "verified": true
-        },
-        "meta": {
-          "request_id": "c41fe81e-8fd0-4a92-9b80-a953e0d2b2ca"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid values for fields in request",
-          "documentation_url": "https://example.com/resource",
-          "errors": [
-            {
-              "field": "body.code",
-              "message": "Too small: expected string to have >=6 characters"
-            },
-            {
-              "field": "body.code",
-              "message": "Invalid string: must match pattern /^\\d+$/"
-            }
-          ]
-        },
-        "meta": {
-          "request_id": "e799a401-1b0b-4b13-9ee8-9ac8019b4e37"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "5bb8cfe7-e61d-4ec5-9fb2-7750de11f06c"
         }
       }
     }
@@ -3764,6 +3910,94 @@
       }
     }
   },
+  "POST /api/v1/auth/switch-to-organization": {
+    "request_body": {
+      "organization_id": "org_example00000000000000"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "access_token": "<redacted>"
+        },
+        "meta": {
+          "request_id": "e477f58e-d423-41e5-9bc8-34179012c97a"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.organization_id",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "8b7a3df5-2339-496b-9bcb-47c30ef6fec1"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "1903f36f-e656-4f8b-9f0f-bf367e45854e"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "8b90bc4e-0265-439a-9ad5-2a325f4d7578"
+        }
+      }
+    }
+  },
+  "POST /api/v1/auth/switch-to-personal": {
+    "responses": {
+      "201": {
+        "data": {
+          "access_token": "<redacted>"
+        },
+        "meta": {
+          "request_id": "6e568354-8991-42ae-9ab8-795e04d5ea9d"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "7052e1f2-515a-4344-911e-f2c1f77a98d9"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "a7cea94a-bd1c-4216-9d87-d862e7fd3c91"
+        }
+      }
+    }
+  },
   "POST /api/v1/auth/webauthn/authenticate/options": {
     "request_body": {
       "email": "user@example.com"
@@ -3773,7 +4007,7 @@
         "data": {
           "options": {
             "rpId": "localhost",
-            "challenge": "k3GZOK77sMGQ0MkU1kXNQJOeS1AJWOy51S0MrnxbdI8",
+            "challenge": "R1i538VsjTay-HR5E7BnBTncygO1KRomuA_mVat31KI",
             "allowCredentials": [
               {
                 "id": "e2e-test-credential-id",
@@ -3856,149 +4090,6 @@
       }
     }
   },
-  "POST /api/v1/auth/webauthn/register/options": {
-    "request_body": {},
-    "responses": {
-      "201": {
-        "data": {
-          "options": {
-            "challenge": "XqKmPP2KnvdZ-OX7Aap9T94VZcaddslssEYv1POfg5o",
-            "rp": {
-              "name": "YourApp",
-              "id": "localhost"
-            },
-            "user": {
-              "id": "dXNyX3N5MTVyeXd6dHc3cGNlYXd4cDY4eQ",
-              "name": "user@example.com",
-              "displayName": "user@example.com"
-            },
-            "pubKeyCredParams": [
-              {
-                "alg": -8,
-                "type": "public-key"
-              },
-              {
-                "alg": -7,
-                "type": "public-key"
-              }
-            ],
-            "timeout": 60000,
-            "attestation": "none",
-            "excludeCredentials": [],
-            "authenticatorSelection": {
-              "residentKey": "preferred",
-              "userVerification": "required",
-              "requireResidentKey": false
-            },
-            "extensions": {
-              "credProps": true
-            },
-            "hints": []
-          },
-          "challenge_token": "<redacted>"
-        },
-        "meta": {
-          "request_id": "0260eddf-c771-4e49-95d5-74eb01d65564"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid values for fields in request",
-          "documentation_url": "https://example.com/resource",
-          "errors": [
-            {
-              "field": "body",
-              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
-            }
-          ]
-        },
-        "meta": {
-          "request_id": "e5ddbf50-f1ed-495a-92fc-45dd782feea7"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "422437a8-9b07-4494-904e-a8b174004dcc"
-        }
-      }
-    }
-  },
-  "POST /api/v1/auth/webauthn/register/verify": {
-    "request_body": {
-      "challenge_token": "<redacted>",
-      "response": {
-        "id": "e2e-test-credential-id",
-        "rawId": "e2e-test-credential-id",
-        "response": {
-          "clientDataJSON": "dGVzdA",
-          "attestationObject": "dGVzdA"
-        },
-        "type": "public-key"
-      }
-    },
-    "responses": {
-      "201": {
-        "data": {
-          "verified": true,
-          "credential_id": "e2e-test-credential-id"
-        },
-        "meta": {
-          "request_id": "b87b4a4b-2bdd-4145-9453-5d51b4f350fd"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid values for fields in request",
-          "documentation_url": "https://example.com/resource",
-          "errors": [
-            {
-              "field": "body.challenge_token",
-              "message": "Invalid input: expected string, received undefined"
-            },
-            {
-              "field": "body.response",
-              "message": "Invalid input: expected object, received undefined"
-            }
-          ]
-        },
-        "meta": {
-          "request_id": "8812b380-93e5-4c52-92b7-26669bcdc837"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "ed175e92-d820-45f6-98f7-990a2e5c3a90"
-        }
-      },
-      "409": {
-        "error": {
-          "type": "request_error",
-          "code": "conflict",
-          "detail": "This passkey is already registered",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "5684ea7a-1bc2-4f22-9788-13e9301603bc"
-        }
-      }
-    }
-  },
   "POST /api/v1/billing/subscriptions": {
     "request_body": {
       "plan_id": "pln_example00000000000000",
@@ -4021,7 +4112,7 @@
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
-          "request_id": "b6267dab-00a4-448c-9cd9-f2801b52d7ae"
+          "request_id": "7ed7a815-970e-42da-9aac-c21a6ca27e31"
         }
       },
       "400": {
@@ -4042,7 +4133,7 @@
           ]
         },
         "meta": {
-          "request_id": "fb89ef6c-d063-40b8-904d-1ab53bc3661d"
+          "request_id": "4dfd8ccb-7eae-4eff-98ca-7e563945f027"
         }
       },
       "403": {
@@ -4053,7 +4144,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "2d24bc09-8c96-409d-9bc6-bf6a9ad2124e"
+          "request_id": "fc73235b-9673-4c92-9344-7a11f7c3b8aa"
         }
       },
       "422": {
@@ -4064,7 +4155,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "8d46e99a-1909-458d-9d51-0feedc85ab38"
+          "request_id": "3981150f-49cf-4257-9e91-862ccdb0fef4"
         }
       }
     }
@@ -4087,7 +4178,7 @@
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
-          "request_id": "69dd5cd8-3c7f-411a-990a-85be54ca1c88"
+          "request_id": "57213d4f-46f1-4645-9053-5004a3a8085d"
         }
       },
       "401": {
@@ -4098,7 +4189,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "9b9c10eb-af56-4a86-93b0-737a86add0b6"
+          "request_id": "03f053d7-1e98-4423-9d7f-cde7b524527e"
         }
       },
       "403": {
@@ -4109,7 +4200,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "e033461d-346a-4e1d-9e03-e7aa66169c29"
+          "request_id": "800b8c0e-661a-4039-94de-d2c164482b57"
         }
       },
       "404": {
@@ -4120,7 +4211,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "93555543-a7a5-409e-956c-883abc143d68"
+          "request_id": "c0950d66-46c3-4d89-927f-9751c9a0eee5"
         }
       },
       "422": {
@@ -4131,7 +4222,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "9e616e7b-dc90-4730-9395-70503516fb6f"
+          "request_id": "f17fa2df-fabf-43a8-9f49-c82ddc73a863"
         }
       }
     }
@@ -4157,7 +4248,7 @@
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
-          "request_id": "7bbc6c03-61ca-4d90-91cd-5727fc6198cc"
+          "request_id": "9bc51800-e559-45c8-9230-c9427fdb6084"
         }
       },
       "400": {
@@ -4178,7 +4269,7 @@
           ]
         },
         "meta": {
-          "request_id": "fd8dd82f-09b1-4256-9b5f-678817989daf"
+          "request_id": "c4c1aaaf-fc90-4007-902c-9d92facf8283"
         }
       },
       "401": {
@@ -4189,7 +4280,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "e7f5e8ca-b430-4045-9018-826c6a30bb59"
+          "request_id": "f695870c-23a3-4468-9535-cc8b8d800e81"
         }
       },
       "403": {
@@ -4200,7 +4291,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "fc78c8b7-daf3-444b-9bd2-737b5c14ed4d"
+          "request_id": "81eba52d-dc73-4bf0-9830-dc4d5debee2f"
         }
       },
       "404": {
@@ -4211,7 +4302,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "4af98a56-60f9-4aa2-9604-af2fa154d75c"
+          "request_id": "bdd7547e-2425-4783-964b-7daf99af8ab0"
         }
       },
       "422": {
@@ -4222,7 +4313,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "9e25df9a-530a-4998-9783-3424f3c5c958"
+          "request_id": "17c8081a-c179-4872-9132-875b73b72bb7"
         }
       }
     }
@@ -4245,7 +4336,7 @@
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
-          "request_id": "24880b97-ed63-44aa-90d1-9fe14b52369c"
+          "request_id": "022a6111-f058-4fc2-99fb-5817bc892819"
         }
       },
       "401": {
@@ -4256,7 +4347,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "a21df4ae-eeab-43f5-9ea1-42fbc77fc1a2"
+          "request_id": "33ba3ca4-c8dd-4644-9e52-4725749ab962"
         }
       },
       "403": {
@@ -4267,7 +4358,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "53ba99af-8755-4826-99a1-4998c5d5d1a4"
+          "request_id": "9191cefa-f835-40f1-9954-75643d726af9"
         }
       },
       "404": {
@@ -4278,7 +4369,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "77b85db0-58e6-4b4c-955c-e1b8f1986cb3"
+          "request_id": "421a66cb-f98d-4d08-9258-bf949a037ee1"
         }
       },
       "422": {
@@ -4289,61 +4380,17 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "bc377a18-b01d-40e1-9391-48144d8cee13"
-        }
-      }
-    }
-  },
-  "POST /api/v1/billing/stripe/webhook": {
-    "request_body": {
-      "id": "evt_dup_1781296361564",
-      "object": "event",
-      "type": "customer.subscription.updated",
-      "created": 1781296361,
-      "data": {
-        "object": {
-          "id": "<redacted>",
-          "object": "subscription",
-          "status": "active",
-          "items": {
-            "data": [
-              {
-                "current_period_start": 1781296361,
-                "current_period_end": 1781382761
-              }
-            ]
-          }
-        }
-      }
-    },
-    "responses": {
-      "200": {
-        "data": {
-          "received": true
-        },
-        "meta": {
-          "request_id": "33edd8f1-b878-4582-9bd9-da284307c980"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Missing stripe-signature header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "09fcfa40-9913-44ba-93fc-a458396e5aec"
+          "request_id": "7eceafe1-ceff-488b-9c6c-4f7d6f31ec75"
         }
       }
     }
   },
   "POST /api/v1/billing/webhook": {
     "request_body": {
-      "id": "evt_legacy_1781296337989",
+      "id": "evt_legacy_1781595900685",
       "object": "event",
       "type": "customer.subscription.updated",
-      "created": 1781296337,
+      "created": 1781595900,
       "data": {
         "object": {
           "id": "<redacted>",
@@ -4352,8 +4399,8 @@
           "items": {
             "data": [
               {
-                "current_period_start": 1781296337,
-                "current_period_end": 1781382737
+                "current_period_start": 1781595900,
+                "current_period_end": 1781682300
               }
             ]
           }
@@ -4468,7 +4515,7 @@
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
-          "request_id": "911da639-2a13-42b4-9a7d-3d1f78bae3b7"
+          "request_id": "ba450466-8d52-4915-9f7f-b6a710714e95"
         }
       },
       "400": {
@@ -4489,7 +4536,7 @@
           ]
         },
         "meta": {
-          "request_id": "2d8a2697-8ef7-45ed-9ba8-88c82577e127"
+          "request_id": "331ee3b8-c23a-4294-9e5e-eea5dfab44f7"
         }
       },
       "401": {
@@ -4500,7 +4547,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "cf1b5ccf-7550-4775-9b86-aabcb9d93bdb"
+          "request_id": "5881be74-4390-4c03-924b-223c1ea65c62"
         }
       },
       "403": {
@@ -4511,7 +4558,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "14aa37a0-3170-4125-9898-2c9c1b9ce6de"
+          "request_id": "e10efbb2-f5d0-4479-9543-d8f5c63cd36d"
         }
       }
     }
@@ -4526,7 +4573,7 @@
           "response_body": "{\"ok\":true}"
         },
         "meta": {
-          "request_id": "f75be494-d073-4e2c-98c8-fc8cf6943230"
+          "request_id": "d3cbb38f-e2c9-4e80-9d3e-6f423c2e9674"
         }
       },
       "401": {
@@ -4537,7 +4584,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "dcfdd086-f926-4363-9b6c-5b73350cc779"
+          "request_id": "f61088db-33db-4606-9e11-307ff17d309a"
         }
       },
       "403": {
@@ -4548,7 +4595,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "c929e6c3-b43a-4848-9978-3cf916cb05c7"
+          "request_id": "7664465e-359b-42cc-9c66-d0c1be4ba261"
         }
       },
       "404": {
@@ -4559,7 +4606,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "f65460f0-1bb4-43e2-9dd1-5f393174cdeb"
+          "request_id": "5df7d665-653c-4ee1-919d-92a9216bec3e"
         }
       }
     }
@@ -4587,12 +4634,16 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "Invalid input",
+          "detail": "Invalid values for fields in request",
           "documentation_url": "https://example.com/resource",
           "errors": [
             {
-              "field": "token",
+              "field": "body.token",
               "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body",
+              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
             }
           ]
         },
@@ -4650,6 +4701,630 @@
       }
     }
   },
+  "POST /api/v1/tenancy/organization/api-keys": {
+    "request_body": {
+      "name": "Listing Test Key",
+      "scopes": ["api-key:read"],
+      "expires_in_days": 365
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "api_key": {
+            "id": "key_example00000000000000",
+            "organization_id": "org_example00000000000000",
+            "name": "Listing Test Key",
+            "key_prefix": "ak_49029",
+            "last_used_at": null,
+            "expires_at": "2026-01-01T00:00:00.000Z",
+            "status": "ACTIVE",
+            "created_at": "2026-01-01T00:00:00.000Z",
+            "updated_at": "2026-01-01T00:00:00.000Z"
+          },
+          "raw_key": "<redacted>"
+        },
+        "meta": {
+          "request_id": "22195d0c-5cd4-4667-9bc5-cd08d2f9c85e"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.name",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body.scopes",
+              "message": "Invalid input: expected array, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "04493ff7-aadf-46ed-995b-9c720a72c58c"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "f25d15ad-fdf1-48bf-965d-db06f7e3be29"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "1f062044-c542-408d-9259-acbbfe7f76fa"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organization/api-keys/:api_key_id/rotate": {
+    "responses": {
+      "201": {
+        "data": {
+          "api_key": {
+            "id": "key_example00000000000000",
+            "organization_id": "org_example00000000000000",
+            "name": "Rotation Source",
+            "key_prefix": "ak_5b025",
+            "last_used_at": null,
+            "expires_at": null,
+            "status": "ACTIVE",
+            "created_at": "2026-01-01T00:00:00.000Z",
+            "updated_at": "2026-01-01T00:00:00.000Z"
+          },
+          "raw_key": "<redacted>"
+        },
+        "meta": {
+          "request_id": "b891cebf-5265-410d-9d84-806fc219b5f3"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "cd73c08b-4a73-4a56-9225-0bc72d059119"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "5243dc4c-cb50-46b6-9c76-09e5814e6b72"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "8a7e15e8-ac65-4b4c-9055-8f8b8d2deed0"
+        }
+      },
+      "409": {
+        "error": {
+          "type": "request_error",
+          "code": "conflict",
+          "detail": "This API key was already rotated or revoked by a concurrent request; reload and try again",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "39354e47-6256-4d6a-9ad1-7bf7970e873d"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organization/invitations": {
+    "request_body": {
+      "membership_id": "rol_example00000000000000",
+      "expires_in_days": 7
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "invitation": {
+            "id": "inv_example00000000000000",
+            "membership_id": "rol_example00000000000000",
+            "email": "user@example.com",
+            "expires_at": "2026-01-01T00:00:00.000Z",
+            "accepted_at": null,
+            "revoked_at": null,
+            "created_at": "2026-01-01T00:00:00.000Z"
+          }
+        },
+        "meta": {
+          "request_id": "7d0d1483-4c10-4cc2-9fdd-9474575b8198"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.membership_id",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body",
+              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "037ccc37-98c8-4a82-9f34-bfab34f15c99"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "ddfac5b2-05ca-4389-948c-b0d21d9bac4a"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "5f8f350d-b3f3-4be3-91b3-ceb7721d6a2d"
+        }
+      },
+      "422": {
+        "error": {
+          "type": "request_error",
+          "code": "unprocessable_entity",
+          "detail": "Idempotency-Key header is required for this operation",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "27696155-20e5-446f-9557-12e9ed2b9732"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organization/invitations/:invitation_id/resend": {
+    "request_body": {
+      "expires_in_days": 10
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "invitation": {
+            "id": "inv_example00000000000000",
+            "membership_id": "mem_example00000000000000",
+            "email": "user@example.com",
+            "expires_at": "2026-01-01T00:00:00.000Z",
+            "accepted_at": null,
+            "revoked_at": null,
+            "created_at": "2026-01-01T00:00:00.000Z"
+          }
+        },
+        "meta": {
+          "request_id": "cc6c0df7-abd0-4db6-9f65-161b57d53334"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invitation revoked",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "9e7989ab-9b2c-4365-9865-12730ae87421"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "46af9950-303a-4998-96c9-90f8afe20562"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "d1264cfd-1057-4de8-94f0-fbc869674c30"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "34bd0e3f-584f-4d45-9b51-71ba40aaa43d"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organization/leave": {
+    "responses": {
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "136581d3-4cb8-4a2e-90ac-283a2aa7a883"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Organization owner cannot leave; transfer ownership first",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "acfae23c-5eb1-48ad-9829-cecea7f0dcb9"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organization/memberships": {
+    "request_body": {
+      "user_id": "usr_example00000000000000",
+      "role_id": "rol_example00000000000000"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "id": "mem_example00000000000000",
+          "user_id": "usr_example00000000000000",
+          "organization_id": "org_example00000000000000",
+          "role_id": "rol_example00000000000000",
+          "status": "INVITED",
+          "joined_at": null,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "65a14585-097a-45fb-910a-d19b95574f82"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.user_id",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body.role_id",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "53b6c9df-f232-42bf-9ba8-24029c147768"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Membership can only be activated by accepting the invitation",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "9812c4f8-f993-458a-9ad3-ce6b461bc5ed"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "8fbf5382-565f-462a-930b-e7ecb95b42c6"
+        }
+      },
+      "409": {
+        "error": {
+          "type": "request_error",
+          "code": "conflict",
+          "detail": "This user is already a member of the organization",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "cdafd68b-6322-4061-9bd5-15c8507d4bd8"
+        }
+      },
+      "422": {
+        "error": {
+          "type": "request_error",
+          "code": "unprocessable_entity",
+          "detail": "Your personal organization cannot have additional members; create a team organization to collaborate with others.",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "3ffc0edd-d1a3-4a26-9f43-9e29f9476906"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organization/notification-policies": {
+    "request_body": {
+      "notification_type": "IN_APP",
+      "channel": "EMAIL",
+      "default_enabled": true,
+      "is_mandatory": false
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "id": "pol_example00000000000000",
+          "organization_id": "org_example00000000000000",
+          "notification_type": "IN_APP",
+          "channel": "EMAIL",
+          "default_enabled": true,
+          "is_mandatory": false,
+          "muted_until": null,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "14c9138e-0254-4c26-90b9-895b4635b826"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.notification_type",
+              "message": "Invalid input: expected string, received undefined"
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "30eec879-1b37-442d-9da2-c7d19dcfb389"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "fddbc8f7-2528-4c55-9f63-c3aef2c874a7"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "30c995ba-6213-45be-91c1-c4e6c5d5484d"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organization/roles": {
+    "request_body": {
+      "name": "New Role",
+      "description": "A test role"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "id": "rol_example00000000000000",
+          "name": "New Role",
+          "description": "A test role",
+          "is_system": false,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "7cabcbf7-c60b-436d-9f40-025c705b896e"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.name",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body",
+              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "1f1b1c77-02b9-4c70-9c14-66ce02b9d109"
+        }
+      },
+      "401": {
+        "error": {
+          "type": "request_error",
+          "code": "unauthorized",
+          "detail": "Missing Authorization header",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "34de73a3-46ec-4c58-9f68-3e6ca4bd9191"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Insufficient organization permissions",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "af58556e-b2d8-4ab2-9af3-ee4ff8c130fa"
+        }
+      },
+      "409": {
+        "error": {
+          "type": "request_error",
+          "code": "conflict",
+          "detail": "A role named \"{{name}}\" already exists in this organization",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "1e9764bc-68f5-4915-9749-3a8094ae8778"
+        }
+      },
+      "422": {
+        "error": {
+          "type": "request_error",
+          "code": "unprocessable_entity",
+          "detail": "Your personal organization cannot define custom roles; create a team organization to manage roles and members.",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "b999a1f3-3c86-4a76-96ef-d05fb4f84429"
+        }
+      }
+    }
+  },
+  "POST /api/v1/tenancy/organization/transfer-ownership": {
+    "request_body": {
+      "new_owner_user_id": "usr_example00000000000000"
+    },
+    "responses": {
+      "201": {
+        "data": {
+          "id": "rol_example00000000000000",
+          "user_id": "usr_example00000000000000",
+          "organization_id": "org_example00000000000000",
+          "role_id": "rol_example00000000000000",
+          "status": "ACTIVE",
+          "joined_at": "2026-01-01T00:00:00.000Z",
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-01-01T00:00:00.000Z"
+        },
+        "meta": {
+          "request_id": "8be258d4-a107-4556-9d1d-ced5906d9760"
+        }
+      },
+      "400": {
+        "error": {
+          "type": "validation_error",
+          "code": "invalid_field",
+          "detail": "Invalid values for fields in request",
+          "documentation_url": "https://example.com/resource",
+          "errors": [
+            {
+              "field": "body.new_owner_user_id",
+              "message": "Invalid input: expected string, received undefined"
+            },
+            {
+              "field": "body",
+              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
+            }
+          ]
+        },
+        "meta": {
+          "request_id": "06b4028c-cf17-4c8a-928c-695b00d706e6"
+        }
+      },
+      "403": {
+        "error": {
+          "type": "request_error",
+          "code": "forbidden",
+          "detail": "Only the organization owner can transfer ownership",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "78903e59-4c9f-49fb-9e86-358f9403e69a"
+        }
+      },
+      "404": {
+        "error": {
+          "type": "request_error",
+          "code": "not_found",
+          "detail": "{{resource}} not found",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "20e5c866-ab72-4bd2-98e6-f1ea5ba8b75c"
+        }
+      },
+      "422": {
+        "error": {
+          "type": "request_error",
+          "code": "unprocessable_entity",
+          "detail": "Idempotency-Key header is required for this operation",
+          "documentation_url": "https://example.com/resource"
+        },
+        "meta": {
+          "request_id": "d0a6666c-a07b-490a-917a-655f2ee9b6a9"
+        }
+      }
+    }
+  },
   "POST /api/v1/tenancy/organizations": {
     "request_body": {
       "name": "Test Org",
@@ -4661,8 +5336,16 @@
           "id": "org_example00000000000000",
           "name": "Test Org",
           "slug": "test-org",
+          "type": "TEAM",
           "status": "ACTIVE",
           "logo_url": null,
+          "capabilities": {
+            "can_invite_members": true,
+            "can_manage_members": true,
+            "can_manage_roles": true,
+            "can_transfer_ownership": true,
+            "can_delete": true
+          },
           "created_at": "2026-01-01T00:00:00.000Z",
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
@@ -4718,598 +5401,6 @@
       }
     }
   },
-  "POST /api/v1/tenancy/organization/api-keys": {
-    "request_body": {
-      "name": "Listing Test Key",
-      "scopes": ["api-key:read"],
-      "expires_in_days": 365
-    },
-    "responses": {
-      "201": {
-        "data": {
-          "api_key": {
-            "id": "key_example00000000000000",
-            "organization_id": "org_example00000000000000",
-            "name": "Listing Test Key",
-            "key_prefix": "ak_f9c02",
-            "last_used_at": null,
-            "expires_at": "2026-01-01T00:00:00.000Z",
-            "status": "ACTIVE",
-            "created_at": "2026-01-01T00:00:00.000Z",
-            "updated_at": "2026-01-01T00:00:00.000Z"
-          },
-          "raw_key": "<redacted>"
-        },
-        "meta": {
-          "request_id": "0d3ca807-eec4-42ae-9496-f35b9cf89d9e"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid values for fields in request",
-          "documentation_url": "https://example.com/resource",
-          "errors": [
-            {
-              "field": "body.name",
-              "message": "Invalid input: expected string, received undefined"
-            },
-            {
-              "field": "body.scopes",
-              "message": "Invalid input: expected array, received undefined"
-            }
-          ]
-        },
-        "meta": {
-          "request_id": "df4ae447-02d8-429b-9f7e-24107afae4d1"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "d382c00c-0bd8-4615-9727-e68f9977b085"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "f0e807dd-e037-456a-9508-5ae943c8cac1"
-        }
-      }
-    }
-  },
-  "POST /api/v1/tenancy/organization/api-keys/:api_key_id/rotate": {
-    "responses": {
-      "201": {
-        "data": {
-          "api_key": {
-            "id": "key_example00000000000000",
-            "organization_id": "org_example00000000000000",
-            "name": "Rotation Source",
-            "key_prefix": "ak_82dac",
-            "last_used_at": null,
-            "expires_at": null,
-            "status": "ACTIVE",
-            "created_at": "2026-01-01T00:00:00.000Z",
-            "updated_at": "2026-01-01T00:00:00.000Z"
-          },
-          "raw_key": "<redacted>"
-        },
-        "meta": {
-          "request_id": "b9792990-b780-4a6b-9417-982eca3b47e7"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "5ecc558c-89e5-4e97-97f1-1a3f47a72c7d"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "53e69072-6f94-4b89-9cbd-7ba84bf9daa2"
-        }
-      },
-      "404": {
-        "error": {
-          "type": "request_error",
-          "code": "not_found",
-          "detail": "{{resource}} not found",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "793b11ea-8335-4c61-9e6e-a27cf2a0b64c"
-        }
-      }
-    }
-  },
-  "POST /api/v1/tenancy/organization/invitations": {
-    "request_body": {
-      "membership_id": "rol_example00000000000000",
-      "expires_in_days": 7
-    },
-    "responses": {
-      "201": {
-        "data": {
-          "invitation": {
-            "id": "inv_example00000000000000",
-            "membership_id": "rol_example00000000000000",
-            "email": "user@example.com",
-            "expires_at": "2026-01-01T00:00:00.000Z",
-            "accepted_at": null,
-            "revoked_at": null,
-            "created_at": "2026-01-01T00:00:00.000Z"
-          },
-          "token": "<redacted>"
-        },
-        "meta": {
-          "request_id": "e2fcf85a-e4af-4ed2-9f70-7a479cf016d6"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid input",
-          "documentation_url": "https://example.com/resource",
-          "errors": [
-            {
-              "field": "membership_id",
-              "message": "Invalid input: expected string, received undefined"
-            }
-          ]
-        },
-        "meta": {
-          "request_id": "bf53d861-3fa3-4291-93b1-1283968855a7"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "f438cb0a-687f-4470-9b85-eda12d1dcb56"
-        }
-      },
-      "404": {
-        "error": {
-          "type": "request_error",
-          "code": "not_found",
-          "detail": "{{resource}} not found",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "236faed3-3f2e-42c6-9c60-4f5ade6e2b24"
-        }
-      },
-      "422": {
-        "error": {
-          "type": "request_error",
-          "code": "unprocessable_entity",
-          "detail": "Idempotency-Key header is required for this operation",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "b6d5d4e8-02d8-4120-9694-31f94c31026f"
-        }
-      }
-    }
-  },
-  "POST /api/v1/tenancy/organization/invitations/:invitation_id/resend": {
-    "request_body": {
-      "expires_in_days": 10
-    },
-    "responses": {
-      "201": {
-        "data": {
-          "invitation": {
-            "id": "inv_example00000000000000",
-            "membership_id": "mem_example00000000000000",
-            "email": "user@example.com",
-            "expires_at": "2026-01-01T00:00:00.000Z",
-            "accepted_at": null,
-            "revoked_at": null,
-            "created_at": "2026-01-01T00:00:00.000Z"
-          },
-          "token": "<redacted>"
-        },
-        "meta": {
-          "request_id": "4957d072-139e-4712-9cb6-277bcdb0d5a9"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invitation revoked",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "d57d51cc-6aa1-4495-973f-074a6d32bdae"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "d9e4176b-81f1-4e98-916a-1d4ed72c8680"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "feef6c8a-6123-4445-9fca-9c3349ff085e"
-        }
-      },
-      "404": {
-        "error": {
-          "type": "request_error",
-          "code": "not_found",
-          "detail": "{{resource}} not found",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "51da6e39-6c6c-45ef-9d54-167e36436d8e"
-        }
-      }
-    }
-  },
-  "POST /api/v1/tenancy/organization/leave": {
-    "responses": {
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "10e74454-df40-4876-919e-b6d4fb4aadf9"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Organization owner cannot leave; transfer ownership first",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "9b91076f-24ae-443c-9ee6-ea936e3c8eb0"
-        }
-      }
-    }
-  },
-  "POST /api/v1/tenancy/organization/memberships": {
-    "request_body": {
-      "user_id": "usr_example00000000000000",
-      "role_id": "rol_example00000000000000"
-    },
-    "responses": {
-      "201": {
-        "data": {
-          "id": "mem_example00000000000000",
-          "user_id": "usr_example00000000000000",
-          "organization_id": "org_example00000000000000",
-          "role_id": "rol_example00000000000000",
-          "status": "INVITED",
-          "joined_at": null,
-          "created_at": "2026-01-01T00:00:00.000Z",
-          "updated_at": "2026-01-01T00:00:00.000Z"
-        },
-        "meta": {
-          "request_id": "5516a15e-c477-4e46-970c-609f56afdeb2"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid input",
-          "documentation_url": "https://example.com/resource",
-          "errors": [
-            {
-              "field": "user_id",
-              "message": "Invalid input: expected string, received undefined"
-            },
-            {
-              "field": "role_id",
-              "message": "Invalid input: expected string, received undefined"
-            }
-          ]
-        },
-        "meta": {
-          "request_id": "b358699f-0c1d-4506-9f82-046913856742"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Membership can only be activated by accepting the invitation",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "12e46912-eee2-424a-9503-6202587dd69f"
-        }
-      },
-      "404": {
-        "error": {
-          "type": "request_error",
-          "code": "not_found",
-          "detail": "{{resource}} not found",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "70838231-c773-4951-9198-67a14f5aabf0"
-        }
-      },
-      "409": {
-        "error": {
-          "type": "request_error",
-          "code": "conflict",
-          "detail": "This user is already a member of the organization",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "93c73889-de31-4353-9fd9-e865665b8536"
-        }
-      },
-      "422": {
-        "error": {
-          "type": "request_error",
-          "code": "unprocessable_entity",
-          "detail": "Idempotency-Key header is required for this operation",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "4b935a6e-6602-4056-98b6-a61827a7ff27"
-        }
-      }
-    }
-  },
-  "POST /api/v1/tenancy/organization/notification-policies": {
-    "request_body": {
-      "notification_type": "IN_APP",
-      "channel": "EMAIL",
-      "default_enabled": true,
-      "is_mandatory": false
-    },
-    "responses": {
-      "201": {
-        "data": {
-          "id": "pol_example00000000000000",
-          "organization_id": "org_example00000000000000",
-          "notification_type": "IN_APP",
-          "channel": "EMAIL",
-          "default_enabled": true,
-          "is_mandatory": false,
-          "muted_until": null,
-          "created_at": "2026-01-01T00:00:00.000Z",
-          "updated_at": "2026-01-01T00:00:00.000Z"
-        },
-        "meta": {
-          "request_id": "f649540e-69e5-4c8f-9f81-00a7cb294dda"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid values for fields in request",
-          "documentation_url": "https://example.com/resource",
-          "errors": [
-            {
-              "field": "body.notification_type",
-              "message": "Invalid input: expected string, received undefined"
-            }
-          ]
-        },
-        "meta": {
-          "request_id": "83148dd7-cdcb-4309-9b17-201ed41098fd"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "2dbbcb97-33ff-4c65-9046-a4d918399e16"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "420a3c7c-f0e4-410d-91e2-f63c75055e82"
-        }
-      }
-    }
-  },
-  "POST /api/v1/tenancy/organization/roles": {
-    "request_body": {
-      "name": "New Role",
-      "description": "A test role"
-    },
-    "responses": {
-      "201": {
-        "data": {
-          "id": "rol_example00000000000000",
-          "name": "New Role",
-          "description": "A test role",
-          "is_system": false,
-          "created_at": "2026-01-01T00:00:00.000Z",
-          "updated_at": "2026-01-01T00:00:00.000Z"
-        },
-        "meta": {
-          "request_id": "79965635-71d4-4e84-91a9-6a5150a6566b"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid input",
-          "documentation_url": "https://example.com/resource",
-          "errors": [
-            {
-              "field": "name",
-              "message": "Invalid input: expected string, received undefined"
-            }
-          ]
-        },
-        "meta": {
-          "request_id": "816daa2e-5971-4132-9234-2f0a91970ab3"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "b63bea1d-7318-4e51-98ea-3861f61593d5"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "4b5aee51-2204-4f52-93ef-4697c4f3f533"
-        }
-      },
-      "409": {
-        "error": {
-          "type": "request_error",
-          "code": "conflict",
-          "detail": "A role named \"{{name}}\" already exists in this organization",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "e61833ff-b9a6-442e-97fe-da77ee26f27f"
-        }
-      }
-    }
-  },
-  "POST /api/v1/tenancy/organization/transfer-ownership": {
-    "request_body": {
-      "new_owner_user_id": "usr_example00000000000000"
-    },
-    "responses": {
-      "201": {
-        "data": {
-          "id": "rol_example00000000000000",
-          "user_id": "usr_example00000000000000",
-          "organization_id": "org_example00000000000000",
-          "role_id": "rol_example00000000000000",
-          "status": "ACTIVE",
-          "joined_at": "2026-01-01T00:00:00.000Z",
-          "created_at": "2026-01-01T00:00:00.000Z",
-          "updated_at": "2026-01-01T00:00:00.000Z"
-        },
-        "meta": {
-          "request_id": "ae8bd4e8-e9c2-4350-9734-02852261e511"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid input",
-          "documentation_url": "https://example.com/resource",
-          "errors": [
-            {
-              "field": "new_owner_user_id",
-              "message": "Invalid input: expected string, received undefined"
-            }
-          ]
-        },
-        "meta": {
-          "request_id": "2c55132c-de9a-40ba-936c-aaf079b68ab9"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Only the organization owner can transfer ownership",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "a19c4436-c27d-4f52-91aa-bdb1d87b126c"
-        }
-      },
-      "404": {
-        "error": {
-          "type": "request_error",
-          "code": "not_found",
-          "detail": "{{resource}} not found",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "e84e3a23-7a1c-46ce-92fb-7be5fc841b80"
-        }
-      },
-      "422": {
-        "error": {
-          "type": "request_error",
-          "code": "unprocessable_entity",
-          "detail": "Idempotency-Key header is required for this operation",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "e95f957e-a6c0-4e57-9786-82779af50c0b"
-        }
-      }
-    }
-  },
   "POST /api/v1/uploads": {
     "request_body": {
       "purpose": "avatar",
@@ -5323,7 +5414,7 @@
         "data": {
           "id": "upl_example00000000000000",
           "uploadUrl": "https://example.com/resource",
-          "key": "avatars/usr_qdh0ar0rmn37chmhizykm/47f0f778-a6d5-4e5b-9913-4df96bcaef94.png",
+          "key": "avatars/usr_iropfbed59ongcj9i6ynm/65b3d4bd-0726-49ae-84a6-0b2c72e1b667.png",
           "expiresAt": "2026-01-01T00:00:00.000Z",
           "uploadMethod": "POST",
           "fields": {
@@ -5380,12 +5471,11 @@
     }
   },
   "POST /api/v1/uploads/:upload_id/confirm": {
-    "request_body": {},
     "responses": {
       "201": {
         "data": {
           "id": "upl_example00000000000000",
-          "fileName": "verified.png",
+          "fileName": "happy-path.png",
           "mimeType": "image/png",
           "fileSize": 1024,
           "status": "UPLOADED",
@@ -5430,8 +5520,8 @@
           "email": "user@example.com",
           "is_email_verified": false,
           "is_mfa_enabled": false,
-          "first_name": "Kirk",
-          "last_name": "Herzog",
+          "first_name": "Dean",
+          "last_name": "Rowe",
           "avatar_url": null,
           "status": "SUSPENDED",
           "created_at": "2026-01-01T00:00:00.000Z",
@@ -5473,8 +5563,8 @@
           "email": "user@example.com",
           "is_email_verified": false,
           "is_mfa_enabled": false,
-          "first_name": "Kirk",
-          "last_name": "Herzog",
+          "first_name": "Dean",
+          "last_name": "Rowe",
           "avatar_url": null,
           "status": "ACTIVE",
           "created_at": "2026-01-01T00:00:00.000Z",
@@ -5560,21 +5650,29 @@
   },
   "PUT /api/v1/tenancy/organization/logo": {
     "request_body": {
-      "key": "organization-logos/org_6hdmsko6prwmrzwjdydz2/fd466c1c-7156-4ff9-8009-c56215d43930.png"
+      "key": "organization-logos/org_kwncorz8rtgvx9ydtz6fx/a2eb38aa-9eb4-45a5-9844-7d98139df68e.png"
     },
     "responses": {
       "200": {
         "data": {
           "id": "org_example00000000000000",
-          "name": "Schaden LLC",
-          "slug": "schaden-llc-6hdmsko6pr",
+          "name": "Bogisich, Rice and Moen",
+          "slug": "bogisich-rice-and-moen-kwncorz8rt",
+          "type": "TEAM",
           "status": "ACTIVE",
           "logo_url": "https://example.com/resource",
+          "capabilities": {
+            "can_invite_members": true,
+            "can_manage_members": true,
+            "can_manage_roles": true,
+            "can_transfer_ownership": true,
+            "can_delete": true
+          },
           "created_at": "2026-01-01T00:00:00.000Z",
           "updated_at": "2026-01-01T00:00:00.000Z"
         },
         "meta": {
-          "request_id": "410831b9-9b62-482f-94ca-2381632aa720"
+          "request_id": "958431b7-3d50-41af-9b49-a3e64e301707"
         }
       },
       "400": {
@@ -5591,7 +5689,7 @@
           ]
         },
         "meta": {
-          "request_id": "b1e7e85e-8b16-4a56-9a38-86f9b39ca335"
+          "request_id": "e56e9e27-22bc-4eee-93f6-eb0d2877af78"
         }
       },
       "401": {
@@ -5602,7 +5700,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "8ee6e999-069d-4d99-9309-836bb5a2df59"
+          "request_id": "5712a4b1-3406-4c86-9281-d1a52c59eec0"
         }
       },
       "403": {
@@ -5613,7 +5711,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "93a6ede1-f8e9-48f2-90ac-28ea95c45a54"
+          "request_id": "4f9855fa-f45d-483d-994e-bda1c7f4cf00"
         }
       }
     }
@@ -5632,24 +5730,28 @@
           }
         ],
         "meta": {
-          "request_id": "1cfbcd24-0232-4316-9c01-1a3b25287524"
+          "request_id": "b303785c-834d-4596-99de-08ac92edcdfb"
         }
       },
       "400": {
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "Invalid input",
+          "detail": "Invalid values for fields in request",
           "documentation_url": "https://example.com/resource",
           "errors": [
             {
-              "field": "permission_codes",
+              "field": "body.permission_codes",
               "message": "Invalid input: expected array, received undefined"
+            },
+            {
+              "field": "body",
+              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
             }
           ]
         },
         "meta": {
-          "request_id": "a0caad77-d298-4219-9975-250bc6ca33ed"
+          "request_id": "c52dbe73-fbec-4438-9e89-e1b39325ecea"
         }
       },
       "401": {
@@ -5660,7 +5762,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "dbcfe798-6315-40ad-9d8f-dd783f8a906d"
+          "request_id": "97fe071a-9a6d-48e5-9cd1-d71274b9bcb2"
         }
       },
       "403": {
@@ -5671,7 +5773,7 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "c5952525-59f3-4f69-946e-9ed728e46df8"
+          "request_id": "db6e9de9-62b8-4633-935b-c273297abf4b"
         }
       },
       "404": {
@@ -5682,14 +5784,14 @@
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "d642e622-7a82-45fb-97e6-8ff6d2e72951"
+          "request_id": "5355873f-4f19-4b0c-988d-34065057416b"
         }
       }
     }
   },
   "PUT /api/v1/users/me/avatar": {
     "request_body": {
-      "avatarKey": "avatars/usr_arzi19wy5c5xomc3qvr4r/25a86e0e-45e5-4d13-b9fa-7f0e30f07860.png"
+      "avatarKey": "avatars/usr_o1qwa9ujcs5kgzjly69oa/4c7a2162-fac0-45f0-ab31-e80b1a54db0d.png"
     },
     "responses": {
       "200": {
@@ -5698,9 +5800,9 @@
           "email": "user@example.com",
           "is_email_verified": false,
           "is_mfa_enabled": false,
-          "first_name": "Bradford",
-          "last_name": "Rath",
-          "avatar_url": "avatars/usr_arzi19wy5c5xomc3qvr4r/25a86e0e-45e5-4d13-b9fa-7f0e30f07860.png",
+          "first_name": "Bridie",
+          "last_name": "Altenwerth",
+          "avatar_url": "https://example.com/resource",
           "status": "ACTIVE",
           "created_at": "2026-01-01T00:00:00.000Z",
           "updated_at": "2026-01-01T00:00:00.000Z"

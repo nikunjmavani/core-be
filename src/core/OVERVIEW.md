@@ -29,7 +29,7 @@ Two files live here:
   `scheduleCommitDispatch` defer the enqueue until commit, so queued work always reflects committed
   state. The commit-dispatch internals are tested under
   `src/infrastructure/queue/commit-dispatch/`.
-- **Two registration paths, chosen by dependency need.** Handlers that only need `enqueueEmail()` (or
+- **Two registration paths, chosen by dependency need.** Handlers that only need `recordOutboxEmail()` (or
   no container deps) register in `register-event-handlers.ts`, which runs before routes. Handlers that
   need repositories from the composition root (notify webhook delivery, billing subscription
   listeners) register in their domain's `register*Container()`. This keeps bootstrap order correct

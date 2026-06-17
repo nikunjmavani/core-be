@@ -4,6 +4,11 @@ import { buildOutboundCallOptions, outboundCall } from '@/infrastructure/outboun
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
+/** Pinned Stripe API version — bump deliberately and verify against Stripe's changelog. */
+const STRIPE_API_VERSION = '2026-05-27.dahlia';
+/** SDK-level network retries for Stripe calls (mutations additionally pass an idempotency key). */
+const STRIPE_MAX_NETWORK_RETRIES = 2;
+
 let stripeInstance: Stripe | null = null;
 
 /**
@@ -38,9 +43,9 @@ export function getStripeClient(): Stripe {
       : {};
 
   stripeInstance = new Stripe(secretKey, {
-    apiVersion: '2026-05-27.dahlia',
+    apiVersion: STRIPE_API_VERSION,
     typescript: true,
-    maxNetworkRetries: 2,
+    maxNetworkRetries: STRIPE_MAX_NETWORK_RETRIES,
     timeout: env.STRIPE_HTTP_TIMEOUT_MS,
     ...optionalOutboundHttpClientForContractTests,
   });

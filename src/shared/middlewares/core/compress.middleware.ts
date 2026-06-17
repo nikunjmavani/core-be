@@ -3,6 +3,9 @@ import fp from 'fastify-plugin';
 import fastifyCompress from '@fastify/compress';
 import { responseBodyContainsSecretFields } from '@/shared/utils/idempotency/idempotency-fingerprint.util.js';
 
+/** Minimum response size (bytes) before compression is applied (1 KiB). */
+const COMPRESSION_THRESHOLD_BYTES = 1024;
+
 const compressMiddlewareInner: FastifyPluginAsync = async (app) => {
   // sec-C/M finding #26 + sec-re-03 fix: BREACH/CRIME defense-in-depth. A future route
   // that returns a server-minted secret alongside an attacker-influenced echo string in
@@ -33,16 +36,16 @@ const compressMiddlewareInner: FastifyPluginAsync = async (app) => {
   // {@link responseBodyContainsSecretFields} matcher that gates idempotency caching
   // (sec-C/M #12) — one source of truth.
   app.addHook('onSend', async (_request, reply, payload) => {
-    if (typeof payload !== 'string') return payload;
-    if (!responseBodyContainsSecretFields(payload)) return payload;
-    reply.header('cache-control', 'no-store, no-cache, must-revalidate, private');
-    reply.header('content-encoding', 'identity-no-compress');
+    if (typeof payload === 'string' && responseBodyContainsSecretFields(payload)) {
+      reply.header('cache-control', 'no-store, no-cache, must-revalidate, private');
+      reply.header('content-encoding', 'identity-no-compress');
+    }
     return payload;
   });
 
   await app.register(fastifyCompress, {
     global: true,
-    threshold: 1024, // Only compress responses > 1 KB
+    threshold: COMPRESSION_THRESHOLD_BYTES, // Only compress responses > 1 KB
     // Brotli is enabled by default in @fastify/compress when the runtime supports it.
     // Prefer brotli for large JSON payloads; gzip remains the fallback for older clients.
     encodings: ['br', 'gzip', 'deflate'],

@@ -1,5 +1,6 @@
 import { NotImplementedError, UnauthorizedError } from '@/shared/errors/index.js';
 import { env } from '@/shared/config/env.config.js';
+import { DEFAULT_FRONTEND_URL } from '@/shared/constants/index.js';
 import { buildOutboundFetchOptions, outboundFetch } from '@/infrastructure/outbound/index.js';
 import { ExternalServiceError } from '@/infrastructure/outbound/outbound-error.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
@@ -13,7 +14,7 @@ const GITHUB_EMAILS_URL = 'https://api.github.com/user/emails';
 function getGitHubRedirectUri(): string {
   return (
     env.OAUTH_GITHUB_REDIRECT_URI ??
-    `${env.FRONTEND_URL ?? 'http://localhost:3000'}/auth/oauth/github/callback`
+    `${env.FRONTEND_URL ?? DEFAULT_FRONTEND_URL}/auth/oauth/github/callback`
   );
 }
 

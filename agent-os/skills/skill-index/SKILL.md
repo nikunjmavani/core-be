@@ -204,7 +204,7 @@ After completing any task, scan the changes and invoke matching skills:
 
 ### Setup infra (third-party providers)
 
-- **Trigger**: added, removed, or changed a third-party provider in the setup:infra flow (e.g. new provider in `tooling/setup/setup.config.json`, new `tooling/setup/providers/*.provider.ts`, or changes to PREVIEW_PROVIDERS, guide steps, or token instructions)
+- **Trigger**: added, removed, or changed a third-party provider in the setup:infra flow (e.g. new provider in `tooling/setup/setup.config.json`, new `tooling/setup/infra/providers/<name>/<name>.provider.ts`, or changes to PREVIEW_PROVIDERS, guide steps, or token instructions)
 - **Action**: read and follow `setup-infra-maintainer` — run the full checklist so config schema, init defaults, secrets/env-secrets, orchestrator (preview, provision, check, status, rollback), guide, prerequisites, provider module, state, build-env-vars, and `docs/deployment/setup/setup-token-instructions.md` all stay in sync. Then run `pnpm typecheck` and `pnpm setup:infra:preview` to verify.
 - **Follow-up**: if `docs/deployment/setup/setup-token-instructions.md` or other deployment docs were updated, invoke **docs-maintainer** to keep the docs index and cross-links correct.
 
@@ -256,6 +256,7 @@ These attach when matching files are open or edited — detail lives in each rul
 | `object-params.mdc` | `src/**/*.ts` | Options objects for 2+ params (repos exempt) |
 | `no-placeholder-files.mdc` | domain DTOs, validators, serializers | No empty placeholder files |
 | `context7-backend.mdc` | `src/**/*.ts` | Context7 for backend library docs |
+| `headroom-context-compression.mdc` | always on | Headroom MCP — compress large tool output / logs / files before loading into context |
 | `seed-conventions.mdc` | `src/domains/**`, `src/scripts/seed/**` | `seed/` dir layout + `SeedContribution` / `DomainSeedModule` contract |
 
 ## Enforcement layers (no duplicate work)
@@ -282,7 +283,7 @@ The following `agent-os/rules/*.mdc` files auto-invoke skills based on file glob
 | `workers-events-sync.mdc`                 | `src/domains/**/events/**`, `**/queues/**`, `**/workers/**`, `src/infrastructure/queue/**`, `src/core/events/**`                                                                    | workers-events                                                             |
 | `code-quality-guard-sync.mdc`             | `biome.json`, `.biomeignore`, `.husky/pre-commit`, `.github/workflows/**`, `.gitleaks.toml`, `.semgrepignore`                                                                       | code-quality-guard                                                         |
 | `dependency-security-sync.mdc`            | `package.json`, `pnpm-lock.yaml`                                                                                                                                                    | dependency-security                                                        |
-| `structure-maintainer-sync.mdc`           | `AGENTS.md`, `CLAUDE.md`, `README.md`, `agent-os/rules/**`, `agent-os/skills/**`, `agent-os/agents/**`                                                                                 | structure-maintainer                                                       |
+| `structure-maintainer-sync.mdc`           | `AGENTS.md`, `CLAUDE.md`, `README.md`, `agent-os/rules/**`, `agent-os/skills/**`, `agent-os/agents/**`, `agent-os/mcp/**`, `.mcp.example.json`                                          | structure-maintainer                                                       |
 | `code-smells-and-best-practices-sync.mdc` | `src/**/*.ts`                                                                                                                                                                       | code-smells-and-best-practices                                             |
 | `tsdoc-export-guard-sync.mdc`             | `src/**/*.ts`                                                                                                                                                                       | tsdoc-export-guard (new/changed public exports)                            |
 | `overview-doc-maintainer-sync.mdc`        | `src/**/OVERVIEW.md`                                                                                                                                                                | overview-doc-maintainer                                                    |

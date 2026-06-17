@@ -243,8 +243,8 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.INVITATION_MANAGE)],
         schema: {
-          summary: 'Cancel invitation',
-          description: 'Cancels a pending invitation. Requires INVITATION_MANAGE permission.',
+          summary: 'Revoke invitation',
+          description: 'Revokes a pending invitation. Requires INVITATION_MANAGE permission.',
           tags: ['Membership', 'Invitation'],
         },
       },

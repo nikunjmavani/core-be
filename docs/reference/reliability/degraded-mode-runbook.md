@@ -14,7 +14,7 @@ See also: [external-service-resilience.md](external-service-resilience.md),
 needs Redis to guarantee at-most-once execution. When Redis is unavailable it **fails closed**: the
 write handler does not run and the request gets `503` with a `Retry-After` header and
 `{ error: { code: 'service_unavailable', retryable: true } }`. Routes that require an
-`Idempotency-Key` are therefore unavailable for writes during a Redis outage; idempotent retries by
+`X-Idempotency-Key` are therefore unavailable for writes during a Redis outage; idempotent retries by
 well-behaved clients succeed once Redis recovers. (Reads, and writes without an idempotency key, are
 unaffected by this gate.)
 
@@ -58,6 +58,6 @@ and the circuit breaker closes.
 
 | Dependency down | Affected surface | Mode | Primary alert |
 | --- | --- | --- | --- |
-| Redis | writes that require `Idempotency-Key` | fail closed (`503` retryable) | `idempotency.cache.unavailable` (Sentry) |
+| Redis | writes that require `X-Idempotency-Key` | fail closed (`503` retryable) | `idempotency.cache.unavailable` (Sentry) |
 | Redis | global + per-route rate limits | graceful (per-process counter) | `rate_limit.redis_failover.local` (log) |
 | Turnstile | captcha-gated auth routes | fail closed (`401`) | `captcha.provider_unavailable` (Sentry) |

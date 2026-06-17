@@ -1,0 +1,53 @@
+# Enables squash auto-merge on a low-risk Dependabot PR (the `npm-non-major` group)
+# once a maintainer APPROVES it — the approval is the manual gate. The PR then merges
+# automatically when the required PR CI checks pass.
+#
+# Why approval-triggered (and not a required approval): dev is solo-maintained with
+# 0 required approvals (.github/rulesets/dev.json) because an author can't approve
+# their own PRs. A maintainer CAN approve Dependabot's PRs, so we use that approval
+# as the opt-in signal to arm auto-merge — no branch-protection change needed.
+# Majors / security / github-actions / docker stay fully manual.
+#
+# Prerequisite: the repo setting "Allow auto-merge" must be enabled
+# (Settings -> General -> Pull Requests -> Allow auto-merge).
+#
+# No third-party actions are used (keeps the action-pin gate satisfied); the
+# non-major classification uses the Dependabot group name from .github/dependabot.yml.
+
+name: Dependabot auto-merge
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
+
+jobs:
+  enable-auto-merge:
+    name: Enable auto-merge for approved low-risk Dependabot updates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Maintainer approved + Dependabot-authored + the non-major npm group only.
+    # `npm-major` does not contain the substring `npm-non-major`, so majors never match.
+    if: >-
+      github.event.review.state == 'approved' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      (
+        contains(github.event.pull_request.title, 'npm-non-major') ||
+        contains(github.event.pull_request.head.ref, 'npm-non-major')
+      )
+    steps:
+      - name: Enable squash auto-merge
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

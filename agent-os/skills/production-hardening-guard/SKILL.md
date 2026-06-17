@@ -26,7 +26,7 @@ Enforce production-readiness checks across the codebase. Verifies security heade
 - [ ] Helmet middleware configured with strict CSP
 - [ ] CORS restricted to `ALLOWED_ORIGINS` (mandatory in production)
 - [ ] Rate limiting on all sensitive endpoints (login, magic-link, password reset)
-- [ ] Idempotency-Key support for write operations
+- [ ] X-Idempotency-Key support for write operations
 - [ ] X-Organization-Id header validated against PUBLIC_ID_REGEX
 
 ### Database

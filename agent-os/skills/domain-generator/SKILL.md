@@ -156,7 +156,7 @@ export function <domain>Routes(deps: <Domain>RoutesDeps): FastifyPluginAsync {
 2. **Create or extend the domain skeleton** at `src/domains/<domain>/`.
 3. **Create sub-domain** at `sub-domains/<resource>/` or `sub-domains/<parent>/<nested>/`.
 4. **Create DB schema** (if new table) — co-located `*.schema.ts`; run **sql-design-guard** + **db-migration-maintainer**.
-5. **Scaffold `seed/`** (when this level owns tables) — add `<name>.reference.seed.ts` / `<name>.bulk.seed.ts` / `<name>.faker.ts` and an `index.ts` exporting a `SeedContribution` (or, for a new top-level domain, a `DomainSeedModule` with `name` + `dependsOn`, registered in `MODULES` in `src/scripts/seed/bulk.ts`). Parent `seed/index.ts` composes the new contribution via `composeContributions(...)`. Seed only this level's tables; read parents from `context.registry`. Run **seed-maintainer**.
+5. **Scaffold `seed/`** (when this level owns tables) — add `<name>.reference.seed.ts` / `<name>.bulk.seed.ts` / `<name>.faker.ts` and an `index.ts` exporting a `SeedContribution` (or, for a new top-level domain, a `DomainSeedModule` with `name` + `dependsOn`, registered in `SEED_MODULES` in `src/scripts/seed/modules.ts`). Parent `seed/index.ts` composes the new contribution via `composeContributions(...)`. Seed only this level's tables; read parents from `context.registry`. Run **seed-maintainer**.
 6. **Add tests** (see **test-generator**):
    - Bundled routes: extend `<domain>/__tests__/<domain>.test.ts` OR add nested `__tests__/<resource>.test.ts`.
    - Validators/serializers: `__tests__/unit/` on the resource that owns the file.

@@ -73,6 +73,7 @@ src/
     │   │   ├── factories/
     │   │   │   └── magic-link-token.factory.ts
     │   │   ├── integration/
+    │   │   │   ├── auth-me-context.integration.test.ts
     │   │   │   ├── auth-recovery-atomicity.integration.test.ts
     │   │   │   ├── auth-route-smoke.integration.test.ts
     │   │   │   ├── auth.integration.test.ts
@@ -80,6 +81,8 @@ src/
     │   │   │   ├── refresh-preserves-active-organization.integration.test.ts
     │   │   │   └── refresh-rotates-token-hash.integration.test.ts
     │   │   ├── unit/
+    │   │   │   ├── auth-me-context.serializer.unit.test.ts
+    │   │   │   ├── auth-me-context.service.unit.test.ts
     │   │   │   ├── auth-mfa.validator.unit.test.ts
     │   │   │   ├── auth-routes-rate-limit.policy.unit.test.ts
     │   │   │   ├── auth.controller.unit.test.ts
@@ -97,6 +100,7 @@ src/
     │   │   ├── auth-auth-method.handlers.ts
     │   │   ├── auth-login.handlers.ts
     │   │   ├── auth-magic-link.handlers.ts
+    │   │   ├── auth-me-context.handlers.ts
     │   │   ├── auth-mfa.handlers.ts
     │   │   ├── auth-oauth.handlers.ts
     │   │   ├── auth-session.handlers.ts
@@ -254,6 +258,9 @@ src/
     │   │   │   ├── webauthn.dto.ts
     │   │   │   ├── webauthn.service.ts
     │   │   │   └── webauthn.validator.ts
+    │   ├── auth-me-context.serializer.ts
+    │   ├── auth-me-context.service.ts
+    │   ├── auth-me-context.types.ts
     │   ├── auth.container.ts
     │   ├── auth.controller.ts
     │   ├── auth.dto.ts
@@ -683,6 +690,7 @@ src/
     │   │   │   │   ├── integration/
     │   │   │   │   │   └── organization.integration.test.ts
     │   │   │   │   └── unit/
+    │   │   │   │   │   ├── organization-capability.unit.test.ts
     │   │   │   │   │   ├── organization-offboarding-reconcile.processor.unit.test.ts
     │   │   │   │   │   ├── organization-routes-rate-limit.policy.unit.test.ts
     │   │   │   │   │   ├── organization-tombstone-retention.processor.boundary.unit.test.ts
@@ -776,6 +784,7 @@ src/
     │   │   │   │   ├── organization-tombstone-retention.constants.ts
     │   │   │   │   ├── organization-tombstone-retention.processor.ts
     │   │   │   │   └── organization-tombstone-retention.worker.ts
+    │   │   │   ├── organization-capability.ts
     │   │   │   ├── organization-provisioning.ts
     │   │   │   ├── organization.controller.ts
     │   │   │   ├── organization.dto.ts
@@ -1018,7 +1027,8 @@ src/
     │   ├── redis-topology-warn.util.ts
     │   ├── redis-url.parse.util.ts
     │   ├── redis-url.util.ts
-    │   └── redis.client.ts
+    │   ├── redis.client.ts
+    │   └── redis.constants.ts
     ├── database/
     │   ├── __tests__/
     │   │   └── unit/
@@ -1230,6 +1240,7 @@ src/
     │   ├── health.ts
     │   ├── OVERVIEW.md
     │   ├── queue-dashboard.ts
+    │   ├── queue.constants.ts
     │   └── scheduler.ts
     ├── resilience/
     │   ├── lua/
@@ -1275,7 +1286,6 @@ src/
     │   ├── generate-route-catalog.ts
     │   ├── generate-route-examples.ts
     │   ├── hosted-docs-upload.util.ts
-    │   ├── openapi-enricher.ts
     │   ├── project-structure-tree.constants.ts
     │   ├── upload-postman-collection.ts
     │   └── upload-scalar-registry.ts
@@ -1338,7 +1348,6 @@ src/
     │       └── sync-env-example.ts
     │   ├── locale/
     │       ├── locale-key-parity.util.ts
-    │       ├── validate-locale-errors-parity.ts
     │       ├── validate-locale-hardcoded-fallbacks.ts
     │       ├── validate-locale-key-parity.ts
     │       └── validate-locale-keys.ts
@@ -1347,8 +1356,11 @@ src/
     │   ├── routes/
     │       ├── route-http-coverage-validation.util.ts
     │       ├── route-http-coverage.allowlist.ts
+    │       ├── route-schema-docs-validation.util.ts
     │       ├── route-success-coverage.util.ts
     │       ├── validate-route-http-coverage.ts
+    │       ├── validate-route-org-scope.ts
+    │       ├── validate-route-schema-docs.ts
     │       ├── validate-route-success-coverage.ts
     │       └── validate-route-success-statuses.ts
     │   └── tests/
@@ -1509,6 +1521,7 @@ src/
     │   │   ├── bullmq-job-validation.util.ts
     │   │   ├── file-magic.util.ts
     │   │   ├── omit-undefined.util.ts
+    │   │   ├── parse-with-schema.util.ts
     │   │   └── validation.util.ts
     │   └── index.ts
     └── OVERVIEW.md
@@ -1590,8 +1603,13 @@ src/
     │   ├── signup-flow.e2e.test.ts
     │   └── tenancy-billing-org.e2e.test.ts
     ├── factories/
+    │   ├── mfa-method.factory.ts
+    │   ├── notification.factory.ts
+    │   ├── organization-api-key.factory.ts
+    │   ├── organization-notification-policy.factory.ts
     │   ├── organization.factory.ts
     │   ├── plan.factory.ts
+    │   ├── user-data-export.factory.ts
     │   ├── user.factory.ts
     │   └── webhook.factory.ts
     ├── fixtures/
@@ -1613,7 +1631,10 @@ src/
     │   │       ├── 20250101000001_first.sql
     │   │       └── 20250102000001_second.sql
     ├── global/
+    │   ├── authz-model-coverage.global.test.ts
+    │   ├── authz-runtime-coverage.global.test.ts
     │   ├── domain-consistency.global.test.ts
+    │   ├── ensure-openapi-spec.global-setup.ts
     │   ├── external-sdk-coverage.global.test.ts
     │   ├── import-paths.global.test.ts
     │   ├── no-direct-db-in-services.global.test.ts
@@ -1623,6 +1644,7 @@ src/
     │   ├── openapi-mcp.global.test.ts
     │   ├── outbound-bypass-guard.global.test.ts
     │   ├── OVERVIEW.md
+    │   ├── public-route-allowlist.global.test.ts
     │   ├── rls-context-network-isolation.global.test.ts
     │   ├── route-completeness.global.test.ts
     │   ├── service-cross-domain-boundary.global.test.ts
@@ -1640,9 +1662,11 @@ src/
     │   ├── object-storage-mock.helper.ts
     │   ├── registered-route.util.ts
     │   ├── rls-matrix.helper.ts
+    │   ├── route-authorization-model.ts
     │   ├── route-catalog-auth.ts
     │   ├── route-catalog-registry.ts
     │   ├── route-http-coverage.helper.ts
+    │   ├── route-org-scope.helper.ts
     │   ├── route-status-observer.ts
     │   ├── route-success-status.helper.ts
     │   ├── test-api-prefix.helper.ts
@@ -1669,7 +1693,6 @@ src/
     │   │   ├── migration-rollback.integration.test.ts
     │   │   ├── migrations-backward.integration.test.ts
     │   │   ├── migrations-forward.integration.test.ts
-    │   │   ├── testcontainers-postgres.integration.test.ts
     │   │   └── transaction-rollback.integration.test.ts
     │   ├── observability/
     │   │   ├── db-pool-metrics.integration.test.ts
@@ -1748,8 +1771,6 @@ src/
     │   ├── OVERVIEW.md
     │   └── worker-bulkheads.performance.test.ts
     ├── security/
-    │   ├── api-versioning/
-    │   │   └── deprecated-route-headers.security.test.ts
     │   ├── auth/
     │   │   ├── api-key-auth.security.test.ts
     │   │   ├── auth-enforcement.security.test.ts
@@ -1764,6 +1785,14 @@ src/
     │   │   ├── open-redirect.security.test.ts
     │   │   ├── privilege-escalation.security.test.ts
     │   │   └── session-invalidation.security.test.ts
+    │   ├── authz/
+    │   │   ├── admin-only.security.test.ts
+    │   │   ├── auth-token-flow.security.test.ts
+    │   │   ├── cross-org-mutation.security.test.ts
+    │   │   ├── cross-org-resource.security.test.ts
+    │   │   ├── invitation-email.security.test.ts
+    │   │   ├── object-ownership.security.test.ts
+    │   │   └── tier-and-grant.security.test.ts
     │   ├── headers/
     │   │   ├── cors.security.test.ts
     │   │   ├── csp.security.test.ts
@@ -1816,6 +1845,7 @@ src/
     │   │   ├── tenant-rls-concurrency.security.test.ts
     │   │   ├── upload-rls.security.test.ts
     │   │   ├── user-public-id-resolver.security.test.ts
+    │   │   ├── worker-context-rls-backstop.security.test.ts
     │   │   ├── worker-rls-context.security.test.ts
     │   │   └── worker-tenant-isolation.security.test.ts
     │   └── OVERVIEW.md
@@ -1962,6 +1992,7 @@ src/
     │   │   ├── rotate-field-secrets.unit.test.ts
     │   │   ├── route-catalog-registry.unit.test.ts
     │   │   ├── route-http-coverage-validation.unit.test.ts
+    │   │   ├── route-schema-docs-validation.unit.test.ts
     │   │   ├── route-success-coverage.unit.test.ts
     │   │   ├── route-success-status.unit.test.ts
     │   │   ├── run-ci-local-guard.unit.test.ts
@@ -2040,6 +2071,7 @@ src/
     │   │   └── validation/
     │   │   │   ├── bullmq-job-validation.unit.test.ts
     │   │   │   ├── file-magic.util.unit.test.ts
+    │   │   │   ├── parse-with-schema.util.unit.test.ts
     │   │   │   └── validation.util.unit.test.ts
     │   ├── validators/
     │   │   ├── idempotency-key.property.unit.test.ts

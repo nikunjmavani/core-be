@@ -17,6 +17,11 @@ export const CSRF_COOKIE_NAME = 'csrf_token';
 /** Header the SPA mirrors from {@link CSRF_COOKIE_NAME} for double-submit CSRF on cookie auth routes. */
 export const CSRF_HEADER_NAME = 'x-csrf-token';
 
+/** Cookie path scoping the session + CSRF cookies to the auth API surface (`/api/v1/auth`). */
+const SESSION_COOKIE_PATH = '/api/v1/auth';
+/** Cookie path scoping the OAuth nonce cookie to the OAuth callback surface (`/api/v1/auth/oauth`). */
+const OAUTH_COOKIE_PATH = '/api/v1/auth/oauth';
+
 /** Generates a cryptographically random CSRF token (32 bytes, base64url-encoded). */
 export function generateCsrfToken(): string {
   return randomBytes(32).toString('base64url');
@@ -28,7 +33,7 @@ export function getSessionCookieOptions() {
     httpOnly: true,
     secure: env.COOKIE_SECURE,
     sameSite: 'strict' as const,
-    path: '/api/v1/auth',
+    path: SESSION_COOKIE_PATH,
     maxAge: env.AUTH_SESSION_MAX_AGE_DAYS * SECONDS_PER_DAY,
   };
 }
@@ -39,7 +44,7 @@ export function getCsrfCookieOptions() {
     httpOnly: false,
     secure: env.COOKIE_SECURE,
     sameSite: 'strict' as const,
-    path: '/api/v1/auth',
+    path: SESSION_COOKIE_PATH,
     maxAge: env.AUTH_SESSION_MAX_AGE_DAYS * SECONDS_PER_DAY,
   };
 }
@@ -51,7 +56,7 @@ export function setCsrfCookie(reply: FastifyReply, csrfToken?: string): void {
 
 /** Removes {@link CSRF_COOKIE_NAME} from the browser (used on logout / session revoke). */
 export function clearCsrfCookie(reply: FastifyReply): void {
-  reply.clearCookie(CSRF_COOKIE_NAME, { path: '/api/v1/auth' });
+  reply.clearCookie(CSRF_COOKIE_NAME, { path: SESSION_COOKIE_PATH });
 }
 
 /** Separator between session public id and refresh secret in {@link SESSION_COOKIE_NAME}. */
@@ -99,7 +104,7 @@ export function setSessionCookie(
 
 /** Clears both the session and CSRF cookies (logout flow). */
 export function clearSessionCookie(reply: FastifyReply): void {
-  reply.clearCookie(SESSION_COOKIE_NAME, { path: '/api/v1/auth' });
+  reply.clearCookie(SESSION_COOKIE_NAME, { path: SESSION_COOKIE_PATH });
   clearCsrfCookie(reply);
 }
 
@@ -116,7 +121,7 @@ function getOauthNonceCookieOptions() {
     httpOnly: true,
     secure: env.COOKIE_SECURE,
     sameSite: 'lax' as const,
-    path: '/api/v1/auth/oauth',
+    path: OAUTH_COOKIE_PATH,
     maxAge: OAUTH_STATE_TTL_SECONDS,
   };
 }
@@ -134,7 +139,7 @@ export function readOauthNonceCookie(request: FastifyRequest): string | undefine
 
 /** Removes the OAuth nonce cookie (called after the callback consumes it). */
 export function clearOauthNonceCookie(reply: FastifyReply): void {
-  reply.clearCookie(OAUTH_NONCE_COOKIE_NAME, { path: '/api/v1/auth/oauth' });
+  reply.clearCookie(OAUTH_NONCE_COOKIE_NAME, { path: OAUTH_COOKIE_PATH });
 }
 
 /** Returns the request remote IP, falling back to `127.0.0.1` when Fastify has not populated `request.ip`. */

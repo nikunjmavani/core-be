@@ -68,7 +68,7 @@ For a visual flow diagram (Service → EventBus → Handler → Queue → Redis 
 
 ```text
 member-invitation.service.ts  →  eventBus.emit(tenancy.member_invitation.created|resent)
-tenancy/sub-domains/membership/member-invitation/events/*.ts  →  enqueueEmail()
+tenancy/sub-domains/membership/member-invitation/events/*.ts  →  recordOutboxEmail() + onCommit(dispatchOutboxEmail)
 tenancy/events/index.ts  →  registerTenancyEventHandlers()
 ```
 
@@ -76,7 +76,7 @@ tenancy/events/index.ts  →  registerTenancyEventHandlers()
 
 ```text
 magic-link.service.ts / auth-method.service.ts  →  eventBus.emit(auth.*.requested)
-auth/sub-domains/auth-method/events/*.ts  →  enqueueEmail()
+auth/sub-domains/auth-method/events/*.ts  →  recordOutboxEmail() + onCommit(dispatchOutboxEmail)
 auth/events/index.ts  →  registerAuthEventHandlers()
 ```
 

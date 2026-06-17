@@ -54,7 +54,7 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
 
     const registerOptionsResponse = await injectAuthenticated(app, {
       method: 'POST',
-      url: testApiPath('/auth/webauthn/register/options'),
+      url: testApiPath('/auth/me/webauthn/register/options'),
       token,
       payload: {},
     });
@@ -81,7 +81,7 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
 
     const registerVerifyResponse = await injectAuthenticated(app, {
       method: 'POST',
-      url: testApiPath('/auth/webauthn/register/verify'),
+      url: testApiPath('/auth/me/webauthn/register/verify'),
       token,
       payload: {
         challenge_token: registerOptionsBody.data.challenge_token,
@@ -169,7 +169,7 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
       await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
       const optionsResponse = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/webauthn/register/options'),
+        url: testApiPath('/auth/me/webauthn/register/options'),
         token,
         payload: {},
       });
@@ -193,7 +193,7 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
 
       return injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/webauthn/register/verify'),
+        url: testApiPath('/auth/me/webauthn/register/verify'),
         token,
         payload: {
           challenge_token: challengeToken,

@@ -43,6 +43,8 @@ export function createDomainContainers(
   const authDomain = createAuthContainer(
     userBase.userService,
     tenancyDomain.organizationSettingsService,
+    tenancyDomain.organizationService,
+    tenancyDomain.authorizationService,
   );
   const auditDomain = createAuditContainer(tenancyDomain.organizationService, userBase.userService);
   const billingDomain = createBillingContainer(tenancyDomain.organizationService);

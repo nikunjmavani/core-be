@@ -5,7 +5,13 @@
  */
 import '../../shared/config/load-env-files.js';
 
-process.env.NODE_ENV ||= 'test';
+// Hard-force test mode (mirrors src/tests/setup.ts) so a developer's `.env.local` NODE_ENV
+// (e.g. `local`, which load-env-files layers on top as an override) cannot leak through. The
+// chaos suite must run as `test` so the captcha bypass, in-memory rate limiting, and the
+// cleanupDatabase/cleanupTestRedis guards behave exactly as they do in CI. A soft `||=` here
+// silently left the suite running as `local`, which fails public auth forms with 401 (captcha
+// is only bypassed for test/development/staging) and tripped the cleanup-guard environment check.
+process.env.NODE_ENV = 'test';
 process.env.VITEST_CHAOS_SUITE = 'true';
 /**
  * In-memory rate limiting only: `@fastify/rate-limit` otherwise shares `redisConnection` and can

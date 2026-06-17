@@ -8,7 +8,6 @@ import type { FastifyInstance } from 'fastify';
  */
 export const METHOD_STATUS_POLICY_EXEMPT_PREFIXES = [
   '/api/v1/billing/webhook',
-  '/api/v1/billing/stripe/webhook',
   '/api/v1/mcp',
 ] as const;
 

@@ -208,7 +208,7 @@ function resolveIdempotencyScope(request: FastifyRequest): {
   // The active organization scopes the idempotency cache key. After the route flatten it rides the
   // signed `org` JWT claim (`auth.organizationPublicId`) — the authoritative active org for both
   // user and API-key principals — not the legacy `X-Organization-Id` header (which clients no longer
-  // send on flat routes). Without this, a user reusing an Idempotency-Key across orgs would collide
+  // send on flat routes). Without this, a user reusing an X-Idempotency-Key across orgs would collide
   // in the same `idempotency:none:<userId>:<key>` bucket. Header is kept only as a pre-auth fallback.
   const organizationId =
     authentication?.organizationPublicId ?? organizationFromRequest ?? organizationIdFromHeader;
@@ -249,7 +249,7 @@ function sendInFlightConflict(request: FastifyRequest, reply: FastifyReply): Fas
 }
 
 /**
- * Rejects a request that reuses an `Idempotency-Key` already associated with a *different* request
+ * Rejects a request that reuses an `X-Idempotency-Key` already associated with a *different* request
  * payload (method + route + body fingerprint mismatch). Returns 422 so the client knows the key was
  * reused incorrectly rather than retrying the same operation — matching Stripe-style semantics and
  * preventing a divergent second operation from executing under the same key.
@@ -373,7 +373,7 @@ async function idempotencyClaimPreHandler(
   if (!hasAuthenticatedIdempotencyActor(scope)) {
     /**
      * Never store or replay idempotent responses for unauthenticated callers. Two anonymous
-     * callers presenting the same `Idempotency-Key` would otherwise collide on a single
+     * callers presenting the same `X-Idempotency-Key` would otherwise collide on a single
      * `idempotency:none:anonymous:<key>` bucket, letting the second caller receive the first
      * caller's cached (possibly token-bearing) response body. The request still proceeds
      * normally — it simply gets no idempotency dedup.
@@ -471,7 +471,7 @@ function serveIdempotencyCacheHit(
 /**
  * Degraded mode (fail closed, but cleanly retryable): with Redis degraded we cannot guarantee
  * at-most-once execution, so we must not run the handler. Advertise an explicit `Retry-After`
- * and flag the error retryable so well-behaved clients re-issue the same `Idempotency-Key` once
+ * and flag the error retryable so well-behaved clients re-issue the same `X-Idempotency-Key` once
  * the transient Redis blip clears — preserving correctness while turning a write outage into a
  * brief, self-healing retry.
  */
@@ -549,7 +549,7 @@ async function idempotencyOnRequest(request: FastifyRequest, _reply: FastifyRepl
 
   assertIdempotencyKeyPresentWhenRequired(request);
 
-  const parsed = parseIdempotencyKeyHeader(request.headers['idempotency-key']);
+  const parsed = parseIdempotencyKeyHeader(request.headers['x-idempotency-key']);
   if (parsed.kind === 'absent') return;
   if (parsed.kind === 'invalid') {
     throw new ValidationError('errors:idempotencyKeyInvalid');
@@ -704,7 +704,7 @@ export async function idempotencyOnResponse(
 /**
  * Idempotency middleware for POST/PUT/PATCH/DELETE requests.
  *
- * When a client sends an `Idempotency-Key` header, the response is cached
+ * When a client sends an `X-Idempotency-Key` header, the response is cached
  * in Redis for 24 hours using SETNX to prevent race conditions. Subsequent
  * requests with the same key return the cached response without
  * re-executing the handler.

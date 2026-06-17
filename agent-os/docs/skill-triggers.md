@@ -27,7 +27,7 @@ Skills live in [`agent-os/skills/`](../skills/).
 | `.vscode/extensions.json`, `.vscode/settings.json` | ide-productivity-guard | |
 | `tooling/setup/**`, `setup.config.json` | setup-infra-maintainer | |
 | `src/shared/locales/*/openapi.json` | openapi-multilingual | |
-| `CLAUDE.md`, `AGENTS.md`, `agent-os/rules/**`, `agent-os/skills/**`, `agent-os/agents/**` | structure-maintainer | |
+| `CLAUDE.md`, `AGENTS.md`, `agent-os/rules/**`, `agent-os/skills/**`, `agent-os/agents/**`, `agent-os/mcp/**`, `.mcp.example.json` | structure-maintainer | MCP example edits: keep both mirrors (`.mcp.example.json` ↔ `agent-os/mcp/mcp.example.json`) identical |
 | `tooling/setup/setup.config.json`, `src/shared/constants/project-identity.constants.ts` | project-identity-sync | |
 | `src/infrastructure/database/contexts/**`, `src/domains/**/*.worker.ts`, RLS migrations | rls-tenant-isolation-guard | |
 | `src/shared/middlewares/core/idempotency.middleware.ts`, idempotencyRequired routes, `src/infrastructure/payment/stripe.client.ts` | idempotency-guard | |

@@ -3,6 +3,11 @@ import { resolveRedisKeyPrefix } from '@/infrastructure/cache/redis-prefix.util.
 import { buildRedisTlsOptions } from '@/infrastructure/cache/redis-url.parse.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { FIVE_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
+import {
+  REDIS_COMMAND_TIMEOUT_MS,
+  REDIS_RECONNECT_DELAY_STEP_MS,
+} from '@/infrastructure/cache/redis.constants.js';
 
 /**
  * Process-wide ioredis client used by cache, idempotency, rate limits, permission cache,
@@ -19,7 +24,7 @@ export const redisConnection = new Redis(env.REDIS_URL, {
   /** Fail fast when disconnected — avoids hanging HTTP handlers and chaos tests during partitions. */
   enableOfflineQueue: false,
   /** Abort any command that has not received a reply within 3 s — guards against a connected-but-unresponsive Redis stalling HTTP request handlers indefinitely. */
-  commandTimeout: 3_000,
+  commandTimeout: REDIS_COMMAND_TIMEOUT_MS,
   /**
    * Dual-stack DNS lookup (IPv4 + IPv6). Required for Railway private networking
    * which exposes services over IPv6-only `.railway.internal` hostnames.
@@ -28,7 +33,7 @@ export const redisConnection = new Redis(env.REDIS_URL, {
   /** Explicit TLS cert verification when REDIS_URL is rediss:// (no-op for plaintext redis://). */
   ...buildRedisTlsOptions(env.REDIS_URL),
   retryStrategy(times: number) {
-    const delay = Math.min(times * 200, 5_000);
+    const delay = Math.min(times * REDIS_RECONNECT_DELAY_STEP_MS, FIVE_SECONDS_MS);
     logger.warn({ attempt: times, delayMs: delay }, 'redis.reconnecting');
     return delay;
   },
@@ -92,7 +97,7 @@ export async function closeRedis(): Promise<void> {
     setTimeout(() => {
       logger.warn('redis.close.timeout');
       resolve();
-    }, 5_000);
+    }, FIVE_SECONDS_MS);
   });
   await Promise.race([redisConnection.quit(), timeout]);
 }

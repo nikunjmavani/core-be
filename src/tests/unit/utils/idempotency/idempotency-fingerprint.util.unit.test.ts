@@ -86,4 +86,24 @@ describe('responseBodyContainsSecretFields', () => {
       responseBodyContainsSecretFields(JSON.stringify({ data: { uploadUrl: 'https://s3/...' } })),
     ).toBe(true);
   });
+
+  it('sec-C/M #12: catches sensitive fields via the isSensitiveKey backstop (beyond the named allowlist)', () => {
+    // Fields NOT in IDEMPOTENCY_SECRET_RESPONSE_FIELD_NAMES but caught by the substring matcher.
+    expect(responseBodyContainsSecretFields(JSON.stringify({ data: { client_secret: 's' } }))).toBe(
+      true,
+    );
+    expect(responseBodyContainsSecretFields(JSON.stringify({ data: { csrf_token: 't' } }))).toBe(
+      true,
+    );
+    expect(responseBodyContainsSecretFields(JSON.stringify({ data: { password: 'p' } }))).toBe(
+      true,
+    );
+  });
+
+  it('fails closed via a substring scan when the response body is not valid JSON', () => {
+    // The onSend hook can encounter a non-JSON body; the parse-failure branch must still detect
+    // secret-bearing fields rather than caching them.
+    expect(responseBodyContainsSecretFields('<<<not json "access_token": "leak" >>>')).toBe(true);
+    expect(responseBodyContainsSecretFields('totally benign plaintext response')).toBe(false);
+  });
 });

@@ -14,7 +14,6 @@ const ENTITY_LABELS: Record<PublicIdEntity, string> = {
   organizationNotificationPolicy: 'notification policy',
   authSession: 'session',
   authMethod: 'auth method',
-  authMfaMethod: 'MFA method',
   notification: 'notification',
   webhook: 'webhook',
   plan: 'plan',

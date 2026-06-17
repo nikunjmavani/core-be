@@ -27,8 +27,36 @@ describe('organization serializers', () => {
       type: 'TEAM',
       status: 'ACTIVE',
       logo_url: null,
+      capabilities: {
+        can_invite_members: true,
+        can_manage_members: true,
+        can_manage_roles: true,
+        can_transfer_ownership: true,
+        can_delete: true,
+      },
       created_at: createdAt.toISOString(),
       updated_at: updatedAt.toISOString(),
+    });
+  });
+
+  it('serializeOrganization derives all-false capabilities for a personal organization', () => {
+    expect(
+      serializeOrganization({
+        public_id: 'org-personal',
+        name: 'Personal',
+        slug: null,
+        type: 'PERSONAL',
+        status: 'ACTIVE',
+        logo_url: null,
+        created_at: createdAt,
+        updated_at: updatedAt,
+      }).capabilities,
+    ).toEqual({
+      can_invite_members: false,
+      can_manage_members: false,
+      can_manage_roles: false,
+      can_transfer_ownership: false,
+      can_delete: false,
     });
   });
 

@@ -56,4 +56,21 @@ describe('Security: CORS', () => {
     // Response should include CORS headers for allowed origin
     expect([200, 204]).toContain(response.statusCode);
   });
+
+  it('does not reflect a non-allowlisted origin', async () => {
+    const response = await injectUnauthenticated(app, {
+      method: 'OPTIONS',
+      url: testApiPath('/auth/login'),
+      headers: {
+        origin: 'https://evil.example.com',
+        'access-control-request-method': 'POST',
+      },
+    });
+    // @fastify/cors with an array allowlist omits Access-Control-Allow-Origin for a disallowed
+    // origin. With credentials:true, echoing the attacker origin back would be exploitable, so the
+    // header must never equal the evil origin — only absent or the configured allowed origin.
+    const allowOrigin = response.headers['access-control-allow-origin'];
+    expect(allowOrigin).not.toBe('https://evil.example.com');
+    expect(allowOrigin === undefined || allowOrigin === 'http://localhost:3000').toBe(true);
+  });
 });

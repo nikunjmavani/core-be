@@ -20,6 +20,7 @@ Claude Code reads `agent-os/` directly via `.claude/` symlinks.
 | [`agent-os/skills/`](agent-os/skills/) | Skill definition files |
 | [`agent-os/rules/`](agent-os/rules/) | Cursor rule files (also accessible via `.cursor/rules/` symlink) |
 | [`agent-os/hooks/`](agent-os/hooks/) | Claude Code hook scripts |
+| [`agent-os/commands/`](agent-os/commands/) | Cross-platform custom slash commands (Claude `.claude/commands`, Cursor `.cursor/commands`, Codex `~/.codex/prompts`) |
 
 ## API Contract (Non-Negotiable)
 
@@ -29,7 +30,7 @@ See **`agent-os/skills/api-contract-guard/SKILL.md`** (rule: `agent-os/rules/api
 - Public ids: Paddle-style `<prefix>_<21 [a-z0-9]>` via `generatePublicId(entity)`; external field is always `id`
 - Method→status policy (middleware-enforced): GET 200 · POST 201 · PUT/PATCH 200 · DELETE 204; webhooks + MCP stay 200
 - Error codes: when to set 400/401/403/404/406/409/413/415/422/429 — see **`docs/reference/api/response-codes.md`** (400 on all POST/PATCH/PUT, omitted only when truly nothing to validate; 409/422 mutating only; never invent statuses)
-- Headers: `Authorization: Bearer`, `X-Organization-Id`, `Idempotency-Key` (required on the 8 `idempotencyRequired` writes), `X-Captcha-Token` (public auth forms), `X-CSRF-Token` (refresh only), `Stripe-Signature` (Stripe-sent); ecosystem X- forms kept (`X-Request-Id`, `X-Api-Key`, `X-RateLimit-*`, …)
+- Headers: `Authorization: Bearer`, `X-Organization-Id`, `X-Idempotency-Key` (required on the 8 `idempotencyRequired` writes), `X-Captcha-Token` (public auth forms), `X-CSRF-Token` (refresh only), `Stripe-Signature` (Stripe-sent); ecosystem X- forms kept (`X-Request-Id`, `X-Api-Key`, `X-RateLimit-*`, …)
 
 ## Architecture Rules (Non-Negotiable)
 
@@ -169,7 +170,7 @@ src/infrastructure/
     mail-outbox.repository.ts # Outbox persistence (not domain-owned)
     templates/                # HTML email templates (base, magic-link, invitation)
     queues/
-      mail.queue.ts           # BullMQ queue + enqueueEmail()
+      mail.queue.ts           # BullMQ queue + recordOutboxEmail / dispatchOutboxEmail
     workers/
       mail.worker.ts          # BullMQ processor for email delivery
   payment/
@@ -238,13 +239,13 @@ These are **not** the same:
 - **Event bus** (`src/core/events/event-bus.ts`): in-process, runs in the API process immediately after a successful service write. Handlers enqueue side effects and **must not** fail the HTTP request.
 - **BullMQ workers** (`src/infrastructure/queue/bootstrap.ts`, `pnpm dev:worker`): async, durable jobs in Redis processed in a separate worker process (retries, DLQ).
 
-Typical flow: `service` → `eventBus.emit` → handler → `enqueueEmail()` → mail worker. Direct `enqueueEmail()` from a service (without the bus) is also valid for simple side effects.
+Typical flow: `service` → `eventBus.emit` → handler → `recordOutboxEmail()` (+ `dispatchOutboxEmail()` on commit) → mail worker. Worker/runtime paths (no request transaction) call `recordOutboxEmail()` + `dispatchOutboxEmail()` directly.
 
 - **Registration (two paths)** — bootstrap order matters:
   1. `buildApp()` → `registerEventHandlers()` ([`register-event-handlers.ts`](src/core/events/register-event-handlers.ts)) **before** routes — auth + tenancy email handlers only.
   2. `registerRoutes()` → [`domain-containers.plugin.ts`](src/domains/domain-containers.plugin.ts) → `registerNotifyContainer()` — notify handlers that need `WebhookRepository` from DI.
-- **Rule:** Handlers that only need `enqueueEmail()` or no container deps → register via `register-event-handlers.ts`. Handlers that need repositories from the composition root → register in the domain’s `register*Container()` (notify today).
-- **Example (core path):** `tenancy/sub-domains/membership/member-invitation/` — service emits; handler calls `enqueueEmail()`.
+- **Rule:** Handlers that only enqueue mail (`recordOutboxEmail()`) or have no container deps → register via `register-event-handlers.ts`. Handlers that need repositories from the composition root → register in the domain’s `register*Container()` (notify today).
+- **Example (core path):** `tenancy/sub-domains/membership/member-invitation/` — service emits; handler calls `recordOutboxEmail()`.
 - **Example (container path):** `notify/events/notify.event-handlers.ts` — `registerBillingWebhookEventHandlers({ webhookRepository })`, webhook delivery enqueue, billing subscription notifications.
 
 | Registrar                               | Event types (examples)                                                    | Side effect                            |
@@ -273,7 +274,7 @@ Billing event helpers and types live with the billing sub-domains that emit them
 - **Tenant**: `X-Organization-Id` header → `request.organizationId` via `src/shared/middlewares/tenant/tenant.middleware.ts`
 - **Organization context / RLS**: Organization context is set only for HTTP requests via tenant middleware (`X-Organization-Id` → Postgres session variable `app.current_organization_id` for RLS). Workers and processors must not call or import `getRequestDatabase()` (enforced by global tests and code review; do not import `request-database.context` under `*.worker.ts` / `*.processor.ts`). Use context wrappers (`withOrganizationContext`, `withGlobalRetentionCleanupDatabaseContext`, `withUserDatabaseContext`, `withSessionRetentionCleanupDatabaseContext`) and pass the returned `databaseHandle` into `createWorker*Repository(databaseHandle)` factories or `runTenantScopedWorkerJob` / `runGlobalRetentionWorkerJob` / `runUserScopedWorkerJob` from `src/infrastructure/queue/worker-processor.util.ts`. Tenant-scoped jobs must include `organizationPublicId` in the job payload. See `src/infrastructure/database/contexts/retention-database.context.ts`; the `app.global_retention_cleanup` RLS bypass clauses are defined in the consolidated baseline migration `migrations/00000000000000_init.sql`.
 - **DB**: `src/infrastructure/database/connection.ts` singleton + Drizzle queries in repositories; repositories may extend `src/infrastructure/database/base-repository.ts` for `paginate()`
-- **Config**: Environment variables from `src/shared/config/env.config.ts`. Env files are **root only**: `.env.example` is the single committed template; per-environment `.env.<environment>` files (e.g. `.env.development`, `.env.production`) and `.env.local` are gitignored. Hosted environment mapping lives in `tooling/setup/setup.config.json` (canonical); `pnpm github:sync` reads it directly. Project identity constants and the CI composite action are generated via `pnpm tool:generate-project-identity`. Scaffold and push with `pnpm github:sync`. Consistency and remote drift: `pnpm github:sync --check`. Runtime loader (`src/shared/config/load-env-files.ts`) reads `.env.${NODE_ENV ?? 'development'}` then applies `.env.local` as an override (non-production only, gitignored, machine-specific — point `DATABASE_URL` / `REDIS_URL` at your local Docker Compose stack without editing `.env.development`).
+- **Config**: Environment variables from `src/shared/config/env.config.ts`. Env files are **root only**: `.env.example` is the single committed template; per-environment `.env.<environment>` files (e.g. `.env.development`, `.env.production`) and `.env.local` are gitignored. Hosted environment mapping lives in `tooling/setup/setup.config.json` (canonical); `pnpm github:sync` reads it directly. Project identity constants and the CI composite action are generated via `pnpm tool:generate-project-identity`. Scaffold and push with `pnpm github:sync`. Consistency and remote drift: `pnpm github:sync --check`. Runtime loader (`src/shared/config/load-env-files.ts`) reads `.env.${NODE_ENV ?? 'local'}` (default `local`, matching the env schema), so `.env.local` is the **primary** file for local dev; it falls back to `.env.development` when the primary is missing, and for a non-`local` `NODE_ENV` layers `.env.local` on top as an override (never under production). Scaffold a self-contained `.env.local` (`.env.example` + generated JWT keys/`SECRETS_ENCRYPTION_KEY` + localhost `DATABASE_URL`/`REDIS_URL`) with `pnpm setup:local` or `pnpm setup:local --only-env`.
 
 ## Dependency Rules
 
@@ -307,6 +308,10 @@ See **[import-paths.mdc](.cursor/rules/import-paths.mdc)** — `@/` in `src/`, `
 ## Context7 (version-wise backend docs)
 
 This repo uses **Context7 MCP** for up-to-date, version-specific documentation. Scope is **backend only** (Fastify, Drizzle, BullMQ, Postgres, Node). Add `use context7` to prompts when asking about library APIs or setup; mention versions (e.g. Fastify 5, Drizzle 0.45) for version-specific docs.
+
+## Headroom (agent context compression)
+
+All AI agents (Claude Code, Cursor, Codex) share the **Headroom MCP** server (wired in `.mcp.example.json` ↔ `agent-os/mcp/mcp.example.json`) as a context-compression layer. Route large, low-signal text — long command/CI/test output, logs, whole-file reads, RAG/search chunks — through `headroom_compress` before loading it into context (same answers, far fewer tokens); use `headroom_retrieve` when exact bytes are needed and `headroom_stats` to check savings. Do **not** compress small outputs or content applied verbatim (diffs, code to edit, migration SQL, secrets). Setup: `pip install "headroom-ai[mcp]"` then `headroom mcp install`. Detail: rule **`agent-os/rules/headroom-context-compression.mdc`** (`alwaysApply`).
 
 ## Keeping Docs and Skills in Sync
 
@@ -354,7 +359,7 @@ See [docs/reference/architecture/documentation-system.md](docs/reference/archite
 
 Script namespaces: `ci:*`, `compose:*`, `test:*`, `db:*`, `docs:*`, `routes:*`, `load:*`, `chaos:*`, `tool:*`, `setup:infra:*`, `security:*`, `sonar:*`, `deps:*`. Legacy: `route-catalog`, `scripts:*`. List all: `pnpm run`.
 
-Local SonarQube quality gate (pre-push): `pnpm sonar:up` / `sonar:scan` / `sonar:down` / `sonar:reset`. The pre-push hook blocks a push when SonarQube has any open issue on the deployed-app surface; `SKIP_SONAR=1 git push` bypasses just that gate. See **`docs/reference/quality/sonarqube-local.md`**.
+Local SonarQube quality gate (pre-commit): `pnpm sonar:up` / `sonar:scan` / `sonar:down` / `sonar:reset`. The pre-commit hook (`pnpm guard:pre-commit`, step 16) blocks a commit when SonarQube has any open issue on the deployed-app surface; the gate is mandatory — there is no bypass, every issue must be resolved. See **`docs/reference/quality/sonarqube-local.md`**.
 
 - `pnpm build` — compile to `dist/` (`tsc` + `tsc-alias`); `pnpm build:check` fails if `@/` aliases remain
 - `pnpm dev` — run Fastify server (tsx watch)
@@ -391,6 +396,8 @@ Local SonarQube quality gate (pre-push): `pnpm sonar:up` / `sonar:scan` / `sonar
 - `pnpm verify:base` — end-to-end gate: migrate → seed (minimal + full) → API smoke (auto-detects/launches server + worker) → validate
 - `pnpm routes:catalog` / `pnpm routes:catalog:check` — regenerate or verify `docs/routes.txt` (legacy: `route-catalog`, `route-catalog:check`)
 - `pnpm validate:route-success-statuses` — verify `tooling/openapi/route-catalog/route-success-statuses.json` (declared happy-path status per route) stays in sync with `docs/routes.txt`
+- `pnpm validate:route-schema-docs` — verify every route registration (incl. `health.middleware.ts`, `mcp-server.ts`) declares `schema.summary`/`description`/`tags` (drives OpenAPI operation docs)
+- `pnpm validate:route-org-scope` — verify `tooling/openapi/route-catalog/route-org-scope.json` (the catalog `O` column: `both` or team-only `team`) stays in sync with `docs/routes.txt`
 - `pnpm validate:route-success-coverage` — observed-status gate after a full `pnpm test`: fails on declared-vs-observed drift; uncovered-routes count ratchets via `tooling/route-coverage/route-success-coverage-budget.json`; also verifies every observed sub-500 status is documented in the generated OpenAPI spec
 - `pnpm routes:examples` — refresh `tooling/openapi/route-examples/route-examples.json` (sanitized request/response samples per route+status, embedded in OpenAPI as `captured` examples) from a capture run: `ROUTE_EXAMPLE_CAPTURE=1 pnpm test && pnpm routes:examples`
 - `pnpm ci:local` — PR gate: validate + domain + routes + migrate lint + env example + full test

@@ -11,8 +11,8 @@ import type { SubscriptionService } from './subscription.service.js';
 import { SubscriptionSerializer } from './subscription.serializer.js';
 
 function readIdempotencyKey(request: FastifyRequest): string | undefined {
-  return typeof request.headers['idempotency-key'] === 'string'
-    ? request.headers['idempotency-key']
+  return typeof request.headers['x-idempotency-key'] === 'string'
+    ? request.headers['x-idempotency-key']
     : undefined;
 }
 
@@ -21,7 +21,7 @@ function readIdempotencyKey(request: FastifyRequest): string | undefined {
  * update / change-plan / cancel / resume). The active organization is resolved
  * from the signed `org` token claim via `resolveActiveOrganizationId`; handlers
  * that take a `subscription_id` path param validate it (sec-B10); externally
- * mutating routes also require the `Idempotency-Key` header before delegating
+ * mutating routes also require the `X-Idempotency-Key` header before delegating
  * to {@link SubscriptionService}.
  *
  * @remarks

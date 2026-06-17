@@ -5,6 +5,12 @@ import type { Redis } from 'ioredis';
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
 import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import {
+  FIFTEEN_SECONDS_MS,
+  MILLISECONDS_PER_MINUTE,
+  MILLISECONDS_PER_SECOND,
+  THIRTY_SECONDS_MS,
+} from '@/shared/constants/ttl.constants.js';
 
 type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
@@ -100,7 +106,7 @@ export class CircuitBreaker {
     this.name = options.name;
     this.redis = options.redis;
     this.failureThreshold = options.failureThreshold ?? 5;
-    this.resetTimeoutMs = options.resetTimeoutMs ?? 30_000;
+    this.resetTimeoutMs = options.resetTimeoutMs ?? THIRTY_SECONDS_MS;
     this.maxHalfOpenAttempts = options.halfOpenAttempts ?? 2;
   }
 
@@ -257,7 +263,7 @@ export class CircuitBreaker {
         logger.info({ circuit: this.name }, 'circuit-breaker.half-open');
         this.reportCircuitStateToSentry('HALF_OPEN', 'info');
       } else {
-        const retryAfterMs = Math.max(this.resetTimeoutMs - elapsed, 1_000);
+        const retryAfterMs = Math.max(this.resetTimeoutMs - elapsed, MILLISECONDS_PER_SECOND);
         throw new CircuitBreakerOpenError(
           this.name,
           retryAfterMs,
@@ -311,42 +317,45 @@ export class CircuitBreaker {
   }
 }
 
-// Pre-configured circuit breakers (Redis-backed for cluster-wide state)
+// Pre-configured circuit breakers (Redis-backed for cluster-wide state).
+// Reset windows are exported (ms) so retry callers can align BullMQ backoff with each breaker.
+/** Reset window (ms) for {@link stripeCircuit}; exported so retry callers can align BullMQ backoff. */
+export const STRIPE_CIRCUIT_RESET_TIMEOUT_MS = THIRTY_SECONDS_MS;
+/** Reset window (ms) for {@link s3Circuit}; exported for consistent BullMQ backoff in storage workers. */
+export const S3_CIRCUIT_RESET_TIMEOUT_MS = FIFTEEN_SECONDS_MS;
+/** Reset window (ms) for {@link resendCircuit}; exported for mail-queue backoff alignment. */
+export const RESEND_CIRCUIT_RESET_TIMEOUT_MS = MILLISECONDS_PER_MINUTE;
+/** Reset window (ms) for {@link turnstileCircuit}. */
+export const TURNSTILE_CIRCUIT_RESET_TIMEOUT_MS = THIRTY_SECONDS_MS;
+
 /** Shared circuit breaker for all Stripe API calls — trips after 5 failures, half-opens after 30s. */
 export const stripeCircuit = new CircuitBreaker({
   name: 'stripe',
   redis: redisConnection,
   failureThreshold: 5,
-  resetTimeoutMs: 30_000,
+  resetTimeoutMs: STRIPE_CIRCUIT_RESET_TIMEOUT_MS,
 });
 /** Shared circuit breaker for all S3/object-storage calls — trips after 3 failures, half-opens after 15s. */
 export const s3Circuit = new CircuitBreaker({
   name: 's3',
   redis: redisConnection,
   failureThreshold: 3,
-  resetTimeoutMs: 15_000,
+  resetTimeoutMs: S3_CIRCUIT_RESET_TIMEOUT_MS,
 });
 /** Shared circuit breaker for all Resend email API calls — trips after 5 failures, half-opens after 60s. */
 export const resendCircuit = new CircuitBreaker({
   name: 'resend',
   redis: redisConnection,
   failureThreshold: 5,
-  resetTimeoutMs: 60_000,
+  resetTimeoutMs: RESEND_CIRCUIT_RESET_TIMEOUT_MS,
 });
 /** Shared circuit breaker for Cloudflare Turnstile CAPTCHA verification — trips after 5 failures, half-opens after 30s. */
 export const turnstileCircuit = new CircuitBreaker({
   name: 'turnstile',
   redis: redisConnection,
   failureThreshold: 5,
-  resetTimeoutMs: 30_000,
+  resetTimeoutMs: TURNSTILE_CIRCUIT_RESET_TIMEOUT_MS,
 });
-
-/** Reset window (ms) for {@link stripeCircuit}; exported so retry callers can align BullMQ backoff. */
-export const STRIPE_CIRCUIT_RESET_TIMEOUT_MS = 30_000;
-/** Reset window (ms) for {@link s3Circuit}; exported for consistent BullMQ backoff in storage workers. */
-export const S3_CIRCUIT_RESET_TIMEOUT_MS = 15_000;
-/** Reset window (ms) for {@link resendCircuit}; exported for mail-queue backoff alignment. */
-export const RESEND_CIRCUIT_RESET_TIMEOUT_MS = 60_000;
 
 /** Named circuit breakers exposed to ops admin endpoints. */
 export const MANAGED_CIRCUIT_BREAKERS = {

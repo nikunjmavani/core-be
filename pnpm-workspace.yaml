@@ -1,5 +1,10 @@
 autoInstallPeers: true
 engineStrict: true
+# Pin the Node version pnpm runs scripts with so environments that boot an
+# older Node (e.g. the Claude Code web sandbox defaults to Node 22) don't trip
+# the engineStrict gate — pnpm self-provisions this version. Keep in sync with
+# .nvmrc / .node-version / engines.node (>=24).
+useNodeVersion: 24.13.0
 
 allowBuilds:
   '@sentry-internal/node-cpu-profiler': true
@@ -24,6 +29,7 @@ packageExtensions:
       esbuild: ^0.25.0
 
 overrides:
+  '@babel/core': '>=7.29.1'
   ioredis: 5.10.1
   esbuild: '>=0.28.1'
   '@esbuild-kit/core-utils>esbuild': '>=0.28.1'
@@ -36,7 +42,7 @@ overrides:
   minimatch: 10.2.5
   micromatch>picomatch: 4.0.4
   rollup: '>=4.59.0'
-  vite: '>=7.3.2'
+  vite: '>=8.0.16 <9'
   fastify: '>=5.8.5'
   '@fastify/static': '>=9.1.1'
   drizzle-orm: '>=0.45.2'

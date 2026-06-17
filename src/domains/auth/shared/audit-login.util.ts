@@ -77,6 +77,19 @@ export async function recordLoginAuditEvent(
 }
 
 /**
+ * Derives the audit `error_code` from a thrown value: the i18n `messageKey` of a typed
+ * `AppError` when present, else the error `name`, else `'unknown'`. Kept as a flat helper
+ * so the failure-audit path has no nested ternary.
+ */
+function extractLoginFailureErrorCode(error: unknown): unknown {
+  if (error !== null && typeof error === 'object') {
+    if ('messageKey' in error) return (error as { messageKey?: unknown }).messageKey;
+    if ('name' in error) return (error as { name?: unknown }).name;
+  }
+  return 'unknown';
+}
+
+/**
  * Records a `auth.login_failure` event on the symmetric failure side of every
  * login surface (sec-A8 follow-up).
  *
@@ -107,12 +120,7 @@ export async function recordLoginFailureAuditEvent(
     // Capture the i18n message key (when present on a typed AppError) as the
     // error_code so audit rows are consistent across calls — far more useful
     // than the raw stringified message which carries the user's locale.
-    const errorCode =
-      error !== null && typeof error === 'object' && 'messageKey' in error
-        ? (error as { messageKey?: unknown }).messageKey
-        : error !== null && typeof error === 'object' && 'name' in error
-          ? (error as { name?: unknown }).name
-          : 'unknown';
+    const errorCode = extractLoginFailureErrorCode(error);
     await recordScopedAuditEvent(request, {
       action: 'auth.login_failure',
       resource_type: 'session',

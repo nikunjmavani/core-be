@@ -6,13 +6,21 @@ const MAX_CLEANUP_RETRIES = 3;
 const CLEANUP_RETRY_DELAY_MS = 100;
 
 /**
+ * Environments where wiping all rows is acceptable: the ephemeral `test` database and a
+ * developer's `local` Docker Compose database. The chaos suite runs with `NODE_ENV=local`
+ * because `.env.local` is layered as an override (see `load-env-files`), so `local` must be
+ * permitted here. `development`/`staging`/`production` are never allowed to be truncated.
+ */
+const DATA_WIPE_ALLOWED_ENVIRONMENTS = new Set(['test', 'local']);
+
+/**
  * Clean up all test data from the database.
  * Uses a single TRUNCATE ... CASCADE (built in PL/pgSQL) to reduce deadlock risk; retries on deadlock.
- * Only use in test environments.
+ * Only use in the `test` or `local` environment (see {@link DATA_WIPE_ALLOWED_ENVIRONMENTS}).
  */
 export async function cleanupDatabase(): Promise<void> {
-  if (process.env.NODE_ENV !== 'test') {
-    throw new Error('cleanupDatabase can only be called in test environment');
+  if (!DATA_WIPE_ALLOWED_ENVIRONMENTS.has(process.env.NODE_ENV ?? '')) {
+    throw new Error('cleanupDatabase can only be called in the test or local environment');
   }
 
   for (let attempt = 1; attempt <= MAX_CLEANUP_RETRIES; attempt++) {

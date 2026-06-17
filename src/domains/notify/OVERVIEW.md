@@ -36,7 +36,7 @@ This domain implements the contracts documented in [src/PATTERNS.md](src/PATTERN
 
 - `transactional-outbox` — `webhook_delivery` is the outbox; the delivery worker is the dispatcher.
 - `tenant-isolation` / `rls-context` — every read and write scoped to the active organization (or the worker's pinned org context).
-- `idempotency` — webhook configuration writes accept `Idempotency-Key`.
+- `idempotency` — webhook configuration writes accept `X-Idempotency-Key`.
 - `audit-emission` — webhook configuration changes record audit rows.
 - `soft-delete` — webhook configurations and delivery rows tombstone with `deleted_at` (subject to retention windows).
 

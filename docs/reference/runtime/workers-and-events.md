@@ -13,9 +13,9 @@ Event bus (in-process) and BullMQ workers (durable) are **not the same thing**. 
 | **Runs in**      | API process                                                       | Worker process                                             |
 | **Failure mode** | Handler enqueues side effects; **must not fail the HTTP request** | Retries → DLQ                                              |
 
-**Typical flow:** `service` → `eventBus.emit` → handler → `enqueueEmail()` → mail worker.
+**Typical flow:** `service` → `eventBus.emit` → handler → `recordOutboxEmail()` (+ `dispatchOutboxEmail()` on commit) → mail worker.
 
-A service may also call `enqueueEmail()` directly without the bus for simple side effects. Both are valid.
+Workers and scripts (no request transaction) call `recordOutboxEmail()` + `dispatchOutboxEmail()` directly — see [Post-commit enqueue](#post-commit-enqueue-transactional-outbox).
 
 ```mermaid
 flowchart LR
@@ -30,7 +30,7 @@ flowchart LR
 
 ## Registration (two paths — bootstrap order matters)
 
-1. **`buildApp()` → `registerEventHandlers()`** ([`register-event-handlers.ts`](../../../src/core/events/register-event-handlers.ts)) **before** routes. Handlers that only need `enqueueEmail()` or have no container deps (auth + tenancy email handlers).
+1. **`buildApp()` → `registerEventHandlers()`** ([`register-event-handlers.ts`](../../../src/core/events/register-event-handlers.ts)) **before** routes. Handlers that only need `recordOutboxEmail()` or have no container deps (auth + tenancy email handlers).
 2. **`registerRoutes()` → [`domain-containers.plugin.ts`](../../../src/domains/domain-containers.plugin.ts) → `createNotifyContainer()`**. Handlers that need repositories from DI (notify handlers today).
 
 **Rule:** No container deps → path 1. Needs a repository from the composition root → path 2.
@@ -63,7 +63,7 @@ HTTP handlers pass `getRequestIdentifier(request)` into services as `context.req
 await eventBus.emit(buildDomainEvent(EVENT_TYPE, payload, { requestId: context?.requestId }));
 ```
 
-Event handlers read `event.requestId` and pass it to `enqueueEmail()`, `enqueueNotification()`, `enqueueWebhookDeliveryByAttemptId()`, etc. Job payloads store `requestId` (Zod-validated); workers log it on `mail.worker.processing` and **`email.sent`** so worker logs correlate with API `request.complete` (`requestId` field).
+Event handlers read `event.requestId` and pass it to `recordOutboxEmail()`, `enqueueNotification()`, `enqueueWebhookDeliveryByAttemptId()`, etc. Job payloads store `requestId` (Zod-validated); workers log it on `mail.worker.processing` and **`email.sent`** so worker logs correlate with API `request.complete` (`requestId` field).
 
 ### Post-commit enqueue (transactional outbox)
 
@@ -208,7 +208,7 @@ Every `enqueue*` helper injects the active W3C trace context (`captureTraceConte
 
 ```text
 member-invitation.service.ts  →  eventBus.emit(tenancy.member_invitation.created|resent)
-tenancy/sub-domains/member-invitation/events/*.ts  →  enqueueEmail()
+tenancy/sub-domains/member-invitation/events/*.ts  →  recordOutboxEmail() + onCommit(dispatchOutboxEmail)
 tenancy/events/index.ts  →  registerTenancyEventHandlers()
 ```
 
@@ -216,7 +216,7 @@ tenancy/events/index.ts  →  registerTenancyEventHandlers()
 
 ```text
 magic-link.service.ts / auth-method.service.ts  →  eventBus.emit(auth.*.requested)
-auth/sub-domains/auth-method/events/*.ts  →  enqueueEmail()
+auth/sub-domains/auth-method/events/*.ts  →  recordOutboxEmail() + onCommit(dispatchOutboxEmail)
 auth/events/index.ts  →  registerAuthEventHandlers()
 ```
 

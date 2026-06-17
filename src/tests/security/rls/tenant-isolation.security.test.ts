@@ -263,7 +263,7 @@ describe('Security: Tenant isolation', () => {
         method: 'POST',
         url: testApiPath(`/billing/subscriptions/${fixture.subscriptionInB.public_id}/cancel`),
         token: tokenScopedToA,
-        headers: { 'idempotency-key': SUBSCRIPTION_MUTATION_IDEMPOTENCY_KEY },
+        headers: { 'x-idempotency-key': SUBSCRIPTION_MUTATION_IDEMPOTENCY_KEY },
         payload: {},
       });
 
@@ -285,7 +285,7 @@ describe('Security: Tenant isolation', () => {
         method: 'POST',
         url: testApiPath(`/billing/subscriptions/${fixture.subscriptionInB.public_id}/change-plan`),
         token: tokenScopedToA,
-        headers: { 'idempotency-key': SUBSCRIPTION_MUTATION_IDEMPOTENCY_KEY },
+        headers: { 'x-idempotency-key': SUBSCRIPTION_MUTATION_IDEMPOTENCY_KEY },
         payload: { plan_id: fixture.plan.public_id },
       });
 
@@ -301,7 +301,7 @@ describe('Security: Tenant isolation', () => {
         method: 'POST',
         url: testApiPath(`/billing/subscriptions/${fixture.subscriptionInB.public_id}/resume`),
         token: tokenScopedToA,
-        headers: { 'idempotency-key': SUBSCRIPTION_MUTATION_IDEMPOTENCY_KEY },
+        headers: { 'x-idempotency-key': SUBSCRIPTION_MUTATION_IDEMPOTENCY_KEY },
         payload: {},
       });
 

@@ -4,6 +4,20 @@ import type { ParsedRoute } from './types.js';
 export const DOMAINS_ROOT = join(process.cwd(), 'src', 'domains');
 export const ROUTES_TS_PATH = join(process.cwd(), 'src', 'routes.ts');
 export const CATALOG_OUTPUT_PATH = join(process.cwd(), 'docs', 'routes.txt');
+export const ROUTE_SUCCESS_STATUS_PATH = join(
+  process.cwd(),
+  'tooling',
+  'openapi',
+  'route-catalog',
+  'route-success-statuses.json',
+);
+export const ROUTE_ORG_SCOPE_PATH = join(
+  process.cwd(),
+  'tooling',
+  'openapi',
+  'route-catalog',
+  'route-org-scope.json',
+);
 export const METHOD_ORDER = ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'] as const;
 
 export const DOMAIN_LABELS: Record<string, string> = {
