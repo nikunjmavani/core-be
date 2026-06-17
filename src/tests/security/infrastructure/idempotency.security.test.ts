@@ -103,6 +103,28 @@ describe('Security: Idempotency', () => {
     );
   });
 
+  it('rejects a MISSING X-Idempotency-Key on an idempotency-required write (422)', async () => {
+    // POST /tenancy/organizations is one of the 8 `idempotencyRequired` writes
+    // (organization.routes.ts sets config.idempotencyRequired = true). Omitting the header must
+    // fail closed with 422 — proving the requirement is enforced on a real required route, not
+    // only that malformed keys are rejected. Without this, a regression dropping the flag would
+    // let a duplicate create slip through and no test would catch it.
+    const user = await createTestUser();
+    const token = await generateTestToken({ userId: user.public_id });
+
+    const response = await injectAuthenticated(app, {
+      method: 'POST',
+      url: testApiPath('/tenancy/organizations'),
+      token,
+      payload: { name: 'Requires Key Org', slug: uniqueSlug('requires-key-org') },
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect((response.json() as { error?: { code?: string } }).error?.code).toBe(
+      'unprocessable_entity',
+    );
+  });
+
   it('should not persist an idempotency Redis entry when write is unauthenticated', async () => {
     const key = uniqueKey('unauth-idem');
     const cacheKey = buildIdempotencyCacheKey(key, {
