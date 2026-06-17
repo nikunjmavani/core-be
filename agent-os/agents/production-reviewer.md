@@ -2,6 +2,11 @@
 name: production-reviewer
 description: Runs a full production-readiness review of core-be and returns a prioritized plan (satisfied items, blocking gaps, optional improvements). Use before any path-to-production action — release, deploy, or "ready for production" sign-off. Read-only; produces a plan for the user to approve, never deploys.
 model: inherit
+tools:
+  - Read
+  - Grep
+  - Glob
+  - Bash
 readonly: true
 ---
 

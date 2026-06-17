@@ -2,6 +2,11 @@
 name: tsdoc-coverage-reviewer
 description: Runs pnpm tsdoc:check and identifies public exports missing TSDoc summaries or @remarks blocks. Returns a prioritized list of symbols to document, scoped to a domain or file if specified. Read-only; produces a report for the user to act on, never edits source files.
 model: inherit
+tools:
+  - Read
+  - Grep
+  - Glob
+  - Bash
 readonly: true
 ---
 

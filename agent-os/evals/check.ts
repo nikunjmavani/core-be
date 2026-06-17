@@ -156,6 +156,25 @@ for (const file of agentFiles) {
     warn('agent-model', `agents/${file} pins model "${model}" — prefer \`inherit\` unless deliberately overridden`)
 }
 
+// ── Check 12: read-only agents must enforce read-only via a tools allowlist ──
+// `readonly: true` is honoured only by Cursor; on Claude Code an agent without a
+// `tools` allowlist can still Edit/Write. Require every readonly agent to declare
+// `tools` and to exclude the write tools, so the read-only contract is real on
+// both platforms (audit §2, item 4).
+const writeTools = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit']
+for (const file of agentFiles) {
+  const text = readText(join(agentOsDirectory, 'agents', file))
+  if (frontmatterField(text, 'readonly') !== 'true') continue
+  const tools = frontmatterField(text, 'tools')
+  if (!tools)
+    error('agent-readonly', `agents/${file} is readonly:true but declares no \`tools\` allowlist — read-only is unenforced on Claude`)
+  else {
+    const offenders = writeTools.filter((tool) => new RegExp(`\\b${tool}\\b`).test(tools))
+    if (offenders.length)
+      error('agent-readonly', `agents/${file} is readonly:true but its \`tools\` allowlist includes write tool(s): ${offenders.join(', ')}`)
+  }
+}
+
 // ── Check 8: hook commands must be portable and reference scripts that exist ──
 const settingsFile = join(repositoryRoot, '.claude', 'settings.json')
 if (existsSync(settingsFile)) {
@@ -278,6 +297,7 @@ const checkLabels: Record<string, string> = {
   'agent-catalog-count': 'Agent catalog count',
   'agent-catalog-coverage': 'Agent catalog coverage',
   'agent-frontmatter': 'Agent frontmatter',
+  'agent-readonly': 'Read-only agents enforce tools',
   'hook-portability': 'Hook portability',
   'hook-script': 'Hook scripts exist',
   'referenced-path': 'Referenced paths exist',

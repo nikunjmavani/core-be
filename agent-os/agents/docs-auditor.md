@@ -2,6 +2,11 @@
 name: docs-auditor
 description: Full on-request audit of the docs/ directory — checks index completeness, naming conventions, Mermaid diagrams, and cross-links. Use when the user asks to audit or review documentation, or after a large docs reorganization. Read-only; returns an issues list, never edits files.
 model: inherit
+tools:
+  - Read
+  - Grep
+  - Glob
+  - Bash
 readonly: true
 ---
 
