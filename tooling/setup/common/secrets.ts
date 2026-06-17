@@ -17,6 +17,9 @@ const TOKEN_URLS: Record<string, string> = {
   RAILWAY_API_TOKEN: 'https://railway.com/account/tokens',
   POSTMAN_API_KEY: 'https://go.postman.co/settings/me/api-keys',
   POSTMAN_WORKSPACE_ID: 'https://go.postman.co/workspaces',
+  SCALAR_API_KEY: 'https://dashboard.scalar.com (Settings → API keys)',
+  SCALAR_NAMESPACE: 'https://dashboard.scalar.com (your team namespace)',
+  SCALAR_SLUG: 'https://dashboard.scalar.com (registry slug; defaults to core-be)',
 };
 
 const SIMPLE_VARS: Array<[string, string]> = [
@@ -30,6 +33,9 @@ const SIMPLE_VARS: Array<[string, string]> = [
   ['RAILWAY_API_TOKEN', TOKEN_URLS.RAILWAY_API_TOKEN ?? ''],
   ['POSTMAN_API_KEY', TOKEN_URLS.POSTMAN_API_KEY ?? ''],
   ['POSTMAN_WORKSPACE_ID', TOKEN_URLS.POSTMAN_WORKSPACE_ID ?? ''],
+  ['SCALAR_API_KEY', TOKEN_URLS.SCALAR_API_KEY ?? ''],
+  ['SCALAR_NAMESPACE', TOKEN_URLS.SCALAR_NAMESPACE ?? ''],
+  ['SCALAR_SLUG', TOKEN_URLS.SCALAR_SLUG ?? ''],
 ];
 
 // ─── Zod schemas ────────────────────────────────────────────────────────────
@@ -88,6 +94,14 @@ export const setupSecretsSchema = z.object({
     })
     .optional()
     .default({ apiKey: '', workspaceId: '' }),
+  scalar: z
+    .object({
+      apiKey: z.string(),
+      namespace: z.string(),
+      slug: z.string(),
+    })
+    .optional()
+    .default({ apiKey: '', namespace: '', slug: '' }),
 });
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -189,6 +203,11 @@ export function loadSecretsFromEnv(environmentNames: string[]): SetupSecrets {
       apiKey: get(source, 'POSTMAN_API_KEY'),
       workspaceId: get(source, 'POSTMAN_WORKSPACE_ID'),
     },
+    scalar: {
+      apiKey: get(source, 'SCALAR_API_KEY'),
+      namespace: get(source, 'SCALAR_NAMESPACE'),
+      slug: get(source, 'SCALAR_SLUG'),
+    },
   };
 }
 
@@ -255,7 +274,8 @@ export function hasAnyEnvSecret(environmentNames: string[]): boolean {
     filled(secrets.sentry.authToken) ||
     filled(secrets.resend.apiKey) ||
     filled(secrets.railway.apiToken) ||
-    filled(secrets.postman.apiKey)
+    filled(secrets.postman.apiKey) ||
+    filled(secrets.scalar.apiKey)
   );
 }
 

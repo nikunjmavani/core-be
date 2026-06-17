@@ -93,6 +93,16 @@ export function buildEnvironmentVariables(
     }
   }
 
+  if (config.providers.scalar.enabled && secrets.scalar?.apiKey) {
+    variables.SCALAR_API_KEY = secrets.scalar.apiKey;
+    if (secrets.scalar.namespace) {
+      variables.SCALAR_NAMESPACE = secrets.scalar.namespace;
+    }
+    if (secrets.scalar.slug) {
+      variables.SCALAR_SLUG = secrets.scalar.slug;
+    }
+  }
+
   if (frontendUrl) {
     variables.FRONTEND_URL = frontendUrl;
   }

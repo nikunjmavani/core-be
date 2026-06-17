@@ -24,6 +24,7 @@ import { setupRailwayProvider } from './setup-railway/setup-railway.provider.js'
 import { setupRailwayRedisProvider } from './setup-railway-redis/setup-railway-redis.provider.js';
 import { setupGithubProvider } from './setup-github/setup-github.provider.js';
 import { setupPostmanProvider } from './setup-postman/setup-postman.provider.js';
+import { setupScalarProvider } from './setup-scalar/setup-scalar.provider.js';
 
 export const INFRA_PROVIDERS: readonly InfraProvider[] = [
   setupNeonProvider,
@@ -37,6 +38,7 @@ export const INFRA_PROVIDERS: readonly InfraProvider[] = [
   setupRailwayRedisProvider,
   setupGithubProvider,
   setupPostmanProvider,
+  setupScalarProvider,
 ] as const;
 
 export function getProvider(key: string): InfraProvider | undefined {

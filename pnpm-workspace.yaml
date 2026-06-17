@@ -14,6 +14,7 @@ allowBuilds:
   msgpackr-extract: true
   protobufjs: true
   ssh2: true
+  vue-demi: false
 
 packageExtensions:
   openapi-to-postmanv2:
