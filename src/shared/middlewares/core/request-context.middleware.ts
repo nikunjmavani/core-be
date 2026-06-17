@@ -13,6 +13,17 @@ const SLOW_REQUEST_LOG_THRESHOLD_MS = 1000;
 
 const requestContextMiddleware: FastifyPluginAsync = async (app) => {
   app.addHook('onRequest', async (request, reply) => {
+    // Health endpoints never enqueue side effects; skip the AsyncLocalStorage scope setup.
+    if (request.url.startsWith('/livez') || request.url.startsWith('/readyz')) {
+      (request as { _startAt?: number })._startAt = Date.now();
+      reply.header('x-request-id', request.id);
+      const clientSupplied = extractClientSuppliedRequestIdentifier(request.headers);
+      if (clientSupplied !== undefined) {
+        reply.header('x-client-request-id', clientSupplied);
+        (request as { _clientRequestId?: string })._clientRequestId = clientSupplied;
+      }
+      return;
+    }
     enterOnCommitScope();
     (request as { _startAt?: number })._startAt = Date.now();
     reply.header('x-request-id', request.id);

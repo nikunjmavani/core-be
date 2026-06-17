@@ -117,7 +117,7 @@ export async function getCachedPermissions(
  *   cache write failure never blocks the request.
  * - **Side effects:** single Redis `SET ... EX` under `perm:<version>:...`.
  * - **Notes:** the default TTL is
- *   {@link PERMISSION_CACHE_DEFAULT_TTL_SECONDS} (5 minutes); callers
+ *   {@link PERMISSION_CACHE_DEFAULT_TTL_SECONDS} (15 minutes); callers
  *   typically rely on the default.
  */
 export async function setCachedPermissions(

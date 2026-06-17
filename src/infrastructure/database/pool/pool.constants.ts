@@ -9,7 +9,7 @@
 export const DEFAULT_DATABASE_POOL_MAX = 10;
 
 /** Default seconds an idle pooled connection is kept before postgres.js closes it (`idle_timeout`). */
-export const DEFAULT_DATABASE_POOL_IDLE_TIMEOUT_SECONDS = 30;
+export const DEFAULT_DATABASE_POOL_IDLE_TIMEOUT_SECONDS = 300;
 
 /** Default seconds to wait for a new connection before failing (`connect_timeout`). */
 export const DEFAULT_DATABASE_POOL_CONNECT_TIMEOUT_SECONDS = 10;

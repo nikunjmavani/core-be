@@ -5,6 +5,9 @@ services:
     image: postgres:17.10-alpine
     restart: unless-stopped
     container_name: core-be-postgres
+    command: postgres -c max_connections=500 -c shared_buffers=256MB -c work_mem=8MB -c effective_cache_size=1GB -c maintenance_work_mem=64MB
+    mem_limit: 2g
+    shm_size: 512m
     environment:
       POSTGRES_USER: core
       POSTGRES_PASSWORD: core
