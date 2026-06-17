@@ -41,10 +41,10 @@ const IDEMPOTENCY_SECRET_RESPONSE_FIELD_NAMES = new Set([
   // sensitive fragment, so `isSensitiveKey` misses them — without this they get neither the
   // `cache-control: no-store` response header (compress.middleware) nor exclusion from the
   // idempotency response cache. `recovery_codes` = plaintext MFA-bypass codes; `download_url`
-  // (GDPR data export) and `uploadUrl` (upload presign) embed time-boxed `X-Amz-Signature` grants.
+  // (GDPR data export) and `upload_url` (upload presign) embed time-boxed `X-Amz-Signature` grants.
   'recovery_codes',
   'download_url',
-  'uploadUrl',
+  'upload_url',
 ]);
 
 /**

@@ -438,10 +438,10 @@ describe('Security: Tenant isolation', () => {
         payload: {
           purpose: UPLOAD_PURPOSES.ORGANIZATION_FILE,
           for: UPLOAD_TARGETS.ORGANIZATION,
-          organizationId: fixture.organizationB.public_id,
-          contentType: 'image/png',
-          fileName: 'secret.png',
-          fileSize: 1024,
+          organization_id: fixture.organizationB.public_id,
+          content_type: 'image/png',
+          file_name: 'secret.png',
+          file_size: 1024,
         },
       });
 

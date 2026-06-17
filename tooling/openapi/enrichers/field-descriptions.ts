@@ -51,7 +51,7 @@ export function getFieldSpecificDescription(fieldName: string): string {
     url: 'Webhook endpoint URL that will receive event payloads.',
     logo_url: 'URL to the organization logo image.',
     avatar_url: 'URL to the user avatar image.',
-    avatarKey: 'S3 object key for the avatar image.',
+    avatar_key: 'S3 object key for the avatar image.',
     user_id: 'ID of the user.',
     new_owner_user_id: 'ID of the user to transfer ownership to.',
     plan_id: 'ID of the subscription plan.',

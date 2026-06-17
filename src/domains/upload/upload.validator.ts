@@ -17,7 +17,7 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
 
 /**
  * Validates the request body for `POST /api/v1/uploads`: structure via
- * {@link createUploadDto}, then policy checks for `organizationId`
+ * {@link createUploadDto}, then policy checks for `organization_id`
  * presence/absence per target, allowed content type for the purpose, declared
  * filename extension matching the content type, and size against
  * {@link UPLOAD_PURPOSE_CONFIG}. Throws {@link ValidationError} on any failure.
@@ -38,42 +38,42 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
   }
 
   // Ownership validation
-  if (input.for === UPLOAD_TARGETS.USER && input.organizationId) {
+  if (input.for === UPLOAD_TARGETS.USER && input.organization_id) {
     throw new ValidationError('errors:uploadOrganizationIdNotAllowed', undefined, undefined, [
       { field: 'organization_id', messageKey: 'errors:uploadOrganizationIdNotAllowed' },
     ]);
   }
-  if (input.for === UPLOAD_TARGETS.ORGANIZATION && !input.organizationId) {
+  if (input.for === UPLOAD_TARGETS.ORGANIZATION && !input.organization_id) {
     throw new ValidationError('errors:uploadOrganizationIdRequired', undefined, undefined, [
       { field: 'organization_id', messageKey: 'errors:uploadOrganizationIdRequired' },
     ]);
   }
-  // sec-UP3: when present, organizationId must match the canonical public-id
+  // sec-UP3: when present, organization_id must match the canonical public-id
   // shape before it flows into S3 keys / Redis cache keys / RLS context.
   // Enforced at the validator layer (not the DTO) so the OpenAPI contract
   // stays a generic string — existing clients still send the canonical 21-
   // char id; arbitrary 1-255-char strings are rejected with ValidationError
   // before any downstream side effect.
-  if (input.organizationId !== undefined) {
-    validatePublicIdParam(input.organizationId, 'organization_id');
+  if (input.organization_id !== undefined) {
+    validatePublicIdParam(input.organization_id, 'organization_id');
   }
 
   // Content type validation
-  if (!allowedTypes.includes(input.contentType)) {
+  if (!allowedTypes.includes(input.content_type)) {
     throw new ValidationError(
       'errors:uploadContentTypeNotAllowed',
       {
-        contentType: input.contentType,
+        contentType: input.content_type,
         purpose: input.purpose,
         allowed: allowedTypes.join(', '),
       },
       undefined,
       [
         {
-          field: 'contentType',
+          field: 'content_type',
           messageKey: 'errors:uploadContentTypeNotAllowed',
           messageParams: {
-            contentType: input.contentType,
+            contentType: input.content_type,
             purpose: input.purpose,
             allowed: allowedTypes.join(', '),
           },
@@ -88,38 +88,40 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
   // filename can never carry a path-traversal or control-character payload into a
   // downstream sink (logs, headers, a client renderer).
   const hasPathCharacters =
-    input.fileName.includes('/') || input.fileName.includes('\\') || input.fileName.includes('..');
-  const hasControlCharacters = Array.from(input.fileName).some((character) => {
+    input.file_name.includes('/') ||
+    input.file_name.includes('\\') ||
+    input.file_name.includes('..');
+  const hasControlCharacters = Array.from(input.file_name).some((character) => {
     const codePoint = character.charCodeAt(0);
     return codePoint <= 0x1f || codePoint === 0x7f;
   });
   if (hasPathCharacters || hasControlCharacters) {
     throw new ValidationError('errors:uploadFilenameUnsafe', undefined, undefined, [
-      { field: 'fileName', messageKey: 'errors:uploadFilenameUnsafe' },
+      { field: 'file_name', messageKey: 'errors:uploadFilenameUnsafe' },
     ]);
   }
 
   // Filename extension validation — declared filename extension must match the declared
   // content type (when the filename includes an extension). Prevents misleading filenames
   // (e.g. evil.exe with contentType=image/png) from being stored against an allowed type.
-  const allowedExtensions = getAllowedExtensionsForContentType(input.contentType);
-  const declaredExtension = path.extname(input.fileName).toLowerCase();
+  const allowedExtensions = getAllowedExtensionsForContentType(input.content_type);
+  const declaredExtension = path.extname(input.file_name).toLowerCase();
   if (declaredExtension !== '' && !allowedExtensions.includes(declaredExtension)) {
     throw new ValidationError(
       'errors:uploadFilenameExtensionMismatch',
       {
         extension: declaredExtension,
-        contentType: input.contentType,
+        contentType: input.content_type,
         allowed: allowedExtensions.join(', '),
       },
       undefined,
       [
         {
-          field: 'fileName',
+          field: 'file_name',
           messageKey: 'errors:uploadFilenameExtensionMismatch',
           messageParams: {
             extension: declaredExtension,
-            contentType: input.contentType,
+            contentType: input.content_type,
             allowed: allowedExtensions.join(', '),
           },
         },
@@ -128,17 +130,17 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
   }
 
   // File size validation
-  if (input.fileSize > config.maxSize) {
+  if (input.file_size > config.maxSize) {
     throw new ValidationError(
       'errors:uploadFileSizeExceeded',
-      { fileSize: input.fileSize, maxSize: config.maxSize, purpose: input.purpose },
+      { fileSize: input.file_size, maxSize: config.maxSize, purpose: input.purpose },
       undefined,
       [
         {
-          field: 'fileSize',
+          field: 'file_size',
           messageKey: 'errors:uploadFileSizeExceeded',
           messageParams: {
-            fileSize: input.fileSize,
+            fileSize: input.file_size,
             maxSize: config.maxSize,
             purpose: input.purpose,
           },
@@ -151,10 +153,10 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
 }
 
 /**
- * Validates the `:publicId` URL param against {@link uploadPublicIdParamDto}
+ * Validates the `:upload_id` URL param against {@link uploadPublicIdParamDto}
  * and the shared public-id format check; returns the normalized public id.
  */
 export function validateUploadPublicIdParam(public_id: string): string {
   const parsed = parseWithSchema(uploadPublicIdParamDto, { upload_id: public_id });
-  return validatePublicIdParam(parsed.upload_id, 'publicId');
+  return validatePublicIdParam(parsed.upload_id, 'upload_id');
 }

@@ -16,7 +16,7 @@ import { generateTestToken } from '@/tests/helpers/test-auth.js';
  * and belong in a separate confirm-step integration test. These tests attack the
  * request-upload validator — the metadata surface a client fully controls:
  * dangerous content types, content-type↔extension mismatch, hostile filenames,
- * oversized declarations, and `for`/`organizationId` scope confusion.
+ * oversized declarations, and `for`/`organization_id` scope confusion.
  *
  * (SVG blocking is covered separately in `upload-svg.security.test.ts`.)
  */
@@ -60,9 +60,9 @@ describe('Security: upload request-validation attacks', () => {
       payload: {
         purpose: 'avatar',
         for: 'user',
-        contentType: 'image/png',
-        fileName: 'avatar.png',
-        fileSize: 1024,
+        content_type: 'image/png',
+        file_name: 'avatar.png',
+        file_size: 1024,
         ...overrides,
       },
     });
@@ -80,9 +80,9 @@ describe('Security: upload request-validation attacks', () => {
       payload: {
         purpose: 'avatar',
         for: 'user',
-        contentType: 'image/png',
-        fileName: 'avatar.png',
-        fileSize: 1024,
+        content_type: 'image/png',
+        file_name: 'avatar.png',
+        file_size: 1024,
       },
     });
     expect(response.statusCode).toBe(201);
@@ -101,8 +101,8 @@ describe('Security: upload request-validation attacks', () => {
     ])('rejects a dangerous content type: %s', async (contentType) => {
       const token = await userToken();
       const status = await requestAvatarUpload(token, {
-        contentType,
-        fileName: 'avatar.png',
+        content_type: contentType,
+        file_name: 'avatar.png',
       });
       expectUploadRejected(status);
     });
@@ -114,8 +114,8 @@ describe('Security: upload request-validation attacks', () => {
     it('rejects a filename whose extension does not match the content type', async () => {
       const token = await userToken();
       const status = await requestAvatarUpload(token, {
-        contentType: 'image/png',
-        fileName: 'evil.pdf',
+        content_type: 'image/png',
+        file_name: 'evil.pdf',
       });
       expectUploadRejected(status);
     });
@@ -123,8 +123,8 @@ describe('Security: upload request-validation attacks', () => {
     it('rejects a double extension with a mismatched final extension (evil.png.php)', async () => {
       const token = await userToken();
       const status = await requestAvatarUpload(token, {
-        contentType: 'image/png',
-        fileName: 'evil.png.php',
+        content_type: 'image/png',
+        file_name: 'evil.png.php',
       });
       expectUploadRejected(status);
     });
@@ -141,8 +141,8 @@ describe('Security: upload request-validation attacks', () => {
     ])('rejects a path-traversal filename: %s', async (fileName) => {
       const token = await userToken();
       const status = await requestAvatarUpload(token, {
-        contentType: 'image/png',
-        fileName,
+        content_type: 'image/png',
+        file_name: fileName,
       });
       expectUploadRejected(status);
     });
@@ -154,7 +154,7 @@ describe('Security: upload request-validation attacks', () => {
     it('rejects an avatar larger than the per-purpose limit', async () => {
       const token = await userToken();
       const status = await requestAvatarUpload(token, {
-        fileSize: 50 * 1024 * 1024, // 50 MB — far over the avatar limit
+        file_size: 50 * 1024 * 1024, // 50 MB — far over the avatar limit
       });
       expectUploadRejected(status);
     });
@@ -162,7 +162,7 @@ describe('Security: upload request-validation attacks', () => {
     it('rejects a zero / negative declared file size', async () => {
       const token = await userToken();
       for (const fileSize of [0, -1]) {
-        const status = await requestAvatarUpload(token, { fileSize });
+        const status = await requestAvatarUpload(token, { file_size: fileSize });
         expectUploadRejected(status);
       }
     });
@@ -170,22 +170,22 @@ describe('Security: upload request-validation attacks', () => {
 
   // ─── Scope confusion ────────────────────────────────────────────────────────
 
-  describe('for / organizationId scope confusion', () => {
-    it('rejects a user upload that smuggles an organizationId', async () => {
+  describe('for / organization_id scope confusion', () => {
+    it('rejects a user upload that smuggles an organization_id', async () => {
       const token = await userToken();
       const status = await requestAvatarUpload(token, {
         for: 'user',
-        organizationId: 'someone-elses-org',
+        organization_id: 'someone-elses-org',
       });
       expectUploadRejected(status);
     });
 
-    it('rejects an organization upload with no organizationId', async () => {
+    it('rejects an organization upload with no organization_id', async () => {
       const token = await userToken();
       const status = await requestAvatarUpload(token, {
         purpose: 'organization-logo',
         for: 'organization',
-        // organizationId intentionally omitted
+        // organization_id intentionally omitted
       });
       expectUploadRejected(status);
     });

@@ -65,9 +65,9 @@ describe('UploadService pending-quota concurrency (database)', () => {
           {
             purpose: 'avatar',
             for: 'user',
-            contentType: 'image/png',
-            fileName: 'avatar.png',
-            fileSize: 1024,
+            content_type: 'image/png',
+            file_name: 'avatar.png',
+            file_size: 1024,
           },
           user.public_id,
         ),

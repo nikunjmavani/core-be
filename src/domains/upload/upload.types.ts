@@ -4,10 +4,10 @@ import type { UploadPurpose, UploadTarget } from './upload.constants.js';
 export interface CreateUploadInput {
   purpose: UploadPurpose;
   for: UploadTarget;
-  organizationId?: string;
-  contentType: string;
-  fileName: string;
-  fileSize: number;
+  organization_id?: string;
+  content_type: string;
+  file_name: string;
+  file_size: number;
 }
 
 /**
@@ -16,15 +16,15 @@ export interface CreateUploadInput {
  */
 export interface UploadCreateOutput {
   id: string;
-  uploadUrl: string;
+  upload_url: string;
   /** Final storage key to pass to attach endpoints after `POST /confirm` succeeds. */
   key: string;
-  expiresAt: string;
+  expires_at: string;
   /**
-   * Upload method. `PUT` → send the file as the body to `uploadUrl`. `POST` → submit a
-   * multipart form to `uploadUrl` with `fields` plus the file (S3 enforces content-length-range).
+   * Upload method. `PUT` → send the file as the body to `upload_url`. `POST` → submit a
+   * multipart form to `upload_url` with `fields` plus the file (S3 enforces content-length-range).
    */
-  uploadMethod: 'PUT' | 'POST';
+  upload_method: 'PUT' | 'POST';
   /** Present only for `POST` uploads: hidden form fields to submit alongside the file. */
   fields?: Record<string, string>;
 }
@@ -32,12 +32,12 @@ export interface UploadCreateOutput {
 /** Response body for the upload metadata endpoints (`GET`, `POST /confirm`). */
 export interface UploadDetailOutput {
   id: string;
-  fileName: string;
-  mimeType: string;
-  fileSize: number;
+  file_name: string;
+  mime_type: string;
+  file_size: number;
   status: string;
-  storageProvider: string;
-  organizationId: string | null;
-  createdAt: string;
-  updatedAt: string;
+  storage_provider: string;
+  organization_id: string | null;
+  created_at: string;
+  updated_at: string;
 }

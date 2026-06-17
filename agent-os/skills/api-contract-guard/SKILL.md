@@ -17,6 +17,14 @@ description: Enforces the core-be public API contract conventions — snake_case
 - `generatePublicId(entity)` requires the entity; never hand-roll ids. Externally the field is always `id` — the words "public id/publicId" never appear in documentation.
 - New tables: widen `public_id` to varchar(28), add the prefix to the map, the migration backfill, and the OpenAPI parameter docs come free via the map.
 
+## Body field casing — snake_case request & response keys
+
+- Every **request body** property (`*.dto.ts` `z.object` keys) and **response body** property (`*.serializer.ts` output keys) is `snake_case`: `file_name`, `content_type`, `created_at`, `avatar_key` — never `fileName`/`createdAt`. The one external identifier stays `id`.
+- Validation-error `errors[].field` (and field-keyed `details`) values name the body property, so they are snake_case too (e.g. `field: 'content_type'`, not `'contentType'`).
+- Internal TypeScript identifiers (local variables, private helper params, the storage-port/AWS-SDK layer) may stay camelCase — only the keys that cross the HTTP boundary are constrained.
+- Exceptions, passed through verbatim: third-party / browser-native inbound payloads — Stripe webhooks, OAuth provider responses, WebAuthn W3C `navigator.credentials` JSON (`rawId`, `clientDataJSON`, …) — and JWT claims.
+- Enforced by `src/tests/unit/api/snake-case-body-keys.policy.unit.test.ts` (scans every `*.dto.ts` / `*.serializer.ts`; allowlist for the documented exceptions). Renaming a body/response key is an API change → run the breaking-change gate (see sync checklist).
+
 ## Method → success status (enforced by middleware)
 
 | GET | POST | PUT/PATCH | DELETE |

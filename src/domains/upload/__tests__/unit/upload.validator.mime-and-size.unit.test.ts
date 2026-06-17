@@ -10,20 +10,20 @@ describe('validateCreateUpload — MIME, size, and ownership', () => {
   const baseUserUpload = {
     for: 'user',
     purpose: 'avatar',
-    contentType: 'image/jpeg',
-    fileSize: 1024,
-    fileName: 'avatar.jpg',
+    content_type: 'image/jpeg',
+    file_size: 1024,
+    file_name: 'avatar.jpg',
   };
 
   it('rejects MIME type not in purpose allowlist', () => {
     expect(() =>
-      validateCreateUpload({ ...baseUserUpload, contentType: 'application/x-msdownload' }),
+      validateCreateUpload({ ...baseUserUpload, content_type: 'application/x-msdownload' }),
     ).toThrow(ValidationError);
   });
 
   it('rejects file size above purpose cap', () => {
     const maxSize = UPLOAD_PURPOSE_CONFIG.avatar.maxSize;
-    expect(() => validateCreateUpload({ ...baseUserUpload, fileSize: maxSize + 1 })).toThrow(
+    expect(() => validateCreateUpload({ ...baseUserUpload, file_size: maxSize + 1 })).toThrow(
       ValidationError,
     );
   });
@@ -31,35 +31,35 @@ describe('validateCreateUpload — MIME, size, and ownership', () => {
   // sec-r4-I4: DTO-level cap rejects absurd values before the per-purpose
   // policy check runs. UPLOAD_DTO_FILE_SIZE_MAX_BYTES is the highest realistic
   // upload size (10 MB today, matching user_file / organization_file).
-  it('rejects fileSize above the DTO-level ceiling (sec-r4-I4)', () => {
+  it('rejects file_size above the DTO-level ceiling (sec-r4-I4)', () => {
     expect(() =>
-      validateCreateUpload({ ...baseUserUpload, fileSize: UPLOAD_DTO_FILE_SIZE_MAX_BYTES + 1 }),
+      validateCreateUpload({ ...baseUserUpload, file_size: UPLOAD_DTO_FILE_SIZE_MAX_BYTES + 1 }),
     ).toThrow(ValidationError);
   });
 
-  it('rejects integer-overflow scale fileSize at the DTO layer (sec-r4-I4)', () => {
+  it('rejects integer-overflow scale file_size at the DTO layer (sec-r4-I4)', () => {
     expect(() =>
-      validateCreateUpload({ ...baseUserUpload, fileSize: Number.MAX_SAFE_INTEGER }),
+      validateCreateUpload({ ...baseUserUpload, file_size: Number.MAX_SAFE_INTEGER }),
     ).toThrow(ValidationError);
   });
 
-  it('requires organizationId for organization-target uploads', () => {
+  it('requires organization_id for organization-target uploads', () => {
     expect(() =>
       validateCreateUpload({
         for: 'organization',
         purpose: 'avatar',
-        contentType: 'image/jpeg',
-        fileSize: 1024,
-        fileName: 'logo.jpg',
+        content_type: 'image/jpeg',
+        file_size: 1024,
+        file_name: 'logo.jpg',
       }),
     ).toThrow(ValidationError);
   });
 
-  it('rejects organizationId on user-target uploads', () => {
+  it('rejects organization_id on user-target uploads', () => {
     expect(() =>
       validateCreateUpload({
         ...baseUserUpload,
-        organizationId: 'org_public_abc',
+        organization_id: 'org_public_abc',
       }),
     ).toThrow(ValidationError);
   });
@@ -74,8 +74,8 @@ describe('validateCreateUpload — MIME, size, and ownership', () => {
     expect(() =>
       validateCreateUpload({
         ...baseUserUpload,
-        contentType: 'image/png',
-        fileName: 'evil.exe',
+        content_type: 'image/png',
+        file_name: 'evil.exe',
       }),
     ).toThrow(ValidationError);
   });
@@ -84,8 +84,8 @@ describe('validateCreateUpload — MIME, size, and ownership', () => {
     expect(() =>
       validateCreateUpload({
         ...baseUserUpload,
-        contentType: 'image/png',
-        fileName: 'photo.JPG',
+        content_type: 'image/png',
+        file_name: 'photo.JPG',
       }),
     ).toThrow(ValidationError);
   });
@@ -93,18 +93,18 @@ describe('validateCreateUpload — MIME, size, and ownership', () => {
   it('accepts .jpeg alias for image/jpeg', () => {
     const result = validateCreateUpload({
       ...baseUserUpload,
-      contentType: 'image/jpeg',
-      fileName: 'photo.jpeg',
+      content_type: 'image/jpeg',
+      file_name: 'photo.jpeg',
     });
-    expect(result.fileName).toBe('photo.jpeg');
+    expect(result.file_name).toBe('photo.jpeg');
   });
 
   it('accepts filename without an extension', () => {
     const result = validateCreateUpload({
       ...baseUserUpload,
-      contentType: 'image/png',
-      fileName: 'screenshot',
+      content_type: 'image/png',
+      file_name: 'screenshot',
     });
-    expect(result.fileName).toBe('screenshot');
+    expect(result.file_name).toBe('screenshot');
   });
 });

@@ -26,11 +26,11 @@ function mockReply(): FastifyReply {
 
 describe('createUploadController', () => {
   const uploadPublicId = generatePublicId('upload');
-  const uploadResult = { publicId: uploadPublicId, uploadUrl: 'https://example.com/upload' };
+  const uploadResult = { id: uploadPublicId, upload_url: 'https://example.com/upload' };
 
   const uploadService = {
     createUpload: vi.fn().mockResolvedValue(uploadResult),
-    getUpload: vi.fn().mockResolvedValue({ publicId: uploadPublicId }),
+    getUpload: vi.fn().mockResolvedValue({ id: uploadPublicId }),
     deleteUpload: vi.fn().mockResolvedValue(undefined),
   } as unknown as UploadService;
 
@@ -43,9 +43,9 @@ describe('createUploadController', () => {
         body: {
           purpose: 'avatar',
           for: 'user',
-          contentType: 'image/png',
-          fileName: 'avatar.png',
-          fileSize: 1024,
+          content_type: 'image/png',
+          file_name: 'avatar.png',
+          file_size: 1024,
         },
       }),
       reply,

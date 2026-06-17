@@ -19,7 +19,7 @@ function expectSvgUploadRejected(response: { statusCode: number; json: () => unk
   expect(body.error?.type).toBe('validation_error');
   const detail = body.error?.detail?.toLowerCase() ?? '';
   const contentTypeMessage =
-    body.error?.errors?.find((fieldError) => fieldError.field === 'contentType')?.message ?? '';
+    body.error?.errors?.find((fieldError) => fieldError.field === 'content_type')?.message ?? '';
   const combined = `${detail} ${contentTypeMessage.toLowerCase()}`;
   expect(
     combined.includes('svg') ||
@@ -53,9 +53,9 @@ describe('Security: SVG upload blocking', () => {
       payload: {
         purpose: 'avatar',
         for: 'user',
-        contentType: 'image/svg+xml',
-        fileName: 'avatar.svg',
-        fileSize: 1024,
+        content_type: 'image/svg+xml',
+        file_name: 'avatar.svg',
+        file_size: 1024,
       },
     });
 

@@ -107,14 +107,14 @@ export class UploadService {
       userPublicId,
     );
     const config = UPLOAD_PURPOSE_CONFIG[input.purpose];
-    const extension = getCanonicalExtensionForContentType(input.contentType);
+    const extension = getCanonicalExtensionForContentType(input.content_type);
     const ownerSegment =
-      input.for === UPLOAD_TARGETS.ORGANIZATION ? input.organizationId! : userPublicId;
+      input.for === UPLOAD_TARGETS.ORGANIZATION ? input.organization_id! : userPublicId;
     let key: string;
     if (input.purpose === UPLOAD_PURPOSES.AVATAR) {
       key = `${buildUserAvatarKeyPrefix(userPublicId)}${randomUUID()}${extension}`;
     } else if (input.purpose === UPLOAD_PURPOSES.ORGANIZATION_LOGO) {
-      key = `${buildOrganizationLogoKeyPrefix(input.organizationId!)}${randomUUID()}${extension}`;
+      key = `${buildOrganizationLogoKeyPrefix(input.organization_id!)}${randomUUID()}${extension}`;
     } else {
       key = `${config.keyPrefix}/${ownerSegment}/${randomUUID()}${extension}`;
     }
@@ -138,10 +138,10 @@ export class UploadService {
       userInternalId: user.id,
       userPublicId,
       organizationInternalId,
-      fileName: input.fileName,
+      fileName: input.file_name,
       fileKey: pendingKey,
-      contentType: input.contentType,
-      fileSize: input.fileSize,
+      contentType: input.content_type,
+      fileSize: input.file_size,
       bucket,
     });
 
@@ -153,13 +153,13 @@ export class UploadService {
       // S3 enforces the content-length-range at upload time, rejecting empty/oversized bodies.
       const post = await this.objectStorage.createPresignedUploadPost({
         key: pendingKey,
-        contentType: input.contentType,
+        contentType: input.content_type,
         minContentLength: 1,
         maxContentLength: config.maxSize,
         expiresInSeconds: PRESIGNED_URL_EXPIRY_SECONDS,
         metadata: {
           purpose: input.purpose,
-          'declared-type': input.contentType,
+          'declared-type': input.content_type,
           owner: userPublicId,
         },
       });
@@ -169,8 +169,8 @@ export class UploadService {
     } else {
       uploadUrl = await this.objectStorage.createPresignedUploadUrl({
         key: pendingKey,
-        contentType: input.contentType,
-        contentLength: input.fileSize,
+        contentType: input.content_type,
+        contentLength: input.file_size,
         expiresInSeconds: PRESIGNED_URL_EXPIRY_SECONDS,
       });
       uploadMethod = 'PUT';
@@ -180,10 +180,10 @@ export class UploadService {
 
     return serializeUploadCreate({
       id: row.public_id,
-      uploadUrl,
+      upload_url: uploadUrl,
       key,
-      expiresAt,
-      uploadMethod,
+      expires_at: expiresAt,
+      upload_method: uploadMethod,
       ...(fields !== undefined ? { fields } : {}),
     });
   }
@@ -238,7 +238,7 @@ export class UploadService {
             undefined,
             [
               {
-                field: 'fileSize',
+                field: 'file_size',
                 messageKey: 'errors:uploadPendingQuotaExceeded',
                 messageParams: { limit: orgPendingCap, pending: orgPendingCount },
               },
@@ -254,7 +254,7 @@ export class UploadService {
           undefined,
           [
             {
-              field: 'fileSize',
+              field: 'file_size',
               messageKey: 'errors:uploadPendingQuotaExceeded',
               messageParams: { limit: pendingCap, pending: pendingCount },
             },
@@ -280,10 +280,10 @@ export class UploadService {
     input: CreateUploadInput,
     userPublicId: string,
   ): Promise<number | null> {
-    if (input.for === UPLOAD_TARGETS.ORGANIZATION && input.organizationId) {
+    if (input.for === UPLOAD_TARGETS.ORGANIZATION && input.organization_id) {
       const permissions = await this.authorizationService.resolveUserOrganizationPermissions(
         userPublicId,
-        input.organizationId,
+        input.organization_id,
       );
       if (!permissions.includes(UPLOAD_PERMISSIONS.UPLOAD_MANAGE)) {
         throw new ForbiddenError('errors:insufficientUploadPermissions');
@@ -295,7 +295,7 @@ export class UploadService {
        * policy. The latter is appropriate here because we have just authorized the user.
        */
       const organization = await withUserDatabaseContext(userPublicId, () =>
-        this.organizationService.requireOrganizationByPublicId(input.organizationId!),
+        this.organizationService.requireOrganizationByPublicId(input.organization_id!),
       );
       return organization.id;
     }
