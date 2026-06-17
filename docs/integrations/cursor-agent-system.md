@@ -96,6 +96,8 @@ Configure once — all platforms read the same file.
 
 CodeGraph is provisioned in `pnpm setup:local` (phase 7/9).
 
+> Agent code-intelligence (diagnostics loop + CodeGraph navigation + optional LSP-over-MCP bridge, incl. Codex `~/.codex/config.toml`): [agent-code-intelligence.md](agent-code-intelligence.md).
+
 ---
 
 ## Cloud agent environment
@@ -106,5 +108,6 @@ Linux agent image with full devDependencies: [cursor-cloud-agent-environment.md]
 
 ## Related
 
+- [agent-code-intelligence.md](agent-code-intelligence.md) — diagnostics, CodeGraph navigation, optional LSP-over-MCP for Claude/Codex/Cursor
 - [documentation-system.md](../reference/architecture/documentation-system.md) — in-source TSDoc, OVERVIEW.md, route schema
 - [pr-review.md](../process/pr-review.md) — human and agent PR rubric

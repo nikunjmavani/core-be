@@ -25,6 +25,29 @@ Before changing this repository:
 - **Claude Code on the web** — network access, setup script, env vars, Postgres/Redis: **[docs/integrations/claude-code-web-environment.md](docs/integrations/claude-code-web-environment.md)**
 - **Agent map** — skills, rules, subagents, MCP: **[docs/integrations/cursor-agent-system.md](docs/integrations/cursor-agent-system.md)**
 
+## Code intelligence (LSP-grade tooling)
+
+For an agent, an LSP boils down to **diagnostics** + **navigation** — both already provided.
+Full guide: **[docs/integrations/agent-code-intelligence.md](docs/integrations/agent-code-intelligence.md)**.
+
+1. **Diagnostics (do this after edits)** — the authoritative signal, identical to CI:
+   `pnpm typecheck` (`tsc --noEmit`) + `pnpm lint` (Biome), or `pnpm validate` for both.
+2. **Navigation (use before grep/find)** — **CodeGraph**, a local semantic index. Shell
+   fallback works everywhere: `codegraph explore "<question or symbols>"`,
+   `codegraph node <symbol-or-file>`. When wired as MCP: `codegraph_explore`, `codegraph_node`,
+   `codegraph_callers`, `codegraph_impact`, … (see [docs/integrations/codegraph.md](docs/integrations/codegraph.md)).
+3. **Codex MCP** — Codex does not read the repo's `.mcp.json`; wire servers once per machine in
+   `~/.codex/config.toml`:
+
+   ```toml
+   [mcp_servers.codegraph]
+   command = "codegraph"
+   args = ["serve", "--mcp"]
+   ```
+
+   Optional TypeScript LSP-over-MCP bridge (hover/references/rename) for any agent is covered in
+   [agent-code-intelligence.md](docs/integrations/agent-code-intelligence.md).
+
 ## Custom subagents
 
 Project-defined subagents in [`agent-os/agents/`](agent-os/agents/) run in isolation

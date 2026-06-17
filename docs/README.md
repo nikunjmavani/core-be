@@ -112,6 +112,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [integrations/agentic-third-party-tooling.md](integrations/agentic-third-party-tooling.md)       | CLI vs MCP vs SDK by consumer; per-service mapping for every third party.                            |
 | [integrations/cursor-backend-mcp.md](integrations/cursor-backend-mcp.md)                         | Connect frontend to core-be MCP.                                                                    |
 | [integrations/codegraph.md](integrations/codegraph.md)                                           | Semantic code index for AI agents (MCP); auto-set-up in `setup:local` (phase 7/9).                  |
+| [integrations/agent-code-intelligence.md](integrations/agent-code-intelligence.md)               | LSP-grade tooling for Claude/Codex/Cursor: diagnostics loop, CodeGraph navigation, optional LSP-over-MCP bridge. |
 | [integrations/understand-anything.md](integrations/understand-anything.md)                         | Knowledge graph, dashboard, and learning-curve steps (`/understand`, tour, chat, diff).             |
 | [integrations/claude-code-sessions.md](integrations/claude-code-sessions.md)                     | Claude Code session setup: the common hooks, gates, and skill routing every session runs. |
 | [integrations/cursor-cloud-agent-environment.md](integrations/cursor-cloud-agent-environment.md) | `Dockerfile.agent` vs production image for Cursor cloud agents.                                     |

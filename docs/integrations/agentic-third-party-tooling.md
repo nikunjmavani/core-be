@@ -48,6 +48,7 @@ instinct is right — for code and CI/CD the CLI (or SDK) is the correct tool, n
 | **Docker** | — | `docker` (`compose`, `buildx bake`) | — gateway only (Docker MCP Toolkit proxies servers, not a peer) |
 | **Context7** (lib docs) | — | — | ✅ `@upstash/context7-mcp` |
 | **codegraph** (code index) | — | `codegraph` | ✅ `codegraph serve --mcp` |
+| **TypeScript LSP** (code intelligence) | — | `tsc` / `biome` (`pnpm validate`) | opt-in `mcp-language-server` — hover/refs/rename, not in shared template ([guide](agent-code-intelligence.md)) |
 | **Headroom** (context compression) | — | — | ✅ `headroom mcp serve` (compress large tool output / logs / files before they reach the model) |
 
 **Stripe is the canonical "all three" case:** the `stripe` SDK runs in the service, the
