@@ -309,9 +309,18 @@ See **[import-paths.mdc](.cursor/rules/import-paths.mdc)** — `@/` in `src/`, `
 
 This repo uses **Context7 MCP** for up-to-date, version-specific documentation. Scope is **backend only** (Fastify, Drizzle, BullMQ, Postgres, Node). Add `use context7` to prompts when asking about library APIs or setup; mention versions (e.g. Fastify 5, Drizzle 0.45) for version-specific docs.
 
+## MCP servers (agent tooling)
+
+Two committed, secret-free templates define the agent-only MCP set (each mirrored under [`agent-os/mcp/`](agent-os/mcp/)):
+
+- **Default auto-start pair — [`.mcp.default.json`](.mcp.default.json): `codegraph` + `headroom`** (zero-config local CLIs, no token). `pnpm setup:local`, the session-start hook, and the cloud bootstrap declare both in the gitignored `.mcp.json` so they are present before the first prompt.
+- **On-demand set — [`.mcp.example.json`](.mcp.example.json): the full set** (`context7`, `core-be:api`, `neon`, `sentry`, `railway`, `aws`, `stripe`, `semgrep`, `sonarqube`, `redis`, `postman`, `resend`, `codegraph`, `headroom`; most need a provider token). Scaffold with **`pnpm mcp:setup`** — all, or a subset by name (`pnpm mcp:setup stripe sentry`); `pnpm mcp:setup:default` for just the pair, `pnpm mcp:setup --list` for status (per-server runtime/token catalog: **`docs/integrations/agentic-third-party-tooling.md`**). The pair in `.mcp.default.json` mirrors its entries in `.mcp.example.json` — the `mcp-config` global test blocks drift.
+
+On **Claude Code web** the live MCP set is loaded by the platform from the environment's MCP settings (web UI), **not** `.mcp.json` — configure `codegraph` + `headroom` there to auto-start, and add others as needed. `Composio`, `Descript`, and `Slack` are intentionally **not** part of this project. See **`docs/integrations/claude-code-web-environment.md`** and **`docs/integrations/agentic-third-party-tooling.md`**.
+
 ## Headroom (agent context compression)
 
-All AI agents (Claude Code, Cursor, Codex) share the **Headroom MCP** server (wired in `.mcp.example.json` ↔ `agent-os/mcp/mcp.example.json`) as a context-compression layer. Route large, low-signal text — long command/CI/test output, logs, whole-file reads, RAG/search chunks — through `headroom_compress` before loading it into context (same answers, far fewer tokens); use `headroom_retrieve` when exact bytes are needed and `headroom_stats` to check savings. Do **not** compress small outputs or content applied verbatim (diffs, code to edit, migration SQL, secrets). Setup: `pip install "headroom-ai[mcp]"` then `headroom mcp install`. Detail: rule **`agent-os/rules/headroom-context-compression.mdc`** (`alwaysApply`).
+All AI agents (Claude Code, Cursor, Codex) share the **Headroom MCP** server (part of the default auto-start MCP pair; wired in `.mcp.example.json` ↔ `agent-os/mcp/mcp.example.json`) as a context-compression layer. Route large, low-signal text — long command/CI/test output, logs, whole-file reads, RAG/search chunks — through `headroom_compress` before loading it into context (same answers, far fewer tokens); use `headroom_retrieve` when exact bytes are needed and `headroom_stats` to check savings. Do **not** compress small outputs or content applied verbatim (diffs, code to edit, migration SQL, secrets). Setup: `pip install "headroom-ai[mcp]"` then `headroom mcp install`. Detail: rule **`agent-os/rules/headroom-context-compression.mdc`** (`alwaysApply`).
 
 ## Keeping Docs and Skills in Sync
 
@@ -357,7 +366,7 @@ See [docs/reference/architecture/documentation-system.md](docs/reference/archite
 
 ## Commands
 
-Script namespaces: `ci:*`, `compose:*`, `test:*`, `db:*`, `docs:*`, `routes:*`, `load:*`, `chaos:*`, `tool:*`, `setup:infra:*`, `security:*`, `sonar:*`, `deps:*`. Legacy: `route-catalog`, `scripts:*`. List all: `pnpm run`.
+Script namespaces: `ci:*`, `compose:*`, `test:*`, `db:*`, `docs:*`, `routes:*`, `load:*`, `chaos:*`, `tool:*`, `setup:infra:*`, `mcp:*`, `security:*`, `sonar:*`, `deps:*`. Legacy: `route-catalog`, `scripts:*`. List all: `pnpm run`.
 
 Local SonarQube quality gate (pre-commit): `pnpm sonar:up` / `sonar:scan` / `sonar:down` / `sonar:reset`. The pre-commit hook (`pnpm guard:pre-commit`, step 16) blocks a commit when SonarQube has any open issue on the deployed-app surface; the gate is mandatory — there is no bypass, every issue must be resolved. See **`docs/reference/quality/sonarqube-local.md`**.
 

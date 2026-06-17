@@ -84,4 +84,35 @@ if command -v headroom >/dev/null 2>&1; then
 else
   echo "install-headroom: headroom CLI not on PATH after install (check ${user_bin}) — non-fatal." >&2
 fi
+
+# Ensure the default MCP pair (codegraph + headroom) is declared in .mcp.json so the
+# session matches `pnpm setup:local`. install-codegraph.sh writes codegraph; this merges
+# in the committed `.mcp.default.json` (codegraph + headroom), preserving any other
+# entries — never clobbering real keys. Best-effort: needs jq + the template. (On Claude
+# Code web the platform loads MCP from the environment settings, not this file; this keeps
+# local/CI clients and the documented default in sync.)
+ensure_default_mcp_servers() {
+  command -v jq >/dev/null 2>&1 || {
+    echo "install-headroom: jq not found — skipping .mcp.json default-pair merge (non-fatal)." >&2
+    return 0
+  }
+  [ -f .mcp.default.json ] || {
+    echo "install-headroom: .mcp.default.json missing — skipping .mcp.json merge (non-fatal)." >&2
+    return 0
+  }
+  local current='{"mcpServers":{}}'
+  [ -f .mcp.json ] && current="$(cat .mcp.json 2>/dev/null || echo '{"mcpServers":{}}')"
+  if printf '%s' "${current}" | jq \
+      --slurpfile defaults .mcp.default.json \
+      '.mcpServers = (($defaults[0].mcpServers // {}) + (.mcpServers // {}))' \
+      > .mcp.json.tmp 2>/dev/null; then
+    mv .mcp.json.tmp .mcp.json
+    echo "install-headroom: ensured codegraph + headroom in .mcp.json." >&2
+  else
+    rm -f .mcp.json.tmp
+    echo "install-headroom: .mcp.json default-pair merge failed (non-fatal)." >&2
+  fi
+}
+
+ensure_default_mcp_servers
 exit 0

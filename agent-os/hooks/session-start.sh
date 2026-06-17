@@ -110,15 +110,13 @@ elif [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && [ -f tooling/setup/agent/install-
   fi
 fi
 
-# --- MCP config: declare the project MCP set before the first prompt ---------
-# Claude Code reads `.mcp.json` at startup; the committed `.mcp.example.json`
-# (agent-only servers) is the source of truth. On local sessions, scaffold
-# `.mcp.json` from the template when it is absent — mirroring how setup:local
-# scaffolds `.env.local` — so the project MCP servers are declared before the
-# first prompt. Servers whose key/CLI is missing simply stay disconnected (fill
-# values via env / `${VAR}` placeholders; pre-approve with
-# enableAllProjectMcpServers in .claude/settings.local.json). Web sessions manage
-# MCP at the platform level, so we only report there. Best-effort and fail-open.
+# --- MCP config: declare the default server pair before the first prompt ------
+# Claude Code reads `.mcp.json` at startup. On local sessions, scaffold it from the
+# committed `.mcp.default.json` (the default auto-start pair — codegraph + headroom,
+# zero-config, no token) when it is absent, mirroring how setup:local does. The other
+# hosted servers (in `.mcp.example.json`) are opt-in via `pnpm mcp:setup` (most need a
+# provider token). Web sessions load MCP from the platform environment settings (web
+# UI), NOT this file, so we only report there. Best-effort and fail-open.
 mcp_status="n/a"
 if [ -f .mcp.json ]; then
   if command -v jq >/dev/null 2>&1; then
@@ -126,15 +124,15 @@ if [ -f .mcp.json ]; then
   else
     mcp_status="declared"
   fi
-elif [ "${CLAUDE_CODE_REMOTE:-}" != "true" ] && [ -f .mcp.example.json ]; then
-  if cp .mcp.example.json .mcp.json 2>/dev/null; then
-    mcp_status="scaffolded from template"
-    echo "session-start: scaffolded .mcp.json from .mcp.example.json — fill keys via env; pre-approve with enableAllProjectMcpServers in .claude/settings.local.json." >&2
+elif [ "${CLAUDE_CODE_REMOTE:-}" != "true" ] && [ -f .mcp.default.json ]; then
+  if cp .mcp.default.json .mcp.json 2>/dev/null; then
+    mcp_status="scaffolded default pair (codegraph + headroom)"
+    echo "session-start: scaffolded .mcp.json from .mcp.default.json (codegraph + headroom); add the rest with \`pnpm mcp:setup\`." >&2
   else
-    mcp_status="template only (run: cp .mcp.example.json .mcp.json)"
+    mcp_status="template only (run: pnpm mcp:setup:default)"
   fi
 else
-  mcp_status="template only (run: cp .mcp.example.json .mcp.json)"
+  mcp_status="platform-managed on web (configure in the environment MCP settings); local: pnpm mcp:setup"
 fi
 
 # --- Build session context: skill routing map + env/commands summary --------

@@ -1637,6 +1637,7 @@ src/
     │   ├── ensure-openapi-spec.global-setup.ts
     │   ├── external-sdk-coverage.global.test.ts
     │   ├── import-paths.global.test.ts
+    │   ├── mcp-config.global.test.ts
     │   ├── no-direct-db-in-services.global.test.ts
     │   ├── no-stripe-shaped-literals.global.test.ts
     │   ├── openapi-completeness.global.test.ts
