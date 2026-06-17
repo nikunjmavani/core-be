@@ -100,7 +100,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
   });
 
-  describe('GET /api/v1/tenancy/organization/notification-policies/:policy_id', () => {
+  describe('GET /api/v1/tenancy/organization/notification-policies/:notification_policy_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         url: notificationPolicyResourcePath('pol_unauth0000000000_'),
@@ -305,7 +305,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
   });
 
-  describe('PATCH /api/v1/tenancy/organization/notification-policies/:policy_id', () => {
+  describe('PATCH /api/v1/tenancy/organization/notification-policies/:notification_policy_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'PATCH',
@@ -441,7 +441,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
   });
 
-  describe('DELETE /api/v1/tenancy/organization/notification-policies/:policy_id', () => {
+  describe('DELETE /api/v1/tenancy/organization/notification-policies/:notification_policy_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'DELETE',

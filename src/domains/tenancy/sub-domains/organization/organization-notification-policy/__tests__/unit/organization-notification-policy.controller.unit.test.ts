@@ -69,7 +69,10 @@ describe('createOrganizationNotificationPolicyController', () => {
   it('getPolicy delegates to service with policy id', async () => {
     const response = await controller.getPolicy(
       mockRequest({
-        params: { organization_id: organizationPublicId, policy_id: 'pol_a1b2c3d4e5f6g7h8i9j0k' },
+        params: {
+          organization_id: organizationPublicId,
+          notification_policy_id: 'pol_a1b2c3d4e5f6g7h8i9j0k',
+        },
       }),
       mockReply(),
     );
@@ -87,7 +90,10 @@ describe('createOrganizationNotificationPolicyController', () => {
     await expect(
       controller.getPolicy(
         mockRequest({
-          params: { organization_id: organizationPublicId, policy_id: 'pol_a1b2c3d4e5f6g7h8i9j0k' },
+          params: {
+            organization_id: organizationPublicId,
+            notification_policy_id: 'pol_a1b2c3d4e5f6g7h8i9j0k',
+          },
         }),
         mockReply(),
       ),
@@ -133,7 +139,10 @@ describe('createOrganizationNotificationPolicyController', () => {
     const userId = generatePublicId('user');
     const response = await controller.updatePolicy(
       mockRequest({
-        params: { organization_id: organizationPublicId, policy_id: 'pol_a1b2c3d4e5f6g7h8i9j0k' },
+        params: {
+          organization_id: organizationPublicId,
+          notification_policy_id: 'pol_a1b2c3d4e5f6g7h8i9j0k',
+        },
         body,
         auth: { kind: 'user', userId, role: 'user' } as never,
       }),
@@ -152,7 +161,10 @@ describe('createOrganizationNotificationPolicyController', () => {
     await expect(
       controller.updatePolicy(
         mockRequest({
-          params: { organization_id: organizationPublicId, policy_id: 'pol_a1b2c3d4e5f6g7h8i9j0k' },
+          params: {
+            organization_id: organizationPublicId,
+            notification_policy_id: 'pol_a1b2c3d4e5f6g7h8i9j0k',
+          },
           auth: undefined as never,
         }),
         mockReply(),
@@ -167,7 +179,10 @@ describe('createOrganizationNotificationPolicyController', () => {
     await expect(
       controller.updatePolicy(
         mockRequest({
-          params: { organization_id: organizationPublicId, policy_id: 'pol_a1b2c3d4e5f6g7h8i9j0k' },
+          params: {
+            organization_id: organizationPublicId,
+            notification_policy_id: 'pol_a1b2c3d4e5f6g7h8i9j0k',
+          },
           body: {},
         }),
         mockReply(),
@@ -179,7 +194,10 @@ describe('createOrganizationNotificationPolicyController', () => {
     const reply = mockReply();
     await controller.deletePolicy(
       mockRequest({
-        params: { organization_id: organizationPublicId, policy_id: 'pol_a1b2c3d4e5f6g7h8i9j0k' },
+        params: {
+          organization_id: organizationPublicId,
+          notification_policy_id: 'pol_a1b2c3d4e5f6g7h8i9j0k',
+        },
       }),
       reply,
     );
@@ -192,7 +210,10 @@ describe('createOrganizationNotificationPolicyController', () => {
     await expect(
       controller.deletePolicy(
         mockRequest({
-          params: { organization_id: organizationPublicId, policy_id: 'pol_a1b2c3d4e5f6g7h8i9j0k' },
+          params: {
+            organization_id: organizationPublicId,
+            notification_policy_id: 'pol_a1b2c3d4e5f6g7h8i9j0k',
+          },
           auth: undefined as never,
         }),
         mockReply(),
@@ -207,7 +228,10 @@ describe('createOrganizationNotificationPolicyController', () => {
     await expect(
       controller.deletePolicy(
         mockRequest({
-          params: { organization_id: organizationPublicId, policy_id: 'pol_a1b2c3d4e5f6g7h8i9j0k' },
+          params: {
+            organization_id: organizationPublicId,
+            notification_policy_id: 'pol_a1b2c3d4e5f6g7h8i9j0k',
+          },
         }),
         mockReply(),
       ),

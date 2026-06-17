@@ -3,7 +3,7 @@ import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.u
 import { successResponse } from '@/shared/utils/http/response.util.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import type { UserDataExportService } from './user-data-export.service.js';
-import { validateExportIdParam } from './user-data-export.validator.js';
+import { validateDataExportIdParam } from './user-data-export.validator.js';
 
 /**
  * Build the GDPR export HTTP handler map (request/status). `requestExport` returns 202 because the
@@ -14,7 +14,7 @@ export function createUserDataExportController(userDataExportService: UserDataEx
   return {
     /**
      * POST /api/v1/users/me/data-export
-     * GDPR: enqueue async export; poll GET :export_id for download URL.
+     * GDPR: enqueue async export; poll GET :data_export_id for download URL.
      */
     async requestExport(request: FastifyRequest, reply: FastifyReply) {
       const requestId = getRequestIdentifier(request);
@@ -24,7 +24,7 @@ export function createUserDataExportController(userDataExportService: UserDataEx
     },
 
     /**
-     * GET /api/v1/users/me/data-export/:export_id
+     * GET /api/v1/users/me/data-export/:data_export_id
      *
      * @remarks
      * sec-U6: every successful URL mint (download_url non-null on the response)
@@ -38,7 +38,7 @@ export function createUserDataExportController(userDataExportService: UserDataEx
     async getExportStatus(request: FastifyRequest, _reply: FastifyReply) {
       const requestId = getRequestIdentifier(request);
       const auth = requireAuth(request);
-      const { export_id: exportId } = validateExportIdParam(request.params);
+      const { data_export_id: exportId } = validateDataExportIdParam(request.params);
       const data = await userDataExportService.getExportStatus(auth.userId, exportId);
       if (
         data !== null &&

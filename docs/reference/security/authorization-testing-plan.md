@@ -178,7 +178,7 @@ A global test banning the unscoped `findByPublicId` from user-scoped service cod
 | `GET /uploads/:upload_id` | user | user B | 404 | `findByPublicIdForUser` + user-RLS | ➕ e2e |
 | `DELETE /uploads/:upload_id` | user | user B | 404 + row intact | `softDelete(publicId,userId)` | ➕ e2e + verify |
 | `POST /uploads/:upload_id/confirm` | user | user B | 404 + still PENDING | app-check `row.user_id` | ➕ e2e + verify |
-| `GET /users/me/data-export/:export_id` | user | user B | 404 | `(public_id,user_id)` + user-RLS | ➕ e2e |
+| `GET /users/me/data-export/:data_export_id` | user | user B | 404 | `(public_id,user_id)` + user-RLS | ➕ e2e |
 | `POST /tenancy/invitations/:invitation_id/accept` | email | wrong email | 403 + no membership | email-match | ➕ e2e + verify |
 | `POST /tenancy/invitations/:invitation_id/decline` | email | wrong email | 403 | `declineOwnInvitationOnly` | ➕ e2e |
 

@@ -61,7 +61,7 @@ function payloadForPermissionRoute(
     // schema validation (400) preempt the permission check (403) this matrix asserts on.
     return { notification_type: 'billing', channel: 'EMAIL' };
   }
-  if (route.path.includes('/notification-policies/:policy_id')) {
+  if (route.path.includes('/notification-policies/:notification_policy_id')) {
     return { default_enabled: false };
   }
   if (route.path.endsWith('/webhooks')) {

@@ -157,9 +157,9 @@ Answers "is every route — organization-level included — covered, and what is
 | GET | `/api/v1/tenancy/organization/memberships/:membership_id/permissions` | PERM: membership:read | `org-by-id` | ✅ BFLA + cross-org |
 | GET | `/api/v1/tenancy/organization/notification-policies` | PERM: notification-policy:read | `org-collection` | ✅ BFLA (matrix) |
 | POST | `/api/v1/tenancy/organization/notification-policies` | PERM: notification-policy:manage | `org-collection` | ✅ BFLA (matrix) |
-| GET | `/api/v1/tenancy/organization/notification-policies/:policy_id` | PERM: notification-policy:read | `org-by-id` | ✅ BFLA + cross-org |
-| PATCH | `/api/v1/tenancy/organization/notification-policies/:policy_id` | PERM: notification-policy:manage | `org-by-id` | ✅ BFLA + cross-org |
-| DELETE | `/api/v1/tenancy/organization/notification-policies/:policy_id` | PERM: notification-policy:manage | `org-by-id` | ✅ BFLA + cross-org |
+| GET | `/api/v1/tenancy/organization/notification-policies/:notification_policy_id` | PERM: notification-policy:read | `org-by-id` | ✅ BFLA + cross-org |
+| PATCH | `/api/v1/tenancy/organization/notification-policies/:notification_policy_id` | PERM: notification-policy:manage | `org-by-id` | ✅ BFLA + cross-org |
+| DELETE | `/api/v1/tenancy/organization/notification-policies/:notification_policy_id` | PERM: notification-policy:manage | `org-by-id` | ✅ BFLA + cross-org |
 | GET | `/api/v1/tenancy/organization/roles` | PERM: role:read | `org-collection` | ✅ BFLA (matrix) |
 | POST | `/api/v1/tenancy/organization/roles` | PERM: role:manage | `org-collection` | ✅ BFLA (matrix) |
 | GET | `/api/v1/tenancy/organization/roles/:role_id` | PERM: role:read | `org-by-id` | ✅ BFLA + cross-org |
@@ -200,7 +200,7 @@ Answers "is every route — organization-level included — covered, and what is
 | PUT | `/api/v1/users/me/avatar` | AUTH | `auth-self-mutation` | ⚠ self; not asserted |
 | DELETE | `/api/v1/users/me/avatar` | AUTH | `auth-self-mutation` | ⚠ self; not asserted |
 | POST | `/api/v1/users/me/data-export` | AUTH | `auth-self-mutation` | ⚠ self; not asserted |
-| GET | `/api/v1/users/me/data-export/:export_id` | AUTH | `auth-by-id` | ✅ e2e attack test (Phase 2) |
+| GET | `/api/v1/users/me/data-export/:data_export_id` | AUTH | `auth-by-id` | ✅ e2e attack test (Phase 2) |
 | GET | `/api/v1/users/me/notification-preferences` | AUTH | `auth-self-list` | ✅ caller-scoped |
 | PUT | `/api/v1/users/me/notification-preferences` | AUTH | `auth-self-mutation` | ⚠ self; not asserted |
 | GET | `/api/v1/users/me/settings` | AUTH | `auth-self-list` | ✅ caller-scoped |
