@@ -108,6 +108,22 @@ export function initSentry(): void {
   const release =
     env.RAILWAY_GIT_COMMIT_SHA ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA;
 
+  // Tracing/profiling instrumentation wraps every HTTP/DB/cache call and adds per-call CPU even
+  // when the trace is ultimately sampled out (the wrapper runs before the sampling decision). Only
+  // install the pure-tracing integrations when tracing is actually enabled, and the profiler only
+  // when profiling is enabled. `httpIntegration` is always installed: besides outbound-HTTP tracing
+  // it provides the per-request isolation scope that gives captured errors their route/request
+  // context, so dropping it would degrade error reports even though error capture itself is cheap.
+  const tracingEnabled = defaultTracesSampleRate > 0;
+  const profilingEnabled = profileSessionSampleRate > 0;
+  const integrations = [Sentry.httpIntegration()];
+  if (profilingEnabled) {
+    integrations.push(nodeProfilingIntegration());
+  }
+  if (tracingEnabled) {
+    integrations.push(Sentry.postgresIntegration(), Sentry.redisIntegration());
+  }
+
   Sentry.init({
     dsn,
     environment: env.SENTRY_ENVIRONMENT ?? env.NODE_ENV,
@@ -117,19 +133,8 @@ export function initSentry(): void {
     sendDefaultPii: false,
 
     // ── Integrations ────────────────────────────────────────────────
-    integrations: [
-      // V8-based continuous profiling (native addon)
-      nodeProfilingIntegration(),
-
-      // Auto-instrument outbound HTTP calls
-      Sentry.httpIntegration(),
-
-      // Auto-instrument Postgres queries (via postgres.js / pg)
-      Sentry.postgresIntegration(),
-
-      // Auto-instrument Redis commands (via ioredis)
-      Sentry.redisIntegration(),
-    ],
+    // Built above: error capture always on; tracing (pg/redis) + profiling only when enabled.
+    integrations,
 
     // ── Tracing ─────────────────────────────────────────────────────
     // Env var override → code default (0.05 prod) → tracesSampler boosts errors/5xx

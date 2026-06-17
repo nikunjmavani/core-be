@@ -1421,6 +1421,7 @@ src/
     │   │   ├── method-status-policy.middleware.ts
     │   │   ├── metrics.middleware.ts
     │   │   ├── ops.middleware.ts
+    │   │   ├── overload-guard.middleware.ts
     │   │   ├── recent-step-up.middleware.ts
     │   │   ├── request-context.middleware.ts
     │   │   ├── request-lifecycle.middleware.ts
@@ -1432,6 +1433,7 @@ src/
     │   ├── rate-limit/
     │   │   ├── rate-limit-fallback-store.ts
     │   │   ├── rate-limit-presets.constants.ts
+    │   │   ├── rate-limit-telemetry-throttle.ts
     │   │   └── rate-limit.middleware.ts
     │   ├── security/
     │   │   ├── api-key-auth.middleware.ts
@@ -1947,8 +1949,10 @@ src/
     │   │   ├── middleware-order.unit.test.ts
     │   │   ├── ops.middleware.unit.test.ts
     │   │   ├── organization-rls-transaction.middleware.unit.test.ts
+    │   │   ├── overload-guard.middleware.unit.test.ts
     │   │   ├── rate-limit-fallback-store.unit.test.ts
     │   │   ├── rate-limit-presets.constants.unit.test.ts
+    │   │   ├── rate-limit-telemetry-throttle.unit.test.ts
     │   │   ├── rate-limit.middleware.unit.test.ts
     │   │   ├── request-lifecycle.middleware.unit.test.ts
     │   │   ├── request-statement-timeout.middleware.unit.test.ts
