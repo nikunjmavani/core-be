@@ -10,14 +10,21 @@ When you change any of the matched files:
 
 1. **Read** `agent-os/skills/env-schema-add/SKILL.md`.
 2. **Place** the new key under the correct top-level half (`# GitHub Secrets`
-   or `# GitHub Variables`) and sub-section in `.env.example`. Section IS
-   classification — `pnpm github:sync` pushes by section, no separate classifier.
-3. **Run** `pnpm tool:sync-env-example` to verify schema ↔ template parity and
+   or `# GitHub Variables`) and sub-section in `.env.example`. `pnpm github:sync`
+   classifies by **name** via `classifyKey()`
+   (`tooling/setup/github/sync-github-environments.ts`); the half is the
+   human-readable mirror, so keep it consistent with that rule.
+3. **Access it from the matching context** wherever a workflow consumes the key:
+   **Secret → `${{ secrets.NAME }}`**, **Variable → `${{ vars.NAME }}`**. A mismatch
+   returns an empty string silently (this hid `SCALAR_NAMESPACE` and skipped the
+   Scalar publish). `grep` `.github/workflows/` for the name when you add or
+   reclassify a key. Also: a step's own `env:` is not visible to that step's `if:`.
+4. **Run** `pnpm tool:sync-env-example` to verify schema ↔ template parity and
    get the PR description snippet.
-4. **Update** local `.env.<environment>` files manually without discarding real
+5. **Update** local `.env.<environment>` files manually without discarding real
    values, then `pnpm github:sync <environment> --dry-run` for each hosted environment to
    confirm the new key lands under the right `[secret]` / `[variable]` column.
-5. **Add** the "Environment variable changes" block printed by the sync tool
+6. **Add** the "Environment variable changes" block printed by the sync tool
    to the PR description.
 
 See **`docs/deployment/runbooks/add-new-environment.md`** for the full hosted-environment workflow.
