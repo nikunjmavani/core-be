@@ -110,6 +110,33 @@ elif [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && [ -f tooling/setup/agent/install-
   fi
 fi
 
+# --- MCP config: declare the project MCP set before the first prompt ---------
+# Claude Code reads `.mcp.json` at startup; the committed `.mcp.example.json`
+# (agent-only servers) is the source of truth. On local sessions, scaffold
+# `.mcp.json` from the template when it is absent — mirroring how setup:local
+# scaffolds `.env.local` — so the project MCP servers are declared before the
+# first prompt. Servers whose key/CLI is missing simply stay disconnected (fill
+# values via env / `${VAR}` placeholders; pre-approve with
+# enableAllProjectMcpServers in .claude/settings.local.json). Web sessions manage
+# MCP at the platform level, so we only report there. Best-effort and fail-open.
+mcp_status="n/a"
+if [ -f .mcp.json ]; then
+  if command -v jq >/dev/null 2>&1; then
+    mcp_status="$(jq -r '.mcpServers | keys | length' .mcp.json 2>/dev/null || echo '?') declared"
+  else
+    mcp_status="declared"
+  fi
+elif [ "${CLAUDE_CODE_REMOTE:-}" != "true" ] && [ -f .mcp.example.json ]; then
+  if cp .mcp.example.json .mcp.json 2>/dev/null; then
+    mcp_status="scaffolded from template"
+    echo "session-start: scaffolded .mcp.json from .mcp.example.json — fill keys via env; pre-approve with enableAllProjectMcpServers in .claude/settings.local.json." >&2
+  else
+    mcp_status="template only (run: cp .mcp.example.json .mcp.json)"
+  fi
+else
+  mcp_status="template only (run: cp .mcp.example.json .mcp.json)"
+fi
+
 # --- Build session context: skill routing map + env/commands summary --------
 node_version="$(node -v 2>/dev/null || echo unknown)"
 deps="missing"; [ -x node_modules/.bin/biome ] && deps="installed"
@@ -124,8 +151,8 @@ map_file="$ROOT/agent-os/docs/skill-triggers.md"
 map_section=""
 [ -f "$map_file" ] && map_section="$(cat "$map_file")"
 
-context="$(printf 'core-be session ready — environment provisioned: %s.\n- Node %s (need >=%s) · deps %s · gh %s · codegraph %s · gitleaks %s · agent-os %s · docker %s%s\n- Startup is light: Node + deps + agent-os:check + (web) Docker daemon — run compose:up / db:migrate / db:seed / tests on demand per prompt.\n- Gates: pnpm validate · pnpm ci:local   (pre-commit: pnpm guard:pre-commit)\n- Custom commands: /validate · /ci-local · /new-domain · /routes-sync\n\nagent-os skill routing — consult skill-index FIRST, then run the listed skill(s) for the files you change:\n\n%s' \
-  "$provisioned" "$node_version" "$required_major" "$deps" "$gh_cli" "$codegraph" "$gitleaks_status" "$agent_os_status" "$docker_status" "$node_note" "$map_section")"
+context="$(printf 'core-be session ready — environment provisioned: %s.\n- Node %s (need >=%s) · deps %s · gh %s · codegraph %s · mcp %s · gitleaks %s · agent-os %s · docker %s%s\n- Startup is light: Node + deps + agent-os:check + (web) Docker daemon — run compose:up / db:migrate / db:seed / tests on demand per prompt.\n- Gates: pnpm validate · pnpm ci:local   (pre-commit: pnpm guard:pre-commit)\n- Custom commands: /validate · /ci-local · /new-domain · /routes-sync\n\nagent-os skill routing — consult skill-index FIRST, then run the listed skill(s) for the files you change:\n\n%s' \
+  "$provisioned" "$node_version" "$required_major" "$deps" "$gh_cli" "$codegraph" "$mcp_status" "$gitleaks_status" "$agent_os_status" "$docker_status" "$node_note" "$map_section")"
 
 # Prefer the structured additionalContext envelope; fall back to plain stdout
 # (also injected as context) when jq is unavailable. Fail-open either way.
