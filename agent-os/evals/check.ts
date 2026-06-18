@@ -358,6 +358,28 @@ if (existsSync(pipelinesFile)) {
   }
 }
 
+// ── Check 16: plugin manifest references resolve to real paths ──
+// .claude-plugin/plugin.json points at agent-os/* component dirs/files; every
+// referenced path must exist so the installable plugin is never broken.
+const pluginManifestFile = join(repositoryRoot, '.claude-plugin', 'plugin.json')
+if (existsSync(pluginManifestFile)) {
+  try {
+    const manifest = JSON.parse(readText(pluginManifestFile)) as Record<string, unknown>
+    const references: string[] = []
+    for (const key of ['commands', 'agents', 'skills']) {
+      const value = manifest[key]
+      if (Array.isArray(value)) references.push(...value.filter((entry): entry is string => typeof entry === 'string'))
+      else if (typeof value === 'string') references.push(value)
+    }
+    if (typeof manifest.mcpServers === 'string') references.push(manifest.mcpServers)
+    for (const reference of references)
+      if (!existsSync(join(repositoryRoot, reference.replace(/^\.\//, ''))))
+        error('plugin-refs', `.claude-plugin/plugin.json references ${reference} which does not exist`)
+  } catch {
+    error('plugin-refs', '.claude-plugin/plugin.json is not valid JSON')
+  }
+}
+
 // ── Report ──
 const errors = findings.filter((finding) => finding.level === 'error')
 const warnings = findings.filter((finding) => finding.level === 'warn')
@@ -381,6 +403,7 @@ const checkLabels: Record<string, string> = {
   'skill-chains': 'Skill chains ↔ disk',
   'command-uniqueness': 'Command names unique',
   'agent-pipelines': 'Agent pipelines ↔ disk',
+  'plugin-refs': 'Plugin manifest refs exist',
 }
 
 console.log('\nagent-os integrity evals (Tier 1)\n')
