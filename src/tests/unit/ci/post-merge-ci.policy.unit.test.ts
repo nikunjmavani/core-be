@@ -29,7 +29,7 @@ describe('post-merge CI trigger policy', () => {
     expect(workflow).not.toContain('Sync main into dev');
   });
 
-  it('runs matrix tests after sbom+docker, then deploys after docs, release sbom, and docker', () => {
+  it('runs matrix tests after sbom+docker, then deploys after docs and docker before stable back-merge dispatch', () => {
     const workflow = readFileSync(POST_MERGE_WORKFLOW, 'utf8');
     expect(workflow).toMatch(
       /matrix-tests:[\s\S]*?needs:\s*\[changes,\s*sbom,\s*docker-build-push\]/,
@@ -40,7 +40,12 @@ describe('post-merge CI trigger policy', () => {
     expect(workflow).not.toMatch(/^\s+resolve-environment:/m);
     expect(workflow).toMatch(/deploy:[\s\S]*?needs:\s*[\s\S]*-\s*docker-build-push/);
     expect(workflow).toMatch(/deploy:[\s\S]*?needs:\s*[\s\S]*-\s*api-docs/);
-    expect(workflow).toMatch(/deploy:[\s\S]*?needs:\s*[\s\S]*-\s*release-sbom/);
+    expect(workflow).toMatch(
+      /dispatch-post-release-backmerge:[\s\S]*?needs:\s*\[release-please,\s*deploy\]/,
+    );
+    expect(workflow).toMatch(
+      /dispatch-post-release-backmerge:[\s\S]*?needs\.deploy\.result == 'success'/,
+    );
   });
 
   it('publishes API docs independently of release-please (a release-please failure must not skip Scalar/Postman publishing)', () => {
@@ -59,5 +64,18 @@ describe('post-merge CI trigger policy', () => {
     const workflow = readFileSync(POST_MERGE_WORKFLOW, 'utf8');
     expect(workflow).toContain('Download SBOM artifact from sbom job');
     expect(workflow).toMatch(/release-sbom:[\s\S]*?actions\/download-artifact@[0-9a-f]{40}/);
+  });
+
+  it('does not publish draft stable releases after deploy', () => {
+    const workflow = readFileSync(POST_MERGE_WORKFLOW, 'utf8');
+    expect(workflow).not.toMatch(/^ {2}publish-release:/m);
+    expect(workflow).not.toContain('gh release edit');
+    expect(workflow).not.toContain('--draft=false');
+  });
+
+  it('enables release PR auto-merge with merge commits because squash merging is not allowed', () => {
+    const workflow = readFileSync(POST_MERGE_WORKFLOW, 'utf8');
+    expect(workflow).toMatch(/gh pr merge "\$\{pr_number\}" --auto --merge --delete-branch=false/);
+    expect(workflow).not.toMatch(/gh pr merge "\$\{pr_number\}" --auto --squash/);
   });
 });
