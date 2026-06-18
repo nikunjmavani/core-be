@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # One-shot cloud-session bring-up for core-be on Claude Code on the web.
 #
-# Runs every agent setup helper in order — Node, gh, Docker images (registry
-# mirror), CodeGraph, Headroom, gitleaks — scaffolds a self-contained `.env.local` (`pnpm setup:local
-# --only-env`), then brings up the local Docker stack (Postgres + Redis), migrates,
-# seeds, and verifies the app is healthy (/livez + /readyz). A single command to
-# make a cloud session "same as local", with a progress log after each step so
-# anyone watching the session sees live status.
+# Runs every agent setup helper in order — Node, gh, Docker CLI/Compose, Docker
+# images (registry mirror), CodeGraph, Headroom, gitleaks — scaffolds a
+# self-contained `.env.local` (`pnpm setup:local --only-env`), then brings up
+# the local Docker stack (Postgres + Redis), migrates, seeds, and verifies the
+# app is healthy (/livez + /readyz). A single command to make a cloud session
+# "same as local", with a progress log after each step so anyone watching the
+# session sees live status.
 #
 #   bash tooling/setup/agent/bootstrap.sh
 #
@@ -84,8 +85,9 @@ step "[2/${TOTAL}] GitHub CLI (gh)"
 bash "${AGENT_DIR}/install-gh.sh" || true
 if command -v gh >/dev/null 2>&1; then ok "[2/${TOTAL}] $(gh --version | head -1)"; else skip "[2/${TOTAL}] gh unavailable (non-fatal)"; fi
 
-# 3) Docker images via registry mirror --------------------------------------
-step "[3/${TOTAL}] Docker images (mirror + pull)"
+# 3) Docker + images via registry mirror ------------------------------------
+step "[3/${TOTAL}] Docker CLI/Compose + images (mirror + pull)"
+bash "${AGENT_DIR}/install-docker.sh" || true
 bash "${AGENT_DIR}/install-docker-images.sh" || true
 if docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -qE '^postgres:|^redis:'; then
   ok "[3/${TOTAL}] compose images present: $(docker images --format '{{.Repository}}:{{.Tag}}' | grep -E '^postgres:|^redis:' | paste -sd' ')"
