@@ -1,14 +1,14 @@
 # Requirement intake form (core-be)
 
 This is the **format** `/build-requirement` produces and builds from. You don't have to
-fill it all — give `/build-requirement` a short prompt and it **drafts the whole form,
+fill it all — give `/build-requirement` a direct task and it **drafts the whole form,
 including the section-9 file tree, for your review**, asks about anything it shouldn't
 guess, and iterates on your changes before building. Or fill the form yourself and pass
 it. Either way the final, approved document looks like the form below.
 
 ## How to fill it
 
-- Prefer the draft-and-review flow: send a one-line prompt, then review the form the AI
+- Prefer the draft-and-review flow: give a direct task, then review the form the AI
   proposes — **check the section-9 tree first** — and reply with any changes.
 - In a drafted form, every value the AI inferred is tagged `[assumed]` and listed under
   "Assumptions I added" up top — review those first; confirming or editing one clears its tag.

@@ -1,14 +1,14 @@
 ---
 description: Draft a requirement (tree first) for review, then build the production-ready slice
-argument-hint: <a short prompt, or a filled requirement.template.md form / path>
+argument-hint: <a direct task — what you want in a line or two — or a filled form / path>
 allowed-tools: Bash(pnpm*), Bash(git*)
 ---
 
-Turn a requirement into a complete, production-ready vertical slice. The user usually gives a **short prompt** (**$ARGUMENTS**, the conversation, or a path) — not the whole form — so you **draft** the full document, get it **reviewed**, then build. The document format is the 9-section form in `docs/getting-started/requirement.template.md` (filled example: `docs/getting-started/requirement.example.md`; defaults: `docs/getting-started/requirement-intake.md`).
+Turn a requirement into a complete, production-ready vertical slice. **The normal input is a direct task** — a line or two of what you want (**$ARGUMENTS**, the conversation, or a path), not a filled form — so you **draft** the full document, get it **reviewed**, then build. The document format is the 9-section form in `docs/getting-started/requirement.template.md` (filled example: `docs/getting-started/requirement.example.md`; defaults: `docs/getting-started/requirement-intake.md`).
 
 ## 1. Draft the full requirement, then get it reviewed (you fill it, not the user)
 
-The user usually sends a short prompt, not the whole form. Build the document for them:
+The user normally gives a direct task, not the whole form. Build the document for them:
 
 1. **Draft all 9 sections** of the form (`# Requirement:` + `## 1`–`## 9`: summary/placement, data model, public API, business logic, i18n, seed, tests [unit/integration/e2e/smoke/contract/chaos], non-functionals, file structure). Fill sensible defaults (`requirement-intake.md`) and infer the data model, API, logic, tests, and the **section-9 file tree** from the prompt.
 2. **Mark everything you added** so the user sees exactly what to scrutinize: tag each value *you* inferred or defaulted (not what the user stated) inline with **`[assumed]`** — e.g. `- Public-id prefix: inv  [assumed]` — and lead the draft with an **"Assumptions I added — confirm or change"** list gathering those choices in one place, one line + reason each.
