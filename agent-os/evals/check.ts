@@ -340,6 +340,24 @@ if (existsSync(commandsDirectory)) {
   }
 }
 
+// ── Check 15: agent review-pipelines reference real agents ──
+// pipelines.json names sequences of read-only agents (consumed by /pre-merge-review
+// and /prod-readiness); every step must resolve to an agent file on disk.
+const pipelinesFile = join(agentOsDirectory, 'agents', 'pipelines.json')
+if (existsSync(pipelinesFile)) {
+  const agentNames = new Set(agentFiles.map((file) => basename(file, '.md')))
+  try {
+    const pipelines =
+      (JSON.parse(readText(pipelinesFile)) as { pipelines?: Record<string, { steps?: string[] }> }).pipelines ?? {}
+    for (const [pipeline, definition] of Object.entries(pipelines))
+      for (const step of definition.steps ?? [])
+        if (!agentNames.has(step))
+          error('agent-pipelines', `pipelines.json pipeline "${pipeline}" references "${step}" which has no agent file`)
+  } catch {
+    error('agent-pipelines', 'agent-os/agents/pipelines.json is not valid JSON')
+  }
+}
+
 // ── Report ──
 const errors = findings.filter((finding) => finding.level === 'error')
 const warnings = findings.filter((finding) => finding.level === 'warn')
@@ -362,6 +380,7 @@ const checkLabels: Record<string, string> = {
   'skill-groups': 'Skill groups ↔ disk',
   'skill-chains': 'Skill chains ↔ disk',
   'command-uniqueness': 'Command names unique',
+  'agent-pipelines': 'Agent pipelines ↔ disk',
 }
 
 console.log('\nagent-os integrity evals (Tier 1)\n')

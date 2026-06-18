@@ -154,6 +154,7 @@
     "agent-os:triggers:strict": "tsx agent-os/evals/trigger-eval.ts --strict",
     "agent-os:generate": "tsx tooling/agent-os/generate.ts --write",
     "agent-os:generate:check": "tsx tooling/agent-os/generate.ts --check",
+    "agent-os:plan-skills": "tsx tooling/agent-os/plan-skills.ts",
     "tool:sync-env-example": "tsx src/scripts/validators/env/sync-env-example.ts",
     "tool:generate-project-identity": "tsx tooling/setup/codegen/generate-project-identity.ts",
     "tool:generate-project-identity:check": "tsx tooling/setup/codegen/generate-project-identity.ts --check",
