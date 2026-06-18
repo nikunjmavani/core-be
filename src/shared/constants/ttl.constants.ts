@@ -129,7 +129,7 @@ export const MFA_RECOVERY_CODE_LENGTH = 12;
 export const OAUTH_STATE_TTL_SECONDS = 600;
 
 /** Default permission set cache TTL in Redis (seconds). */
-export const PERMISSION_CACHE_DEFAULT_TTL_SECONDS = 900;
+export const PERMISSION_CACHE_DEFAULT_TTL_SECONDS = MFA_SESSION_TTL_SECONDS;
 
 /** SETNX lock TTL while recomputing permissions (seconds). */
 export const PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS = 15;
