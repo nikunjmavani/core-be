@@ -7,6 +7,7 @@
 set -uo pipefail
 
 readonly LOG_FILE="${DOCKERD_AGENT_LOG:-/tmp/dockerd-agent.log}"
+readonly MODE_FILE="${DOCKERD_AGENT_MODE_FILE:-/tmp/dockerd-agent-mode}"
 
 log() {
   printf 'ensure-docker-daemon: %s\n' "$*" >&2
@@ -18,6 +19,19 @@ wait_for_docker() {
     sleep 1
   done
   return 1
+}
+
+start_dockerd() {
+  local mode="$1"
+  shift
+
+  log "starting dockerd ${mode}; log: ${LOG_FILE}"
+  : >"${LOG_FILE}"
+  if [ "${#sudo_cmd[@]}" -gt 0 ]; then
+    setsid "${sudo_cmd[@]}" dockerd "$@" >"${LOG_FILE}" 2>&1 </dev/null &
+  else
+    setsid dockerd "$@" >"${LOG_FILE}" 2>&1 </dev/null &
+  fi
 }
 
 sudo_cmd=()
@@ -34,6 +48,7 @@ fi
 
 if docker info >/dev/null 2>&1; then
   log "Docker daemon already reachable."
+  rm -f "${MODE_FILE}" 2>/dev/null || true
   exit 0
 fi
 
@@ -56,16 +71,12 @@ if ! wait_for_docker && command -v systemctl >/dev/null 2>&1; then
 fi
 
 if ! wait_for_docker && command -v dockerd >/dev/null 2>&1; then
-  log "starting dockerd directly; log: ${LOG_FILE}"
-  if [ "${#sudo_cmd[@]}" -gt 0 ]; then
-    setsid "${sudo_cmd[@]}" dockerd >"${LOG_FILE}" 2>&1 </dev/null &
-  else
-    setsid dockerd >"${LOG_FILE}" 2>&1 </dev/null &
-  fi
+  start_dockerd "directly"
 fi
 
 if wait_for_docker; then
   log "Docker daemon is reachable."
+  rm -f "${MODE_FILE}" 2>/dev/null || true
   exit 0
 fi
 
@@ -78,6 +89,26 @@ fi
 
 if wait_for_docker; then
   log "Docker daemon is reachable after socket permission repair."
+  rm -f "${MODE_FILE}" 2>/dev/null || true
+  exit 0
+fi
+
+# Codex Cloud setup containers can run as root but still lack the kernel
+# capability Docker needs to program iptables/NAT for the default bridge:
+# "failed to create NAT chain DOCKER ... Permission denied". In that case,
+# start dockerd without bridge/NAT; bootstrap.sh detects this marker and uses a
+# host-network compose override for Postgres + Redis.
+if command -v dockerd >/dev/null 2>&1; then
+  start_dockerd "with restricted networking fallback" \
+    --iptables=false \
+    --ip-masq=false \
+    --ip-forward=false \
+    --bridge=none
+fi
+
+if wait_for_docker; then
+  printf 'restricted\n' >"${MODE_FILE}"
+  log "Docker daemon is reachable with restricted networking fallback."
   exit 0
 fi
 

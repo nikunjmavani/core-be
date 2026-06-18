@@ -21,6 +21,7 @@ set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.." || exit 1
 readonly AGENT_DIR="tooling/setup/agent"
 readonly TOTAL=11
+readonly DOCKERD_AGENT_MODE_FILE="${DOCKERD_AGENT_MODE_FILE:-/tmp/dockerd-agent-mode}"
 start_ts=$(date +%s)
 
 step() { echo ""; echo "▶ $*"; }
@@ -118,7 +119,13 @@ ok "[7/${TOTAL}] .env.local ready"
 # 8) Postgres + Redis (docker compose) --------------------------------------
 step "[8/${TOTAL}] Postgres + Redis (docker compose)"
 bash "${AGENT_DIR}/ensure-docker-daemon.sh" >&2 || die "Docker daemon is not reachable (see ensure-docker-daemon diagnostics above)"
-SONAR=0 pnpm compose:up >&2 || die "compose:up failed (Docker daemon was reachable before compose; inspect docker compose output above)"
+if [ "$(cat "${DOCKERD_AGENT_MODE_FILE}" 2>/dev/null)" = "restricted" ]; then
+  echo "bootstrap: Docker daemon is in restricted networking mode; using Codex Cloud host-network compose override." >&2
+  docker compose -f docker-compose.yml -f "${AGENT_DIR}/docker-compose.codex-cloud.yml" up -d postgres redis >&2 \
+    || die "compose:up failed with Codex Cloud restricted Docker override"
+else
+  SONAR=0 pnpm compose:up >&2 || die "compose:up failed (Docker daemon was reachable before compose; inspect docker compose output above)"
+fi
 pnpm compose:wait >&2 || die "Postgres did not become ready"
 ok "[8/${TOTAL}] Postgres + Redis healthy"
 
