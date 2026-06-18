@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.9.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.9.0-dev.0...v4.9.1-dev.0) (2026-06-18)
+
+
+### Fixed
+
+* address route audit findings ([#697](https://github.com/nikunjmavani/core-be/issues/697)) ([751e329](https://github.com/nikunjmavani/core-be/commit/751e3291f3b76f02b9e5665dd7ba899219c2c33f))
+
 ## [4.9.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.8.2-dev.0...v4.9.0-dev.0) (2026-06-18)
 
 
