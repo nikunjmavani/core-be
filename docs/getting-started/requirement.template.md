@@ -10,6 +10,8 @@ it. Either way the final, approved document looks like the form below.
 
 - Prefer the draft-and-review flow: send a one-line prompt, then review the form the AI
   proposes — **check the section-9 tree first** — and reply with any changes.
+- In a drafted form, every value the AI inferred is tagged `[assumed]` and listed under
+  "Assumptions I added" up top — review those first; confirming or editing one clears its tag.
 - Keep the `## N.` headings exactly as written — they are the sections the build reads.
 - Every field has an example on the next line starting with `# e.g.` — **replace the
   `<...>` placeholder with your value**; leave the `# e.g.` line as a guide or delete it.

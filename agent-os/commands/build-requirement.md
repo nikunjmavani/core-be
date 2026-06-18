@@ -11,8 +11,9 @@ Turn a requirement into a complete, production-ready vertical slice. The user us
 The user usually sends a short prompt, not the whole form. Build the document for them:
 
 1. **Draft all 9 sections** of the form (`# Requirement:` + `## 1`–`## 9`: summary/placement, data model, public API, business logic, i18n, seed, tests [unit/integration/e2e/smoke/contract/chaos], non-functionals, file structure). Fill sensible defaults (`requirement-intake.md`) and infer the data model, API, logic, tests, and the **section-9 file tree** from the prompt.
-2. **Present the full draft for review** as one fenced code block, leading with the **section-9 tree** so the user reviews the layout first. **Ask** (via `AskUserQuestion`) only about genuine unknowns you must not guess: data-model details, auth/permission codes, tenancy, anything irreversible.
-3. **Iterate**: apply each "change X" the user gives and re-present the draft until they approve it; the approved draft is the final document.
+2. **Mark everything you added** so the user sees exactly what to scrutinize: tag each value *you* inferred or defaulted (not what the user stated) inline with **`[assumed]`** — e.g. `- Public-id prefix: inv  [assumed]` — and lead the draft with an **"Assumptions I added — confirm or change"** list gathering those choices in one place, one line + reason each.
+3. **Present the full draft for review** as one fenced block — the assumptions list first, then the **section-9 tree** (layout reviewed first), then sections 1–8. **Ask** (via `AskUserQuestion`) only about genuine unknowns you must not guess: data-model details, auth/permission codes, tenancy, anything irreversible.
+4. **Iterate**: apply each "change X", clear the `[assumed]` tag on anything the user confirms or edits, and re-present until they approve. The approved draft is the final document.
 
 Do **not** start the build before the draft — the section-9 tree especially — is approved.
 
