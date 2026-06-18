@@ -5,7 +5,12 @@ natural multi-tenant user journey (reads + complete CRUD across every domain) us
 capacity. This file documents **everything needed to reproduce a clean run**, the **prerequisites**
 (checked by [`check-prereqs.mjs`](check-prereqs.mjs)), and the **measured capacity ceiling**.
 
-> **One command applies every prerequisite below and verifies it:**
+> **Run the whole thing (setup + run) in one command:** `pnpm load:journey`
+> (100 VU / 10 workers / 60s; override with `VUS=200 WORKERS=10 DURATION=90s pnpm load:journey`).
+> It front-loads every prerequisite, runs the journey, and leaves the rig up for fast re-runs.
+> Tear down with `pnpm load:journey:down`.
+>
+> **Setup only** — applies every prerequisite below and verifies it:
 > `bash src/tests/load/k6/setup-loadtest.sh [VUS] [WORKERS]` (defaults `100 10`). It backs up
 > `.env.local`, applies the load-test env, **sizes the DB pool to the connection budget**, rebuilds and
 > **copies runtime assets to `dist/`**, **heals a half-open Redis port-forward**, ensures Postgres
