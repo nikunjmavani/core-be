@@ -364,7 +364,7 @@ jobs:
 
           for pr_number in ${pr_numbers}; do
             echo "Enabling auto-merge for release PR #${pr_number}"
-            gh pr merge "${pr_number}" --auto --squash --delete-branch=false
+            gh pr merge "${pr_number}" --auto --merge --delete-branch=false
           done
 
   release-sbom:
@@ -418,12 +418,12 @@ jobs:
 
   dispatch-post-release-backmerge:
     name: Dispatch post-release back-merge
-    needs: [release-please, publish-release]
+    needs: [release-please, deploy]
     if: |
       always() &&
       github.ref_name == 'main' &&
       needs.release-please.outputs.releases_created == 'true' &&
-      needs.publish-release.result == 'success'
+      needs.deploy.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -485,46 +485,6 @@ jobs:
     with:
       merge_commit_sha: ${{ github.sha }}
       target_branch: ${{ github.ref_name }}
-
-  publish-release:
-    name: Publish release
-    needs: [release-please, deploy]
-    # Stable (main) releases are created as drafts (release-please `draft: true`), so a
-    # *published* stable release only ever exists after production has deployed. This job
-    # publishes that draft once the deploy succeeds. Editing an already-created release
-    # needs only `contents: write` (the tag exists from draft time), so the default token
-    # works and the `release: published` event does not fan out — keeping the explicit
-    # back-merge dispatch below as the single back-merge trigger. dev is unaffected: its
-    # config keeps `draft: false`, so dev releases publish immediately (before deploy).
-    if: |
-      always() &&
-      github.ref_name == 'main' &&
-      needs.release-please.outputs.releases_created == 'true' &&
-      needs.deploy.result == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: write
-    steps:
-      - name: Publish the draft stable release (deploy succeeded)
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          tag_name="$(
-            gh release list \
-              --repo "${GH_REPOSITORY}" \
-              --limit 20 \
-              --json tagName,isPrerelease,isDraft \
-              --jq '[.[] | select(.isPrerelease == false and .isDraft == true)][0].tagName // ""'
-          )"
-          if [ -z "${tag_name}" ] || [ "${tag_name}" = "null" ]; then
-            echo "No draft stable release to publish."
-            exit 0
-          fi
-          gh release edit "${tag_name}" --repo "${GH_REPOSITORY}" --draft=false
-          echo "Published ${tag_name} after a successful deploy."
 
   notify-failure:
     name: Notify failure
