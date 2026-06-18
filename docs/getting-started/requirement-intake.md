@@ -42,6 +42,63 @@ The AI fills these unless your message says otherwise. List overrides in your fi
 
 ---
 
+## Full-slice template — one requirement → production-ready slice
+
+Fill this once and run **`/build-requirement`** (or paste it as your prompt). The AI validates it for completeness (missing fields are surfaced, never guessed), then drives the full build chain to a gate-passing vertical slice and emits a **reports bundle**. This is the autonomous path; the type-by-type sections below remain the detailed reference.
+
+### Template
+
+```markdown
+# Requirement: <one-line title>
+
+## 1. Summary & placement
+- Purpose: <what + why, 1–2 lines>
+- Domain / sub-domain: <e.g. billing / invoice>  (new or existing)
+
+## 2. Data model
+- Table(s): <name(s)>
+- Columns: <name: type, notNull?, default?, unique?, FK?>  (text not varchar)
+- Public-id prefix: <e.g. inv>
+- Relations / indexes: <...>
+- Tenancy: <org-scoped? RLS on?> | Soft-delete: <yes/no> | Audit: <created_by? events?>
+
+## 3. Public API
+- Endpoints: <METHOD /path — purpose>  (snake_case semantic params)
+- Auth per route: <public | authenticated | org-permission:<code> | global-role:admin>
+- Request body: <snake_case fields + validation>
+- Response: <serialized fields; external id>
+- Statuses: <success + error> | Headers: <idempotency? captcha?> | Pagination: <cursor?>
+
+## 4. Business logic
+- Service intent per operation: <...>
+- Transactions / cross-domain (via services): <...>
+- Events / workers: <event name, queue, payload, behavior>
+- Idempotency: <which writes> | Caching / rate limits: <...>
+
+## 5. i18n
+- Message keys + English copy: <errors.*, success.*>
+
+## 6. Seed data
+- Reference rows: <...> | Bulk/faker: <...>
+
+## 7. Tests
+- Happy paths: <...>
+- Edge cases / auth & tenant boundaries / validation failures / idempotency replays: <...>
+
+## 8. Non-functionals
+- Observability / performance budget / security notes: <...>
+```
+
+### What `/build-requirement` does
+
+It runs the pipeline (each step is an existing skill), self-healing failed gates and escalating only on genuine ambiguity:
+
+`schema-complete` → **domain-generator** (repository → service → controller → dto/validator/serializer/types → container + route registration) → `route-complete` → **workers-events** (if events) → **seed-maintainer** → **test-generator** → i18n + **tsdoc-export-guard** + **overview-doc-maintainer** + OpenAPI → **/pre-merge-review**.
+
+**Definition of done:** `pnpm validate` + the route/domain gates + a live `pnpm verify:base` smoke + `/pre-merge-review` clean. It emits a **reports bundle** under `docs/builds/<date>-<feature>/`: build report (files, decisions, assumptions, deviations), a requirement→code→test traceability matrix, the review report, and a quality/security summary.
+
+---
+
 ## Requirement types and details to provide
 
 ### 1. New domain or sub-domain (new resource/API surface)
@@ -366,7 +423,7 @@ flowchart LR
 
 | Skill                          | Path                                                     | When to invoke                                            |
 | ------------------------------ | -------------------------------------------------------- | --------------------------------------------------------- |
-| **skill-index**                | `.cursor/skills/skill-index/SKILL.md`                    | **First** — full catalog and triggers (36 project skills) |
+| **skill-index**                | `.cursor/skills/skill-index/SKILL.md`                    | **First** — full catalog and triggers (39 project skills) |
 | domain-generator               | `.cursor/skills/domain-generator/SKILL.md`               | New domain/sub-domain scaffold                            |
 | route-catalog                  | `.cursor/skills/route-catalog/SKILL.md`                  | Any change to `*.routes.ts`                               |
 | route-schema-doc-guard         | `.cursor/skills/route-schema-doc-guard/SKILL.md`         | Route `schema: { summary, description, tags }`          |

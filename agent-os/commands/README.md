@@ -41,6 +41,12 @@ Granular procedures live in **skills** (invoked by name); these commands are **w
 | `/new-domain <name>` | Scaffold a domain/sub-domain via the domain-generator skill (full DAG). |
 | `/routes-sync` | Re-sync route catalog + OpenAPI/seed artifacts after route changes. |
 
+**Autonomous build**
+
+| Command | Purpose |
+| ------- | ------- |
+| `/build-requirement` | One filled intake → full production-ready slice (schema → API → workers → tests → docs) + reports bundle. |
+
 **Build chains** (from `agent-os/skills/chains.json`)
 
 | Command | Purpose |
