@@ -6,8 +6,10 @@ const ROOT = process.cwd();
 const RELEASE_PLEASE_DIR = join(ROOT, '.github/release-please');
 
 interface ReleasePleaseConfig {
+  draft?: boolean;
   prerelease?: boolean;
   'prerelease-type'?: string;
+  versioning?: string;
 }
 
 interface ReleasePleaseManifest {
@@ -23,6 +25,11 @@ describe('release-please manifest policy', () => {
     const config = readJson<ReleasePleaseConfig>('config.dev.json');
     expect(config.prerelease).toBe(true);
     expect(config['prerelease-type']).toBe('dev');
+  });
+
+  it('dev config uses prerelease versioning so dev releases advance dev.N instead of recalculating the base version', () => {
+    const config = readJson<ReleasePleaseConfig>('config.dev.json');
+    expect(config.versioning).toBe('prerelease');
   });
 
   it('dev manifest version ends with `-dev.<n>` while config.dev.json has prerelease enabled', () => {
@@ -43,6 +50,11 @@ describe('release-please manifest policy', () => {
   it('stable config keeps prerelease mode disabled', () => {
     const config = readJson<ReleasePleaseConfig>('config.json');
     expect(config.prerelease ?? false).toBe(false);
+  });
+
+  it('stable config publishes releases immediately so release-please does not re-count draft releases', () => {
+    const config = readJson<ReleasePleaseConfig>('config.json');
+    expect(config.draft ?? false).toBe(false);
   });
 
   it('stable manifest version is plain MAJOR.MINOR.PATCH (no prerelease suffix)', () => {

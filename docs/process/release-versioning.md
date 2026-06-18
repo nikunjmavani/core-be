@@ -45,18 +45,32 @@ Standard semantic versioning. Among all commits since the last release, the
 ## The flow
 
 ```mermaid
-flowchart LR
+flowchart TB
   commit["a commit<br/>fix: / feat: / feat!:"] --> dev[merge to dev]
-  dev --> rp[release-please reads the prefixes]
-  rp --> pr["keeps a Release PR open<br/>chore: release X.Y.Z"]
-  pr --> merge[you merge the Release PR]
-  merge --> rel["tag + GitHub Release cut"]
+  dev --> devRp[release-please reads prefixes on dev]
+  devRp --> devPr["dev Release PR<br/>chore(dev): release X.Y.Z-dev.N"]
+  devPr --> devRel["tag + prerelease<br/>vX.Y.Z-dev.N"]
+  devRel --> promote[merge dev to main]
+  promote --> mainRp[release-please reads prefixes on main]
+  mainRp --> mainPr["main Release PR<br/>chore(main): release X.Y.Z"]
+  mainPr --> mainRel["tag + published stable release<br/>vX.Y.Z"]
+  mainRel --> deploy[deploy production]
+  deploy --> backmerge["if deploy succeeds:<br/>back-merge main to dev + reseed"]
 ```
 
 1. You merge `fix:` / `feat:` / `feat!:` commits to `dev`.
-2. release-please keeps **one** Release PR open with the computed next version + changelog;
-   it updates as more commits land.
-3. Merging that Release PR cuts the git tag + GitHub Release.
+2. release-please keeps **one dev Release PR** open with the computed prerelease version
+   and changelog; it updates as more commits land.
+3. Merging the dev Release PR cuts the prerelease tag + GitHub prerelease and deploys the
+   development environment.
+4. When `dev` is promoted to `main`, release-please keeps **one stable Release PR** open.
+5. Merging the stable Release PR immediately cuts the stable tag + published GitHub Release
+   because the release commit is already on `main`; deploy success does not decide whether
+   that version exists.
+6. Production deploy runs after the stable release commit is on `main`.
+7. If production deploy succeeds, the workflow back-merges `main` into `dev` and reseeds
+   `dev` to the next prerelease line. If deploy fails, the stable release remains the
+   release boundary and the back-merge waits until the deployment issue is fixed.
 
 ---
 
@@ -64,13 +78,15 @@ flowchart LR
 
 | Channel | Branch | Versions | Config |
 | --- | --- | --- | --- |
-| Prerelease | `dev` | `X.Y.Z-dev.N` | [`config.dev.json`](../../.github/release-please/config.dev.json) (`prerelease: true`) |
+| Prerelease | `dev` | `X.Y.Z-dev.N` | [`config.dev.json`](../../.github/release-please/config.dev.json) (`prerelease: true`, `versioning: "prerelease"`) |
 | Stable | `main` | `X.Y.Z` | [`config.json`](../../.github/release-please/config.json) |
 
-- **dev** publishes a prerelease immediately on each Release-PR merge.
-- **main** creates the stable release as a **draft** and publishes it **only after the
-  production deploy succeeds** — so a published stable release always means "this version
-  is live." See the `publish-release` job in
+- **dev** publishes a prerelease immediately on each Release-PR merge and advances the
+  active `-dev.N` line.
+- **main** publishes the stable release immediately on each Release-PR merge so
+  release-please can recognize the latest stable tag and will not re-count a draft
+  release into another release PR. The automated `main → dev` back-merge dispatch still
+  waits for production deploy success in
   [`post-merge-ci.yml`](../../.github/workflows/post-merge-ci.yml).
 - After a stable `main` release, an automated back-merge reseeds `dev` to the next minor
   (ship `4.7.0` → `dev` resumes at `4.8.0-dev.0`).
