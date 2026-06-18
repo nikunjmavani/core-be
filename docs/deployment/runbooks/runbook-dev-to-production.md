@@ -72,6 +72,10 @@ Sync with `.env.example`: `pnpm tool:sync-env-example`
 
 ### 4.1 Local vs production (summary)
 
+> For the **dev / load-test → production delta** — which values are auto-rejected at boot vs. which
+> the operator must set (e.g. `RATE_LIMIT_MAX`, `CAPTCHA_PROVIDER`, role caps, webhook allowlist) — see
+> [environment-variables.md §11 — Production safety](./environment-variables.md#11-production-safety-unsafe-dev-and-load-test-values).
+
 | Variable                                                           | Local / dev                                       | Production                                                                                  |
 | ------------------------------------------------------------------ | ------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `NODE_ENV`                                                         | `local` or `development`                          | `production`                                                                                |

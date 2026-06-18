@@ -22,6 +22,7 @@ invariant. This runbook covers the **per-key lifecycle**.
 | Verify branch/env/NODE_ENV invariant | `pnpm github:sync --check`                    |
 | Verify required keys exist in GitHub | `CONFIG=<env> pnpm validate:github-env`       |
 | Add a new env var (skill)            | read `.cursor/skills/env-schema-add/SKILL.md` |
+| **Which dev/load-test values are unsafe in prod** | [§11 Production safety](#11-production-safety-unsafe-dev-and-load-test-values) |
 
 ## 1. The mental model
 
@@ -289,7 +290,72 @@ For the cross-dimension (branch ↔ GH env ↔ `NODE_ENV` ↔ `.env.<env>`)
 1:1 invariant — including ruleset, workflow case mapping, and protection rules —
 see the dedicated runbook: **[add-new-environment.md](./add-new-environment.md)**.
 
-## 11. Reference
+## 11. Production safety: unsafe dev and load-test values
+
+The `local`, `test`, and load-test profiles deliberately **turn off** protections
+(captcha, rate limiting, Sentry) and tune sizing for one machine. Production must
+inherit **none** of those values. Three layers govern this — the first two are
+enforced for you; the third is entirely on the operator.
+
+### 11.1 Layer 1 — the schema refuses to boot in production/staging
+
+These `src/shared/config/env-schema.ts` refinements **throw at startup** in
+`production`/`staging`, so a deploy carrying a dev/placeholder value crashes fast
+instead of running insecure — you cannot ship the dev value:
+
+| Setting                               | dev / load-test value     | Enforced in production / staging                                                  |
+| ------------------------------------- | ------------------------- | --------------------------------------------------------------------------------- |
+| `CAPTCHA_PROVIDER` + `CAPTCHA_SECRET` | `disabled`                | `turnstile` **and** `CAPTCHA_SECRET` required (public auth routes)                 |
+| `SECRETS_ENCRYPTION_KEY`              | all-zero placeholder      | high-entropy 32-byte key (`openssl rand -hex 32`); low-entropy rejected           |
+| `ALLOWED_ORIGINS`                     | `http://localhost:3000`   | absolute `https://` only; no `*`, path, userinfo, query, or trailing slash        |
+| `COOKIE_SECURE`                       | `false`                   | `true` (cookies sent over HTTPS only)                                              |
+| `JWT_LEGACY_KEY_ENABLED`              | `true` (pre-keyring)      | `false` once `JWT_PUBLIC_KEYS` (verification keyring) is set                       |
+| `UPLOAD_USE_PRESIGNED_POST`           | may be `false`            | `true` (presigned PUT has no min-size enforcement)                                 |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`         | `http://…` ok             | `https://` (telemetry must not transmit SQL/paths in plaintext)                   |
+| `METRICS_SCRAPE_TOKEN`                | optional                  | **required (≥32 chars)** when `METRICS_ENABLED=true`                               |
+| `EMAIL_FROM_ADDRESS`                  | optional                  | **required** when `RESEND_API_KEY` or `STRIPE_SECRET_KEY` is set                   |
+
+**Verify before deploy:** `NODE_ENV=production pnpm dev` with `.env.production`
+filled — boot fails loudly on any violation. `CONFIG=production pnpm validate:github-env`
+confirms the required keys exist in the GitHub Environment.
+
+### 11.2 Layer 2 — `NODE_ENV` is the master switch (hosted deploys force `production`)
+
+`NODE_ENV=test` is the single most dangerous value to leak into a deployed
+environment: it **lifts every per-route rate-limit cap to 5000**
+(`rate-limit-presets.constants.ts`, gated on `=== 'test'`) and makes **captcha
+fail open** (`captcha.middleware.ts`). `NODE_ENV=production` reverts both
+automatically. You normally cannot ship the wrong value — the Dockerfile sets
+`NODE_ENV=production`, and the branch ↔ GitHub-env ↔ `NODE_ENV` 1:1 invariant
+(`pnpm github:sync --check`, see [add-new-environment.md](./add-new-environment.md))
+blocks a mismatch. **Never hand-edit `NODE_ENV` to `test`/`development` in `.env.production`.**
+
+### 11.3 Layer 3 — valid-but-dangerous values the schema accepts (operator-owned)
+
+These are real, schema-valid values — nothing rejects them — so a load-test value
+silently **disables protection** in production. **This is the category to review by
+hand on every `.env.production`:**
+
+| Setting                                                                  | Load-test value                | Production value                          | If the load-test value ships                                              |
+| ------------------------------------------------------------------------ | ------------------------------ | ----------------------------------------- | ------------------------------------------------------------------------- |
+| `RATE_LIMIT_MAX`                                                         | `100000000`                    | `100` (default)                           | global limiter effectively off → brute-force / DoS exposure               |
+| `MEMBER_ROLE_MAX_PER_ORG`                                                | `500`                          | `50` (default)                            | per-org role sprawl / abuse                                               |
+| `WEBHOOK_URL_ALLOWLIST`                                                  | `example.com`                  | real partner hosts                        | `example.com` accepted as a webhook delivery target                       |
+| `DATABASE_POOL_MAX` / `DEPLOYMENT_*_REPLICA_COUNT` / `POSTGRES_MAX_CONNECTIONS` | tuned to a 12-core box (`44`/`10`/`500`) | match the managed DB plan + replica topology | over/under-provisioned pool; boot connection-budget assert can fail or starve queries — [resource-limits.md](./resource-limits.md) |
+| `LOG_LEVEL`                                                              | `debug` (common in dev)        | `info` (default) / `warn`                 | noisy logs, larger PII surface                                            |
+| `SENTRY_DSN`                                                             | empty                          | real DSN (`SENTRY_ENVIRONMENT=production`) | no error / performance visibility (ops, not security)                     |
+| `HTTP_SERVER_TIMING_ENABLED`                                            | `true` (journey reads `app;dur=`) | consider `false`                          | exposes server compute time (coarsened to 5 ms in prod, but still a signal) |
+
+The full set of **required** production variables (replicas, retention, JWT,
+managed URLs, admin emails) is the go-live checklist in
+[runbook-dev-to-production.md §4.2](./runbook-dev-to-production.md#42-production-go-live-checklist).
+This section is specifically the **dev / load-test → production delta**.
+
+> The exact load-test overrides are tabulated in
+> [src/tests/load/k6/COMPREHENSIVE-JOURNEY.md §1](../../../src/tests/load/k6/COMPREHENSIVE-JOURNEY.md) —
+> none of those values belong in a deployed environment.
+
+## 12. Reference
 
 - **Schema:** `src/shared/config/env-schema.ts`
 - **Template (committed):** `.env.example`
