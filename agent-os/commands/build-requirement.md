@@ -12,8 +12,21 @@ The user normally gives a direct task, not the whole form. Build the document fo
 
 1. **Draft all 9 sections** of the form (`# Requirement:` + `## 1`–`## 9`: summary/placement, data model, public API, business logic, i18n, seed, tests [unit/integration/e2e/smoke/contract/chaos], non-functionals, file structure). Fill sensible defaults (`requirement-intake.md`) and infer the data model, API, logic, tests, and the **section-9 file tree** from the prompt.
 2. **Mark everything you added** so the user sees exactly what to scrutinize: tag each value *you* inferred or defaulted (not what the user stated) inline with **`[assumed]`** — e.g. `- Public-id prefix: inv  [assumed]` — and lead the draft with an **"Assumptions I added — confirm or change"** list gathering those choices in one place, one line + reason each.
-3. **Present the full draft for review** as one fenced block — the assumptions list first, then the **section-9 tree** (layout reviewed first), then sections 1–8. **Ask** (via `AskUserQuestion`) only about genuine unknowns you must not guess: data-model details, auth/permission codes, tenancy, anything irreversible.
+3. **Present the full draft for review** as one fenced block — the assumptions list first, then the **section-9 tree** (layout reviewed first), then sections 1–8. **Ask** (via `AskUserQuestion`) only the **unresolved** items from the Question catalog below — never guess the ★ (structural / irreversible) ones.
 4. **Iterate**: apply each "change X", clear the `[assumed]` tag on anything the user confirms or edits, and re-present until they approve. The approved draft is the final document.
+
+### Question catalog (ask only the unresolved items; ★ = never guess)
+
+- **Placement** — ★ domain (auth · user · tenancy · billing · notify · audit · upload · new) · ★ sub-domain (new · extend) · ★ tenancy (org-scoped/RLS · user-scoped · global)
+- **Data model** — ★ new tables? (yes · reuse) · ★ lifecycle (soft-delete · hard delete · immutable ledger) · columns (type/null/unique/FK/CHECK) · public-id prefix · indexes (AI proposes · specify)
+- **Public API** — ★ auth per route (public · authenticated · `org-permission:<code>` · global-role:admin) · endpoint shape (standard REST · custom) · pagination (cursor · offset · none) · ★ idempotency on writes (yes · no)
+- **Business logic** — cross-domain (none · read · write service `<X>`) · ★ async side effects (none · event · event + queue + worker) · caching / rate limits (default · custom)
+- **i18n / seed** — messages (AI proposes · specify) · seed (none · reference · bulk/faker count)
+- **Tests** (multi-select) — unit · integration · e2e · smoke · contract · chaos
+- **Non-functionals** — performance budget (default · p95 target) · security (standard RLS/tenant · specify PII/encryption/secrets)
+- **Delivery** — target branch (dev · hotfix/production) · PR after build (no · yes → `/ship`)
+
+Anything not ★ you may infer and tag `[assumed]`. This catalog is curatable — trim or extend it freely.
 
 Do **not** start the build before the draft — the section-9 tree especially — is approved.
 
