@@ -6,9 +6,10 @@
  *
  * Single source: agent-os/hooks/hooks.json (hook wiring) + agent-os/platforms/
  * targets.json (capability registry). Derived artifacts: the `hooks` block of
- * .claude/settings.json and the `hooks` block of .cursor/hooks.json. Everything
- * else in those files (Claude `permissions`, Cursor `$schema`/`version`) is
- * owned by hand and preserved verbatim. --check compares semantically (parsed,
+ * .claude/settings.json, the `hooks` block of .cursor/hooks.json,
+ * .codex/hooks.json, and the default Codex MCP config. Everything else in those
+ * files (Claude `permissions`, Cursor `$schema`/`version`) is owned by hand and
+ * preserved verbatim. --check compares semantically (parsed,
  * key-order-independent) so the existing hand-formatted files pass unchanged.
  *
  * Usage:
@@ -29,6 +30,7 @@ interface HookManifestEntry {
   script: string;
   claude?: { event: string; matcher?: string };
   cursor?: { event: string; matcher?: string };
+  codex?: { event: string; matcher?: string; statusMessage?: string };
 }
 interface HookManifest {
   hooks: HookManifestEntry[];
@@ -52,6 +54,7 @@ const targets = readJson<TargetsRegistry>(join(agentOsDirectory, 'platforms', 't
 
 const claudeTarget = targets.agents.claude;
 const cursorTarget = targets.agents.cursor;
+const codexTarget = targets.agents.codex;
 
 /** Claude command form: `<runtime> "$CLAUDE_PROJECT_DIR/agent-os/hooks/<script>"`. */
 const claudeCommand = (entry: HookManifestEntry): string =>
@@ -59,8 +62,15 @@ const claudeCommand = (entry: HookManifestEntry): string =>
 /** Cursor command form, relative to .cursor/: `<runtime> ../agent-os/hooks/<script>`. */
 const cursorCommand = (entry: HookManifestEntry): string =>
   `${entry.runtime} ../agent-os/hooks/${entry.script}`;
+/** Codex command form: resolve from git root because Codex may start in a subdirectory. */
+const codexCommand = (entry: HookManifestEntry): string =>
+  `CLAUDE_PROJECT_DIR="$(git rev-parse --show-toplevel)" ${entry.runtime} "$(git rev-parse --show-toplevel)/agent-os/hooks/${entry.script}"`;
 
 type ClaudeHookEntry = { matcher?: string; hooks: Array<{ type: 'command'; command: string }> };
+type CodexHookEntry = {
+  matcher?: string;
+  hooks: Array<{ type: 'command'; command: string; statusMessage?: string }>;
+};
 
 /** Build the Claude `hooks` block, grouped by event in first-appearance order. */
 function buildClaudeHooks(): Record<string, ClaudeHookEntry[]> {
@@ -106,6 +116,32 @@ function buildCursorHooks(): Record<string, Array<{ command: string }>> {
   return grouped;
 }
 
+/** Build project-local Codex hooks.json from compatible common hook entries. */
+function buildCodexHooks(): Record<string, CodexHookEntry[]> {
+  const supported = new Set(codexTarget?.capabilities.hookEvents ?? []);
+  const grouped: Record<string, CodexHookEntry[]> = {};
+  for (const entry of manifest.hooks) {
+    if (!entry.codex) continue;
+    if (!supported.has(entry.codex.event)) {
+      report(`codex: hook "${entry.id}" targets unsupported event ${entry.codex.event} — skipped`);
+      continue;
+    }
+    const hook: { type: 'command'; command: string; statusMessage?: string } = {
+      type: 'command',
+      command: codexCommand(entry),
+    };
+    if (entry.codex.statusMessage) hook.statusMessage = entry.codex.statusMessage;
+    const hookEntry: CodexHookEntry = entry.codex.matcher
+      ? { matcher: entry.codex.matcher, hooks: [hook] }
+      : { hooks: [hook] };
+    const event = entry.codex.event;
+    const bucket = grouped[event] ?? [];
+    bucket.push(hookEntry);
+    grouped[event] = bucket;
+  }
+  return grouped;
+}
+
 /** Recursively sort object keys so comparison ignores key order (arrays stay ordered). */
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
@@ -140,6 +176,7 @@ function toCodexToml(servers: Record<string, { command?: string; args?: string[]
 
 const claudeHooks = buildClaudeHooks();
 const cursorHooks = buildCursorHooks();
+const codexHooks = buildCodexHooks();
 
 // ── Claude: .claude/settings.json (hooks block only; permissions preserved) ──
 const claudeSettingsPath = join(
@@ -182,8 +219,30 @@ if (existsSync(cursorHooksPath)) {
   }
 } else report(`missing: ${cursorHooksPath}`);
 
+// ── Codex: .codex/hooks.json (generated from common compatible hook entries) ──
+const codexHooksPath = join(repositoryRoot, codexTarget?.hooksTarget ?? '.codex/hooks.json');
+const codexHooksFile = { hooks: codexHooks };
+if (writeMode) {
+  const current = existsSync(codexHooksPath)
+    ? readJson<Record<string, unknown>>(codexHooksPath)
+    : null;
+  if (!deepEqual(current, codexHooksFile)) {
+    mkdirSync(dirname(codexHooksPath), { recursive: true });
+    writeFileSync(codexHooksPath, `${JSON.stringify(codexHooksFile, null, 2)}\n`);
+    report('wrote .codex/hooks.json');
+  }
+} else if (!existsSync(codexHooksPath)) {
+  report(`missing: ${codexHooksPath}`);
+} else {
+  const current = readJson<Record<string, unknown>>(codexHooksPath);
+  if (!deepEqual(current, codexHooksFile)) {
+    report(
+      'drift: .codex/hooks.json differs from agent-os/hooks/hooks.json — run `pnpm agent-os:generate --write`',
+    );
+  }
+}
+
 // ── Codex: agent-os/platforms/codex/config.toml (MCP servers as TOML, generated) ──
-const codexTarget = targets.agents.codex;
 if (codexTarget?.capabilities.mcpFormat === 'toml') {
   const mcpDefaultPath = join(agentOsDirectory, 'mcp', 'mcp.default.json');
   const codexConfigPath = join(agentOsDirectory, 'platforms', 'codex', 'config.toml');
@@ -215,7 +274,7 @@ const drift = problems.filter(
 console.log(`\nagent-os generate (${writeMode ? 'write' : 'check'})\n`);
 console.log(`  agents: ${Object.keys(targets.agents).join(', ')}`);
 console.log(
-  `  claude hooks: ${Object.values(claudeHooks).flat().length}   cursor hooks: ${Object.values(cursorHooks).flat().length}\n`,
+  `  claude hooks: ${Object.values(claudeHooks).flat().length}   cursor hooks: ${Object.values(cursorHooks).flat().length}   codex hooks: ${Object.values(codexHooks).flat().length}\n`,
 );
 for (const message of problems) console.log(`  • ${message}`);
 console.log('');

@@ -55,8 +55,12 @@ Executable guardrails enforce the repo's safety rules per platform
   destructive shell and secret writes; warn on protected paths and cross-domain imports.
 - **Cursor** — `beforeShellExecution` hook (`.cursor/hooks.json`) blocks destructive
   shell; file-level rules are advisory in [`.cursor/rules/ai-guardrails.mdc`](.cursor/rules/ai-guardrails.mdc).
-- **Codex** — enforce via sandbox + approvals in `~/.codex/config.toml`
-  (`sandbox_mode = "workspace-write"`, `approval_policy = "on-request"`) plus the policy below.
+- **Codex** — enforce via generated project-local [`.codex/hooks.json`](.codex/hooks.json)
+  (from `agent-os/hooks/hooks.json`: startup context, prompt skill routing, Bash
+  guardrails, stop reminders), [`.codex/config.toml`](.codex/config.toml)
+  (symlink to generated default MCP pair: CodeGraph + Headroom), sandbox +
+  approvals in `~/.codex/config.toml` (`sandbox_mode = "workspace-write"`,
+  `approval_policy = "on-request"`), plus the policy below.
 
 Policy (all agents): never write secrets to source (`.env*` except `.env.example`);
 no `rm -rf` / `git push --force`; treat `migrations/*.sql` and billing ledgers as
