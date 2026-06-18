@@ -37,26 +37,31 @@ function incrAsync(
 }
 
 describe('createRedisFallbackRateLimitStore', () => {
-  it('counts via Redis when healthy (INCR + PEXPIRE on first hit)', async () => {
+  it('counts via a single Lua EVAL (first hit sets the window, later hits read PTTL)', async () => {
     const redis = {
-      incr: vi.fn().mockResolvedValue(1),
-      pexpire: vi.fn().mockResolvedValue(1),
-      pttl: vi.fn().mockResolvedValue(900),
+      eval: vi.fn().mockResolvedValueOnce([1, 1000]).mockResolvedValueOnce([2, 873]),
     } as unknown as Redis;
     const StoreCtor = createRedisFallbackRateLimitStore(redis);
     const store = new StoreCtor({}) as never;
 
-    const result = await incrAsync(store, '1.2.3.4', 1000, 5);
+    const first = await incrAsync(store, '1.2.3.4', 1000, 5);
+    const second = await incrAsync(store, '1.2.3.4', 1000, 5);
 
-    expect(result).toEqual({ current: 1, ttl: 1000 });
-    expect(redis.pexpire).toHaveBeenCalledWith('fastify-rate-limit-1.2.3.4', 1000);
+    expect(first).toEqual({ current: 1, ttl: 1000 });
+    expect(second).toEqual({ current: 2, ttl: 873 });
+    // One round-trip per hit: a single EVAL with the prefixed bucket key and window (ms).
+    expect(redis.eval).toHaveBeenCalledTimes(2);
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      'fastify-rate-limit-1.2.3.4',
+      '1000',
+    );
   });
 
   it('falls over to per-process counting when Redis rejects', async () => {
     const redis = {
-      incr: vi.fn().mockRejectedValue(new Error('ECONNREFUSED')),
-      pexpire: vi.fn(),
-      pttl: vi.fn(),
+      eval: vi.fn().mockRejectedValue(new Error('ECONNREFUSED')),
     } as unknown as Redis;
     const StoreCtor = createRedisFallbackRateLimitStore(redis);
     const store = new StoreCtor({}) as never;
@@ -70,9 +75,7 @@ describe('createRedisFallbackRateLimitStore', () => {
 
   it('child stores isolate buckets by route prefix', async () => {
     const redis = {
-      incr: vi.fn().mockRejectedValue(new Error('down')),
-      pexpire: vi.fn(),
-      pttl: vi.fn(),
+      eval: vi.fn().mockRejectedValue(new Error('down')),
     } as unknown as Redis;
     const StoreCtor = createRedisFallbackRateLimitStore(redis);
     const store = new StoreCtor({}) as never as {
@@ -91,9 +94,7 @@ describe('createRedisFallbackRateLimitStore', () => {
 
   it('evicts old local buckets instead of growing without bound during Redis outages', async () => {
     const redis = {
-      incr: vi.fn().mockRejectedValue(new Error('down')),
-      pexpire: vi.fn(),
-      pttl: vi.fn(),
+      eval: vi.fn().mockRejectedValue(new Error('down')),
     } as unknown as Redis;
     const StoreCtor = createRedisFallbackRateLimitStore(redis);
     const store = new StoreCtor({}) as never;

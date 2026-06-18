@@ -30,14 +30,32 @@ function logRedisFailover(error: unknown): void {
 }
 
 /**
+ * Atomic fixed-window increment in a single Redis round-trip: `INCR`, set the window expiry on the
+ * first hit, and read the remaining TTL — all server-side. Returns `[current, ttlMs]`. Replaces the
+ * previous sequential `INCR` + `PEXPIRE`/`PTTL` (two round-trips) that ran on every rate-limited
+ * request. `ttl` is always ≥ 0 (the window length when the key had no expiry to read).
+ */
+const RATE_LIMIT_INCR_LUA = `
+local current = redis.call('INCR', KEYS[1])
+if current == 1 then
+  redis.call('PEXPIRE', KEYS[1], ARGV[1])
+  return {current, tonumber(ARGV[1])}
+end
+local ttl = redis.call('PTTL', KEYS[1])
+if ttl < 0 then ttl = tonumber(ARGV[1]) end
+return {current, ttl}
+`;
+
+/**
  * `@fastify/rate-limit` store that counts in Redis but transparently falls over to a
  * per-process in-memory fixed-window counter when Redis is unavailable.
  *
  * @remarks
- * - **Algorithm:** `incr` runs `INCR` + `PEXPIRE`/`PTTL` against Redis (cluster-wide count);
- *   on any Redis rejection it counts in a local `Map` keyed by the same bucket and returns
- *   that count instead. `child` returns a new store with a route-scoped key prefix so per-route
- *   presets keep isolated buckets.
+ * - **Algorithm:** `incr` runs a single Lua `EVAL` ({@link RATE_LIMIT_INCR_LUA} — `INCR` +
+ *   first-hit `PEXPIRE` + `PTTL`) against Redis in one round-trip (cluster-wide count); on any
+ *   Redis rejection it counts in a local `Map` keyed by the same bucket and returns that count
+ *   instead. `child` returns a new store with a route-scoped key prefix so per-route presets keep
+ *   isolated buckets.
  * - **Failure modes:** none surfaced to the caller — Redis errors are caught and converted into
  *   local enforcement, so the limiter never throws (and never has to fail fully open).
  * - **Side effects:** writes Redis keys; maintains a bounded in-memory counter map capped at
@@ -65,12 +83,12 @@ class RedisFallbackRateLimitStore {
   }
 
   private async incrInRedis(fullKey: string, timeWindow: number): Promise<RateLimitIncrResult> {
-    const current = await this.redis.incr(fullKey);
-    if (current === 1) {
-      await this.redis.pexpire(fullKey, timeWindow);
-      return { current, ttl: timeWindow };
-    }
-    const ttl = await this.redis.pttl(fullKey);
+    const [current, ttl] = (await this.redis.eval(
+      RATE_LIMIT_INCR_LUA,
+      1,
+      fullKey,
+      String(timeWindow),
+    )) as [number, number];
     return { current, ttl: ttl >= 0 ? ttl : timeWindow };
   }
 
