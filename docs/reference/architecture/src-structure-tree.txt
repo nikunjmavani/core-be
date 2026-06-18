@@ -1493,6 +1493,7 @@ src/
     │   │   ├── audit-record.util.ts
     │   │   ├── audit-request-context.util.ts
     │   │   ├── database-timestamp.util.ts
+    │   │   ├── event-loop-monitor.ts
     │   │   ├── gzip.util.ts
     │   │   ├── health-operational-metrics.util.ts
     │   │   ├── list-cap.util.ts
@@ -1734,6 +1735,7 @@ src/
     ├── load/
     │   ├── k6/
     │   │   ├── data/
+    │   │   │   └── credential-pool.json
     │   │   ├── helpers/
     │   │   │   ├── auth.js
     │   │   │   ├── checks.js
@@ -1748,6 +1750,7 @@ src/
     │   │   │   ├── auth-stress-server-timing.js
     │   │   │   ├── billing-subscriptions-rls.js
     │   │   │   ├── billing.js
+    │   │   │   ├── comprehensive-journey.js
     │   │   │   ├── daily-ops.js
     │   │   │   ├── health-breakpoint.js
     │   │   │   ├── health-stress.js
@@ -1768,7 +1771,11 @@ src/
     │   │   │   ├── user-data-export.js
     │   │   │   ├── user-journey.js
     │   │   │   └── webhooks.js
-    │   │   └── README.md
+    │   │   ├── check-prereqs.mjs
+    │   │   ├── COMPREHENSIVE-JOURNEY.md
+    │   │   ├── README.md
+    │   │   ├── run-journey.sh
+    │   │   └── setup-loadtest.sh
     │   └── OVERVIEW.md
     ├── performance/
     │   ├── concurrent-requests.performance.test.ts
