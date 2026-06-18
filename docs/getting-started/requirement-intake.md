@@ -48,7 +48,7 @@ Fill this once and run **`/build-requirement`** (or paste it as your prompt). Th
 
 ### Template
 
-The canonical fill-in form is **[`requirement.template.md`](requirement.template.md)** (same folder) — every field carries an `# e.g.` example. Copy it, fill the 9 sections (`# Requirement:` and `## 1`–`## 9`: data model, API, logic, i18n, seed, tests [unit/integration/e2e/smoke/contract/chaos], non-functionals, file structure & deliverables), and run **`/build-requirement`**. Keep the `## N.` headings as-is; mark anything that doesn't apply as `none`.
+The canonical form is **[`requirement.template.md`](requirement.template.md)** (filled example: **[`requirement.example.md`](requirement.example.md)**). You don't have to fill it — give **`/build-requirement`** a short prompt and it drafts the full 9-section document (data model, API, logic, i18n, seed, tests [unit/integration/e2e/smoke/contract/chaos], non-functionals, and a **section-9 file tree**) for your review, asks about anything it shouldn't guess, and iterates before building. Or fill the form yourself; keep the `## N.` headings as-is and mark anything N/A as `none`.
 
 ### What `/build-requirement` does
 

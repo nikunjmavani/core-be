@@ -1,12 +1,15 @@
 # Requirement intake form (core-be)
 
-This is the **one format** `/build-requirement` expects. Copy the form in **The form**
-below, fill every section, and run **`/build-requirement`** (paste it, or pass a path).
-You fill this form; the command builds the full production-ready vertical slice from it
-and emits a reports bundle.
+This is the **format** `/build-requirement` produces and builds from. You don't have to
+fill it all — give `/build-requirement` a short prompt and it **drafts the whole form,
+including the section-9 file tree, for your review**, asks about anything it shouldn't
+guess, and iterates on your changes before building. Or fill the form yourself and pass
+it. Either way the final, approved document looks like the form below.
 
 ## How to fill it
 
+- Prefer the draft-and-review flow: send a one-line prompt, then review the form the AI
+  proposes — **check the section-9 tree first** — and reply with any changes.
 - Keep the `## N.` headings exactly as written — they are the sections the build reads.
 - Every field has an example on the next line starting with `# e.g.` — **replace the
   `<...>` placeholder with your value**; leave the `# e.g.` line as a guide or delete it.
@@ -104,20 +107,20 @@ and emits a reports bundle.
 - Security: <tenant isolation / secrets / PII>
   # e.g. RLS enforces org isolation; no PII beyond the org link; amounts are not secrets
 
-## 9. File structure & deliverables (what the build will create — adjust if needed)
-- Schema + migration:
-  # e.g. src/domains/billing/sub-domains/invoice/invoice.schema.ts
-  # e.g. migrations/<timestamp>_create_invoices.sql
-- Layers (sub-domain): repository, service, controller, dto, validator, serializer, types
-  # e.g. src/domains/billing/sub-domains/invoice/invoice.{repository,service,controller,dto,validator,serializer,types}.ts
-- Routes + DI wiring:
-  # e.g. invoice routes added to billing.routes.ts; wired in billing.container.ts
-- Tests:
-  # e.g. src/domains/billing/__tests__/billing.test.ts (e2e) + sub-domains/invoice/__tests__/unit/
-- Seed:
-  # e.g. src/domains/billing/sub-domains/invoice/seed/ (reference + bulk + faker)
-- Docs:
-  # e.g. OVERVIEW.md for invoice; route schema summary/description/tags; OpenAPI; TSDoc on every export
-- Reports bundle:
-  # e.g. docs/builds/<date>-organization-invoices/ (build-report, traceability, review, quality)
+## 9. File structure & deliverables (the AI drafts this tree from your prompt — review it first)
+src/domains/<domain>/
+├── <domain>.routes.ts                         # + <resource> routes
+├── <domain>.container.ts                      # + <resource> service wiring
+├── __tests__/<domain>.test.ts                 # + <resource> e2e
+└── sub-domains/<sub-domain>/
+    ├── <sub-domain>.schema.ts
+    ├── <sub-domain>.{repository, service, controller, dto, validator, serializer, types}.ts
+    ├── OVERVIEW.md
+    ├── events/ queues/ workers/               # only if section 4 declares events/jobs
+    ├── seed/{index, reference, bulk, faker}
+    └── __tests__/{<sub-domain>.test.ts, unit/}
+migrations/<timestamp>_<change>.sql
+src/shared/locales/en/{errors, success}.json   # + your i18n keys
+docs/builds/<date>-<feature>/{build-report, traceability, review, quality}.md
+# see requirement.example.md for a fully drawn tree
 ```

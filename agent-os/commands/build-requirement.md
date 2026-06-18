@@ -1,16 +1,20 @@
 ---
-description: Build a full production-ready vertical slice from a filled requirement intake
-argument-hint: <paste the filled requirement.template.md form, or a path to it>
+description: Draft a requirement (tree first) for review, then build the production-ready slice
+argument-hint: <a short prompt, or a filled requirement.template.md form / path>
 allowed-tools: Bash(pnpm*), Bash(git*)
 ---
 
-Build a complete, production-ready vertical slice from the requirement intake (**$ARGUMENTS**, the filled form in the conversation, or a path to it). The one accepted format is the fill-in form in `docs/getting-started/requirement.template.md` (defaults and detail in `docs/getting-started/requirement-intake.md`).
+Turn a requirement into a complete, production-ready vertical slice. The user usually gives a **short prompt** (**$ARGUMENTS**, the conversation, or a path) — not the whole form — so you **draft** the full document, get it **reviewed**, then build. The document format is the 9-section form in `docs/getting-started/requirement.template.md` (filled example: `docs/getting-started/requirement.example.md`; defaults: `docs/getting-started/requirement-intake.md`).
 
-## 1. Read the intake against the one accepted format
+## 1. Draft the full requirement, then get it reviewed (you fill it, not the user)
 
-The accepted input is the form in `docs/getting-started/requirement.template.md` — the sections `# Requirement:` and `## 1`–`## 9` (summary/placement, data model, public API, business logic, i18n, seed, tests [unit/integration/e2e/smoke/contract/chaos], non-functionals, file structure & deliverables). Map the input onto those sections; the posted plan lists the section 9 files and the section 7 test layers.
+The user usually sends a short prompt, not the whole form. Build the document for them:
 
-Best-effort gap-filling: for any section that is **missing, still a `<...>` placeholder, or ambiguous**, collect the gaps and **ask once** via `AskUserQuestion` to fill them — never guess the data model, auth, or tenancy. Sections marked `none` or `default` are accepted as-is (defaults from `requirement-intake.md` apply). Once the form is complete, post the plan once and proceed.
+1. **Draft all 9 sections** of the form (`# Requirement:` + `## 1`–`## 9`: summary/placement, data model, public API, business logic, i18n, seed, tests [unit/integration/e2e/smoke/contract/chaos], non-functionals, file structure). Fill sensible defaults (`requirement-intake.md`) and infer the data model, API, logic, tests, and the **section-9 file tree** from the prompt.
+2. **Present the full draft for review** as one fenced code block, leading with the **section-9 tree** so the user reviews the layout first. **Ask** (via `AskUserQuestion`) only about genuine unknowns you must not guess: data-model details, auth/permission codes, tenancy, anything irreversible.
+3. **Iterate**: apply each "change X" the user gives and re-present the draft until they approve it; the approved draft is the final document.
+
+Do **not** start the build before the draft — the section-9 tree especially — is approved.
 
 ## 2. Run the build pipeline (each step is an existing skill — consult skill-index first)
 
