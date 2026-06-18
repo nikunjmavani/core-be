@@ -41,6 +41,7 @@ How **API-initiated** subscription changes relate to **Stripe webhooks** and loc
 1. **Webhook lag:** Inspect `billing.stripe_webhook_events` (`processing_status`, `request_id` from correlation id) for stuck `processing` rows.
 2. **Drift:** Compare local subscription `status` / `provider_subscription_id` with Stripe dashboard when users report billing mismatches after changePlan/cancel.
 3. **Duplicate events:** Re-delivered webhooks are idempotent (`tryClaimEvent` + `onConflictDoNothing`).
+4. **Signature tolerance after an outage:** webhook signatures are accepted within `STRIPE_WEBHOOK_TOLERANCE_SECONDS` of the event's signing time (default **150s**, half of Stripe's 300s default, to keep the replay window tight). Stripe retries carry the **original** signing timestamp, so if the API is unreachable longer than the tolerance, every retry for that event is rejected once it ages past the window. To recover deliveries after a prolonged outage, temporarily raise `STRIPE_WEBHOOK_TOLERANCE_SECONDS` (up to **1800s**) so in-flight retries verify, then restore the default. Events that did reach the API are still recovered by the local-ledger reclaim worker regardless of this knob.
 
 ---
 
