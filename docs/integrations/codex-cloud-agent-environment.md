@@ -71,13 +71,14 @@ bash tooling/setup/agent/codex-setup.sh
 ```bash
 bash tooling/setup/agent/install-node.sh          # Node from .nvmrc into /opt/node24
 bash tooling/setup/agent/install-gh.sh            # GitHub CLI fallback
+bash tooling/setup/agent/install-docker.sh        # Docker CLI/Compose if missing
 bash tooling/setup/agent/install-docker-images.sh # Docker mirror + compose image pre-pull
 bash tooling/setup/agent/install-codegraph.sh     # default MCP pair: CodeGraph CLI + index
 bash tooling/setup/agent/install-headroom.sh      # default MCP pair: Headroom CLI
 bash tooling/setup/agent/install-gitleaks.sh      # pre-commit secret scan
 ```
 
-It also activates `/opt/node24/bin`, symlinks Node/npm/npx into `/usr/local/bin` when permitted, appends a fallback `PATH` entry to `~/.bashrc`, runs `corepack enable`, and runs `pnpm install --frozen-lockfile` while setup internet is available. Set `CODEX_SETUP_AGENT_TOOLS=0` only for a deliberately minimal environment; set `CODEX_SETUP_PREPULL_DOCKER=0` only when Docker is unavailable or DB-backed work is out of scope.
+It also activates `/opt/node24/bin`, symlinks Node/npm/npx into `/usr/local/bin` when permitted, appends a fallback `PATH` entry to `~/.bashrc`, runs `corepack enable`, and runs `pnpm install --frozen-lockfile` while setup internet is available. Docker is skipped when `docker compose` is already present and installed via apt only when missing. Set `CODEX_SETUP_AGENT_TOOLS=0` only for a deliberately minimal environment; set `CODEX_SETUP_PREPULL_DOCKER=0` only when Docker is unavailable or DB-backed work is out of scope.
 
 Husky activates during `pnpm install` (its `prepare` step), so a properly set-up Codex container gets the **same** pre-commit / pre-push gates as local.
 
@@ -111,7 +112,7 @@ Use Codex environment variables for non-secret test values needed during the age
 
 Unit tests and the static gates need neither — that is the Codex sweet spot. For e2e / DB tests you need Postgres 17+ and Redis, but the **offline agent phase can't pull images on demand**, so choose one:
 
-- **Pre-pull in setup, start in task** — [`codex-setup.sh`](../../tooling/setup/agent/codex-setup.sh) runs [`install-docker-images.sh`](../../tooling/setup/agent/install-docker-images.sh) by default, so image pulls happen while network is up and use the same mirror path as Claude Cloud. During the task, run `SONAR=0 pnpm compose:up && pnpm compose:wait && pnpm db:migrate` when DB-backed tests or app boot are needed.
+- **Pre-pull in setup, start in task** — [`codex-setup.sh`](../../tooling/setup/agent/codex-setup.sh) runs [`install-docker.sh`](../../tooling/setup/agent/install-docker.sh) and [`install-docker-images.sh`](../../tooling/setup/agent/install-docker-images.sh) by default, so Codex uses a preinstalled Docker when available, installs Docker CLI/Compose when missing, and pulls images while network is up through the same mirror path as Claude Cloud. During the task, run `SONAR=0 pnpm compose:up && pnpm compose:wait && pnpm db:migrate` when DB-backed tests or app boot are needed.
 - **Provision services in setup** — only if the Codex environment keeps Docker services alive into the agent phase, append `SONAR=0 pnpm compose:up && pnpm compose:wait && pnpm db:migrate` after `codex-setup.sh` in the setup script.
 - **External services** — point `DATABASE_URL` / `DATABASE_MIGRATION_URL` / `REDIS_URL` at services your platform provides.
 

@@ -4,9 +4,9 @@
 # Codex runs this script with internet access before the agent phase. The agent
 # phase commonly runs without egress, so install the pinned runtime and npm
 # dependencies here, while the network is available. Mirror the Claude Cloud
-# setup helper list by default: Node, gh, Docker image pre-pull, CodeGraph,
-# Headroom, and gitleaks. Keep database/app startup out of the default path;
-# start services explicitly from the task.
+# setup helper list by default: Node, gh, Docker CLI/Compose, Docker image
+# pre-pull, CodeGraph, Headroom, and gitleaks. Keep database/app startup out of
+# the default path; start services explicitly from the task.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.." || exit 1
@@ -68,6 +68,7 @@ pnpm install --frozen-lockfile
 if [ "${INSTALL_AGENT_TOOLS}" = "1" ]; then
   run_best_effort "Installing GitHub CLI" bash "${AGENT_DIR}/install-gh.sh"
   if [ "${PREPULL_DOCKER_IMAGES}" = "1" ]; then
+    run_best_effort "Installing Docker CLI and Compose when missing" bash "${AGENT_DIR}/install-docker.sh"
     run_best_effort "Configuring Docker mirror and pre-pulling DB images" bash "${AGENT_DIR}/install-docker-images.sh"
   else
     warn "skipping Docker image pre-pull because CODEX_SETUP_PREPULL_DOCKER=${PREPULL_DOCKER_IMAGES}"
