@@ -42,12 +42,26 @@ export const WORKER_THROUGHPUT_QUEUE_NAMES = [
 /**
  * True when every recorded throughput heartbeat is older than `stallTimeoutMs`.
  * Returns false when no jobs have completed yet (cold start / idle before first job).
+ *
+ * @remarks
+ * `pendingWorkCount` (waiting + delayed across the throughput queues) distinguishes a
+ * genuinely stalled worker from a healthy idle one: when it is `0`, the worker simply has
+ * nothing to do (nights/weekends, or a worker that only services interval cron jobs), so
+ * stale heartbeats are expected and must NOT report `stalled` — otherwise the orchestrator
+ * restart-loops the worker during every quiet period. Stall is only asserted when there is
+ * pending work the worker is failing to drain. Omitting the argument preserves the prior
+ * heartbeat-only behaviour (used by existing callers/tests).
  */
 export function isWorkerThroughputStalled(
   heartbeats: readonly WorkerQueueHeartbeat[],
   stallTimeoutMs: number,
   nowMilliseconds: number = Date.now(),
+  pendingWorkCount?: number,
 ): boolean {
+  // No queued work → idle, not stalled (the false-positive that caused restart loops).
+  if (pendingWorkCount !== undefined && pendingWorkCount <= 0) {
+    return false;
+  }
   const recorded = heartbeats.filter((heartbeat) => heartbeat.last_job_at !== null);
   if (recorded.length === 0) {
     return false;

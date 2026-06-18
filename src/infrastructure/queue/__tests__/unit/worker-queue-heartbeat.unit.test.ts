@@ -31,4 +31,22 @@ describe('worker-queue-heartbeat', () => {
     ];
     expect(isWorkerThroughputStalled(heartbeats, stallTimeoutMs, nowMs)).toBe(true);
   });
+
+  it('returns false when heartbeats are stale but no work is pending (idle, not stalled)', () => {
+    const heartbeats: WorkerQueueHeartbeat[] = [
+      { queue: 'mail', last_job_at: '2026-05-19T11:00:00.000Z' },
+      { queue: 'webhook-delivery', last_job_at: '2026-05-19T10:30:00.000Z' },
+    ];
+    // pendingWorkCount = 0 → an idle worker during a quiet period must not be flagged stalled
+    // (this is the restart-loop false-positive the queue-depth check fixes).
+    expect(isWorkerThroughputStalled(heartbeats, stallTimeoutMs, nowMs, 0)).toBe(false);
+  });
+
+  it('returns true when heartbeats are stale and work is pending (genuinely stalled)', () => {
+    const heartbeats: WorkerQueueHeartbeat[] = [
+      { queue: 'mail', last_job_at: '2026-05-19T11:00:00.000Z' },
+      { queue: 'webhook-delivery', last_job_at: '2026-05-19T10:30:00.000Z' },
+    ];
+    expect(isWorkerThroughputStalled(heartbeats, stallTimeoutMs, nowMs, 5)).toBe(true);
+  });
 });

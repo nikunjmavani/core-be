@@ -9,6 +9,7 @@ import {
 import { env, resetEnvCacheForTests } from '@/shared/config/env.config.js';
 import type * as MetricsModule from '@/infrastructure/observability/metrics/metrics.js';
 import type * as WorkerQueueHeartbeatModule from '@/infrastructure/queue/worker-runtime/worker-queue-heartbeat.js';
+import type * as BullmqMetricsModule from '@/infrastructure/observability/metrics/bullmq-metrics.js';
 
 vi.mock(
   '@/infrastructure/queue/worker-runtime/worker-queue-heartbeat.js',
@@ -20,6 +21,15 @@ vi.mock(
     };
   },
 );
+
+vi.mock('@/infrastructure/observability/metrics/bullmq-metrics.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof BullmqMetricsModule>();
+  return {
+    ...actual,
+    // Default: no pending work, so the readiness probe never reads Redis in unit tests.
+    readQueuesPendingWorkTotal: vi.fn().mockResolvedValue(0),
+  };
+});
 
 vi.mock('@/infrastructure/observability/metrics/metrics.js', async (importOriginal) => {
   const actual = await importOriginal<typeof MetricsModule>();
@@ -105,9 +115,12 @@ describe('worker-health.server', () => {
     });
   });
 
-  it('returns 503 on /readyz when throughput heartbeats are stale', async () => {
+  it('returns 503 on /readyz when throughput heartbeats are stale and work is pending', async () => {
     const { readWorkerQueueHeartbeats } = await import(
       '@/infrastructure/queue/worker-runtime/worker-queue-heartbeat.js'
+    );
+    const { readQueuesPendingWorkTotal } = await import(
+      '@/infrastructure/observability/metrics/bullmq-metrics.js'
     );
     vi.mocked(readWorkerQueueHeartbeats)
       .mockResolvedValueOnce([])
@@ -119,10 +132,37 @@ describe('worker-health.server', () => {
           ).toISOString(),
         },
       ]);
+    // Pending work present → stale heartbeats are a genuine stall.
+    vi.mocked(readQueuesPendingWorkTotal).mockResolvedValueOnce(5);
     markWorkerHealthReady(3);
     const response = await getHealth(readyUrl);
     expect(response.statusCode).toBe(503);
     expect(JSON.parse(response.body)).toMatchObject({ status: 'stalled', role: 'worker' });
+  });
+
+  it('returns 200 on /readyz when heartbeats are stale but no work is pending (idle)', async () => {
+    const { readWorkerQueueHeartbeats } = await import(
+      '@/infrastructure/queue/worker-runtime/worker-queue-heartbeat.js'
+    );
+    const { readQueuesPendingWorkTotal } = await import(
+      '@/infrastructure/observability/metrics/bullmq-metrics.js'
+    );
+    vi.mocked(readWorkerQueueHeartbeats)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          queue: 'mail',
+          last_job_at: new Date(
+            Date.now() - env.WORKER_HEALTH_STALL_TIMEOUT_MS - 1_000,
+          ).toISOString(),
+        },
+      ]);
+    // No pending work → idle worker must stay ready (no restart-loop false positive).
+    vi.mocked(readQueuesPendingWorkTotal).mockResolvedValueOnce(0);
+    markWorkerHealthReady(3);
+    const response = await getHealth(readyUrl);
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toMatchObject({ status: 'ok', role: 'worker' });
   });
 
   it('returns 401 on /metrics without bearer token when METRICS_SCRAPE_TOKEN is set', async () => {

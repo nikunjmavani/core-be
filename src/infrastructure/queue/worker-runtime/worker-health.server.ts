@@ -6,7 +6,10 @@ import {
 } from '@/infrastructure/observability/metrics/metrics.js';
 import { env, getEnv } from '@/shared/config/env.config.js';
 import { isBearerTokenValid } from '@/shared/utils/security/bearer-token.util.js';
-import { MONITORED_BULLMQ_QUEUE_NAMES } from '@/infrastructure/observability/metrics/bullmq-metrics.js';
+import {
+  MONITORED_BULLMQ_QUEUE_NAMES,
+  readQueuesPendingWorkTotal,
+} from '@/infrastructure/observability/metrics/bullmq-metrics.js';
 import {
   isWorkerThroughputStalled,
   readWorkerQueueHeartbeats,
@@ -86,14 +89,21 @@ function handleLivenessProbe(response: http.ServerResponse): void {
 }
 
 async function handleReadinessProbe(response: http.ServerResponse): Promise<void> {
-  const [readiness, worker_queues, throughputHeartbeats] = await Promise.all([
-    runDependencyReadinessProbes(),
-    readWorkerQueueHeartbeats(MONITORED_BULLMQ_QUEUE_NAMES),
-    readWorkerQueueHeartbeats(WORKER_THROUGHPUT_QUEUE_NAMES),
-  ]);
+  const [readiness, worker_queues, throughputHeartbeats, throughputPendingWork] = await Promise.all(
+    [
+      runDependencyReadinessProbes(),
+      readWorkerQueueHeartbeats(MONITORED_BULLMQ_QUEUE_NAMES),
+      readWorkerQueueHeartbeats(WORKER_THROUGHPUT_QUEUE_NAMES),
+      readQueuesPendingWorkTotal(WORKER_THROUGHPUT_QUEUE_NAMES),
+    ],
+  );
+  // Only treat stale throughput heartbeats as a stall when there is actually pending work to
+  // drain; an idle worker with an empty queue (quiet periods, cron-only workers) is healthy.
   const stalled = isWorkerThroughputStalled(
     throughputHeartbeats,
     env.WORKER_HEALTH_STALL_TIMEOUT_MS,
+    Date.now(),
+    throughputPendingWork,
   );
   const processReady = workerReady && !stalled && readiness.status === 'ok';
   const status = resolveWorkerHealthStatus({

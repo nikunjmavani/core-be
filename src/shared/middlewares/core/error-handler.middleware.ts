@@ -17,8 +17,11 @@ function getRequestId(request: { id?: string }): string {
   return request.id ?? randomUUID();
 }
 
-function getDocsBaseUrl(): string {
-  return env.API_DOCS_BASE_URL ?? 'https://docs.example.com/errors';
+function getDocsBaseUrl(): string | null {
+  // Return null (not a placeholder domain) when unset so the error payload omits
+  // `documentation_url` entirely rather than linking callers to a non-existent
+  // `docs.example.com` page.
+  return env.API_DOCS_BASE_URL ?? null;
 }
 
 function buildErrorPayload(
@@ -27,6 +30,7 @@ function buildErrorPayload(
   detail: string,
   errors?: { field: string; message: string }[],
 ) {
+  const docsBaseUrl = getDocsBaseUrl();
   const payload: {
     type: string;
     code: string;
@@ -37,8 +41,8 @@ function buildErrorPayload(
     type,
     code,
     detail,
-    documentation_url: `${getDocsBaseUrl()}/${code}`,
   };
+  if (docsBaseUrl) payload.documentation_url = `${docsBaseUrl}/${code}`;
   if (errors?.length) payload.errors = errors;
   return payload;
 }

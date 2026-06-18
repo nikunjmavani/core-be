@@ -287,6 +287,15 @@ const envSchemaBase = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
   /** Stripe Node client per-request HTTP timeout (ms). */
   STRIPE_HTTP_TIMEOUT_MS: z.coerce.number().int().min(1000).max(180_000).default(30_000),
+  /**
+   * Stripe webhook signature timestamp tolerance (seconds). Default 150 (half of Stripe's
+   * 300 s default) keeps the replay window tight for normal operation. Operators who need
+   * to recover deliveries after an API outage longer than the tolerance (Stripe retries
+   * carry the original signing timestamp, so every retry fails once the event ages past the
+   * window) can widen this up to 1800 s; the local-ledger reclaim worker covers events that
+   * did reach the API, this widens acceptance for events that arrive late.
+   */
+  STRIPE_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().min(60).max(1800).default(150),
 
   // Sentry
   SENTRY_DSN: z.url().optional(),

@@ -1503,6 +1503,7 @@ src/
     │   │   ├── readiness-probe-timeout.util.ts
     │   │   ├── readiness-probes.util.ts
     │   │   ├── redis-counter.util.ts
+    │   │   ├── rss-monitor.util.ts
     │   │   └── timeout-error.util.ts
     │   ├── security/
     │   │   ├── __tests__/
@@ -1735,7 +1736,6 @@ src/
     ├── load/
     │   ├── k6/
     │   │   ├── data/
-    │   │   │   └── credential-pool.json
     │   │   ├── helpers/
     │   │   │   ├── auth.js
     │   │   │   ├── checks.js

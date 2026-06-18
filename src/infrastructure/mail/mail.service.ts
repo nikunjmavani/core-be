@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { env } from '@/shared/config/env.config.js';
+import { PROJECT_DISPLAY_NAME } from '@/shared/constants/project-identity.constants.js';
 import { CircuitBreakerOpenError } from '@/infrastructure/resilience/circuit-breaker.js';
 import { buildOutboundCallOptions, outboundCall } from '@/infrastructure/outbound/index.js';
 import { ResendApiError } from '@/infrastructure/mail/resend-api.error.js';
@@ -72,7 +73,9 @@ async function sendEmailViaResend(
   if (!fromAddress) {
     throw new Error('EMAIL_FROM_ADDRESS is not configured');
   }
-  const fromName = env.EMAIL_FROM_NAME ?? 'Core';
+  // Brand-aware default: fall back to the canonical product name rather than a hardcoded
+  // 'Core' literal so white-label deployments send from their own configured identity.
+  const fromName = env.EMAIL_FROM_NAME ?? PROJECT_DISPLAY_NAME;
   const client = getClient();
   const requestOptions: ResendEmailRequestOptions = omitUndefined({
     signal,

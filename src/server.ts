@@ -15,9 +15,17 @@ import { assertRedisTlsVerification } from '@/infrastructure/cache/assert-redis-
 import { registerPostgresPoolMetrics } from '@/infrastructure/observability/metrics/db-pool-metrics.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { startRssMonitor } from '@/shared/utils/infrastructure/rss-monitor.util.js';
 import { assertHostedTrustProxyConfigured } from '@/shared/utils/http/trust-proxy.util.js';
 import { assertJwtKeyMaterial } from '@/shared/utils/security/jwt.util.js';
 import { buildApp } from '@/app.js';
+
+/**
+ * RSS warn ceiling for the API process (MB). Higher than the worker's 512 MB because the
+ * request-serving process holds more concurrent per-request state; a sustained breach signals
+ * a leak well before the container OOM-kills.
+ */
+const API_RSS_WARNING_THRESHOLD_MEGABYTES = 1024;
 
 // Initialize Sentry before anything else
 initSentry();
@@ -73,6 +81,11 @@ async function main() {
   const app = await buildApp();
   await app.listen({ port: env.PORT, host: env.HTTP_BIND_HOST });
   logger.info({ host: env.HTTP_BIND_HOST, port: env.PORT }, 'Server listening');
+
+  // Memory observability parity with the worker (which monitors RSS in its bootstrap): warn
+  // when the API process RSS crosses the threshold so a leak pages before an OOM kill. The
+  // timer is unref()-ed so it never blocks graceful shutdown.
+  startRssMonitor({ processLabel: 'api', thresholdMegabytes: API_RSS_WARNING_THRESHOLD_MEGABYTES });
 }
 
 main().catch((error) => {

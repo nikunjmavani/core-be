@@ -1,6 +1,18 @@
 import { z } from 'zod';
 import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
-import { trimmedString } from '@/shared/utils/validation/validation.util.js';
+import { trimmedString, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
+
+/**
+ * Zod schema for the `:webhook_id` path param shared by the get/update/delete/test/
+ * delivery-attempts routes. The bound is permissive (length only) so it never rejects an id
+ * the controller would accept — the authoritative entity-prefix check stays in the controller
+ * via `validatePublicIdParam`; this gates empty/oversized values at the Fastify boundary.
+ */
+export const webhookIdParamsDto = z
+  .object({
+    webhook_id: trimmedStringMinMax(1, 28),
+  })
+  .strict();
 
 /**
  * Zod schema for the `GET /notify/webhooks` query string — extends cursor pagination

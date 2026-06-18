@@ -69,6 +69,33 @@ export async function refreshBullMQQueueGauges(): Promise<void> {
 }
 
 /**
+ * Sums `waiting + delayed` job counts across `queueNames`, reusing the pooled metrics
+ * `Queue` clients.
+ *
+ * @remarks
+ * Used by the worker readiness probe to distinguish a genuinely stalled worker (pending
+ * work but no recent completions) from a healthy idle worker (nothing queued). On a
+ * per-queue read failure the queue contributes 0 — a transient count error must not be
+ * read as "work is piling up" and trigger a restart loop; a real Redis outage is caught
+ * independently by the dependency readiness probe.
+ */
+export async function readQueuesPendingWorkTotal(queueNames: readonly string[]): Promise<number> {
+  const perQueueCounts = await Promise.all(
+    queueNames.map(async (queueName) => {
+      try {
+        const queue = getOrCreateQueueClient(queueName);
+        const counts = await queue.getJobCounts('waiting', 'delayed');
+        return (counts.waiting ?? 0) + (counts.delayed ?? 0);
+      } catch (error) {
+        logger.warn({ queueName, error }, 'worker.health.pending_work_count.failed');
+        return 0;
+      }
+    }),
+  );
+  return perQueueCounts.reduce((total, value) => total + value, 0);
+}
+
+/**
  * Closes every pooled `Queue` client created by {@link refreshBullMQQueueGauges}
  * so the metrics scraper releases its Redis sockets cleanly on shutdown.
  */

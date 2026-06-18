@@ -24,6 +24,12 @@ function shouldUseStripeFetchHttpClientForContractOutboundTests(): boolean {
 /**
  * Get the singleton Stripe client instance.
  * Throws if STRIPE_SECRET_KEY is not configured.
+ *
+ * @remarks
+ * The client is cached for the process lifetime. Rotating `STRIPE_SECRET_KEY` therefore
+ * requires a process restart (a deliberate design choice — runtime key swaps are rare and
+ * a restart is the safe rollout path); {@link resetStripeClientForTests} exists only to
+ * reset the singleton between Vitest cases.
  */
 export function getStripeClient(): Stripe {
   if (stripeInstance) return stripeInstance;
@@ -49,8 +55,20 @@ export function getStripeClient(): Stripe {
     timeout: env.STRIPE_HTTP_TIMEOUT_MS,
     ...optionalOutboundHttpClientForContractTests,
   });
+  // Logged on first instantiation (lazy) rather than at module load, so importing this
+  // module in a worker that never touches Stripe emits no noise.
+  logger.info('Stripe client initialized');
 
   return stripeInstance;
+}
+
+/**
+ * Test-only reset of the cached Stripe singleton so a Vitest case can re-instantiate the
+ * client with different env (e.g. toggling the contract-test fetch HTTP client). Never call
+ * this from runtime code — production key rotation is handled by a process restart.
+ */
+export function resetStripeClientForTests(): void {
+  stripeInstance = null;
 }
 
 /**
@@ -330,8 +348,11 @@ export async function updateStripeSubscription(
  * `Stripe.Event`. Throws when the secret is missing or no configured secret matches.
  *
  * @remarks
- * **Tolerance:** 150 seconds (half of Stripe's 300 s default) to halve the replay window;
- * legitimate deliveries from Stripe arrive within seconds of signing.
+ * **Tolerance:** configurable via `STRIPE_WEBHOOK_TOLERANCE_SECONDS` (default 150 — half of
+ * Stripe's 300 s default — to halve the replay window; legitimate deliveries arrive within
+ * seconds of signing). Operators can widen it (up to 1800 s) to accept deliveries that arrive
+ * late after an API outage longer than the window, since Stripe retries carry the original
+ * signing timestamp.
  *
  * **Key rotation (sec-new-B3):** `STRIPE_WEBHOOK_SECRET` may be a comma-separated list of
  * `whsec_`-prefixed secrets (e.g. `whsec_old,whsec_new`). Each segment is trimmed; empty
@@ -359,12 +380,15 @@ export function constructStripeWebhookEvent(
   let lastError: unknown;
   for (const secret of secrets) {
     try {
-      return stripe.webhooks.constructEvent(body, signature, secret, 150);
+      return stripe.webhooks.constructEvent(
+        body,
+        signature,
+        secret,
+        env.STRIPE_WEBHOOK_TOLERANCE_SECONDS,
+      );
     } catch (error) {
       lastError = error;
     }
   }
   throw lastError;
 }
-
-logger.info('Stripe client module loaded');

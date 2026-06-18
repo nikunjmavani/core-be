@@ -5,6 +5,7 @@ import { ConflictError, UnauthorizedError } from '@/shared/errors/index.js';
 import { requireAllowedSourceOriginForCookieSessionRoute } from '@/shared/middlewares/session/cookie-session-origin.pre-handler.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import {
   clearSessionCookie,
   parseSessionCookieValue,
@@ -35,8 +36,11 @@ export function createAuthSessionHandlers({
       try {
         const payload = await verifyAccessToken(token);
         actorUserPublicId = payload.userId;
-      } catch {
-        // proceed with logout even if token is expired
+      } catch (error) {
+        // Proceed with logout even if the access token is expired/invalid — but keep a
+        // debug trace so a spike in unverifiable logout tokens is observable rather than
+        // silently swallowed (the audit actor id is simply omitted from the audit event).
+        logger.debug({ error }, 'auth.logout.token_unverifiable');
       }
 
       await authService.logout(token);

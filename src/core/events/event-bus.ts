@@ -242,6 +242,13 @@ export async function scheduleCommitDispatch(
         { error, requestId, taskType: task.type },
         'commit-dispatch.append_failed.fallback_to_memory',
       );
+      // The in-memory onCommit fallback below is NOT crash-safe (a process exit before
+      // flushOnCommit drops the side effect), so surface every fallback to Sentry — not
+      // just the Pino warn — so an operator is alerted that durable persistence degraded.
+      captureException(error, {
+        requestId,
+        tags: { source: 'commit-dispatch.append_failed', taskType: task.type },
+      });
     }
   }
   eventBus.onCommit(() => executeCommitDispatchTask(task));

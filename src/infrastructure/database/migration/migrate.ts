@@ -337,8 +337,10 @@ main()
     logger.error({ error }, 'Migrations failed');
     try {
       await sql.end({ timeout: 5_000 });
-    } catch {
-      // ignore
+    } catch (endError) {
+      // Cleanup-only: the process is exiting non-zero regardless, but trace the pool-close
+      // failure at debug so it is not entirely invisible during incident triage.
+      logger.debug({ endError }, 'migrate.sql_end_failed_during_cleanup');
     }
     process.exit(1);
   });

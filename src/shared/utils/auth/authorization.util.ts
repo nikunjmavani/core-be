@@ -3,6 +3,7 @@ import { resolveUserOrganizationPermissions } from '@/domains/tenancy/sub-domain
 import type { GlobalRole } from '@/shared/constants/roles.constants.js';
 import { ForbiddenError, UnauthorizedError } from '@/shared/errors/index.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
  * Best-effort emit `auth.permission.denied` audit row before throwing
@@ -29,8 +30,10 @@ async function emitPermissionDenyAudit(
       severity: 'WARNING',
       metadata,
     });
-  } catch {
-    // best-effort: a failure to record must not affect the 403 response.
+  } catch (error) {
+    // Best-effort: a failure to record must not affect the 403 response. Keep a debug
+    // trace so a persistently failing audit-write path is observable instead of silent.
+    logger.debug({ error }, 'auth.permission.denied.audit_write_failed');
   }
 }
 
