@@ -51,15 +51,21 @@
     "codex": {
       "label": "Codex",
       "entrypoint": "AGENTS.md",
-      "consumes": ["skills", "commands", "mcp", "docs"],
-      "hooksTarget": null,
+      "consumes": ["skills", "commands", "hooks", "mcp", "docs"],
+      "hooksTarget": ".codex/hooks.json",
       "capabilities": {
         "skills": true,
         "subagents": false,
         "plugins": false,
         "outputStyles": false,
         "mcpFormat": "toml",
-        "hookEvents": [],
+        "hookEvents": [
+          "SessionStart",
+          "UserPromptSubmit",
+          "PreToolUse",
+          "PostToolUse",
+          "Stop"
+        ],
         "agentsMd": { "linkFollow": false, "maxBytes": 32768, "overrideFile": "AGENTS.override.md" }
       }
     }

@@ -34,8 +34,16 @@ referenced `.sh` script exists and that hook commands use `$CLAUDE_PROJECT_DIR`
   are Claude-only — Cursor mirrors only the shell guard.)
 - **Cursor** — `.cursor/hooks.json` → `beforeShellExecution`. Command paths resolve
   **relative to `.cursor/`**, so the entry uses `../agent-os/hooks/…`.
-- **Codex** — no committable hook; enforce via `~/.codex/config.toml`
-  (sandbox/approvals) + the policy in `AGENTS.md`.
+- **Codex** — `.codex/hooks.json` is generated from the compatible subset in
+  `agent-os/hooks/hooks.json` (drift-checked by `pnpm agent-os:generate:check`)
+  and requires project trust / hook review in Codex: `SessionStart` runs
+  `session-start.sh`; `UserPromptSubmit` runs `prompt-skill-router.sh`;
+  `PreToolUse` on Bash runs `guardrails.mjs`; `Stop` runs
+  `stop-gate-reminder.sh`. Claude-only edit hooks (`format-edits.sh`,
+  `skill-reminder.sh`, `guard-edits.sh`) are intentionally not wired for Codex
+  because Codex file edits arrive through `apply_patch` payloads rather than
+  Claude `file_path` edit payloads. Local sandbox/approval defaults still live in
+  `~/.codex/config.toml`; project MCP defaults live in `.codex/config.toml`.
 
 ## Design rules
 
