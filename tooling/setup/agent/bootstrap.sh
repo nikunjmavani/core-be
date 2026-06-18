@@ -2,7 +2,7 @@
 # One-shot cloud-session bring-up for core-be on Claude Code on the web.
 #
 # Runs every agent setup helper in order — Node, gh, Docker CLI/Compose, Docker
-# images (registry mirror), CodeGraph, Headroom, gitleaks — scaffolds a
+# daemon, Docker images (registry mirror), CodeGraph, Headroom, gitleaks — scaffolds a
 # self-contained `.env.local` (`pnpm setup:local --only-env`), then brings up
 # the local Docker stack (Postgres + Redis), migrates, seeds, and verifies the
 # app is healthy (/livez + /readyz). A single command to make a cloud session
@@ -117,7 +117,8 @@ ok "[7/${TOTAL}] .env.local ready"
 
 # 8) Postgres + Redis (docker compose) --------------------------------------
 step "[8/${TOTAL}] Postgres + Redis (docker compose)"
-SONAR=0 pnpm compose:up >&2 || die "compose:up failed (is dockerd running? see step 3)"
+bash "${AGENT_DIR}/ensure-docker-daemon.sh" >&2 || die "Docker daemon is not reachable (see ensure-docker-daemon diagnostics above)"
+SONAR=0 pnpm compose:up >&2 || die "compose:up failed (Docker daemon was reachable before compose; inspect docker compose output above)"
 pnpm compose:wait >&2 || die "Postgres did not become ready"
 ok "[8/${TOTAL}] Postgres + Redis healthy"
 
