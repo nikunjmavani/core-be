@@ -275,7 +275,7 @@ Domain folder = DB schema; each **sub-domain** is a folder with its own controll
   - Organizations (account-level): `GET|POST /api/v1/tenancy/organizations` (list / create a team org), `GET /api/v1/tenancy/organizations/by-slug/:slug`.
   - Active organization: `GET|PATCH|DELETE /api/v1/tenancy/organization`.
   - Settings: `GET|PATCH /api/v1/tenancy/organization/settings`.
-  - Notification policies: `GET|POST /api/v1/tenancy/organization/notification-policies`, `PATCH|DELETE .../notification-policies/:policy_id`.
+  - Notification policies: `GET|POST /api/v1/tenancy/organization/notification-policies`, `PATCH|DELETE .../notification-policies/:notification_policy_id`.
   - Roles: `GET|POST /api/v1/tenancy/organization/roles`, `GET|PATCH|DELETE .../roles/:role_id`; role permissions `GET|PUT .../roles/:role_id/permissions`.
   - Memberships: `GET|POST /api/v1/tenancy/organization/memberships`, `GET|PATCH|DELETE .../memberships/:membership_id`; `POST /api/v1/tenancy/organization/leave`, `POST /api/v1/tenancy/organization/transfer-ownership`.
   - Invitations: `GET|POST /api/v1/tenancy/organization/invitations`, `DELETE .../invitations/:invitation_id`; cross-org accept/decline are account-level: `POST /api/v1/tenancy/invitations/:invitation_id/accept|decline`.

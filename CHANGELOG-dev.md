@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.8.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.8.1-dev.0...v4.8.2-dev.0) (2026-06-17)
+
+
+### Changed
+
+* **api:** semantic path params, single-tag operations, invitation grouping ([#691](https://github.com/nikunjmavani/core-be/issues/691)) ([94f4ecb](https://github.com/nikunjmavani/core-be/commit/94f4ecb4adf2e28f2a905f3d5b4c0696619cf2f2))
+
 ## [4.8.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.8.0-dev.0...v4.8.1-dev.0) (2026-06-17)
 
 

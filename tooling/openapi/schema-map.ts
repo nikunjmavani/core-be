@@ -134,7 +134,7 @@ export const routeSchemaMap: Record<string, ZodTypeAny> = {
   // ── Organization: Notification Policies ──
   'POST /api/v1/tenancy/organization/notification-policies':
     createOrganizationNotificationPolicyDto,
-  'PATCH /api/v1/tenancy/organization/notification-policies/{policy_id}':
+  'PATCH /api/v1/tenancy/organization/notification-policies/{notification_policy_id}':
     updateOrganizationNotificationPolicyDto,
 
   // ── Memberships ──

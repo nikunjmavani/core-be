@@ -79,7 +79,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       summary: 'Send magic link email',
       description:
         'Sends a passwordless login link to the provided email address. The link expires after a short period.',
-      tags: ['Auth', 'Magic Link'],
+      tags: ['Magic Link'],
       body: MagicLinkSendDto,
     },
     handler: controller.sendMagicLink,
@@ -90,7 +90,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       summary: 'Verify magic link token',
       description:
         'Validates the magic link token and returns access and refresh tokens on success.',
-      tags: ['Auth', 'Magic Link'],
+      tags: ['Magic Link'],
       body: MagicLinkVerifyDto,
     },
     handler: controller.verifyMagicLink,
@@ -103,7 +103,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'List available OAuth providers',
         description:
           'Returns a list of configured OAuth providers (e.g. Google, GitHub) available for login.',
-        tags: ['Auth', 'OAuth'],
+        tags: ['OAuth'],
       },
     },
     controller.listOauthProviders,
@@ -115,7 +115,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       summary: 'Initiate OAuth flow',
       description:
         'Returns the OAuth provider authorization URL and nonce cookie for a browser client to begin the login flow.',
-      tags: ['Auth', 'OAuth'],
+      tags: ['OAuth'],
       params: oauthProviderParamsDto,
     },
     handler: controller.oauthRedirect,
@@ -126,7 +126,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       summary: 'OAuth callback',
       description:
         'Handles the OAuth provider callback after user authorization. Exchanges the code for tokens and creates or links the user account.',
-      tags: ['Auth', 'OAuth'],
+      tags: ['OAuth'],
       params: oauthProviderParamsDto,
       querystring: OauthCallbackQueryDto,
     },
@@ -139,7 +139,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       summary: 'Request password reset',
       description:
         'Sends a password reset email to the user. Returns 200 even if the email is not registered (to prevent enumeration).',
-      tags: ['Auth', 'Password'],
+      tags: ['Password'],
       body: ForgotPasswordDto,
     },
     handler: controller.forgotPassword,
@@ -150,7 +150,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     schema: {
       summary: 'Reset password with token',
       description: 'Resets the user password using a valid reset token received via email.',
-      tags: ['Auth', 'Password'],
+      tags: ['Password'],
       body: ResetPasswordDto,
     },
     handler: controller.resetPassword,
@@ -162,7 +162,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       summary: 'Verify email address',
       description:
         "Confirms the user's email address using a verification token sent during registration.",
-      tags: ['Auth', 'Email Verification'],
+      tags: ['Email Verification'],
       body: VerifyEmailDto,
     },
     handler: controller.verifyEmail,
@@ -180,7 +180,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Complete MFA during login',
         description:
           'Completes the login flow for an MFA-enabled account. Requires the short-lived mfa_session_token issued by POST /auth/login after password verification, plus a valid TOTP or recovery code. Returns access and refresh tokens and sets the session cookie on success.',
-        tags: ['Auth', 'MFA'],
+        tags: ['MFA'],
         body: MfaLoginVerifyDto,
       },
     },
@@ -193,7 +193,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       summary: 'Begin passkey authentication',
       description:
         'Returns WebAuthn authentication options and an opaque challenge token for a passwordless login ceremony. The client echoes the challenge back at /auth/webauthn/authenticate/verify. Public endpoint used during login.',
-      tags: ['Auth', 'WebAuthn'],
+      tags: ['WebAuthn'],
       body: webauthnAuthenticateOptionsDto,
     },
     handler: controller.webauthnAuthenticateOptions,
@@ -204,7 +204,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       summary: 'Complete passkey authentication',
       description:
         'Verifies the assertion response from a WebAuthn authentication ceremony and, on success, returns access and refresh tokens and sets the session cookie. Public endpoint used during login.',
-      tags: ['Auth', 'WebAuthn'],
+      tags: ['WebAuthn'],
       body: webauthnAuthenticateVerifyDto,
     },
     handler: controller.webauthnAuthenticateVerify,
@@ -217,7 +217,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Refresh access token',
         description:
           'Exchanges a valid session cookie for a new short-lived access token. The session_id httpOnly cookie is sent automatically by the browser. When ALLOWED_ORIGINS is set, requests that include an Origin header must match that allowlist (403 otherwise); requests without Origin are allowed for non-browser clients.',
-        tags: ['Auth', 'Token'],
+        tags: ['Token'],
       },
     },
     controller.refreshToken,
@@ -230,7 +230,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Switch to personal organization',
         description:
           "Re-mints the access token scoped to the caller's personal organization (no body — the server resolves it; can never 403). Returns a new access token; the client swaps its Bearer to it.",
-        tags: ['Auth', 'Organization'],
+        tags: ['Organization'],
       },
     },
     controller.switchToPersonalOrganization,
@@ -243,7 +243,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Switch active organization',
         description:
           "Re-mints the access token scoped to the given organization after validating the caller's active membership (403 if not a member). Returns a new access token; the client swaps its Bearer to it.",
-        tags: ['Auth', 'Organization'],
+        tags: ['Organization'],
         body: z.object({
           organization_id: z
             .string()
@@ -266,7 +266,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Change current password',
         description:
           "Changes the authenticated user's password. Requires the current password for verification.",
-        tags: ['Auth', 'Password'],
+        tags: ['Password'],
         body: ChangePasswordDto,
       },
     },
@@ -295,7 +295,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'Resend email verification',
         description: 'Resends the email verification link to the currently authenticated user.',
-        tags: ['Auth', 'Email Verification'],
+        tags: ['Email Verification'],
       },
     },
     controller.resendEmailVerification,
@@ -310,7 +310,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Begin MFA enrollment (phase 1 of 2)',
         description:
           'Stages a TOTP secret in Redis and returns it with a provisioning URI for authenticator app setup. Phase 2 (`POST /auth/me/mfa/enroll/confirm`) verifies a fresh code and atomically persists the auth method, generates recovery codes, and flips is_mfa_enabled. Nothing is written to Postgres at this step.',
-        tags: ['Auth', 'MFA'],
+        tags: ['MFA'],
         body: MfaEnrollDto,
       },
     },
@@ -326,7 +326,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Confirm MFA enrollment (phase 2 of 2)',
         description:
           'Verifies a 6-digit TOTP code against the secret staged by `POST /auth/me/mfa/enroll`. On success the auth method is persisted, recovery codes are generated and hashed, and is_mfa_enabled is flipped. The plaintext recovery codes are returned EXACTLY ONCE in this response.',
-        tags: ['Auth', 'MFA'],
+        tags: ['MFA'],
         body: MfaEnrollConfirmDto,
       },
     },
@@ -342,7 +342,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Begin passkey registration',
         description:
           'Returns WebAuthn registration options and an opaque challenge token the client echoes back at /auth/me/webauthn/register/verify. Requires recent step-up authentication.',
-        tags: ['Auth', 'WebAuthn'],
+        tags: ['WebAuthn'],
         body: z.object({}).strict(),
       },
     },
@@ -358,7 +358,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Complete passkey registration',
         description:
           'Verifies the attestation response from a WebAuthn registration ceremony and persists the credential. Requires recent step-up authentication.',
-        tags: ['Auth', 'WebAuthn'],
+        tags: ['WebAuthn'],
         body: webauthnRegisterVerifyDto,
       },
     },
@@ -372,7 +372,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'List enrolled MFA methods',
         description: 'Returns all MFA methods enrolled by the authenticated user.',
-        tags: ['Auth', 'MFA'],
+        tags: ['MFA'],
       },
     },
     controller.listMfaMethods,
@@ -387,7 +387,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Remove MFA method',
         description:
           'Deletes an enrolled MFA method. Cannot remove the last MFA method if MFA is required by organization policy.',
-        tags: ['Auth', 'MFA'],
+        tags: ['MFA'],
         params: mfaMethodIdParamsDto,
       },
     },
@@ -407,7 +407,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Revoke all sessions',
         description:
           'Revokes all active sessions for the authenticated user except the current one. Requires recent step-up authentication.',
-        tags: ['Auth', 'Session'],
+        tags: ['Session'],
       },
     },
     controller.revokeAllSessions,
@@ -421,7 +421,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Verify MFA code',
         description:
           'Validates a TOTP code to complete MFA verification during login or enrollment confirmation.',
-        tags: ['Auth', 'MFA'],
+        tags: ['MFA'],
         body: MfaVerifyDto,
       },
     },
@@ -450,7 +450,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'List my auth methods',
         description:
           'Returns all authentication methods (password, OAuth, magic link) linked to the authenticated user.',
-        tags: ['Auth', 'Auth Method'],
+        tags: ['Auth Method'],
       },
     },
     controller.listAuthMethods,
@@ -465,7 +465,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Add auth method',
         description:
           "Links a new authentication method (e.g. OAuth provider) to the authenticated user's account.",
-        tags: ['Auth', 'Auth Method'],
+        tags: ['Auth Method'],
         body: CreateAuthMethodDto,
       },
     },
@@ -481,7 +481,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Remove auth method',
         description:
           "Removes an authentication method from the user's account. Cannot remove the last auth method.",
-        tags: ['Auth', 'Auth Method'],
+        tags: ['Auth Method'],
         params: authMethodPublicIdParamsDto,
       },
     },
@@ -496,7 +496,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'List my active sessions',
         description:
           'Returns all active sessions for the authenticated user, including device and location info.',
-        tags: ['Auth', 'Session'],
+        tags: ['Session'],
       },
     },
     controller.listSessions,
@@ -512,7 +512,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Revoke a specific session',
         description:
           'Revokes a specific session by its ID. Cannot revoke the current session (use logout instead). Requires recent step-up authentication.',
-        tags: ['Auth', 'Session'],
+        tags: ['Session'],
         params: sessionIdParamsDto,
       },
     },

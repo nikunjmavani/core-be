@@ -74,7 +74,7 @@ describe('createUserDataExportController', () => {
     const response = await controller.getExportStatus(
       mockRequest({
         auth: { kind: 'user' as const, userId: userPublicId, role: 'user' },
-        params: { export_id: exportId },
+        params: { data_export_id: exportId },
       }),
       mockReply(),
     );
@@ -106,7 +106,7 @@ describe('createUserDataExportController', () => {
     await controller.getExportStatus(
       mockRequest({
         auth: { kind: 'user' as const, userId: userPublicId, role: 'user' },
-        params: { export_id: exportId },
+        params: { data_export_id: exportId },
       }),
       mockReply(),
     );
@@ -138,7 +138,7 @@ describe('createUserDataExportController', () => {
     await controller.getExportStatus(
       mockRequest({
         auth: { kind: 'user' as const, userId: userPublicId, role: 'user' },
-        params: { export_id: exportId },
+        params: { data_export_id: exportId },
       }),
       mockReply(),
     );

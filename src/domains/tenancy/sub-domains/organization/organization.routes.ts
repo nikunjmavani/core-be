@@ -215,7 +215,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           summary: 'List organization audit logs',
           description:
             'Returns a paginated list of audit log entries for the organization. Requires AUDIT_LOG_READ permission.',
-          tags: ['Organization', 'Audit Log'],
+          tags: ['Audit Log'],
           querystring: ListAuditLogsQueryDto,
         },
         onRequest: [app.authenticate],
@@ -235,7 +235,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           summary: 'Get organization settings',
           description:
             'Returns the organization settings (email notifications, security policy). Requires ORGANIZATION_READ permission.',
-          tags: ['Organization', 'Organization Settings'],
+          tags: ['Organization Settings'],
         },
       },
       settingsController.getSettings,
@@ -249,7 +249,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
         schema: {
           summary: 'Update organization settings',
           description: 'Updates organization settings. Requires ORGANIZATION_UPDATE permission.',
-          tags: ['Organization', 'Organization Settings'],
+          tags: ['Organization Settings'],
           body: updateOrganizationSettingsDto,
         },
         onRequest: [app.authenticate],
@@ -266,7 +266,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           summary: 'List API keys',
           description:
             'Returns all API keys for the organization. The key value is masked after creation. Requires API_KEY_READ permission.',
-          tags: ['Organization', 'API Key'],
+          tags: ['API Key'],
           querystring: listOrganizationApiKeysQueryDto,
         },
         onRequest: [app.authenticate],
@@ -283,7 +283,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
         schema: {
           summary: 'Get API key',
           description: 'Returns a single API key by ID. Requires API_KEY_READ permission.',
-          tags: ['Organization', 'API Key'],
+          tags: ['API Key'],
         },
       },
       apiKeyController.getApiKey,
@@ -300,7 +300,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           summary: 'Create API key',
           description:
             'Creates a new API key. The full key value is only returned once in the creation response. Requires a user principal with API_KEY_MANAGE permission.',
-          tags: ['Organization', 'API Key'],
+          tags: ['API Key'],
           body: createOrganizationApiKeyDto,
         },
         onRequest: [app.authenticate],
@@ -316,7 +316,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
         schema: {
           summary: 'Update API key',
           description: 'Updates an API key (name or status). Requires API_KEY_MANAGE permission.',
-          tags: ['Organization', 'API Key'],
+          tags: ['API Key'],
           body: updateOrganizationApiKeyDto,
         },
         onRequest: [app.authenticate],
@@ -334,7 +334,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
         schema: {
           summary: 'Delete API key',
           description: 'Permanently deletes an API key. Requires API_KEY_MANAGE permission.',
-          tags: ['Organization', 'API Key'],
+          tags: ['API Key'],
         },
       },
       apiKeyController.deleteApiKey,
@@ -349,7 +349,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           summary: 'Rotate API key',
           description:
             'Regenerates the API key secret. The old key is immediately invalidated. Requires a user principal with API_KEY_MANAGE permission.',
-          tags: ['Organization', 'API Key'],
+          tags: ['API Key'],
         },
       },
       apiKeyController.rotateApiKey,
@@ -365,13 +365,13 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           summary: 'List notification policies',
           description:
             'Returns all notification policies for the organization. Requires NOTIFICATION_POLICY_READ permission.',
-          tags: ['Organization', 'Notification Policy'],
+          tags: ['Notification Policy'],
         },
       },
       notificationPolicyController.listPolicies,
     );
-    zodApplication.get<{ Params: { policy_id: string } }>(
-      '/organization/notification-policies/:policy_id',
+    zodApplication.get<{ Params: { notification_policy_id: string } }>(
+      '/organization/notification-policies/:notification_policy_id',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.NOTIFICATION_POLICY_READ)],
@@ -379,7 +379,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           summary: 'Get notification policy',
           description:
             'Returns a single notification policy. Requires NOTIFICATION_POLICY_READ permission.',
-          tags: ['Organization', 'Notification Policy'],
+          tags: ['Notification Policy'],
         },
       },
       notificationPolicyController.getPolicy,
@@ -397,7 +397,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           summary: 'Create notification policy',
           description:
             'Creates a new notification policy defining how a notification type is delivered. Requires NOTIFICATION_POLICY_MANAGE permission.',
-          tags: ['Organization', 'Notification Policy'],
+          tags: ['Notification Policy'],
           body: createOrganizationNotificationPolicyDto,
         },
         onRequest: [app.authenticate],
@@ -405,8 +405,8 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
       },
       notificationPolicyController.createPolicy,
     );
-    zodApplication.patch<{ Params: { policy_id: string } }>(
-      '/organization/notification-policies/:policy_id',
+    zodApplication.patch<{ Params: { notification_policy_id: string } }>(
+      '/organization/notification-policies/:notification_policy_id',
       {
         // R4: org-scoped admin mutation — cap per (org, actor).
         ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
@@ -414,7 +414,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           summary: 'Update notification policy',
           description:
             'Updates a notification policy. Requires NOTIFICATION_POLICY_MANAGE permission.',
-          tags: ['Organization', 'Notification Policy'],
+          tags: ['Notification Policy'],
           body: updateOrganizationNotificationPolicyDto,
         },
         onRequest: [app.authenticate],
@@ -422,8 +422,8 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
       },
       notificationPolicyController.updatePolicy,
     );
-    zodApplication.delete<{ Params: { policy_id: string } }>(
-      '/organization/notification-policies/:policy_id',
+    zodApplication.delete<{ Params: { notification_policy_id: string } }>(
+      '/organization/notification-policies/:notification_policy_id',
       {
         // R4: org-scoped admin mutation — cap per (org, actor).
         ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
@@ -433,7 +433,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           summary: 'Delete notification policy',
           description:
             'Deletes a notification policy. Requires NOTIFICATION_POLICY_MANAGE permission.',
-          tags: ['Organization', 'Notification Policy'],
+          tags: ['Notification Policy'],
         },
       },
       notificationPolicyController.deletePolicy,

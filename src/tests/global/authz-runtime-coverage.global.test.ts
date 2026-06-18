@@ -28,7 +28,7 @@ const RUNTIME_COVERAGE: Readonly<Record<string, string>> = {
   'GET /api/v1/uploads/:upload_id': 'object-ownership: uploads',
   'DELETE /api/v1/uploads/:upload_id': 'object-ownership: uploads',
   'POST /api/v1/uploads/:upload_id/confirm': 'object-ownership: uploads',
-  'GET /api/v1/users/me/data-export/:export_id': 'object-ownership: data exports',
+  'GET /api/v1/users/me/data-export/:data_export_id': 'object-ownership: data exports',
 
   // ── model: org — cross-org reads (cross-org-resource.security.test.ts) ─────
   'GET /api/v1/billing/subscriptions/:subscription_id':
@@ -40,7 +40,7 @@ const RUNTIME_COVERAGE: Readonly<Record<string, string>> = {
   'GET /api/v1/tenancy/organization/memberships/:membership_id': 'cross-org-resource: membership',
   'GET /api/v1/tenancy/organization/memberships/:membership_id/permissions':
     'cross-org-resource: membership permissions',
-  'GET /api/v1/tenancy/organization/notification-policies/:policy_id':
+  'GET /api/v1/tenancy/organization/notification-policies/:notification_policy_id':
     'cross-org-resource: notification policy',
   'GET /api/v1/tenancy/organization/roles/:role_id': 'cross-org-resource: role',
   'GET /api/v1/tenancy/organization/roles/:role_id/permissions':
@@ -62,9 +62,9 @@ const RUNTIME_COVERAGE: Readonly<Record<string, string>> = {
   'POST /api/v1/tenancy/organization/api-keys/:api_key_id/rotate':
     'cross-org-mutation: API key rotate',
   'DELETE /api/v1/notify/webhooks/:webhook_id': 'cross-org-mutation: webhook DELETE',
-  'PATCH /api/v1/tenancy/organization/notification-policies/:policy_id':
+  'PATCH /api/v1/tenancy/organization/notification-policies/:notification_policy_id':
     'cross-org-mutation: notification policy PATCH',
-  'DELETE /api/v1/tenancy/organization/notification-policies/:policy_id':
+  'DELETE /api/v1/tenancy/organization/notification-policies/:notification_policy_id':
     'cross-org-mutation: notification policy DELETE',
   'PATCH /api/v1/tenancy/organization/roles/:role_id': 'cross-org-mutation: role PATCH',
   'DELETE /api/v1/tenancy/organization/roles/:role_id': 'cross-org-mutation: role DELETE',

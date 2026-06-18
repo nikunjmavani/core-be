@@ -80,12 +80,14 @@
     "verifyNoMutation": true
   },
   "GET /api/v1/tenancy/organization/memberships/:membership_id/permissions": { "model": "org" },
-  "GET /api/v1/tenancy/organization/notification-policies/:policy_id": { "model": "org" },
-  "PATCH /api/v1/tenancy/organization/notification-policies/:policy_id": {
+  "GET /api/v1/tenancy/organization/notification-policies/:notification_policy_id": {
+    "model": "org"
+  },
+  "PATCH /api/v1/tenancy/organization/notification-policies/:notification_policy_id": {
     "model": "org",
     "verifyNoMutation": true
   },
-  "DELETE /api/v1/tenancy/organization/notification-policies/:policy_id": {
+  "DELETE /api/v1/tenancy/organization/notification-policies/:notification_policy_id": {
     "model": "org",
     "verifyNoMutation": true
   },
@@ -111,5 +113,5 @@
   "DELETE /api/v1/users/:user_id": { "model": "global-role", "verifyNoMutation": true },
   "POST /api/v1/users/:user_id/suspend": { "model": "global-role", "verifyNoMutation": true },
   "POST /api/v1/users/:user_id/unsuspend": { "model": "global-role", "verifyNoMutation": true },
-  "GET /api/v1/users/me/data-export/:export_id": { "model": "user" }
+  "GET /api/v1/users/me/data-export/:data_export_id": { "model": "user" }
 }

@@ -21,7 +21,7 @@ export const auditRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'List audit logs (admin)',
         description:
           'Returns audit log entries with cursor pagination (`after`, `limit`). Requires SUPER_ADMIN or ADMIN role.',
-        tags: ['Admin', 'Audit Log'],
+        tags: ['Audit Log'],
       },
     },
     controller.listLogs,
