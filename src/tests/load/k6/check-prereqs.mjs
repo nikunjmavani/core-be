@@ -252,15 +252,19 @@ if (dbUrl) {
 }
 
 // ---- report ----
+// biome-ignore lint/suspicious/noConsole: This CLI script reports prerequisite status to stdout.
 console.log('\nLoad-test prerequisites:\n');
 let hardFail = 0;
 for (const r of results) {
+  // biome-ignore lint/suspicious/noConsole: This CLI script reports prerequisite status to stdout.
   console.log(`  ${r.pass ? '✓' : '✗'} ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
   if (!r.pass) {
     hardFail += 1;
+    // biome-ignore lint/suspicious/noConsole: This CLI script reports remediation guidance to stdout.
     if (r.fix) console.log(`      → ${r.fix}`);
   }
 }
+// biome-ignore lint/suspicious/noConsole: This CLI script reports final prerequisite status to stdout.
 console.log(
   hardFail === 0
     ? `\n✅ All prerequisites met — ready to run (VUS=${TARGET_VUS}).\n`

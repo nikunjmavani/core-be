@@ -26,7 +26,7 @@ Legend:
   POST   /api/v1/auth/email/resend-verification                   201  -    both  AUTH
   POST   /api/v1/auth/email/verify                                201  -    both  PUBLIC
   POST   /api/v1/auth/login                                       201  -    both  PUBLIC
-  POST   /api/v1/auth/logout                                      201  -    both  PUBLIC
+  POST   /api/v1/auth/logout                                      201  -    both  TOKEN: access-token
   POST   /api/v1/auth/magic-link/send                             201  -    both  PUBLIC
   POST   /api/v1/auth/magic-link/verify                           201  -    both  PUBLIC
   GET    /api/v1/auth/me/auth-methods                             200  -    both  AUTH
@@ -216,11 +216,11 @@ Legend:
 ================================================================================
 
   Total routes    : 131
-  Public          : 19
+  Public          : 18
   Authenticated   : 50
   Role-guarded    : 9
   Perm-guarded    : 50
-  Token-guarded   : 3
+  Token-guarded   : 4
   Team-only (O)   : 5
 
 ================================================================================

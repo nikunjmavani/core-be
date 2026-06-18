@@ -143,7 +143,10 @@ function validationErrorsFor(routeKey: string): { field: string; message: string
   }
   const paramMatch = /\{([a-z_]+)\}/.exec(routeKey);
   if (paramMatch) {
-    const param = paramMatch[1]!;
+    const [, param] = paramMatch;
+    if (!param) {
+      return [];
+    }
     const entity = PARAM_NAME_TO_ENTITY[param as keyof typeof PARAM_NAME_TO_ENTITY];
     return [
       {

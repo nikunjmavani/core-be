@@ -11,6 +11,10 @@ export function extractRouteSnippet(content: string, methodIndex: number): strin
 }
 
 export function classifyAccess(snippet: string, permissionMap: Map<string, string>): RouteAccess {
+  if (snippet.includes("'/logout'") || snippet.includes('"/logout"')) {
+    return 'TOKEN: access-token';
+  }
+
   if (!snippet.includes('app.authenticate')) {
     return 'PUBLIC';
   }

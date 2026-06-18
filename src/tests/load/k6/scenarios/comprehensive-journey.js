@@ -109,6 +109,7 @@ export function setup() {
       userPublicId: c.userPublicId,
     });
   }
+  // biome-ignore lint/suspicious/noConsole: k6 setup progress is intentionally emitted to stdout.
   console.log(
     `setup: ${tokens.length} usable tokens minted, ${mfaSkipped} skipped (mfa/switch-fail)`,
   );
@@ -169,10 +170,10 @@ const OP_NAMES = [
   'delete-membership',
 ];
 const slug = (n) => n.replace(/[^a-z0-9]/gi, '_');
-const mid = (n) => 'rt_' + slug(n); // total round-trip latency
-const sid = (n) => 'srv_' + slug(n); // Server-Timing app;dur = pure server compute
-const wid = (n) => 'wait_' + slug(n); // TTFB / waiting = compute + network + server-side queue
-const fid = (n) => 'fail_' + slug(n);
+const mid = (n) => `rt_${slug(n)}`; // total round-trip latency
+const sid = (n) => `srv_${slug(n)}`; // Server-Timing app;dur = pure server compute
+const wid = (n) => `wait_${slug(n)}`; // TTFB / waiting = compute + network + server-side queue
+const fid = (n) => `fail_${slug(n)}`;
 const trends = {};
 const srv = {};
 const wait = {};
@@ -185,9 +186,9 @@ for (const n of OP_NAMES) {
   srv[n] = new Trend(sid(n), true);
   wait[n] = new Trend(wid(n), true);
   fails[n] = new Counter(fid(n));
-  c429[n] = new Counter('s429_' + slug(n));
-  c503[n] = new Counter('s503_' + slug(n));
-  c4xx[n] = new Counter('s4xx_' + slug(n));
+  c429[n] = new Counter(`s429_${slug(n)}`);
+  c503[n] = new Counter(`s503_${slug(n)}`);
+  c4xx[n] = new Counter(`s4xx_${slug(n)}`);
 }
 
 // ---- per-VU auth state ----
@@ -218,6 +219,7 @@ function record(name, res) {
     else if (res.status === 503) c503[name].add(1);
     else c4xx[name].add(1);
     if (__ENV.DIAG === 'true') {
+      // biome-ignore lint/suspicious/noConsole: DIAG mode intentionally prints failing k6 responses.
       console.log(`DIAGFAIL ${name} status=${res.status} body=${(res.body || '').slice(0, 120)}`);
     }
   }
@@ -301,7 +303,7 @@ function phaseExplore() {
   think();
 }
 
-function phaseSelfService(uniq) {
+function phaseSelfService(_uniq) {
   req('patch-me-settings', 'PATCH', '/users/me/settings', {
     is_dark_mode_enabled: true,
     language: 'en',
@@ -413,7 +415,7 @@ function phaseRareOnce(uniq) {
     const prior = Array.isArray(members)
       ? members.find((mm) => mm.user_id === invitee.userPublicId)
       : null;
-    if (prior && prior.id) {
+    if (prior?.id) {
       req('delete-membership', 'DELETE', `/tenancy/organization/memberships/${prior.id}`);
     }
     const m = req(
@@ -449,7 +451,7 @@ export default function (tokenPool) {
   if (!token) {
     // Token comes ONLY from setup() (minted once). No lazy/per-request login -> can't storm.
     const e = tokenPool[(__VU - 1) % tokenPool.length];
-    token = e && e.token ? e.token : null;
+    token = e?.token ? e.token : null;
     cred = e
       ? {
           email: e.email,
@@ -481,24 +483,22 @@ export default function (tokenPool) {
 export function handleSummary(data) {
   const val = (metricName) => (data.metrics[metricName] ? data.metrics[metricName].values : null);
   const cnt = (metricName) =>
-    data.metrics[metricName] && data.metrics[metricName].values.count
-      ? data.metrics[metricName].values.count
-      : 0;
+    data.metrics[metricName]?.values.count ? data.metrics[metricName].values.count : 0;
   const rows = [];
   for (const n of OP_NAMES) {
     const rt = val(mid(n));
     const ok = rt ? rt.count : 0;
     const fail = cnt(fid(n));
-    if (!ok && !fail) continue;
+    if (ok === 0 && fail === 0) continue;
     const sv = val(sid(n));
     const wv = val(wid(n));
     rows.push({
       name: n,
       ok,
       fail,
-      s4xx: cnt('s4xx_' + slug(n)),
-      s429: cnt('s429_' + slug(n)),
-      s503: cnt('s503_' + slug(n)),
+      s4xx: cnt(`s4xx_${slug(n)}`),
+      s429: cnt(`s429_${slug(n)}`),
+      s503: cnt(`s503_${slug(n)}`),
       total_avg: rt ? rt.avg : null,
       total_p99: rt ? rt['p(99)'] : null,
       srv_avg: sv ? sv.avg : null,
@@ -546,9 +546,9 @@ export function handleSummary(data) {
   let t503 = 0;
   let t4xx = 0;
   for (const n of OP_NAMES) {
-    t429 += cnt('s429_' + slug(n));
-    t503 += cnt('s503_' + slug(n));
-    t4xx += cnt('s4xx_' + slug(n));
+    t429 += cnt(`s429_${slug(n)}`);
+    t503 += cnt(`s503_${slug(n)}`);
+    t4xx += cnt(`s4xx_${slug(n)}`);
   }
   out += `\nOVERALL round-trip: avg=${d.avg.toFixed(1)} p95=${d['p(95)'].toFixed(1)} p99=${d['p(99)'].toFixed(1)} max=${d.max.toFixed(1)} ms\n`;
   out += `        ${reqs.count} reqs @ ${reqs.rate.toFixed(0)}/s | ${iters.count} journeys | failed ${(failed.rate * 100).toFixed(2)}%  (4xx=${t4xx} 429=${t429} 503=${t503})\n`;
