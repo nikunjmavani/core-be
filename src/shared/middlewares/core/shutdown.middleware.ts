@@ -8,6 +8,7 @@ import { closeMailQueue } from '@/infrastructure/mail/queues/mail.queue.js';
 import { closeNotificationQueue } from '@/domains/notify/sub-domains/notification/queues/notification.queue.js';
 import { closeWebhookDeliveryQueue } from '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js';
 import { flushSentry } from '@/infrastructure/observability/sentry/sentry.js';
+import { THREE_SECONDS_MS } from '@/shared/constants/index.js';
 import { setApplicationDraining } from '@/shared/utils/infrastructure/application-lifecycle.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
@@ -27,7 +28,7 @@ import { getShutdownWatchdogMs } from '@/infrastructure/queue/worker-runtime/shu
  * {@link getShutdownDrainDelayMs}) so it never eats into the in-flight drain budget or
  * trips the force-exit watchdog.
  */
-export const SHUTDOWN_DRAIN_DELAY_MS = 3_000;
+export const SHUTDOWN_DRAIN_DELAY_MS = THREE_SECONDS_MS;
 
 /**
  * Runtimes that sit behind a load balancer and therefore need the pre-close drain pause.

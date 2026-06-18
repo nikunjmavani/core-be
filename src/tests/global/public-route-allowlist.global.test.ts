@@ -21,12 +21,13 @@ const EXPECTED_PUBLIC_ROUTES: readonly string[] = [
   'GET /livez',
   'GET /readyz',
   // Auth — unauthenticated credential / token issuance, OAuth, and passkey login.
+  // Logout is intentionally excluded: the route skips app.authenticate to allow expired-token
+  // revocation, but the handler still requires an Authorization bearer token.
   'GET /api/v1/auth/oauth/:provider',
   'GET /api/v1/auth/oauth/:provider/callback',
   'GET /api/v1/auth/oauth/providers',
   'POST /api/v1/auth/email/verify',
   'POST /api/v1/auth/login',
-  'POST /api/v1/auth/logout',
   'POST /api/v1/auth/magic-link/send',
   'POST /api/v1/auth/magic-link/verify',
   'POST /api/v1/auth/mfa/login',

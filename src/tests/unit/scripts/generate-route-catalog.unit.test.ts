@@ -58,6 +58,15 @@ describe('generate-route-catalog', () => {
     ).toBe('PERM: organization:update');
   });
 
+  it('classifyAccess treats logout as manually bearer-token guarded', () => {
+    expect(
+      classifyAccess(
+        "zodApplication.post('/logout', { schema: {} }, controller.logout)",
+        new Map(),
+      ),
+    ).toBe('TOKEN: access-token');
+  });
+
   it('toRegistryAccess maps catalog labels to registry access enum', () => {
     expect(toRegistryAccess('PUBLIC')).toBe('public');
     expect(toRegistryAccess('AUTH')).toBe('authenticated');

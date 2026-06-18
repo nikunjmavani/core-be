@@ -5,7 +5,32 @@ import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.u
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import type { UserContainer } from './user.container.js';
 
-// eslint-disable-next-line max-lines-per-function -- controller aggregator: thin handler map across user / settings / notifications / admin.
+type AdminUserAuditAction =
+  | 'user.admin.update'
+  | 'user.admin.delete'
+  | 'user.admin.suspend'
+  | 'user.admin.unsuspend';
+
+function getUserIdParam(request: FastifyRequest): string {
+  return validatePublicIdParam((request.params as { user_id: string }).user_id ?? '', 'user_id');
+}
+
+async function recordAdminUserAudit(
+  request: FastifyRequest,
+  actorUserPublicId: string,
+  action: AdminUserAuditAction,
+  targetUserPublicId: string,
+  severity?: 'WARNING',
+): Promise<void> {
+  await recordScopedAuditEvent(request, {
+    actorUserPublicId,
+    action,
+    resource_type: 'user',
+    ...(severity ? { severity } : {}),
+    metadata: { target_user_public_id: targetUserPublicId },
+  });
+}
+
 /**
  * Build the user-domain HTTP handler map covering self-service profile, settings, notification
  * preferences, avatar upload/delete, and admin list/get/update/suspend/unsuspend/delete. Settings
@@ -102,80 +127,42 @@ export function createUserController({
     },
 
     getUser: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const userId = validatePublicIdParam(
-        (request.params as { user_id: string }).user_id ?? '',
-        'user_id',
-      );
+      const userId = getUserIdParam(request);
       const data = await userService.getUser(userId);
       return successResponse(data, getRequestIdentifier(request));
     },
 
     updateUser: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const userId = validatePublicIdParam(
-        (request.params as { user_id: string }).user_id ?? '',
-        'user_id',
-      );
+      const userId = getUserIdParam(request);
       const data = await userService.adminUpdateUser(userId, request.body);
       // sec-U9: every admin user-management action emits an audit row so a rogue
       // admin cannot wipe accounts without leaving a platform-visible trace.
-      await recordScopedAuditEvent(request, {
-        actorUserPublicId: auth.userId,
-        action: 'user.admin.update',
-        resource_type: 'user',
-        metadata: { target_user_public_id: userId },
-      });
+      await recordAdminUserAudit(request, auth.userId, 'user.admin.update', userId);
       return successResponse(data, getRequestIdentifier(request));
     },
 
     deleteUser: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const userId = validatePublicIdParam(
-        (request.params as { user_id: string }).user_id ?? '',
-        'user_id',
-      );
+      const userId = getUserIdParam(request);
       await userService.deleteUser(userId);
-      await recordScopedAuditEvent(request, {
-        actorUserPublicId: auth.userId,
-        action: 'user.admin.delete',
-        resource_type: 'user',
-        severity: 'WARNING',
-        metadata: { target_user_public_id: userId },
-      });
+      await recordAdminUserAudit(request, auth.userId, 'user.admin.delete', userId, 'WARNING');
       return reply.status(204).send();
     },
 
     suspendUser: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const userId = validatePublicIdParam(
-        (request.params as { user_id: string }).user_id ?? '',
-        'user_id',
-      );
+      const userId = getUserIdParam(request);
       const data = await userService.suspendUser(userId);
-      await recordScopedAuditEvent(request, {
-        actorUserPublicId: auth.userId,
-        action: 'user.admin.suspend',
-        resource_type: 'user',
-        severity: 'WARNING',
-        metadata: { target_user_public_id: userId },
-      });
+      await recordAdminUserAudit(request, auth.userId, 'user.admin.suspend', userId, 'WARNING');
       return successResponse(data, getRequestIdentifier(request));
     },
 
     unsuspendUser: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const userId = validatePublicIdParam(
-        (request.params as { user_id: string }).user_id ?? '',
-        'user_id',
-      );
+      const userId = getUserIdParam(request);
       const data = await userService.unsuspendUser(userId);
-      await recordScopedAuditEvent(request, {
-        actorUserPublicId: auth.userId,
-        action: 'user.admin.unsuspend',
-        resource_type: 'user',
-        severity: 'WARNING',
-        metadata: { target_user_public_id: userId },
-      });
+      await recordAdminUserAudit(request, auth.userId, 'user.admin.unsuspend', userId, 'WARNING');
       return successResponse(data, getRequestIdentifier(request));
     },
   };
