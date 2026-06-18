@@ -34,6 +34,7 @@ let dlqDepthTotal: Gauge | null = null;
 let databaseRlsActiveCheckouts: Gauge | null = null;
 let databaseRlsCheckoutHoldSeconds: Histogram<'path'> | null = null;
 let processUnhandledRejectionsTotal: Counter<'process'> | null = null;
+let eventBusHandlerFailuresTotal: Counter<'event_type'> | null = null;
 
 function registerOn(registry: Registry): void {
   httpRequestsTotal = new Counter({
@@ -169,10 +170,22 @@ function registerOn(registry: Registry): void {
     registers: [registry],
   });
 
+  registerDiagnosticCounters(registry);
+}
+
+/** Creates the process-/event-level diagnostic counters (split out of {@link registerOn} to keep it under the per-function line budget). */
+function registerDiagnosticCounters(registry: Registry): void {
   processUnhandledRejectionsTotal = new Counter({
     name: 'process_unhandled_rejections_total',
     help: 'Non-fatal unhandledRejection events tolerated by the burst handler, by process (api | worker). Alert on a sustained sub-threshold rate — it hides a persistent failing path that never trips the fatal burst exit',
     labelNames: ['process'],
+    registers: [registry],
+  });
+
+  eventBusHandlerFailuresTotal = new Counter({
+    name: 'event_bus_handler_failures_total',
+    help: 'In-process domain-event handler failures swallowed by eventBus.emit, by event_type. emit logs + captures each to Sentry but never fails the originating request, so alert on a rising rate to catch silently-degraded side effects (welcome emails, billing metadata, webhook enqueues)',
+    labelNames: ['event_type'],
     registers: [registry],
   });
 }
@@ -211,6 +224,9 @@ function bindMetricHandlesFromRegistry(registry: Registry): void {
   processUnhandledRejectionsTotal = registry.getSingleMetric(
     'process_unhandled_rejections_total',
   ) as Counter<'process'>;
+  eventBusHandlerFailuresTotal = registry.getSingleMetric(
+    'event_bus_handler_failures_total',
+  ) as Counter<'event_type'>;
   registeredMetricsRegistry = registry;
 }
 
@@ -416,4 +432,17 @@ export function recordUnhandledRejection(process: UnhandledRejectionProcess): vo
   ensurePrometheusMetricsRegistered(getMetricsRegistry());
   if (!processUnhandledRejectionsTotal) return;
   processUnhandledRejectionsTotal.inc({ process });
+}
+
+/**
+ * Increments `event_bus_handler_failures_total{event_type}` for one swallowed domain-event
+ * handler failure. Lazily registers metrics so an early failure is still counted. No-op when
+ * metrics are disabled — the failure is still logged + captured to Sentry by the caller, so
+ * observability never depends on `METRICS_ENABLED`.
+ */
+export function recordEventBusHandlerFailure(eventType: string): void {
+  if (!isMetricsEnabled()) return;
+  ensurePrometheusMetricsRegistered(getMetricsRegistry());
+  if (!eventBusHandlerFailuresTotal) return;
+  eventBusHandlerFailuresTotal.inc({ event_type: eventType });
 }

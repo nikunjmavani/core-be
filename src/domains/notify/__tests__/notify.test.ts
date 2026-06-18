@@ -226,7 +226,9 @@ describe('Notify Domain — Integration', () => {
         method: 'POST',
         url: testApiPath('/notify/webhooks'),
         token,
-        payload: {},
+        // Valid body so the request passes boundary validation and reaches the permission
+        // preHandler — this asserts the 403 (no WEBHOOK_MANAGE), not a 400 body rejection.
+        payload: { url: 'https://example.com/webhook', events: ['notification.created'] },
       });
       expect(response.statusCode).toBe(403);
     });

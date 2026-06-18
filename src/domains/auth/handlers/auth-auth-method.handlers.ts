@@ -83,11 +83,13 @@ export function createAuthAuthMethodHandlers({
     },
     changePassword: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const currentAccessToken = request.headers.authorization?.match(/^Bearer\s+(\S.*)$/i)?.[1];
+      // Exclude the caller's own session from the family-wide revoke by its stable public id
+      // (not the rotatable access-token hash) so a concurrent refresh cannot evict it.
+      const currentSessionPublicId = auth.sessionPublicId;
       await authMethodService.changePassword(
         auth.userId,
         request.body,
-        currentAccessToken ? { currentAccessToken } : undefined,
+        currentSessionPublicId ? { currentSessionPublicId } : undefined,
       );
       await recordScopedAuditEvent(request, {
         actorUserPublicId: auth.userId,

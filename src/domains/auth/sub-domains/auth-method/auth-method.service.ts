@@ -349,7 +349,7 @@ export class AuthMethodService {
   async changePassword(
     userPublicId: string,
     body: unknown,
-    options?: { currentAccessToken?: string },
+    options?: { currentSessionPublicId?: string },
   ): Promise<void> {
     const parsed = validateChangePassword(body);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
@@ -375,12 +375,12 @@ export class AuthMethodService {
         if (!updatedUser) throw new NotFoundError('User');
 
         // An authenticated change keeps the caller's current session and terminates
-        // every other device. Without a current token we cannot single one out, so
+        // every other device. Without a current session id we cannot single one out, so
         // fall back to revoking all sessions.
-        if (options?.currentAccessToken) {
+        if (options?.currentSessionPublicId) {
           await this.authSessionService.revokeAllSessionsExceptCurrent({
             userPublicId: user.public_id,
-            currentAccessToken: options.currentAccessToken,
+            currentSessionPublicId: options.currentSessionPublicId,
           });
         } else {
           await this.authSessionService.revokeAllSessions(user.public_id);

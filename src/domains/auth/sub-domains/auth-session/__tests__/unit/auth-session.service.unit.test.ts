@@ -43,7 +43,7 @@ describe('AuthSessionService', () => {
     listByUserId: vi.fn().mockResolvedValue([{ public_id: 'session_public' }]),
     revoke: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
     revokeAllByUserId: vi.fn().mockResolvedValue([]),
-    revokeAllByUserIdExcept: vi.fn().mockResolvedValue([]),
+    revokeAllByUserIdExceptSession: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockResolvedValue({ public_id: 'session_new' }),
     revokeByTokenHash: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
     findByPublicId: vi
@@ -107,8 +107,8 @@ describe('AuthSessionService', () => {
     await expect(service.revokeAllSessions('missing')).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it('revokeAllSessionsExceptCurrent keeps the current token and invalidates revoked hashes (bug 33)', async () => {
-    vi.mocked(sessionRepository.revokeAllByUserIdExcept).mockResolvedValue([
+  it('revokeAllSessionsExceptCurrent excludes by stable session public id and invalidates revoked hashes (bug 33 + refresh race)', async () => {
+    vi.mocked(sessionRepository.revokeAllByUserIdExceptSession).mockResolvedValue([
       { token_hash: 'revoked-hash-a' },
       { token_hash: 'revoked-hash-b' },
       { token_hash: null },
@@ -118,12 +118,13 @@ describe('AuthSessionService', () => {
     );
     await service.revokeAllSessionsExceptCurrent({
       userPublicId: 'user_public',
-      currentAccessToken: 'current-bearer-token',
+      currentSessionPublicId: 'ses_currentsession00000',
     });
-    // The except-hash passed to the repository is the SHA-256 of the current token, never the raw token.
-    const [, exceptHash] = vi.mocked(sessionRepository.revokeAllByUserIdExcept).mock.calls[0]!;
-    expect(exceptHash).not.toBe('current-bearer-token');
-    expect(exceptHash).toMatch(/^[0-9a-f]{64}$/);
+    // The except value passed to the repository is the STABLE session public id (not a token
+    // hash), so a concurrent refresh that rotates the token hash cannot evict the caller.
+    const [, exceptSessionPublicId] = vi.mocked(sessionRepository.revokeAllByUserIdExceptSession)
+      .mock.calls[0]!;
+    expect(exceptSessionPublicId).toBe('ses_currentsession00000');
     expect(invalidateCachedSessionToken).toHaveBeenCalledWith('revoked-hash-a');
     expect(invalidateCachedSessionToken).toHaveBeenCalledWith('revoked-hash-b');
     expect(invalidateCachedSessionToken).toHaveBeenCalledTimes(2);
@@ -134,7 +135,7 @@ describe('AuthSessionService', () => {
     await expect(
       service.revokeAllSessionsExceptCurrent({
         userPublicId: 'missing',
-        currentAccessToken: 'token',
+        currentSessionPublicId: 'ses_x000000000000000000',
       }),
     ).rejects.toBeInstanceOf(NotFoundError);
   });

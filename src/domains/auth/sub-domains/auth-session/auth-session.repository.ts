@@ -218,7 +218,14 @@ export class AuthSessionRepository {
       .returning({ token_hash: sessions.token_hash });
   }
 
-  async revokeAllByUserIdExcept(userId: number, exceptTokenHash: string) {
+  /**
+   * Revokes every active session for `userId` except the one with `exceptSessionPublicId`.
+   * Excludes by the STABLE session public id rather than the access-token hash: the hash rotates
+   * on `/auth/refresh`, so a concurrent refresh racing a "sign out everywhere except current"
+   * could leave the caller's just-rotated session matched by the old hash and revoke it too. The
+   * public id never changes for the lifetime of the session, closing that race.
+   */
+  async revokeAllByUserIdExceptSession(userId: number, exceptSessionPublicId: string) {
     return getRequestDatabase()
       .update(sessions)
       .set({ is_revoked: true })
@@ -226,7 +233,7 @@ export class AuthSessionRepository {
         and(
           eq(sessions.user_id, userId),
           eq(sessions.is_revoked, false),
-          ne(sessions.token_hash, exceptTokenHash),
+          ne(sessions.public_id, exceptSessionPublicId),
         ),
       )
       .returning({ token_hash: sessions.token_hash });

@@ -127,15 +127,19 @@ export function createAuthSessionHandlers({
     },
     revokeAllSessions: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);
-      // sec-new-A3: preserve the caller's own session so the client is not
-      // silently logged out. Extract the bearer token from the Authorization
-      // header (always present after authenticate passes) and pass it to the
-      // service so that session is excluded from revocation.
-      const currentAccessToken =
-        request.headers.authorization?.match(/^Bearer\s+(\S.*)$/i)?.[1] ?? '';
+      // sec-new-A3: preserve the caller's own session so the client is not silently logged out.
+      // Exclude by the STABLE session public id (attached to request.auth by the auth
+      // middleware) rather than the access-token hash: a concurrent /auth/refresh rotates the
+      // hash, and excluding by hash could then revoke the caller's own just-rotated session.
+      const currentSessionPublicId = auth.sessionPublicId;
+      if (!currentSessionPublicId) {
+        // The route is behind authenticate + step-up, which bind to a session id, so this is
+        // unreachable in practice; fail closed rather than silently revoke the caller too.
+        throw new UnauthorizedError('errors:invalidOrExpiredSession');
+      }
       await authSessionService.revokeAllSessionsExceptCurrent({
         userPublicId: auth.userId,
-        currentAccessToken,
+        currentSessionPublicId,
       });
       await recordScopedAuditEvent(request, {
         actorUserPublicId: auth.userId,

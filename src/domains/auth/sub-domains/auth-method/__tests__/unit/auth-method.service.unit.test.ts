@@ -219,17 +219,17 @@ describe('AuthMethodService', () => {
         current_password: 'old',
         new_password: 'NewPassword123!',
       },
-      { currentAccessToken: 'current-bearer-token' },
+      { currentSessionPublicId: 'ses_currentsession00000' },
     );
     expect(userService.updatePassword).toHaveBeenCalled();
     expect(authSessionService.revokeAllSessionsExceptCurrent).toHaveBeenCalledWith({
       userPublicId: user.public_id,
-      currentAccessToken: 'current-bearer-token',
+      currentSessionPublicId: 'ses_currentsession00000',
     });
     expect(authSessionService.revokeAllSessions).not.toHaveBeenCalled();
   });
 
-  it('changePassword revokes all sessions when no current token is supplied', async () => {
+  it('changePassword revokes all sessions when no current session is supplied', async () => {
     await service.changePassword('user_public', {
       current_password: 'old',
       new_password: 'NewPassword123!',
@@ -249,7 +249,7 @@ describe('AuthMethodService', () => {
       service.changePassword(
         'user_public',
         { current_password: 'old', new_password: 'NewPassword123!' },
-        { currentAccessToken: 'current-bearer-token' },
+        { currentSessionPublicId: 'ses_currentsession00000' },
       ),
     ).rejects.toThrow('redis down');
     // updatePassword ran inside the same transaction callback, so a real DB rolls it back.

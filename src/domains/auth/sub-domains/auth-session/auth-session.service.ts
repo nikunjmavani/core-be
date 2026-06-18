@@ -104,32 +104,33 @@ export class AuthSessionService {
 
   /**
    * Revokes every active session for a user except the one identified by the
-   * supplied bearer access token, and invalidates their token caches.
+   * supplied stable session public id, and invalidates their token caches.
    *
    * @remarks
-   * - **Algorithm:** hashes `currentAccessToken` (SHA-256) and runs a single
-   *   `UPDATE … WHERE user_id = ? AND is_revoked = false AND token_hash <> ?`,
+   * - **Algorithm:** runs a single
+   *   `UPDATE … WHERE user_id = ? AND is_revoked = false AND public_id <> ?`,
    *   then invalidates the Redis token cache for each revoked hash.
    * - **Failure modes:** throws `NotFoundError('User')` when the user no longer
-   *   exists. If the current token's session was already rotated/revoked, this
-   *   simply revokes the remaining sessions.
+   *   exists.
    * - **Side effects:** writes `auth.sessions` rows; invalidates cached
    *   token-validity entries so revocation takes effect immediately.
-   * - **Notes:** used by the authenticated change-password flow to terminate all
-   *   other devices while keeping the caller's current session alive.
+   * - **Notes:** used by the authenticated change-password flow and `DELETE /me/sessions`
+   *   to terminate all other devices while keeping the caller's current session alive.
+   *   Excludes by `currentSessionPublicId` (stable) rather than the access-token hash so a
+   *   concurrent `/auth/refresh` that rotates the hash cannot cause the caller's own session
+   *   to be revoked (sec race fix).
    */
   async revokeAllSessionsExceptCurrent({
     userPublicId,
-    currentAccessToken,
+    currentSessionPublicId,
   }: {
     userPublicId: string;
-    currentAccessToken: string;
+    currentSessionPublicId: string;
   }): Promise<void> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
-    const currentTokenHash = hashAccessToken(currentAccessToken);
     const revokedSessions = await withUserDatabaseContext(userPublicId, (_databaseHandle) =>
-      this.sessionRepository.revokeAllByUserIdExcept(user.id, currentTokenHash),
+      this.sessionRepository.revokeAllByUserIdExceptSession(user.id, currentSessionPublicId),
     );
     await this.invalidateRevokedSessionCaches(revokedSessions);
   }

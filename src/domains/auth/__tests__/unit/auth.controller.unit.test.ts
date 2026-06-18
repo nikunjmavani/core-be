@@ -438,32 +438,36 @@ describe('createAuthController', () => {
   // sec-new-A3: DELETE /me/sessions must preserve the caller's current session.
   // sec-r4-A1: the session cookie must NOT be cleared — clearing it would invalidate
   // the preserved session's browser-side refresh token even though the DB row survives.
-  it('revokeAllSessions calls revokeAllSessionsExceptCurrent with bearer token, skips revokeAllSessions, and does NOT clear the cookie (sec-new-A3 + sec-r4-A1)', async () => {
+  it('revokeAllSessions excludes the caller by stable sessionPublicId, skips revokeAllSessions, and does NOT clear the cookie (sec-new-A3 + sec-r4-A1)', async () => {
+    vi.mocked(authSessionService.revokeAllSessionsExceptCurrent).mockClear();
     const reply = mockReply();
-    await controller.revokeAllSessions(
-      mockRequest({
-        headers: { authorization: 'Bearer current-session-token', 'user-agent': 'vitest' },
-      }),
-      reply,
-    );
+    // Excludes by the stable session public id on request.auth (not the rotatable token hash),
+    // so a concurrent /auth/refresh cannot cause the caller's own session to be revoked.
+    await controller.revokeAllSessions(mockRequest(), reply);
     expect(authSessionService.revokeAllSessionsExceptCurrent).toHaveBeenCalledWith({
       userPublicId: expect.any(String),
-      currentAccessToken: 'current-session-token',
+      currentSessionPublicId: expect.any(String),
     });
     expect(authSessionService.revokeAllSessions).not.toHaveBeenCalled();
     // Cookie must NOT be cleared — the preserved session still needs it.
     expect(reply.clearCookie).not.toHaveBeenCalled();
   });
 
-  it('revokeAllSessions falls back to empty token when Authorization header is absent, does not clear cookie (sec-new-A3 + sec-r4-A1)', async () => {
+  it('revokeAllSessions fails closed (401) when no session id is bound, and does not revoke or clear the cookie', async () => {
     vi.mocked(authSessionService.revokeAllSessionsExceptCurrent).mockClear();
     const reply = mockReply();
-    await controller.revokeAllSessions(mockRequest(), reply);
-    expect(authSessionService.revokeAllSessionsExceptCurrent).toHaveBeenCalledWith({
-      userPublicId: expect.any(String),
-      currentAccessToken: '',
-    });
-    // Cookie must NOT be cleared — the caller's preserved session still needs it.
+    // The route is behind authenticate + step-up which bind a session id; if it is somehow
+    // absent we must NOT fall back to revoking everything (which would log the caller out) —
+    // fail closed instead.
+    await expect(
+      controller.revokeAllSessions(
+        mockRequest({
+          auth: { kind: 'user' as const, userId: generatePublicId('user'), role: 'user' },
+        }),
+        reply,
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(authSessionService.revokeAllSessionsExceptCurrent).not.toHaveBeenCalled();
     expect(reply.clearCookie).not.toHaveBeenCalled();
   });
 

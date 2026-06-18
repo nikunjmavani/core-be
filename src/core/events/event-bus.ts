@@ -7,6 +7,7 @@ import {
 import { executeCommitDispatchTask } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.executor.js';
 import type { CommitDispatchTask } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.types.js';
 import { captureException } from '@/infrastructure/observability/sentry/sentry.js';
+import { recordEventBusHandlerFailure } from '@/infrastructure/observability/metrics/prometheus-metrics.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
@@ -165,6 +166,9 @@ export class EventBus {
         } catch (error) {
           logger.error({ eventType: event.type, error }, 'Domain event handler failed');
           captureException(error, { tags: { source: 'event-bus.emit', eventType: event.type } });
+          // Queryable failure rate so a silently-degraded side effect (email, billing
+          // metadata, webhook enqueue) can be alerted on, not just found in logs/Sentry.
+          recordEventBusHandlerFailure(event.type);
         }
       }),
     );
