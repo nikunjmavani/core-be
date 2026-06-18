@@ -6,6 +6,18 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.9.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.8.2-dev.0...v4.9.0-dev.0) (2026-06-18)
+
+
+### Added
+
+* **agent-os:** single-source backbone + agent read-only + skill orchestration ([#693](https://github.com/nikunjmavani/core-be/issues/693)) ([a7cbb66](https://github.com/nikunjmavani/core-be/commit/a7cbb66544aff822176920be37d341b3717ce757))
+
+
+### Performance
+
+* **http:** reduce idle P99 + comprehensive journey load-test harness ([#694](https://github.com/nikunjmavani/core-be/issues/694)) ([e0385d3](https://github.com/nikunjmavani/core-be/commit/e0385d362ee64cda4c8f9fda8e418e71cda48771))
+
 ## [4.8.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.8.1-dev.0...v4.8.2-dev.0) (2026-06-17)
 
 
