@@ -48,46 +48,7 @@ Fill this once and run **`/build-requirement`** (or paste it as your prompt). Th
 
 ### Template
 
-```markdown
-# Requirement: <one-line title>
-
-## 1. Summary & placement
-- Purpose: <what + why, 1–2 lines>
-- Domain / sub-domain: <e.g. billing / invoice>  (new or existing)
-
-## 2. Data model
-- Table(s): <name(s)>
-- Columns: <name: type, notNull?, default?, unique?, FK?>  (text not varchar)
-- Public-id prefix: <e.g. inv>
-- Relations / indexes: <...>
-- Tenancy: <org-scoped? RLS on?> | Soft-delete: <yes/no> | Audit: <created_by? events?>
-
-## 3. Public API
-- Endpoints: <METHOD /path — purpose>  (snake_case semantic params)
-- Auth per route: <public | authenticated | org-permission:<code> | global-role:admin>
-- Request body: <snake_case fields + validation>
-- Response: <serialized fields; external id>
-- Statuses: <success + error> | Headers: <idempotency? captcha?> | Pagination: <cursor?>
-
-## 4. Business logic
-- Service intent per operation: <...>
-- Transactions / cross-domain (via services): <...>
-- Events / workers: <event name, queue, payload, behavior>
-- Idempotency: <which writes> | Caching / rate limits: <...>
-
-## 5. i18n
-- Message keys + English copy: <errors.*, success.*>
-
-## 6. Seed data
-- Reference rows: <...> | Bulk/faker: <...>
-
-## 7. Tests
-- Happy paths: <...>
-- Edge cases / auth & tenant boundaries / validation failures / idempotency replays: <...>
-
-## 8. Non-functionals
-- Observability / performance budget / security notes: <...>
-```
+The canonical fill-in form is **[`requirement.template.md`](requirement.template.md)** (same folder) — a blank form plus a worked example. Copy it, fill the 8 sections (`# Requirement:` and `## 1`–`## 8`), and run **`/build-requirement`**. Keep the `## N.` headings as-is; mark anything that doesn't apply as `none`.
 
 ### What `/build-requirement` does
 

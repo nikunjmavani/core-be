@@ -380,6 +380,30 @@ if (existsSync(pluginManifestFile)) {
   }
 }
 
+// ── Check 17: the /build-requirement intake form exists with all canonical sections ──
+// docs/getting-started/requirement.template.md is the one format /build-requirement
+// accepts; it must stay complete so a build always starts from the full 8-section spec.
+const requirementForm = join(repositoryRoot, 'docs', 'getting-started', 'requirement.template.md')
+if (!existsSync(requirementForm)) {
+  error('requirement-form', 'docs/getting-started/requirement.template.md is missing (the /build-requirement format)')
+} else {
+  const formText = readText(requirementForm)
+  const requiredSections = [
+    '# Requirement:',
+    '## 1. Summary & placement',
+    '## 2. Data model',
+    '## 3. Public API',
+    '## 4. Business logic',
+    '## 5. i18n',
+    '## 6. Seed data',
+    '## 7. Tests',
+    '## 8. Non-functionals',
+  ]
+  for (const section of requiredSections)
+    if (!formText.includes(section))
+      error('requirement-form', `requirement.template.md is missing the "${section}" section`)
+}
+
 // ── Report ──
 const errors = findings.filter((finding) => finding.level === 'error')
 const warnings = findings.filter((finding) => finding.level === 'warn')
@@ -404,6 +428,7 @@ const checkLabels: Record<string, string> = {
   'command-uniqueness': 'Command names unique',
   'agent-pipelines': 'Agent pipelines ↔ disk',
   'plugin-refs': 'Plugin manifest refs exist',
+  'requirement-form': 'Requirement form sections',
 }
 
 console.log('\nagent-os integrity evals (Tier 1)\n')

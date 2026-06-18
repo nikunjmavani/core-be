@@ -1,14 +1,16 @@
 ---
 description: Build a full production-ready vertical slice from a filled requirement intake
-argument-hint: <paste the filled full-slice template, or a path to it>
+argument-hint: <paste the filled requirement.template.md form, or a path to it>
 allowed-tools: Bash(pnpm*), Bash(git*)
 ---
 
-Build a complete, production-ready vertical slice from the requirement intake (**$ARGUMENTS**, or the filled template in the conversation). Follow the "Full-slice template" in `docs/getting-started/requirement-intake.md`.
+Build a complete, production-ready vertical slice from the requirement intake (**$ARGUMENTS**, the filled form in the conversation, or a path to it). The one accepted format is the fill-in form in `docs/getting-started/requirement.template.md` (defaults and detail in `docs/getting-started/requirement-intake.md`).
 
-## 1. Validate the intake first
+## 1. Read the intake against the one accepted format
 
-Parse the 8 sections (summary/placement, data model, public API, business logic, i18n, seed, tests, non-functionals). If any required field is missing or ambiguous, **list the gaps and ask** via `AskUserQuestion` — never guess the data model, auth, or tenancy. Then post the plan once and proceed.
+The accepted input is the form in `docs/getting-started/requirement.template.md` — the sections `# Requirement:` and `## 1`–`## 8` (summary/placement, data model, public API, business logic, i18n, seed, tests, non-functionals). Map the input onto those sections.
+
+Best-effort gap-filling: for any section that is **missing, still a `<...>` placeholder, or ambiguous**, collect the gaps and **ask once** via `AskUserQuestion` to fill them — never guess the data model, auth, or tenancy. Sections marked `none` or `default` are accepted as-is (defaults from `requirement-intake.md` apply). Once the form is complete, post the plan once and proceed.
 
 ## 2. Run the build pipeline (each step is an existing skill — consult skill-index first)
 
