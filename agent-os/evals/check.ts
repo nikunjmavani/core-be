@@ -324,6 +324,22 @@ if (existsSync(chainsFile)) {
   }
 }
 
+// ── Check 14: command names are unique and never collide with a skill name ──
+// Commands are workflows; skills are the granular procedures. A command must not
+// shadow a skill (or another command), so routing stays unambiguous across tools.
+const commandsDirectory = join(agentOsDirectory, 'commands')
+if (existsSync(commandsDirectory)) {
+  const seenCommand = new Set<string>()
+  for (const file of listFilesWithExtension(commandsDirectory, '.md')) {
+    const name = basename(file, '.md')
+    if (name === 'README') continue
+    if (seenCommand.has(name)) error('command-uniqueness', `command "${name}" is defined more than once`)
+    seenCommand.add(name)
+    if (skillNames.includes(name))
+      error('command-uniqueness', `command "${name}" collides with a skill of the same name`)
+  }
+}
+
 // ── Report ──
 const errors = findings.filter((finding) => finding.level === 'error')
 const warnings = findings.filter((finding) => finding.level === 'warn')
@@ -345,6 +361,7 @@ const checkLabels: Record<string, string> = {
   'targets-registry': 'Capability registry valid',
   'skill-groups': 'Skill groups ↔ disk',
   'skill-chains': 'Skill chains ↔ disk',
+  'command-uniqueness': 'Command names unique',
 }
 
 console.log('\nagent-os integrity evals (Tier 1)\n')

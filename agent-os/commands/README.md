@@ -30,12 +30,45 @@ for f in "$PWD"/agent-os/commands/*.md; do ln -sf "$f" ~/.codex/prompts/; done
 
 ## Commands
 
+Granular procedures live in **skills** (invoked by name); these commands are **workflows** that orchestrate them. Names are collision-checked against skills (`pnpm agent-os:check`).
+
+**Core**
+
 | Command | Purpose |
 | ------- | ------- |
 | `/validate` | Run `pnpm validate` (lint + format + typecheck); fix introduced issues. |
 | `/ci-local` | Run the full `pnpm ci:local` PR gate; summarize and fix failures. |
-| `/new-domain <name>` | Scaffold a domain/sub-domain via the domain-generator skill. |
+| `/new-domain <name>` | Scaffold a domain/sub-domain via the domain-generator skill (full DAG). |
 | `/routes-sync` | Re-sync route catalog + OpenAPI/seed artifacts after route changes. |
+
+**Build chains** (from `agent-os/skills/chains.json`)
+
+| Command | Purpose |
+| ------- | ------- |
+| `/route-complete` | Route change end-to-end: contract → schema-docs → catalog → seed (+ openapi, tests). |
+| `/schema-complete` | Schema change end-to-end: schema-generator → sql-design → migration → RLS. |
+| `/worker-complete` | Events/queues/workers end-to-end: workers-events → tests → tsdoc. |
+
+**Review**
+
+| Command | Purpose |
+| ------- | ------- |
+| `/pre-merge-review` | Read-only pipeline (sql-design → rls → idempotency → verifier); one aggregated report. |
+
+**PR lifecycle**
+
+| Command | Purpose |
+| ------- | ------- |
+| `/open-pr [title]` | Push the branch + open a PR to `dev` (the explicit PR opt-in). |
+| `/watch-pr <n>` | Subscribe to a PR; triage CI + review comments until green. |
+| `/merge-pr <n>` | Merge once CI is green and approvals are in. |
+| `/ship [title]` | The full flow: open-pr → watch-pr → merge-pr. |
+
+**Maintenance**
+
+| Command | Purpose |
+| ------- | ------- |
+| `/agent-os-sync` | Regenerate adapters from common + run the agent-os gates; fix drift. |
 
 ## Related: SessionStart + guardrails
 
