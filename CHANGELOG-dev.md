@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.9.1-dev.4](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.3...v4.9.1-dev.4) (2026-06-18)
+
+
+### Fixed
+
+* start docker daemon before cloud compose ([6c93d3e](https://github.com/nikunjmavani/core-be/commit/6c93d3eaa30a0a9cd9227d4703527331c83e99a5))
+
 ## [4.9.1-dev.3](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.2...v4.9.1-dev.3) (2026-06-18)
 
 
