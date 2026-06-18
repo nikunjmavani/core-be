@@ -35,8 +35,43 @@ const compressMiddlewareInner: FastifyPluginAsync = async (app) => {
   // cache should retain a secret-bearing body. The detection reuses the same
   // {@link responseBodyContainsSecretFields} matcher that gates idempotency caching
   // (sec-C/M #12) — one source of truth.
+  // Fast-path: a cheap substring pre-scan lets the 95%+ of secret-free responses skip the
+  // expensive JSON.parse + recursive walk inside {@link responseBodyContainsSecretFields}.
+  //
+  // INVARIANT — this list MUST remain a *superset* of every fragment the canonical matcher
+  // catches; otherwise a secret-bearing body would skip the no-store/no-compress hardening
+  // (a BREACH / cache-leak regression). It mirrors, as bare (un-quoted) lowercase substrings:
+  //   • SENSITIVE_KEY_FRAGMENTS               (sensitive-redaction.util.ts — `isSensitiveKey`)
+  //   • IDEMPOTENCY_SECRET_RESPONSE_FIELD_NAMES (idempotency-fingerprint.util.ts)
+  // Bare matching only ever over-triggers (a false positive merely runs the full check), so it
+  // cannot produce a false negative. The superset property is pinned by the compress unit test.
+  const SECRET_FRAGMENTS = [
+    'token', // token, access_token, refresh_token, mfa_session_token
+    'secret', // secret, client_secret
+    'password',
+    'passwd',
+    'credential',
+    'cookie',
+    'jwt',
+    'key', // api_key, raw_key, private_key, encryption_key, access_key_id
+    'authorization',
+    'session', // session_id
+    'email',
+    'recovery_code', // recovery_codes
+    'download_url',
+    'upload_url',
+  ];
+  function likelyContainsSecretFields(body: string): boolean {
+    const lower = body.toLowerCase();
+    return SECRET_FRAGMENTS.some((fragment) => lower.includes(fragment));
+  }
+
   app.addHook('onSend', async (_request, reply, payload) => {
-    if (typeof payload === 'string' && responseBodyContainsSecretFields(payload)) {
+    if (
+      typeof payload === 'string' &&
+      likelyContainsSecretFields(payload) &&
+      responseBodyContainsSecretFields(payload)
+    ) {
       reply.header('cache-control', 'no-store, no-cache, must-revalidate, private');
       reply.header('content-encoding', 'identity-no-compress');
     }

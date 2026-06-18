@@ -1,34 +1,16 @@
-import { monitorEventLoopDelay, type IntervalHistogram } from 'node:perf_hooks';
+import {
+  getSharedEventLoopHistogram,
+  resetSharedEventLoopHistogram,
+} from '@/shared/utils/infrastructure/event-loop-monitor.js';
 import { isMetricsEnabled } from '@/infrastructure/observability/metrics/metrics-registry.js';
 import { setEventLoopLagMilliseconds } from '@/infrastructure/observability/metrics/prometheus-metrics.js';
-
-/** Sampling resolution for monitorEventLoopDelay (ms). */
-export const EVENT_LOOP_MONITORING_RESOLUTION_MS = 10;
-
-let eventLoopDelayHistogram: IntervalHistogram | null = null;
-
-function getEventLoopDelayHistogram(): IntervalHistogram | null {
-  if (eventLoopDelayHistogram) {
-    return eventLoopDelayHistogram;
-  }
-  try {
-    const histogram = monitorEventLoopDelay({
-      resolution: EVENT_LOOP_MONITORING_RESOLUTION_MS,
-    });
-    histogram.enable();
-    eventLoopDelayHistogram = histogram;
-    return histogram;
-  } catch {
-    return null;
-  }
-}
 
 /** Registers perf_hooks event-loop monitoring when metrics are enabled. */
 export function registerEventLoopMetrics(): void {
   if (!isMetricsEnabled()) {
     return;
   }
-  getEventLoopDelayHistogram();
+  getSharedEventLoopHistogram();
 }
 
 /**
@@ -40,11 +22,7 @@ export function refreshEventLoopMetrics(): void {
     return;
   }
 
-  const histogram = getEventLoopDelayHistogram();
-  if (!histogram) {
-    return;
-  }
-
+  const histogram = getSharedEventLoopHistogram();
   const lagNanoseconds = histogram.percentile(99);
   const lagMilliseconds = lagNanoseconds / 1_000_000;
   setEventLoopLagMilliseconds(lagMilliseconds);
@@ -52,5 +30,5 @@ export function refreshEventLoopMetrics(): void {
 
 /** Test-only: reset histogram singleton between Vitest cases. */
 export function resetEventLoopMetricsForTests(): void {
-  eventLoopDelayHistogram = null;
+  resetSharedEventLoopHistogram();
 }
