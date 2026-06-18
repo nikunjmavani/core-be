@@ -12,6 +12,7 @@ const sampleEntry = (
     method: 'POST',
     fullPath: '/api/v1/sample',
     lookupKey: 'POST /api/v1/sample',
+    hasParamsSchema: false,
     ...rest,
     metadata: {
       summary: 'Sample',

@@ -1364,6 +1364,7 @@ src/
     │       ├── route-success-coverage.util.ts
     │       ├── validate-route-http-coverage.ts
     │       ├── validate-route-org-scope.ts
+    │       ├── validate-route-params-schema.ts
     │       ├── validate-route-schema-docs.ts
     │       ├── validate-route-success-coverage.ts
     │       └── validate-route-success-statuses.ts

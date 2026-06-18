@@ -92,6 +92,17 @@ function extractMetadataFromOptionsBody(optionsBody: string): RouteSchemaMetadat
   };
 }
 
+/** Matches a `params:` property key inside a route `schema` block. */
+const PARAMS_PROPERTY_PATTERN = /\bparams\s*:/;
+
+/** True when the route options' `schema` block declares a `params:` property. */
+function optionsBodyHasParamsSchema(optionsBody: string): boolean {
+  const schemaRange = findSchemaPropertyRange(optionsBody);
+  if (!schemaRange) return false;
+  const schemaBody = optionsBody.slice(schemaRange.bodyStart, schemaRange.bodyEnd);
+  return PARAMS_PROPERTY_PATTERN.test(schemaBody);
+}
+
 /** A single route registration paired with its (possibly incomplete) extracted schema metadata. */
 export interface RouteSchemaEntry {
   method: string;
@@ -99,6 +110,8 @@ export interface RouteSchemaEntry {
   /** `${METHOD} ${OPENAPI_PATH}` lookup key (Fastify `:param` → OpenAPI `{param}`). */
   lookupKey: string;
   metadata: RouteSchemaMetadata;
+  /** True when the route's `schema` block declares a `params:` property (boundary param validation). */
+  hasParamsSchema: boolean;
 }
 
 function scanRouteSchemaEntries({
@@ -132,7 +145,14 @@ function scanRouteSchemaEntries({
     if (!optionsRange) continue;
     const optionsBody = sourceText.slice(optionsRange.bodyStart, optionsRange.bodyEnd);
     const metadata = extractMetadataFromOptionsBody(optionsBody);
-    entries.push({ method, fullPath, lookupKey: buildLookupKey(method, fullPath), metadata });
+    const hasParamsSchema = optionsBodyHasParamsSchema(optionsBody);
+    entries.push({
+      method,
+      fullPath,
+      lookupKey: buildLookupKey(method, fullPath),
+      metadata,
+      hasParamsSchema,
+    });
   }
 
   return entries;
