@@ -8,7 +8,7 @@ Build a complete, production-ready vertical slice from the requirement intake (*
 
 ## 1. Read the intake against the one accepted format
 
-The accepted input is the form in `docs/getting-started/requirement.template.md` — the sections `# Requirement:` and `## 1`–`## 8` (summary/placement, data model, public API, business logic, i18n, seed, tests, non-functionals). Map the input onto those sections.
+The accepted input is the form in `docs/getting-started/requirement.template.md` — the sections `# Requirement:` and `## 1`–`## 9` (summary/placement, data model, public API, business logic, i18n, seed, tests [unit/integration/e2e/smoke/contract/chaos], non-functionals, file structure & deliverables). Map the input onto those sections; the posted plan lists the section 9 files and the section 7 test layers.
 
 Best-effort gap-filling: for any section that is **missing, still a `<...>` placeholder, or ambiguous**, collect the gaps and **ask once** via `AskUserQuestion` to fill them — never guess the data model, auth, or tenancy. Sections marked `none` or `default` are accepted as-is (defaults from `requirement-intake.md` apply). Once the form is complete, post the plan once and proceed.
 
@@ -19,7 +19,7 @@ Best-effort gap-filling: for any section that is **missing, still a `<...>` plac
 3. **`/route-complete`** — api-contract-guard → route-schema-doc-guard → route-catalog → seed-maintainer (+ openapi-multilingual if tags).
 4. **workers-events** — only if the intake declares events/queues/workers.
 5. **seed-maintainer** — reference + bulk/faker rows per the intake.
-6. **test-generator** — unit + e2e; the intake's test cases become the acceptance tests.
+6. **test-generator** (+ **contract-test-maintainer** / **chaos-test-maintainer** when section 7 marks them) — generate the test layers declared in section 7 (unit, integration, e2e, smoke; contract/chaos if needed); the intake's cases become the acceptance tests.
 7. **i18n-message-guard**, **tsdoc-export-guard**, **overview-doc-maintainer**, OpenAPI — i18n + docs.
 
 ## 3. Autonomous verify → heal loop

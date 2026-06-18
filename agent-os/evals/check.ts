@@ -398,6 +398,7 @@ if (!existsSync(requirementForm)) {
     '## 6. Seed data',
     '## 7. Tests',
     '## 8. Non-functionals',
+    '## 9. File structure',
   ]
   for (const section of requiredSections)
     if (!formText.includes(section))
