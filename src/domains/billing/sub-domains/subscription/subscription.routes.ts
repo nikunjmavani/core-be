@@ -5,7 +5,12 @@ import { ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT } from '@/shared/middlewares/rate
 import { BILLING_PERMISSIONS } from '@/domains/billing/billing.permissions.js';
 import type { SubscriptionService } from './subscription.service.js';
 import { createSubscriptionController } from './subscription.controller.js';
-import { ChangePlanDto, CreateSubscriptionDto, UpdateSubscriptionDto } from './subscription.dto.js';
+import {
+  ChangePlanDto,
+  CreateSubscriptionDto,
+  subscriptionIdParamsDto,
+  UpdateSubscriptionDto,
+} from './subscription.dto.js';
 
 /**
  * Fastify plugin factory that mounts the organization-scoped subscription
@@ -43,6 +48,7 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
           description:
             'Returns a single subscription with its current status. Requires SUBSCRIPTION_READ permission.',
           tags: ['Subscription'],
+          params: subscriptionIdParamsDto,
         },
       },
       controller.getSubscription,
@@ -72,6 +78,7 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
           description:
             'Updates subscription settings (e.g. cancel at period end). Requires SUBSCRIPTION_MANAGE permission.',
           tags: ['Subscription'],
+          params: subscriptionIdParamsDto,
           body: UpdateSubscriptionDto,
         },
         onRequest: [app.authenticate],
@@ -88,6 +95,7 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
           description:
             'Upgrades or downgrades the subscription to a different plan. Proration is applied automatically. Requires SUBSCRIPTION_MANAGE permission. Send an `X-Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
           tags: ['Subscription'],
+          params: subscriptionIdParamsDto,
           body: ChangePlanDto,
         },
         onRequest: [app.authenticate],
@@ -106,6 +114,7 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
           description:
             'Cancels the subscription. By default, access continues until the end of the current billing period. Requires SUBSCRIPTION_MANAGE permission. Send an `X-Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
           tags: ['Subscription'],
+          params: subscriptionIdParamsDto,
         },
       },
       controller.cancelSubscription,
@@ -121,6 +130,7 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
           description:
             'Resumes a subscription that was previously cancelled but has not yet expired. Requires SUBSCRIPTION_MANAGE permission. Send an `X-Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
           tags: ['Subscription'],
+          params: subscriptionIdParamsDto,
         },
       },
       controller.resumeSubscription,

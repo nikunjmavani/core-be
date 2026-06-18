@@ -3,6 +3,17 @@ import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedString, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 /**
+ * Zod schema for the `:role_id` path param shared by the role get/update/delete and the
+ * nested permission list/replace routes. Permissive length bound (the authoritative
+ * entity-prefix check stays in the controller via `validatePublicIdParam`).
+ */
+export const roleIdParamsDto = z
+  .object({
+    role_id: trimmedStringMinMax(1, 28),
+  })
+  .strict();
+
+/**
  * Zod schema for the `POST /organization/roles` request body.
  *
  * @remarks

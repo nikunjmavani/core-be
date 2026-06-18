@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { MODERATE_AUTHED_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 import { createUploadController } from './upload.controller.js';
-import { createUploadDto } from './upload.dto.js';
+import { createUploadDto, uploadPublicIdParamDto } from './upload.dto.js';
 
 /**
  * Fastify plugin mounting upload routes under the upload prefix: presigned URL
@@ -38,6 +38,7 @@ export const uploadRoutesPlugin: FastifyPluginAsync = async (app) => {
         description:
           'Returns metadata for a previously requested upload owned by the authenticated user.',
         tags: ['Upload'],
+        params: uploadPublicIdParamDto,
       },
     },
     controller.getUpload,
@@ -52,6 +53,7 @@ export const uploadRoutesPlugin: FastifyPluginAsync = async (app) => {
         description:
           'Confirms a previously requested upload after the client has PUT the file to the pre-signed URL. Verifies the object exists in storage and marks the upload record complete.',
         tags: ['Upload'],
+        params: uploadPublicIdParamDto,
       },
     },
     controller.confirmUpload,
@@ -66,6 +68,7 @@ export const uploadRoutesPlugin: FastifyPluginAsync = async (app) => {
         description:
           'Soft-deletes the upload record and removes the object from storage when possible.',
         tags: ['Upload'],
+        params: uploadPublicIdParamDto,
       },
     },
     controller.deleteUpload,

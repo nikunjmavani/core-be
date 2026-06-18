@@ -1,5 +1,16 @@
 import { z } from 'zod';
-import { trimmedString } from '@/shared/utils/validation/validation.util.js';
+import { trimmedString, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
+
+/**
+ * Zod schema for the `:user_id` path param shared by the admin get/update/delete/suspend/
+ * unsuspend routes. Permissive length bound (the authoritative entity-prefix check stays in
+ * the controller via `validatePublicIdParam`); gates empty/oversized values at the boundary.
+ */
+export const userIdParamsDto = z
+  .object({
+    user_id: trimmedStringMinMax(1, 28),
+  })
+  .strict();
 
 // ── Self-service DTOs ────────────────────────────────────────
 

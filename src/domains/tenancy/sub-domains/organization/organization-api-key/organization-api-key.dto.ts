@@ -3,6 +3,17 @@ import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 /**
+ * Zod schema for the `:api_key_id` path param shared by the get/update/delete/rotate routes.
+ * Permissive length bound (the authoritative entity-prefix check stays in the controller via
+ * `validatePublicIdParam`).
+ */
+export const apiKeyIdParamsDto = z
+  .object({
+    api_key_id: trimmedStringMinMax(1, 28),
+  })
+  .strict();
+
+/**
  * Zod schema for `POST /api/v1/organization/api-keys` — requires a
  * human label, 1–50 scope strings, and an optional `expires_in_days`
  * (1–365). The raw secret is generated server-side and returned only once.
