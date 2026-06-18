@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.9.1-dev.2](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.1...v4.9.1-dev.2) (2026-06-18)
+
+
+### Documentation
+
+* **agent-os:** document dev production release command ([7d023a2](https://github.com/nikunjmavani/core-be/commit/7d023a203df9dc7bc81020428c24eb4e78a1b31d))
+
 ## [4.9.1-dev.1](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.0...v4.9.1-dev.1) (2026-06-18)
 
 
