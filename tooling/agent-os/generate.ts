@@ -131,8 +131,13 @@ const claudeSettingsPath = join(
 if (existsSync(claudeSettingsPath)) {
   const settings = readJson<Record<string, unknown>>(claudeSettingsPath);
   if (writeMode) {
-    settings.hooks = claudeHooks;
-    writeFileSync(claudeSettingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+    // Idempotent: only write when the hooks actually differ, so an unchanged
+    // file is never reformatted (do-no-harm).
+    if (!deepEqual(settings.hooks, claudeHooks)) {
+      settings.hooks = claudeHooks;
+      writeFileSync(claudeSettingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+      report('wrote .claude/settings.json');
+    }
   } else if (!deepEqual(settings.hooks, claudeHooks)) {
     report(
       'drift: .claude/settings.json hooks differ from agent-os/hooks/hooks.json — run `pnpm agent-os:generate --write`',
@@ -145,8 +150,13 @@ const cursorHooksPath = join(repositoryRoot, cursorTarget?.hooksTarget ?? '.curs
 if (existsSync(cursorHooksPath)) {
   const cursorConfig = readJson<Record<string, unknown>>(cursorHooksPath);
   if (writeMode) {
-    cursorConfig.hooks = cursorHooks;
-    writeFileSync(cursorHooksPath, `${JSON.stringify(cursorConfig, null, 2)}\n`);
+    // Idempotent: skip the write when content matches, preserving the existing
+    // hand-formatted file instead of canonicalising it.
+    if (!deepEqual(cursorConfig.hooks, cursorHooks)) {
+      cursorConfig.hooks = cursorHooks;
+      writeFileSync(cursorHooksPath, `${JSON.stringify(cursorConfig, null, 2)}\n`);
+      report('wrote .cursor/hooks.json');
+    }
   } else if (!deepEqual(cursorConfig.hooks, cursorHooks)) {
     report(
       'drift: .cursor/hooks.json hooks differ from agent-os/hooks/hooks.json — run `pnpm agent-os:generate --write`',

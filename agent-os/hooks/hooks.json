@@ -56,6 +56,18 @@
       "claude": { "event": "Stop" }
     },
     {
+      "id": "pre-compact-preserve",
+      "runtime": "bash",
+      "script": "pre-compact-preserve.sh",
+      "claude": { "event": "PreCompact" }
+    },
+    {
+      "id": "session-end",
+      "runtime": "bash",
+      "script": "session-end.sh",
+      "claude": { "event": "SessionEnd" }
+    },
+    {
       "id": "cursor-shell-guard",
       "runtime": "node",
       "script": "cursor-shell-guard.mjs",
