@@ -156,6 +156,25 @@ for (const file of agentFiles) {
     warn('agent-model', `agents/${file} pins model "${model}" — prefer \`inherit\` unless deliberately overridden`)
 }
 
+// ── Check 12: read-only agents must enforce read-only via a tools allowlist ──
+// `readonly: true` is honoured only by Cursor; on Claude Code an agent without a
+// `tools` allowlist can still Edit/Write. Require every readonly agent to declare
+// `tools` and to exclude the write tools, so the read-only contract is real on
+// both platforms (audit §2, item 4).
+const writeTools = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit']
+for (const file of agentFiles) {
+  const text = readText(join(agentOsDirectory, 'agents', file))
+  if (frontmatterField(text, 'readonly') !== 'true') continue
+  const tools = frontmatterField(text, 'tools')
+  if (!tools)
+    error('agent-readonly', `agents/${file} is readonly:true but declares no \`tools\` allowlist — read-only is unenforced on Claude`)
+  else {
+    const offenders = writeTools.filter((tool) => new RegExp(`\\b${tool}\\b`).test(tools))
+    if (offenders.length)
+      error('agent-readonly', `agents/${file} is readonly:true but its \`tools\` allowlist includes write tool(s): ${offenders.join(', ')}`)
+  }
+}
+
 // ── Check 8: hook commands must be portable and reference scripts that exist ──
 const settingsFile = join(repositoryRoot, '.claude', 'settings.json')
 if (existsSync(settingsFile)) {
@@ -193,25 +212,198 @@ const isPathCandidate = (token: string): boolean => {
   const hasKnownExtension = pathExtensions.some((extension) => token.endsWith(extension))
   return underRoot && hasKnownExtension
 }
-const scanForPaths = (absoluteDirectory: string, extension: string) => {
-  for (const file of listFilesWithExtension(absoluteDirectory, extension)) {
-    const displayPath = relative(repositoryRoot, join(absoluteDirectory, file))
-    const text = readText(join(absoluteDirectory, file))
-    const seen = new Set<string>()
-    for (const inline of text.matchAll(/`([^`\n]+)`/g)) {
-      const token = inline[1].trim()
-      if (seen.has(token) || !isPathCandidate(token)) continue
-      seen.add(token)
-      if (!existsSync(join(repositoryRoot, token)))
-        // Gated: the reference corpus is clean, so a missing path is a real dead reference.
-        // Add genuinely-absent paths (gitignored / generated / illustrative) to evals/ignore.json.
-        error('referenced-path', `${displayPath} → \`${token}\` does not exist (fix the ref, or add to evals/ignore.json if intentional)`)
-    }
+const scanOneFile = (absolutePath: string) => {
+  const displayPath = relative(repositoryRoot, absolutePath)
+  const text = readText(absolutePath)
+  const seen = new Set<string>()
+  for (const inline of text.matchAll(/`([^`\n]+)`/g)) {
+    const token = inline[1].trim()
+    if (seen.has(token) || !isPathCandidate(token)) continue
+    seen.add(token)
+    if (!existsSync(join(repositoryRoot, token)))
+      // Gated: the reference corpus is clean, so a missing path is a real dead reference.
+      // Add genuinely-absent paths (gitignored / generated / illustrative) to evals/ignore.json.
+      error('referenced-path', `${displayPath} → \`${token}\` does not exist (fix the ref, or add to evals/ignore.json if intentional)`)
   }
+}
+const scanForPaths = (absoluteDirectory: string, extension: string) => {
+  for (const file of listFilesWithExtension(absoluteDirectory, extension)) scanOneFile(join(absoluteDirectory, file))
 }
 scanForPaths(join(agentOsDirectory, 'docs'), '.md')
 scanForPaths(join(agentOsDirectory, 'rules'), '.mdc')
 for (const skill of skillNames) scanForPaths(join(agentOsDirectory, 'skills', skill), '.md')
+// Repo-wide: the canonical entry-point docs at the root are scanned too, so a
+// dead `src/...` / `agent-os/...` reference there fails the gate like any other.
+for (const rootDoc of ['CLAUDE.md', 'AGENTS.md'])
+  if (existsSync(join(repositoryRoot, rootDoc))) scanOneFile(join(repositoryRoot, rootDoc))
+
+// ── Check 10: root docs (CLAUDE.md, AGENTS.md) state counts that match disk ──
+// These root files sit outside the per-component scans above (skill-index,
+// skill-triggers, agents-catalog), so a stale count there ("22 sync rules",
+// "All 8 agents", "36 project skills") drifts unseen. Same patterns, applied
+// at the repo root so the canonical entry-point docs cannot silently diverge.
+for (const rootDoc of ['CLAUDE.md', 'AGENTS.md']) {
+  const rootDocFile = join(repositoryRoot, rootDoc)
+  if (!existsSync(rootDocFile)) continue
+  const rootText = readText(rootDocFile)
+  for (const count of new Set(allNumbers(rootText, /(\d+)\s+project skills/g)))
+    if (count !== skillNames.length)
+      error('root-doc-count', `${rootDoc} states ${count} project skills; ${skillNames.length} exist on disk`)
+  for (const count of new Set(allNumbers(rootText, /(\d+)\s+sync rules/g)))
+    if (count !== syncRuleCount)
+      error('root-doc-count', `${rootDoc} states ${count} sync rules; ${syncRuleCount} *-sync.mdc files exist`)
+  for (const count of new Set(allNumbers(rootText, /[Aa]ll\s+(\d+)\s+(?:project\s+)?agents/g)))
+    if (count !== agentFiles.length)
+      error('root-doc-count', `${rootDoc} states ${count} agents; ${agentFiles.length} agent files exist`)
+}
+
+// ── Check 11: backbone manifests — hook scripts exist, capability registry is well-formed ──
+// The generator (tooling/agent-os/generate.ts) owns drift between these manifests
+// and the derived .claude/.cursor wiring (pnpm agent-os:generate:check); here we
+// assert the source manifests themselves are structurally sound.
+const hooksManifestFile = join(agentOsDirectory, 'hooks', 'hooks.json')
+if (existsSync(hooksManifestFile)) {
+  try {
+    const manifest = JSON.parse(readText(hooksManifestFile)) as { hooks?: Array<{ id?: string; script?: string }> }
+    for (const entry of manifest.hooks ?? []) {
+      if (!entry.script) error('hooks-manifest', `hooks.json entry "${entry.id ?? '∅'}" has no script`)
+      else if (!existsSync(join(agentOsDirectory, 'hooks', entry.script)))
+        error('hooks-manifest', `hooks.json references agent-os/hooks/${entry.script} which does not exist`)
+    }
+  } catch {
+    error('hooks-manifest', 'agent-os/hooks/hooks.json is not valid JSON')
+  }
+}
+const targetsRegistryFile = join(agentOsDirectory, 'platforms', 'targets.json')
+if (existsSync(targetsRegistryFile)) {
+  try {
+    const registry = JSON.parse(readText(targetsRegistryFile)) as { agents?: Record<string, unknown> }
+    if (!registry.agents || Object.keys(registry.agents).length === 0)
+      error('targets-registry', 'platforms/targets.json declares no agents')
+  } catch {
+    error('targets-registry', 'agent-os/platforms/targets.json is not valid JSON')
+  }
+}
+
+// ── Check 13: skill groups + chains stay in sync with the skills on disk ──
+// groups.json must place every skill in exactly one known group; chains.json
+// steps must each reference a real skill — so the orchestration manifests cannot
+// drift as skills are added or renamed.
+const groupsFile = join(agentOsDirectory, 'skills', 'groups.json')
+if (existsSync(groupsFile)) {
+  try {
+    const groups = (JSON.parse(readText(groupsFile)) as { groups?: Record<string, string[]> }).groups ?? {}
+    const membership = new Map<string, number>()
+    for (const [group, members] of Object.entries(groups))
+      for (const member of members) {
+        if (!skillNames.includes(member))
+          error('skill-groups', `groups.json group "${group}" lists "${member}" which has no skill directory`)
+        membership.set(member, (membership.get(member) ?? 0) + 1)
+      }
+    for (const skill of skillNames) {
+      const count = membership.get(skill) ?? 0
+      if (count === 0) error('skill-groups', `skill "${skill}" is in no group in groups.json`)
+      else if (count > 1) error('skill-groups', `skill "${skill}" is in ${count} groups in groups.json (expected exactly 1)`)
+    }
+  } catch {
+    error('skill-groups', 'agent-os/skills/groups.json is not valid JSON')
+  }
+}
+const chainsFile = join(agentOsDirectory, 'skills', 'chains.json')
+if (existsSync(chainsFile)) {
+  try {
+    const chains =
+      (JSON.parse(readText(chainsFile)) as { chains?: Record<string, { steps?: string[]; optional?: string[] }> })
+        .chains ?? {}
+    for (const [chain, definition] of Object.entries(chains))
+      for (const step of [...(definition.steps ?? []), ...(definition.optional ?? [])])
+        if (!skillNames.includes(step))
+          error('skill-chains', `chains.json chain "${chain}" references "${step}" which has no skill directory`)
+  } catch {
+    error('skill-chains', 'agent-os/skills/chains.json is not valid JSON')
+  }
+}
+
+// ── Check 14: command names are unique and never collide with a skill name ──
+// Commands are workflows; skills are the granular procedures. A command must not
+// shadow a skill (or another command), so routing stays unambiguous across tools.
+const commandsDirectory = join(agentOsDirectory, 'commands')
+if (existsSync(commandsDirectory)) {
+  const seenCommand = new Set<string>()
+  for (const file of listFilesWithExtension(commandsDirectory, '.md')) {
+    const name = basename(file, '.md')
+    if (name === 'README') continue
+    if (seenCommand.has(name)) error('command-uniqueness', `command "${name}" is defined more than once`)
+    seenCommand.add(name)
+    if (skillNames.includes(name))
+      error('command-uniqueness', `command "${name}" collides with a skill of the same name`)
+  }
+}
+
+// ── Check 15: agent review-pipelines reference real agents ──
+// pipelines.json names sequences of read-only agents (consumed by /pre-merge-review
+// and /prod-readiness); every step must resolve to an agent file on disk.
+const pipelinesFile = join(agentOsDirectory, 'agents', 'pipelines.json')
+if (existsSync(pipelinesFile)) {
+  const agentNames = new Set(agentFiles.map((file) => basename(file, '.md')))
+  try {
+    const pipelines =
+      (JSON.parse(readText(pipelinesFile)) as { pipelines?: Record<string, { steps?: string[] }> }).pipelines ?? {}
+    for (const [pipeline, definition] of Object.entries(pipelines))
+      for (const step of definition.steps ?? [])
+        if (!agentNames.has(step))
+          error('agent-pipelines', `pipelines.json pipeline "${pipeline}" references "${step}" which has no agent file`)
+  } catch {
+    error('agent-pipelines', 'agent-os/agents/pipelines.json is not valid JSON')
+  }
+}
+
+// ── Check 16: plugin manifest references resolve to real paths ──
+// .claude-plugin/plugin.json points at agent-os/* component dirs/files; every
+// referenced path must exist so the installable plugin is never broken.
+const pluginManifestFile = join(repositoryRoot, '.claude-plugin', 'plugin.json')
+if (existsSync(pluginManifestFile)) {
+  try {
+    const manifest = JSON.parse(readText(pluginManifestFile)) as Record<string, unknown>
+    const references: string[] = []
+    for (const key of ['commands', 'agents', 'skills']) {
+      const value = manifest[key]
+      if (Array.isArray(value)) references.push(...value.filter((entry): entry is string => typeof entry === 'string'))
+      else if (typeof value === 'string') references.push(value)
+    }
+    if (typeof manifest.mcpServers === 'string') references.push(manifest.mcpServers)
+    for (const reference of references)
+      if (!existsSync(join(repositoryRoot, reference.replace(/^\.\//, ''))))
+        error('plugin-refs', `.claude-plugin/plugin.json references ${reference} which does not exist`)
+  } catch {
+    error('plugin-refs', '.claude-plugin/plugin.json is not valid JSON')
+  }
+}
+
+// ── Check 17: the /build-requirement intake form exists with all canonical sections ──
+// docs/getting-started/requirement.template.md is the one format /build-requirement
+// accepts; it must stay complete so a build always starts from the full 8-section spec.
+const requirementForm = join(repositoryRoot, 'docs', 'getting-started', 'requirement.template.md')
+if (!existsSync(requirementForm)) {
+  error('requirement-form', 'docs/getting-started/requirement.template.md is missing (the /build-requirement format)')
+} else {
+  const formText = readText(requirementForm)
+  const requiredSections = [
+    '# Requirement:',
+    '## 1. Summary & placement',
+    '## 2. Data model',
+    '## 3. Public API',
+    '## 4. Business logic',
+    '## 5. i18n',
+    '## 6. Seed data',
+    '## 7. Tests',
+    '## 8. Non-functionals',
+    '## 9. File structure',
+  ]
+  for (const section of requiredSections)
+    if (!formText.includes(section))
+      error('requirement-form', `requirement.template.md is missing the "${section}" section`)
+}
 
 // ── Report ──
 const errors = findings.filter((finding) => finding.level === 'error')
@@ -225,9 +417,19 @@ const checkLabels: Record<string, string> = {
   'agent-catalog-count': 'Agent catalog count',
   'agent-catalog-coverage': 'Agent catalog coverage',
   'agent-frontmatter': 'Agent frontmatter',
+  'agent-readonly': 'Read-only agents enforce tools',
   'hook-portability': 'Hook portability',
   'hook-script': 'Hook scripts exist',
   'referenced-path': 'Referenced paths exist',
+  'root-doc-count': 'Root-doc counts (CLAUDE/AGENTS)',
+  'hooks-manifest': 'Hook manifest scripts exist',
+  'targets-registry': 'Capability registry valid',
+  'skill-groups': 'Skill groups ↔ disk',
+  'skill-chains': 'Skill chains ↔ disk',
+  'command-uniqueness': 'Command names unique',
+  'agent-pipelines': 'Agent pipelines ↔ disk',
+  'plugin-refs': 'Plugin manifest refs exist',
+  'requirement-form': 'Requirement form sections',
 }
 
 console.log('\nagent-os integrity evals (Tier 1)\n')

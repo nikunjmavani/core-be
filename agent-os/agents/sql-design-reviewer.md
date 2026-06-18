@@ -2,6 +2,11 @@
 name: sql-design-reviewer
 description: Reviews Drizzle schema files under src/domains/ for PostgreSQL design conventions — indexes, partitioning, constraint naming, column types, and soft-delete patterns. Returns a prioritized design-issue list. Read-only; produces a report for the user to act on, never edits schema files.
 model: inherit
+tools:
+  - Read
+  - Grep
+  - Glob
+  - Bash
 readonly: true
 ---
 

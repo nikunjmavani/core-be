@@ -6,7 +6,7 @@ description: >
   follows the project's Keep a Changelog / conventional-commits format. Flags
   missing entries, wrong version bumps, and unreleased sections that are stale.
   Does NOT write commits or push — produces a gap report only.
-model: claude-sonnet-4-5
+model: inherit
 tools:
   - Read
   - Bash

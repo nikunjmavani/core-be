@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "agentforge",
+  "version": "0.1.0",
+  "description": "Single-source, multi-runtime agent tooling for core-be: skills, agents, workflow commands, and the requirement to production-ready build pipeline, all driven from agent-os/.",
+  "author": { "name": "core-be" },
+  "commands": ["./agent-os/commands"],
+  "skills": ["./agent-os/skills"],
+  "agents": [
+    "./agent-os/agents/changelog-reviewer.md",
+    "./agent-os/agents/ci-investigator.md",
+    "./agent-os/agents/dependency-auditor.md",
+    "./agent-os/agents/docs-auditor.md",
+    "./agent-os/agents/production-hardening-reviewer.md",
+    "./agent-os/agents/production-reviewer.md",
+    "./agent-os/agents/sql-design-reviewer.md",
+    "./agent-os/agents/tsdoc-coverage-reviewer.md",
+    "./agent-os/agents/verifier.md"
+  ],
+  "mcpServers": "./.mcp.default.json"
+}
