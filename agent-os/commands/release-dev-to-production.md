@@ -8,6 +8,9 @@ Run the complete **dev → production** release workflow. Production is `main`;
 non-production integration is `dev`. This command is intentionally scoped to
 that branch pair only.
 
+Follow the durable workflow documentation in
+[`agent-os/docs/commands/release-dev-to-production.md`](../docs/commands/release-dev-to-production.md).
+
 Use the PR title **$ARGUMENTS** if provided; otherwise use today's local date
 in `YYYY-MM-DD` format:
 `chore(release): promote dev to main (YYYY-MM-DD)`.
@@ -23,7 +26,7 @@ Hard stops:
 - Do not squash any PR whose purpose is to merge `main` ancestry into `dev`;
   those PRs must use the merge-commit method.
 
-Workflow:
+Workflow summary:
 
 1. Fetch fresh refs:
    `git fetch origin main dev`.
