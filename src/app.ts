@@ -131,8 +131,8 @@ export async function buildApp(options?: BuildAppOptions) {
 
   registerMethodStatusPolicy(app);
 
-  const keepAliveTimeoutMs = env.FASTIFY_KEEP_ALIVE_TIMEOUT_MS ?? 72_000;
-  const headersTimeoutMs = env.FASTIFY_HEADERS_TIMEOUT_MS ?? 73_000;
+  const keepAliveTimeoutMs = env.FASTIFY_KEEP_ALIVE_TIMEOUT_MS ?? 65_000;
+  const headersTimeoutMs = env.FASTIFY_HEADERS_TIMEOUT_MS ?? 66_000;
   app.server.keepAliveTimeout = keepAliveTimeoutMs;
   app.server.headersTimeout = headersTimeoutMs;
 

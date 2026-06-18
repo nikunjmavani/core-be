@@ -2,6 +2,11 @@
 name: verifier
 description: Skeptical independent validator for core-be. Use after a task is marked done to confirm the implementation actually works — runs validate/tests, checks edge cases, and reports what passed vs what is incomplete or broken. Use proactively before claiming a feature complete.
 model: inherit
+tools:
+  - Read
+  - Grep
+  - Glob
+  - Bash
 readonly: true
 ---
 

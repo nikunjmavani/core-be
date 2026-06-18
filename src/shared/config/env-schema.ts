@@ -98,6 +98,13 @@ const envSchemaBase = z.object({
    * browser devtools without scraping `/metrics`. Default on; set false to suppress the header.
    */
   HTTP_SERVER_TIMING_ENABLED: booleanString('true'),
+  /**
+   * Overload-guard shed threshold: recent p99 event-loop delay (ms) above which incoming requests
+   * are rejected with 503 (`Retry-After`) instead of queuing behind a saturated event loop. Default
+   * 250 ms — well above normal load (tens of ms), so the guard is dormant until the loop truly
+   * stalls (a long sync op / GC pause). Lower it to shed sooner; raise it to tolerate longer stalls.
+   */
+  OVERLOAD_MAX_EVENT_LOOP_DELAY_MS: z.coerce.number().int().min(1).max(60_000).default(250),
 
   // Database (managed service)
   DATABASE_URL: isLocalRuntime ? z.string().min(1).default(LOCAL_DATABASE_URL) : z.string().min(1),
@@ -317,7 +324,7 @@ const envSchemaBase = z.object({
     .transform((value) => value === 'true' || value === '1'),
   /**
    * Use presigned POST (with an S3-enforced content-length-range) instead of presigned PUT
-   * for direct client uploads. On by default; the response carries `uploadMethod` and,
+   * for direct client uploads. On by default; the response carries `upload_method` and,
    * for POST, the policy `fields` clients must submit with the file.
    */
   UPLOAD_USE_PRESIGNED_POST: booleanString('true'),

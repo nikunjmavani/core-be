@@ -1,7 +1,18 @@
 import type { Redis } from 'ioredis';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
-/** Result shape `@fastify/rate-limit` expects from a store's `incr`. */
+/**
+ * Lua script that atomically increments a rate-limit counter, sets expiry on first use,
+ * and returns the current count + remaining TTL in a single round-trip.
+ */
+const RATE_LIMIT_INCR_SCRIPT = `
+  local current = redis.call('INCR', KEYS[1])
+  if current == 1 then
+    redis.call('PEXPIRE', KEYS[1], ARGV[1])
+  end
+  local ttl = redis.call('PTTL', KEYS[1])
+  return {current, ttl >= 0 and ttl or tonumber(ARGV[1])}
+`;
 interface RateLimitIncrResult {
   current: number;
   ttl: number;
@@ -34,10 +45,10 @@ function logRedisFailover(error: unknown): void {
  * per-process in-memory fixed-window counter when Redis is unavailable.
  *
  * @remarks
- * - **Algorithm:** `incr` runs `INCR` + `PEXPIRE`/`PTTL` against Redis (cluster-wide count);
- *   on any Redis rejection it counts in a local `Map` keyed by the same bucket and returns
- *   that count instead. `child` returns a new store with a route-scoped key prefix so per-route
- *   presets keep isolated buckets.
+ * - **Algorithm:** `incr` runs an atomic Lua script (`INCR` + conditional `PEXPIRE` + `PTTL`)
+ *   in a single Redis round-trip, falling back to a local `Map` counter on any Redis rejection.
+ *   `child` returns a new store with a route-scoped key prefix so per-route presets keep isolated
+ *   buckets.
  * - **Failure modes:** none surfaced to the caller — Redis errors are caught and converted into
  *   local enforcement, so the limiter never throws (and never has to fail fully open).
  * - **Side effects:** writes Redis keys; maintains a bounded in-memory counter map capped at
@@ -65,13 +76,14 @@ class RedisFallbackRateLimitStore {
   }
 
   private async incrInRedis(fullKey: string, timeWindow: number): Promise<RateLimitIncrResult> {
-    const current = await this.redis.incr(fullKey);
-    if (current === 1) {
-      await this.redis.pexpire(fullKey, timeWindow);
-      return { current, ttl: timeWindow };
-    }
-    const ttl = await this.redis.pttl(fullKey);
-    return { current, ttl: ttl >= 0 ? ttl : timeWindow };
+    const result = (await this.redis.eval(
+      RATE_LIMIT_INCR_SCRIPT,
+      1,
+      fullKey,
+      String(timeWindow),
+    )) as [number, number];
+    const [current, ttl] = result;
+    return { current, ttl };
   }
 
   private incrInMemory(fullKey: string, timeWindow: number): RateLimitIncrResult {

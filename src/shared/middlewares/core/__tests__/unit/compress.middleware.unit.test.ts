@@ -88,4 +88,26 @@ describe('compress.middleware — sec-re-03: BREACH suppression', () => {
 
     expect(response.headers['content-encoding']).not.toBe('identity-no-compress');
   });
+
+  // Regression guard: an earlier fast-path scanned for quoted fragments (`"token"`, `"raw_key"`)
+  // and silently MISSED access_token / email / session_id / client_secret, leaving secret-bearing
+  // bodies compressible. The pre-scan must stay a superset of the canonical secret matcher.
+  it.each([
+    'access_token',
+    'email',
+    'session_id',
+    'client_secret',
+  ])('engages the BREACH suppression for the previously-missed field %s', async (field) => {
+    const app = fastify();
+    await app.register(compressMiddleware);
+    app.get('/probe', async () => ({ [field]: 'sensitive', message: `ok ${'x'.repeat(2048)}` }));
+    const response = await app.inject({
+      method: 'GET',
+      url: '/probe',
+      headers: { 'accept-encoding': 'gzip, br' },
+    });
+    await app.close();
+
+    expect(response.headers['content-encoding']).toBe('identity-no-compress');
+  });
 });

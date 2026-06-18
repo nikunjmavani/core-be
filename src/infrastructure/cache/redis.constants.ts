@@ -1,7 +1,9 @@
+import { THREE_SECONDS_MS } from '@/shared/constants/index.js';
+
 /** Tuning constants shared by the process-wide and BullMQ ioredis clients. */
 
 /** Abort a Redis command that has not received a reply within this budget (ms). */
-export const REDIS_COMMAND_TIMEOUT_MS = 3_000;
+export const REDIS_COMMAND_TIMEOUT_MS = THREE_SECONDS_MS;
 
 /**
  * Per-attempt step for the linear-capped Redis reconnect backoff (ms).

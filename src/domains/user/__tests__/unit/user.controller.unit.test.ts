@@ -158,7 +158,7 @@ describe('createUserController', () => {
 
   it('avatar handlers delegate to user service', async () => {
     await controller.uploadAvatar(
-      mockRequest({ body: { avatarKey: 'avatars/user/avatar.png' } }),
+      mockRequest({ body: { avatar_key: 'avatars/user/avatar.png' } }),
       {} as FastifyReply,
     );
     const deleteAvatarReply = { code: vi.fn().mockReturnThis(), send: vi.fn() };

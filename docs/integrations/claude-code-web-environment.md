@@ -67,8 +67,8 @@ Paste into the **Setup script** field (runs as root, cached):
 bash tooling/setup/agent/install-node.sh
 bash tooling/setup/agent/install-gh.sh              # optional: GitHub CLI (in-session GitHub fallback)
 bash tooling/setup/agent/install-docker-images.sh   # optional: Docker Hub mirror + pre-pull compose images
-bash tooling/setup/agent/install-codegraph.sh       # optional: CodeGraph CLI + semantic index (MCP)
-bash tooling/setup/agent/install-headroom.sh        # optional: Headroom CLI — context-compression MCP (headroom_compress)
+bash tooling/setup/agent/install-codegraph.sh       # default MCP pair: CodeGraph CLI + semantic index
+bash tooling/setup/agent/install-headroom.sh        # default MCP pair: Headroom CLI — context-compression MCP (headroom_compress)
 bash tooling/setup/agent/install-gitleaks.sh        # optional: gitleaks (pre-commit secret scan)
 ```
 
@@ -186,14 +186,27 @@ flowchart TD
 A cloud session can touch GitHub only after the platform is **authorized** on this repo, and opening a PR is a deliberate, gated step — not something the agent does unprompted.
 
 - **One-time authorization (the connect-GitHub prompt).** Install / authorize the platform's GitHub App or connector on `nikunjmavani/core-be` with **least-privilege** scopes — `contents` (read/write the working branch), `pull_requests` (open/update PRs), and `actions: read` (CI status / logs). Without it the session cannot fetch, push, or open a PR.
-- **Pushes are pinned to the session branch.** The cloud git proxy restricts a web session to pushing only its assigned working branch (`claude/<slug>` on Claude Code web; the platform's task branch on Cursor / Codex). Repo hooks run *inside* the session and cannot rename it — `claude/*` is allowlisted by [git-branch-naming.mdc](../../agent-os/rules/git-branch-naming.mdc) by design. To land work under a `feature/` / `fix/` name, rename at the PR / merge layer.
+- **Pushes are pinned to the session branch.** The cloud git proxy restricts a web session to pushing only its assigned working branch (`claude/<slug>` on Claude Code web; configure Codex Cloud to use the same `claude/<slug>` branch format when available). Repo hooks run *inside* the session and cannot rename it — `claude/*` is allowlisted by [git-branch-naming.mdc](../../agent-os/rules/git-branch-naming.mdc) by design. To land work under a `feature/` / `fix/` name, rename at the PR / merge layer.
 - **"Create PR" asks first — by design.** Opening a pull request is an outward-facing action, so the agent won't do it unsolicited; it confirms first (Claude Code web uses the scoped **GitHub MCP** tools rather than `gh`). Ask explicitly when you want the PR opened, then drive CI to green per [git-workflow.md](../process/git-workflow.md).
 
 ---
 
 ## MCP servers
 
-In Claude Code on the web the live MCP server set is loaded by the **platform at session start** from your account / environment MCP settings — **not** the repo's [`.mcp.json`](../../.mcp.example.json). Installing a server's CLI in-session (e.g. CodeGraph) does not make its tools appear until a fresh session starts with that server configured. [`.mcp.example.json`](../../.mcp.example.json) lists the full local set (`context7`, `neon`, `sentry`, `github`, `slack`, `railway`, `aws`, `stripe`, `semgrep`, `sonarqube`, `redis`, `postman`, `resend`, `codegraph`, `headroom`, `core-be:api`); most need provider tokens (put them in the environment **Variables**) and several need `uvx` / `docker`, so connect only the subset a task needs.
+In Claude Code on the web the live MCP server set is loaded by the **platform at session start** from your account / environment MCP settings — **not** the repo's [`.mcp.json`](../../.mcp.example.json). Installing a server's CLI in-session (e.g. CodeGraph) does not make its tools appear until a fresh session starts with that server configured in the web UI.
+
+The repo splits the MCP set into two tiers:
+
+- **Default auto-start pair — `codegraph` + `headroom`** (committed in [`.mcp.default.json`](../../.mcp.default.json)). Two zero-config, agent-only servers (local CLIs, no token): CodeGraph (semantic code index) and Headroom (context compression). `pnpm setup:local` and the cloud bootstrap ([`install-codegraph.sh`](../../tooling/setup/agent/install-codegraph.sh) + [`install-headroom.sh`](../../tooling/setup/agent/install-headroom.sh)) install their CLIs and declare both in `.mcp.json`, so a session is useful with no setup.
+- **On-demand set — everything else.** [`.mcp.example.json`](../../.mcp.example.json) (mirrored at [`agent-os/mcp/mcp.example.json`](../../agent-os/mcp/mcp.example.json)) lists the full set: `context7`, `core-be:api`, `neon`, `sentry`, `railway`, `aws`, `stripe`, `semgrep`, `sonarqube`, `redis`, `postman`, `resend`, `codegraph`, `headroom`. Most need a provider token (put them in the environment **Variables**) and several need `uvx` / `docker`, so connect only the subset a task needs. Scaffold them into a local `.mcp.json` with **`pnpm mcp:setup`** — all, or a subset by name (`pnpm mcp:setup stripe sentry`); `pnpm mcp:setup:default` for just the pair, `pnpm mcp:setup --list` to see status. The full catalog (per-server runtime + token) is in [agentic-third-party-tooling.md](agentic-third-party-tooling.md#setting-up-mcp-locally-pnpm-mcpsetup).
+
+### Configure the web environment (one-time, in the web UI)
+
+Because the platform — not `.mcp.json` — drives a cloud session's MCP, set these in the environment's MCP settings:
+
+1. **Add the default pair so they auto-connect every session:** `codegraph` (command `codegraph serve --mcp`) and `headroom` (command `headroom mcp serve`). Their CLIs are installed by the Setup script above.
+2. **Add any on-demand server a task needs** from `.mcp.example.json`, supplying its token via the environment **Variables**.
+3. **Do not add `Composio`, `Descript`, or `Slack`.** They are intentionally not part of this project's tooling — use `gh` / the GitHub MCP for GitHub, and keep any personal-account servers at the user level, separate from the repo. (See [agentic-third-party-tooling.md](agentic-third-party-tooling.md).)
 
 ## Related documentation
 

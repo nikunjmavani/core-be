@@ -137,6 +137,13 @@ export function buildFastifyServerOptions(): FastifyServerOptions {
           }
         : {}),
     },
+    // Drop Fastify's automatic per-request "incoming request" / "request completed" info logs.
+    // Each was run through the recursive `redactSensitive` formatter + Pino transport on every
+    // request — a load test attributed ~25% of throughput / ~23% of p99 to that volume. Request
+    // observability is preserved via Prometheus /metrics (counts, latency histograms, status),
+    // the `Server-Timing` header, and the error handler (which logs failures). Explicit
+    // `request.log.*` calls and error logging are unaffected.
+    disableRequestLogging: true,
     trustProxy: resolveTrustProxy(),
     genReqId: (request) => resolveIncomingRequestIdentifier(request),
     bodyLimit: DEFAULT_BODY_LIMIT_BYTES,

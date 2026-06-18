@@ -2,6 +2,16 @@
 name: ci-investigator
 description: Diagnoses a single failing core-be PR CI check and returns a short root-cause summary with a fix plan. Use when the user asks why CI failed or to diagnose a specific GitHub Actions job. Runs in isolation so verbose CI logs do not bloat the main conversation.
 model: inherit
+tools:
+  - Read
+  - Grep
+  - Glob
+  - Bash
+  - mcp__github__actions_list
+  - mcp__github__actions_get
+  - mcp__github__get_job_logs
+  - mcp__github__pull_request_read
+  - mcp__github__list_pull_requests
 readonly: true
 ---
 

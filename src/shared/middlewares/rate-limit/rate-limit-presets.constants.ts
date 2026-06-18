@@ -6,6 +6,7 @@ import { getAuthenticatedActorId } from '@/shared/utils/http/request.util.js';
 import { Sentry } from '@/infrastructure/observability/sentry/sentry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { MILLISECONDS_PER_MINUTE } from '@/shared/constants/ttl.constants.js';
+import { shouldEmitRateLimitTelemetry } from '@/shared/middlewares/rate-limit/rate-limit-telemetry-throttle.js';
 
 /**
  * Per-route rate limit presets for high-risk endpoints.
@@ -23,6 +24,11 @@ function buildRateLimitKeyFromIpAddress(request: FastifyRequest): string {
  * never changes throttling behavior. Matches the `onExceeding` signature `(request, key)`.
  */
 function recordRouteRateLimitExceeded(request: FastifyRequest, key: string): void {
+  // Throttle the WARN + Sentry breadcrumb per key (see rate-limit-telemetry-throttle.ts) so a
+  // hot per-user / per-org bucket cannot flood logs and Sentry under load.
+  if (!shouldEmitRateLimitTelemetry(key)) {
+    return;
+  }
   const url = request.routeOptions?.url ?? request.url;
   logger.warn({
     event: 'rate_limit.exceeded',

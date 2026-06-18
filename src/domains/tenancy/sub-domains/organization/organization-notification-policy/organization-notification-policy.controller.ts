@@ -36,13 +36,13 @@ export function createOrganizationNotificationPolicyController(
       return successResponse(data, getRequestIdentifier(request));
     },
     getPolicy: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const { policy_id: policyId } = (request.params as {
-        policy_id: string;
-      }) ?? { policy_id: '' };
+      const { notification_policy_id: policyId } = (request.params as {
+        notification_policy_id: string;
+      }) ?? { notification_policy_id: '' };
       const organizationId = resolveActiveOrganizationId(request);
       const data = await service.getByPublicId(
         organizationId,
-        validatePublicIdParam(policyId, 'policy_id'),
+        validatePublicIdParam(policyId, 'notification_policy_id'),
       );
       return successResponse(data, getRequestIdentifier(request));
     },
@@ -55,13 +55,13 @@ export function createOrganizationNotificationPolicyController(
     },
     updatePolicy: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const { policy_id: policyId } = (request.params as {
-        policy_id: string;
-      }) ?? { policy_id: '' };
+      const { notification_policy_id: policyId } = (request.params as {
+        notification_policy_id: string;
+      }) ?? { notification_policy_id: '' };
       const organizationId = resolveActiveOrganizationId(request);
       const data = await service.update(
         organizationId,
-        validatePublicIdParam(policyId, 'policy_id'),
+        validatePublicIdParam(policyId, 'notification_policy_id'),
         request.body,
         getActingUserPublicId(auth),
       );
@@ -69,11 +69,14 @@ export function createOrganizationNotificationPolicyController(
     },
     deletePolicy: async (request: FastifyRequest, reply: FastifyReply) => {
       requirePrincipal(request);
-      const { policy_id: policyId } = (request.params as {
-        policy_id: string;
-      }) ?? { policy_id: '' };
+      const { notification_policy_id: policyId } = (request.params as {
+        notification_policy_id: string;
+      }) ?? { notification_policy_id: '' };
       const organizationId = resolveActiveOrganizationId(request);
-      await service.delete(organizationId, validatePublicIdParam(policyId, 'policy_id'));
+      await service.delete(
+        organizationId,
+        validatePublicIdParam(policyId, 'notification_policy_id'),
+      );
       return reply.code(204).send();
     },
   };

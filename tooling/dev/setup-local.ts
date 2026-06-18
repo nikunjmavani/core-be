@@ -16,6 +16,7 @@
  *   pnpm setup:local --check                    (preflight only, no mutations)
  *   pnpm setup:local --skip-deps --skip-docker  (granular skips)
  *   pnpm setup:local --skip-codegraph           (skip the CodeGraph agent index)
+ *   pnpm setup:local --skip-mcp                  (skip MCP setup: CodeGraph + Headroom + .mcp.json)
  *   pnpm setup:local --only-env                  (scaffold .env.local only, then exit)
  *
  * Designed to never overwrite real credentials: if `.env.local` already exists it is
@@ -30,6 +31,7 @@ import { createServer } from 'node:net';
 import { resolve } from 'node:path';
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
+import { ensureDefaultMcpServers } from './mcp-config.js';
 
 const PROJECT_ROOT = process.cwd();
 const REQUIRED_NODE_MAJOR = 24;
@@ -53,6 +55,7 @@ interface BootstrapOptions {
   skipDocker: boolean;
   skipMigrate: boolean;
   skipCodegraph: boolean;
+  skipMcp: boolean;
   forceEnvLocal: boolean;
   onlyEnv: boolean;
   seed: 'none' | 'minimal' | 'full';
@@ -151,6 +154,7 @@ function parseArgs(): BootstrapOptions {
     skipDocker: has('--skip-docker'),
     skipMigrate: has('--skip-migrate'),
     skipCodegraph: has('--skip-codegraph'),
+    skipMcp: has('--skip-mcp'),
     forceEnvLocal: has('--force-env-local'),
     onlyEnv: has('--only-env'),
     seed,
@@ -557,8 +561,19 @@ function runSeed(reports: StepReport[], options: BootstrapOptions): void {
 
 const CODEGRAPH_PACKAGE = '@colbymchenry/codegraph';
 
+function runMcpSetup(reports: StepReport[], options: BootstrapOptions): void {
+  logHeading('7/9 MCP servers (CodeGraph index + default set)');
+  if (options.skipMcp) {
+    const startedAt = performance.now();
+    reportStep(reports, 'mcp', 'skipped', startedAt, '--skip-mcp');
+    return;
+  }
+  runCodeGraphSetup(reports, options);
+  ensureDefaultMcpConfig(reports, options);
+  installHeadroomCli(reports, options);
+}
+
 function runCodeGraphSetup(reports: StepReport[], options: BootstrapOptions): void {
-  logHeading('7/9 CodeGraph (semantic index for AI agents)');
   const startedAt = performance.now();
   if (options.skipCodegraph) {
     reportStep(reports, 'codegraph', 'skipped', startedAt, '--skip-codegraph');
@@ -622,6 +637,68 @@ function runCodeGraphSetup(reports: StepReport[], options: BootstrapOptions): vo
     status === 'done'
       ? 'cursor + claude MCP configured + project indexed (restart agents to load)'
       : 'codegraph install failed (non-fatal)',
+  );
+}
+
+// Declare the default auto-start MCP pair (codegraph + headroom) in .mcp.json so a local
+// session matches the cloud bootstrap. Non-destructive: codegraph install above writes
+// codegraph; this adds headroom (and codegraph when skipped) without clobbering real keys.
+function ensureDefaultMcpConfig(reports: StepReport[], options: BootstrapOptions): void {
+  const startedAt = performance.now();
+  if (options.check) {
+    reportStep(
+      reports,
+      '.mcp.json (default set)',
+      'skipped',
+      startedAt,
+      '--check mode (would declare codegraph + headroom)',
+    );
+    return;
+  }
+  try {
+    const result = ensureDefaultMcpServers();
+    reportStep(
+      reports,
+      '.mcp.json (default set)',
+      'done',
+      startedAt,
+      result.changed
+        ? `declared ${result.added.join(' + ')}`
+        : 'codegraph + headroom already declared',
+    );
+  } catch (error) {
+    reportStep(
+      reports,
+      '.mcp.json (default set)',
+      'warning',
+      startedAt,
+      error instanceof Error ? error.message : 'failed to scaffold .mcp.json',
+    );
+  }
+}
+
+// Best-effort Headroom CLI install (context-compression MCP) via the same installer the
+// cloud bootstrap uses. Headroom is a Python tool (uv / pipx / pip --user); fail-open.
+function installHeadroomCli(reports: StepReport[], options: BootstrapOptions): void {
+  const startedAt = performance.now();
+  if (options.check) {
+    reportStep(reports, 'headroom CLI', 'skipped', startedAt, '--check mode (would install)');
+    return;
+  }
+  if (captureCommand('headroom', ['--version']).code === 0) {
+    reportStep(reports, 'headroom CLI', 'skipped', startedAt, 'already installed');
+    return;
+  }
+  captureCommand('bash', ['tooling/setup/agent/install-headroom.sh']);
+  const installed = captureCommand('headroom', ['--version']).code === 0;
+  reportStep(
+    reports,
+    'headroom CLI',
+    installed ? 'done' : 'warning',
+    startedAt,
+    installed
+      ? 'context-compression MCP ready'
+      : 'install skipped — run `pip install "headroom-ai[mcp]"` manually (non-fatal)',
   );
 }
 
@@ -752,7 +829,7 @@ async function main(): Promise<void> {
   runDocker(reports, options);
   runMigrations(reports, options);
   runSeed(reports, options);
-  runCodeGraphSetup(reports, options);
+  runMcpSetup(reports, options);
   const worker = runOptionalWorker(reports, options);
   printSummary(reports);
   await runDevServer(reports, options, worker);

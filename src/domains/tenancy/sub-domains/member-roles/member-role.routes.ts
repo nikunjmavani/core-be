@@ -122,7 +122,7 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
         schema: {
           summary: 'List role permissions',
           description: 'Returns all permissions assigned to a role. Requires ROLE_READ permission.',
-          tags: ['Role', 'Permission'],
+          tags: ['Permission'],
         },
       },
       permissionController.listRolePermissions,
@@ -138,7 +138,7 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
           summary: 'Replace role permissions',
           description:
             'Replaces all permissions for a role with the provided set. Requires ROLE_MANAGE permission.',
-          tags: ['Role', 'Permission'],
+          tags: ['Permission'],
           body: putMemberRolePermissionsDto,
         },
       },

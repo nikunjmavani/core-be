@@ -153,7 +153,7 @@ There are **two release channels** — each tracks its own version via a dedicat
 | **Stable**     | `main` | `v3.1.0`       | [.github/release-please/config.json](../../../.github/release-please/config.json)         | [.github/release-please/manifest.json](../../../.github/release-please/manifest.json)         | `CHANGELOG.md`     |
 | **Prerelease** | `dev`  | `v3.1.0-dev.0` | [.github/release-please/config.dev.json](../../../.github/release-please/config.dev.json) | [.github/release-please/manifest.dev.json](../../../.github/release-please/manifest.dev.json) | `CHANGELOG-dev.md` |
 
-The dev config sets `prerelease: true` + `prerelease-type: "dev"` and writes its own `CHANGELOG-dev.md`. Both channels publish GitHub Releases (`release: published`), so a release SBOM workflow attaches a CycloneDX SBOM in either case (managed via Release Please publish hooks; previous `release-sbom.yml` standalone workflow has been consolidated into the publish pipeline).
+The dev config sets `prerelease: true` + `prerelease-type: "dev"` + `versioning: "prerelease"` and writes its own `CHANGELOG-dev.md`. That keeps the active dev line moving through `-dev.N` prereleases instead of recalculating a fresh minor/patch base on every qualifying commit. Both channels publish GitHub Releases (`release: published`), so a release SBOM workflow attaches a CycloneDX SBOM in either case (managed via Release Please publish hooks; previous `release-sbom.yml` standalone workflow has been consolidated into the publish pipeline).
 
 > **Prerelease prerequisite (one-time)** — release-please's `node` release-type only honors `prerelease: true` when the manifest already contains a `-dev.N` suffix. `manifest.dev.json` is seeded to `3.0.0-dev.0` so dev keeps emitting `-dev.N` going forward. Do not edit either manifest by hand for routine releases — let release-please bump them, and let the back-merge workflow (section 4.2) reseed dev after each stable release.
 
@@ -186,8 +186,9 @@ flowchart TB
   subgraph promote [Promote dev to main]
     PromotePR[Promotion PR dev to main as Merge commit]
     MainReleasePlease[release-please: stable release PR vX.Y.Z]
-    MainTag[Tag vX.Y.Z + deploy production]
-    PromotePR --> MainReleasePlease --> MainTag
+    MainTag[Tag vX.Y.Z + publish GitHub Release]
+    ProdDeploy[Deploy production]
+    PromotePR --> MainReleasePlease --> MainTag --> ProdDeploy
   end
 
   subgraph backmerge [Post-release back-merge]
@@ -199,24 +200,26 @@ flowchart TB
   CI --> DevMerge[Merge to dev]
   DevMerge --> DevReleasePlease
   DevTag --> PromotePR
-  MainTag --> BackmergeWorkflow
+  ProdDeploy --> BackmergeWorkflow
   DevSeed --> Feature
 ```
 
 - **Feature → PR → CI:** Every PR runs quality, tests, and security. PR title must follow conventional commits (validated by PR checks).
 - **Merge to dev:** push to `dev` triggers release-please which opens or updates the **dev release PR** (`vX.Y.Z-dev.N`). Auto-merge in [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) ships it → tag → SBOM → deploy `development`.
-- **Promote dev → main:** open a PR `dev → main` titled `chore(release): promote <version> to main`. Use **Merge commit** so each `feat:` / `fix:` survives. release-please then opens the stable release PR (`vX.Y.Z`) → auto-merge → tag → deploy `production`.
-- **Back-merge main → dev (automatic):** [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) explicitly dispatches [post-release-backmerge.yml](../../../.github/workflows/post-release-backmerge.yml) after a stable `main` release, because releases created with `GITHUB_TOKEN` do not reliably fan out to release-triggered workflows. The back-merge workflow still also supports manual `workflow_dispatch` and direct `release: published` events. It merges main into dev, reseeds dev version files to the next non-decreasing prerelease window, and opens an auto-merging PR `main → dev`. Section 4.2 covers it in detail.
+- **Promote dev → main:** open a PR `dev → main` titled `chore(release): promote <version> to main`. Use **Merge commit** so each `feat:` / `fix:` survives. release-please then opens the stable release PR (`vX.Y.Z`) and auto-merges it.
+- **Stable release boundary:** merging the stable release PR means the release commit is already on `main`, so release-please immediately creates the stable tag and published GitHub Release. Do not hold this release as a draft while waiting for deploy; release-please uses the published stable release/tag as the boundary for future release calculations.
+- **Back-merge main → dev (automatic):** [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) explicitly dispatches [post-release-backmerge.yml](../../../.github/workflows/post-release-backmerge.yml) only after the stable `main` release exists **and** production deploy succeeds, because releases created with `GITHUB_TOKEN` do not reliably fan out to release-triggered workflows. If deploy fails, the stable tag/release remains because the code is already merged, but the automatic `main → dev` back-merge waits until the deployment issue is fixed. The back-merge workflow still also supports manual `workflow_dispatch` and direct `release: published` events. It merges main into dev, reseeds dev version files to the next non-decreasing prerelease window, and opens an auto-merging PR `main → dev`. Section 4.2 covers it in detail.
 
 **Production path (steps):**
 
 1. Merge promotion PR to `main` (Merge commit only).
 2. release-please creates or updates the stable release PR.
-3. Merge the release PR → stable GitHub Release + tag (`vX.Y.Z`) → the release publish pipeline attaches the SBOM.
+3. Merge the release PR → stable GitHub Release + tag (`vX.Y.Z`) → the release publish pipeline attaches the SBOM. This happens immediately because the release commit is already part of `main`; deploy status does not decide whether the version exists.
 4. CI `docker-build` job on `main` Trivy-scans and pushes `ghcr.io/<owner>/<repo>/core-be-api` and `core-be-worker` (tags `:sha` and `:latest`).
 5. Deploy workflow runs on push to `main` (validate env → log expected GHCR image refs → migrate → `pnpm tool:railway-deploy-image` pins each Railway service to the freshly scanned GHCR image and triggers `serviceInstanceDeployV2` → `/readyz` → worker readiness → `pnpm test:api-smoke` on the Railway API URL).
-6. [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) dispatches [post-release-backmerge.yml](../../../.github/workflows/post-release-backmerge.yml), which opens an auto-merging PR `main → dev` with the reseed.
-7. Optional load check: `pnpm load:health` against the deployed base URL.
+6. If production deploy succeeds, [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) dispatches [post-release-backmerge.yml](../../../.github/workflows/post-release-backmerge.yml), which opens an auto-merging PR `main → dev` with the reseed.
+7. If production deploy fails, keep the stable tag/release as the source-of-truth boundary and fix forward or revert through a normal PR. The automatic `main → dev` back-merge does not run until a successful production deploy is available.
+8. Optional load check: `pnpm load:health` against the deployed base URL.
 
 **Development path (steps):** identical to production but on the `dev` branch:
 
@@ -240,7 +243,7 @@ The workflow [.github/workflows/post-release-backmerge.yml](../../../.github/wor
    - Default: max(current dev seed, bump minor → `X.(Y+1).0-dev.0`).
    - Override: `workflow_dispatch` input `next_seed` (e.g. `4.0.0-dev.0` if the next cycle is breaking, or `3.1.1-dev.0` if patch-only).
 4. Edits `manifest.dev.json` and `package.json` to the seed.
-5. Opens or updates the PR `main → dev` and enables auto-merge (`gh pr merge --auto --squash`).
+5. Opens or updates the PR `main → dev` and enables auto-merge (`gh pr merge --auto --merge`).
 
 The PR title is `chore(release): back-merge v<version> into dev`. If the merge has conflicts, the workflow fails fast — open the PR manually, resolve conflicts, push, then re-trigger via `workflow_dispatch` with the same `version`.
 

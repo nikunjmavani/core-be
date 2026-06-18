@@ -20,6 +20,7 @@ src/
     │   │   ├── unit/
     │   │   │   ├── events/
     │   │   │   │   └── worker/
+    │   │   │   │   │   ├── audit-outbox-drain.worker.unit.test.ts
     │   │   │   │   │   └── audit-retention.worker.unit.test.ts
     │   │   │   ├── audit-export.processor.unit.test.ts
     │   │   │   ├── audit.controller.admin-read-audit.unit.test.ts
@@ -463,6 +464,9 @@ src/
     │   │   │       ├── integration/
     │   │   │       │   └── webhook.integration.test.ts
     │   │   │       └── unit/
+    │   │   │       │   ├── events/
+    │   │   │       │       └── worker/
+    │   │   │       │       │   └── webhook-delivery-attempt-retention.worker.unit.test.ts
     │   │   │       │   ├── webhook-delivery-attempt-retention.processor.db.unit.test.ts
     │   │   │       │   ├── webhook-subscription.util.unit.test.ts
     │   │   │       │   ├── webhook-tombstone-retention.processor.boundary.unit.test.ts
@@ -1421,6 +1425,7 @@ src/
     │   │   ├── method-status-policy.middleware.ts
     │   │   ├── metrics.middleware.ts
     │   │   ├── ops.middleware.ts
+    │   │   ├── overload-guard.middleware.ts
     │   │   ├── recent-step-up.middleware.ts
     │   │   ├── request-context.middleware.ts
     │   │   ├── request-lifecycle.middleware.ts
@@ -1432,6 +1437,7 @@ src/
     │   ├── rate-limit/
     │   │   ├── rate-limit-fallback-store.ts
     │   │   ├── rate-limit-presets.constants.ts
+    │   │   ├── rate-limit-telemetry-throttle.ts
     │   │   └── rate-limit.middleware.ts
     │   ├── security/
     │   │   ├── api-key-auth.middleware.ts
@@ -1487,6 +1493,7 @@ src/
     │   │   ├── audit-record.util.ts
     │   │   ├── audit-request-context.util.ts
     │   │   ├── database-timestamp.util.ts
+    │   │   ├── event-loop-monitor.ts
     │   │   ├── gzip.util.ts
     │   │   ├── health-operational-metrics.util.ts
     │   │   ├── list-cap.util.ts
@@ -1637,6 +1644,7 @@ src/
     │   ├── ensure-openapi-spec.global-setup.ts
     │   ├── external-sdk-coverage.global.test.ts
     │   ├── import-paths.global.test.ts
+    │   ├── mcp-config.global.test.ts
     │   ├── no-direct-db-in-services.global.test.ts
     │   ├── no-stripe-shaped-literals.global.test.ts
     │   ├── openapi-completeness.global.test.ts
@@ -1727,6 +1735,7 @@ src/
     ├── load/
     │   ├── k6/
     │   │   ├── data/
+    │   │   │   └── credential-pool.json
     │   │   ├── helpers/
     │   │   │   ├── auth.js
     │   │   │   ├── checks.js
@@ -1741,6 +1750,7 @@ src/
     │   │   │   ├── auth-stress-server-timing.js
     │   │   │   ├── billing-subscriptions-rls.js
     │   │   │   ├── billing.js
+    │   │   │   ├── comprehensive-journey.js
     │   │   │   ├── daily-ops.js
     │   │   │   ├── health-breakpoint.js
     │   │   │   ├── health-stress.js
@@ -1761,7 +1771,11 @@ src/
     │   │   │   ├── user-data-export.js
     │   │   │   ├── user-journey.js
     │   │   │   └── webhooks.js
-    │   │   └── README.md
+    │   │   ├── check-prereqs.mjs
+    │   │   ├── COMPREHENSIVE-JOURNEY.md
+    │   │   ├── README.md
+    │   │   ├── run-journey.sh
+    │   │   └── setup-loadtest.sh
     │   └── OVERVIEW.md
     ├── performance/
     │   ├── concurrent-requests.performance.test.ts
@@ -1862,6 +1876,7 @@ src/
     ├── unit/
     │   ├── api/
     │   │   ├── route-dto-presence.policy.unit.test.ts
+    │   │   ├── snake-case-body-keys.policy.unit.test.ts
     │   │   ├── stripe-webhook-ingress.policy.unit.test.ts
     │   │   └── zod-route-body-boundary.policy.unit.test.ts
     │   ├── ci/
@@ -1946,8 +1961,10 @@ src/
     │   │   ├── middleware-order.unit.test.ts
     │   │   ├── ops.middleware.unit.test.ts
     │   │   ├── organization-rls-transaction.middleware.unit.test.ts
+    │   │   ├── overload-guard.middleware.unit.test.ts
     │   │   ├── rate-limit-fallback-store.unit.test.ts
     │   │   ├── rate-limit-presets.constants.unit.test.ts
+    │   │   ├── rate-limit-telemetry-throttle.unit.test.ts
     │   │   ├── rate-limit.middleware.unit.test.ts
     │   │   ├── request-lifecycle.middleware.unit.test.ts
     │   │   ├── request-statement-timeout.middleware.unit.test.ts

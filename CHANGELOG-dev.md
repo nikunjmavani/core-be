@@ -6,6 +6,53 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.9.1-dev.1](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.0...v4.9.1-dev.1) (2026-06-18)
+
+
+### Fixed
+
+* **ci:** correct release-please flow ([#698](https://github.com/nikunjmavani/core-be/issues/698)) ([c5e2e4d](https://github.com/nikunjmavani/core-be/commit/c5e2e4db4ef6d94d47c020dd7d7ecd7dcd6e1247))
+
+## [4.9.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.9.0-dev.0...v4.9.1-dev.0) (2026-06-18)
+
+
+### Fixed
+
+* address route audit findings ([#697](https://github.com/nikunjmavani/core-be/issues/697)) ([751e329](https://github.com/nikunjmavani/core-be/commit/751e3291f3b76f02b9e5665dd7ba899219c2c33f))
+
+## [4.9.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.8.2-dev.0...v4.9.0-dev.0) (2026-06-18)
+
+
+### Added
+
+* **agent-os:** single-source backbone + agent read-only + skill orchestration ([#693](https://github.com/nikunjmavani/core-be/issues/693)) ([a7cbb66](https://github.com/nikunjmavani/core-be/commit/a7cbb66544aff822176920be37d341b3717ce757))
+
+
+### Performance
+
+* **http:** reduce idle P99 + comprehensive journey load-test harness ([#694](https://github.com/nikunjmavani/core-be/issues/694)) ([e0385d3](https://github.com/nikunjmavani/core-be/commit/e0385d362ee64cda4c8f9fda8e418e71cda48771))
+
+## [4.8.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.8.1-dev.0...v4.8.2-dev.0) (2026-06-17)
+
+
+### Changed
+
+* **api:** semantic path params, single-tag operations, invitation grouping ([#691](https://github.com/nikunjmavani/core-be/issues/691)) ([94f4ecb](https://github.com/nikunjmavani/core-be/commit/94f4ecb4adf2e28f2a905f3d5b4c0696619cf2f2))
+
+## [4.8.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.8.0-dev.0...v4.8.1-dev.0) (2026-06-17)
+
+
+### Performance
+
+* **http:** cut per-request logging cost and add event-loop overload valve ([#687](https://github.com/nikunjmavani/core-be/issues/687)) ([3dda668](https://github.com/nikunjmavani/core-be/commit/3dda668b6aff80de7feccac8e4304a014055069c))
+
+## [4.8.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.7.0-dev.0...v4.8.0-dev.0) (2026-06-17)
+
+
+### Added
+
+* **mcp:** two-tier MCP setup — default codegraph+headroom pair + on-demand `pnpm mcp:setup` ([#683](https://github.com/nikunjmavani/core-be/issues/683)) ([b8331aa](https://github.com/nikunjmavani/core-be/commit/b8331aa63bb26adcfe81f55983614f31d7617b1b))
+
 ## [4.7.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.9-dev.0...v4.7.0-dev.0) (2026-06-17)
 
 

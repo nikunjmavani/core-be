@@ -110,7 +110,7 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     ]),
     example: null,
   },
-  'GET /api/v1/tenancy/organization/notification-policies/{policy_id}': {
+  'GET /api/v1/tenancy/organization/notification-policies/{notification_policy_id}': {
     statusCode: 200,
     schema: wrapSuccess(schemas.notificationPolicySchema, schemas.notificationPolicyExample),
     example: null,
@@ -120,12 +120,12 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     schema: wrapSuccess(schemas.notificationPolicySchema, schemas.notificationPolicyExample),
     example: null,
   },
-  'PATCH /api/v1/tenancy/organization/notification-policies/{policy_id}': {
+  'PATCH /api/v1/tenancy/organization/notification-policies/{notification_policy_id}': {
     statusCode: 200,
     schema: wrapSuccess(schemas.notificationPolicySchema, schemas.notificationPolicyExample),
     example: null,
   },
-  'DELETE /api/v1/tenancy/organization/notification-policies/{policy_id}': {
+  'DELETE /api/v1/tenancy/organization/notification-policies/{notification_policy_id}': {
     statusCode: 204,
     schema: null,
     example: null,

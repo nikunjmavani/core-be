@@ -172,6 +172,9 @@ export const HEALTH_READINESS_PROBE_TIMEOUT_MS = 1_500;
  */
 export const HEALTH_READINESS_PROBE_CACHE_TTL_MS = 2_000;
 
+/** Three seconds in milliseconds (short infrastructure timeouts and drain pauses). */
+export const THREE_SECONDS_MS = 3_000;
+
 /** S3 presigned URL lifetime (seconds); aligns with access token TTL. */
 export const PRESIGNED_URL_EXPIRY_SECONDS = ACCESS_TOKEN_EXPIRY_SECONDS;
 

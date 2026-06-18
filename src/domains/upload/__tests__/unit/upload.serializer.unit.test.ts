@@ -7,17 +7,17 @@ describe('serializeUploadCreate', () => {
     expect(
       serializeUploadCreate({
         id: 'abc123xyz',
-        uploadUrl: 'https://s3.example.com/presigned',
+        upload_url: 'https://s3.example.com/presigned',
         key: 'avatars/user/abc.png',
-        expiresAt,
-        uploadMethod: 'PUT',
+        expires_at: expiresAt,
+        upload_method: 'PUT',
       }),
     ).toEqual({
       id: 'abc123xyz',
-      uploadUrl: 'https://s3.example.com/presigned',
+      upload_url: 'https://s3.example.com/presigned',
       key: 'avatars/user/abc.png',
-      expiresAt: expiresAt.toISOString(),
-      uploadMethod: 'PUT',
+      expires_at: expiresAt.toISOString(),
+      upload_method: 'PUT',
     });
   });
 });

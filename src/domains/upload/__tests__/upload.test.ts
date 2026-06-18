@@ -58,9 +58,9 @@ describe('Upload Domain — Integration', () => {
         payload: {
           purpose: 'invalid-purpose',
           for: 'user',
-          contentType: 'image/png',
-          fileName: 'avatar.png',
-          fileSize: 1024,
+          content_type: 'image/png',
+          file_name: 'avatar.png',
+          file_size: 1024,
         },
       });
       expect([400, 422]).toContain(response.statusCode);

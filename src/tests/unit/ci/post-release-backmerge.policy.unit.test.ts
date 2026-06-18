@@ -58,7 +58,8 @@ describe('post-release back-merge workflow policy', () => {
   it('opens a PR to dev and enables auto-merge (idempotent)', () => {
     const workflow = readFileSync(BACKMERGE_WORKFLOW, 'utf8');
     expect(workflow).toMatch(/gh pr create[\s\S]*?--base dev/);
-    expect(workflow).toMatch(/gh pr merge[^\n]*--auto[^\n]*--squash/);
+    expect(workflow).toMatch(/gh pr merge[^\n]*--auto[^\n]*--merge/);
+    expect(workflow).not.toMatch(/gh pr merge[^\n]*--auto[^\n]*--squash/);
     expect(workflow).toMatch(/gh pr list[\s\S]*?--head "\$\{BRANCH\}"[\s\S]*?--base dev/);
   });
 

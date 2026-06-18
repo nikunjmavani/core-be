@@ -118,13 +118,13 @@ describe('UploadService', () => {
       {
         purpose: 'avatar',
         for: 'user',
-        contentType: 'image/png',
-        fileName: 'avatar.png',
-        fileSize: 1024,
+        content_type: 'image/png',
+        file_name: 'avatar.png',
+        file_size: 1024,
       },
       userPublicId,
     );
-    expect(result.uploadUrl).toContain('https://');
+    expect(result.upload_url).toContain('https://');
     expect(repository.create).toHaveBeenCalled();
   });
 
@@ -148,9 +148,9 @@ describe('UploadService', () => {
       {
         purpose: 'avatar',
         for: 'user',
-        contentType: 'image/png',
-        fileName: 'avatar.png',
-        fileSize: 1024,
+        content_type: 'image/png',
+        file_name: 'avatar.png',
+        file_size: 1024,
       },
       userPublicId,
     );
@@ -159,7 +159,7 @@ describe('UploadService', () => {
       expect.objectContaining({ minContentLength: 1, maxContentLength: 2 * 1024 * 1024 }),
     );
     expect(objectStorage.createPresignedUploadUrl).not.toHaveBeenCalled();
-    expect(result.uploadMethod).toBe('POST');
+    expect(result.upload_method).toBe('POST');
     expect(result.fields).toMatchObject({ 'Content-Type': 'image/png' });
   });
 
@@ -171,10 +171,10 @@ describe('UploadService', () => {
         {
           purpose: 'organization-logo',
           for: 'organization',
-          organizationId: 'org_public',
-          contentType: 'image/png',
-          fileName: 'logo.png',
-          fileSize: 2048,
+          organization_id: 'org_public',
+          content_type: 'image/png',
+          file_name: 'logo.png',
+          file_size: 2048,
         },
         userPublicId,
       ),
@@ -237,14 +237,14 @@ describe('UploadService', () => {
       {
         purpose: 'organization-logo',
         for: 'organization',
-        organizationId: 'org_public',
-        contentType: 'image/png',
-        fileName: 'logo.png',
-        fileSize: 2048,
+        organization_id: 'org_public',
+        content_type: 'image/png',
+        file_name: 'logo.png',
+        file_size: 2048,
       },
       userPublicId,
     );
-    expect(result.uploadUrl).toContain('https://');
+    expect(result.upload_url).toContain('https://');
   });
 
   it('getUpload throws when upload is missing', async () => {
@@ -411,9 +411,9 @@ describe('UploadService', () => {
       {
         purpose: 'avatar',
         for: 'user',
-        contentType: 'image/png',
-        fileName: 'avatar.png',
-        fileSize: 1024,
+        content_type: 'image/png',
+        file_name: 'avatar.png',
+        file_size: 1024,
       },
       userPublicId,
     );
@@ -429,9 +429,9 @@ describe('UploadService', () => {
       {
         purpose: 'avatar',
         for: 'user',
-        contentType: 'image/png',
-        fileName: 'avatar.png',
-        fileSize: 1024,
+        content_type: 'image/png',
+        file_name: 'avatar.png',
+        file_size: 1024,
       },
       userPublicId,
     );
@@ -649,9 +649,9 @@ describe('UploadService', () => {
         {
           purpose: 'avatar',
           for: 'user',
-          contentType: 'image/png',
-          fileName: 'avatar.png',
-          fileSize: 1024,
+          content_type: 'image/png',
+          file_name: 'avatar.png',
+          file_size: 1024,
         },
         userPublicId,
       ),
@@ -683,9 +683,9 @@ describe('UploadService', () => {
       {
         purpose: 'avatar',
         for: 'user',
-        contentType: 'image/png',
-        fileName: 'avatar.png',
-        fileSize: 1024,
+        content_type: 'image/png',
+        file_name: 'avatar.png',
+        file_size: 1024,
       },
       userPublicId,
     );
@@ -700,14 +700,14 @@ describe('UploadService', () => {
       {
         purpose: 'avatar',
         for: 'user',
-        contentType: 'image/png',
-        fileName: 'avatar.png',
-        fileSize: 1024,
+        content_type: 'image/png',
+        file_name: 'avatar.png',
+        file_size: 1024,
       },
       userPublicId,
     );
 
-    expect(result.uploadUrl).toContain('https://');
+    expect(result.upload_url).toContain('https://');
     expect(repository.create).toHaveBeenCalled();
   });
 
@@ -725,9 +725,9 @@ describe('UploadService', () => {
         {
           purpose: 'avatar',
           for: 'user',
-          contentType: 'image/png',
-          fileName: 'avatar.png',
-          fileSize: 1024,
+          content_type: 'image/png',
+          file_name: 'avatar.png',
+          file_size: 1024,
         },
         userPublicId,
       ),

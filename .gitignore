@@ -18,6 +18,10 @@ dist/
 !.env.example
 !.env.setup.example
 
+# Docker Compose machine-local overrides (auto-merged by compose; never shared with team/CI)
+docker-compose.override.yml
+compose.override.yml
+
 # IDE
 .vscode/*
 !.vscode/settings.json
@@ -75,9 +79,10 @@ sbom.cyclonedx.json
 TEST_REPORT.md
 
 # User-specific agent MCP config (may contain API keys).
-# Committed templates (secret-free): .cursor/mcp.example.json and
-# .mcp.example.json — copy to the real path and fill in real keys, or let
-# `pnpm setup:local` write the codegraph entry for you.
+# Committed templates (secret-free): .mcp.default.json (default auto-start pair —
+# codegraph + headroom), .mcp.example.json (full set), and .cursor/mcp.example.json.
+# Scaffold .mcp.json with `pnpm mcp:setup` (full) / `pnpm mcp:setup:default` (pair),
+# or let `pnpm setup:local` declare the default pair for you.
 .cursor/mcp.json
 .mcp.json
 agent-os/mcp/mcp.json

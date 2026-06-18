@@ -181,7 +181,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       membershipController.transferOwnership,
     );
 
-    // Member Invitations
+    // ── Org-admin invitations (active org, INVITATION_MANAGE) ──
     zodApplication.get(
       '/organization/invitations',
       {
@@ -189,7 +189,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           summary: 'List invitations',
           description:
             'Returns all pending invitations for the organization. Requires INVITATION_MANAGE permission.',
-          tags: ['Membership', 'Invitation'],
+          tags: ['Invitation'],
           querystring: listMemberInvitationsQueryDto,
         },
         onRequest: [app.authenticate],
@@ -208,30 +208,11 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           summary: 'Create invitation',
           description:
             'Sends an invitation email to join the organization. Requires INVITATION_MANAGE permission.',
-          tags: ['Membership', 'Invitation'],
+          tags: ['Invitation'],
           body: createMemberInvitationDto,
         },
       },
       invitationController.createMemberInvitation,
-    );
-    zodApplication.post<{ Params: { invitation_id: string } }>(
-      '/invitations/:invitation_id/accept',
-      {
-        // sec-T4: accept now requires authentication and (in the service)
-        // an invitee-email match. The previous unauthenticated route let
-        // anyone who got hold of the invitation URL flip the victim's
-        // pending membership to ACTIVE without the victim's interaction.
-        onRequest: [app.authenticate],
-        ...STRICT_PUBLIC_RATE_LIMIT,
-        schema: {
-          summary: 'Accept invitation',
-          description:
-            "Accepts a pending invitation using the invitation token. Requires authentication; the authenticated user's email must match the invitee email on the invitation. Creates a membership for the user.",
-          tags: ['Membership', 'Invitation'],
-          body: acceptMemberInvitationDto,
-        },
-      },
-      invitationController.acceptMemberInvitation,
     );
     zodApplication.delete<{ Params: { invitation_id: string } }>(
       '/organization/invitations/:invitation_id',
@@ -245,7 +226,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
         schema: {
           summary: 'Revoke invitation',
           description: 'Revokes a pending invitation. Requires INVITATION_MANAGE permission.',
-          tags: ['Membership', 'Invitation'],
+          tags: ['Invitation'],
         },
       },
       invitationController.revokeMemberInvitation,
@@ -260,12 +241,14 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           summary: 'Resend invitation',
           description:
             'Resends the invitation email with a new expiry. Requires INVITATION_MANAGE permission.',
-          tags: ['Membership', 'Invitation'],
+          tags: ['Invitation'],
           body: resendMemberInvitationDto,
         },
       },
       invitationController.resendInvitation,
     );
+
+    // ── Recipient invitations (the invited user, cross-org, auth-only) ──
     zodApplication.get(
       '/invitations/pending',
       {
@@ -275,11 +258,30 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           summary: 'List my pending invitations',
           description:
             'Returns the authenticated user’s pending invitations across all organizations, cursor-paginated (`limit` + opaque `after`). Replaces the previous fixed 100-row cap (R5 / TEN-35).',
-          tags: ['Membership', 'Invitation'],
+          tags: ['Invitation'],
           querystring: listPendingMemberInvitationsQueryDto,
         },
       },
       invitationController.listPendingInvitations,
+    );
+    zodApplication.post<{ Params: { invitation_id: string } }>(
+      '/invitations/:invitation_id/accept',
+      {
+        // sec-T4: accept now requires authentication and (in the service)
+        // an invitee-email match. The previous unauthenticated route let
+        // anyone who got hold of the invitation URL flip the victim's
+        // pending membership to ACTIVE without the victim's interaction.
+        onRequest: [app.authenticate],
+        ...STRICT_PUBLIC_RATE_LIMIT,
+        schema: {
+          summary: 'Accept invitation',
+          description:
+            "Accepts a pending invitation using the invitation token. Requires authentication; the authenticated user's email must match the invitee email on the invitation. Creates a membership for the user.",
+          tags: ['Invitation'],
+          body: acceptMemberInvitationDto,
+        },
+      },
+      invitationController.acceptMemberInvitation,
     );
     zodApplication.post<{ Params: { invitation_id: string } }>(
       '/invitations/:invitation_id/decline',
@@ -292,7 +294,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
         schema: {
           summary: 'Decline invitation',
           description: 'Declines a pending invitation. The invitation is marked as declined.',
-          tags: ['Membership', 'Invitation'],
+          tags: ['Invitation'],
         },
       },
       invitationController.declineInvitation,

@@ -4,7 +4,7 @@ import { trimmedString } from '@/shared/utils/validation/validation.util.js';
 // ── Self-service DTOs ────────────────────────────────────────
 
 /**
- * Zod schema for the `PATCH /api/v1/users/me` request body. The optional `avatarKey` is the S3
+ * Zod schema for the `PATCH /api/v1/users/me` request body. The optional `avatar_key` is the S3
  * object key returned from a confirmed upload — it must live under the `avatars/` prefix and is
  * verified by the service against the user's owned key namespace before being persisted.
  */
@@ -12,7 +12,7 @@ export const UpdateMeDto = z
   .object({
     first_name: trimmedString().max(100).nullable().optional(),
     last_name: trimmedString().max(100).nullable().optional(),
-    avatarKey: trimmedString()
+    avatar_key: trimmedString()
       .max(512)
       .refine((key) => key.startsWith('avatars/'), {
         message: 'Avatar key must start with "avatars/"',
@@ -29,7 +29,7 @@ export type UpdateMeInput = z.infer<typeof UpdateMeDto>;
  */
 export const UploadAvatarDto = z
   .object({
-    avatarKey: trimmedString()
+    avatar_key: trimmedString()
       .max(512)
       .refine((key) => key.startsWith('avatars/'), {
         message: 'Avatar key must start with "avatars/"',

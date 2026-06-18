@@ -38,16 +38,15 @@ export function getRequestBodySchema(
  *
  * @remarks
  * These carry no `app.authenticate` onRequest hook (route-catalog access `PUBLIC`): the public auth
- * forms (login/refresh/logout/magic-link/oauth/webauthn-authenticate/password/email/mfa-login) and
+ * forms (login/refresh/magic-link/oauth/webauthn-authenticate/password/email/mfa-login) and
  * the Stripe-signed webhooks (verified via `Stripe-Signature`, not a JWT). The `Health` and
- * `Billing/Plan` tags are excluded separately above. Keyed by `"<METHOD> <openapi-path>"`. Kept in
+ * `Plan` tags are excluded separately above. Keyed by `"<METHOD> <openapi-path>"`. Kept in
  * sync with `docs/routes.txt` PUBLIC routes by `mcp-openapi`/route-security guard tests.
  */
 const PUBLIC_ROUTE_KEYS = new Set<string>([
   'GET /livez',
   'GET /readyz',
   'POST /api/v1/auth/login',
-  'POST /api/v1/auth/logout',
   'POST /api/v1/auth/refresh',
   'POST /api/v1/auth/mfa/login',
   'POST /api/v1/auth/magic-link/send',
@@ -65,7 +64,7 @@ const PUBLIC_ROUTE_KEYS = new Set<string>([
 
 export function getRouteSecurity(tags: string[], routeKey: string): object[] | undefined {
   if (tags.includes('Health')) return undefined;
-  if (tags.join('/') === 'Billing/Plan') return undefined;
+  if (tags.includes('Plan')) return undefined;
   // Public routes (no JWT): don't advertise the bearerAuth requirement.
   if (PUBLIC_ROUTE_KEYS.has(routeKey)) return undefined;
   return [{ bearerAuth: [] }];

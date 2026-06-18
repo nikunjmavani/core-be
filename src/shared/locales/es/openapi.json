@@ -22,7 +22,6 @@
     "User": "Gestión del perfil del usuario actual",
     "User Settings": "Configuración personal del usuario (modo oscuro, idioma, etc.)",
     "Notification Preferences": "Preferencias de notificación por tipo y canal por usuario",
-    "Admin": "Endpoints de administración de la plataforma (requiere rol admin)",
     "User Management": "Gestión de usuarios por admin — listar, actualizar, suspender, eliminar",
     "Organization": "CRUD y gestión de organizaciones",
     "Organization Settings": "Configuración y políticas a nivel de organización",
@@ -33,9 +32,9 @@
     "Invitation": "Invitaciones de miembros — crear, aceptar, rechazar, reenviar",
     "Role": "Gestión de roles personalizados en las organizaciones",
     "Permission": "Permisos disponibles que se pueden asignar a roles",
-    "Billing": "Gestión de facturación y suscripciones",
     "Plan": "Planes de suscripción y precios",
     "Subscription": "Ciclo de vida de suscripción — crear, mejorar, cancelar, reanudar",
+    "Stripe Webhook": "Receptor de webhooks de facturación de Stripe (cuerpo sin procesar, firma verificada)",
     "Notification": "Feed de notificaciones del usuario",
     "Webhook": "Gestión de endpoints webhook e historial de envíos",
     "Upload": "Generación de URL pre-firmadas para subida de archivos"

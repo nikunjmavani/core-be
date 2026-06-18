@@ -34,7 +34,7 @@ Every protected by-id route (plus the two owner-tier routes) and the authorizati
 | DELETE | `/api/v1/uploads/:upload_id` | yes |
 | GET | `/api/v1/notify/notifications/:notification_id` | — |
 | GET | `/api/v1/uploads/:upload_id` | — |
-| GET | `/api/v1/users/me/data-export/:export_id` | — |
+| GET | `/api/v1/users/me/data-export/:data_export_id` | — |
 | PATCH | `/api/v1/notify/notifications/:notification_id/read` | yes |
 | POST | `/api/v1/uploads/:upload_id/confirm` | yes |
 
@@ -45,7 +45,7 @@ Every protected by-id route (plus the two owner-tier routes) and the authorizati
 | DELETE | `/api/v1/notify/webhooks/:webhook_id` | yes |
 | DELETE | `/api/v1/tenancy/organization/api-keys/:api_key_id` | yes |
 | DELETE | `/api/v1/tenancy/organization/invitations/:invitation_id` | yes |
-| DELETE | `/api/v1/tenancy/organization/notification-policies/:policy_id` | yes |
+| DELETE | `/api/v1/tenancy/organization/notification-policies/:notification_policy_id` | yes |
 | DELETE | `/api/v1/tenancy/organization/roles/:role_id` | yes |
 | GET | `/api/v1/billing/subscriptions/:subscription_id` | — |
 | GET | `/api/v1/notify/webhooks/:webhook_id` | — |
@@ -53,14 +53,14 @@ Every protected by-id route (plus the two owner-tier routes) and the authorizati
 | GET | `/api/v1/tenancy/organization/api-keys/:api_key_id` | — |
 | GET | `/api/v1/tenancy/organization/memberships/:membership_id` | — |
 | GET | `/api/v1/tenancy/organization/memberships/:membership_id/permissions` | — |
-| GET | `/api/v1/tenancy/organization/notification-policies/:policy_id` | — |
+| GET | `/api/v1/tenancy/organization/notification-policies/:notification_policy_id` | — |
 | GET | `/api/v1/tenancy/organization/roles/:role_id` | — |
 | GET | `/api/v1/tenancy/organization/roles/:role_id/permissions` | — |
 | GET | `/api/v1/tenancy/organizations/by-slug/:slug` | — |
 | PATCH | `/api/v1/billing/subscriptions/:subscription_id` | yes |
 | PATCH | `/api/v1/notify/webhooks/:webhook_id` | yes |
 | PATCH | `/api/v1/tenancy/organization/api-keys/:api_key_id` | yes |
-| PATCH | `/api/v1/tenancy/organization/notification-policies/:policy_id` | yes |
+| PATCH | `/api/v1/tenancy/organization/notification-policies/:notification_policy_id` | yes |
 | PATCH | `/api/v1/tenancy/organization/roles/:role_id` | yes |
 | POST | `/api/v1/billing/subscriptions/:subscription_id/cancel` | yes |
 | POST | `/api/v1/billing/subscriptions/:subscription_id/change-plan` | yes |

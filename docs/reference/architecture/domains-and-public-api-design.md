@@ -275,7 +275,7 @@ Domain folder = DB schema; each **sub-domain** is a folder with its own controll
   - Organizations (account-level): `GET|POST /api/v1/tenancy/organizations` (list / create a team org), `GET /api/v1/tenancy/organizations/by-slug/:slug`.
   - Active organization: `GET|PATCH|DELETE /api/v1/tenancy/organization`.
   - Settings: `GET|PATCH /api/v1/tenancy/organization/settings`.
-  - Notification policies: `GET|POST /api/v1/tenancy/organization/notification-policies`, `PATCH|DELETE .../notification-policies/:policy_id`.
+  - Notification policies: `GET|POST /api/v1/tenancy/organization/notification-policies`, `PATCH|DELETE .../notification-policies/:notification_policy_id`.
   - Roles: `GET|POST /api/v1/tenancy/organization/roles`, `GET|PATCH|DELETE .../roles/:role_id`; role permissions `GET|PUT .../roles/:role_id/permissions`.
   - Memberships: `GET|POST /api/v1/tenancy/organization/memberships`, `GET|PATCH|DELETE .../memberships/:membership_id`; `POST /api/v1/tenancy/organization/leave`, `POST /api/v1/tenancy/organization/transfer-ownership`.
   - Invitations: `GET|POST /api/v1/tenancy/organization/invitations`, `DELETE .../invitations/:invitation_id`; cross-org accept/decline are account-level: `POST /api/v1/tenancy/invitations/:invitation_id/accept|decline`.
@@ -283,7 +283,7 @@ Domain folder = DB schema; each **sub-domain** is a folder with its own controll
 
 All `:id` params are **public_id**. Organization **slug** is unique; `getBySlug(slug)` returns same shape as the active-org get.
 
-**Organization context (HTTP):** The active organization rides the signed `org` token claim — not a path parameter or header. The tenant middleware resolves it post-auth and re-checks membership + RLS per request; switch with `POST /api/v1/auth/switch-to-personal` or `POST /api/v1/auth/switch-to-organization { organization_id }` (both re-mint the access token). `X-Organization-Id` is legacy (upload domain only). See **[api-testing.md](../../getting-started/api-testing.md)** (active-organization section). Avatars and logos are attached only via presigned upload keys (`avatarKey` / logo `key`), not arbitrary URLs on PATCH.
+**Organization context (HTTP):** The active organization rides the signed `org` token claim — not a path parameter or header. The tenant middleware resolves it post-auth and re-checks membership + RLS per request; switch with `POST /api/v1/auth/switch-to-personal` or `POST /api/v1/auth/switch-to-organization { organization_id }` (both re-mint the access token). `X-Organization-Id` is legacy (upload domain only). See **[api-testing.md](../../getting-started/api-testing.md)** (active-organization section). Avatars and logos are attached only via presigned upload keys (`avatar_key` / logo `key`), not arbitrary URLs on PATCH.
 
 #### Personal vs Team capability matrix
 
@@ -315,6 +315,7 @@ An organization has an immutable `type` — `PERSONAL` (single-owner workspace) 
 - **Domain folders = DB schemas:** Exactly five: `auth`, `tenancy`, `billing`, `notify`, `audit`. Folder under `src/domains/<name>/` uses the same name as the Postgres schema.
 - **URL path segments:** Plural, kebab-case (e.g. `member-invitations`, `audit-logs`).
 - **IDs in URLs:** Always **public_id** (21-char NanoID/ULID). Response bodies use `id` for public_id.
+- **Body field casing:** Request body and response body property keys are **snake_case** (`file_name`, `created_at`, `avatar_key`) — matching the DB columns and the `meta`/`pagination` envelope; the single external identifier is `id`. Validation `error.errors[].field` values are snake_case too. Internal TypeScript identifiers may stay camelCase. Verbatim third-party / browser-native payloads (Stripe webhooks, OAuth, WebAuthn W3C JSON) and JWT claims are the only exceptions. Enforced by `src/tests/unit/api/snake-case-body-keys.policy.unit.test.ts`.
 - **API prefix:** `/api/v1/`.
 - **Request ID:** Every response (success and error) includes `meta.request_id` (UUID).
 - **Drizzle:** snake_case columns; DB schema names auth, tenancy, billing, notify, audit (match domain folder names).

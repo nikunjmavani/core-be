@@ -41,7 +41,7 @@ export function stripeWebhookRoutes(
       '/webhook',
       {
         ...WEBHOOK_RATE_LIMIT,
-        config: { captureRawBody: true },
+        config: { ...WEBHOOK_RATE_LIMIT.config, captureRawBody: true },
         // sec-C/M #29: lift the per-route body limit to 5 MB. The global default is
         // 1 MB, but line-item-heavy `invoice.finalized` events legitimately exceed
         // that in production. A 413 here turns into "Stripe retries for 3 days then
@@ -52,7 +52,7 @@ export function stripeWebhookRoutes(
           summary: 'Stripe webhook receiver',
           description:
             'Public endpoint for Stripe billing events. Verifies the `Stripe-Signature` header against `STRIPE_WEBHOOK_SECRET` and enqueues durable processing. Raw JSON body is required for signature verification.',
-          tags: ['Billing', 'Stripe Webhook'],
+          tags: ['Stripe Webhook'],
         },
       },
       controller.handleWebhook,

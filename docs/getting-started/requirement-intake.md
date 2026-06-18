@@ -42,6 +42,24 @@ The AI fills these unless your message says otherwise. List overrides in your fi
 
 ---
 
+## Full-slice template — one requirement → production-ready slice
+
+Fill this once and run **`/build-requirement`** (or paste it as your prompt). The AI validates it for completeness (missing fields are surfaced, never guessed), then drives the full build chain to a gate-passing vertical slice and emits a **reports bundle**. This is the autonomous path; the type-by-type sections below remain the detailed reference.
+
+### Template
+
+The canonical form is **[`requirement.template.md`](requirement.template.md)** (filled example: **[`requirement.example.md`](requirement.example.md)**). You don't have to fill it — give **`/build-requirement`** a direct task and it drafts the full 9-section document (data model, API, logic, i18n, seed, tests [unit/integration/e2e/smoke/contract/chaos], non-functionals, and a **section-9 file tree**) for your review, asks about anything it shouldn't guess, and iterates before building. Or fill the form yourself; keep the `## N.` headings as-is and mark anything N/A as `none`.
+
+### What `/build-requirement` does
+
+It runs the pipeline (each step is an existing skill), self-healing failed gates and escalating only on genuine ambiguity:
+
+`schema-complete` → **domain-generator** (repository → service → controller → dto/validator/serializer/types → container + route registration) → `route-complete` → **workers-events** (if events) → **seed-maintainer** → **test-generator** → i18n + **tsdoc-export-guard** + **overview-doc-maintainer** + OpenAPI → **/pre-merge-review**.
+
+**Definition of done:** `pnpm validate` + the route/domain gates + a live `pnpm verify:base` smoke + `/pre-merge-review` clean. It emits a **reports bundle** under `docs/builds/<date>-<feature>/`: build report (files, decisions, assumptions, deviations), a requirement→code→test traceability matrix, the review report, and a quality/security summary.
+
+---
+
 ## Requirement types and details to provide
 
 ### 1. New domain or sub-domain (new resource/API surface)
@@ -366,7 +384,7 @@ flowchart LR
 
 | Skill                          | Path                                                     | When to invoke                                            |
 | ------------------------------ | -------------------------------------------------------- | --------------------------------------------------------- |
-| **skill-index**                | `.cursor/skills/skill-index/SKILL.md`                    | **First** — full catalog and triggers (36 project skills) |
+| **skill-index**                | `.cursor/skills/skill-index/SKILL.md`                    | **First** — full catalog and triggers (39 project skills) |
 | domain-generator               | `.cursor/skills/domain-generator/SKILL.md`               | New domain/sub-domain scaffold                            |
 | route-catalog                  | `.cursor/skills/route-catalog/SKILL.md`                  | Any change to `*.routes.ts`                               |
 | route-schema-doc-guard         | `.cursor/skills/route-schema-doc-guard/SKILL.md`         | Route `schema: { summary, description, tags }`          |

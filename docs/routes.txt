@@ -26,7 +26,7 @@ Legend:
   POST   /api/v1/auth/email/resend-verification                   201  -    both  AUTH
   POST   /api/v1/auth/email/verify                                201  -    both  PUBLIC
   POST   /api/v1/auth/login                                       201  -    both  PUBLIC
-  POST   /api/v1/auth/logout                                      201  -    both  PUBLIC
+  POST   /api/v1/auth/logout                                      201  -    both  TOKEN: access-token
   POST   /api/v1/auth/magic-link/send                             201  -    both  PUBLIC
   POST   /api/v1/auth/magic-link/verify                           201  -    both  PUBLIC
   GET    /api/v1/auth/me/auth-methods                             200  -    both  AUTH
@@ -137,9 +137,9 @@ Legend:
   GET    /api/v1/tenancy/organization/memberships/:membership_id/permissions  200  -    both  PERM: membership:read
   GET    /api/v1/tenancy/organization/notification-policies       200  -    both  PERM: notification-policy:read
   POST   /api/v1/tenancy/organization/notification-policies       201  -    both  PERM: notification-policy:manage
-  GET    /api/v1/tenancy/organization/notification-policies/:policy_id  200  -    both  PERM: notification-policy:read
-  PATCH  /api/v1/tenancy/organization/notification-policies/:policy_id  200  -    both  PERM: notification-policy:manage
-  DELETE /api/v1/tenancy/organization/notification-policies/:policy_id  204  -    both  PERM: notification-policy:manage
+  GET    /api/v1/tenancy/organization/notification-policies/:notification_policy_id  200  -    both  PERM: notification-policy:read
+  PATCH  /api/v1/tenancy/organization/notification-policies/:notification_policy_id  200  -    both  PERM: notification-policy:manage
+  DELETE /api/v1/tenancy/organization/notification-policies/:notification_policy_id  204  -    both  PERM: notification-policy:manage
   GET    /api/v1/tenancy/organization/roles                       200  -    both  PERM: role:read
   POST   /api/v1/tenancy/organization/roles                       201  -    team  PERM: role:manage
   GET    /api/v1/tenancy/organization/roles/:role_id              200  -    both  PERM: role:read
@@ -182,7 +182,7 @@ Legend:
   PUT    /api/v1/users/me/avatar                                  200  -    both  AUTH
   DELETE /api/v1/users/me/avatar                                  204  -    both  AUTH
   POST   /api/v1/users/me/data-export                             201  -    both  AUTH
-  GET    /api/v1/users/me/data-export/:export_id                  200  -    both  AUTH
+  GET    /api/v1/users/me/data-export/:data_export_id             200  -    both  AUTH
   GET    /api/v1/users/me/notification-preferences                200  -    both  AUTH
   PUT    /api/v1/users/me/notification-preferences                200  -    both  AUTH
   GET    /api/v1/users/me/settings                                200  -    both  AUTH
@@ -216,11 +216,11 @@ Legend:
 ================================================================================
 
   Total routes    : 131
-  Public          : 19
+  Public          : 18
   Authenticated   : 50
   Role-guarded    : 9
   Perm-guarded    : 50
-  Token-guarded   : 3
+  Token-guarded   : 4
   Team-only (O)   : 5
 
 ================================================================================

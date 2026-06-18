@@ -48,6 +48,13 @@ describe('Stripe webhook ingress policy', () => {
     expect(postIndex).toBeGreaterThan(ingressIndex);
   });
 
+  it('preserves webhook rate-limit config alongside raw-body capture', () => {
+    const source = readFileSync(STRIPE_WEBHOOK_ROUTES, 'utf8');
+
+    expect(source).toContain('...WEBHOOK_RATE_LIMIT.config');
+    expect(source).toContain('captureRawBody: true');
+  });
+
   it('does not register /stripe/webhook directly in other billing route files', () => {
     const violations: string[] = [];
     const stripeWebhookRoutesRelative = relativePath(STRIPE_WEBHOOK_ROUTES);
