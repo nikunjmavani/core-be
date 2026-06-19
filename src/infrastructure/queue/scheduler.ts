@@ -327,6 +327,13 @@ async function reconcileOrphanSchedulers(options: {
       // getJobSchedulers takes pagination args; first 1000 schedulers per queue is
       // far above any realistic count for this app.
       const existingSchedulers = await queueForReconcile.getJobSchedulers(0, 1000);
+      if (existingSchedulers.length >= 1000) {
+        // Orphan reconciliation only sees the first page; at the cap it may silently miss orphans.
+        logger.error(
+          { queueName, count: existingSchedulers.length },
+          'scheduler.reconcile.page_limit_reached',
+        );
+      }
       for (const existing of existingSchedulers) {
         if (!canonicalIds.has(existing.key)) {
           await queueForReconcile.removeJobScheduler(existing.key);

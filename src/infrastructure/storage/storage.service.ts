@@ -12,6 +12,7 @@ import { outboundCall } from '@/infrastructure/outbound/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { type S3HeadResult, isS3NotFoundError } from '@/infrastructure/storage/s3-error.util.js';
 import { buildPublicMediaUrl } from '@/infrastructure/storage/public-media-url.util.js';
+import { ConfigurationError } from '@/shared/errors/index.js';
 
 const S3_BUCKET_NOT_CONFIGURED_MESSAGE = 'S3_BUCKET is not configured';
 
@@ -62,7 +63,7 @@ export async function createPresignedUploadUrl(options: {
 }): Promise<string> {
   const client = getS3Client();
   const bucket = env.S3_BUCKET;
-  if (!bucket) throw new Error(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
+  if (!bucket) throw new ConfigurationError(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
 
   const command = new PutObjectCommand({
     Bucket: bucket,
@@ -117,7 +118,7 @@ export async function headObject(
   key: string,
 ): Promise<{ contentType: string | undefined; contentLength: number | undefined } | null> {
   const bucket = env.S3_BUCKET;
-  if (!bucket) throw new Error(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
+  if (!bucket) throw new ConfigurationError(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
 
   try {
     return await outboundCall({
@@ -159,7 +160,7 @@ export async function headObjectResult(
   key: string,
 ): Promise<S3HeadResult<{ contentType: string | undefined; contentLength: number | undefined }>> {
   const bucket = env.S3_BUCKET;
-  if (!bucket) throw new Error(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
+  if (!bucket) throw new ConfigurationError(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
 
   try {
     const metadata = await outboundCall({
@@ -203,7 +204,7 @@ export async function getObjectLeadingBytes(
   maxBytes: number = GET_OBJECT_MAGIC_BYTE_PREFIX_LENGTH,
 ): Promise<{ body: Buffer; contentType: string | undefined } | null> {
   const bucket = env.S3_BUCKET;
-  if (!bucket) throw new Error(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
+  if (!bucket) throw new ConfigurationError(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
 
   try {
     return await outboundCall({
@@ -254,7 +255,7 @@ export async function putObjectBuffer(options: {
   metadata?: Record<string, string>;
 }): Promise<void> {
   const bucket = env.S3_BUCKET;
-  if (!bucket) throw new Error(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
+  if (!bucket) throw new ConfigurationError(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
 
   await outboundCall({
     name: 's3',
@@ -300,7 +301,7 @@ export async function copyObject(options: {
   contentType: string;
 }): Promise<void> {
   const bucket = env.S3_BUCKET;
-  if (!bucket) throw new Error(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
+  if (!bucket) throw new ConfigurationError(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
 
   await outboundCall({
     name: 's3',
@@ -337,7 +338,7 @@ export async function copyObject(options: {
  */
 export async function deleteObject(key: string): Promise<boolean> {
   const bucket = env.S3_BUCKET;
-  if (!bucket) throw new Error(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
+  if (!bucket) throw new ConfigurationError(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
 
   try {
     await outboundCall({

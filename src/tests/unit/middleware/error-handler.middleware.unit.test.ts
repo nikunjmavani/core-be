@@ -279,10 +279,48 @@ describe('error-handler.middleware', () => {
     expect(vi.mocked(captureException)).toHaveBeenCalled();
   });
 
-  it('includes documentation_url on not-found responses', async () => {
+  it('derives documentation_url from API_DOCS_BASE_URL (never the old hardcoded fake domain)', async () => {
+    // EX-26: the link is built from env.API_DOCS_BASE_URL; the previous hardcoded
+    // `docs.example.com` fallback is gone. When unset the field is omitted (see next test).
+    const { env } = await import('@/shared/config/env.config.js');
     application = await createErrorHandlerApp();
     const response = await application.inject({ method: 'GET', url: '/does-not-exist' });
-    expect(response.json().error.documentation_url).toMatch(/\/not_found$/);
+    const documentationUrl = response.json().error.documentation_url;
+    expect(documentationUrl).not.toContain('docs.example.com');
+    if (env.API_DOCS_BASE_URL) {
+      expect(documentationUrl).toBe(`${env.API_DOCS_BASE_URL}/not_found`);
+    } else {
+      expect(documentationUrl).toBeUndefined();
+    }
+  });
+
+  it('omits documentation_url entirely when API_DOCS_BASE_URL is unset', async () => {
+    // EX-26: with no docs base configured, the field is omitted rather than emitting a fake link.
+    vi.resetModules();
+    vi.doMock('@/shared/config/env.config.js', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('@/shared/config/env.config.js')>();
+      return { ...actual, env: { ...actual.env, API_DOCS_BASE_URL: undefined } };
+    });
+    const { default: freshErrorHandler } = await import(
+      '@/shared/middlewares/core/error-handler.middleware.js'
+    );
+    const unconfiguredApplication = Fastify({ logger: false });
+    unconfiguredApplication.decorateRequest(
+      't',
+      ((key: string) => `translated:${key}`) as unknown as NonNullable<
+        Parameters<typeof unconfiguredApplication.decorateRequest>[1]
+      >,
+    );
+    await unconfiguredApplication.register(freshErrorHandler);
+    await unconfiguredApplication.ready();
+    try {
+      const response = await unconfiguredApplication.inject({ method: 'GET', url: '/missing' });
+      expect(response.json().error.documentation_url).toBeUndefined();
+    } finally {
+      await unconfiguredApplication.close();
+      vi.doUnmock('@/shared/config/env.config.js');
+      vi.resetModules();
+    }
   });
 
   it('omits errors array on non-validation AppError responses', async () => {
