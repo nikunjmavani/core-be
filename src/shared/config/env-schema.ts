@@ -287,6 +287,12 @@ const envSchemaBase = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
   /** Stripe Node client per-request HTTP timeout (ms). */
   STRIPE_HTTP_TIMEOUT_MS: z.coerce.number().int().min(1000).max(180_000).default(30_000),
+  /**
+   * Tolerance (seconds) for the Stripe webhook signature timestamp check. A wider window lets
+   * Stripe's retries — which carry the original event timestamp — still verify after a short API
+   * outage instead of being rejected as stale. Stripe's SDK default is 300s; bounded to [150, 600].
+   */
+  STRIPE_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().min(150).max(600).default(300),
 
   // Sentry
   SENTRY_DSN: z.url().optional(),

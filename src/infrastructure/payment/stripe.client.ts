@@ -359,7 +359,12 @@ export function constructStripeWebhookEvent(
   let lastError: unknown;
   for (const secret of secrets) {
     try {
-      return stripe.webhooks.constructEvent(body, signature, secret, 150);
+      return stripe.webhooks.constructEvent(
+        body,
+        signature,
+        secret,
+        env.STRIPE_WEBHOOK_TOLERANCE_SECONDS,
+      );
     } catch (error) {
       lastError = error;
     }
