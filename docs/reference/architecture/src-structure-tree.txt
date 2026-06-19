@@ -1368,6 +1368,7 @@ src/
     │       ├── route-success-coverage.util.ts
     │       ├── validate-route-http-coverage.ts
     │       ├── validate-route-org-scope.ts
+    │       ├── validate-route-param-schemas.ts
     │       ├── validate-route-schema-docs.ts
     │       ├── validate-route-success-coverage.ts
     │       └── validate-route-success-statuses.ts
@@ -1897,6 +1898,7 @@ src/
     │   │   ├── pr-unit-gate-full-suite.policy.unit.test.ts
     │   │   ├── release-please-manifests.policy.unit.test.ts
     │   │   ├── restore-drill.policy.unit.test.ts
+    │   │   ├── route-param-schemas.policy.unit.test.ts
     │   │   ├── stryker-config.policy.unit.test.ts
     │   │   └── supply-chain-sbom.policy.unit.test.ts
     │   ├── composition-root/

@@ -92,6 +92,14 @@ function extractMetadataFromOptionsBody(optionsBody: string): RouteSchemaMetadat
   };
 }
 
+/** True when the route options' `schema` block declares a `params` property (Zod params schema). */
+function schemaDeclaresParams(optionsBody: string): boolean {
+  const schemaRange = findSchemaPropertyRange(optionsBody);
+  if (!schemaRange) return false;
+  const schemaBody = optionsBody.slice(schemaRange.bodyStart, schemaRange.bodyEnd);
+  return /(?:^|[,{\s])params\s*:/.test(schemaBody);
+}
+
 /** A single route registration paired with its (possibly incomplete) extracted schema metadata. */
 export interface RouteSchemaEntry {
   method: string;
@@ -99,6 +107,12 @@ export interface RouteSchemaEntry {
   /** `${METHOD} ${OPENAPI_PATH}` lookup key (Fastify `:param` → OpenAPI `{param}`). */
   lookupKey: string;
   metadata: RouteSchemaMetadata;
+  /**
+   * True when the route declares `schema.params` (drives the `:param` completeness gate). Optional so
+   * older fixtures stay valid; the extractor always populates it, and a missing value is treated as
+   * "no params schema".
+   */
+  hasParamsSchema?: boolean;
 }
 
 function scanRouteSchemaEntries({
@@ -132,7 +146,13 @@ function scanRouteSchemaEntries({
     if (!optionsRange) continue;
     const optionsBody = sourceText.slice(optionsRange.bodyStart, optionsRange.bodyEnd);
     const metadata = extractMetadataFromOptionsBody(optionsBody);
-    entries.push({ method, fullPath, lookupKey: buildLookupKey(method, fullPath), metadata });
+    entries.push({
+      method,
+      fullPath,
+      lookupKey: buildLookupKey(method, fullPath),
+      metadata,
+      hasParamsSchema: schemaDeclaresParams(optionsBody),
+    });
   }
 
   return entries;
