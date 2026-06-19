@@ -1263,7 +1263,8 @@ src/
     │       │   ├── s3-adapter.unit.test.ts
     │       │   ├── s3-error.util.unit.test.ts
     │       │   ├── storage.service.presigned-put.unit.test.ts
-    │       │   └── storage.service.put-object-buffer.unit.test.ts
+    │       │   ├── storage.service.put-object-buffer.unit.test.ts
+    │       │   └── storage.service.unconfigured.unit.test.ts
     │   ├── object-storage.port.ts
     │   ├── OVERVIEW.md
     │   ├── public-media-url.util.ts
