@@ -1516,6 +1516,7 @@ src/
     │   │   ├── field-secret-encryption.util.ts
     │   │   ├── jwt.util.ts
     │   │   ├── password.util.ts
+    │   │   ├── response-encryption-keyring.util.ts
     │   │   ├── safe-webhook-url-for-logs.util.ts
     │   │   ├── sensitive-redaction.util.ts
     │   │   ├── turnstile-verifier.util.ts
@@ -2082,6 +2083,7 @@ src/
     │   │   │   ├── jwt-key-material.unit.test.ts
     │   │   │   ├── jwt.util.unit.test.ts
     │   │   │   ├── password.util.unit.test.ts
+    │   │   │   ├── response-encryption-keyring.util.unit.test.ts
     │   │   │   ├── sensitive-redaction.util.unit.test.ts
     │   │   │   ├── turnstile-verifier.unit.test.ts
     │   │   │   ├── webhook-outbound-fetch.util.unit.test.ts

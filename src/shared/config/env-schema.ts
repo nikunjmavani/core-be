@@ -702,6 +702,18 @@ const envSchemaBase = z.object({
     .default('false')
     .transform((v) => v === 'true' || v === '1'),
   RESPONSE_ENCRYPTION_KEY: z.string().length(64).optional(), // 64 hex chars = 32 bytes for AES-256
+  /**
+   * Optional version→hex keyring (JSON object, e.g. `{"v1":"<hex>","v2":"<hex>"}`) enabling
+   * zero-downtime rotation of the response-encryption key. Each envelope carries its `kid`, so the
+   * client decrypts with the matching key; unset preserves the single `RESPONSE_ENCRYPTION_KEY`
+   * (`v1`) path exactly.
+   */
+  RESPONSE_ENCRYPTION_KEYS: z.string().min(1).optional(),
+  /**
+   * Response-encryption version used when ENCRYPTING responses (default `v1`). Decryption is keyed by
+   * the envelope's own `kid`, so this only selects the write key during a keyring rotation.
+   */
+  RESPONSE_ENCRYPTION_CURRENT_VERSION: z.enum(['v1', 'v2']).optional().default('v1'),
   /** AES-256-GCM key for MFA/webhook secrets at rest (64 hex chars). Required in every runtime. */
   SECRETS_ENCRYPTION_KEY: z
     .string()
@@ -1015,19 +1027,25 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
-      // sec-C11: ENABLE_RESPONSE_ENCRYPTION must be paired with
-      // RESPONSE_ENCRYPTION_KEY. Other pairings (METRICS_ENABLED, CAPTCHA_*)
-      // enforce this at the schema; this one was previously enforced at
-      // `buildApp()` runtime, so a deploy without the key would crash on
-      // first request instead of failing config validation at boot.
+      // sec-C11: ENABLE_RESPONSE_ENCRYPTION must be paired with a key source —
+      // either the single RESPONSE_ENCRYPTION_KEY or a RESPONSE_ENCRYPTION_KEYS
+      // keyring (for kid-based rotation). Other pairings (METRICS_ENABLED,
+      // CAPTCHA_*) enforce this at the schema; this one was previously enforced
+      // at `buildApp()` runtime, so a deploy without the key would crash on
+      // first request instead of failing config validation at boot. The deeper
+      // "keyring contains the current version" check lives in the resolver
+      // (resolveActiveResponseEncryptionKey), which also runs at boot.
       if (!data.ENABLE_RESPONSE_ENCRYPTION) return true;
-      return (
-        typeof data.RESPONSE_ENCRYPTION_KEY === 'string' && data.RESPONSE_ENCRYPTION_KEY.length > 0
-      );
+      const hasSingleKey =
+        typeof data.RESPONSE_ENCRYPTION_KEY === 'string' && data.RESPONSE_ENCRYPTION_KEY.length > 0;
+      const hasKeyring =
+        typeof data.RESPONSE_ENCRYPTION_KEYS === 'string' &&
+        data.RESPONSE_ENCRYPTION_KEYS.length > 0;
+      return hasSingleKey || hasKeyring;
     },
     {
       message:
-        'RESPONSE_ENCRYPTION_KEY (64 hex chars / 32 bytes for AES-256) is required when ENABLE_RESPONSE_ENCRYPTION=true.',
+        'RESPONSE_ENCRYPTION_KEY (64 hex chars / 32 bytes for AES-256) or a RESPONSE_ENCRYPTION_KEYS keyring is required when ENABLE_RESPONSE_ENCRYPTION=true.',
       path: ['RESPONSE_ENCRYPTION_KEY'],
     },
   )

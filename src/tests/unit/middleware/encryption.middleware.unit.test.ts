@@ -118,6 +118,7 @@ describe('encryption.middleware', () => {
     expect(result).toBe(
       JSON.stringify({
         _encrypted: true,
+        kid: 'v1',
         payload: 'cipher',
         iv: 'iv-bytes',
         authTag: 'tag-bytes',
