@@ -419,8 +419,17 @@ const envSchemaBase = z.object({
    * Use split services in production so each process pool budget matches its registered workers.
    */
   WORKER_QUEUE_FAMILIES: z.string().min(1).default('all'),
-  /** Postgres pool size per Node process (postgres-js `max`). Not the cluster-wide total. Default 10. */
-  DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
+  /**
+   * Postgres pool size per Node process (postgres-js `max`). Not the cluster-wide total. Default 20.
+   *
+   * Each HTTP request runs in its own RLS transaction holding one pooled connection for its
+   * duration, so the pool size is the per-process in-flight DB concurrency ceiling. The default
+   * was raised 10 → 20 to lift that ceiling under burst; the cluster-wide budget
+   * `(api + worker replicas) × DATABASE_POOL_MAX ≤ max_connections − reserved` is still enforced
+   * fail-closed at boot by `assertPostgresConnectionBudget`. Raise further on larger Postgres
+   * instances; see docs/deployment/runbooks/resource-limits.md.
+   */
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(20),
   /** Connections reserved for admin, migrations, and monitoring (subtracted from Postgres max_connections). */
   POSTGRES_RESERVED_CONNECTIONS: z.coerce.number().int().min(1).default(10),
   /** Override when SHOW max_connections is unavailable or wrong (e.g. behind pooler). */
