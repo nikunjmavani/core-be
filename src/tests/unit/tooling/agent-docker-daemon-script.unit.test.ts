@@ -15,8 +15,16 @@ describe('agent Docker daemon setup scripts', () => {
     expect(ensureDockerDaemonScript).toContain('DOCKERD_AGENT_MODE_FILE');
   });
 
+  it('falls back to vfs storage when cloud overlay layer extraction is denied', () => {
+    expect(ensureDockerDaemonScript).toContain('--storage-driver=vfs');
+    expect(ensureDockerDaemonScript).toContain('--data-root="${VFS_DATA_ROOT}"');
+    expect(ensureDockerDaemonScript).toContain('DOCKERD_AGENT_VFS_DATA_ROOT');
+    expect(ensureDockerDaemonScript).toContain('restricted-vfs');
+  });
+
   it('uses the Codex Cloud host-network compose override in restricted Docker mode', () => {
     expect(bootstrapScript).toContain('docker-compose.codex-cloud.yml');
     expect(bootstrapScript).toContain('DOCKERD_AGENT_MODE_FILE');
+    expect(bootstrapScript).toContain('restricted*');
   });
 });
