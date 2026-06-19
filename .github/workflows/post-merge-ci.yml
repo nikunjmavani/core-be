@@ -269,7 +269,9 @@ jobs:
       - name: Lint-fix CHANGELOGs on release PR branches
         if: steps.release.outputs.prs_created == 'true' || steps.release.outputs.pr != ''
         env:
-          GH_TOKEN: ${{ github.token }}
+          # PAT (not github.token) so the lint-fix commit pushed to the release PR
+          # branch re-triggers the PR checks that auto-merge waits on.
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           RELEASE_PRS: ${{ steps.release.outputs.prs }}
           RELEASE_PR: ${{ steps.release.outputs.pr }}
           GH_REPOSITORY: ${{ github.repository }}
@@ -320,8 +322,13 @@ jobs:
           done
 
       - name: Enable auto-merge on release PRs
+        # Use the PAT (not github.token) so the eventual auto-merge of the release
+        # PR is attributed to the PAT and its push to dev/main RE-TRIGGERS this
+        # workflow. A merge performed with the default GITHUB_TOKEN does not start
+        # a new workflow run, so the Release Please job would never run on the
+        # merge commit and the tag / GitHub Release would never be created.
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           RELEASE_PR: ${{ steps.release.outputs.pr }}
           RELEASE_PRS: ${{ steps.release.outputs.prs }}
           TARGET_BRANCH: ${{ github.ref_name }}
