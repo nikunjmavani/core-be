@@ -14,6 +14,20 @@ vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+const captureExceptionMock = vi.fn();
+vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
+  captureException: (...arguments_: unknown[]) => captureExceptionMock(...arguments_),
+}));
+
+const recordEventBusHandlerFailureMock = vi.fn();
+const recordCommitDispatchDurabilityFallbackMock = vi.fn();
+vi.mock('@/infrastructure/observability/metrics/prometheus-metrics.js', () => ({
+  recordEventBusHandlerFailure: (...arguments_: unknown[]) =>
+    recordEventBusHandlerFailureMock(...arguments_),
+  recordCommitDispatchDurabilityFallback: (...arguments_: unknown[]) =>
+    recordCommitDispatchDurabilityFallbackMock(...arguments_),
+}));
+
 const appendCommitDispatchTaskMock = vi.fn().mockResolvedValue(undefined);
 const consumeCommitDispatchTasksMock = vi.fn().mockResolvedValue([]);
 
@@ -87,6 +101,18 @@ describe('EventBus.emit', () => {
       expect.objectContaining({ eventType: 'log-event', error: handlerError }),
       expect.any(String),
     );
+  });
+
+  it('increments the per-event failure metric when a best-effort handler throws (EX-15)', async () => {
+    recordEventBusHandlerFailureMock.mockClear();
+    const bus = new EventBus();
+    bus.on('metric-event', async () => {
+      throw new Error('handler-failed');
+    });
+
+    await bus.emit({ type: 'metric-event', payload: {}, timestamp: new Date() });
+
+    expect(recordEventBusHandlerFailureMock).toHaveBeenCalledWith('metric-event');
   });
 });
 
@@ -272,5 +298,25 @@ describe('EventBus.clearCommitDispatchMarker (commit-dispatch marker leak guard)
 
   it('is idempotent and safe for an unknown request id', () => {
     expect(() => eventBus.clearCommitDispatchMarker('never-scheduled')).not.toThrow();
+  });
+
+  it('alerts and counts a durability fallback when the Redis append fails (EX-14)', async () => {
+    captureExceptionMock.mockClear();
+    recordCommitDispatchDurabilityFallbackMock.mockClear();
+    const appendError = new Error('redis-rpush-down');
+    appendCommitDispatchTaskMock.mockRejectedValueOnce(appendError);
+
+    // Must not throw — the request still succeeds, but durability degrades to the in-memory path.
+    await expect(
+      scheduleCommitDispatch(task, { requestId: 'req-redis-down' }),
+    ).resolves.toBeUndefined();
+
+    expect(captureExceptionMock).toHaveBeenCalledWith(
+      appendError,
+      expect.objectContaining({
+        tags: expect.objectContaining({ source: 'event-bus.commit-dispatch' }),
+      }),
+    );
+    expect(recordCommitDispatchDurabilityFallbackMock).toHaveBeenCalledTimes(1);
   });
 });
