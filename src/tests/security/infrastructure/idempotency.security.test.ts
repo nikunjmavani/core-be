@@ -104,7 +104,7 @@ describe('Security: Idempotency', () => {
   });
 
   it('rejects a MISSING X-Idempotency-Key on an idempotency-required write (422)', async () => {
-    // POST /tenancy/organizations is one of the 8 `idempotencyRequired` writes
+    // POST /tenancy/organizations is one of the 10 `idempotencyRequired` writes
     // (organization.routes.ts sets config.idempotencyRequired = true). Omitting the header must
     // fail closed with 422 — proving the requirement is enforced on a real required route, not
     // only that malformed keys are rejected. Without this, a regression dropping the flag would
@@ -162,12 +162,10 @@ describe('Security: Idempotency', () => {
     // The flat DELETE route resolves the target org from the JWT `org` claim;
     // mint a token scoped to the just-created org (the creator owns it).
     //
-    // NOTE: the org DELETE is NOT in the idempotency-required write set and
-    // returns 204 (empty body). The idempotency `onSend` hook currently crashes
-    // on an empty 204 body when an X-Idempotency-Key header is present (a separate,
-    // pre-existing shared-middleware defect, flagged out of band). This test
-    // asserts the flat route's actual contract — a clean 204 — without sending
-    // an X-Idempotency-Key so it does not depend on that unrelated bug.
+    // Regression: an optional X-Idempotency-Key on a 204 (empty-body) write previously crashed
+    // the idempotency `onSend` hook (`JSON.stringify(undefined)` → `Buffer.byteLength` throw) and
+    // surfaced as a 500. The hook now treats an empty/undefined payload as non-cacheable, so the
+    // key is accepted and the route returns its clean 204 contract.
     const tokenScopedToOrg = await generateTestToken({
       userId: user.public_id,
       organizationPublicId: organizationId,
@@ -176,6 +174,7 @@ describe('Security: Idempotency', () => {
       method: 'DELETE',
       url: testApiPath('/tenancy/organization'),
       token: tokenScopedToOrg,
+      headers: { 'x-idempotency-key': uniqueKey('delete-204') },
     });
 
     expect(response.statusCode).toBe(204);

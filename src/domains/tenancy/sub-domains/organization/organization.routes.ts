@@ -399,11 +399,13 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
         // with no enum constraint and no per-org row cap, so without this
         // limiter an Admin-role-holder could churn policies and flap
         // downstream notification routing. Parity with sec-r4-I2.
-        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
+        // idempotencyRequired merged into config (not spread at top level) so the
+        // X-Idempotency-Key gate survives alongside the rate limit.
+        config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         schema: {
           summary: 'Create notification policy',
           description:
-            'Creates a new notification policy defining how a notification type is delivered. Requires NOTIFICATION_POLICY_MANAGE permission.',
+            'Creates a new notification policy defining how a notification type is delivered. Requires NOTIFICATION_POLICY_MANAGE permission. Send an `X-Idempotency-Key` header (min 16 characters) so a retried create does not mint a duplicate policy.',
           tags: ['Notification Policy'],
           body: createOrganizationNotificationPolicyDto,
         },

@@ -5,7 +5,7 @@ description: Keeps core-be request idempotency correct — the 8 idempotencyRequ
 
 # Idempotency guard
 
-Exactly **8 writes** in core-be are idempotency-required; getting the replay, fingerprint, and Stripe-forwarding right is what makes a retried subscription-create safe end-to-end (no duplicate charge). This guard codifies the rules; contract tests (`src/tests/contract/stripe.contract.test.ts`) and unit tests (`src/tests/unit/utils/idempotency/**`) catch regressions.
+Exactly **10 writes** in core-be are idempotency-required; getting the replay, fingerprint, and Stripe-forwarding right is what makes a retried subscription-create safe end-to-end (no duplicate charge). This guard codifies the rules; contract tests (`src/tests/contract/stripe.contract.test.ts`) and unit tests (`src/tests/unit/utils/idempotency/**`) catch regressions.
 
 ## Mechanism
 
@@ -15,7 +15,7 @@ Exactly **8 writes** in core-be are idempotency-required; getting the replay, fi
 - **Completed entry is written only after the DB transaction commits** — dispatched from `src/shared/middlewares/core/request-lifecycle.middleware.ts` (post-commit), never directly in `onSend`. Rollback/settle-failure → `DEL` the placeholder so the client can safely retry. TTL: placeholder = session TTL; completed = 24 h.
 - **Never cache secrets:** `onSend` skips bodies > 100 KB or containing secret fields (`responseBodyContainsSecretFields`); token/secret-issuance routes are in `IDEMPOTENCY_EXCLUDED_ROUTE_PATTERNS` (`idempotency-fingerprint.util.ts`).
 
-## The 8 idempotencyRequired routes
+## The 10 idempotencyRequired routes
 
 Source of truth = the `config: { idempotencyRequired: true }` flag on each route registration (typed in `src/fastify.d.ts`); there is **no central array**. The set:
 
@@ -29,8 +29,16 @@ Source of truth = the `config: { idempotencyRequired: true }` flag on each route
 | 6 | `POST /billing/subscriptions/:subscription_id/change-plan` | `…/subscription/subscription.routes.ts` |
 | 7 | `POST /billing/subscriptions/:subscription_id/cancel` | `…/subscription/subscription.routes.ts` |
 | 8 | `POST /billing/subscriptions/:subscription_id/resume` | `…/subscription/subscription.routes.ts` |
+| 9 | `POST /tenancy/organization/roles` | `tenancy/sub-domains/member-roles/member-role.routes.ts` |
+| 10 | `POST /tenancy/organization/notification-policies` | `tenancy/sub-domains/organization/organization.routes.ts` |
 
-The count of 8 is asserted in `docs/reference/api/frontend-auth-guide.md`.
+The count of 10 is asserted in `docs/reference/api/frontend-auth-guide.md`.
+
+Only resource-creating writes whose **response carries no secret field** are required: the
+claim/replay cache must be able to store and replay the response. Secret/single-use-token routes
+(API-key create, MFA enroll/confirm, uploads, webhook create — the latter surfaces
+`secret_rotated_at`, a `secret`-fragment field) are excluded from caching, so a required key there
+would give only in-flight dedup, not replay — duplicate-prevention for those is an app-layer concern.
 
 ## When this guard triggers
 

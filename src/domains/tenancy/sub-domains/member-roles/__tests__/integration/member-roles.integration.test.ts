@@ -155,6 +155,9 @@ describe('Member Roles Sub-Domain — Integration', () => {
         url: testApiPath('/tenancy/organization/roles'),
         token,
         organizationPublicId: provisioned.organization.public_id,
+        // POST /roles is idempotencyRequired; send a key so the request reaches the
+        // personal-org guard rather than the earlier missing-key 422.
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: { name: `Personal Custom Role ${randomUUID()}` },
       });
 
@@ -195,6 +198,7 @@ describe('Member Roles Sub-Domain — Integration', () => {
         url: testApiPath('/tenancy/organization/roles'),
         token,
         organizationPublicId: team.organization.public_id,
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: { name: `Team Custom Role ${randomUUID()}` },
       });
 

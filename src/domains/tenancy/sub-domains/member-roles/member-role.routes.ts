@@ -67,13 +67,15 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
         // sec-r4-I2 / sec-r4-I3 on every other org-scoped mutation. The
         // sec-r4-D4 .limit(256) on `findByRoleId` already caps per-role read
         // memory; this caps the rate at which new rows can be created.
-        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
+        // idempotencyRequired merged into the config object (not spread at top
+        // level) so the X-Idempotency-Key gate survives alongside the rate limit.
+        config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_MANAGE)],
         schema: {
           summary: 'Create role',
           description:
-            'Creates a new custom role in the organization. Requires ROLE_MANAGE permission.',
+            'Creates a new custom role in the organization. Requires ROLE_MANAGE permission. Send an `X-Idempotency-Key` header (min 16 characters) so a retried create does not mint a duplicate role.',
           tags: ['Role'],
           body: createMemberRoleDto,
         },

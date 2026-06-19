@@ -591,7 +591,23 @@ async function idempotencyOnSend(
     return payload;
   }
 
+  /**
+   * Empty-body successes (e.g. 204 No Content from a DELETE that received an optional
+   * X-Idempotency-Key) have nothing to cache/replay. `JSON.stringify(undefined)` returns
+   * `undefined` — passing that to `Buffer.byteLength` would throw and surface as a 500 — so
+   * treat an empty/undefined payload like an error/oversize body: release the placeholder in
+   * `onResponse` and never persist a completed entry.
+   */
+  if (payload === undefined || payload === null || payload === '') {
+    delete requestWithIdempotency._idempotencyPendingCompleted;
+    return payload;
+  }
+
   const body = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  if (typeof body !== 'string') {
+    delete requestWithIdempotency._idempotencyPendingCompleted;
+    return payload;
+  }
   const bodyByteLength = Buffer.byteLength(body, 'utf8');
   if (bodyByteLength > IDEMPOTENCY_CACHED_BODY_BYTES) {
     logger.warn(

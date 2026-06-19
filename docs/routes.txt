@@ -136,12 +136,12 @@ Legend:
   DELETE /api/v1/tenancy/organization/memberships/:membership_id  204  -    both  PERM: membership:manage
   GET    /api/v1/tenancy/organization/memberships/:membership_id/permissions  200  -    both  PERM: membership:read
   GET    /api/v1/tenancy/organization/notification-policies       200  -    both  PERM: notification-policy:read
-  POST   /api/v1/tenancy/organization/notification-policies       201  -    both  PERM: notification-policy:manage
+  POST   /api/v1/tenancy/organization/notification-policies       201  req  both  PERM: notification-policy:manage
   GET    /api/v1/tenancy/organization/notification-policies/:notification_policy_id  200  -    both  PERM: notification-policy:read
   PATCH  /api/v1/tenancy/organization/notification-policies/:notification_policy_id  200  -    both  PERM: notification-policy:manage
   DELETE /api/v1/tenancy/organization/notification-policies/:notification_policy_id  204  -    both  PERM: notification-policy:manage
   GET    /api/v1/tenancy/organization/roles                       200  -    both  PERM: role:read
-  POST   /api/v1/tenancy/organization/roles                       201  -    team  PERM: role:manage
+  POST   /api/v1/tenancy/organization/roles                       201  req  team  PERM: role:manage
   GET    /api/v1/tenancy/organization/roles/:role_id              200  -    both  PERM: role:read
   PATCH  /api/v1/tenancy/organization/roles/:role_id              200  -    both  PERM: role:manage
   DELETE /api/v1/tenancy/organization/roles/:role_id              204  -    both  PERM: role:manage
@@ -224,7 +224,7 @@ Legend:
   Team-only (O)   : 5
 
 ================================================================================
-  IDEMPOTENCY-REQUIRED WRITES (8) — X-Idempotency-Key required
+  IDEMPOTENCY-REQUIRED WRITES (10) — X-Idempotency-Key required
 ================================================================================
 
   Routes flagged I = req reject a missing or reused key (422); every other write
@@ -236,6 +236,8 @@ Legend:
     POST /api/v1/billing/subscriptions/:subscription_id/resume
     POST /api/v1/tenancy/organization/invitations
     POST /api/v1/tenancy/organization/memberships
+    POST /api/v1/tenancy/organization/notification-policies
+    POST /api/v1/tenancy/organization/roles
     POST /api/v1/tenancy/organization/transfer-ownership
     POST /api/v1/tenancy/organizations
 

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import { createTestApp } from '@/tests/helpers/test-app.js';
@@ -59,6 +60,8 @@ describe('Tenancy e2e: member role permission', () => {
       method: 'POST',
       url: testApiPath('/tenancy/organization/roles'),
       token,
+      // POST /roles is idempotencyRequired; send a key so the create reaches the handler.
+      headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
       payload: { name: 'E2E Custom Role', description: 'e2e' },
     });
     expect([201]).toContain(createRoleResponse.statusCode);

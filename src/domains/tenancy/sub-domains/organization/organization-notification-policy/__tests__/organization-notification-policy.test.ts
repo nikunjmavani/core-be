@@ -181,6 +181,9 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
       const response = await injectUnauthenticated(app, {
         method: 'POST',
         url: NOTIFICATION_POLICIES_COLLECTION_PATH,
+        // POST notification-policies is idempotencyRequired and that gate runs before auth, so a
+        // keyless request 422s first. Send a (format-valid) key to prove the auth layer returns 401.
+        headers: { 'x-idempotency-key': 'idem-unauth-401-test-key' },
         payload: { notification_type: 'TYPE', channel: 'EMAIL' },
       });
       expect(response.statusCode).toBe(401);

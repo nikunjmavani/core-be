@@ -65,7 +65,7 @@ flowchart LR
 |--------|---------|-----------|-------|
 | `Authorization: Bearer <access_token>` | every authenticated request | **Yes** (authed routes) | The in-memory access token. Carries the active `org` claim. |
 | `Content-Type: application/json` | any request with a JSON body | **Yes** for JSON bodies | — |
-| `X-Idempotency-Key: <uuid>` | `POST`/`PUT`/`PATCH` writes | **Required on 8 routes**, optional elsewhere | `422` if missing on a required route. See [Idempotency keys](#idempotency-keys). |
+| `X-Idempotency-Key: <uuid>` | `POST`/`PUT`/`PATCH` writes | **Required on 10 routes**, optional elsewhere | `422` if missing on a required route. See [Idempotency keys](#idempotency-keys). |
 | `X-Captcha-Token: <widget token>` | public auth forms | **Required only when Turnstile is configured** (production) | From the Cloudflare Turnstile widget. Routes: `login`, `mfa/login`, `magic-link/send`, `password/forgot`, `password/reset`, `email/verify`, OAuth init. |
 | `X-CSRF-Token: <csrf_token cookie value>` | `POST /auth/refresh` **only**, **only if you don't send `Origin`** | Browsers: **not needed** | Browsers always send `Origin`, which satisfies the refresh origin check. This is a fallback for non-browser clients. |
 | `X-Organization-Id: <org_…>` | **upload domain routes only** | Upload only | The flat org-scoped routes **ignore** it (org comes from the token claim). Do **not** send it elsewhere. |
@@ -295,7 +295,7 @@ The four rules that keep it correct:
 
 ## Idempotency keys
 
-The server **requires** `X-Idempotency-Key` on these **8 write routes** (returns `422
+The server **requires** `X-Idempotency-Key` on these **10 write routes** (returns `422
 idempotencyKeyRequired` / `idempotencyKeyInvalid` without it):
 
 1. Create team organization — `POST /tenancy/organizations`
@@ -303,6 +303,12 @@ idempotencyKeyRequired` / `idempotencyKeyInvalid` without it):
 3. Transfer organization ownership — `POST /tenancy/organization/transfer-ownership`
 4. Create invitation — `POST /tenancy/organization/invitations`
 5–8. Subscription writes — create / cancel / resume / change-plan under `/billing/subscriptions`
+5. Create role — `POST /tenancy/organization/roles`
+6. Create notification policy — `POST /tenancy/organization/notification-policies`
+
+(Routes that return a single-use secret — e.g. API-key creation, MFA enrollment, uploads — are
+deliberately **not** required: their responses are excluded from the idempotency cache for safety,
+so a key could not replay them anyway; duplicate-prevention there is handled at the app layer.)
 
 On any other route, an `X-Idempotency-Key` is **optional**: if you send one, the response is cached and
 replayed for that key; if you don't, nothing happens. The wrapper above sends a **fresh** UUID on

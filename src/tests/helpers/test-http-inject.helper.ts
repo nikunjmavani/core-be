@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { InjectOptions } from 'light-my-request';
 import type { FastifyInstance } from 'fastify';
 
@@ -150,8 +151,26 @@ export async function injectAuthenticatedOrganizationMutation(
   application: FastifyInstance,
   options: InjectAuthenticatedOptions,
 ): Promise<InjectHttpResult> {
-  const response = await injectAuthenticated(application, options);
   const method = options.method ?? 'GET';
+  // DELETE is intentionally excluded: it returns 204 (empty body) and needs no idempotency key
+  // (none of the DELETE routes are idempotencyRequired).
+  const isWriteMethod = method === 'POST' || method === 'PUT' || method === 'PATCH';
+  // Mirror the documented frontend wrapper: every org write carries a fresh `X-Idempotency-Key`.
+  // This lets happy-path mutation tests omit the boilerplate and keeps them passing as more
+  // writes become `idempotencyRequired` (the gate runs before auth, so a keyless write 422s).
+  // Only injected when the caller did not already set a key (in `headers` or `extraHeaders`),
+  // so tests that exercise the missing/invalid-key path use the lower-level `injectAuthenticated`.
+  const callerProvidedIdempotencyKey =
+    options.headers?.['x-idempotency-key'] !== undefined ||
+    options.extraHeaders?.['x-idempotency-key'] !== undefined;
+  const effectiveOptions: InjectAuthenticatedOptions =
+    isWriteMethod && !callerProvidedIdempotencyKey
+      ? {
+          ...options,
+          headers: { ...options.headers, 'x-idempotency-key': `test-idem-${randomUUID()}` },
+        }
+      : options;
+  const response = await injectAuthenticated(application, effectiveOptions);
   if (method === 'POST' || method === 'PATCH' || method === 'DELETE') {
     await waitForOrganizationRlsTransactionCommit();
   }

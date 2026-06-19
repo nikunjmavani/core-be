@@ -82,6 +82,11 @@ export function webhookRoutes(
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_MANAGE)],
+        // Intentionally NOT idempotencyRequired: the create response carries `secret_rotated_at`
+        // (a `secret`-fragment field name), so `responseBodyContainsSecretFields` excludes the
+        // body from the idempotency cache — a key would therefore give only in-flight (concurrent)
+        // dedup, not sequential-retry replay, which is a misleading contract. Duplicate-webhook
+        // prevention for retries belongs at the app layer, not the idempotency key.
         ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         schema: {
           summary: 'Create webhook',

@@ -77,7 +77,7 @@ Returning 409 would invite clients to retry a request that is futile by construc
 | Column | Meaning | Values |
 | ------ | ------- | ------ |
 | **S** | Declared happy-path success status | `200` / `201` / `204` (per the method→status policy) |
-| **I** | Idempotency | `req` = one of the 8 `idempotencyRequired` writes (`X-Idempotency-Key` required); `-` = optional key |
+| **I** | Idempotency | `req` = one of the 10 `idempotencyRequired` writes (`X-Idempotency-Key` required); `-` = optional key |
 | **O** | Org scope | `both` = works for personal **and** team orgs; `team` = team-only (422 on a personal org) |
 | **ACCESS** | Authorization | `PUBLIC` / `AUTH` / `ROLE: …` / `PERM: …` / `TOKEN` |
 

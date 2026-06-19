@@ -117,6 +117,9 @@ describe('Security: Privilege escalation', () => {
       method: 'POST',
       url: testApiPath('/tenancy/organization/roles'),
       token,
+      // POST /roles is idempotencyRequired and that gate runs before the permission check, so a
+      // keyless request 422s first. Send a key to prove the permission layer returns 403.
+      headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
       payload: { name: 'Escalated role' },
     });
 
