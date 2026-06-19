@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.9.1-dev.5](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.4...v4.9.1-dev.5) (2026-06-19)
+
+
+### Fixed
+
+* add Codex Docker vfs fallback ([#715](https://github.com/nikunjmavani/core-be/issues/715)) ([f61b64e](https://github.com/nikunjmavani/core-be/commit/f61b64eaf8794d403bf6752c3660fdf2bbf2de1e))
+
 ## [4.9.1-dev.4](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.3...v4.9.1-dev.4) (2026-06-18)
 
 
