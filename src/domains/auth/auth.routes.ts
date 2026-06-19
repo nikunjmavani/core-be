@@ -305,7 +305,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
-      config: { idempotencyRequired: true, ...STRICT_AUTHED_RATE_LIMIT.config },
+      config: { ...STRICT_AUTHED_RATE_LIMIT.config },
       schema: {
         summary: 'Begin MFA enrollment (phase 1 of 2)',
         description:
@@ -321,7 +321,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
-      config: { idempotencyRequired: true, ...STRICT_AUTHED_RATE_LIMIT.config },
+      config: { ...STRICT_AUTHED_RATE_LIMIT.config },
       schema: {
         summary: 'Confirm MFA enrollment (phase 2 of 2)',
         description:
@@ -353,7 +353,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
-      config: { idempotencyRequired: true, ...STRICT_AUTHED_RATE_LIMIT.config },
+      config: { ...STRICT_AUTHED_RATE_LIMIT.config },
       schema: {
         summary: 'Complete passkey registration',
         description:
@@ -460,7 +460,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
-      config: { idempotencyRequired: true, ...STRICT_AUTHED_RATE_LIMIT.config },
+      config: { ...STRICT_AUTHED_RATE_LIMIT.config },
       schema: {
         summary: 'Add auth method',
         description:

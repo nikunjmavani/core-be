@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
@@ -60,6 +61,7 @@ describe('Tenancy e2e: member role permission', () => {
       url: testApiPath('/tenancy/organization/roles'),
       token,
       payload: { name: 'E2E Custom Role', description: 'e2e' },
+      headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
     });
     expect([201]).toContain(createRoleResponse.statusCode);
 

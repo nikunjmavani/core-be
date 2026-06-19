@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import { createTestApp } from '@/tests/helpers/test-app.js';
@@ -244,7 +245,10 @@ describe('Notify Domain — Integration', () => {
         method: 'POST',
         url: testApiPath('/notify/webhooks'),
         token: token,
-        payload: {},
+        // Valid body + key so the request reaches the permission preHandler (403) rather than
+        // tripping schema validation (400) or the idempotencyRequired onRequest gate (422).
+        payload: { url: 'https://example.com/hook', events: ['notification.created'] },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
       });
       expect(response.statusCode).toBe(403);
     });

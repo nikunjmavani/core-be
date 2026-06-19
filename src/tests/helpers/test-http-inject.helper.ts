@@ -1,5 +1,37 @@
+import { randomUUID } from 'node:crypto';
 import type { InjectOptions } from 'light-my-request';
 import type { FastifyInstance } from 'fastify';
+
+const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+/**
+ * Path suffixes of the `idempotencyRequired` CREATE routes added in EX-06. Their missing-key 422 is
+ * emitted by the GLOBAL `onRequest` idempotency hook, which runs BEFORE route auth/validation — so a
+ * test write to one of these without a key gets 422 instead of the 401/403/201 it intends to assert.
+ * `injectRoute` auto-supplies a fresh key for exactly these create endpoints (scoped by an exact path
+ * suffix so it never touches `:id` sub-routes, non-required writes like password change, or the
+ * original idempotency routes whose tests pass explicit keys). An explicit key always wins.
+ */
+const IDEMPOTENCY_REQUIRED_CREATE_PATH_SUFFIXES = [
+  '/uploads',
+  '/notify/webhooks',
+  '/organization/api-keys',
+  '/organization/roles',
+  '/organization/notification-policies',
+];
+
+function shouldAutoAddIdempotencyKey(
+  method: string,
+  url: string,
+  headers: Record<string, string>,
+): boolean {
+  if (!WRITE_METHODS.has(method.toUpperCase())) return false;
+  const path = (url.split('?')[0] ?? '').replace(/\/+$/, '');
+  if (!IDEMPOTENCY_REQUIRED_CREATE_PATH_SUFFIXES.some((suffix) => path.endsWith(suffix))) {
+    return false;
+  }
+  return !Object.keys(headers).some((key) => key.toLowerCase() === 'x-idempotency-key');
+}
 
 export type InjectRouteOptions = {
   method?: InjectOptions['method'];
@@ -69,6 +101,9 @@ export async function injectRoute(
   const headers = { ...options.headers };
   if (cookieHeader) {
     headers.cookie = headers.cookie ? `${headers.cookie}; ${cookieHeader}` : cookieHeader;
+  }
+  if (shouldAutoAddIdempotencyKey(options.method ?? 'GET', options.url, headers)) {
+    headers['x-idempotency-key'] = `idem-${randomUUID()}`;
   }
 
   const injectOptions: InjectOptions = {
