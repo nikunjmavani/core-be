@@ -29,6 +29,8 @@ Org-scoped routes are flat — they carry **no** `/organizations/{organization_i
 
 **Nightly CI:** [.github/workflows/scheduled-k6-load-slo.yml](../../../../.github/workflows/scheduled-k6-load-slo.yml) (`Scheduled k6 API load & SLO`) — gate on `load:stress`-equivalent and `load:stress:api`-equivalent k6 runs; see [docs/reference/testing/load-testing.md](../../../../docs/reference/testing/load-testing.md#nightly-ci-gate-github-actions).
 
+**Interpreting results:** Running k6 on the **same host** as the API caps throughput and inflates latency through CPU contention — treat single-box numbers as lower bounds and regression signals, not true capacity. See [docs/reference/testing/load-testing.md](../../../../docs/reference/testing/load-testing.md#interpreting-results-co-located-load-generation).
+
 ## Scenarios
 
 | Scenario        | File                           | Required env                                             | Command / script                                  |
