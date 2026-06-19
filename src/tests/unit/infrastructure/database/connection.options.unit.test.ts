@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildPostgresOptions,
+  closeDatabase,
   isNeonPoolerConnection,
+  sql,
 } from '@/infrastructure/database/connection.js';
+import { getShutdownTimeoutMs } from '@/infrastructure/queue/worker-runtime/shutdown-timing.util.js';
 import { env } from '@/shared/config/env.config.js';
 
 describe('postgres connection options', () => {
@@ -54,6 +57,21 @@ describe('postgres connection options', () => {
       const options = buildPostgresOptions('postgresql://user:pass@localhost:5432/core');
       // DATABASE_POOL_MAX has an explicit schema default of 20; the env is always a number.
       expect(options.max).toBe(env.DATABASE_POOL_MAX);
+    });
+  });
+
+  describe('closeDatabase (EX-32)', () => {
+    it('drains using the shared shutdown timeout so it can never exceed the watchdog budget', async () => {
+      // EX-32: closeDatabase must use getShutdownTimeoutMs() (the same drain budget the watchdog is
+      // derived from), not its own longer default — otherwise the force-exit watchdog could kill the
+      // postgres pool drain mid-flight.
+      const endSpy = vi.spyOn(sql, 'end').mockResolvedValue(undefined);
+      try {
+        await closeDatabase();
+        expect(endSpy).toHaveBeenCalledWith({ timeout: getShutdownTimeoutMs() });
+      } finally {
+        endSpy.mockRestore();
+      }
     });
   });
 });
