@@ -7,7 +7,7 @@ import type { MemberRoleService } from './member-role.service.js';
 import type { MemberRolePermissionService } from './member-role-permission/member-role-permission.service.js';
 import { createMemberRoleController } from './member-role.controller.js';
 import { createMemberRolePermissionController } from './member-role-permission/member-role-permission.controller.js';
-import { createMemberRoleDto, updateMemberRoleDto } from './member-role.dto.js';
+import { createMemberRoleDto, roleIdParamsDto, updateMemberRoleDto } from './member-role.dto.js';
 import { putMemberRolePermissionsDto } from './member-role-permission/member-role-permission.dto.js';
 
 /** Services required to wire the member-role and role-permission routes. */
@@ -54,6 +54,7 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
           summary: 'Get role',
           description: 'Returns a single role with its details. Requires ROLE_READ permission.',
           tags: ['Role'],
+          params: roleIdParamsDto,
         },
       },
       roleController.getRole,
@@ -91,6 +92,7 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
           description:
             'Updates a role name or description. System roles cannot be modified. Requires ROLE_MANAGE permission.',
           tags: ['Role'],
+          params: roleIdParamsDto,
           body: updateMemberRoleDto,
         },
       },
@@ -108,6 +110,7 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
           description:
             'Deletes a custom role. System roles cannot be deleted. Members with this role must be reassigned first. Requires ROLE_MANAGE permission.',
           tags: ['Role'],
+          params: roleIdParamsDto,
         },
       },
       roleController.deleteRole,
@@ -123,6 +126,7 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
           summary: 'List role permissions',
           description: 'Returns all permissions assigned to a role. Requires ROLE_READ permission.',
           tags: ['Permission'],
+          params: roleIdParamsDto,
         },
       },
       permissionController.listRolePermissions,
@@ -139,6 +143,7 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
           description:
             'Replaces all permissions for a role with the provided set. Requires ROLE_MANAGE permission.',
           tags: ['Permission'],
+          params: roleIdParamsDto,
           body: putMemberRolePermissionsDto,
         },
       },
