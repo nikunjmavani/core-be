@@ -1,7 +1,6 @@
 import Stripe from 'stripe';
 import { env } from '@/shared/config/env.config.js';
 import { buildOutboundCallOptions, outboundCall } from '@/infrastructure/outbound/index.js';
-import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
 /** Pinned Stripe API version — bump deliberately and verify against Stripe's changelog. */
@@ -371,5 +370,3 @@ export function constructStripeWebhookEvent(
   }
   throw lastError;
 }
-
-logger.info('Stripe client module loaded');
