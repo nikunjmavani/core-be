@@ -368,6 +368,25 @@ organization model and capability flags.
 
 ---
 
+## Password strength (reset & change)
+
+When a user **sets a new password** — `POST /auth/password/reset` and `POST /auth/password/change` —
+the server enforces a strength policy beyond the 12-character minimum:
+
+- **Entropy (zxcvbn):** easily-guessed passwords (common words, names, keyboard runs, or anything
+  derived from the account email) are rejected.
+- **Breach check (HaveIBeenPwned):** passwords found in a known breach corpus are rejected. Only a
+  5-char SHA-1 prefix ever leaves the server (k-anonymity), and the check **fails open** — a HIBP
+  outage degrades to entropy-only and never blocks a password change.
+
+Rejections return **`400`** with the standard validation envelope: `error.code = "invalid_field"` and
+an `errors[]` entry whose `field` is `password` (reset) or `new_password` (change) — surface
+`errors[].message` inline on the password input. Login is **never** strength-checked (it only verifies
+an existing credential). Enforcement is controlled server-side by `PASSWORD_STRENGTH_CHECK_ENABLED`
+(and `PASSWORD_HIBP_CHECK_ENABLED` for the breach step).
+
+---
+
 ## Related
 
 - [authentication.md](../security/authentication.md) — auth methods, rate limits, CAPTCHA boot guard

@@ -11,6 +11,16 @@ export const AES_GCM_IV_LENGTH = 12;
 /** AES-256-GCM cipher identifier passed to Node `crypto.createCipheriv` / `createDecipheriv`. */
 export const AES_GCM_ALGORITHM = 'aes-256-gcm';
 
+/**
+ * Minimum acceptable zxcvbn strength score (0–4 scale) for a newly set password
+ * (reset / change flows). `3` is "safely unguessable" — it withstands an offline
+ * slow-hash attack of ~10^8 guesses — and is the level OWASP/NIST-aligned guidance
+ * treats as the floor for human-chosen secrets. Below this the password is rejected
+ * with `errors:validation.weakPassword`. Enforcement is gated by the
+ * `PASSWORD_STRENGTH_CHECK_ENABLED` env flag; see `password-strength.util.ts`.
+ */
+export const MINIMUM_ACCEPTABLE_PASSWORD_SCORE = 3;
+
 /** Failed login attempts before the account is temporarily locked. */
 export const MAX_FAILED_LOGIN_ATTEMPTS = 10;
 

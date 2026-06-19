@@ -50,6 +50,15 @@ process.env.ENABLE_MCP_SERVER = 'true';
 process.env.ENABLE_QUEUE_DASHBOARD = 'true';
 process.env.ENABLE_QUEUE_DASHBOARD_MUTATIONS = 'true';
 /**
+ * Password-strength enforcement is ON in production but OFF in the test harness: the broad
+ * reset/change suites use human-memorable passwords (e.g. `BrandNewPassword456!`) that zxcvbn
+ * would reject, and the breach check must never make a real outbound HaveIBeenPwned call from a
+ * test. The dedicated `password-strength.*` suites flip `PASSWORD_STRENGTH_CHECK_ENABLED` back on
+ * (and keep HIBP off / nock it) inside their own `beforeAll`.
+ */
+process.env.PASSWORD_STRENGTH_CHECK_ENABLED = 'false';
+process.env.PASSWORD_HIBP_CHECK_ENABLED = 'false';
+/**
  * Metrics mirror CI (`reusable-vitest-postgres-redis.yml`) and the env-schema default (`true`).
  * `.env.development` pins `METRICS_ENABLED=false` for local `pnpm dev` ergonomics, which
  * de-registers `GET /metrics`. But `docs/routes.txt` catalogues `/metrics` as a TOKEN route, so

@@ -17,6 +17,8 @@ const OUTBOUND_BYPASS_ALLOWLIST = [
   'src/infrastructure/storage/s3-adapter.ts',
   'src/shared/utils/security/webhook-outbound-fetch.util.ts',
   'src/shared/utils/security/turnstile-verifier.util.ts',
+  // Calls fetch() inside an outboundCall() operation (HIBP range API), same pattern as turnstile.
+  'src/shared/utils/security/password-strength.util.ts',
   'src/scripts/',
   'src/tests/',
   'src/infrastructure/observability/',

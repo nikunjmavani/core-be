@@ -58,7 +58,9 @@
     "avatarKeyNotOwned": "La clave de avatar no pertenece a este usuario",
     "logoKeyNotOwned": "La clave de logo no pertenece a esta organización",
     "uploadNotConfirmed": "La carga debe confirmarse antes de poder adjuntarse",
-    "invalidMfaMethodId": "ID de método MFA no válido"
+    "invalidMfaMethodId": "ID de método MFA no válido",
+    "weakPassword": "Esta contraseña es demasiado débil o fácil de adivinar. Elige una frase de contraseña más larga y evita palabras comunes, nombres y secuencias predecibles.",
+    "breachedPassword": "Esta contraseña ha aparecido en una filtración de datos conocida y no puede usarse. Elige una contraseña diferente y única."
   },
   "missingSessionCookie": "Falta la cookie de sesión",
   "disposableEmail": "Este dominio de correo no está permitido.",

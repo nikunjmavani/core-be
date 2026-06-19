@@ -25,7 +25,8 @@ export type OutboundIntegrationName =
   | 'webhook-test'
   | 'oauth-google'
   | 'oauth-github'
-  | 'captcha-turnstile';
+  | 'captcha-turnstile'
+  | 'hibp';
 
 /** Per-integration defaults (HTTP timeout + circuit breaker) applied when call sites omit overrides. */
 export interface OutboundIntegrationDefaults {
@@ -37,6 +38,12 @@ const OAUTH_HTTP_TIMEOUT_MS = TEN_SECONDS_MS;
 const WEBHOOK_DELIVERY_TIMEOUT_MS = THIRTY_SECONDS_MS;
 const WEBHOOK_TEST_TIMEOUT_MS = TEN_SECONDS_MS;
 const TURNSTILE_HTTP_TIMEOUT_MS = FIVE_SECONDS_MS;
+/**
+ * Wall-clock cap for the HaveIBeenPwned range lookup on password set/reset/change. The check
+ * is advisory and fails open (a slow or unreachable HIBP never blocks a password change), so the
+ * timeout only bounds how long a password write waits before degrading to zxcvbn-only.
+ */
+const HIBP_HTTP_TIMEOUT_MS = FIVE_SECONDS_MS;
 /** Wall-clock cap for S3 SDK calls (SDK also uses maxAttempts). */
 const S3_HTTP_TIMEOUT_MS = THIRTY_SECONDS_MS;
 
@@ -70,6 +77,11 @@ const OUTBOUND_DEFAULT_FACTORIES: Record<OutboundIntegrationName, OutboundDefaul
   'captcha-turnstile': () => ({
     timeoutMs: TURNSTILE_HTTP_TIMEOUT_MS,
     circuit: turnstileCircuit,
+  }),
+  // No circuit breaker: the breach check is fail-open by design, so a HIBP outage degrades to
+  // zxcvbn-only without a breaker tripping login/credential flows.
+  hibp: () => ({
+    timeoutMs: HIBP_HTTP_TIMEOUT_MS,
   }),
 };
 

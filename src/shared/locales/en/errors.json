@@ -58,7 +58,9 @@
     "avatarKeyNotOwned": "Avatar key does not belong to this user",
     "logoKeyNotOwned": "Logo key does not belong to this organization",
     "uploadNotConfirmed": "Upload must be confirmed before it can be attached",
-    "invalidMfaMethodId": "Invalid MFA method id"
+    "invalidMfaMethodId": "Invalid MFA method id",
+    "weakPassword": "This password is too weak or easily guessed. Choose a longer passphrase and avoid common words, names, and predictable sequences.",
+    "breachedPassword": "This password has appeared in a known data breach and can't be used. Choose a different, unique password."
   },
   "missingSessionCookie": "Missing session cookie",
   "disposableEmail": "This email domain is not allowed.",

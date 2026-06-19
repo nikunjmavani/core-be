@@ -79,6 +79,7 @@ src/
     │   │   │   ├── auth-route-smoke.integration.test.ts
     │   │   │   ├── auth.integration.test.ts
     │   │   │   ├── logout-revokes-token.integration.test.ts
+    │   │   │   ├── password-strength.integration.test.ts
     │   │   │   ├── refresh-preserves-active-organization.integration.test.ts
     │   │   │   └── refresh-rotates-token-hash.integration.test.ts
     │   │   ├── unit/
@@ -123,6 +124,7 @@ src/
     │   │   │   │   │   ├── events/
     │   │   │   │   │       └── auth-method.event-handlers.unit.test.ts
     │   │   │   │   │   ├── auth-method.change-password.db.unit.test.ts
+    │   │   │   │   │   ├── auth-method.change-password.strength.db.unit.test.ts
     │   │   │   │   │   ├── auth-method.repository.db.unit.test.ts
     │   │   │   │   │   ├── auth-method.repository.unit.test.ts
     │   │   │   │   │   ├── auth-method.service.last-method-guard.unit.test.ts
@@ -1516,6 +1518,7 @@ src/
     │   │   ├── encryption.util.ts
     │   │   ├── field-secret-encryption.util.ts
     │   │   ├── jwt.util.ts
+    │   │   ├── password-strength.util.ts
     │   │   ├── password.util.ts
     │   │   ├── safe-webhook-url-for-logs.util.ts
     │   │   ├── sensitive-redaction.util.ts
@@ -1595,6 +1598,7 @@ src/
     │   │   ├── s3.schemas.ts
     │   │   └── stripe.schemas.ts
     │   ├── contract-vitest-setup.ts
+    │   ├── hibp.contract.test.ts
     │   ├── OVERVIEW.md
     │   ├── README.md
     │   ├── request-id-eventbus.contract.test.ts
@@ -2080,6 +2084,7 @@ src/
     │   │   │   ├── field-secret-encryption.unit.test.ts
     │   │   │   ├── jwt-key-material.unit.test.ts
     │   │   │   ├── jwt.util.unit.test.ts
+    │   │   │   ├── password-strength.util.unit.test.ts
     │   │   │   ├── password.util.unit.test.ts
     │   │   │   ├── sensitive-redaction.util.unit.test.ts
     │   │   │   ├── turnstile-verifier.unit.test.ts

@@ -8,6 +8,7 @@ import {
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { enforceMinimumDuration } from '@/shared/utils/security/anti-enumeration.util.js';
 import { hashPassword, verifyPassword } from '@/shared/utils/security/password.util.js';
+import { assertPasswordAcceptable } from '@/shared/utils/security/password-strength.util.js';
 import { eventBus } from '@/core/events/event-bus.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import {
@@ -315,6 +316,12 @@ export class AuthMethodService {
     const parsed = validateResetPassword(body);
     const tokenHash = createHash('sha256').update(parsed.token).digest('hex');
 
+    // Enforce the strength/breach policy BEFORE consuming the single-use token, so a weak or
+    // breached choice is rejected without burning the user's reset link. The reset token does not
+    // carry the email, so no user-specific inputs are available here (zxcvbn dictionary/entropy
+    // still applies); the change flow below supplies the email.
+    await assertPasswordAcceptable({ password: parsed.password, field: 'password' });
+
     // Hash the new password BEFORE opening the transaction: argon2 is CPU-bound (~100ms) and
     // must not hold a pooled connection open inside the transaction.
     const passwordHash = await hashPassword(parsed.password);
@@ -357,6 +364,14 @@ export class AuthMethodService {
     if (!user.password_hash) throw new UnauthorizedError('errors:passwordAuthNotEnabled');
     const { valid } = await verifyPassword(parsed.current_password, user.password_hash);
     if (!valid) throw new UnauthorizedError('errors:currentPasswordIncorrect');
+    // Enforce the strength/breach policy only after the caller proves knowledge of the current
+    // password — so the zxcvbn + (outbound) breach check can't be probed without authentication.
+    // The account email is fed to zxcvbn so an email-derived password scores low.
+    await assertPasswordAcceptable({
+      password: parsed.new_password,
+      field: 'new_password',
+      userInputs: [user.email],
+    });
     // Hash BEFORE the transaction: argon2 is CPU-bound (~100 ms) and must not hold a pooled
     // connection open inside the transaction.
     const passwordHash = await hashPassword(parsed.new_password);

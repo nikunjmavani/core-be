@@ -648,6 +648,21 @@ const envSchemaBase = z.object({
    */
   CAPTCHA_BYPASS_HEADER: z.string().min(1).optional(),
 
+  // Password strength (enforced when a password is SET on reset/change — never on login)
+  /**
+   * Master switch for password-strength enforcement. When `true`, new passwords are scored with
+   * zxcvbn and rejected below the minimum acceptable score; when `false`, only the DTO length rule
+   * applies. Uses {@link booleanString} so `"false"`/`"0"` actually disable it.
+   */
+  PASSWORD_STRENGTH_CHECK_ENABLED: booleanString('true'),
+  /**
+   * When `true` (and strength enforcement is on), new passwords are additionally checked against
+   * the HaveIBeenPwned breach corpus via the k-anonymity range API. The check is fail-open: a HIBP
+   * outage degrades to zxcvbn-only and never blocks a password change. Set `false` for fully
+   * air-gapped deployments with no outbound egress.
+   */
+  PASSWORD_HIBP_CHECK_ENABLED: booleanString('true'),
+
   // MCP server (Model Context Protocol) at POST /api/v1/mcp — exposes APIs as tools for frontends/agents
   ENABLE_MCP_SERVER: z
     .string()
