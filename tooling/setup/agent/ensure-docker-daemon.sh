@@ -220,7 +220,7 @@ if wait_for_docker; then
   exit 0
 fi
 
-# Codex Cloud setup containers can run as root but still lack the kernel
+# Some cloud-agent setup containers can run as root but still lack the kernel
 # capability Docker needs to program iptables/NAT for the default bridge:
 # "failed to create NAT chain DOCKER ... Permission denied". In that case,
 # start dockerd without bridge/NAT; bootstrap.sh detects this marker and uses a

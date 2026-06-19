@@ -22,8 +22,8 @@ describe('agent Docker daemon setup scripts', () => {
     expect(ensureDockerDaemonScript).toContain('restricted-vfs');
   });
 
-  it('uses the Codex Cloud host-network compose override in restricted Docker mode', () => {
-    expect(bootstrapScript).toContain('docker-compose.codex-cloud.yml');
+  it('uses the shared cloud-agent host-network compose override in restricted Docker mode', () => {
+    expect(bootstrapScript).toContain('docker-compose.cloud-agent.yml');
     expect(bootstrapScript).toContain('DOCKERD_AGENT_MODE_FILE');
     expect(bootstrapScript).toContain('restricted*');
   });

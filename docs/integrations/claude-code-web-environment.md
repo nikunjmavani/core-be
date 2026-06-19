@@ -120,6 +120,8 @@ pnpm db:seed         # or pnpm db:seed:full
 
 > **Docker image pulls in the cloud.** Docker Hub serves image *blobs* from a CDN (`production.cloudfront.docker.com`) that is **not** on the default allowlist, so a bare `pnpm compose:up` fails with `403 Forbidden` while pulling `postgres:<v>-alpine` / `redis:<v>-alpine` (AWS ECR Public has the same `*.cloudfront.net` problem). Run [`install-docker-images.sh`](../../tooling/setup/agent/install-docker-images.sh) in the Setup script: it points the Docker daemon at Google's Docker Hub pull-through mirror (`https://mirror.gcr.io` — reachable on the default allowlist, byte-identical images / same digests) and pre-pulls the compose images, so `pnpm compose:up` runs the **same** pinned images you use locally with no compose changes. Alternatively add `production.cloudfront.docker.com` to the Custom network allowlist to pull straight from Docker Hub. Note Postgres **17+** is required by `pnpm db:migrate`, so the cloud image's native Postgres 16 is not a substitute.
 
+**Restricted cloud Docker.** [`bootstrap.sh`](../../tooling/setup/agent/bootstrap.sh) calls the shared [`ensure-docker-daemon.sh`](../../tooling/setup/agent/ensure-docker-daemon.sh) helper before compose. If a cloud-agent container denies Docker bridge/NAT setup or overlay layer extraction, the helper falls back to restricted networking, then `vfs` storage when needed, and `bootstrap.sh` uses the shared [`docker-compose.cloud-agent.yml`](../../tooling/setup/agent/docker-compose.cloud-agent.yml) host-network override for Postgres + Redis.
+
 ---
 
 ### One-command bring-up + verify
