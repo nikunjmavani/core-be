@@ -183,6 +183,8 @@ export function responseBodyContainsSecretFields(body: string): boolean {
     const parsed = JSON.parse(body) as unknown;
     return objectContainsSecretField(parsed);
   } catch {
+    // safe-catch: a non-JSON body is expected (not a fault); fall back to a conservative
+    // case-insensitive substring scan rather than failing the secret-exclusion check.
     const lower = body.toLowerCase();
     for (const fragment of RESPONSE_BODY_SECRET_FRAGMENTS) {
       if (
