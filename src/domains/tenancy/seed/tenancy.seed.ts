@@ -2,6 +2,7 @@
  * Tenancy domain seed — organizations, roles, memberships, role_permissions, invitations.
  * Domain-owned; used by scripts/seed orchestration. Data is passed in (no faker here).
  */
+import { sql } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
@@ -21,6 +22,7 @@ export interface SeedOrganizationPayload {
  * Inserts an `ACTIVE` organization with a freshly generated public id and
  * returns the created row (or `null` if the insert returned no row). Used by
  * `src/scripts/seed/{minimal,full}.ts` to bootstrap demo tenants.
+ * Idempotent: re-running updates `name` on slug conflict.
  */
 export async function seedOrganization(payload: SeedOrganizationPayload) {
   const [row] = await getRequestDatabase()
@@ -32,6 +34,10 @@ export async function seedOrganization(payload: SeedOrganizationPayload) {
       owner_user_id: payload.owner_user_id,
       status: 'ACTIVE',
       created_by_user_id: payload.owner_user_id,
+    })
+    .onConflictDoUpdate({
+      target: organizations.slug,
+      set: { name: payload.name },
     })
     .returning();
   return row ?? null;
@@ -49,6 +55,7 @@ export interface SeedRolePayload {
  * Inserts a tenancy role under the given organization with a generated public
  * id and returns the created row. `is_system` distinguishes immutable seeded
  * roles (Admin, Member) from user-created roles.
+ * Idempotent: re-running updates `is_system` on (organization_id, name) conflict.
  */
 export async function seedRole(payload: SeedRolePayload) {
   const [row] = await getRequestDatabase()
@@ -59,6 +66,11 @@ export async function seedRole(payload: SeedRolePayload) {
       name: payload.name,
       is_system: payload.is_system ?? false,
       created_by_user_id: payload.created_by_user_id,
+    })
+    .onConflictDoUpdate({
+      target: [roles.organization_id, roles.name],
+      targetWhere: sql`${roles.deleted_at} IS NULL`,
+      set: { is_system: payload.is_system ?? false },
     })
     .returning();
   return row ?? null;
@@ -80,6 +92,7 @@ export interface SeedMembershipPayload {
  * given role. When status is `INVITED` `joined_at` is left null; otherwise it
  * defaults to `now()` so demo flows can immediately resolve permissions.
  * `invited_by_user_id` is recorded when provided (e.g. seeded invitations).
+ * Idempotent: re-running updates `role_id` and `status` on (user_id, organization_id) conflict.
  */
 export async function seedMembership(payload: SeedMembershipPayload) {
   const status = payload.status ?? 'ACTIVE';
@@ -94,6 +107,11 @@ export async function seedMembership(payload: SeedMembershipPayload) {
       joined_at: payload.joined_at ?? (status === 'INVITED' ? null : new Date()),
       created_by_user_id: payload.created_by_user_id,
       invited_by_user_id: payload.invited_by_user_id ?? null,
+    })
+    .onConflictDoUpdate({
+      target: [memberships.user_id, memberships.organization_id],
+      targetWhere: sql`${memberships.deleted_at} IS NULL`,
+      set: { role_id: payload.role_id, status },
     })
     .returning();
   return row ?? null;

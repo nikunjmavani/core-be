@@ -36,7 +36,10 @@ Dependency order: `user` → `tenancy` → `billing` / `notify` / `upload` / `au
 ## Determinism and idempotency
 
 - `SEED` pins faker (`initFakerSeed()`) so a given seed reproduces the same data.
-- Re-running any tier is a no-op for existing rows: deterministic natural keys (slug/email from faker + index) plus count-and-resume or `onConflictDoNothing()`. High-count tables (`audit.logs`, notifications) use batched multi-row inserts with `ON CONFLICT DO NOTHING`.
+- Re-running any tier is a no-op for existing rows. Two patterns:
+  - **`onConflictDoNothing()`** — use when the row is the source of truth and no fields need refreshing (bulk-seeded rows, reference codes, role-permission join rows).
+  - **`onConflictDoUpdate({ target, set })`** — use for demo seed helpers where fields must stay current on re-run (e.g. `password_hash`, `first_name`, `last_name` in `seedUser`; `name` in `seedOrganization`). For unique indexes with a `WHERE` clause (partial indexes), also supply `targetWhere: sql\`${table.deleted_at} IS NULL\`` so Drizzle can resolve the correct index.
+- Natural keys are deterministic (slug/email from faker + index); high-count tables (`audit.logs`, notifications) use batched multi-row inserts with `ON CONFLICT DO NOTHING`.
 
 ## Usage
 
