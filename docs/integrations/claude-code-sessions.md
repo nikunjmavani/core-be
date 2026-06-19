@@ -5,8 +5,7 @@ the hooks, the `pnpm` gates, and the `agent-os/` skills/rules are committed to t
 repo and apply to **every session the same way**. The same files drive every
 session, so there is nothing surface-specific to maintain.
 
-The Cursor / Codex equivalents are [cursor-agent-system.md](cursor-agent-system.md)
-and [codex-cloud-agent-environment.md](codex-cloud-agent-environment.md).
+The Cursor equivalent is [cursor-agent-system.md](cursor-agent-system.md).
 
 ---
 
