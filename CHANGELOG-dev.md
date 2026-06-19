@@ -6,6 +6,48 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.9.1-dev.7](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.6...v4.9.1-dev.7) (2026-06-19)
+
+
+### Documentation
+
+* archive Codex Cloud setup ([#719](https://github.com/nikunjmavani/core-be/issues/719)) ([831865e](https://github.com/nikunjmavani/core-be/commit/831865e05d9a770eabe031f638c18fac95889ca3))
+
+## [4.9.1-dev.6](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.5...v4.9.1-dev.6) (2026-06-19)
+
+
+### Fixed
+
+* use shared cloud agent docker fallback ([#716](https://github.com/nikunjmavani/core-be/issues/716)) ([7ab2c17](https://github.com/nikunjmavani/core-be/commit/7ab2c176ca2c58082e61c20b75c8b801ee3534a1))
+
+## [4.9.1-dev.5](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.4...v4.9.1-dev.5) (2026-06-19)
+
+
+### Fixed
+
+* add Codex Docker vfs fallback ([#715](https://github.com/nikunjmavani/core-be/issues/715)) ([f61b64e](https://github.com/nikunjmavani/core-be/commit/f61b64eaf8794d403bf6752c3660fdf2bbf2de1e))
+
+## [4.9.1-dev.4](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.3...v4.9.1-dev.4) (2026-06-18)
+
+
+### Fixed
+
+* start docker daemon before cloud compose ([6c93d3e](https://github.com/nikunjmavani/core-be/commit/6c93d3eaa30a0a9cd9227d4703527331c83e99a5))
+
+## [4.9.1-dev.3](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.2...v4.9.1-dev.3) (2026-06-18)
+
+
+### Fixed
+
+* install docker for cloud bootstrap ([2055ce5](https://github.com/nikunjmavani/core-be/commit/2055ce51b545d74b41dc933970ea06006cbbb76f))
+
+## [4.9.1-dev.2](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.1...v4.9.1-dev.2) (2026-06-18)
+
+
+### Documentation
+
+* **agent-os:** document dev production release command ([7d023a2](https://github.com/nikunjmavani/core-be/commit/7d023a203df9dc7bc81020428c24eb4e78a1b31d))
+
 ## [4.9.1-dev.1](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.0...v4.9.1-dev.1) (2026-06-18)
 
 

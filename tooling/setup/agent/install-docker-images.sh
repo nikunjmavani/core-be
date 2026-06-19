@@ -36,6 +36,7 @@ readonly MIRROR_URL="https://mirror.gcr.io"
 readonly DAEMON_JSON="/etc/docker/daemon.json"
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+agent_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Wait up to ~30s for the Docker socket to become responsive.
 wait_for_docker() {
@@ -75,7 +76,7 @@ fi
 # 2) Ensure dockerd is running and has actually picked up the mirror.
 if ! docker info >/dev/null 2>&1; then
   echo "install-docker-images: starting dockerd…" >&2
-  start_docker || true
+  bash "${agent_dir}/ensure-docker-daemon.sh" || start_docker || true
 fi
 
 if ! docker info >/dev/null 2>&1; then
