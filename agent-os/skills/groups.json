@@ -24,7 +24,8 @@
       "code-quality-guard",
       "code-smells-and-best-practices",
       "lint-warnings-handler",
-      "before-commit-guard"
+      "before-commit-guard",
+      "change-completeness-guard"
     ],
     "security-hardening": [
       "rls-tenant-isolation-guard",

@@ -327,6 +327,8 @@ All AI agents (Claude Code, Cursor, Codex) share the **Headroom MCP** server (pa
 
 When **code or architecture changes**, consult **`.cursor/skills/skill-index/SKILL.md` first** — it maps what changed to which skill(s) to run (no duplicate invocations).
 
+**Definition-of-done (every change):** a code change is finished only when its **own tests, cross-cutting test suites, docs, rules, and skills** have all moved with it — see **change-completeness-guard** (always-applied rule: `agent-os/rules/change-completeness.mdc`). When a single fact (a count, a route set, a constant, an env key, a header) lives in more than one place, grep the literal across `src/`, `docs/`, and `agent-os/` so no mirror is left stale.
+
 **Enforcement:** Agent skills generate/fix artifacts once → pre-commit (`lint-staged`, `typecheck`, `validate:domain`, `tsdoc:check`) → CI (`pnpm validate`, `routes:catalog:check`, `tsdoc:check`, env-example sync).
 
 **Human docs** (when layout changes): `CLAUDE.md`, `README.md`, `.cursor/rules/`, skills — via **structure-maintainer**. Hand-written `docs/**/*.md` — via **docs-maintainer**.
