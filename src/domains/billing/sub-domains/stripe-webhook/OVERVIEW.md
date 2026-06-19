@@ -18,6 +18,7 @@ The receiver is registered at the canonical path:
 - **Idempotent on `event.id`**: `stripe_webhook_events.provider_event_id UNIQUE`. Stripe retries are no-ops once we've persisted an event.
 - **Stale-event protection**: subscription sync uses strict `<` on `last_stripe_event_created_at` so same-second stale updates cannot overwrite newer state; cancellation still uses `<=` so a terminal delete at the same timestamp wins.
 - **Reclaim window**: rows in `processing` longer than `STRIPE_WEBHOOK_STUCK_PROCESSING_LEASE_MINUTES = 15` may be reclaimed for retry by the reclaim worker.
+- **Catch-up sweep**: the `stripe-webhook-event-catchup` worker polls `events.list` over the last `STRIPE_WEBHOOK_EVENT_CATCHUP_WINDOW_MINUTES` and re-ingests events absent from the ledger entirely — the durable backstop for webhooks dropped while the API was down longer than the signature-tolerance window (`STRIPE_WEBHOOK_TOLERANCE_SECONDS`). Reclaim retries known-but-failed rows; catch-up recovers never-seen events.
 - **Per-source DLQ**: `stripe-webhook-event-reclaim-dlq` and `stripe-webhook-event-retention-dlq` capture final-retry failures.
 
 ## Lifecycle

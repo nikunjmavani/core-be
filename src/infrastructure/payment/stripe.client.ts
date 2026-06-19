@@ -173,6 +173,42 @@ export async function retrieveStripeEvent(
   );
 }
 
+/**
+ * Lists the most recent Stripe events created at or after `createdGteSeconds` (a single bounded
+ * page, newest first). Used by the catch-up worker to recover events that never reached the local
+ * ledger — e.g. webhooks dropped while the API was down longer than the signature tolerance window.
+ *
+ * @remarks
+ * - **Algorithm:** one `events.list({ created: { gte }, limit })` page (`limit` ≤ 100). The sweep is
+ *   idempotent: any event still missing after a page boundary is recovered on the next run.
+ * - **Failure modes:** Stripe errors are rethrown through {@link outboundCall} so the BullMQ job
+ *   retries/backs off; the per-attempt timeout + `maxNetworkRetries: 0` bound the bad-day cost.
+ * - **Side effects:** one outbound Stripe API call per invocation.
+ */
+export async function listRecentStripeEvents(options: {
+  createdGteSeconds: number;
+  limit: number;
+  requestId?: string;
+}): Promise<Stripe.Event[]> {
+  const { createdGteSeconds, limit, requestId } = options;
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: 'stripe',
+      requestId,
+      enforceAbortTimeout: true,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        const page = await stripe.events.list(
+          { created: { gte: createdGteSeconds }, limit },
+          { timeout: env.STRIPE_HTTP_TIMEOUT_MS, maxNetworkRetries: 0 },
+        );
+        return page.data;
+      },
+    }),
+  );
+}
+
 // ── Subscription helpers ──────────────────────────────────────
 
 /**

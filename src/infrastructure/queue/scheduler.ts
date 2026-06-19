@@ -35,6 +35,7 @@ import {
   DEFAULT_DLQ_AUTO_RETRY_CRON,
 } from '@/infrastructure/queue/dlq/dlq-auto-retry.constants.js';
 import { STRIPE_WEBHOOK_EVENT_RECLAIM_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-reclaim.constants.js';
+import { STRIPE_WEBHOOK_EVENT_CATCHUP_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-catchup.constants.js';
 import { STRIPE_WEBHOOK_EVENT_RETENTION_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-retention.constants.js';
 import { AUDIT_EXPORT_QUEUE_NAME } from '@/domains/audit/workers/audit-export.constants.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -90,6 +91,7 @@ const DEFAULT_COMMIT_DISPATCH_RECOVERY_CRON = '*/5 * * * *';
 /** PENDING upload reconciliation runs hourly (independent of tombstone retention). */
 const DEFAULT_UPLOAD_PENDING_SWEEP_CRON = '15 * * * *';
 const DEFAULT_STRIPE_WEBHOOK_EVENT_RECLAIM_CRON = '*/5 * * * *';
+const DEFAULT_STRIPE_WEBHOOK_EVENT_CATCHUP_CRON = '*/15 * * * *';
 const DEFAULT_STRIPE_WEBHOOK_EVENT_RETENTION_CRON = '0 3 * * *';
 const DEFAULT_AUDIT_EXPORT_CRON = '15 2 * * *';
 
@@ -278,6 +280,13 @@ export function getScheduledJobs(): ScheduledJob[] {
       jobName: 'reclaim-failed-stripe-webhook-events',
       cronPattern:
         env.STRIPE_WEBHOOK_EVENT_RECLAIM_CRON ?? DEFAULT_STRIPE_WEBHOOK_EVENT_RECLAIM_CRON,
+    }),
+    withSchedulerTimezone(timezone, {
+      queueName: STRIPE_WEBHOOK_EVENT_CATCHUP_QUEUE_NAME,
+      schedulerId: 'stripe-webhook-event-catchup',
+      jobName: 'catchup-missing-stripe-webhook-events',
+      cronPattern:
+        env.STRIPE_WEBHOOK_EVENT_CATCHUP_CRON ?? DEFAULT_STRIPE_WEBHOOK_EVENT_CATCHUP_CRON,
     }),
   ];
 }

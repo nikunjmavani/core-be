@@ -537,6 +537,12 @@ const envSchemaBase = z.object({
   WEBHOOK_DELIVERY_ATTEMPT_RETENTION_CRON: z.string().min(1).optional(),
   STRIPE_WEBHOOK_EVENT_RECLAIM_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(100),
   STRIPE_WEBHOOK_EVENT_RECLAIM_CRON: z.string().min(1).optional(),
+  /** Lookback window (minutes) for the Stripe catch-up worker's `events.list` poll. */
+  STRIPE_WEBHOOK_EVENT_CATCHUP_WINDOW_MINUTES: z.coerce.number().int().min(5).max(1440).default(60),
+  /** Max events fetched per Stripe catch-up `events.list` page (Stripe caps at 100). */
+  STRIPE_WEBHOOK_EVENT_CATCHUP_PAGE_SIZE: z.coerce.number().int().min(1).max(100).default(100),
+  /** Cron for the Stripe catch-up sweep; omit to use the default (every 15 min). */
+  STRIPE_WEBHOOK_EVENT_CATCHUP_CRON: z.string().min(1).optional(),
   /** Daily audit cold export to S3 (disabled when S3_BUCKET unset). */
   AUDIT_EXPORT_ENABLED: z
     .string()

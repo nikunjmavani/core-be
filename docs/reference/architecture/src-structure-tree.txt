@@ -324,6 +324,7 @@ src/
     │   │   │   │   └── unit/
     │   │   │   │   │   ├── events/
     │   │   │   │   │       └── worker/
+    │   │   │   │   │       │   ├── stripe-webhook-event-catchup.processor.unit.test.ts
     │   │   │   │   │       │   ├── stripe-webhook-event-reclaim.worker.unit.test.ts
     │   │   │   │   │       │   ├── stripe-webhook-event-retention.worker.unit.test.ts
     │   │   │   │   │       │   └── stripe-webhook.worker.unit.test.ts
@@ -342,6 +343,9 @@ src/
     │   │   │   │   ├── stripe-webhook.job.schema.ts
     │   │   │   │   └── stripe-webhook.queue.ts
     │   │   │   ├── workers/
+    │   │   │   │   ├── stripe-webhook-event-catchup.constants.ts
+    │   │   │   │   ├── stripe-webhook-event-catchup.processor.ts
+    │   │   │   │   ├── stripe-webhook-event-catchup.worker.ts
     │   │   │   │   ├── stripe-webhook-event-reclaim.constants.ts
     │   │   │   │   ├── stripe-webhook-event-reclaim.processor.ts
     │   │   │   │   ├── stripe-webhook-event-reclaim.worker.ts

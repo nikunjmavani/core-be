@@ -60,6 +60,8 @@ import { createStripeWebhookEventRetentionWorker } from '@/domains/billing/sub-d
 import { STRIPE_WEBHOOK_EVENT_RETENTION_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-retention.constants.js';
 import { createStripeWebhookEventReclaimWorker } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-reclaim.worker.js';
 import { STRIPE_WEBHOOK_EVENT_RECLAIM_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-reclaim.constants.js';
+import { createStripeWebhookEventCatchupWorker } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-catchup.worker.js';
+import { STRIPE_WEBHOOK_EVENT_CATCHUP_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-catchup.constants.js';
 import { createNotificationRetentionWorker } from '@/domains/notify/sub-domains/notification/workers/notification-retention.worker.js';
 import { NOTIFICATION_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/notification/workers/notification-retention.constants.js';
 import {
@@ -285,6 +287,12 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
     family: 'stripe',
     logLabel: 'stripe webhook event reclaim worker',
     create: () => createStripeWebhookEventReclaimWorker(),
+  }),
+  retentionDefinition({
+    queueName: STRIPE_WEBHOOK_EVENT_CATCHUP_QUEUE_NAME,
+    family: 'stripe',
+    logLabel: 'stripe webhook event catch-up worker',
+    create: () => createStripeWebhookEventCatchupWorker(),
   }),
   retentionDefinition({
     queueName: WEBHOOK_TOMBSTONE_RETENTION_QUEUE_NAME,

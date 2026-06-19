@@ -1,4 +1,4 @@
-import { and, asc, eq, lt, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, lt, or, sql } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import {
   assertWorkerDatabaseContext,
@@ -215,6 +215,28 @@ export class StripeWebhookEventRepository {
       .limit(limit);
 
     return rows.map((row) => row.stripe_event_id);
+  }
+
+  /**
+   * Returns the subset of `stripeEventIds` already present in the ledger.
+   *
+   * @remarks
+   * - **Algorithm:** single `WHERE stripe_event_id IN (...)` read; empty input short-circuits to an
+   *   empty set without a query.
+   * - **Failure modes:** propagates SELECT errors to the caller (the catch-up sweep logs + retries).
+   * - **Side effects:** none — pure read.
+   * - **Notes:** the catch-up processor diffs a Stripe `events.list` page against this set and
+   *   enqueues only the missing ids, recovering events that never reached the ledger.
+   */
+  async findExistingStripeEventIds(stripeEventIds: string[]): Promise<Set<string>> {
+    if (stripeEventIds.length === 0) {
+      return new Set();
+    }
+    const rows = await stripeWebhookLedgerDatabase()
+      .select({ stripe_event_id: stripe_webhook_events.stripe_event_id })
+      .from(stripe_webhook_events)
+      .where(inArray(stripe_webhook_events.stripe_event_id, stripeEventIds));
+    return new Set(rows.map((row) => row.stripe_event_id));
   }
 
   /**
