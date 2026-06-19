@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isWorkerStalled,
   isWorkerThroughputStalled,
   type WorkerQueueHeartbeat,
 } from '@/infrastructure/queue/worker-runtime/worker-queue-heartbeat.js';
@@ -30,5 +31,22 @@ describe('worker-queue-heartbeat', () => {
       { queue: 'webhook-delivery', last_job_at: '2026-05-19T10:30:00.000Z' },
     ];
     expect(isWorkerThroughputStalled(heartbeats, stallTimeoutMs, nowMs)).toBe(true);
+  });
+});
+
+describe('isWorkerStalled (queue-depth-aware readiness — EX-02)', () => {
+  // Bug premise: a stale heartbeat alone used to mark the worker stalled. With queue depth in the
+  // decision, an idle worker (stale heartbeat, empty queue) is healthy; only a backlog with dead
+  // throughput is stalled.
+  it('is NOT stalled when heartbeats are stale but no jobs are waiting (idle worker — the fix)', () => {
+    expect(isWorkerStalled({ isThroughputStalled: true, waitingJobCount: 0 })).toBe(false);
+  });
+
+  it('IS stalled when heartbeats are stale and jobs are waiting (genuinely stuck)', () => {
+    expect(isWorkerStalled({ isThroughputStalled: true, waitingJobCount: 5 })).toBe(true);
+  });
+
+  it('is NOT stalled when throughput is healthy, regardless of waiting jobs', () => {
+    expect(isWorkerStalled({ isThroughputStalled: false, waitingJobCount: 5 })).toBe(false);
   });
 });
