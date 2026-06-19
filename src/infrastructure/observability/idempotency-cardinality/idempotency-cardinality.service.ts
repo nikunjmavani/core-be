@@ -7,6 +7,12 @@ import {
   IDEMPOTENCY_CLAIM_COUNTER_LOGICAL_KEY,
 } from '@/shared/utils/idempotency/idempotency-key.util.js';
 
+/** Per-iteration `SCAN ... COUNT` hint — pages the keyspace in ~1000-key batches. */
+const IDEMPOTENCY_SCAN_COUNT = 1000;
+
+/** Extra SCAN round-trips allowed over the minimum `maxKeys / COUNT` before the iteration guard trips. */
+const IDEMPOTENCY_SCAN_ITERATION_SLACK = 100;
+
 /**
  * Result of {@link sampleIdempotencyCardinality} — approximate Redis SCAN count
  * for idempotency keys plus a `scanTruncated` flag set when the bounded scan
@@ -44,18 +50,26 @@ export interface IdempotencyCardinalitySampleResult {
  */
 export async function sampleIdempotencyCardinality(): Promise<IdempotencyCardinalitySampleResult> {
   const maxKeys = env.IDEMPOTENCY_CARDINALITY_SCAN_MAX;
+  // Bound the number of SCAN round-trips so a pathological cursor (or a keyspace far
+  // larger than maxKeys that yields small/empty pages) can never spin this sampler
+  // indefinitely and pin Redis CPU. Generous headroom over the minimum maxKeys/COUNT
+  // pages, so normal truncation still trips on the observedCount cap first.
+  const maxIterations =
+    Math.ceil(maxKeys / IDEMPOTENCY_SCAN_COUNT) + IDEMPOTENCY_SCAN_ITERATION_SLACK;
   let cursor = '0';
   let observedCount = 0;
   let scanTruncated = false;
+  let iterations = 0;
 
   try {
     while (true) {
+      iterations += 1;
       const [nextCursor, keys] = await redisConnection.scan(
         cursor,
         'MATCH',
         IDEMPOTENCY_CACHE_KEY_MATCH_PATTERN,
         'COUNT',
-        1000,
+        IDEMPOTENCY_SCAN_COUNT,
       );
       cursor = nextCursor;
       observedCount += keys.length;
@@ -65,6 +79,15 @@ export async function sampleIdempotencyCardinality(): Promise<IdempotencyCardina
         break;
       }
       if (cursor === '0') break;
+      if (iterations >= maxIterations) {
+        // Hit the round-trip guard before exhausting the keyspace — treat as truncated.
+        scanTruncated = true;
+        logger.warn(
+          { observedCount, iterations, maxIterations },
+          'idempotency.cardinality.scan.iteration_cap_reached',
+        );
+        break;
+      }
     }
   } catch (error) {
     logger.error({ error }, 'idempotency.cardinality.scan.failed');
