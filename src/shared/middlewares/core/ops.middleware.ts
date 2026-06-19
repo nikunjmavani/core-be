@@ -4,6 +4,7 @@ import { getEnv } from '@/shared/config/env.config.js';
 import {
   MANAGED_CIRCUIT_BREAKERS,
   type ManagedCircuitBreakerName,
+  snapshotManagedCircuitBreakers,
 } from '@/infrastructure/resilience/circuit-breaker.js';
 import { isBearerTokenValid } from '@/shared/utils/security/bearer-token.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -39,12 +40,7 @@ const opsMiddleware: FastifyPluginAsync = async (application) => {
     },
     async (request) => {
       requireOpsBearerToken(request.headers.authorization);
-      const circuits = await Promise.all(
-        Object.entries(MANAGED_CIRCUIT_BREAKERS).map(async ([name, circuitBreaker]) => ({
-          name,
-          state: await circuitBreaker.getState(),
-        })),
-      );
+      const circuits = await snapshotManagedCircuitBreakers();
       return { circuits };
     },
   );

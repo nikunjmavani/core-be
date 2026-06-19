@@ -192,6 +192,18 @@ const envSchemaBase = z.object({
    * Enable only for trusted internal ingress (LB-internal probes behind ACLs).
    */
   HEALTH_VERBOSE_BODY_ENABLED: booleanString('false'),
+  /**
+   * Opt-in (default off): when true, `/readyz` returns 503 if any managed external circuit breaker
+   * (Stripe/S3/Resend/Turnstile) is OPEN. Off by default so an external-dependency blip is reported
+   * as `degraded` in the body without pulling the API out of load-balancer rotation.
+   */
+  READYZ_503_ON_OPEN_CIRCUIT: booleanString('false'),
+  /**
+   * Opt-in (default 0 = disabled): when > 0, `/readyz` returns 503 if any throughput queue's
+   * `waiting` depth exceeds this value. Off by default — queue depth is reported as `degraded`
+   * without affecting load-balancer routing.
+   */
+  READYZ_QUEUE_DEPTH_503_THRESHOLD: z.coerce.number().int().min(0).default(0),
 
   // CORS (comma-separated origins; required in every runtime)
   ALLOWED_ORIGINS: isLocalRuntime
