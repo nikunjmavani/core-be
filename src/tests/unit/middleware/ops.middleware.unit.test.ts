@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const METRICS_TOKEN_FIXTURE = 'test-metrics-bearer-token-min-32-chars';
 
-vi.mock('@/infrastructure/resilience/circuit-breaker.js', () => ({
-  MANAGED_CIRCUIT_BREAKERS: {
+vi.mock('@/infrastructure/resilience/circuit-breaker.js', () => {
+  const MANAGED_CIRCUIT_BREAKERS = {
     stripe: {
       getState: vi.fn().mockResolvedValue('CLOSED'),
       reset: vi.fn().mockResolvedValue(undefined),
@@ -13,8 +13,20 @@ vi.mock('@/infrastructure/resilience/circuit-breaker.js', () => ({
       getState: vi.fn().mockResolvedValue('OPEN'),
       reset: vi.fn().mockResolvedValue(undefined),
     },
-  },
-}));
+  };
+  return {
+    MANAGED_CIRCUIT_BREAKERS,
+    // EX-03 routed the ops handler through this helper; mirror the real impl over the mocked breakers.
+    snapshotManagedCircuitBreakers: vi.fn(async () =>
+      Promise.all(
+        Object.entries(MANAGED_CIRCUIT_BREAKERS).map(async ([name, circuitBreaker]) => ({
+          name,
+          state: await circuitBreaker.getState(),
+        })),
+      ),
+    ),
+  };
+});
 
 const loggerWarnMock = vi.fn();
 vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
