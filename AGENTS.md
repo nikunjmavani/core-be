@@ -22,7 +22,8 @@ Before changing this repository:
 
 - **Cursor cloud agent** — Linux environments with full dev dependencies (separate from production image): **[docs/integrations/cursor-cloud-agent-environment.md](docs/integrations/cursor-cloud-agent-environment.md)**
 - **Claude Code on the web** — network access, setup script, env vars, Postgres/Redis: **[docs/integrations/claude-code-web-environment.md](docs/integrations/claude-code-web-environment.md)**
-- **Codex Cloud setup archive** — reference-only notes for removed setup attempts: **[docs/integrations/codex-cloud-agent-setup-archive.md](docs/integrations/codex-cloud-agent-setup-archive.md)**
+- **Codex local setup** — keep using the project-local `.codex/` hooks/MCP config and `~/.codex/prompts` command symlinks described below.
+- **Codex Cloud setup archive** — reference-only notes for removed cloud-session setup attempts: **[docs/integrations/codex-cloud-agent-setup-archive.md](docs/integrations/codex-cloud-agent-setup-archive.md)**
 - **Agent map** — skills, rules, subagents, MCP: **[docs/integrations/cursor-agent-system.md](docs/integrations/cursor-agent-system.md)**
 
 ## Custom subagents

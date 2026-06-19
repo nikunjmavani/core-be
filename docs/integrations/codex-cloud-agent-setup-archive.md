@@ -1,8 +1,10 @@
 # Codex Cloud Agent Setup Archive
 
-Reference-only notes for the Codex Cloud setup work attempted in June 2026.
-This is not an active setup guide, and no repo workflow should point Codex Cloud
-at this file as an executable source of truth.
+Reference-only notes for the Codex Cloud session setup work attempted in June
+2026. This is not an active setup guide, and no repo workflow should point Codex
+Cloud at this file as an executable source of truth. Local Codex support remains
+active through the project-local `.codex/` config, `agent-os/`, and the
+`~/.codex/prompts` command symlinks documented in `AGENTS.md`.
 
 ## Current decision
 
