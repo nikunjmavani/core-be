@@ -6,6 +6,18 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.9.1-dev.8](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.7...v4.9.1-dev.8) (2026-06-19)
+
+
+### Fixed
+
+* **seed:** idempotent demo seed helpers + smoke test status fixes ([#723](https://github.com/nikunjmavani/core-be/issues/723)) ([3d3a998](https://github.com/nikunjmavani/core-be/commit/3d3a998e169a7fc111ec1e9790f9ad10b90b1924))
+
+
+### Documentation
+
+* **load-testing:** document co-located load-generation caveat ([#722](https://github.com/nikunjmavani/core-be/issues/722)) ([1df13ae](https://github.com/nikunjmavani/core-be/commit/1df13aec72510e73763537c3615424bafc9d2f90))
+
 ## [4.9.1-dev.7](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.6...v4.9.1-dev.7) (2026-06-19)
 
 
