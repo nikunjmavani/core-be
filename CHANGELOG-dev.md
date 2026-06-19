@@ -6,6 +6,20 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.9.1-dev.7](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.6...v4.9.1-dev.7) (2026-06-19)
+
+
+### Documentation
+
+* archive Codex Cloud setup ([#719](https://github.com/nikunjmavani/core-be/issues/719)) ([831865e](https://github.com/nikunjmavani/core-be/commit/831865e05d9a770eabe031f638c18fac95889ca3))
+
+## [4.9.1-dev.6](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.5...v4.9.1-dev.6) (2026-06-19)
+
+
+### Fixed
+
+* use shared cloud agent docker fallback ([#716](https://github.com/nikunjmavani/core-be/issues/716)) ([7ab2c17](https://github.com/nikunjmavani/core-be/commit/7ab2c176ca2c58082e61c20b75c8b801ee3534a1))
+
 ## [4.9.1-dev.5](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.4...v4.9.1-dev.5) (2026-06-19)
 
 
