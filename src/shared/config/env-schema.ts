@@ -204,6 +204,12 @@ const envSchemaBase = z.object({
    * without affecting load-balancer routing.
    */
   READYZ_QUEUE_DEPTH_503_THRESHOLD: z.coerce.number().int().min(0).default(0),
+  /**
+   * RSS (resident memory) warning threshold in MB for both the API and worker processes. When a
+   * process exceeds it, a `process.rss.exceeds.threshold` warning is logged (sampled every 30s) —
+   * an early leak signal alongside the Prometheus `process_resident_memory_bytes` gauge.
+   */
+  PROCESS_RSS_WARN_THRESHOLD_MB: z.coerce.number().int().min(64).default(512),
 
   // CORS (comma-separated origins; required in every runtime)
   ALLOWED_ORIGINS: isLocalRuntime

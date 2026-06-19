@@ -13,6 +13,7 @@ import { assertDatabaseRoleRlsSafety } from '@/infrastructure/database/safety/as
 import { assertDatabaseTlsVerification } from '@/infrastructure/database/safety/assert-database-tls-safety.js';
 import { assertRedisTlsVerification } from '@/infrastructure/cache/assert-redis-tls-safety.js';
 import { registerPostgresPoolMetrics } from '@/infrastructure/observability/metrics/db-pool-metrics.js';
+import { startProcessMemoryMonitoring } from '@/shared/utils/infrastructure/process-memory-monitor.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { assertHostedTrustProxyConfigured } from '@/shared/utils/http/trust-proxy.util.js';
@@ -65,6 +66,10 @@ async function main() {
   await assertPostgresConnectionBudget();
   await assertDatabaseRoleRlsSafety();
   registerPostgresPoolMetrics();
+  startProcessMemoryMonitoring({
+    processLabel: 'api',
+    thresholdMegabytes: env.PROCESS_RSS_WARN_THRESHOLD_MB,
+  });
 
   logger.info(
     { DATABASE_POOL_MAX: env.DATABASE_POOL_MAX },

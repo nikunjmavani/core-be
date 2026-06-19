@@ -1500,6 +1500,7 @@ src/
     │   │   ├── logger.util.ts
     │   │   ├── media-url.util.ts
     │   │   ├── postgres-error.util.ts
+    │   │   ├── process-memory-monitor.util.ts
     │   │   ├── readiness-probe-timeout.util.ts
     │   │   ├── readiness-probes.util.ts
     │   │   ├── redis-counter.util.ts
@@ -2068,6 +2069,7 @@ src/
     │   │   │   ├── list-cap.util.unit.test.ts
     │   │   │   ├── logger.util.unit.test.ts
     │   │   │   ├── postgres-error.util.unit.test.ts
+    │   │   │   ├── process-memory-monitor.util.unit.test.ts
     │   │   │   ├── readiness-probe-timeout.util.unit.test.ts
     │   │   │   ├── readiness-probes.util.unit.test.ts
     │   │   │   └── timeout-error.util.unit.test.ts
