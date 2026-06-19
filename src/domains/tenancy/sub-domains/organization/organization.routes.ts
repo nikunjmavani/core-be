@@ -298,7 +298,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
         // single Admin role-holder (or a hijacked session for one) cannot churn
         // unbounded API key rows. Parity with sec-r4-I2 / sec-r4-I3 on every
         // other org-scoped mutation.
-        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
+        config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         schema: {
           summary: 'Create API key',
           description:
@@ -399,7 +399,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
         // with no enum constraint and no per-org row cap, so without this
         // limiter an Admin-role-holder could churn policies and flap
         // downstream notification routing. Parity with sec-r4-I2.
-        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
+        config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         schema: {
           summary: 'Create notification policy',
           description:

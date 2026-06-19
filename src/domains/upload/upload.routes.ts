@@ -17,7 +17,7 @@ export const uploadRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/',
     {
       onRequest: [app.authenticate],
-      ...MODERATE_AUTHED_RATE_LIMIT,
+      config: { idempotencyRequired: true, ...MODERATE_AUTHED_RATE_LIMIT.config },
       schema: {
         summary: 'Request pre-signed upload URL',
         description:

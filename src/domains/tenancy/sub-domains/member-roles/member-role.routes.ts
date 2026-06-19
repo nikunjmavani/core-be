@@ -67,7 +67,7 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
         // sec-r4-I2 / sec-r4-I3 on every other org-scoped mutation. The
         // sec-r4-D4 .limit(256) on `findByRoleId` already caps per-role read
         // memory; this caps the rate at which new rows can be created.
-        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
+        config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_MANAGE)],
         schema: {

@@ -82,7 +82,7 @@ export function webhookRoutes(
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_MANAGE)],
-        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
+        config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         schema: {
           summary: 'Create webhook',
           description:
