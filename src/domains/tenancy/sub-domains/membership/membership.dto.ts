@@ -2,6 +2,13 @@ import { z } from 'zod';
 import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
+/** Zod schema for the `:membership_id` path param (get/get-permissions/update/delete membership). */
+export const membershipIdParamsDto = z
+  .object({
+    membership_id: trimmedStringMinMax(1, 28),
+  })
+  .strict();
+
 /**
  * Zod schema for the `POST /organization/memberships` request body.
  * Identifies the user and role by public id and optionally pre-sets the
