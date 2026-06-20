@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.9.1-dev.12](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.11...v4.9.1-dev.12) (2026-06-20)
+
+
+### Fixed
+
+* **idempotency:** enforce 16-char min key and document all 13 required writes ([#735](https://github.com/nikunjmavani/core-be/issues/735)) ([606edbb](https://github.com/nikunjmavani/core-be/commit/606edbba19a7c5234b72f1f46b036b9187d06794))
+
 ## [4.9.1-dev.11](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.10...v4.9.1-dev.11) (2026-06-20)
 
 
