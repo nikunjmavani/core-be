@@ -9,7 +9,9 @@ non-production integration is `dev`. This command is intentionally scoped to
 that branch pair only.
 
 Follow the durable workflow documentation in
-[`agent-os/docs/commands/release-dev-to-production.md`](../docs/commands/release-dev-to-production.md).
+[`agent-os/docs/commands/release-dev-to-production.md`](../docs/commands/release-dev-to-production.md)
+— it defines the enforcement gates, the Handoff Summary format, and how to force
+a specific version.
 
 Use the PR title **$ARGUMENTS** if provided; otherwise use today's local date
 in `YYYY-MM-DD` format:
@@ -21,8 +23,9 @@ Hard stops:
 - Do not target any production branch except `main`.
 - Do not force-push.
 - Do not push directly to `dev` or `main`; all branch updates go through PRs.
-- Do not merge the final `dev` → `main` release PR unless required checks are
-  green and required review/approval rules are satisfied.
+- Do not merge the final `dev` → `main` release PR yourself — drive it to
+  merge-ready and hand off to the user with the Handoff Summary (see docs); the
+  user performs the merge.
 - Do not squash any PR whose purpose is to merge `main` ancestry into `dev`;
   those PRs must use the merge-commit method.
 
@@ -71,15 +74,19 @@ Workflow summary:
    requests a different release-version policy.
 10. Watch all release PR checks. For failures, inspect logs, identify the root
     cause, and fix only issues introduced by the release merge.
-11. When checks are green but review is required, stop and report the exact
-    approval blocker.
-12. When checks and reviews are satisfied, merge the final `dev` → `main` PR
-    using the repo's configured production merge method.
-13. After merge, fetch `main` and report:
+11. When required checks are green and the PR is mergeable, **stop — do not
+    merge**. Emit the Handoff Summary (see docs) and ask the user to merge the
+    release PR with a **merge commit**. Never merge it yourself, never use the
+    admin bypass to merge on their behalf, never self-approve. If review is
+    pending, name the exact blocker.
+12. After the user confirms the merge, fetch `main` and verify the automatic
+    cascade: release-please tag + GitHub Release, Railway prod deploy +
+    post-deploy `/readyz` smoke, automatic `main` → `dev` back-merge.
+13. Report:
     - release PR URL
-    - merge commit
+    - merge commit (performed by the user)
     - final checks/review status
-    - whether any follow-up release-please PR was opened on `main`
+    - release-please + deploy + back-merge status
 
 Final report format:
 
