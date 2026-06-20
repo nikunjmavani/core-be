@@ -37,6 +37,7 @@ let processUnhandledRejectionsTotal: Counter<'process'> | null = null;
 let eventBusHandlerFailuresTotal: Counter<'event_type'> | null = null;
 let commitDispatchDurabilityFallbacksTotal: Counter | null = null;
 
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: single registration site for all Prometheus instruments — boilerplate, intentionally long
 function registerOn(registry: Registry): void {
   httpRequestsTotal = new Counter({
     name: 'http_requests_total',

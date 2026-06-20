@@ -55,8 +55,25 @@ export function formatResponsePayload(
   return { data: payload, meta: { request_id: context.requestId } };
 }
 
+/**
+ * Non-API UI mounts (Scalar docs at `/reference`, Bull Board at `/admin/queues`) serve their
+ * own JSON shapes that their front-ends parse directly. Wrapping those in the Paddle
+ * `{ data, meta }` envelope breaks them — the docs page reports "Document could not be loaded"
+ * and Bull Board cannot read its queue data. The public API surface (which the envelope is for)
+ * lives under `/api/`, so exempting these doc/admin subtrees is safe.
+ */
+const ENVELOPE_EXEMPT_PREFIXES = ['/reference', '/admin/queues'] as const;
+
+function isEnvelopeExemptPath(url: string): boolean {
+  const path = url.split('?')[0] ?? url;
+  return ENVELOPE_EXEMPT_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+  );
+}
+
 const responseFormatMiddleware: FastifyPluginAsync = async (app) => {
   app.addHook('onSend', async (request, reply, payload) => {
+    if (isEnvelopeExemptPath(request.url)) return payload;
     const config = (reply.routeOptions?.config ?? {}) as RouteConfig;
     return formatResponsePayload(payload, {
       statusCode: reply.statusCode,

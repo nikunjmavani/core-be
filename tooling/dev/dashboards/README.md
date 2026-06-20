@@ -1,0 +1,34 @@
+# Local dashboards (dev tooling)
+
+A one-command **control room** for the running core-be stack — open every local dashboard
+from one page, with no browser extension.
+
+```sh
+pnpm dashboards:up        # Postgres/Redis/Sonar + API/worker/Studio + this hub (detached)
+pnpm dashboards:status    # live status + links (read-only)
+pnpm dashboards:down      # stop the node processes (--all also stops the containers)
+pnpm dashboards:restart
+pnpm dashboards:proxy     # just the auth proxy + hub (when the stack is already running)
+```
+
+Then open **<http://localhost:3010/>**.
+
+## Files
+
+| File | Role |
+| ---- | ---- |
+| `cli.sh` | Orchestrator — starts/stops the stack (detached) and prints status. |
+| `proxy.mjs` | Auth proxy on `:3010` — serves the hub, injects tokens so the gated dashboards (`/metrics`, `/admin/queues`) open in any browser, and exposes `/_status`, `/_worker/*`, `/_hub/tw.js`. |
+| `hub.html` | The single-page UI (Tailwind + shadcn light/dark theme). Read live by the proxy — edit and refresh, no restart. |
+| `mcp.mjs` | MCP server exposing the stack as read-only tools (`local_stack_status`, `local_worker_health`, `local_queue_stats`, `local_metrics`). Registered as the on-demand `dashboards` server in `.mcp.example.json`. |
+| `tailwind.js` | Vendored Tailwind Play CDN (gitignored, regenerable). |
+
+## Notes
+
+- The proxy injects the `METRICS_SCRAPE_TOKEN` and a self-refreshing super_admin JWT, so the
+  token-gated dashboards open in a plain browser navigation.
+- Vendored Tailwind is gitignored; fetch it once if missing (the proxy prints this hint):
+  `curl -fsSL https://cdn.tailwindcss.com -o tooling/dev/dashboards/tailwind.js`.
+- Logs and pidfiles live in `.dashboards/` at the repo root (gitignored).
+- The MCP server reads from the proxy on `:3010`, so run `pnpm dashboards:up` first; its tools
+  return a clear hint if the proxy is not running.
