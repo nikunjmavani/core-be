@@ -7,7 +7,6 @@ export {
 export {
   outboundFetch,
   buildOutboundFetchOptions,
-  buildOutboundFetchLogContext,
   type OutboundFetchOptions,
   type OutboundFetchImplementation,
 } from '@/infrastructure/outbound/outbound-fetch.js';
