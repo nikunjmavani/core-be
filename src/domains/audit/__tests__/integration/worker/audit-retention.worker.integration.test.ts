@@ -86,6 +86,54 @@ describe('audit-retention.worker — purge', () => {
     expect(remaining[0]?.action).toBe('user.login.recent');
   });
 
+  it('applies a strict cutoff at second resolution — keeps a boundary row, deletes one just past it', async () => {
+    // Off-by-one guard: the comparator is `created_at < cutoff` (strict). A flip to `<=`,
+    // a wrong unit, a sign error, or a timezone/day-arithmetic slip would silently destroy
+    // or retain a full day of the compliance trail. The coarse `-1 day` case above cannot
+    // see that; pin the boundary at second resolution. cutoff = now - AUDIT_RETENTION_DAYS,
+    // computed exactly as the job does.
+    const user = await createTestUser();
+    const retentionDays = env.AUDIT_RETENTION_DAYS;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - retentionDays);
+    // 1s older than the cutoff -> must be deleted. The job recomputes its cutoff a few ms
+    // later, which only pushes this row further past the boundary (never the other way).
+    const justPastCutoff = new Date(cutoff.getTime() - 1_000);
+    // 30s newer than the cutoff -> must be kept. The 30s margin dwarfs the job's
+    // compute/enqueue delay, so the keep assertion is not racy.
+    const justInsideRetention = new Date(cutoff.getTime() + 30_000);
+
+    await ensureAuditLogPartitionsForTimestamps([justPastCutoff, justInsideRetention]);
+
+    await withGlobalRetentionCleanupDatabaseContext(async (databaseHandle) => {
+      await databaseHandle.insert(logs).values([
+        {
+          actor_user_id: user.id,
+          action: 'user.login.just_past_cutoff',
+          resource_type: 'user',
+          created_at: justPastCutoff,
+        },
+        {
+          actor_user_id: user.id,
+          action: 'user.login.just_inside_retention',
+          resource_type: 'user',
+          created_at: justInsideRetention,
+        },
+      ]);
+    });
+
+    const jobId = `audit-retention-${randomUUID()}`;
+    const completion = waitForJobCompletion(queueEvents!, jobId);
+    await queue!.add('cleanup-old-logs', {}, { jobId, attempts: 1 });
+    await completion;
+
+    const remaining = await withGlobalRetentionCleanupDatabaseContext(async (databaseHandle) =>
+      databaseHandle.select().from(logs),
+    );
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]?.action).toBe('user.login.just_inside_retention');
+  });
+
   it('deletes dead-letter ledger rows older than the retention cutoff (bounds unbounded growth)', async () => {
     const retentionDays = env.AUDIT_RETENTION_DAYS;
     const staleFailedAt = new Date();
