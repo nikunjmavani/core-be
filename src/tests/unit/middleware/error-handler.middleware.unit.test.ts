@@ -286,10 +286,13 @@ describe('error-handler.middleware', () => {
     application = await createErrorHandlerApp();
     const response = await application.inject({ method: 'GET', url: '/does-not-exist' });
     const documentationUrl = response.json().error.documentation_url;
-    expect(documentationUrl).not.toContain('docs.example.com');
     if (env.API_DOCS_BASE_URL) {
+      // Configured: the link is derived from the base and is never the old fake domain.
       expect(documentationUrl).toBe(`${env.API_DOCS_BASE_URL}/not_found`);
+      expect(documentationUrl).not.toContain('docs.example.com');
     } else {
+      // Unset (e.g. CI, where API_DOCS_BASE_URL is not provided): the field is omitted
+      // entirely rather than emitting a fake `docs.example.com` link.
       expect(documentationUrl).toBeUndefined();
     }
   });
