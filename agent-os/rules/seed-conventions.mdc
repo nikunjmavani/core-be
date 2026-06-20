@@ -54,7 +54,10 @@ The contract lives in `src/scripts/seed/seed-contract.ts`.
 
 ## Idempotency (required)
 
-- Re-running any tier must not duplicate rows. Use deterministic natural keys (slug/email derived from faker + index) plus either count-and-resume (create only indices beyond what already exists) or `onConflictDoNothing()`.
+- Re-running any tier must not duplicate rows. Two conflict-handling patterns:
+  - **`onConflictDoNothing()`** — default for bulk rows, reference codes, and join tables where existing data is the source of truth.
+  - **`onConflictDoUpdate({ target, set })`** — required for demo seed helpers where fields must stay current on re-run (e.g. `password_hash`, `first_name`, `last_name` in `seedUser`; `name` in `seedOrganization`). For unique indexes defined with a `WHERE` clause (partial indexes), supply `targetWhere: sql\`${table.deleted_at} IS NULL\`` so Drizzle resolves the correct index.
+- Use count-and-resume (create only indices beyond what already exists) as an alternative for ordered bulk rows.
 - High-count tables (`audit.logs`, notifications) use batched multi-row inserts with `ON CONFLICT DO NOTHING`.
 - Pin faker with `SEED` for reproducible runs (`initFakerSeed()`).
 

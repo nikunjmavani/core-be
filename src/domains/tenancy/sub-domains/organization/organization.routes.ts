@@ -28,12 +28,14 @@ import {
 } from './organization.dto.js';
 import { updateOrganizationSettingsDto } from './organization-settings/organization-settings.dto.js';
 import {
+  apiKeyIdParamsDto,
   createOrganizationApiKeyDto,
   listOrganizationApiKeysQueryDto,
   updateOrganizationApiKeyDto,
 } from './organization-api-key/organization-api-key.dto.js';
 import {
   createOrganizationNotificationPolicyDto,
+  notificationPolicyIdParamsDto,
   updateOrganizationNotificationPolicyDto,
 } from './organization-notification-policy/organization-notification-policy.dto.js';
 
@@ -284,6 +286,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           summary: 'Get API key',
           description: 'Returns a single API key by ID. Requires API_KEY_READ permission.',
           tags: ['API Key'],
+          params: apiKeyIdParamsDto,
         },
       },
       apiKeyController.getApiKey,
@@ -295,7 +298,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
         // single Admin role-holder (or a hijacked session for one) cannot churn
         // unbounded API key rows. Parity with sec-r4-I2 / sec-r4-I3 on every
         // other org-scoped mutation.
-        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
+        config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         schema: {
           summary: 'Create API key',
           description:
@@ -317,6 +320,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           summary: 'Update API key',
           description: 'Updates an API key (name or status). Requires API_KEY_MANAGE permission.',
           tags: ['API Key'],
+          params: apiKeyIdParamsDto,
           body: updateOrganizationApiKeyDto,
         },
         onRequest: [app.authenticate],
@@ -335,6 +339,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           summary: 'Delete API key',
           description: 'Permanently deletes an API key. Requires API_KEY_MANAGE permission.',
           tags: ['API Key'],
+          params: apiKeyIdParamsDto,
         },
       },
       apiKeyController.deleteApiKey,
@@ -350,6 +355,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           description:
             'Regenerates the API key secret. The old key is immediately invalidated. Requires a user principal with API_KEY_MANAGE permission.',
           tags: ['API Key'],
+          params: apiKeyIdParamsDto,
         },
       },
       apiKeyController.rotateApiKey,
@@ -380,6 +386,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           description:
             'Returns a single notification policy. Requires NOTIFICATION_POLICY_READ permission.',
           tags: ['Notification Policy'],
+          params: notificationPolicyIdParamsDto,
         },
       },
       notificationPolicyController.getPolicy,
@@ -392,7 +399,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
         // with no enum constraint and no per-org row cap, so without this
         // limiter an Admin-role-holder could churn policies and flap
         // downstream notification routing. Parity with sec-r4-I2.
-        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
+        config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         schema: {
           summary: 'Create notification policy',
           description:
@@ -415,6 +422,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           description:
             'Updates a notification policy. Requires NOTIFICATION_POLICY_MANAGE permission.',
           tags: ['Notification Policy'],
+          params: notificationPolicyIdParamsDto,
           body: updateOrganizationNotificationPolicyDto,
         },
         onRequest: [app.authenticate],
@@ -434,6 +442,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
           description:
             'Deletes a notification policy. Requires NOTIFICATION_POLICY_MANAGE permission.',
           tags: ['Notification Policy'],
+          params: notificationPolicyIdParamsDto,
         },
       },
       notificationPolicyController.deletePolicy,

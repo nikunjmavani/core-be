@@ -18,6 +18,9 @@ async function getOperationalMetricsForReadiness() {
       draining: isApplicationDraining(),
       worker_queues: [],
       worker_queue_manifest: getWorkerQueueOperationalManifest(),
+      circuit_breakers: [],
+      queue_depths: [],
+      degraded: false,
     };
   }
 }
@@ -47,21 +50,39 @@ async function handleReadinessProbe(reply: FastifyReply) {
   // reeling"; the manifest reveals worker topology. Default OFF; operators
   // explicitly opt in via `HEALTH_VERBOSE_BODY_ENABLED=true` for trusted
   // ingress paths (LB-internal probes behind network ACLs).
-  if (!env.HEALTH_VERBOSE_BODY_ENABLED) {
-    const readiness = await getCachedDependencyReadinessProbes();
-    if (readiness.status !== 'ok') {
-      reply.status(503);
-    }
-    return readiness;
-  }
+  // Operational metrics (breaker state + queue depth) are needed to render the verbose body OR to
+  // evaluate the opt-in 503 thresholds; otherwise the hot path stays at just the dependency probes.
+  const optInChecksEnabled =
+    env.READYZ_503_ON_OPEN_CIRCUIT || env.READYZ_QUEUE_DEPTH_503_THRESHOLD > 0;
+  const needOperational = env.HEALTH_VERBOSE_BODY_ENABLED || optInChecksEnabled;
+
   const [readiness, operational] = await Promise.all([
     getCachedDependencyReadinessProbes(),
-    getOperationalMetricsForReadiness(),
+    needOperational ? getOperationalMetricsForReadiness() : Promise.resolve(null),
   ]);
-  if (readiness.status !== 'ok') {
+
+  // Postgres/Redis/BullMQ always gate readiness. External breaker state / queue depth are
+  // informational by default (reported as `degraded`); operators may OPT IN to also 503 on them
+  // so an email/storage blip does not pull the whole API out of load-balancer rotation by default.
+  let shouldFail = readiness.status !== 'ok';
+  if (operational && optInChecksEnabled) {
+    if (env.READYZ_503_ON_OPEN_CIRCUIT && operational.degraded) {
+      shouldFail = true;
+    }
+    if (
+      env.READYZ_QUEUE_DEPTH_503_THRESHOLD > 0 &&
+      operational.queue_depths.some((depth) => depth.waiting > env.READYZ_QUEUE_DEPTH_503_THRESHOLD)
+    ) {
+      shouldFail = true;
+    }
+  }
+  if (shouldFail) {
     reply.status(503);
   }
-  return { ...readiness, ...operational };
+
+  return env.HEALTH_VERBOSE_BODY_ENABLED && operational
+    ? { ...readiness, ...operational }
+    : readiness;
 }
 
 /**

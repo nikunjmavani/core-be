@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import { createTestApp } from '@/tests/helpers/test-app.js';
@@ -36,6 +37,9 @@ describe('Upload Domain — Integration', () => {
         method: 'POST',
         url: testApiPath('/uploads'),
         payload: {},
+        // POST /uploads is idempotencyRequired; without a key the global onRequest hook returns 422
+        // before auth. Supply one so this exercises the auth 401 it intends to assert.
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
       });
       expect(response.statusCode).toBe(401);
     });

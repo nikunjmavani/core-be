@@ -3,6 +3,7 @@ import { AppError } from '@/shared/errors/app.error.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { encryptPayload } from '@/shared/utils/security/encryption.util.js';
+import { resolveActiveResponseEncryptionKey } from '@/shared/utils/security/response-encryption-keyring.util.js';
 
 interface RouteConfig {
   raw_response?: boolean;
@@ -17,8 +18,9 @@ const API_PATH_PREFIX = '/api/';
  * When enabled via ENABLE_RESPONSE_ENCRYPTION, all JSON responses under /api/
  * are encrypted so they appear as unreadable ciphertext in Chrome DevTools.
  *
- * Encrypted envelope: `{ _encrypted: true, payload: "<base64>", iv: "<base64>", authTag: "<base64>" }`
- * (clients decrypt with Web Crypto AES-GCM; see encryption.util.ts).
+ * Encrypted envelope: `{ _encrypted: true, kid: "v1", payload: "<base64>", iv: "<base64>", authTag: "<base64>" }`
+ * (clients decrypt with Web Crypto AES-GCM; see encryption.util.ts). The `kid` selects which keyring
+ * key the client decrypts with, enabling zero-downtime `RESPONSE_ENCRYPTION_KEYS` rotation.
  *
  * Skips:
  *  - Non-API routes (health checks, queue dashboard, static files)
@@ -29,15 +31,12 @@ const API_PATH_PREFIX = '/api/';
 const encryptionMiddleware: FastifyPluginAsync = async (application) => {
   if (!env.ENABLE_RESPONSE_ENCRYPTION) return;
 
-  if (!env.RESPONSE_ENCRYPTION_KEY) {
-    throw new Error(
-      'RESPONSE_ENCRYPTION_KEY is required when ENABLE_RESPONSE_ENCRYPTION is enabled',
-    );
-  }
+  // Resolve the active write key + its kid once at registration (boot). Throws here — not on the
+  // first request — when no key source is configured for the current version or the keyring is
+  // malformed, mirroring the field-secret keyring's fail-at-boot contract.
+  const { kid, keyHex: encryptionKey } = resolveActiveResponseEncryptionKey();
 
-  const encryptionKey = env.RESPONSE_ENCRYPTION_KEY;
-
-  logger.info('Response encryption middleware enabled');
+  logger.info({ kid }, 'Response encryption middleware enabled');
 
   application.addHook('onSend', async (request, reply, payload) => {
     if (!request.url.startsWith(API_PATH_PREFIX)) return payload;
@@ -56,6 +55,7 @@ const encryptionMiddleware: FastifyPluginAsync = async (application) => {
       const encrypted = encryptPayload(payload, encryptionKey);
       return JSON.stringify({
         _encrypted: true,
+        kid,
         payload: encrypted.payload,
         iv: encrypted.iv,
         authTag: encrypted.authTag,

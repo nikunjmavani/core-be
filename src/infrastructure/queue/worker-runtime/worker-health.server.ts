@@ -6,8 +6,12 @@ import {
 } from '@/infrastructure/observability/metrics/metrics.js';
 import { env, getEnv } from '@/shared/config/env.config.js';
 import { isBearerTokenValid } from '@/shared/utils/security/bearer-token.util.js';
-import { MONITORED_BULLMQ_QUEUE_NAMES } from '@/infrastructure/observability/metrics/bullmq-metrics.js';
 import {
+  getQueuesWaitingJobCount,
+  MONITORED_BULLMQ_QUEUE_NAMES,
+} from '@/infrastructure/observability/metrics/bullmq-metrics.js';
+import {
+  isWorkerStalled,
   isWorkerThroughputStalled,
   readWorkerQueueHeartbeats,
   WORKER_THROUGHPUT_QUEUE_NAMES,
@@ -91,10 +95,27 @@ async function handleReadinessProbe(response: http.ServerResponse): Promise<void
     readWorkerQueueHeartbeats(MONITORED_BULLMQ_QUEUE_NAMES),
     readWorkerQueueHeartbeats(WORKER_THROUGHPUT_QUEUE_NAMES),
   ]);
-  const stalled = isWorkerThroughputStalled(
+  const throughputStalled = isWorkerThroughputStalled(
     throughputHeartbeats,
     env.WORKER_HEALTH_STALL_TIMEOUT_MS,
   );
+  // A worker is only "stalled" when heartbeats are stale AND there is queued work waiting — an
+  // idle worker with an empty queue is healthy. Queue depth is read only when heartbeats are
+  // already stale, so the healthy hot path adds no Redis round-trip; a depth-read failure fails
+  // safe to "work exists" so a genuine stall is still surfaced.
+  let throughputWaiting = 0;
+  if (throughputStalled) {
+    try {
+      throughputWaiting = await getQueuesWaitingJobCount(WORKER_THROUGHPUT_QUEUE_NAMES);
+    } catch (error) {
+      logger.warn({ error }, 'worker.health.throughput_waiting.failed');
+      throughputWaiting = 1;
+    }
+  }
+  const stalled = isWorkerStalled({
+    isThroughputStalled: throughputStalled,
+    waitingJobCount: throughputWaiting,
+  });
   const processReady = workerReady && !stalled && readiness.status === 'ok';
   const status = resolveWorkerHealthStatus({
     isReady: workerReady,
@@ -111,6 +132,7 @@ async function handleReadinessProbe(response: http.ServerResponse): Promise<void
     latencyMs: readiness.latencyMs,
     workersRegistered: registeredWorkerCount,
     worker_queues,
+    throughput_waiting: throughputWaiting,
   });
 }
 

@@ -192,6 +192,24 @@ const envSchemaBase = z.object({
    * Enable only for trusted internal ingress (LB-internal probes behind ACLs).
    */
   HEALTH_VERBOSE_BODY_ENABLED: booleanString('false'),
+  /**
+   * Opt-in (default off): when true, `/readyz` returns 503 if any managed external circuit breaker
+   * (Stripe/S3/Resend/Turnstile) is OPEN. Off by default so an external-dependency blip is reported
+   * as `degraded` in the body without pulling the API out of load-balancer rotation.
+   */
+  READYZ_503_ON_OPEN_CIRCUIT: booleanString('false'),
+  /**
+   * Opt-in (default 0 = disabled): when > 0, `/readyz` returns 503 if any throughput queue's
+   * `waiting` depth exceeds this value. Off by default — queue depth is reported as `degraded`
+   * without affecting load-balancer routing.
+   */
+  READYZ_QUEUE_DEPTH_503_THRESHOLD: z.coerce.number().int().min(0).default(0),
+  /**
+   * RSS (resident memory) warning threshold in MB for both the API and worker processes. When a
+   * process exceeds it, a `process.rss.exceeds.threshold` warning is logged (sampled every 30s) —
+   * an early leak signal alongside the Prometheus `process_resident_memory_bytes` gauge.
+   */
+  PROCESS_RSS_WARN_THRESHOLD_MB: z.coerce.number().int().min(64).default(512),
 
   // CORS (comma-separated origins; required in every runtime)
   ALLOWED_ORIGINS: isLocalRuntime
@@ -287,6 +305,12 @@ const envSchemaBase = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
   /** Stripe Node client per-request HTTP timeout (ms). */
   STRIPE_HTTP_TIMEOUT_MS: z.coerce.number().int().min(1000).max(180_000).default(30_000),
+  /**
+   * Tolerance (seconds) for the Stripe webhook signature timestamp check. A wider window lets
+   * Stripe's retries — which carry the original event timestamp — still verify after a short API
+   * outage instead of being rejected as stale. Stripe's SDK default is 300s; bounded to [150, 600].
+   */
+  STRIPE_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().min(150).max(600).default(300),
 
   // Sentry
   SENTRY_DSN: z.url().optional(),
@@ -395,8 +419,17 @@ const envSchemaBase = z.object({
    * Use split services in production so each process pool budget matches its registered workers.
    */
   WORKER_QUEUE_FAMILIES: z.string().min(1).default('all'),
-  /** Postgres pool size per Node process (postgres-js `max`). Not the cluster-wide total. Default 10. */
-  DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
+  /**
+   * Postgres pool size per Node process (postgres-js `max`). Not the cluster-wide total. Default 20.
+   *
+   * Each HTTP request runs in its own RLS transaction holding one pooled connection for its
+   * duration, so the pool size is the per-process in-flight DB concurrency ceiling. The default
+   * was raised 10 → 20 to lift that ceiling under burst; the cluster-wide budget
+   * `(api + worker replicas) × DATABASE_POOL_MAX ≤ max_connections − reserved` is still enforced
+   * fail-closed at boot by `assertPostgresConnectionBudget`. Raise further on larger Postgres
+   * instances; see docs/deployment/runbooks/resource-limits.md.
+   */
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(20),
   /** Connections reserved for admin, migrations, and monitoring (subtracted from Postgres max_connections). */
   POSTGRES_RESERVED_CONNECTIONS: z.coerce.number().int().min(1).default(10),
   /** Override when SHOW max_connections is unavailable or wrong (e.g. behind pooler). */
@@ -504,6 +537,12 @@ const envSchemaBase = z.object({
   WEBHOOK_DELIVERY_ATTEMPT_RETENTION_CRON: z.string().min(1).optional(),
   STRIPE_WEBHOOK_EVENT_RECLAIM_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(100),
   STRIPE_WEBHOOK_EVENT_RECLAIM_CRON: z.string().min(1).optional(),
+  /** Lookback window (minutes) for the Stripe catch-up worker's `events.list` poll. */
+  STRIPE_WEBHOOK_EVENT_CATCHUP_WINDOW_MINUTES: z.coerce.number().int().min(5).max(1440).default(60),
+  /** Max events fetched per Stripe catch-up `events.list` page (Stripe caps at 100). */
+  STRIPE_WEBHOOK_EVENT_CATCHUP_PAGE_SIZE: z.coerce.number().int().min(1).max(100).default(100),
+  /** Cron for the Stripe catch-up sweep; omit to use the default (every 15 min). */
+  STRIPE_WEBHOOK_EVENT_CATCHUP_CRON: z.string().min(1).optional(),
   /** Daily audit cold export to S3 (disabled when S3_BUCKET unset). */
   AUDIT_EXPORT_ENABLED: z
     .string()
@@ -669,6 +708,18 @@ const envSchemaBase = z.object({
     .default('false')
     .transform((v) => v === 'true' || v === '1'),
   RESPONSE_ENCRYPTION_KEY: z.string().length(64).optional(), // 64 hex chars = 32 bytes for AES-256
+  /**
+   * Optional version→hex keyring (JSON object, e.g. `{"v1":"<hex>","v2":"<hex>"}`) enabling
+   * zero-downtime rotation of the response-encryption key. Each envelope carries its `kid`, so the
+   * client decrypts with the matching key; unset preserves the single `RESPONSE_ENCRYPTION_KEY`
+   * (`v1`) path exactly.
+   */
+  RESPONSE_ENCRYPTION_KEYS: z.string().min(1).optional(),
+  /**
+   * Response-encryption version used when ENCRYPTING responses (default `v1`). Decryption is keyed by
+   * the envelope's own `kid`, so this only selects the write key during a keyring rotation.
+   */
+  RESPONSE_ENCRYPTION_CURRENT_VERSION: z.enum(['v1', 'v2']).optional().default('v1'),
   /** AES-256-GCM key for MFA/webhook secrets at rest (64 hex chars). Required in every runtime. */
   SECRETS_ENCRYPTION_KEY: z
     .string()
@@ -982,19 +1033,25 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
-      // sec-C11: ENABLE_RESPONSE_ENCRYPTION must be paired with
-      // RESPONSE_ENCRYPTION_KEY. Other pairings (METRICS_ENABLED, CAPTCHA_*)
-      // enforce this at the schema; this one was previously enforced at
-      // `buildApp()` runtime, so a deploy without the key would crash on
-      // first request instead of failing config validation at boot.
+      // sec-C11: ENABLE_RESPONSE_ENCRYPTION must be paired with a key source —
+      // either the single RESPONSE_ENCRYPTION_KEY or a RESPONSE_ENCRYPTION_KEYS
+      // keyring (for kid-based rotation). Other pairings (METRICS_ENABLED,
+      // CAPTCHA_*) enforce this at the schema; this one was previously enforced
+      // at `buildApp()` runtime, so a deploy without the key would crash on
+      // first request instead of failing config validation at boot. The deeper
+      // "keyring contains the current version" check lives in the resolver
+      // (resolveActiveResponseEncryptionKey), which also runs at boot.
       if (!data.ENABLE_RESPONSE_ENCRYPTION) return true;
-      return (
-        typeof data.RESPONSE_ENCRYPTION_KEY === 'string' && data.RESPONSE_ENCRYPTION_KEY.length > 0
-      );
+      const hasSingleKey =
+        typeof data.RESPONSE_ENCRYPTION_KEY === 'string' && data.RESPONSE_ENCRYPTION_KEY.length > 0;
+      const hasKeyring =
+        typeof data.RESPONSE_ENCRYPTION_KEYS === 'string' &&
+        data.RESPONSE_ENCRYPTION_KEYS.length > 0;
+      return hasSingleKey || hasKeyring;
     },
     {
       message:
-        'RESPONSE_ENCRYPTION_KEY (64 hex chars / 32 bytes for AES-256) is required when ENABLE_RESPONSE_ENCRYPTION=true.',
+        'RESPONSE_ENCRYPTION_KEY (64 hex chars / 32 bytes for AES-256) or a RESPONSE_ENCRYPTION_KEYS keyring is required when ENABLE_RESPONSE_ENCRYPTION=true.',
       path: ['RESPONSE_ENCRYPTION_KEY'],
     },
   )

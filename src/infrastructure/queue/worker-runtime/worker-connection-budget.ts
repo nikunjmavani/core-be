@@ -49,8 +49,23 @@ export type WorkerPostgresPoolDemandReport = {
    * making outbound HTTP/S3/Resend calls. Slow externals here translate to pool starvation.
    */
   readonly peakPostgresConcurrencyHoldingExternalIo: number;
+  /**
+   * `peakPostgresConcurrency` inflated by {@link WORKER_POSTGRES_POOL_SAFETY_MARGIN} (rounded up) —
+   * the pool size that leaves burst headroom so simultaneous queue spikes do not exhaust checkouts.
+   * Advisory: boot still fails only on the raw `peakPostgresConcurrency`, but the budget assertion
+   * warns when this margin-adjusted demand exceeds `DATABASE_POOL_MAX` so operators add headroom
+   * before a burst forces jobs to the DLQ.
+   */
+  readonly peakPostgresConcurrencyWithSafetyMargin: number;
   readonly queues: readonly WorkerPostgresQueueDemandEntry[];
 };
+
+/**
+ * Burst-headroom multiplier applied to the summed worker Postgres concurrency. Every worker can
+ * spike to its configured concurrency at the same time, so the raw sum carries no slack; reserving
+ * ~25% extra pool keeps a simultaneous burst from exhausting checkouts and forcing jobs to the DLQ.
+ */
+const WORKER_POSTGRES_POOL_SAFETY_MARGIN = 1.25;
 
 function isRegistrationEnabled(
   definition: WorkerQueueRegistrationDefinition,
@@ -123,12 +138,16 @@ export function computeWorkerPostgresPoolDemand(
     (peak, entry) => peak + (entry.holdsConnectionDuringExternalIo ? entry.postgresConcurrency : 0),
     0,
   );
+  const peakPostgresConcurrencyWithSafetyMargin = Math.ceil(
+    peakPostgresConcurrency * WORKER_POSTGRES_POOL_SAFETY_MARGIN,
+  );
 
   return {
     selectedFamilies,
     monolithicWorker: isMonolithicWorkerQueueFamilies(selectedFamilies),
     peakPostgresConcurrency,
     peakPostgresConcurrencyHoldingExternalIo,
+    peakPostgresConcurrencyWithSafetyMargin,
     queues,
   };
 }

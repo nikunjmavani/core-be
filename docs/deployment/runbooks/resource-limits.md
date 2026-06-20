@@ -38,7 +38,7 @@ The worker process logs a warning when **RSS** exceeds **512 MiB** ([`src/infras
 
 ### Postgres connection budget
 
-Each **API** and **worker** process opens its own postgres.js pool (`DATABASE_POOL_MAX`, default **10**). Size deployments so:
+Each **API** and **worker** process opens its own postgres.js pool (`DATABASE_POOL_MAX`, default **20**). Size deployments so:
 
 ```text
 DEPLOYMENT_TOTAL_REPLICA_COUNT × DATABASE_POOL_MAX ≤ max_connections − POSTGRES_RESERVED_CONNECTIONS
@@ -51,7 +51,7 @@ If you set split counts instead of `DEPLOYMENT_TOTAL_REPLICA_COUNT`, the API and
 | `DEPLOYMENT_TOTAL_REPLICA_COUNT`  | Shorthand: `api_replicas + worker_replicas`                     | required in production (or use split counts) |
 | `DEPLOYMENT_API_REPLICA_COUNT`    | API service replica count                                       | optional split count                         |
 | `DEPLOYMENT_WORKER_REPLICA_COUNT` | Worker service replica count                                    | optional split count                         |
-| `DATABASE_POOL_MAX`               | postgres.js pool `max` per pool                                 | `10`                                         |
+| `DATABASE_POOL_MAX`               | postgres.js pool `max` per pool                                 | `20`                                         |
 | `POSTGRES_RESERVED_CONNECTIONS`   | Admin, migrations, monitoring headroom                          | `10`                                         |
 | `POSTGRES_MAX_CONNECTIONS`        | Optional override when `SHOW max_connections` is wrong (pooler) | query Postgres                               |
 
@@ -105,7 +105,7 @@ The `External-IO holding` column is the **at-risk slice** of the Postgres budget
 
 | Mode                                                 | Trigger                                | Enforcement                                                                                                                                                                                              |
 | ---------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Monolithic**                                       | `WORKER_QUEUE_FAMILIES` unset or `all` | **Warns** (`database.connection_budget.worker_pool_pressure`) when peak Postgres demand exceeds `DATABASE_POOL_MAX`. Default 42 > pool 10 → tune `DATABASE_POOL_MAX` higher (e.g. 45) or split services. |
+| **Monolithic**                                       | `WORKER_QUEUE_FAMILIES` unset or `all` | **Warns** (`database.connection_budget.worker_pool_pressure`) when peak Postgres demand exceeds `DATABASE_POOL_MAX`. Default 42 > pool 20 → tune `DATABASE_POOL_MAX` higher (e.g. 45) or split services. |
 | **Split** (e.g. `WORKER_QUEUE_FAMILIES=mail,notify`) | Explicit subset                        | **Fails fast** at startup when the subset's computed Postgres demand exceeds `DATABASE_POOL_MAX`.                                                                                                        |
 
 #### Example Railway split (same image, different env per service)
@@ -140,6 +140,13 @@ Size the connection budget against Neon `max_connections` (see formula above).
 ### Row-level security (RLS) and the connection pool
 
 Org-scoped HTTP routes (`X-Organization-Id` set) hold **one pool checkout** for the full request via `organizationRlsTransactionMiddleware` (`BEGIN` + `SET LOCAL app.current_organization_id`). That keeps Postgres RLS policies aligned with the handler on a single connection.
+
+> **Throughput SLA (RLS ceiling).** Because each org-scoped request holds its connection for the
+> whole request, a single process sustains at most `DATABASE_POOL_MAX` concurrent org-scoped
+> requests. Steady-state RPS ≈ `DATABASE_POOL_MAX / avg_request_seconds` per process (e.g. 20 / 0.05s
+> ≈ 400 RPS). Beyond that, requests queue against `connect_timeout` and the 5s HTTP statement timeout
+> and surface as 504s. Scale by raising `DATABASE_POOL_MAX` (within the connection budget above) or
+> adding API replicas; watch the `database.pool.exhaustion.*` Sentry alerts (warn 80% / crit 95%).
 
 | Concern                | Guidance                                                                                               |
 | ---------------------- | ------------------------------------------------------------------------------------------------------ |

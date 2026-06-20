@@ -34,6 +34,8 @@ let dlqDepthTotal: Gauge | null = null;
 let databaseRlsActiveCheckouts: Gauge | null = null;
 let databaseRlsCheckoutHoldSeconds: Histogram<'path'> | null = null;
 let processUnhandledRejectionsTotal: Counter<'process'> | null = null;
+let eventBusHandlerFailuresTotal: Counter<'event_type'> | null = null;
+let commitDispatchDurabilityFallbacksTotal: Counter | null = null;
 
 function registerOn(registry: Registry): void {
   httpRequestsTotal = new Counter({
@@ -175,6 +177,19 @@ function registerOn(registry: Registry): void {
     labelNames: ['process'],
     registers: [registry],
   });
+
+  eventBusHandlerFailuresTotal = new Counter({
+    name: 'event_bus_handler_failures_total',
+    help: 'Domain-event handler failures swallowed by eventBus.emit (best-effort side effects), by event_type. A sustained rate hides a persistently failing handler (email/webhook/audit enqueue) that never fails the originating request',
+    labelNames: ['event_type'],
+    registers: [registry],
+  });
+
+  commitDispatchDurabilityFallbacksTotal = new Counter({
+    name: 'commit_dispatch_durability_fallbacks_total',
+    help: 'Post-commit dispatch tasks that fell back from durable Redis persistence to the lossy in-memory onCommit path because the Redis RPUSH failed. Any non-zero value is a durability-degradation signal — the side effect is lost if the process dies before flush',
+    registers: [registry],
+  });
 }
 
 function bindMetricHandlesFromRegistry(registry: Registry): void {
@@ -211,6 +226,12 @@ function bindMetricHandlesFromRegistry(registry: Registry): void {
   processUnhandledRejectionsTotal = registry.getSingleMetric(
     'process_unhandled_rejections_total',
   ) as Counter<'process'>;
+  eventBusHandlerFailuresTotal = registry.getSingleMetric(
+    'event_bus_handler_failures_total',
+  ) as Counter<'event_type'>;
+  commitDispatchDurabilityFallbacksTotal = registry.getSingleMetric(
+    'commit_dispatch_durability_fallbacks_total',
+  ) as Counter;
   registeredMetricsRegistry = registry;
 }
 
@@ -416,4 +437,28 @@ export function recordUnhandledRejection(process: UnhandledRejectionProcess): vo
   ensurePrometheusMetricsRegistered(getMetricsRegistry());
   if (!processUnhandledRejectionsTotal) return;
   processUnhandledRejectionsTotal.inc({ process });
+}
+
+/**
+ * Increments `event_bus_handler_failures_total{event_type}` for one best-effort domain-event
+ * handler that threw inside {@link eventBus.emit}. No-op when metrics are disabled — the failure is
+ * still logged and captured by the caller, so observability never depends on `METRICS_ENABLED`.
+ */
+export function recordEventBusHandlerFailure(eventType: string): void {
+  if (!isMetricsEnabled()) return;
+  ensurePrometheusMetricsRegistered(getMetricsRegistry());
+  if (!eventBusHandlerFailuresTotal) return;
+  eventBusHandlerFailuresTotal.inc({ event_type: eventType });
+}
+
+/**
+ * Increments `commit_dispatch_durability_fallbacks_total` when a post-commit dispatch task could not
+ * be persisted to Redis and fell back to the lossy in-memory path. No-op when metrics are disabled —
+ * the fallback is still logged and captured to Sentry by the caller.
+ */
+export function recordCommitDispatchDurabilityFallback(): void {
+  if (!isMetricsEnabled()) return;
+  ensurePrometheusMetricsRegistered(getMetricsRegistry());
+  if (!commitDispatchDurabilityFallbacksTotal) return;
+  commitDispatchDurabilityFallbacksTotal.inc();
 }

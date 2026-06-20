@@ -1,11 +1,11 @@
 ---
 name: idempotency-guard
-description: Keeps core-be request idempotency correct — the 8 idempotencyRequired writes (X-Idempotency-Key → 422 when missing/reused, 409 in-flight), the post-commit Redis replay write (never in onSend), secret-bearing response bodies excluded from caching, and the client X-Idempotency-Key forwarded as Stripe's idempotencyKey on customer/subscription mutations. Use when adding or changing a mutating money/state route, the idempotency middleware or utils, the Stripe client, or the subscription controller/service.
+description: Keeps core-be request idempotency correct — the 13 idempotencyRequired writes (X-Idempotency-Key → 422 when missing/reused, 409 in-flight), the post-commit Redis replay write (never in onSend), secret-bearing response bodies excluded from caching, and the client X-Idempotency-Key forwarded as Stripe's idempotencyKey on customer/subscription mutations. Use when adding or changing a mutating money/state route, the idempotency middleware or utils, the Stripe client, or the subscription controller/service.
 ---
 
 # Idempotency guard
 
-Exactly **8 writes** in core-be are idempotency-required; getting the replay, fingerprint, and Stripe-forwarding right is what makes a retried subscription-create safe end-to-end (no duplicate charge). This guard codifies the rules; contract tests (`src/tests/contract/stripe.contract.test.ts`) and unit tests (`src/tests/unit/utils/idempotency/**`) catch regressions.
+Exactly **13 writes** in core-be are idempotency-required; getting the replay, fingerprint, and Stripe-forwarding right is what makes a retried subscription-create safe end-to-end (no duplicate charge). This guard codifies the rules; contract tests (`src/tests/contract/stripe.contract.test.ts`) and unit tests (`src/tests/unit/utils/idempotency/**`) catch regressions.
 
 ## Mechanism
 
@@ -15,9 +15,9 @@ Exactly **8 writes** in core-be are idempotency-required; getting the replay, fi
 - **Completed entry is written only after the DB transaction commits** — dispatched from `src/shared/middlewares/core/request-lifecycle.middleware.ts` (post-commit), never directly in `onSend`. Rollback/settle-failure → `DEL` the placeholder so the client can safely retry. TTL: placeholder = session TTL; completed = 24 h.
 - **Never cache secrets:** `onSend` skips bodies > 100 KB or containing secret fields (`responseBodyContainsSecretFields`); token/secret-issuance routes are in `IDEMPOTENCY_EXCLUDED_ROUTE_PATTERNS` (`idempotency-fingerprint.util.ts`).
 
-## The 8 idempotencyRequired routes
+## The 13 idempotencyRequired routes
 
-Source of truth = the `config: { idempotencyRequired: true }` flag on each route registration (typed in `src/fastify.d.ts`); there is **no central array**. The set:
+Source of truth = the `config: { idempotencyRequired: true }` flag on each route registration (typed in `src/fastify.d.ts`); there is **no central array** — the live list is the `I` (`req`) column in `docs/routes.txt`. The set:
 
 | # | Route | File |
 | - | ----- | ---- |
@@ -29,8 +29,17 @@ Source of truth = the `config: { idempotencyRequired: true }` flag on each route
 | 6 | `POST /billing/subscriptions/:subscription_id/change-plan` | `…/subscription/subscription.routes.ts` |
 | 7 | `POST /billing/subscriptions/:subscription_id/cancel` | `…/subscription/subscription.routes.ts` |
 | 8 | `POST /billing/subscriptions/:subscription_id/resume` | `…/subscription/subscription.routes.ts` |
+| 9 | `POST /notify/webhooks` | `notify/sub-domains/webhook/webhook.routes.ts` |
+| 10 | `POST /tenancy/organization/api-keys` | `tenancy/sub-domains/organization/organization.routes.ts` |
+| 11 | `POST /tenancy/organization/notification-policies` | `tenancy/sub-domains/organization/organization.routes.ts` |
+| 12 | `POST /tenancy/organization/roles` | `tenancy/sub-domains/member-roles/member-role.routes.ts` |
+| 13 | `POST /uploads` | `upload/upload.routes.ts` |
 
-The count of 8 is asserted in `docs/reference/api/frontend-auth-guide.md`.
+Routes 9–13 are the resource-creation writes added in the audit remediation (EX-06). Step-up-gated
+`/auth/me/*` routes are intentionally **not** in this set — the global `onRequest` required-key gate
+runs before route auth, so mandatory idempotency there would return 422 before the 401/403 those
+routes assert, and their handlers dedupe server-side. The count of 13 is mirrored in
+`docs/reference/api/frontend-auth-guide.md`.
 
 ## When this guard triggers
 

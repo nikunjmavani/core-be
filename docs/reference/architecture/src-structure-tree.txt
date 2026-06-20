@@ -243,6 +243,7 @@ src/
     │   │   │       └── unit/
     │   │   │       │   ├── webauthn-challenge.unit.test.ts
     │   │   │       │   ├── webauthn-config.expected-origin.unit.test.ts
+    │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.db.unit.test.ts
     │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.unit.test.ts
     │   │   │       │   ├── webauthn-user-verification.policy.unit.test.ts
     │   │   │       │   ├── webauthn.service.authenticate-options.unit.test.ts
@@ -324,6 +325,7 @@ src/
     │   │   │   │   └── unit/
     │   │   │   │   │   ├── events/
     │   │   │   │   │       └── worker/
+    │   │   │   │   │       │   ├── stripe-webhook-event-catchup.processor.unit.test.ts
     │   │   │   │   │       │   ├── stripe-webhook-event-reclaim.worker.unit.test.ts
     │   │   │   │   │       │   ├── stripe-webhook-event-retention.worker.unit.test.ts
     │   │   │   │   │       │   └── stripe-webhook.worker.unit.test.ts
@@ -342,6 +344,9 @@ src/
     │   │   │   │   ├── stripe-webhook.job.schema.ts
     │   │   │   │   └── stripe-webhook.queue.ts
     │   │   │   ├── workers/
+    │   │   │   │   ├── stripe-webhook-event-catchup.constants.ts
+    │   │   │   │   ├── stripe-webhook-event-catchup.processor.ts
+    │   │   │   │   ├── stripe-webhook-event-catchup.worker.ts
     │   │   │   │   ├── stripe-webhook-event-reclaim.constants.ts
     │   │   │   │   ├── stripe-webhook-event-reclaim.processor.ts
     │   │   │   │   ├── stripe-webhook-event-reclaim.worker.ts
@@ -1259,7 +1264,8 @@ src/
     │       │   ├── s3-adapter.unit.test.ts
     │       │   ├── s3-error.util.unit.test.ts
     │       │   ├── storage.service.presigned-put.unit.test.ts
-    │       │   └── storage.service.put-object-buffer.unit.test.ts
+    │       │   ├── storage.service.put-object-buffer.unit.test.ts
+    │       │   └── storage.service.unconfigured.unit.test.ts
     │   ├── object-storage.port.ts
     │   ├── OVERVIEW.md
     │   ├── public-media-url.util.ts
@@ -1364,6 +1370,7 @@ src/
     │       ├── route-success-coverage.util.ts
     │       ├── validate-route-http-coverage.ts
     │       ├── validate-route-org-scope.ts
+    │       ├── validate-route-param-schemas.ts
     │       ├── validate-route-schema-docs.ts
     │       ├── validate-route-success-coverage.ts
     │       └── validate-route-success-statuses.ts
@@ -1500,6 +1507,7 @@ src/
     │   │   ├── logger.util.ts
     │   │   ├── media-url.util.ts
     │   │   ├── postgres-error.util.ts
+    │   │   ├── process-memory-monitor.util.ts
     │   │   ├── readiness-probe-timeout.util.ts
     │   │   ├── readiness-probes.util.ts
     │   │   ├── redis-counter.util.ts
@@ -1515,6 +1523,7 @@ src/
     │   │   ├── field-secret-encryption.util.ts
     │   │   ├── jwt.util.ts
     │   │   ├── password.util.ts
+    │   │   ├── response-encryption-keyring.util.ts
     │   │   ├── safe-webhook-url-for-logs.util.ts
     │   │   ├── sensitive-redaction.util.ts
     │   │   ├── turnstile-verifier.util.ts
@@ -1735,7 +1744,6 @@ src/
     ├── load/
     │   ├── k6/
     │   │   ├── data/
-    │   │   │   └── credential-pool.json
     │   │   ├── helpers/
     │   │   │   ├── auth.js
     │   │   │   ├── checks.js
@@ -1855,6 +1863,7 @@ src/
     │   │   ├── retention-cleanup-rls.security.test.ts
     │   │   ├── rls-matrix.security.test.ts
     │   │   ├── system-tables-rls.security.test.ts
+    │   │   ├── tenancy-with-check-write-confinement.security.test.ts
     │   │   ├── tenant-isolation.security.test.ts
     │   │   ├── tenant-rls-concurrency.security.test.ts
     │   │   ├── upload-rls.security.test.ts
@@ -1890,8 +1899,10 @@ src/
     │   │   ├── post-release-backmerge.policy.unit.test.ts
     │   │   ├── pr-rls-security-gate.policy.unit.test.ts
     │   │   ├── pr-unit-gate-full-suite.policy.unit.test.ts
+    │   │   ├── redis-set-ttl.policy.unit.test.ts
     │   │   ├── release-please-manifests.policy.unit.test.ts
     │   │   ├── restore-drill.policy.unit.test.ts
+    │   │   ├── route-param-schemas.policy.unit.test.ts
     │   │   ├── stryker-config.policy.unit.test.ts
     │   │   └── supply-chain-sbom.policy.unit.test.ts
     │   ├── composition-root/
@@ -2033,6 +2044,7 @@ src/
     │   │   │   ├── route-extractor.unit.test.ts
     │   │   │   ├── route-response-map-statuses.unit.test.ts
     │   │   │   └── schema-enricher.unit.test.ts
+    │   │   ├── agent-docker-daemon-script.unit.test.ts
     │   │   ├── check-patch-coverage.unit.test.ts
     │   │   ├── deploy-env-sync.util.unit.test.ts
     │   │   ├── github-environments.util.unit.test.ts
@@ -2068,6 +2080,7 @@ src/
     │   │   │   ├── list-cap.util.unit.test.ts
     │   │   │   ├── logger.util.unit.test.ts
     │   │   │   ├── postgres-error.util.unit.test.ts
+    │   │   │   ├── process-memory-monitor.util.unit.test.ts
     │   │   │   ├── readiness-probe-timeout.util.unit.test.ts
     │   │   │   ├── readiness-probes.util.unit.test.ts
     │   │   │   └── timeout-error.util.unit.test.ts
@@ -2080,6 +2093,7 @@ src/
     │   │   │   ├── jwt-key-material.unit.test.ts
     │   │   │   ├── jwt.util.unit.test.ts
     │   │   │   ├── password.util.unit.test.ts
+    │   │   │   ├── response-encryption-keyring.util.unit.test.ts
     │   │   │   ├── sensitive-redaction.util.unit.test.ts
     │   │   │   ├── turnstile-verifier.unit.test.ts
     │   │   │   ├── webhook-outbound-fetch.util.unit.test.ts

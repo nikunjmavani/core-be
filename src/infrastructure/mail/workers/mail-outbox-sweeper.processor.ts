@@ -4,6 +4,8 @@ import {
   reclaimStaleSendingMailOutboxIds,
 } from '@/infrastructure/mail/mail-outbox.repository.js';
 import { enqueueMailOutboxJob } from '@/infrastructure/mail/queues/mail.queue.js';
+import { MAIL_OUTBOX_RECLAIM_CIRCUIT_OPEN_MULTIPLIER } from '@/infrastructure/mail/workers/mail-outbox-sweeper.constants.js';
+import { resendCircuit } from '@/infrastructure/resilience/circuit-breaker.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
@@ -39,6 +41,11 @@ export type MailOutboxSweeperJobResult = {
  *   rows older than `MAIL_OUTBOX_SWEEP_PENDING_MINUTES`, and re-enqueues each id.
  *   Resend idempotency keys (set in the mail processor) de-duplicate any send
  *   that overlaps a premature reclaim (audit #20).
+ * - **Circuit-aware:** when the Resend circuit breaker is OPEN the sending-reclaim
+ *   window is widened by `MAIL_OUTBOX_RECLAIM_CIRCUIT_OPEN_MULTIPLIER`, so rows stuck
+ *   because the provider is down are not rolled back and re-enqueued against it.
+ *   The per-row retry cap + alert is BullMQ's `MAIL_QUEUE_MAX_ATTEMPTS` → `<queue>-dlq`
+ *   with final-failure Sentry (no separate per-row counter needed).
  * - **Failure modes:** a failed `enqueueMailOutboxJob` per row is logged at warn
  *   and skipped — the next sweep retries it.
  * - **Side effects:** updates `auth.mail_outbox.status`/`updated_at` for reclaimed
@@ -53,8 +60,14 @@ export async function runMailOutboxSweeperJob(): Promise<MailOutboxSweeperJobRes
 async function runMailOutboxSweeperJobInner(): Promise<MailOutboxSweeperJobResult> {
   const pendingOlderThanMinutes = env.MAIL_OUTBOX_SWEEP_PENDING_MINUTES;
   const reclaimSendingOlderThanMinutes = env.MAIL_OUTBOX_RECLAIM_SENDING_MINUTES;
+  // Circuit-aware reclaim: when Resend is OPEN (down), widen the sending-reclaim window so stuck
+  // rows are not rolled back to pending and re-enqueued against a failing provider (audit P2-14).
+  const resendCircuitState = await resendCircuit.getState();
+  const reclaimWindowMultiplier =
+    resendCircuitState === 'OPEN' ? MAIL_OUTBOX_RECLAIM_CIRCUIT_OPEN_MULTIPLIER : 1;
+  const effectiveReclaimSendingMinutes = reclaimSendingOlderThanMinutes * reclaimWindowMultiplier;
   const pendingCutoff = new Date(Date.now() - pendingOlderThanMinutes * 60_000);
-  const sendingCutoff = new Date(Date.now() - reclaimSendingOlderThanMinutes * 60_000);
+  const sendingCutoff = new Date(Date.now() - effectiveReclaimSendingMinutes * 60_000);
   const batchSize = env.MAIL_OUTBOX_SWEEP_BATCH_SIZE ?? DEFAULT_SWEEP_BATCH_SIZE;
 
   const reclaimedSendingIds = await reclaimStaleSendingMailOutboxIds(sendingCutoff, batchSize);
@@ -79,6 +92,8 @@ async function runMailOutboxSweeperJobInner(): Promise<MailOutboxSweeperJobResul
     {
       pendingOlderThanMinutes,
       reclaimSendingOlderThanMinutes,
+      resendCircuitState,
+      effectiveReclaimSendingMinutes,
       scannedCount: staleMailOutboxIds.length,
       reclaimedSendingCount: reclaimedSendingIds.length,
       reEnqueuedCount,

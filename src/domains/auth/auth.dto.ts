@@ -61,6 +61,40 @@ export const CreateAuthMethodDto = z
 export type CreateAuthMethodInput = z.infer<typeof CreateAuthMethodDto>;
 
 // Password
+
+/** Minimum / maximum length and character-class requirements for a NEW password. */
+const PASSWORD_MIN_LENGTH = 12;
+const PASSWORD_MAX_LENGTH = 128;
+const PASSWORD_MIN_CHARACTER_CLASSES = 3;
+
+/** Counts how many of {lowercase, uppercase, digit, symbol} appear in `value`. */
+function countPasswordCharacterClasses(value: string): number {
+  let classes = 0;
+  if (/[a-z]/.test(value)) classes += 1;
+  if (/[A-Z]/.test(value)) classes += 1;
+  if (/\d/.test(value)) classes += 1;
+  if (/[^a-z\d]/i.test(value)) classes += 1;
+  return classes;
+}
+
+/**
+ * Shared strength policy for every password-set entry point (reset, change) so the rule cannot
+ * drift between them: trimmed, 12–128 chars, and at least 3 of 4 character classes (lowercase,
+ * uppercase, digit, symbol).
+ *
+ * @remarks
+ * Login / step-up / `current_password` verify an EXISTING credential and intentionally keep
+ * `trimmedStringMinMax(1, 128)` — applying a strength policy there would lock out users whose
+ * password predates the policy. Breach (HIBP k-anonymity) and strength-score (zxcvbn) checks are
+ * deliberately left as optional future additions; this policy is the dependency-free baseline.
+ */
+export function passwordPolicy(): z.ZodType<string> {
+  return trimmedStringMinMax(PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH).refine(
+    (value) => countPasswordCharacterClasses(value) >= PASSWORD_MIN_CHARACTER_CLASSES,
+    { message: 'Password must include at least 3 of: lowercase, uppercase, number, symbol' },
+  );
+}
+
 /** Zod schema for the `POST /api/v1/auth/password/forgot` request body. */
 export const ForgotPasswordDto = z
   .object({
@@ -70,11 +104,11 @@ export const ForgotPasswordDto = z
 /** Inferred input type of {@link ForgotPasswordDto}. */
 export type ForgotPasswordInput = z.infer<typeof ForgotPasswordDto>;
 
-/** Zod schema for the `POST /api/v1/auth/password/reset` request body (reset token + new password ≥ 12 chars). */
+/** Zod schema for the `POST /api/v1/auth/password/reset` request body (reset token + a policy-compliant new password). */
 export const ResetPasswordDto = z
   .object({
     token: trimmedStringMinMax(1, 512),
-    password: trimmedStringMinMax(12, 128),
+    password: passwordPolicy(),
   })
   .strict();
 /** Inferred input type of {@link ResetPasswordDto}. */
@@ -84,7 +118,7 @@ export type ResetPasswordInput = z.infer<typeof ResetPasswordDto>;
 export const ChangePasswordDto = z
   .object({
     current_password: trimmedStringMinMax(1, 128),
-    new_password: trimmedStringMinMax(12, 128),
+    new_password: passwordPolicy(),
   })
   .strict();
 /** Inferred input type of {@link ChangePasswordDto}. */

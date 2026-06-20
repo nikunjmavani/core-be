@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
-import { trimmedString } from '@/shared/utils/validation/validation.util.js';
+import { trimmedString, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
+
+/** Zod schema for webhook `:webhook_id` path params (get/update/delete/delivery-attempts/test). */
+export const webhookIdParamsDto = z
+  .object({
+    webhook_id: trimmedStringMinMax(1, 28),
+  })
+  .strict();
 
 /**
  * Zod schema for the `GET /notify/webhooks` query string — extends cursor pagination

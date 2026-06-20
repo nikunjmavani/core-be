@@ -44,4 +44,18 @@ describe('cors.middleware', () => {
       }),
     );
   });
+
+  it('exposes Retry-After so cross-origin clients can read it on 429/503 (EX-11)', async () => {
+    application = Fastify();
+    const registerSpy = vi.spyOn(application, 'register');
+    await application.register(corsMiddleware);
+    await application.ready();
+
+    expect(registerSpy).toHaveBeenCalledWith(
+      fastifyCorsPlugin,
+      expect.objectContaining({
+        exposedHeaders: expect.arrayContaining(['Retry-After']),
+      }),
+    );
+  });
 });

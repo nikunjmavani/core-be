@@ -28,7 +28,11 @@ const corsMiddleware: FastifyPluginAsync = async (app) => {
     // browsers honour `Access-Control-Expose-Headers` strictly, so without
     // this entry the new header was invisible to fetch / XHR callers and
     // the tracing pivot it was meant to enable did not work from web apps.
-    exposedHeaders: ['X-Request-Id', 'X-Client-Request-Id', 'X-Idempotency-Replay'],
+    // EX-11: `Retry-After` is emitted on 429 (rate limit) and 503 (idempotency store unavailable)
+    // but cross-origin browsers cannot read it unless it is exposed — so SPAs retried blind. Expose
+    // it so clients can honour the server's backoff. (X-RateLimit-* are intentionally omitted: this
+    // stack does not emit them, so listing them would be dead config.)
+    exposedHeaders: ['X-Request-Id', 'X-Client-Request-Id', 'X-Idempotency-Replay', 'Retry-After'],
     maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
   });
 };

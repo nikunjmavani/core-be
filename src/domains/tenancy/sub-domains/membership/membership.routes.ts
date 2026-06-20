@@ -13,12 +13,14 @@ import type { MemberInvitationService } from './member-invitation/member-invitat
 import {
   acceptMemberInvitationDto,
   createMemberInvitationDto,
+  invitationIdParamsDto,
   listMemberInvitationsQueryDto,
   listPendingMemberInvitationsQueryDto,
   resendMemberInvitationDto,
 } from './member-invitation/member-invitation.dto.js';
 import {
   createMembershipDto,
+  membershipIdParamsDto,
   transferOwnershipDto,
   updateMembershipDto,
 } from './membership.dto.js';
@@ -73,6 +75,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           description:
             'Returns a single membership including user details and role. Requires MEMBERSHIP_READ permission.',
           tags: ['Membership'],
+          params: membershipIdParamsDto,
         },
       },
       membershipController.getMembership,
@@ -87,6 +90,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           description:
             'Returns all effective permissions for a membership (from role). Requires MEMBERSHIP_READ permission.',
           tags: ['Membership'],
+          params: membershipIdParamsDto,
         },
       },
       membershipController.getMembershipPermissions,
@@ -121,6 +125,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           description:
             'Updates a membership status (e.g. suspend or activate). Requires MEMBERSHIP_MANAGE permission.',
           tags: ['Membership'],
+          params: membershipIdParamsDto,
           body: updateMembershipDto,
         },
       },
@@ -138,6 +143,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           description:
             'Removes a member from the organization. Requires MEMBERSHIP_MANAGE permission.',
           tags: ['Membership'],
+          params: membershipIdParamsDto,
         },
       },
       membershipController.deleteMembership,
@@ -227,6 +233,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           summary: 'Revoke invitation',
           description: 'Revokes a pending invitation. Requires INVITATION_MANAGE permission.',
           tags: ['Invitation'],
+          params: invitationIdParamsDto,
         },
       },
       invitationController.revokeMemberInvitation,
@@ -242,6 +249,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           description:
             'Resends the invitation email with a new expiry. Requires INVITATION_MANAGE permission.',
           tags: ['Invitation'],
+          params: invitationIdParamsDto,
           body: resendMemberInvitationDto,
         },
       },
@@ -278,6 +286,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           description:
             "Accepts a pending invitation using the invitation token. Requires authentication; the authenticated user's email must match the invitee email on the invitation. Creates a membership for the user.",
           tags: ['Invitation'],
+          params: invitationIdParamsDto,
           body: acceptMemberInvitationDto,
         },
       },
@@ -295,6 +304,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           summary: 'Decline invitation',
           description: 'Declines a pending invitation. The invitation is marked as declined.',
           tags: ['Invitation'],
+          params: invitationIdParamsDto,
         },
       },
       invitationController.declineInvitation,

@@ -17,7 +17,11 @@ import {
 import { getSelectedWorkerQueueFamilies } from '@/infrastructure/queue/worker-runtime/worker-queue-family.util.js';
 import { getWorkerRegistrationsForFamilies } from '@/infrastructure/queue/worker-runtime/worker-registration.registry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
-import { THIRTY_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
+import { env } from '@/shared/config/env.config.js';
+import {
+  startProcessMemoryMonitoring,
+  stopProcessMemoryMonitoring,
+} from '@/shared/utils/infrastructure/process-memory-monitor.util.js';
 import type { DomainContainers } from '@/worker-containers.js';
 
 export { closeDeadLetterQueues } from '@/infrastructure/queue/dlq/dead-letter.js';
@@ -35,35 +39,9 @@ export interface WorkerHandle {
   queueName?: string;
 }
 
-const RSS_WARNING_THRESHOLD_MEGABYTES = 512;
-const RSS_WARNING_THRESHOLD_BYTES = RSS_WARNING_THRESHOLD_MEGABYTES * 1024 * 1024;
-let rssMonitorInterval: ReturnType<typeof setInterval> | null = null;
-
-/**
- * Start periodic RSS monitoring for the worker process.
- * Warns if memory usage exceeds 512 MB.
- */
-function startRssMonitoring(): void {
-  rssMonitorInterval = setInterval(() => {
-    const rssBytes = process.memoryUsage().rss;
-    if (rssBytes > RSS_WARNING_THRESHOLD_BYTES) {
-      const rssMegabytes = Math.round(rssBytes / 1024 / 1024);
-      logger.warn(
-        { rssMegabytes, thresholdMegabytes: RSS_WARNING_THRESHOLD_MEGABYTES },
-        'worker.rss.exceeds.threshold',
-      );
-    }
-  }, THIRTY_SECONDS_MS); // Check every 30 seconds
-}
-
-/**
- * Stop RSS monitoring.
- */
+/** Stops the worker RSS monitor on shutdown (delegates to the shared process memory monitor). */
 export function stopRssMonitoring(): void {
-  if (rssMonitorInterval) {
-    clearInterval(rssMonitorInterval);
-    rssMonitorInterval = null;
-  }
+  stopProcessMemoryMonitoring();
 }
 
 function pushWorkerWithDeadLetterHook(
@@ -96,7 +74,10 @@ export async function registerDomainWorkers(
     workerContainers,
   });
 
-  startRssMonitoring();
+  startProcessMemoryMonitoring({
+    processLabel: 'worker',
+    thresholdMegabytes: env.PROCESS_RSS_WARN_THRESHOLD_MB,
+  });
 
   logger.info(
     {

@@ -69,6 +69,42 @@ export async function refreshBullMQQueueGauges(): Promise<void> {
 }
 
 /**
+ * Sums the `waiting` (ready-but-unprocessed) job count across the given queues, reusing the
+ * pooled queue clients. Used by the worker readiness probe to tell an idle worker (no waiting
+ * jobs — healthy) apart from a genuinely stalled one (jobs waiting but heartbeats stale).
+ *
+ * @remarks
+ * Not gated by `isMetricsEnabled()` — readiness must work regardless of `METRICS_ENABLED`.
+ * Only `waiting` is counted: `delayed` jobs (future-scheduled backoff retries) are not yet due,
+ * and counting them would re-introduce the idle false-positive this lookup exists to avoid.
+ */
+export async function getQueuesWaitingJobCount(queueNames: readonly string[]): Promise<number> {
+  const counts = await Promise.all(
+    queueNames.map((queueName) => getOrCreateQueueClient(queueName).getWaitingCount()),
+  );
+  return counts.reduce((total, count) => total + count, 0);
+}
+
+/** Per-queue `waiting`/`delayed` job depth, surfaced on the verbose `/readyz` body. */
+export type QueueDepth = { queue: string; waiting: number; delayed: number };
+
+/**
+ * Reads `waiting` and `delayed` job counts per queue, reusing the pooled queue clients.
+ *
+ * @remarks
+ * Used by the `/readyz` operational body to report backlog directly (no Prometheus scrape needed).
+ * Not gated by `isMetricsEnabled()` — readiness must work regardless of `METRICS_ENABLED`.
+ */
+export async function getQueueDepths(queueNames: readonly string[]): Promise<QueueDepth[]> {
+  return Promise.all(
+    queueNames.map(async (queueName) => {
+      const counts = await getOrCreateQueueClient(queueName).getJobCounts('waiting', 'delayed');
+      return { queue: queueName, waiting: counts.waiting ?? 0, delayed: counts.delayed ?? 0 };
+    }),
+  );
+}
+
+/**
  * Closes every pooled `Queue` client created by {@link refreshBullMQQueueGauges}
  * so the metrics scraper releases its Redis sockets cleanly on shutdown.
  */

@@ -384,7 +384,7 @@ flowchart LR
 
 | Skill                          | Path                                                     | When to invoke                                            |
 | ------------------------------ | -------------------------------------------------------- | --------------------------------------------------------- |
-| **skill-index**                | `.cursor/skills/skill-index/SKILL.md`                    | **First** — full catalog and triggers (39 project skills) |
+| **skill-index**                | `.cursor/skills/skill-index/SKILL.md`                    | **First** — full catalog and triggers (40 project skills) |
 | domain-generator               | `.cursor/skills/domain-generator/SKILL.md`               | New domain/sub-domain scaffold                            |
 | route-catalog                  | `.cursor/skills/route-catalog/SKILL.md`                  | Any change to `*.routes.ts`                               |
 | route-schema-doc-guard         | `.cursor/skills/route-schema-doc-guard/SKILL.md`         | Route `schema: { summary, description, tags }`          |
@@ -410,6 +410,7 @@ flowchart LR
 | ide-productivity-guard         | `.cursor/skills/ide-productivity-guard/SKILL.md`         | `.vscode/` project IDE config                             |
 | dependency-security            | `.cursor/skills/dependency-security/SKILL.md`            | `package.json` / lockfile                                 |
 | before-commit-guard            | `.cursor/skills/before-commit-guard/SKILL.md`            | Failed pre-commit / commit-ready                          |
+| change-completeness-guard      | `.cursor/skills/change-completeness-guard/SKILL.md`      | Finishing any change — DoD: tests + cross-cutting + docs + rules + skills |
 | pr-babysit                     | `.cursor/skills/pr-babysit/SKILL.md`                     | PR merge-ready loop (CI + comments)                       |
 | split-to-prs                   | `.cursor/skills/split-to-prs/SKILL.md`                   | Split branch into reviewable PRs                          |
 | ci-investigator                | `.cursor/skills/ci-investigator/SKILL.md`                | Diagnose one failing CI check                             |

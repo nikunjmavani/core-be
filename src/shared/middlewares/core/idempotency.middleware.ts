@@ -561,6 +561,21 @@ async function idempotencyOnRequest(request: FastifyRequest, _reply: FastifyRepl
 }
 
 /**
+ * Normalizes the `onSend` payload into a JSON-parseable cache body string.
+ *
+ * A successful response with no body (HTTP 204, or an empty 200) reaches `onSend` with a
+ * nullish/empty payload. `JSON.stringify(undefined)` returns `undefined` (not a string),
+ * which crashes the downstream `Buffer.byteLength` and 500s the response whenever a client
+ * attaches an `X-Idempotency-Key` to such a write; an empty string would instead crash the
+ * `JSON.parse` in {@link sendCachedIdempotencyResponse} on replay. Both empty cases collapse
+ * to JSON `null` so the entry is byte-measurable here and replays as an empty body.
+ */
+function toIdempotencyCacheBody(payload: unknown): string {
+  if (payload === undefined || payload === null || payload === '') return 'null';
+  return typeof payload === 'string' ? payload : JSON.stringify(payload);
+}
+
+/**
  * Snapshots the outgoing response so the completed-cache write can run in `onResponse`,
  * after the request-level transaction (or any service-level transaction) has committed.
  *
@@ -591,7 +606,7 @@ async function idempotencyOnSend(
     return payload;
   }
 
-  const body = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  const body = toIdempotencyCacheBody(payload);
   const bodyByteLength = Buffer.byteLength(body, 'utf8');
   if (bodyByteLength > IDEMPOTENCY_CACHED_BODY_BYTES) {
     logger.warn(

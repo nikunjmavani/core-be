@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { trimmedString } from '@/shared/utils/validation/validation.util.js';
+import { trimmedString, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
+
+/** Zod schema for the `:subscription_id` path param (get/update/change-plan/cancel/resume). */
+export const subscriptionIdParamsDto = z
+  .object({
+    subscription_id: trimmedStringMinMax(1, 28),
+  })
+  .strict();
 
 /** Zod schema for `POST /api/v1/billing/subscriptions` request body. */
 export const CreateSubscriptionDto = z

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import { createTestApp } from '@/tests/helpers/test-app.js';
@@ -72,6 +73,7 @@ describe('Notify e2e: webhook delivery', () => {
         url: 'https://example.com/webhook',
         events: ['subscription.created'],
       },
+      headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
     });
     expect([201]).toContain(createResponse.statusCode);
 

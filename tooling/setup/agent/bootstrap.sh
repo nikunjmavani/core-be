@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# One-shot cloud-session bring-up for core-be on Claude Code on the web.
+# One-shot cloud-session bring-up for core-be cloud agents.
 #
-# Runs every agent setup helper in order — Node, gh, Docker images (registry
-# mirror), CodeGraph, Headroom, gitleaks — scaffolds a self-contained `.env.local` (`pnpm setup:local
-# --only-env`), then brings up the local Docker stack (Postgres + Redis), migrates,
-# seeds, and verifies the app is healthy (/livez + /readyz). A single command to
-# make a cloud session "same as local", with a progress log after each step so
-# anyone watching the session sees live status.
+# Runs every agent setup helper in order — Node, gh, Docker CLI/Compose, Docker
+# daemon, Docker images (registry mirror), CodeGraph, Headroom, gitleaks — scaffolds a
+# self-contained `.env.local` (`pnpm setup:local --only-env`), then brings up
+# the local Docker stack (Postgres + Redis), migrates, seeds, and verifies the
+# app is healthy (/livez + /readyz). A single command to make a cloud session
+# "same as local", with a progress log after each step so anyone watching the
+# session sees live status.
 #
 #   bash tooling/setup/agent/bootstrap.sh
 #
@@ -20,6 +21,7 @@ set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.." || exit 1
 readonly AGENT_DIR="tooling/setup/agent"
 readonly TOTAL=11
+readonly DOCKERD_AGENT_MODE_FILE="${DOCKERD_AGENT_MODE_FILE:-/tmp/dockerd-agent-mode}"
 start_ts=$(date +%s)
 
 step() { echo ""; echo "▶ $*"; }
@@ -84,8 +86,9 @@ step "[2/${TOTAL}] GitHub CLI (gh)"
 bash "${AGENT_DIR}/install-gh.sh" || true
 if command -v gh >/dev/null 2>&1; then ok "[2/${TOTAL}] $(gh --version | head -1)"; else skip "[2/${TOTAL}] gh unavailable (non-fatal)"; fi
 
-# 3) Docker images via registry mirror --------------------------------------
-step "[3/${TOTAL}] Docker images (mirror + pull)"
+# 3) Docker + images via registry mirror ------------------------------------
+step "[3/${TOTAL}] Docker CLI/Compose + images (mirror + pull)"
+bash "${AGENT_DIR}/install-docker.sh" || true
 bash "${AGENT_DIR}/install-docker-images.sh" || true
 if docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -qE '^postgres:|^redis:'; then
   ok "[3/${TOTAL}] compose images present: $(docker images --format '{{.Repository}}:{{.Tag}}' | grep -E '^postgres:|^redis:' | paste -sd' ')"
@@ -115,7 +118,18 @@ ok "[7/${TOTAL}] .env.local ready"
 
 # 8) Postgres + Redis (docker compose) --------------------------------------
 step "[8/${TOTAL}] Postgres + Redis (docker compose)"
-SONAR=0 pnpm compose:up >&2 || die "compose:up failed (is dockerd running? see step 3)"
+bash "${AGENT_DIR}/ensure-docker-daemon.sh" >&2 || die "Docker daemon is not reachable (see ensure-docker-daemon diagnostics above)"
+docker_mode="$(cat "${DOCKERD_AGENT_MODE_FILE}" 2>/dev/null || true)"
+case "${docker_mode}" in
+  restricted*)
+    echo "bootstrap: Docker daemon is in ${docker_mode} mode; using cloud-agent host-network compose override." >&2
+    docker compose -f docker-compose.yml -f "${AGENT_DIR}/docker-compose.cloud-agent.yml" up -d postgres redis >&2 \
+      || die "compose:up failed with cloud-agent restricted Docker override"
+    ;;
+  *)
+    SONAR=0 pnpm compose:up >&2 || die "compose:up failed (Docker daemon was reachable before compose; inspect docker compose output above)"
+    ;;
+esac
 pnpm compose:wait >&2 || die "Postgres did not become ready"
 ok "[8/${TOTAL}] Postgres + Redis healthy"
 

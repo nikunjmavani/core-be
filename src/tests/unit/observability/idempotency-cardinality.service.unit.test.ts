@@ -73,6 +73,20 @@ describe('sampleIdempotencyCardinality', () => {
     expect(result).toEqual({ observedCount: 3, scanTruncated: true });
   });
 
+  it('trips the iteration guard and marks truncated when the cursor never settles', async () => {
+    cardinalityTestEnv.scanMax = 1000;
+    // Cursor never returns to '0' and pages stay empty, so observedCount never reaches the cap;
+    // without the round-trip guard this would loop forever and pin Redis CPU.
+    mockScan.mockResolvedValue(['99', []]);
+
+    const result = await sampleIdempotencyCardinality();
+
+    expect(result.scanTruncated).toBe(true);
+    expect(result.observedCount).toBe(0);
+    // ceil(1000 / 1000) + 100 slack = 101 round-trips before the guard trips.
+    expect(mockScan).toHaveBeenCalledTimes(101);
+  });
+
   it('logs a warning and captures a Sentry message at warn threshold', async () => {
     mockScan.mockResolvedValueOnce(['0', ['a', 'b', 'c', 'd', 'e']]);
     const result = await sampleIdempotencyCardinality();
