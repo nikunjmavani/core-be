@@ -43,8 +43,9 @@ stateDiagram-v2
 
 ## Failure modes
 
-- **Invitee already a member** → 409 `errors:invitationAlreadyMember`.
+- **Invitee already a member** (ACTIVE or live INVITED) → 409 `errors:membershipAlreadyExists` (add-member-by-email path).
 - **Disposable email blocked on invite** → 400 `errors:disposableEmail`.
+- **Revoke** removes the auto-created INVITED membership too (soft-delete) so the members table shows no ghost invitee.
 - **Invitation token expired** → 401 `errors:invitationTokenExpired`.
 - **Invitation accepted twice** → 409 (atomic accept consumed the row on the first call).
 - **Invitation cancelled before accept** → 410 `errors:invitationCancelled`.

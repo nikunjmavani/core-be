@@ -43,10 +43,6 @@
     "model": "email",
     "verifyNoMutation": true
   },
-  "POST /api/v1/tenancy/invitations/:invitation_id/decline": {
-    "model": "email",
-    "verifyNoMutation": true
-  },
   "POST /api/v1/tenancy/organization/transfer-ownership": {
     "model": "tier:owner",
     "verifyNoMutation": true

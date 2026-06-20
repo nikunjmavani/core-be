@@ -1,5 +1,12 @@
-import { ConflictError, ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
+import {
+  ConfigurationError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/shared/errors/index.js';
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
+import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
@@ -32,6 +39,8 @@ import {
 import { serializeMembership } from './membership.serializer.js';
 import { resolveStoredMediaReadUrl } from '@/shared/utils/infrastructure/media-url.util.js';
 import type { ObjectStoragePort } from '@/infrastructure/storage/object-storage.port.js';
+import type { UserService } from '@/domains/user/user.service.js';
+import type { MemberInvitationService } from './member-invitation/member-invitation.service.js';
 import { invalidatePermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import type { OrganizationApiKeyRepository } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.repository.js';
 
@@ -104,6 +113,10 @@ export class MembershipService {
     // REQ-2: presigns the embedded member `avatar_url`; optional so minimal harnesses can omit it
     // (then the raw stored key is passed through). The container always wires the S3 adapter.
     private readonly objectStorage?: ObjectStoragePort,
+    // REQ-1: add-member-by-email provisions/finds the invitee and issues the invitation. Optional so
+    // minimal harnesses can omit them; the container always wires both. `create` requires them.
+    private readonly userService?: UserService,
+    private readonly memberInvitationService?: MemberInvitationService,
   ) {}
 
   /**
@@ -257,35 +270,42 @@ export class MembershipService {
     organization_public_id: string,
     body: unknown,
     invited_by_user_public_id: string | undefined,
+    options?: { requestId?: string },
   ): Promise<MembershipOutput> {
     const parsed = validateCreateMembership(body);
-    // A freshly created membership has never joined (joined_at IS NULL), so creating it
-    // directly as ACTIVE both violates chk_memberships_joined (would 500) and bypasses the
-    // invariant that initial activation comes from invitation acceptance — the same rule the
-    // PATCH path enforces. Reject it cleanly instead of letting the constraint surface a 500.
-    if (parsed.status === 'ACTIVE') {
-      throw new ForbiddenError('errors:membershipActivationRequiresInvitationAccept');
+    const userService = this.userService;
+    const memberInvitationService = this.memberInvitationService;
+    if (!(userService && memberInvitationService)) {
+      throw new ConfigurationError(
+        'UserService and MemberInvitationService must be wired on MembershipService (tenancy.container).',
+      );
     }
+    // Block disposable invitee addresses up front (no DB/context needed) — mirrors the prior
+    // invitation-create guard now that the email enters at the membership door.
+    if (isDisposableEmailBlocked(parsed.email)) {
+      throw new ValidationError('errors:disposableEmail', undefined, undefined, [
+        { field: 'email', messageKey: 'errors:disposableEmail' },
+      ]);
+    }
+    // Provision/find the invitee in its OWN transaction (BEFORE the org context) so the public-id
+    // collision retry can open fresh transactions — a pinned org transaction would abort on retry.
+    // A user left with no membership by a later failure is harmless and reused on the next attempt.
+    const inviteeUser = await userService.findOrCreateInvitedByEmail({ email: parsed.email });
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
         );
-      // Capability matrix: a PERSONAL organization is single-member by definition. The invitation
-      // flow already blocks this, but membership-create is a second entry point (a holder of
-      // MEMBERSHIP_MANAGE — which the personal-org owner has — could otherwise seed a second member
-      // directly). Reject here so the single-member invariant holds at every door. Collaboration
-      // requires a TEAM organization.
+      // Capability matrix: a PERSONAL organization is single-member by definition. Collaboration
+      // requires a TEAM organization — reject here so the single-member invariant holds at every door.
       assertTeamOrganization(organization, 'MEMBERS');
       const role = await this.memberRoleService.requireRoleRecordByPublicId(
         organization_public_id,
         parsed.role_id,
       );
-      // Privilege-escalation guard: the caller must already hold every permission the assigned
-      // role would grant. Without this, a holder of `MEMBERSHIP_MANAGE` + `INVITATION_MANAGE`
-      // could mint an Admin (or any privileged) membership for a throwaway account and accept
-      // the invitation unauthenticated → full organization takeover. Runs BEFORE the row is
-      // persisted so a rejected attempt leaves no half-state.
+      // Privilege-escalation guard: the caller must already hold every permission the assigned role
+      // would grant, or a MEMBERSHIP_MANAGE holder could mint an Admin membership for a throwaway
+      // address and accept it → full organization takeover. Runs BEFORE any row is persisted.
       const rolePermissionCodes = await this.memberRolePermissionService.listPermissionCodesForRole(
         role.id,
       );
@@ -296,32 +316,42 @@ export class MembershipService {
         organizationPublicId: organization_public_id,
         requestedPermissionCodes: rolePermissionCodes,
       });
-      const userId = await this.organizationService.resolveUserInternalIdByPublicId(parsed.user_id);
-      if (userId === null) throw new NotFoundError('User');
+      // [REQ-4] seat-availability check goes here (no-op until the seat model lands in PR4).
       const inviterId =
         await this.organizationService.resolveUserInternalIdByPublicId(invited_by_user_public_id);
+      if (inviterId === null) throw new NotFoundError('User');
       let created: Awaited<ReturnType<MembershipRepository['create']>>;
       try {
-        created = await this.membershipRepository.create(
-          omitUndefined({
-            organization_id: organization.id,
-            user_id: userId,
-            role_id: role.id,
-            status: parsed.status,
-            invited_by_user_id: inviterId,
-            created_by_user_id: inviterId,
-          }),
-        );
+        created = await this.membershipRepository.create({
+          organization_id: organization.id,
+          user_id: inviteeUser.id,
+          role_id: role.id,
+          status: 'INVITED',
+          invited_by_user_id: inviterId,
+          created_by_user_id: inviterId,
+        });
       } catch (error) {
-        // The user already belongs to this organization (idx_memberships_user_org_unique) —
-        // surface a clean 409 instead of an unhandled unique_violation 500.
+        // The invitee already belongs to this organization (idx_memberships_user_org_unique) —
+        // surface a clean 409 instead of an unhandled unique_violation 500. Covers an existing
+        // ACTIVE member and a still-live INVITED one (the FE resends in that case).
         if (isPostgresUniqueViolation(error)) {
           throw new ConflictError('errors:membershipAlreadyExists');
         }
         throw error;
       }
-      await invalidatePermissions(parsed.user_id, organization_public_id);
-      await this.applyOrganizationLocaleDefaults(parsed.user_id, organization_public_id);
+      // Issue the invitation (token + email) in this same org transaction.
+      await memberInvitationService.createForMembership({
+        organization_name: organization.name ?? organization.public_id,
+        membership_id: created.id,
+        membership_public_id: created.public_id,
+        email: inviteeUser.email,
+        expires_in_days: parsed.expires_in_days,
+        invited_by_user_id: inviterId,
+        inviter_label: invited_by_user_public_id ?? 'Team member',
+        ...(options?.requestId !== undefined ? { requestId: options.requestId } : {}),
+      });
+      await invalidatePermissions(inviteeUser.public_id, organization_public_id);
+      await this.applyOrganizationLocaleDefaults(inviteeUser.public_id, organization_public_id);
       return this.resolveAndSerializeMembership(created, organization_public_id);
     });
   }

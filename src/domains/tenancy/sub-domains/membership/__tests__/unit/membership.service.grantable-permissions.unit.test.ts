@@ -24,6 +24,8 @@ import type { MemberRolePermissionService } from '@/domains/tenancy/sub-domains/
 import type { MembershipRepository } from '@/domains/tenancy/sub-domains/membership/membership.repository.js';
 import type { AuthorizationService } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
 import type { PermissionRepository } from '@/domains/tenancy/sub-domains/permission/permission.repository.js';
+import type { UserService } from '@/domains/user/user.service.js';
+import type { MemberInvitationService } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.service.js';
 
 /**
  * Regression for the Critical org-takeover finding (T1).
@@ -98,6 +100,18 @@ describe('MembershipService.create — grantable-permissions guard (sec-T1)', ()
     findAll: vi.fn().mockResolvedValue([]),
   } as unknown as PermissionRepository;
 
+  const userService = {
+    findOrCreateInvitedByEmail: vi.fn().mockResolvedValue({
+      id: 10,
+      public_id: 'user_public',
+      email: 'invitee@example.com',
+    }),
+  } as unknown as UserService;
+
+  const memberInvitationService = {
+    createForMembership: vi.fn().mockResolvedValue({ id: 'inv_public' }),
+  } as unknown as MemberInvitationService;
+
   const service = new MembershipService(
     organizationService,
     memberRoleService,
@@ -105,6 +119,12 @@ describe('MembershipService.create — grantable-permissions guard (sec-T1)', ()
     membershipRepository,
     authorizationService,
     permissionRepository,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    userService,
+    memberInvitationService,
   );
 
   beforeEach(() => {
@@ -133,7 +153,7 @@ describe('MembershipService.create — grantable-permissions guard (sec-T1)', ()
 
     await service.create(
       'org_public',
-      { user_id: 'user_public', role_id: 'role_public_admin', status: 'INVITED' },
+      { email: 'invitee@example.com', role_id: 'role_public_admin' },
       'inviter_public',
     );
 
@@ -158,7 +178,7 @@ describe('MembershipService.create — grantable-permissions guard (sec-T1)', ()
     await expect(
       service.create(
         'org_public',
-        { user_id: 'user_public', role_id: 'role_public_admin', status: 'INVITED' },
+        { email: 'invitee@example.com', role_id: 'role_public_admin' },
         'inviter_public',
       ),
     ).rejects.toBeInstanceOf(ForbiddenError);
@@ -174,7 +194,7 @@ describe('MembershipService.create — grantable-permissions guard (sec-T1)', ()
     await expect(
       service.create(
         'org_public',
-        { user_id: 'user_public', role_id: 'role_public_admin', status: 'INVITED' },
+        { email: 'invitee@example.com', role_id: 'role_public_admin' },
         undefined,
       ),
     ).rejects.toBeInstanceOf(ForbiddenError);

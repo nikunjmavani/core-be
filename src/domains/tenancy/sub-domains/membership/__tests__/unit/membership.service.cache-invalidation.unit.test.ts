@@ -101,6 +101,18 @@ describe('MembershipService — permission cache invalidation', () => {
     findAll: vi.fn().mockResolvedValue([]),
   };
 
+  const userService = {
+    findOrCreateInvitedByEmail: vi.fn().mockResolvedValue({
+      id: 5,
+      public_id: 'user_public_new',
+      email: 'invitee@example.com',
+    }),
+  };
+
+  const memberInvitationService = {
+    createForMembership: vi.fn().mockResolvedValue({ id: 'inv_public' }),
+  };
+
   const service = new MembershipService(
     organizationService as never,
     memberRoleService as never,
@@ -108,6 +120,12 @@ describe('MembershipService — permission cache invalidation', () => {
     membershipRepository as never,
     authorizationService as never,
     permissionRepository as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    userService as never,
+    memberInvitationService as never,
   );
 
   beforeEach(() => {
@@ -117,7 +135,7 @@ describe('MembershipService — permission cache invalidation', () => {
   it('create invalidates user permission cache after membership is created', async () => {
     await service.create(
       'org_public_abc',
-      { user_id: 'user_public_new', role_id: 'role_public', status: 'INVITED' },
+      { email: 'invitee@example.com', role_id: 'role_public' },
       'inviter_public',
     );
 

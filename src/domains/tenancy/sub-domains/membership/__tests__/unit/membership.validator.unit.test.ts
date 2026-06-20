@@ -9,13 +9,26 @@ import {
 } from '@/domains/tenancy/sub-domains/membership/membership.validator.js';
 
 describe('membership validators', () => {
-  it('validateCreateMembership accepts user_id and role_id', () => {
-    expect(
-      validateCreateMembership({ user_id: 'userpublicid1234567', role_id: 'rolepublicid1234567' }),
-    ).toMatchObject({
-      user_id: 'userpublicid1234567',
+  it('validateCreateMembership accepts email + role_id, normalizes the email, and defaults expires_in_days', () => {
+    const result = validateCreateMembership({
+      email: '  Invitee@Example.com ',
       role_id: 'rolepublicid1234567',
     });
+    expect(result.email).toBe('invitee@example.com');
+    expect(result.role_id).toBe('rolepublicid1234567');
+    expect(result.expires_in_days).toBe(7);
+  });
+
+  it('validateCreateMembership rejects a malformed email', () => {
+    expect(() =>
+      validateCreateMembership({ email: 'not-an-email', role_id: 'rolepublicid1234567' }),
+    ).toThrow(ValidationError);
+  });
+
+  it('validateCreateMembership rejects the legacy user_id field (REQ-1: body is now email-based)', () => {
+    expect(() =>
+      validateCreateMembership({ user_id: 'userpublicid1234567', role_id: 'rolepublicid1234567' }),
+    ).toThrow(ValidationError);
   });
 
   it('validateUpdateMembership accepts status', () => {

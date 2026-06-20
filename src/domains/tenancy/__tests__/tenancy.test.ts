@@ -316,77 +316,23 @@ describe('Tenancy Domain — Integration', () => {
     });
   });
 
-  // ─── Invitations ──────────────────────────────────────────────
+  // ─── Add member (invite by email) ─────────────────────────────
+  // REQ-1: the standalone POST/GET /organization/invitations and the invitee
+  // pending-list / decline routes were removed. Adding a member now issues the
+  // invitation via POST /organization/memberships (validation guard kept here;
+  // the full add-member flow is covered in membership.integration.test.ts).
 
-  describe('GET /api/v1/tenancy/organization/invitations', () => {
-    it('should return 403 without membership manage permission', async () => {
-      const { organization } = await createAuthorizedUserAndOrganization();
-      const user = await createTestUser({ email: 'noperm3@test.com' });
-      const token = await generateTestToken({
-        userId: user.public_id,
-        organizationPublicId: organization.public_id,
-      });
-      const response = await injectAuthenticated(app, {
-        url: testApiPath('/tenancy/organization/invitations'),
-        token,
-      });
-      expect(response.statusCode).toBe(403);
-    });
-
-    it('should return invitations with manage permission', async () => {
-      const { token } = await createAuthorizedUserAndOrganization();
-      const response = await injectAuthenticated(app, {
-        url: testApiPath('/tenancy/organization/invitations'),
-        token,
-      });
-      expect(response.statusCode).toBe(200);
-      const body = response.json() as {
-        meta?: { pagination?: { has_more?: boolean; next?: string | null } };
-      };
-      expect(body.meta?.pagination).toMatchObject({ has_more: false, next: null });
-    });
-  });
-
-  describe('POST /api/v1/tenancy/organization/invitations', () => {
-    it('should return 400 for missing body', async () => {
+  describe('POST /api/v1/tenancy/organization/memberships', () => {
+    it('should return 400/422 for missing body', async () => {
       const { token } = await createAuthorizedUserAndOrganization();
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: testApiPath('/tenancy/organization/invitations'),
+        url: testApiPath('/tenancy/organization/memberships'),
         token,
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
-    });
-
-    it('when BLOCK_DISPOSABLE_EMAIL is off, invitation create accepts disposable email', async () => {
-      const { token } = await createAuthorizedUserAndOrganization();
-      const membershipsResponse = await injectAuthenticated(app, {
-        url: testApiPath('/tenancy/organization/memberships'),
-        token,
-      });
-      expect(membershipsResponse.statusCode).toBe(200);
-      const membershipsBody = membershipsResponse.json() as {
-        data: Array<{ id?: number; public_id?: string }>;
-      };
-      const memberships = membershipsBody.data;
-      expect(Array.isArray(memberships) && memberships.length > 0).toBe(true);
-      const firstMembership = memberships[0]!;
-      const membershipId = firstMembership.id ?? firstMembership.public_id;
-
-      const response = await injectAuthenticatedOrganizationMutation(app, {
-        method: 'POST',
-        url: testApiPath('/tenancy/organization/invitations'),
-        token,
-        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
-        payload: {
-          membership_id: membershipId,
-          expires_in_days: 7,
-        },
-      });
-      expect(response.statusCode).toBe(201);
-      const body = response.json() as { data?: unknown };
-      expect(body.data).toBeDefined();
     });
   });
 

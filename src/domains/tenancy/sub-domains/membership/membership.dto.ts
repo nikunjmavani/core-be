@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
-import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
+import { trimmedEmail, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 /** Zod schema for the `:membership_id` path param (get/get-permissions/update/delete membership). */
 export const membershipIdParamsDto = z
@@ -10,15 +10,18 @@ export const membershipIdParamsDto = z
   .strict();
 
 /**
- * Zod schema for the `POST /organization/memberships` request body.
- * Identifies the user and role by public id and optionally pre-sets the
- * lifecycle `status`.
+ * Zod schema for the `POST /organization/memberships` request body — the
+ * "Add member" action (REQ-1). Identifies the invitee by `email` (a new
+ * address provisions a bare ACTIVE user; an existing one resolves to that
+ * account), the `role_id` by public id, and an optional invitation
+ * `expires_in_days` (1–365, default 7). The membership is always created
+ * `INVITED`; the invitee is emailed a token and becomes `ACTIVE` on accept.
  */
 export const createMembershipDto = z
   .object({
-    user_id: trimmedStringMinMax(1, 28),
+    email: trimmedEmail(),
     role_id: trimmedStringMinMax(1, 28),
-    status: z.enum(['INVITED', 'ACTIVE', 'SUSPENDED']).optional(),
+    expires_in_days: z.number().int().min(1).max(365).optional().default(7),
   })
   .strict();
 

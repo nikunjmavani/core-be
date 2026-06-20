@@ -150,62 +150,63 @@ sequenceDiagram
 ### Failure modes
 
 - **Not a member of the target organization** → switch is rejected (the token is not re-minted); the active org is unchanged.
-- **Client ignores `capabilities` and calls a team-only route on a personal org** → the centralized guard `assertTeamOrganization` rejects with **422** (`unprocessable_entity`), not 409, because the org `type` is immutable and retrying is futile. The `capabilities` object exists precisely so clients hide/disable those actions up front instead of probing for the 422. The five team-only routes: `DELETE /api/v1/tenancy/organization`, `POST .../organization/invitations`, `POST .../organization/memberships`, `POST .../organization/transfer-ownership`, `POST .../organization/roles`.
+- **Client ignores `capabilities` and calls a team-only route on a personal org** → the centralized guard `assertTeamOrganization` rejects with **422** (`unprocessable_entity`), not 409, because the org `type` is immutable and retrying is futile. The `capabilities` object exists precisely so clients hide/disable those actions up front instead of probing for the 422. The four team-only routes: `DELETE /api/v1/tenancy/organization`, `POST .../organization/memberships`, `POST .../organization/transfer-ownership`, `POST .../organization/roles`.
 
 ## organization-invitation-flow
 
 ### Trigger
 
-Organization admin invites a teammate: `POST /api/v1/tenancy/organizations/:id/invitations`.
+Organization admin adds a teammate by email: `POST /api/v1/tenancy/organization/memberships {email, role_id, expires_in_days?}` (REQ-1). That single call provisions/finds the user, creates the `INVITED` membership, and issues the invitation — there is no separate "create invitation" route.
 
 ### Sequence
 
 ```mermaid
 sequenceDiagram
   participant Admin as Admin Client
-  participant Tenancy as tenancy.controller
+  participant Mem as MembershipService
+  participant Usr as UserService
   participant Inv as MemberInvitationService
   participant DB as Postgres (RLS scoped to org)
   participant Bus as event-bus
   participant Mail as mail.processor
   participant Invitee as Invitee Client
-  participant Auth as auth.controller
-  Admin->>Tenancy: POST /organizations/:id/invitations {email, member_role}
-  Tenancy->>Inv: create(orgId, body, invitedByUserId)
-  Inv->>DB: BEGIN; SET LOCAL app.current_organization_id
-  Inv->>DB: insert member_invitations (token_hash, expires_at, status=pending)
-  Inv->>DB: COMMIT
-  Inv->>Bus: emit MEMBER_INVITATION_EVENT.CREATED {email, raw_token, organization_name, ...}
+  participant Auth as auth (OAuth / magic-link)
+  Admin->>Mem: POST /organization/memberships {email, role_id}
+  Mem->>Usr: findOrCreateInvitedByEmail(email)
+  Usr->>DB: resolve by email (SECURITY DEFINER) — else INSERT auth.users (ACTIVE, is_email_verified=false, no auth method)
+  Mem->>DB: BEGIN; SET LOCAL app.current_organization_id
+  Mem->>DB: privilege-escalation guard; INSERT memberships (status=INVITED)
+  Mem->>Inv: createForMembership(...)
+  Inv->>DB: INSERT member_invitations (token_hash, expires_at)
+  Inv->>Bus: emitStrict MEMBER_INVITATION_EVENT.CREATED {email, raw_token, organization_name, ...}
+  Mem->>DB: COMMIT
   Bus->>Mail: recordOutboxEmail (via event handler)
   Mail-->>Invitee: invitation email (raw_token in URL)
 
-  Invitee->>Auth: POST /auth/magic-link {email} (signup-flow if new user)
-  Note over Invitee,Auth: invitee establishes a session
-
-  Invitee->>Tenancy: POST /tenancy/invitations/:invitation_id/accept {token}
-  Tenancy->>Inv: accept(invitationId, token, currentUserId)
+  Note over Invitee,Auth: invitee logs in via OAuth / magic-link (find-by-email reuses the pre-created user)
+  Invitee->>Inv: POST /tenancy/invitations/:invitation_id/accept {token}
   Inv->>DB: BEGIN; SET LOCAL app.current_organization_id
-  Inv->>DB: UPDATE member_invitations SET status=accepted, accepted_at=NOW() WHERE token_hash=$1
-  Inv->>DB: INSERT memberships (user_id, organization_id, member_role_id)
+  Inv->>DB: UPDATE member_invitations SET accepted_at=NOW() WHERE token_hash=$1 (atomic, single-use)
+  Inv->>DB: UPDATE memberships SET status=ACTIVE, joined_at=NOW() (activateForInvitationAccept)
   Inv->>DB: COMMIT
-  Inv-->>Tenancy: {membership}
-  Tenancy-->>Invitee: 200
+  Inv-->>Invitee: 201 {invitation}
 ```
 
 ### Side effects
 
-- `member_invitations` row created with hashed token; raw token leaves the platform only via the email payload (parallel to `magic-link`).
-- `MEMBER_INVITATION_EVENT.CREATED` event → mail outbox row → invitation email delivered.
-- On accept: `memberships` row created; permission cache invalidated for the new member.
-- Audit log row recorded for both create and accept (`audit-emission`).
+- New invitee → a bare ACTIVE `auth.users` row (`is_email_verified=false`, no auth method), claimed on first OAuth/magic-link login; an existing address resolves to that account.
+- `INVITED` `memberships` row + `member_invitations` row (hashed token; the raw token leaves the platform only via the email payload, parallel to `magic-link`).
+- `MEMBER_INVITATION_EVENT.CREATED` (emitStrict — a failed outbox write rolls back the whole org transaction) → mail outbox → invitation email.
+- On accept: the membership is activated (`status=ACTIVE`, `joined_at`) and the member's permission cache invalidated.
+- On revoke (`DELETE /organization/invitations/:id`): the invitation is revoked AND the auto-created `INVITED` membership is soft-deleted (no ghost invitee in the members table).
 
 ### Failure modes
 
 - **Disposable email** → 400 `errors:disposableEmail`.
-- **Invitee already a member** → 409 `errors:invitationAlreadyMember`.
-- **Token expired** → 401 `errors:invitationTokenExpired`.
-- **Token reuse** → atomic `UPDATE ... RETURNING` consumes the row on first accept; second attempt sees `status=accepted` and returns 409.
-- **Invitation cancelled before accept** → 410 `errors:invitationCancelled`.
+- **Already a member (ACTIVE or live INVITED) for that email** → 409 `errors:membershipAlreadyExists`.
+- **Personal organization** (single-member) → 422 (team-only route).
+- **Token expired / invalid / revoked / already accepted** → `ValidationError` on accept.
+- **Token reuse** → the atomic accept consumes the row on first accept; a second attempt fails validation.
 
 ## subscription-change-flow
 

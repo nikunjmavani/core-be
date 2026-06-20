@@ -89,8 +89,6 @@ const RUNTIME_COVERAGE: Readonly<Record<string, string>> = {
   // ── model: email (invitation-email.security.test.ts) ───────────────────────
   'POST /api/v1/tenancy/invitations/:invitation_id/accept':
     'invitation-email: email-mismatch accept → 403',
-  'POST /api/v1/tenancy/invitations/:invitation_id/decline':
-    'invitation-email: email-mismatch decline → 403',
 
   // ── model: global-role (admin-only.security.test.ts) ───────────────────────
   'GET /api/v1/users/:user_id': 'admin-only: regular user denied',

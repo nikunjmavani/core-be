@@ -93,6 +93,13 @@ export function createTenancyContainer(
     permissionRepository,
     membershipRepository,
   );
+  // REQ-1: created before MembershipService so the add-member-by-email flow can issue invitations.
+  const memberInvitationService = new MemberInvitationService(
+    organizationRepository,
+    membershipRepository,
+    memberInvitationRepository,
+    userService,
+  );
   const membershipService = new MembershipService(
     organizationService,
     memberRoleService,
@@ -106,12 +113,9 @@ export function createTenancyContainer(
     organizationApiKeyRepository,
     // REQ-2: presign embedded member avatars in list/get responses.
     objectStorage,
-  );
-  const memberInvitationService = new MemberInvitationService(
-    organizationRepository,
-    membershipRepository,
-    memberInvitationRepository,
+    // REQ-1: add-member-by-email provisions/finds the invitee and issues the invitation.
     userService,
+    memberInvitationService,
   );
 
   return {

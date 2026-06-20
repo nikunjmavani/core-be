@@ -182,19 +182,7 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
 
-  // ── Invitations ──
-  'GET /api/v1/tenancy/organization/invitations': {
-    statusCode: 200,
-    schema: wrapSuccess({ type: 'array', items: schemas.invitationSchema }, [
-      schemas.invitationExample,
-    ]),
-    example: null,
-  },
-  'POST /api/v1/tenancy/organization/invitations': {
-    statusCode: 201,
-    schema: wrapSuccess(schemas.invitationSchema, schemas.invitationExample),
-    example: null,
-  },
+  // ── Invitations ── (add-member issues invitations via POST /organization/memberships, REQ-1)
   'POST /api/v1/tenancy/invitations/{invitation_id}/accept': {
     statusCode: 201,
     schema: wrapSuccess(schemas.membershipSchema, schemas.membershipExample),
@@ -211,18 +199,6 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
       ...schemas.invitationExample,
       expires_at: '2026-02-28T10:30:00.000Z',
     }),
-    example: null,
-  },
-  'GET /api/v1/tenancy/invitations/pending': {
-    statusCode: 200,
-    schema: wrapSuccess({ type: 'array', items: schemas.invitationSchema }, [
-      schemas.invitationExample,
-    ]),
-    example: null,
-  },
-  'POST /api/v1/tenancy/invitations/{invitation_id}/decline': {
-    statusCode: 201,
-    schema: null,
     example: null,
   },
 
