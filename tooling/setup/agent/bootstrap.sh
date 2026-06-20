@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-shot cloud-session bring-up for core-be on Claude Code on the web.
+# One-shot cloud-session bring-up for core-be cloud agents.
 #
 # Runs every agent setup helper in order — Node, gh, Docker CLI/Compose, Docker
 # daemon, Docker images (registry mirror), CodeGraph, Headroom, gitleaks — scaffolds a
@@ -122,9 +122,9 @@ bash "${AGENT_DIR}/ensure-docker-daemon.sh" >&2 || die "Docker daemon is not rea
 docker_mode="$(cat "${DOCKERD_AGENT_MODE_FILE}" 2>/dev/null || true)"
 case "${docker_mode}" in
   restricted*)
-    echo "bootstrap: Docker daemon is in ${docker_mode} mode; using Codex Cloud host-network compose override." >&2
-    docker compose -f docker-compose.yml -f "${AGENT_DIR}/docker-compose.codex-cloud.yml" up -d postgres redis >&2 \
-      || die "compose:up failed with Codex Cloud restricted Docker override"
+    echo "bootstrap: Docker daemon is in ${docker_mode} mode; using cloud-agent host-network compose override." >&2
+    docker compose -f docker-compose.yml -f "${AGENT_DIR}/docker-compose.cloud-agent.yml" up -d postgres redis >&2 \
+      || die "compose:up failed with cloud-agent restricted Docker override"
     ;;
   *)
     SONAR=0 pnpm compose:up >&2 || die "compose:up failed (Docker daemon was reachable before compose; inspect docker compose output above)"
