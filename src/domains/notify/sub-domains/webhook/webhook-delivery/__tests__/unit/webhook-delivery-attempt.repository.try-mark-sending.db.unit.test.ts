@@ -122,4 +122,55 @@ describe('WebhookDeliveryAttemptRepository.tryMarkSending (database)', () => {
     const result = await attemptRepository.tryMarkSending(attempt.id, 2);
     expect(result).toBe('already_sent');
   });
+
+  it('recordOutcome never overwrites a terminal SENT row (stale reclaim writer)', async () => {
+    // Race: worker A claims and POSTs slowly; the lease expires; worker B reclaims, re-sends,
+    // and records SENT. A's slow POST then returns and records FAILED. Without a guard A would
+    // flip an already-delivered webhook back to FAILED and trigger a spurious redelivery.
+    const { webhook } = await createWebhookFixture('record-outcome-sent');
+    const sentAttempt = await attemptRepository.create({
+      webhook_id: webhook.id,
+      event_type: 'subscription.updated',
+      payload: { id: 'sub_5' },
+      status: 'SENT',
+      http_status_code: 200,
+      response_body: 'ok',
+      sent_at: new Date(),
+      attempt_count: 1,
+    });
+
+    await attemptRepository.recordOutcome(sentAttempt.id, {
+      status: 'FAILED',
+      http_status_code: 500,
+      response_body: 'late-failure',
+      next_retry_at: new Date(),
+    });
+
+    const { items } = await attemptRepository.listByWebhook(webhook.id, { limit: 10 });
+    const sentRow = items.find((item) => item.id === sentAttempt.id);
+    expect(sentRow?.status).toBe('SENT');
+    expect(sentRow?.http_status_code).toBe(200);
+
+    // Control: the guard only protects SENT — a SENDING row is still recordable to a terminal
+    // outcome (the normal delivery path must keep working).
+    const sendingAttempt = await attemptRepository.create({
+      webhook_id: webhook.id,
+      event_type: 'subscription.updated',
+      payload: { id: 'sub_6' },
+      status: 'SENDING',
+      http_status_code: null,
+      response_body: null,
+      sent_at: new Date(),
+      attempt_count: 1,
+    });
+    await attemptRepository.recordOutcome(sendingAttempt.id, {
+      status: 'SENT',
+      http_status_code: 200,
+      response_body: 'ok',
+    });
+    const { items: afterControl } = await attemptRepository.listByWebhook(webhook.id, {
+      limit: 10,
+    });
+    expect(afterControl.find((item) => item.id === sendingAttempt.id)?.status).toBe('SENT');
+  });
 });

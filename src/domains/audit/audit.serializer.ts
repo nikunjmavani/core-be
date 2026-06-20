@@ -11,16 +11,38 @@
  */
 const SENSITIVE_INTERNAL_METADATA_KEYS = new Set<string>(['auth_method_id', 'mfa_method_id']);
 
+/**
+ * Defense-in-depth (sec): keys whose VALUE would be a credential/secret if a writer ever
+ * placed one in the free-form `metadata` jsonb. Writers should never log secrets, but a
+ * single careless `metadata: { token }` would otherwise persist and surface verbatim in the
+ * admin / org-audit feed. We keep the key (so an admin sees a field existed) and redact the
+ * value before it leaves through the response. Matched case-insensitively as a substring.
+ */
+const SECRET_METADATA_KEY_PATTERN =
+  /password|passwd|secret|token|api[_-]?key|authorization|credential|private[_-]?key|access[_-]?key/i;
+const REDACTED_METADATA_VALUE = '[REDACTED]';
+
+/**
+ * Public-id keys (`*_public_id`) are safe forensic identifiers admins pivot on — never redact
+ * them even when the name brushes the secret pattern (e.g. `api_key_public_id`).
+ */
+function isPublicIdMetadataKey(key: string): boolean {
+  return key.endsWith('public_id');
+}
+
 function sanitizeMetadata(metadata: unknown): unknown {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
     return metadata;
   }
 
-  return Object.fromEntries(
-    Object.entries(metadata as Record<string, unknown>).filter(
-      ([key]) => !SENSITIVE_INTERNAL_METADATA_KEYS.has(key),
-    ),
-  );
+  const sanitizedEntries = Object.entries(metadata as Record<string, unknown>)
+    .filter(([key]) => !SENSITIVE_INTERNAL_METADATA_KEYS.has(key))
+    .map(([key, value]): [string, unknown] =>
+      !isPublicIdMetadataKey(key) && SECRET_METADATA_KEY_PATTERN.test(key)
+        ? [key, REDACTED_METADATA_VALUE]
+        : [key, value],
+    );
+  return Object.fromEntries(sanitizedEntries);
 }
 
 /**

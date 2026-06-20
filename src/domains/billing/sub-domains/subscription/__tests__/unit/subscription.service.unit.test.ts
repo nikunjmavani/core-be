@@ -258,6 +258,61 @@ describe('SubscriptionService', () => {
     expect(organizationService.updateStripeCustomerIdForOrganization).toHaveBeenCalled();
   });
 
+  it('create forwards the request idempotency key to Stripe and uses a deterministic customer-create key', async () => {
+    // Money-path regression (C1): the X-Idempotency-Key threaded controller -> service ->
+    // provider must land on Stripe's subscription-create. A dropped key lets a retry or a
+    // double-click that crosses the in-flight window mint a SECOND paid subscription.
+    stripeMocks.isStripeConfigured.mockReturnValue(true);
+    vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
+      ...plan,
+      stripe_price_monthly_id: 'price_monthly',
+    } as never);
+
+    await service.create(
+      'org_public',
+      { plan_id: 'plan_public', billing_cycle: 'monthly' },
+      'user_public',
+      'idem-create-key',
+    );
+
+    expect(stripeMocks.createStripeSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({ idempotencyKey: 'idem-create-key' }),
+    );
+    // The customer-create uses a deterministic per-org key (`customer-create:<org>`) so a
+    // retried create after a crash returns the same Stripe customer instead of minting a
+    // duplicate (organization has no stripe_customer_id in this fixture).
+    expect(stripeMocks.createStripeCustomer).toHaveBeenCalledWith(
+      expect.objectContaining({ idempotencyKey: 'customer-create:org_public' }),
+    );
+  });
+
+  it('changePlan forwards the request idempotency key to the Stripe price update', async () => {
+    // Money-path regression (C4): updateStripeSubscription is a non-atomic retrieve-then-update;
+    // a retried change-plan WITHOUT the forwarded key can double-apply the proration. The key
+    // must reach the Stripe price swap's options.
+    stripeMocks.isStripeConfigured.mockReturnValue(true);
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...subscriptionRow,
+      provider_subscription_id: 'sub_stripe',
+    } as never);
+    vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
+      ...plan,
+      stripe_price_monthly_id: 'price_monthly',
+    } as never);
+
+    await service.changePlan(
+      'org_public',
+      'sub_public',
+      { plan_id: 'plan_public' },
+      'idem-change-key',
+    );
+
+    expect(stripeMocks.updateStripeSubscription).toHaveBeenCalledWith(
+      'sub_stripe',
+      expect.objectContaining({ idempotencyKey: 'idem-change-key' }),
+    );
+  });
+
   it('cancel calls Stripe when provider subscription id exists', async () => {
     stripeMocks.isStripeConfigured.mockReturnValue(true);
     vi.mocked(repository.findByPublicId).mockResolvedValue({

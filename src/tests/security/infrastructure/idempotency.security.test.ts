@@ -147,7 +147,7 @@ describe('Security: Idempotency', () => {
     expect(stored).toBeNull();
   });
 
-  it('handles a DELETE on the flat organization route (org resolved from the claim)', async () => {
+  it('handles a DELETE returning an empty 204 body when an X-Idempotency-Key is present', async () => {
     const user = await createTestUser();
     const token = await generateTestToken({ userId: user.public_id });
     const slug = uniqueSlug('delete-idempotent-org');
@@ -163,23 +163,24 @@ describe('Security: Idempotency', () => {
 
     // The flat DELETE route resolves the target org from the JWT `org` claim;
     // mint a token scoped to the just-created org (the creator owns it).
-    //
-    // NOTE: the org DELETE is NOT in the idempotency-required write set and
-    // returns 204 (empty body). The idempotency `onSend` hook currently crashes
-    // on an empty 204 body when an X-Idempotency-Key header is present (a separate,
-    // pre-existing shared-middleware defect, flagged out of band). This test
-    // asserts the flat route's actual contract — a clean 204 — without sending
-    // an X-Idempotency-Key so it does not depend on that unrelated bug.
     const tokenScopedToOrg = await generateTestToken({
       userId: user.public_id,
       organizationPublicId: organizationId,
     });
+
+    // Regression: attaching an X-Idempotency-Key to a write that returns 204 (empty body)
+    // must not 500. `onSend` previously crashed on the empty payload
+    // (`JSON.stringify(undefined)` -> `Buffer.byteLength` throw); the empty body now
+    // normalizes to JSON `null`, so the route returns its real 204 contract.
+    // (The cached-204 *replay* path — `JSON.parse('null')` -> empty body — is covered as a
+    // unit test; it cannot be exercised here because this DELETE removes the org the
+    // idempotency scope's auth/permission preHandlers resolve, so a replay 403s on membership.)
     const response = await injectAuthenticated(app, {
       method: 'DELETE',
       url: testApiPath('/tenancy/organization'),
       token: tokenScopedToOrg,
+      headers: { 'x-idempotency-key': uniqueKey('delete-idem') },
     });
-
     expect(response.statusCode).toBe(204);
   });
 

@@ -243,6 +243,7 @@ src/
     │   │   │       └── unit/
     │   │   │       │   ├── webauthn-challenge.unit.test.ts
     │   │   │       │   ├── webauthn-config.expected-origin.unit.test.ts
+    │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.db.unit.test.ts
     │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.unit.test.ts
     │   │   │       │   ├── webauthn-user-verification.policy.unit.test.ts
     │   │   │       │   ├── webauthn.service.authenticate-options.unit.test.ts
@@ -1862,6 +1863,7 @@ src/
     │   │   ├── retention-cleanup-rls.security.test.ts
     │   │   ├── rls-matrix.security.test.ts
     │   │   ├── system-tables-rls.security.test.ts
+    │   │   ├── tenancy-with-check-write-confinement.security.test.ts
     │   │   ├── tenant-isolation.security.test.ts
     │   │   ├── tenant-rls-concurrency.security.test.ts
     │   │   ├── upload-rls.security.test.ts

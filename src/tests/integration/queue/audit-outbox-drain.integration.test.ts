@@ -87,4 +87,53 @@ describe('Integration: audit transactional outbox drain', () => {
     expect(outboxRows[0]?.status).toBe('FAILED');
     expect(outboxRows[0]?.last_error).toMatch(/actor public_id did not resolve/);
   });
+
+  it('two concurrent drainers process each row exactly once (FOR UPDATE SKIP LOCKED)', async () => {
+    // The scheduler can run on >1 replica. `claimPendingBatch` uses FOR UPDATE SKIP LOCKED so
+    // two drainers racing the same backlog partition the rows instead of both copying a row into
+    // audit.logs (a duplicate ledger entry). The single-drainer test above cannot prove this.
+    await database.insert(users).values({
+      public_id: ACTOR_PUBLIC_ID,
+      email: 'audit-drain-concurrent@example.com',
+      email_hash: 'audit-drain-concurrent-hash',
+    });
+
+    const ROW_COUNT = 24;
+    await database.insert(audit_outbox).values(
+      Array.from({ length: ROW_COUNT }, (_, index) => ({
+        status: 'PENDING' as const,
+        actor_user_public_id: ACTOR_PUBLIC_ID,
+        organization_public_id: null,
+        action: 'user.login',
+        resource_type: 'user',
+        severity: 'INFO',
+        metadata: { source: 'audit-outbox-drain.concurrent', index },
+      })),
+    );
+    expect(await pendingOutboxCount()).toBe(ROW_COUNT);
+
+    // Two independent drain contexts (two worker replicas) racing the same backlog.
+    const [resultA, resultB] = await Promise.all([
+      withAuditOutboxDrainDatabaseContext((databaseHandle) =>
+        runAuditOutboxDrainJob(databaseHandle),
+      ),
+      withAuditOutboxDrainDatabaseContext((databaseHandle) =>
+        runAuditOutboxDrainJob(databaseHandle),
+      ),
+    ]);
+
+    // No row drained twice: the two runs together drain exactly ROW_COUNT, with no overlap.
+    expect(resultA.drained + resultB.drained).toBe(ROW_COUNT);
+    expect(resultA.permanentlyFailed + resultB.permanentlyFailed).toBe(0);
+    expect(await pendingOutboxCount()).toBe(0);
+
+    // The canonical ledger has exactly ROW_COUNT rows — a broken SKIP LOCKED would double-insert.
+    const auditRows = await database.select().from(logs).where(eq(logs.action, 'user.login'));
+    expect(auditRows).toHaveLength(ROW_COUNT);
+
+    // Every outbox row is PROCESSED exactly once.
+    const outboxRows = await database.select().from(audit_outbox);
+    expect(outboxRows).toHaveLength(ROW_COUNT);
+    expect(outboxRows.every((row) => row.status === 'PROCESSED')).toBe(true);
+  });
 });
