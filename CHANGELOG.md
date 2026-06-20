@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.7.1](https://github.com/nikunjmavani/core-be/compare/v4.7.0...v4.7.1) (2026-06-20)
+
+
+### Fixed
+
+* add Codex Docker vfs fallback ([#715](https://github.com/nikunjmavani/core-be/issues/715)) ([f61b64e](https://github.com/nikunjmavani/core-be/commit/f61b64eaf8794d403bf6752c3660fdf2bbf2de1e))
+* audit remediation — verified production-hardening items ([#725](https://github.com/nikunjmavani/core-be/issues/725)) ([bdaabac](https://github.com/nikunjmavani/core-be/commit/bdaabacd88cf643d2093d68b16bf0d68d2ccd253))
+* install docker for cloud bootstrap ([2055ce5](https://github.com/nikunjmavani/core-be/commit/2055ce51b545d74b41dc933970ea06006cbbb76f))
+* install docker for cloud bootstrap ([c421afa](https://github.com/nikunjmavani/core-be/commit/c421afa0ffa0960d86695fd0183d61011d1afdef))
+* **seed:** idempotent demo seed helpers + smoke test status fixes ([#723](https://github.com/nikunjmavani/core-be/issues/723)) ([3d3a998](https://github.com/nikunjmavani/core-be/commit/3d3a998e169a7fc111ec1e9790f9ad10b90b1924))
+* start docker daemon before cloud compose ([6c93d3e](https://github.com/nikunjmavani/core-be/commit/6c93d3eaa30a0a9cd9227d4703527331c83e99a5))
+* support restricted docker in codex cloud ([#713](https://github.com/nikunjmavani/core-be/issues/713)) ([c557ca0](https://github.com/nikunjmavani/core-be/commit/c557ca0839bdfb7c17db90ff2d56477d0358ac0a))
+* use shared cloud agent docker fallback ([#716](https://github.com/nikunjmavani/core-be/issues/716)) ([7ab2c17](https://github.com/nikunjmavani/core-be/commit/7ab2c176ca2c58082e61c20b75c8b801ee3534a1))
+
+
+### Documentation
+
+* add handoff summary, enforcement gates, and version override to release-dev-to-production ([#727](https://github.com/nikunjmavani/core-be/issues/727)) ([812afba](https://github.com/nikunjmavani/core-be/commit/812afbaf98b421cb516cd8cf50f6f00b3b825d2c))
+* **agent-os:** document dev production release command ([7d023a2](https://github.com/nikunjmavani/core-be/commit/7d023a203df9dc7bc81020428c24eb4e78a1b31d))
+* archive Codex Cloud setup ([#719](https://github.com/nikunjmavani/core-be/issues/719)) ([831865e](https://github.com/nikunjmavani/core-be/commit/831865e05d9a770eabe031f638c18fac95889ca3))
+* **load-testing:** document co-located load-generation caveat ([#722](https://github.com/nikunjmavani/core-be/issues/722)) ([1df13ae](https://github.com/nikunjmavani/core-be/commit/1df13aec72510e73763537c3615424bafc9d2f90))
+
 ## [4.7.0](https://github.com/nikunjmavani/core-be/compare/v4.6.0...v4.7.0) (2026-06-18)
 
 
