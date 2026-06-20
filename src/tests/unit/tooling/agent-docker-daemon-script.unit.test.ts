@@ -17,6 +17,7 @@ describe('agent Docker daemon setup scripts', () => {
 
   it('falls back to vfs storage when cloud overlay layer extraction is denied', () => {
     expect(ensureDockerDaemonScript).toContain('--storage-driver=vfs');
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: asserts the literal ${VFS_DATA_ROOT} shell variable emitted in the generated dockerd script
     expect(ensureDockerDaemonScript).toContain('--data-root="${VFS_DATA_ROOT}"');
     expect(ensureDockerDaemonScript).toContain('DOCKERD_AGENT_VFS_DATA_ROOT');
     expect(ensureDockerDaemonScript).toContain('restricted-vfs');
