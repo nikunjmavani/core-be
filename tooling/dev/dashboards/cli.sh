@@ -16,7 +16,7 @@
 
 set -uo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT" || exit 1
 RUN_DIR="$ROOT/.dashboards"
 mkdir -p "$RUN_DIR"
@@ -122,7 +122,7 @@ cmd_up() {
     local spid=$!; disown "$spid" 2>/dev/null || disown 2>/dev/null || true
     echo "$spid" > "$RUN_DIR/studio.pid"; ok "studio started (pid $spid)  ${c_dim}→ .dashboards/studio.log${c_reset}"
   fi
-  start_proc proxy "dashboards-proxy" node tooling/dev/dashboards-proxy.mjs
+  start_proc proxy "dashboards/proxy" node tooling/dev/dashboards/proxy.mjs
   log "→ readiness…"
   wait_up "$API_URL/livez"   "API     $API_URL"
   wait_up "$WORKER_URL/readyz" "worker  $WORKER_URL"
@@ -130,7 +130,7 @@ cmd_up() {
 }
 
 cmd_down() {
-  stop_proc proxy  "dashboards-proxy"
+  stop_proc proxy  "dashboards/proxy"
   stop_proc studio "drizzle-kit.*studio"
   stop_proc worker "src/worker.ts"
   stop_proc api    "src/server.ts"
@@ -148,5 +148,5 @@ case "${1:-up}" in
   down)    shift || true; cmd_down "${1:-}";;
   status)  cmd_status;;
   restart) cmd_down; cmd_up;;
-  *)       err "usage: dashboards.sh [up | down [--all] | status | restart]"; exit 1;;
+  *)       err "usage: cli.sh [up | down [--all] | status | restart]"; exit 1;;
 esac

@@ -4,7 +4,7 @@
 // dashboards auth proxy on :3010 — run `pnpm dashboards:up` (or `pnpm dashboards:proxy`) first.
 //
 // Wired in .mcp.example.json as the on-demand `dashboards` server:
-//   "dashboards": { "type": "stdio", "command": "node", "args": ["tooling/dev/dashboards-mcp.mjs"] }
+//   "dashboards": { "type": "stdio", "command": "node", "args": ["tooling/dev/dashboards/mcp.mjs"] }
 //
 // Env (optional): DASHBOARDS_PROXY_URL (default http://127.0.0.1:3010).
 

@@ -1,20 +1,20 @@
 #!/usr/bin/env node
-// Local dashboards hub + authenticating reverse proxy.
+// Dashboards hub + authenticating reverse proxy (part of tooling/dev/dashboards/).
 //
-// Open http://localhost:3010/ for a single tabbed control room linking to every local
-// dashboard with live status. Browsers can't attach an `Authorization: Bearer` header to a
-// plain navigation, so `GET /metrics` and `GET /admin/queues` (Bull Board) 401 when opened
-// directly; this proxy injects the right token per request and forwards to the API. It also
-// strips frame-blocking headers so the gated dashboards can be embedded inside the hub, and
-// proxies the worker health server under /_worker/* for the Worker tab.
+// Serves the single-page control-room hub at http://localhost:3010/ and proxies the gated
+// dashboards so they open in any browser: a browser can't attach an `Authorization: Bearer`
+// header to a plain navigation, so this proxy injects the metrics scrape token and a
+// self-refreshing super_admin JWT and forwards to the API. It also serves /_status (live
+// health + latency), /_worker/* (worker readiness/metrics), and the vendored Tailwind engine
+// at /_hub/tw.js, and strips frame-blocking headers so dashboards can be embedded if wanted.
 //
-//   pnpm dashboards:proxy        (or: node tooling/dev/dashboards-proxy.mjs)
-//     → http://localhost:3010/                tabbed hub (embeds + live status)
+//   pnpm dashboards:proxy        (or: node tooling/dev/dashboards/proxy.mjs)
+//     → http://localhost:3010/                the hub (status, queues, metrics, links)
 //     → http://localhost:3010/admin/queues    Bull Board (super_admin JWT injected, refreshed)
 //     → http://localhost:3010/metrics         Prometheus (METRICS_SCRAPE_TOKEN injected)
-//     → http://localhost:3010/reference/      API docs (public)
+//     → http://localhost:3010/reference/      Scalar API docs (public)
 //
-// The hub UI is tooling/dev/dashboards-hub.html (read per request — edit it live, no restart).
+// The hub UI is ./hub.html (read per request — edit it live, no restart).
 // Env (optional): PROXY_PORT (3010), API_PORT (PORT from .env.local, else 3000),
 //                 DEMO_EMAIL, DEMO_PASSWORD.
 
@@ -23,9 +23,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const HUB_HTML_PATH = join(ROOT, 'tooling/dev/dashboards-hub.html');
-const TW_PATH = join(ROOT, 'tooling/dev/dashboards-hub.tw.js');
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const HUB_HTML_PATH = join(ROOT, 'tooling/dev/dashboards/hub.html');
+const TW_PATH = join(ROOT, 'tooling/dev/dashboards/tailwind.js');
 
 function envVal(key) {
   try {
@@ -193,7 +193,7 @@ function readHub() {
   try {
     return readFileSync(HUB_HTML_PATH, 'utf8');
   } catch {
-    return '<!doctype html><meta charset="utf-8"><body style="font:14px system-ui;padding:40px">Hub file missing: tooling/dev/dashboards-hub.html</body>';
+    return '<!doctype html><meta charset="utf-8"><body style="font:14px system-ui;padding:40px">Hub file missing: tooling/dev/dashboards/hub.html</body>';
   }
 }
 
@@ -264,7 +264,7 @@ async function handleRequest(clientReq, res, reqBody) {
     } catch {
       res.writeHead(404, { 'content-type': 'text/plain' });
       res.end(
-        'tailwind asset missing — curl https://cdn.tailwindcss.com -o tooling/dev/dashboards-hub.tw.js',
+        'tailwind asset missing — curl https://cdn.tailwindcss.com -o tooling/dev/dashboards/tailwind.js',
       );
     }
     return;

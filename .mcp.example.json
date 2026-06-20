@@ -106,7 +106,7 @@
       "type": "stdio",
       "command": "node",
       "args": [
-        "tooling/dev/dashboards-mcp.mjs"
+        "tooling/dev/dashboards/mcp.mjs"
       ]
     }
   }

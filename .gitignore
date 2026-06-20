@@ -118,4 +118,4 @@ tooling/setup.secrets.json
 outputs/
 
 # vendored Tailwind Play CDN for the local dashboards hub (regenerable: curl https://cdn.tailwindcss.com)
-tooling/dev/dashboards-hub.tw.js
+tooling/dev/dashboards/tailwind.js
