@@ -3,6 +3,9 @@ import { randomInt } from 'node:crypto';
 /** Maximum length after trim; Stripe-style keys are typically shorter. */
 export const IDEMPOTENCY_KEY_MAX_LENGTH = 255;
 
+/** Minimum length after trim; shorter keys collide too easily to be safe replay keys. */
+export const IDEMPOTENCY_KEY_MIN_LENGTH = 16;
+
 /** Redis counter (logical key); does not match cache entries under `idempotency:` namespaces. */
 export const IDEMPOTENCY_CLAIM_COUNTER_LOGICAL_KEY = 'idempotency-claim-counter';
 
@@ -29,7 +32,9 @@ export type ParsedIdempotencyKeyHeader =
   | { kind: 'valid'; value: string };
 
 /**
- * Parses and validates `X-Idempotency-Key` header value.
+ * Parses and validates the `X-Idempotency-Key` header value (16–255 chars,
+ * `[A-Za-z0-9._:~+/=-]`); an empty or whitespace-only header is `absent`, while
+ * anything out of range or malformed is `invalid`.
  */
 export function parseIdempotencyKeyHeader(
   headerValue: string | string[] | undefined,
@@ -39,6 +44,7 @@ export function parseIdempotencyKeyHeader(
   if (typeof raw !== 'string') return { kind: 'absent' };
   const trimmed = raw.trim();
   if (trimmed.length === 0) return { kind: 'absent' };
+  if (trimmed.length < IDEMPOTENCY_KEY_MIN_LENGTH) return { kind: 'invalid' };
   if (trimmed.length > IDEMPOTENCY_KEY_MAX_LENGTH) return { kind: 'invalid' };
   if (!IDEMPOTENCY_KEY_BODY_PATTERN.test(trimmed)) return { kind: 'invalid' };
   return { kind: 'valid', value: trimmed };

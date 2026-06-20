@@ -9,7 +9,7 @@ core-be deduplicates mutating HTTP requests when clients send an **`X-Idempotenc
 | Aspect | Detail |
 | ------ | ------ |
 | **Methods** | `POST`, `PUT`, `PATCH`, `DELETE` |
-| **Header** | `X-Idempotency-Key` (validated format; see `parseIdempotencyKeyHeader`) |
+| **Header** | `X-Idempotency-Key` — 16–255 chars, `[A-Za-z0-9._:~+/=-]` (see `parseIdempotencyKeyHeader`) |
 | **Scope** | Redis key includes organization and user when present: `idempotency:{org}:{user}:{key}` |
 | **TTL** | 24 hours for completed responses; 60s placeholder while in flight |
 | **Redis down** | **503** `service_unavailable` (fail closed) |
@@ -36,15 +36,17 @@ Legacy placeholders written before this state machine (no `state` field, or `sta
 
 ---
 
-## Recommended routes
+## Required vs optional
 
-The header is **optional** on all writes, but **strongly recommended** where duplicate side effects are costly:
+The header is **required on 13 writes** — a missing or malformed key fails closed with **422**
+(`idempotencyKeyRequired` / `idempotencyKeyInvalid`). It is **optional but strongly recommended** on
+every other write, where duplicate side effects are costly.
 
-| Method | Path | Notes |
-| ------ | ---- | ----- |
-| `POST` | `/api/v1/billing/subscriptions` | Key forwarded to Stripe `subscriptions.create` when Stripe is configured |
-
-The generated route catalog (`docs/routes.txt`) lists this under **IDEMPOTENCY**. OpenAPI descriptions for subscription create reference this page.
+The required set's source of truth is the `config: { idempotencyRequired: true }` flag on each route;
+the generated route catalog (`docs/routes.txt`) lists it under **IDEMPOTENCY-REQUIRED WRITES (13)**, and
+each route's OpenAPI parameter advertises the header as required. For example, on
+`POST /api/v1/billing/subscriptions` the key is forwarded to Stripe `subscriptions.create` when Stripe is
+configured.
 
 ---
 
