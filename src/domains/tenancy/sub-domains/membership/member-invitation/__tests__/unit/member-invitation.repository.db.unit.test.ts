@@ -162,3 +162,90 @@ describe('MemberInvitationRepository.findByOrganizationId (keyset cursor paginat
     expect(ids).toEqual(sortedAsc);
   });
 });
+
+/**
+ * The service-layer test mocks `accept` to always succeed, and the service pre-check does NOT
+ * verify the token (credential equality lives only in the repository WHERE). So the single-use,
+ * wrong-token, and expiry guards have no behavioral coverage — a broken WHERE clause would ship
+ * green. These exercise the real DB-level `accept`.
+ */
+describe('MemberInvitationRepository.accept (single-use + credential + expiry guards)', () => {
+  const repository = new MemberInvitationRepository();
+
+  beforeEach(async () => {
+    await cleanupDatabase();
+  });
+
+  async function seedInvitation() {
+    const { owner, membership } = await setupOrganizationWithMembership();
+    const plainToken = `accept-token-${Date.now()}-${Math.random()}`;
+    const invitation = await repository.create({
+      membership_id: membership.id,
+      email: `accept-${Date.now()}-${Math.random()}@test.com`,
+      token_hash: hashInvitationToken(plainToken),
+      invited_by_user_id: owner.id,
+      expires_at: new Date(Date.now() + ONE_DAY_MS),
+      created_by_user_id: owner.id,
+    });
+    return { invitation, plainToken };
+  }
+
+  async function readAcceptedAt(id: number): Promise<Date | null> {
+    const rows = await database
+      .select({ accepted_at: member_invitations.accepted_at })
+      .from(member_invitations)
+      .where(eq(member_invitations.id, id));
+    return rows[0]?.accepted_at ?? null;
+  }
+
+  it('accepts once with the correct token, then rejects the replay (single-use)', async () => {
+    const { invitation, plainToken } = await seedInvitation();
+    const tokenHash = hashInvitationToken(plainToken);
+
+    const first = await repository.accept(invitation.public_id, tokenHash, new Date());
+    expect(first?.public_id).toBe(invitation.public_id);
+
+    const replay = await repository.accept(invitation.public_id, tokenHash, new Date());
+    expect(replay).toBeNull();
+    expect(await readAcceptedAt(invitation.id)).not.toBeNull();
+  });
+
+  it('rejects a wrong token and leaves accepted_at null', async () => {
+    const { invitation } = await seedInvitation();
+
+    const result = await repository.accept(
+      invitation.public_id,
+      hashInvitationToken('a-different-token-entirely'),
+      new Date(),
+    );
+    expect(result).toBeNull();
+    expect(await readAcceptedAt(invitation.id)).toBeNull();
+  });
+
+  it('rejects an invitation whose expiry precedes the check time, even with the correct token', async () => {
+    const { invitation, plainToken } = await seedInvitation();
+
+    // The invitation is valid for 1 day; checking it 2 days out makes it expired relative to
+    // the guard `gt(expires_at, expires_after)`. (A past-dated expires_at cannot be inserted —
+    // the chk_member_inv_expires CHECK constraint forbids it — so the check time models "now".)
+    const result = await repository.accept(
+      invitation.public_id,
+      hashInvitationToken(plainToken),
+      new Date(Date.now() + 2 * ONE_DAY_MS),
+    );
+    expect(result).toBeNull();
+    expect(await readAcceptedAt(invitation.id)).toBeNull();
+  });
+
+  it('lets exactly one of two concurrent accepts win', async () => {
+    const { invitation, plainToken } = await seedInvitation();
+    const tokenHash = hashInvitationToken(plainToken);
+    const now = new Date();
+
+    const results = await Promise.all([
+      repository.accept(invitation.public_id, tokenHash, now),
+      repository.accept(invitation.public_id, tokenHash, now),
+    ]);
+    expect(results.filter((row) => row !== null)).toHaveLength(1);
+  });
+});
