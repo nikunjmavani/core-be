@@ -31,6 +31,7 @@ Skills live in [`agent-os/skills/`](../skills/).
 | `tooling/setup/setup.config.json`, `src/shared/constants/project-identity.constants.ts` | project-identity-sync | |
 | `src/infrastructure/database/contexts/**`, `src/domains/**/*.worker.ts`, RLS migrations | rls-tenant-isolation-guard | |
 | `src/shared/middlewares/core/idempotency.middleware.ts`, idempotencyRequired routes, `src/infrastructure/payment/stripe.client.ts` | idempotency-guard | |
+| **Finishing any code change** (before declaring it done) | change-completeness-guard | Definition-of-done: own tests + cross-cutting suites + docs + rules + skills all moved with the change. Always-applied rule: `agent-os/rules/change-completeness.mdc` |
 
 > The 26 `agent-os/rules/*-sync.mdc` files remain for Cursor's glob auto-attach.
 > This table is the human-readable cross-platform equivalent.

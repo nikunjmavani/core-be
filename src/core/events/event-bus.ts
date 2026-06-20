@@ -7,6 +7,10 @@ import {
 import { executeCommitDispatchTask } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.executor.js';
 import type { CommitDispatchTask } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.types.js';
 import { captureException } from '@/infrastructure/observability/sentry/sentry.js';
+import {
+  recordCommitDispatchDurabilityFallback,
+  recordEventBusHandlerFailure,
+} from '@/infrastructure/observability/metrics/prometheus-metrics.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
@@ -165,6 +169,10 @@ export class EventBus {
         } catch (error) {
           logger.error({ eventType: event.type, error }, 'Domain event handler failed');
           captureException(error, { tags: { source: 'event-bus.emit', eventType: event.type } });
+          // Per-event failure counter: emit swallows handler errors by design (a failed email must
+          // not fail the HTTP request), so this metric is the only rate signal for a handler that
+          // fails persistently. Critical side effects use emitStrict instead (propagates the error).
+          recordEventBusHandlerFailure(event.type);
         }
       }),
     );
@@ -222,8 +230,14 @@ export interface ScheduleCommitDispatchOptions {
  * Schedules a serializable post-commit side effect.
  *
  * @remarks
- * - **Algorithm:** when `requestId` is set, RPUSH JSON to Redis immediately; otherwise queue in-memory for flush.
- * - **Failure modes:** Redis append failure falls back to in-memory onCommit (not crash-safe).
+ * - **Algorithm:** when `requestId` is set, RPUSH JSON to Redis immediately (durable, recovered by
+ *   the commit-dispatch sweeper if the request dies after commit); otherwise queue in-memory for flush.
+ * - **Durability contract:** the Redis path is crash-safe; the in-memory `onCommit` path is NOT. A
+ *   Redis append failure therefore *degrades* durability — the task survives only if the process
+ *   lives long enough to flush. That degradation is surfaced as a high-severity alert (Sentry +
+ *   `commit_dispatch_durability_fallbacks_total`) rather than a silent warn, so a Redis outage that
+ *   is quietly dropping post-commit side effects is observable.
+ * - **Failure modes:** Redis append failure falls back to in-memory onCommit (not crash-safe) and alerts.
  * - **Side effects:** may write Redis keys; execution deferred until {@link EventBus.flushOnCommit}.
  * - **Notes:** task payloads must stay secret-free — identifiers only.
  */
@@ -238,10 +252,15 @@ export async function scheduleCommitDispatch(
       pendingCommitDispatchRequestIds.add(requestId);
       return;
     } catch (error) {
-      logger.warn(
+      // Durability degradation — escalate beyond a warn log: the side effect is no longer crash-safe.
+      logger.error(
         { error, requestId, taskType: task.type },
         'commit-dispatch.append_failed.fallback_to_memory',
       );
+      captureException(error, {
+        tags: { source: 'event-bus.commit-dispatch', taskType: task.type },
+      });
+      recordCommitDispatchDurabilityFallback();
     }
   }
   eventBus.onCommit(() => executeCommitDispatchTask(task));

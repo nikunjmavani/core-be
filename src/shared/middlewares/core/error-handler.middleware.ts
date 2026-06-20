@@ -17,8 +17,9 @@ function getRequestId(request: { id?: string }): string {
   return request.id ?? randomUUID();
 }
 
-function getDocsBaseUrl(): string {
-  return env.API_DOCS_BASE_URL ?? 'https://docs.example.com/errors';
+function getDocsBaseUrl(): string | null {
+  // Omit documentation_url entirely when unconfigured rather than emit a non-existent domain.
+  return env.API_DOCS_BASE_URL ?? null;
 }
 
 function buildErrorPayload(
@@ -27,6 +28,7 @@ function buildErrorPayload(
   detail: string,
   errors?: { field: string; message: string }[],
 ) {
+  const docsBaseUrl = getDocsBaseUrl();
   const payload: {
     type: string;
     code: string;
@@ -37,7 +39,7 @@ function buildErrorPayload(
     type,
     code,
     detail,
-    documentation_url: `${getDocsBaseUrl()}/${code}`,
+    ...(docsBaseUrl ? { documentation_url: `${docsBaseUrl}/${code}` } : {}),
   };
   if (errors?.length) payload.errors = errors;
   return payload;

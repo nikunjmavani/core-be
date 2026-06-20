@@ -11,7 +11,13 @@ import type { WebhookService } from './webhook.service.js';
 import type { WebhookEventService } from './webhook-event/webhook-event.service.js';
 import { createWebhookController } from './webhook.controller.js';
 import { createWebhookEventController } from './webhook-event/webhook-event.controller.js';
-import { listWebhookDeliveryAttemptsQueryDto, listWebhooksQueryDto } from './webhook.dto.js';
+import {
+  CreateWebhookDto,
+  listWebhookDeliveryAttemptsQueryDto,
+  listWebhooksQueryDto,
+  UpdateWebhookDto,
+  webhookIdParamsDto,
+} from './webhook.dto.js';
 
 /**
  * Returns a Fastify plugin that registers the organization-scoped webhook HTTP routes (catalog,
@@ -66,6 +72,7 @@ export function webhookRoutes(
           summary: 'Get webhook',
           description: 'Returns a single webhook configuration. Requires WEBHOOK_READ permission.',
           tags: ['Webhook'],
+          params: webhookIdParamsDto,
         },
       },
       webhookController.getWebhook,
@@ -75,12 +82,13 @@ export function webhookRoutes(
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_MANAGE)],
-        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
+        config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         schema: {
           summary: 'Create webhook',
           description:
             'Creates a new webhook endpoint. Specify the URL and events to subscribe to. Requires WEBHOOK_MANAGE permission.',
           tags: ['Webhook'],
+          body: CreateWebhookDto,
         },
       },
       webhookController.createWebhook,
@@ -96,6 +104,8 @@ export function webhookRoutes(
           description:
             'Updates a webhook URL, events, or enabled status. Requires WEBHOOK_MANAGE permission.',
           tags: ['Webhook'],
+          params: webhookIdParamsDto,
+          body: UpdateWebhookDto,
         },
       },
       webhookController.updateWebhook,
@@ -111,6 +121,7 @@ export function webhookRoutes(
           description:
             'Permanently deletes a webhook endpoint. Requires WEBHOOK_MANAGE permission.',
           tags: ['Webhook'],
+          params: webhookIdParamsDto,
         },
       },
       webhookController.deleteWebhook,
@@ -123,6 +134,7 @@ export function webhookRoutes(
           description:
             'Returns the delivery attempt history for a webhook, including status codes and response times. Requires WEBHOOK_READ permission.',
           tags: ['Webhook'],
+          params: webhookIdParamsDto,
           querystring: listWebhookDeliveryAttemptsQueryDto,
         },
         onRequest: [app.authenticate],
@@ -142,6 +154,7 @@ export function webhookRoutes(
           description:
             'Sends a test event to the webhook URL to verify connectivity. Requires WEBHOOK_MANAGE permission.',
           tags: ['Webhook'],
+          params: webhookIdParamsDto,
         },
       },
       webhookController.testWebhook,

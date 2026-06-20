@@ -96,7 +96,7 @@ Legend:
   GET    /api/v1/notify/notifications/unread-count                200  -    both  AUTH
   GET    /api/v1/notify/webhook-events                            200  -    both  PERM: webhook:read
   GET    /api/v1/notify/webhooks                                  200  -    both  PERM: webhook:read
-  POST   /api/v1/notify/webhooks                                  201  -    both  PERM: webhook:manage
+  POST   /api/v1/notify/webhooks                                  201  req  both  PERM: webhook:manage
   GET    /api/v1/notify/webhooks/:webhook_id                      200  -    both  PERM: webhook:read
   PATCH  /api/v1/notify/webhooks/:webhook_id                      200  -    both  PERM: webhook:manage
   DELETE /api/v1/notify/webhooks/:webhook_id                      204  -    both  PERM: webhook:manage
@@ -116,7 +116,7 @@ Legend:
   PATCH  /api/v1/tenancy/organization                             200  -    both  PERM: organization:update
   DELETE /api/v1/tenancy/organization                             204  -    team  PERM: organization:delete
   GET    /api/v1/tenancy/organization/api-keys                    200  -    both  PERM: api-key:read
-  POST   /api/v1/tenancy/organization/api-keys                    201  -    both  PERM: api-key:manage
+  POST   /api/v1/tenancy/organization/api-keys                    201  req  both  PERM: api-key:manage
   GET    /api/v1/tenancy/organization/api-keys/:api_key_id        200  -    both  PERM: api-key:read
   PATCH  /api/v1/tenancy/organization/api-keys/:api_key_id        200  -    both  PERM: api-key:manage
   DELETE /api/v1/tenancy/organization/api-keys/:api_key_id        204  -    both  PERM: api-key:manage
@@ -136,12 +136,12 @@ Legend:
   DELETE /api/v1/tenancy/organization/memberships/:membership_id  204  -    both  PERM: membership:manage
   GET    /api/v1/tenancy/organization/memberships/:membership_id/permissions  200  -    both  PERM: membership:read
   GET    /api/v1/tenancy/organization/notification-policies       200  -    both  PERM: notification-policy:read
-  POST   /api/v1/tenancy/organization/notification-policies       201  -    both  PERM: notification-policy:manage
+  POST   /api/v1/tenancy/organization/notification-policies       201  req  both  PERM: notification-policy:manage
   GET    /api/v1/tenancy/organization/notification-policies/:notification_policy_id  200  -    both  PERM: notification-policy:read
   PATCH  /api/v1/tenancy/organization/notification-policies/:notification_policy_id  200  -    both  PERM: notification-policy:manage
   DELETE /api/v1/tenancy/organization/notification-policies/:notification_policy_id  204  -    both  PERM: notification-policy:manage
   GET    /api/v1/tenancy/organization/roles                       200  -    both  PERM: role:read
-  POST   /api/v1/tenancy/organization/roles                       201  -    team  PERM: role:manage
+  POST   /api/v1/tenancy/organization/roles                       201  req  team  PERM: role:manage
   GET    /api/v1/tenancy/organization/roles/:role_id              200  -    both  PERM: role:read
   PATCH  /api/v1/tenancy/organization/roles/:role_id              200  -    both  PERM: role:manage
   DELETE /api/v1/tenancy/organization/roles/:role_id              204  -    both  PERM: role:manage
@@ -160,7 +160,7 @@ Legend:
   Routes: 4
 ================================================================================
 
-  POST   /api/v1/uploads                                          201  -    both  AUTH
+  POST   /api/v1/uploads                                          201  req  both  AUTH
   GET    /api/v1/uploads/:upload_id                               200  -    both  AUTH
   DELETE /api/v1/uploads/:upload_id                               204  -    both  AUTH
   POST   /api/v1/uploads/:upload_id/confirm                       201  -    both  AUTH
@@ -224,7 +224,7 @@ Legend:
   Team-only (O)   : 5
 
 ================================================================================
-  IDEMPOTENCY-REQUIRED WRITES (8) — X-Idempotency-Key required
+  IDEMPOTENCY-REQUIRED WRITES (13) — X-Idempotency-Key required
 ================================================================================
 
   Routes flagged I = req reject a missing or reused key (422); every other write
@@ -234,10 +234,15 @@ Legend:
     POST /api/v1/billing/subscriptions/:subscription_id/cancel
     POST /api/v1/billing/subscriptions/:subscription_id/change-plan
     POST /api/v1/billing/subscriptions/:subscription_id/resume
+    POST /api/v1/notify/webhooks
+    POST /api/v1/tenancy/organization/api-keys
     POST /api/v1/tenancy/organization/invitations
     POST /api/v1/tenancy/organization/memberships
+    POST /api/v1/tenancy/organization/notification-policies
+    POST /api/v1/tenancy/organization/roles
     POST /api/v1/tenancy/organization/transfer-ownership
     POST /api/v1/tenancy/organizations
+    POST /api/v1/uploads
 
   See docs/reference/reliability/idempotency.md and OpenAPI operation descriptions.
 

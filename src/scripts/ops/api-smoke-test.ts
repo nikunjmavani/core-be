@@ -144,7 +144,7 @@ async function setupLogin(): Promise<void> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
-    expectedStatus: 200,
+    expectedStatus: 201,
   });
   const payload = body as { data?: { access_token?: string } };
   if (!payload.data?.access_token) {
@@ -217,7 +217,7 @@ function buildDomainProbes(): RouteProbe[] {
       name: 'POST /api/v1/auth/magic-link/send',
       method: 'POST',
       path: `${API_PREFIX}/auth/magic-link/send`,
-      expectedStatus: [200, 202],
+      expectedStatus: 201,
       body: { email: EMAIL },
     },
 

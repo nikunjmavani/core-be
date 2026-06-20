@@ -212,12 +212,19 @@ export async function assertPostgresConnectionBudget(
 
   if (options.assertWorkerConcurrency) {
     const poolDemand = computeWorkerPostgresPoolDemand();
-    const { peakPostgresConcurrency, monolithicWorker, selectedFamilies, queues } = poolDemand;
+    const {
+      peakPostgresConcurrency,
+      peakPostgresConcurrencyWithSafetyMargin,
+      monolithicWorker,
+      selectedFamilies,
+      queues,
+    } = poolDemand;
 
     logger.info(
       {
         poolMaxConnections,
         peakPostgresConcurrency,
+        peakPostgresConcurrencyWithSafetyMargin,
         selectedFamilies,
         monolithicWorker,
         enabledQueues: queues
@@ -237,6 +244,23 @@ export async function assertPostgresConnectionBudget(
           `for WORKER_QUEUE_FAMILIES [${selectedFamilies.join(', ')}]${monolithicWorker ? ' (monolithic worker)' : ''}. ` +
           'Raise DATABASE_POOL_MAX on the worker service, lower WORKER_CONCURRENCY_* overrides, ' +
           'or split worker services by queue family. See docs/deployment/runbooks/resource-limits.md',
+      );
+    }
+
+    // EX-22: the hard cap above is on *actual* demand, but a worker sized with zero burst headroom
+    // can still exhaust the pool when several queues spike at once. Warn (never fail boot) when the
+    // raw demand fits but the safety-margin-adjusted demand does not, so operators raise
+    // DATABASE_POOL_MAX before a burst forces jobs to the DLQ.
+    if (peakPostgresConcurrencyWithSafetyMargin > poolMaxConnections) {
+      logger.warn(
+        {
+          poolMaxConnections,
+          peakPostgresConcurrency,
+          peakPostgresConcurrencyWithSafetyMargin,
+          selectedFamilies,
+          monolithicWorker,
+        },
+        'database.connection_budget.worker_demand_no_burst_headroom',
       );
     }
   }

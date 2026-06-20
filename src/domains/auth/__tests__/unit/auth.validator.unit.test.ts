@@ -91,6 +91,29 @@ describe('auth.validator', () => {
     });
   });
 
+  it('validateChangePassword rejects a long password lacking character-class diversity (EX-10)', () => {
+    // 19 chars but a single character class (all lowercase) — meets length, fails the policy.
+    expect(() =>
+      validateChangePassword({
+        current_password: 'OldPassword12!',
+        new_password: 'alllowercaseletters',
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('validateChangePassword accepts a 12-char password with 3 character classes (EX-10)', () => {
+    // lowercase + uppercase + digit = 3 of 4 classes, no symbol required.
+    expect(
+      validateChangePassword({
+        current_password: 'OldPassword12!',
+        new_password: 'lowerUPPER12',
+      }),
+    ).toEqual({
+      current_password: 'OldPassword12!',
+      new_password: 'lowerUPPER12',
+    });
+  });
+
   it('validateVerifyEmail accepts token', () => {
     expect(validateVerifyEmail({ token: 'verify-token' })).toEqual({ token: 'verify-token' });
   });

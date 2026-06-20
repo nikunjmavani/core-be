@@ -3,6 +3,7 @@
  * Domain-owned; used by scripts/seed orchestration.
  */
 import { createHash } from 'node:crypto';
+import { sql } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { users } from '@/domains/user/user.schema.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
@@ -21,6 +22,7 @@ export interface SeedUserPayload {
  * Insert a single user row for dev/demo seeding (`pnpm db:seed`, `pnpm db:seed:full`).
  * Sets `is_email_verified = true`, generates a fresh `public_id`, and computes the
  * lowercased SHA-256 `email_hash` so case-insensitive lookups work post-seed.
+ * Idempotent: re-running updates `password_hash`, `first_name`, `last_name` on conflict.
  */
 export async function seedUser(payload: SeedUserPayload) {
   const emailHash = createHash('sha256').update(payload.email.toLowerCase()).digest('hex');
@@ -35,6 +37,16 @@ export async function seedUser(payload: SeedUserPayload) {
       last_name: payload.last_name,
       password_hash: payload.password_hash ?? null,
       status: payload.status ?? 'ACTIVE',
+    })
+    .onConflictDoUpdate({
+      target: users.email,
+      targetWhere: sql`${users.deleted_at} IS NULL`,
+      set: {
+        email_hash: emailHash,
+        first_name: payload.first_name,
+        last_name: payload.last_name,
+        password_hash: payload.password_hash ?? null,
+      },
     })
     .returning();
   return row ?? null;

@@ -10,7 +10,13 @@ import { createUserController } from './user.controller.js';
 import { createUserDataExportController } from './sub-domains/user-data-export/user-data-export.controller.js';
 import { PutNotificationPreferencesDto } from './sub-domains/user-notification-preferences/user-notification-preferences.dto.js';
 import { UpdateUserSettingsDto } from './sub-domains/user-settings/user-settings.dto.js';
-import { AdminUpdateUserDto, UpdateMeDto, UploadAvatarDto } from './user.dto.js';
+import {
+  AdminUpdateUserDto,
+  dataExportIdParamsDto,
+  UpdateMeDto,
+  UploadAvatarDto,
+  userIdParamsDto,
+} from './user.dto.js';
 
 /**
  * Fastify plugin that mounts the user domain HTTP surface: admin user management routes, the
@@ -45,6 +51,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Get user by ID (admin)',
         description: "Returns a specific user's profile. Requires SUPER_ADMIN or ADMIN role.",
         tags: ['User Management'],
+        params: userIdParamsDto,
       },
     },
     controller.getUser,
@@ -60,6 +67,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Update user (admin)',
         description: "Updates a user's profile or status. Requires SUPER_ADMIN or ADMIN role.",
         tags: ['User Management'],
+        params: userIdParamsDto,
         body: AdminUpdateUserDto,
       },
     },
@@ -76,6 +84,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Delete user (admin)',
         description: 'Permanently deletes a user account. Requires SUPER_ADMIN or ADMIN role.',
         tags: ['User Management'],
+        params: userIdParamsDto,
       },
     },
     controller.deleteUser,
@@ -91,6 +100,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
         description:
           'Suspends a user account, preventing login. Requires SUPER_ADMIN or ADMIN role.',
         tags: ['User Management'],
+        params: userIdParamsDto,
       },
     },
     controller.suspendUser,
@@ -105,6 +115,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
         summary: 'Unsuspend user (admin)',
         description: 'Reactivates a suspended user account. Requires SUPER_ADMIN or ADMIN role.',
         tags: ['User Management'],
+        params: userIdParamsDto,
       },
     },
     controller.unsuspendUser,
@@ -285,6 +296,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
         description:
           'Returns export job status. When completed, includes a presigned download URL for the gzip JSON artifact (15-minute lifetime; every mint is audited as `user.data_export.url_minted`).',
         tags: ['Privacy'],
+        params: dataExportIdParamsDto,
       },
     },
     dataExportController.getExportStatus,

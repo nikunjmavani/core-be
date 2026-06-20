@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const sqlMock = vi.fn();
 const getEnvMock = vi.fn();
 const computeWorkerPostgresPoolDemandMock = vi.fn();
+const loggerWarnMock = vi.fn();
 const originalKubernetesServiceHost = process.env.KUBERNETES_SERVICE_HOST;
 
 vi.mock('@/infrastructure/database/connection.js', () => ({
@@ -22,7 +23,7 @@ vi.mock('@/shared/config/env.config.js', () => ({
 }));
 
 vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { info: vi.fn(), warn: loggerWarnMock, error: vi.fn() },
 }));
 
 vi.mock('@/infrastructure/queue/worker-runtime/worker-connection-budget.js', () => ({
@@ -35,6 +36,7 @@ describe('assertPostgresConnectionBudget', () => {
     sqlMock.mockReset();
     getEnvMock.mockReset();
     computeWorkerPostgresPoolDemandMock.mockReset();
+    loggerWarnMock.mockReset();
     vi.resetModules();
     delete process.env.KUBERNETES_SERVICE_HOST;
     getEnvMock.mockReturnValue({
@@ -151,6 +153,40 @@ describe('assertPostgresConnectionBudget', () => {
 
     await expect(assertPostgresConnectionBudget({ assertWorkerConcurrency: true })).rejects.toThrow(
       /Worker Postgres pool demand/i,
+    );
+  });
+
+  // EX-22: actual demand fits the pool, but the 1.25x burst-margin does not — warn, do not fail boot.
+  it('warns (without throwing) when worker demand fits but lacks burst headroom', async () => {
+    getEnvMock.mockReturnValue({
+      DATABASE_POOL_MAX: 20,
+      POSTGRES_RESERVED_CONNECTIONS: 10,
+      POSTGRES_MAX_CONNECTIONS: 100,
+      DEPLOYMENT_TOTAL_REPLICA_COUNT: 1,
+      NODE_ENV: 'test',
+    });
+    computeWorkerPostgresPoolDemandMock.mockReturnValue({
+      selectedFamilies: ['mail', 'notify', 'webhook', 'stripe', 'retention', 'observability'],
+      monolithicWorker: true,
+      peakPostgresConcurrency: 18, // <= 20, so no hard failure
+      peakPostgresConcurrencyWithSafetyMargin: 23, // ceil(18 * 1.25) > 20, so headroom warning
+      queues: [],
+    });
+
+    const { assertPostgresConnectionBudget } = await import(
+      '@/infrastructure/database/safety/assert-connection-budget.js'
+    );
+
+    await expect(
+      assertPostgresConnectionBudget({ assertWorkerConcurrency: true }),
+    ).resolves.toBeUndefined();
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        poolMaxConnections: 20,
+        peakPostgresConcurrency: 18,
+        peakPostgresConcurrencyWithSafetyMargin: 23,
+      }),
+      'database.connection_budget.worker_demand_no_burst_headroom',
     );
   });
 

@@ -117,10 +117,21 @@ export class AuthMethodRepository {
     ) as Record<string, unknown>[];
     const row = rows[0];
     if (!row) return null;
+    // Explicit field mapping (no blanket `as unknown` cast): the row is an untyped SQL-function
+    // result, so map each field by name — a future change to AuthMethodProviderLookup then fails
+    // the compile here instead of silently drifting.
     return {
-      ...(row as unknown as AuthMethodProviderLookup),
-      id: Number((row as { id: unknown }).id),
-      user_id: Number((row as { user_id: unknown }).user_id),
+      id: Number(row.id),
+      user_id: Number(row.user_id),
+      user_public_id: String(row.user_public_id),
+      method_type: String(row.method_type),
+      provider: (row.provider as string | null) ?? null,
+      provider_user_id: (row.provider_user_id as string | null) ?? null,
+      is_primary: Boolean(row.is_primary),
+      verified_at: (row.verified_at as Date | null) ?? null,
+      last_used_at: (row.last_used_at as Date | null) ?? null,
+      created_at: (row.created_at as Date | null) ?? null,
+      revoked_at: (row.revoked_at as Date | null) ?? null,
     };
   }
 

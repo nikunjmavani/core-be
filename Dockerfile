@@ -98,7 +98,7 @@ LABEL org.opencontainers.image.revision="${BUILD_REVISION}"
 # compose-local liveness; platform probes still apply in hosted deploys).
 # reaudit-#8: read WORKER_HEALTH_PORT at runtime so overriding it does not leave the
 # container permanently unhealthy on a hardcoded port.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.WORKER_HEALTH_PORT||'9090')+'/livez').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 EXPOSE 9090
@@ -113,7 +113,7 @@ LABEL org.opencontainers.image.revision="${BUILD_REVISION}"
 COPY --from=build /app/docs/routes.txt ./docs/routes.txt
 COPY --from=build /app/docs/openapi ./docs/openapi
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||'3000')+'/livez').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 EXPOSE 3000

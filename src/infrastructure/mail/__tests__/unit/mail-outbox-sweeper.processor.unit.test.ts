@@ -4,6 +4,13 @@ import { runMailOutboxSweeperJob } from '@/infrastructure/mail/workers/mail-outb
 const findStalePendingMailOutboxIdsMock = vi.fn();
 const reclaimStaleSendingMailOutboxIdsMock = vi.fn();
 const enqueueMailOutboxJobMock = vi.fn();
+const resendCircuitGetStateMock = vi.fn();
+
+vi.mock('@/infrastructure/resilience/circuit-breaker.js', () => ({
+  resendCircuit: {
+    getState: (...arguments_: unknown[]) => resendCircuitGetStateMock(...arguments_),
+  },
+}));
 
 vi.mock('@/infrastructure/database/contexts/worker-database.context.js', () => ({
   withSystemTableWorkerContext: (callback: () => Promise<unknown>) => callback(),
@@ -41,6 +48,8 @@ describe('mail-outbox-sweeper.processor', () => {
     reclaimStaleSendingMailOutboxIdsMock.mockResolvedValue([]);
     findStalePendingMailOutboxIdsMock.mockResolvedValue([101, 102]);
     enqueueMailOutboxJobMock.mockResolvedValue(undefined);
+    resendCircuitGetStateMock.mockReset();
+    resendCircuitGetStateMock.mockResolvedValue('CLOSED');
   });
 
   it('runMailOutboxSweeperJob re-enqueues stale pending rows', async () => {
@@ -72,5 +81,30 @@ describe('mail-outbox-sweeper.processor', () => {
       reclaimedSendingCount: 1,
       reEnqueuedCount: 2,
     });
+  });
+
+  it('widens the sending-reclaim window when the Resend circuit is OPEN', async () => {
+    resendCircuitGetStateMock.mockResolvedValue('OPEN');
+    const before = Date.now();
+
+    await runMailOutboxSweeperJob();
+
+    const sendingCutoff = reclaimStaleSendingMailOutboxIdsMock.mock.calls[0]?.[0] as Date;
+    // CLOSED would put the cutoff ~10 min in the past; OPEN doubles the window to ~20 min, so far
+    // fewer rows qualify for reclaim while Resend is down.
+    const cutoffAgeMinutes = (before - sendingCutoff.getTime()) / 60_000;
+    expect(cutoffAgeMinutes).toBeGreaterThanOrEqual(19);
+  });
+
+  it('keeps the normal reclaim window when the Resend circuit is CLOSED', async () => {
+    resendCircuitGetStateMock.mockResolvedValue('CLOSED');
+    const before = Date.now();
+
+    await runMailOutboxSweeperJob();
+
+    const sendingCutoff = reclaimStaleSendingMailOutboxIdsMock.mock.calls[0]?.[0] as Date;
+    const cutoffAgeMinutes = (before - sendingCutoff.getTime()) / 60_000;
+    expect(cutoffAgeMinutes).toBeGreaterThanOrEqual(9);
+    expect(cutoffAgeMinutes).toBeLessThan(15);
   });
 });

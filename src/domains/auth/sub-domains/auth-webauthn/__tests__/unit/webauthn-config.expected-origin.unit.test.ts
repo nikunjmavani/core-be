@@ -6,10 +6,12 @@ const { mockEnv } = vi.hoisted(() => ({
     ALLOWED_ORIGINS: undefined,
     WEBAUTHN_RP_ID: undefined,
     WEBAUTHN_RP_NAME: undefined,
+    FRONTEND_URL: undefined,
   } as {
     ALLOWED_ORIGINS: string | undefined;
     WEBAUTHN_RP_ID: string | undefined;
     WEBAUTHN_RP_NAME: string | undefined;
+    FRONTEND_URL: string | undefined;
   },
 }));
 
@@ -24,6 +26,7 @@ describe('resolveWebauthnExpectedOrigin — trusted-origin allowlist (bug 39)', 
     mockEnv.ALLOWED_ORIGINS = undefined;
     mockEnv.WEBAUTHN_RP_ID = undefined;
     mockEnv.WEBAUTHN_RP_NAME = undefined;
+    mockEnv.FRONTEND_URL = undefined;
   });
 
   it('rejects a spoofed Origin header that is not in the allowlist before verification', () => {
@@ -72,5 +75,22 @@ describe('resolveWebauthnExpectedOrigin — trusted-origin allowlist (bug 39)', 
     mockEnv.WEBAUTHN_RP_ID = 'app.example.com';
 
     expect(resolveWebauthnExpectedOrigin('https://evil.example')).toBe('https://app.example.com');
+  });
+
+  // EX-35: the localhost dev origin must be config-derived, not a hardcoded port.
+  it('uses the conventional dev origin for a localhost RP id when FRONTEND_URL is unset', () => {
+    mockEnv.ALLOWED_ORIGINS = undefined;
+    mockEnv.WEBAUTHN_RP_ID = undefined; // resolves RP id to "localhost"
+    mockEnv.FRONTEND_URL = undefined;
+
+    expect(resolveWebauthnExpectedOrigin(undefined)).toBe('http://localhost:3000');
+  });
+
+  it('derives the localhost dev origin from FRONTEND_URL when set (non-default dev port)', () => {
+    mockEnv.ALLOWED_ORIGINS = undefined;
+    mockEnv.WEBAUTHN_RP_ID = undefined; // resolves RP id to "localhost"
+    mockEnv.FRONTEND_URL = 'http://localhost:5173/app'; // path stripped → origin only
+
+    expect(resolveWebauthnExpectedOrigin(undefined)).toBe('http://localhost:5173');
   });
 });

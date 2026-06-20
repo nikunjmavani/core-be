@@ -3,9 +3,9 @@
 
 # Branch-name policy — keep working branches under the documented prefixes
 # (docs/process/git-workflow.md). Long-lived env branches (dev, main) and
-# Claude Code / Codex Cloud web session branches (claude/*) are allowlisted: the
-# cloud git proxy pins a web session to push only its claude/* branch, so the
-# platform's name is accepted as-is rather than rejected. Bypass once with:
+# Claude Code web session branches (claude/*) are allowlisted: the cloud git
+# proxy pins a web session to push only its claude/* branch, so the platform's
+# name is accepted as-is rather than rejected. Bypass once with:
 #   SKIP_BRANCH_CHECK=1 git push
 BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)
 BRANCH_TYPES='feat|feature|fix|hotfix|refactor|docs|test|chore|ci|perf|build|style|revert'

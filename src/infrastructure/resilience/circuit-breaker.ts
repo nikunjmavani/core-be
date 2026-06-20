@@ -12,7 +12,8 @@ import {
   THIRTY_SECONDS_MS,
 } from '@/shared/constants/ttl.constants.js';
 
-type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+/** Lifecycle state of a circuit breaker: closed (healthy), open (failing/avoided), half-open (probing recovery). */
+export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
 interface CircuitStateData {
   state: CircuitState;
@@ -367,3 +368,27 @@ export const MANAGED_CIRCUIT_BREAKERS = {
 
 /** Union of circuit breaker names exposed on ops admin endpoints. */
 export type ManagedCircuitBreakerName = keyof typeof MANAGED_CIRCUIT_BREAKERS;
+
+/** Point-in-time state of one managed external-dependency circuit breaker. */
+export type ManagedCircuitBreakerSnapshot = {
+  name: ManagedCircuitBreakerName;
+  state: CircuitState;
+};
+
+/**
+ * Reads the current state of every managed external circuit breaker (Stripe, S3, Resend,
+ * Turnstile) in parallel.
+ *
+ * @remarks
+ * Surfaces external-dependency health without issuing any outbound call — state is read from the
+ * Redis-backed breaker (falling back to the in-memory copy). Shared by the ops admin endpoint and
+ * the `/readyz` operational body so both report identical breaker states.
+ */
+export async function snapshotManagedCircuitBreakers(): Promise<ManagedCircuitBreakerSnapshot[]> {
+  return Promise.all(
+    Object.entries(MANAGED_CIRCUIT_BREAKERS).map(async ([name, circuitBreaker]) => ({
+      name: name as ManagedCircuitBreakerName,
+      state: await circuitBreaker.getState(),
+    })),
+  );
+}

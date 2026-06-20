@@ -6,6 +6,74 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.9.1-dev.10](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.9...v4.9.1-dev.10) (2026-06-20)
+
+
+### Documentation
+
+* add handoff summary, enforcement gates, and version override to release-dev-to-production ([#727](https://github.com/nikunjmavani/core-be/issues/727)) ([812afba](https://github.com/nikunjmavani/core-be/commit/812afbaf98b421cb516cd8cf50f6f00b3b825d2c))
+
+## [4.9.1-dev.9](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.8...v4.9.1-dev.9) (2026-06-20)
+
+
+### Fixed
+
+* audit remediation — verified production-hardening items ([#725](https://github.com/nikunjmavani/core-be/issues/725)) ([bdaabac](https://github.com/nikunjmavani/core-be/commit/bdaabacd88cf643d2093d68b16bf0d68d2ccd253))
+
+## [4.9.1-dev.8](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.7...v4.9.1-dev.8) (2026-06-19)
+
+
+### Fixed
+
+* **seed:** idempotent demo seed helpers + smoke test status fixes ([#723](https://github.com/nikunjmavani/core-be/issues/723)) ([3d3a998](https://github.com/nikunjmavani/core-be/commit/3d3a998e169a7fc111ec1e9790f9ad10b90b1924))
+
+
+### Documentation
+
+* **load-testing:** document co-located load-generation caveat ([#722](https://github.com/nikunjmavani/core-be/issues/722)) ([1df13ae](https://github.com/nikunjmavani/core-be/commit/1df13aec72510e73763537c3615424bafc9d2f90))
+
+## [4.9.1-dev.7](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.6...v4.9.1-dev.7) (2026-06-19)
+
+
+### Documentation
+
+* archive Codex Cloud setup ([#719](https://github.com/nikunjmavani/core-be/issues/719)) ([831865e](https://github.com/nikunjmavani/core-be/commit/831865e05d9a770eabe031f638c18fac95889ca3))
+
+## [4.9.1-dev.6](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.5...v4.9.1-dev.6) (2026-06-19)
+
+
+### Fixed
+
+* use shared cloud agent docker fallback ([#716](https://github.com/nikunjmavani/core-be/issues/716)) ([7ab2c17](https://github.com/nikunjmavani/core-be/commit/7ab2c176ca2c58082e61c20b75c8b801ee3534a1))
+
+## [4.9.1-dev.5](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.4...v4.9.1-dev.5) (2026-06-19)
+
+
+### Fixed
+
+* add Codex Docker vfs fallback ([#715](https://github.com/nikunjmavani/core-be/issues/715)) ([f61b64e](https://github.com/nikunjmavani/core-be/commit/f61b64eaf8794d403bf6752c3660fdf2bbf2de1e))
+
+## [4.9.1-dev.4](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.3...v4.9.1-dev.4) (2026-06-18)
+
+
+### Fixed
+
+* start docker daemon before cloud compose ([6c93d3e](https://github.com/nikunjmavani/core-be/commit/6c93d3eaa30a0a9cd9227d4703527331c83e99a5))
+
+## [4.9.1-dev.3](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.2...v4.9.1-dev.3) (2026-06-18)
+
+
+### Fixed
+
+* install docker for cloud bootstrap ([2055ce5](https://github.com/nikunjmavani/core-be/commit/2055ce51b545d74b41dc933970ea06006cbbb76f))
+
+## [4.9.1-dev.2](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.1...v4.9.1-dev.2) (2026-06-18)
+
+
+### Documentation
+
+* **agent-os:** document dev production release command ([7d023a2](https://github.com/nikunjmavani/core-be/commit/7d023a203df9dc7bc81020428c24eb4e78a1b31d))
+
 ## [4.9.1-dev.1](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.0...v4.9.1-dev.1) (2026-06-18)
 
 

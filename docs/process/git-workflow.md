@@ -55,7 +55,7 @@ type/ticket-description
 
 ### AI / automation branches (`claude/*`)
 
-Claude Code **web/cloud** and Codex Cloud sessions run on platform-assigned task branches, not necessarily `feature/`/`fix/` branches. Configure Codex Cloud to use the same `claude/<slug>` branch format as Claude Code web when the platform exposes that setting. The name is created by the platform **before** the sandbox starts, and the cloud git proxy can restrict each session to pushing only that working branch, so repo skills, rules, and hooks cannot rename it. `claude/*` is therefore allowlisted by the pre-push policy by design. To land that work under a `feature/`/`fix/` name, rename at the PR/merge layer or teleport the session to a local checkout — do not switch branches from inside the session without explicit permission.
+Claude Code **web/cloud** sessions run on platform-assigned task branches, not necessarily `feature/`/`fix/` branches. The name is created by the platform **before** the sandbox starts, and the cloud git proxy can restrict each session to pushing only that working branch, so repo skills, rules, and hooks cannot rename it. `claude/*` is therefore allowlisted by the pre-push policy by design. To land that work under a `feature/`/`fix/` name, rename at the PR/merge layer or teleport the session to a local checkout — do not switch branches from inside the session without explicit permission.
 
 ---
 

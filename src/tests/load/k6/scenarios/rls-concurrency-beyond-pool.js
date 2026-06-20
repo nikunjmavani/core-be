@@ -17,11 +17,11 @@ import { authHeaders, switchToOrganization } from '../helpers/auth.js';
  *
  * Env:
  *   TEST_TOKEN, TEST_ORG_ID  (required — scenario is a no-op without them)
- *   DATABASE_POOL_MAX        (default 10) — pool size to exceed
+ *   DATABASE_POOL_MAX        (default 20) — pool size to exceed
  *   BEYOND_POOL_FACTOR       (default 4)  — target VUs = DATABASE_POOL_MAX * factor
  *   BEYOND_POOL_VUS          (optional)   — explicit target VU override
  */
-const poolMax = Number.parseInt(__ENV.DATABASE_POOL_MAX || '10', 10);
+const poolMax = Number.parseInt(__ENV.DATABASE_POOL_MAX || '20', 10);
 const beyondPoolFactor = Number.parseInt(__ENV.BEYOND_POOL_FACTOR || '4', 10);
 const targetVus = Number.parseInt(
   __ENV.BEYOND_POOL_VUS || String(Math.max(poolMax * beyondPoolFactor, poolMax + 1)),

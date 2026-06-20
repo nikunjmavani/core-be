@@ -71,7 +71,10 @@ Dependency order (declared via `dependsOn` at the domain level): `user` first; t
 
 ## Idempotency and reproducibility (required)
 
-- Re-running any tier must not duplicate rows. Use deterministic natural keys (slug/email from faker + index) plus count-and-resume (create only indices beyond what already exists) or `onConflictDoNothing()`. Use `generatePublicId()` for `public_id` fields.
+- Re-running any tier must not duplicate rows. Two conflict-handling patterns:
+  - **`onConflictDoNothing()`** — default for bulk rows, reference codes, and join tables where existing data is the source of truth.
+  - **`onConflictDoUpdate({ target, set })`** — required for demo seed helpers where fields must stay current on re-run (e.g. `password_hash`, `first_name`, `last_name` in `seedUser`; `name` in `seedOrganization`). For unique indexes with a `WHERE` clause (partial indexes), also supply `targetWhere: sql\`${table.deleted_at} IS NULL\`` so Drizzle resolves the correct index.
+- Use count-and-resume as an alternative for ordered bulk rows. Use `generatePublicId()` for `public_id` fields.
 - High-count tables (`audit.logs`, notifications) use batched multi-row inserts with `ON CONFLICT DO NOTHING`.
 - Pin faker via `SEED` (`initFakerSeed()`) so a given seed reproduces the same data.
 
@@ -94,15 +97,27 @@ System permission codes live in `src/domains/tenancy/sub-domains/permission/seed
 ## Seed function pattern
 
 ```typescript
-// In a domain seed/ file: src/domains/<domain>/.../seed/<resource>.bulk.seed.ts
+// Bulk rows / reference codes / join tables — existing row is source of truth
 export async function seedEntity(payload: Payload) {
   const [row] = await database
     .insert(entity)
-    .values({
-      public_id: generatePublicId(),
-      ...payload,
-    })
+    .values({ public_id: generatePublicId(), ...payload })
     .onConflictDoNothing()
+    .returning();
+  return row ?? null;
+}
+
+// Demo seed helpers — fields must stay current on re-run (e.g. credentials, display name)
+// For a partial unique index (WHERE deleted_at IS NULL), supply targetWhere.
+export async function seedDemoEntity(payload: Payload) {
+  const [row] = await database
+    .insert(entity)
+    .values({ public_id: generatePublicId(), ...payload })
+    .onConflictDoUpdate({
+      target: entity.email,                          // or composite [entity.org_id, entity.name]
+      targetWhere: sql`${entity.deleted_at} IS NULL`, // omit for non-partial indexes
+      set: { field_to_refresh: payload.field_to_refresh },
+    })
     .returning();
   return row ?? null;
 }

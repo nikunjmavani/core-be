@@ -31,7 +31,7 @@ See **`agent-os/skills/api-contract-guard/SKILL.md`** (rule: `agent-os/rules/api
 - Body field casing: request body (`*.dto.ts`) and response body (`*.serializer.ts`) property keys are **snake_case** (`file_name`, `created_at`); the external id stays `id`; validation `errors[].field` values are snake_case too. Internal TS identifiers may stay camelCase. Exceptions passed through verbatim: third-party/browser-native payloads (Stripe webhooks, OAuth, WebAuthn W3C JSON) and JWT claims. Enforced by `src/tests/unit/api/snake-case-body-keys.policy.unit.test.ts`
 - Method→status policy (middleware-enforced): GET 200 · POST 201 · PUT/PATCH 200 · DELETE 204; webhooks + MCP stay 200
 - Error codes: when to set 400/401/403/404/406/409/413/415/422/429 — see **`docs/reference/api/response-codes.md`** (400 on all POST/PATCH/PUT, omitted only when truly nothing to validate; 409/422 mutating only; never invent statuses)
-- Headers: `Authorization: Bearer`, `X-Organization-Id`, `X-Idempotency-Key` (required on the 8 `idempotencyRequired` writes), `X-Captcha-Token` (public auth forms), `X-CSRF-Token` (refresh only), `Stripe-Signature` (Stripe-sent); ecosystem X- forms kept (`X-Request-Id`, `X-Api-Key`, `X-RateLimit-*`, …)
+- Headers: `Authorization: Bearer`, `X-Organization-Id`, `X-Idempotency-Key` (required on the `idempotencyRequired` writes; see the `I` column in `docs/routes.txt`), `X-Captcha-Token` (public auth forms), `X-CSRF-Token` (refresh only), `Stripe-Signature` (Stripe-sent); ecosystem X- forms kept (`X-Request-Id`, `X-Api-Key`, `X-RateLimit-*`, …)
 
 ## Architecture Rules (Non-Negotiable)
 
@@ -326,6 +326,8 @@ All AI agents (Claude Code, Cursor, Codex) share the **Headroom MCP** server (pa
 ## Keeping Docs and Skills in Sync
 
 When **code or architecture changes**, consult **`.cursor/skills/skill-index/SKILL.md` first** — it maps what changed to which skill(s) to run (no duplicate invocations).
+
+**Definition-of-done (every change):** a code change is finished only when its **own tests, cross-cutting test suites, docs, rules, and skills** have all moved with it — see **change-completeness-guard** (always-applied rule: `agent-os/rules/change-completeness.mdc`). When a single fact (a count, a route set, a constant, an env key, a header) lives in more than one place, grep the literal across `src/`, `docs/`, and `agent-os/` so no mirror is left stale.
 
 **Enforcement:** Agent skills generate/fix artifacts once → pre-commit (`lint-staged`, `typecheck`, `validate:domain`, `tsdoc:check`) → CI (`pnpm validate`, `routes:catalog:check`, `tsdoc:check`, env-example sync).
 

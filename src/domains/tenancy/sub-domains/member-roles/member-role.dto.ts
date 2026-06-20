@@ -2,6 +2,13 @@ import { z } from 'zod';
 import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedString, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
+/** Zod schema for the `:role_id` path param (get/update/delete role + list/replace role permissions). */
+export const roleIdParamsDto = z
+  .object({
+    role_id: trimmedStringMinMax(1, 28),
+  })
+  .strict();
+
 /**
  * Zod schema for the `POST /organization/roles` request body.
  *
