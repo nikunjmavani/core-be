@@ -62,4 +62,20 @@ describe('membership validators', () => {
   it('validateUpdateMembership rejects invalid status', () => {
     expect(() => validateUpdateMembership({ status: 'DELETED' })).toThrow(ValidationError);
   });
+
+  it('validateUpdateMembership accepts a role_id-only update (REQ-3)', () => {
+    expect(validateUpdateMembership({ role_id: 'rolepublicid1234567' })).toMatchObject({
+      role_id: 'rolepublicid1234567',
+    });
+  });
+
+  it('validateUpdateMembership accepts status + role_id together (REQ-3)', () => {
+    expect(
+      validateUpdateMembership({ status: 'SUSPENDED', role_id: 'rolepublicid1234567' }),
+    ).toMatchObject({ status: 'SUSPENDED', role_id: 'rolepublicid1234567' });
+  });
+
+  it('validateUpdateMembership rejects an empty body (at least one of status/role_id)', () => {
+    expect(() => validateUpdateMembership({})).toThrow(ValidationError);
+  });
 });

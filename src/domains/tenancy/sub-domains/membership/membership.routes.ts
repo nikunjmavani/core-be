@@ -119,7 +119,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
         schema: {
           summary: 'Update membership',
           description:
-            'Updates a membership status (e.g. suspend or activate). Requires MEMBERSHIP_MANAGE permission.',
+            "Updates a membership's status and/or role (suspend, reactivate, or change role). Requires MEMBERSHIP_MANAGE permission.",
           tags: ['Membership'],
           params: membershipIdParamsDto,
           body: updateMembershipDto,

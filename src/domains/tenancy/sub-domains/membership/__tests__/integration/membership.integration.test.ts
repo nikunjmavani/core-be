@@ -302,6 +302,55 @@ describe('Membership Sub-Domain — Integration', () => {
     });
   });
 
+  describe('PATCH /api/v1/tenancy/organization/memberships/:membership_id (role change, REQ-3)', () => {
+    it("changes an active member's role and persists the new role_id", async () => {
+      const { organization, token } = await createAuthorizedContext();
+      const member = await createTestUser({ email: `rerole-${randomUUID()}@test.com` });
+      const fromRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [TENANCY_PERMISSIONS.MEMBERSHIP_READ],
+      });
+      // Target role with no permissions, so the privilege-escalation guard trivially passes
+      // (the caller can always grant the empty set) — isolates the role-change behavior.
+      const toRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [],
+      });
+      const [membership] = await database
+        .insert(memberships)
+        .values({
+          public_id: generatePublicId('membership'),
+          user_id: member.id,
+          organization_id: organization.id,
+          role_id: fromRole.id,
+          status: 'ACTIVE',
+          joined_at: new Date(),
+        })
+        .returning();
+
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'PATCH',
+        url: testApiPath(`/tenancy/organization/memberships/${membership!.public_id}`),
+        token,
+        organizationPublicId: organization.public_id,
+        payload: { role_id: toRole.public_id },
+      });
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as {
+        data: { role_id: string; role: { id: string } };
+      };
+      // Flat + embedded role public id both reflect the new role (REQ-2 embed).
+      expect(body.data.role_id).toBe(toRole.public_id);
+      expect(body.data.role.id).toBe(toRole.public_id);
+
+      const [row] = await database
+        .select()
+        .from(memberships)
+        .where(eq(memberships.id, membership!.id));
+      expect(row!.role_id).toBe(toRole.id);
+    });
+  });
+
   describe('DELETE /api/v1/tenancy/organization/invitations/:invitation_id (route-coverage gap-fill)', () => {
     async function createPendingInvitationForAdminRevoke() {
       const { organization, token: adminToken, user: admin } = await createAuthorizedContext();

@@ -239,6 +239,22 @@ describe('MembershipService', () => {
     expect(membershipRepository.update).toHaveBeenCalled();
   });
 
+  it('update changes a member role (REQ-3): resolves the role and persists its internal id', async () => {
+    await service.update('org_public', 'mem_public', { role_id: 'role_public' }, 'updater_public');
+    expect(memberRoleService.requireRoleRecordByPublicId).toHaveBeenCalledWith(
+      'org_public',
+      'role_public',
+    );
+    // The privilege-escalation guard runs for the new role's permission codes before persisting.
+    expect(memberRolePermissionService.listPermissionCodesForRole).toHaveBeenCalledWith(role.id);
+    expect(membershipRepository.update).toHaveBeenCalledWith(
+      'mem_public',
+      organization.id,
+      expect.objectContaining({ role_id: role.id }),
+      expect.anything(),
+    );
+  });
+
   // sec-new-T1: owner membership cannot be modified (would enable Admin lockout of owner)
   it('update rejects any status change targeting the org owner membership (sec-new-T1)', async () => {
     // membership.user_id matches organization.owner_user_id (99)

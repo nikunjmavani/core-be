@@ -304,11 +304,12 @@ export class MembershipRepository extends BaseRepository {
   async update(
     public_id: string,
     organization_id: number,
-    data: { status?: string },
+    data: { status?: string; role_id?: number },
     updated_by_user_id: number | null,
   ): Promise<MembershipRow | null> {
     const payload: {
       status?: string;
+      role_id?: number;
       joined_at?: Date;
       updated_at: Date | SQL;
       updated_by_user_id?: number;
@@ -318,6 +319,7 @@ export class MembershipRepository extends BaseRepository {
     });
     if (data.status) payload.status = data.status;
     if (data.status === 'ACTIVE') payload.joined_at = new Date();
+    if (data.role_id !== undefined) payload.role_id = data.role_id;
     const rows = await getRequestDatabase()
       .update(memberships)
       .set(payload)

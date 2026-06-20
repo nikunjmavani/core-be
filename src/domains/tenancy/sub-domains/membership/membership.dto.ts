@@ -27,13 +27,18 @@ export const createMembershipDto = z
 
 /**
  * Zod schema for the `PATCH /organization/memberships/:membership_id`
- * request body. Only the membership `status` is mutable here.
+ * request body. The membership `status` and/or `role_id` are mutable here
+ * (REQ-3: change a member's role). At least one field must be provided.
  */
 export const updateMembershipDto = z
   .object({
     status: z.enum(['INVITED', 'ACTIVE', 'SUSPENDED']).optional(),
+    role_id: trimmedStringMinMax(1, 28).optional(),
   })
-  .strict();
+  .strict()
+  .refine((value) => value.status !== undefined || value.role_id !== undefined, {
+    message: 'Provide at least one of status or role_id',
+  });
 
 /** Zod schema for the `GET /organization/memberships` cursor pagination query. */
 export const listMembershipsQueryDto = cursorPaginationSchema.strict();

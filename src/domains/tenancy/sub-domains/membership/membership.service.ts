@@ -392,12 +392,32 @@ export class MembershipService {
       if (parsed.status === 'ACTIVE' && membership.joined_at === null) {
         throw new ForbiddenError('errors:membershipActivationRequiresInvitationAccept');
       }
+      let roleInternalId: number | undefined;
+      if (parsed.role_id !== undefined) {
+        // REQ-3: resolve the target role and run the same privilege-escalation guard as create — a
+        // caller must already hold every permission the new role grants, so a MEMBERSHIP_MANAGE
+        // holder cannot escalate a member into a role carrying permissions the caller lacks.
+        const role = await this.memberRoleService.requireRoleRecordByPublicId(
+          organization_public_id,
+          parsed.role_id,
+        );
+        const rolePermissionCodes =
+          await this.memberRolePermissionService.listPermissionCodesForRole(role.id);
+        await assertCallerCanGrantPermissionCodes({
+          authorizationService: this.authorizationService,
+          permissionRepository: this.permissionRepository,
+          callerUserPublicId: updated_by_user_public_id,
+          organizationPublicId: organization_public_id,
+          requestedPermissionCodes: rolePermissionCodes,
+        });
+        roleInternalId = role.id;
+      }
       const userId =
         await this.organizationService.resolveUserInternalIdByPublicId(updated_by_user_public_id);
       const updated = await this.membershipRepository.update(
         membership_public_id,
         organization.id,
-        omitUndefined(parsed),
+        omitUndefined({ status: parsed.status, role_id: roleInternalId }),
         userId ?? null,
       );
       if (!updated) throw new NotFoundError('Membership');
