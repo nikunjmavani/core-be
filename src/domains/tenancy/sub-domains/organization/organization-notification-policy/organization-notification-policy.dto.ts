@@ -2,6 +2,13 @@ import { z } from 'zod';
 import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 import { NOTIFICATION_CHANNELS } from '@/shared/constants/index.js';
 
+/** Zod schema for the `:notification_policy_id` path param (get/update/delete policy). */
+export const notificationPolicyIdParamsDto = z
+  .object({
+    notification_policy_id: trimmedStringMinMax(1, 28),
+  })
+  .strict();
+
 /**
  * Zod schema for `POST /api/v1/organization/notification-policies` —
  * binds a `notification_type` to a `channel` (`EMAIL`/`SMS`/`PUSH`/`IN_APP`)

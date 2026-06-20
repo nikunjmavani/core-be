@@ -34,6 +34,7 @@ const SECRET_B = 'TEST_WEBHOOK_SIGNING_KEY_B_DO_NOT_USE';
 const SECRET_C = 'TEST_WEBHOOK_SIGNING_KEY_C_DO_NOT_USE';
 
 let mockWebhookSecret: string | undefined = SECRET_A;
+let mockToleranceSeconds = 300;
 
 vi.mock('@/shared/config/env.config.js', () => {
   const envProxy = new Proxy({} as Record<string, unknown>, {
@@ -41,6 +42,7 @@ vi.mock('@/shared/config/env.config.js', () => {
       if (prop === 'STRIPE_SECRET_KEY') return SK_TEST;
       if (prop === 'STRIPE_WEBHOOK_SECRET') return mockWebhookSecret;
       if (prop === 'STRIPE_HTTP_TIMEOUT_MS') return 10_000;
+      if (prop === 'STRIPE_WEBHOOK_TOLERANCE_SECONDS') return mockToleranceSeconds;
       return undefined;
     },
   });
@@ -136,5 +138,48 @@ describe('constructStripeWebhookEvent — key rotation (sec-new-B3)', () => {
     expect(() => constructStripeWebhookEvent(Buffer.from(PAYLOAD), 'sig')).toThrow(
       'STRIPE_WEBHOOK_SECRET is not configured',
     );
+  });
+});
+
+/**
+ * EX-01 (was P0-03): the signature timestamp tolerance is configurable via
+ * STRIPE_WEBHOOK_TOLERANCE_SECONDS (default 300s, up from a hardcoded 150s) so Stripe's retries —
+ * which carry the original event timestamp — still verify after a short API outage. These tests mint
+ * a real HMAC over an old timestamp and assert the same event is accepted at 300s but rejected at 150s,
+ * proving the env knob actually drives the tolerance.
+ */
+describe('constructStripeWebhookEvent — timestamp tolerance (EX-01: STRIPE_WEBHOOK_TOLERANCE_SECONDS)', () => {
+  beforeEach(() => {
+    mockWebhookSecret = SECRET_A;
+    mockToleranceSeconds = 300;
+    vi.resetModules();
+  });
+
+  it('accepts an event whose timestamp is within the configured tolerance window', async () => {
+    mockToleranceSeconds = 300;
+    const { constructStripeWebhookEvent } = await import(
+      '@/infrastructure/payment/stripe.client.js'
+    );
+    const timestamp = Math.floor(Date.now() / 1000) - 200; // 200s old — inside the 300s window
+    const sig = Stripe.webhooks.generateTestHeaderString({
+      payload: PAYLOAD,
+      secret: SECRET_A,
+      timestamp,
+    });
+    expect(constructStripeWebhookEvent(Buffer.from(PAYLOAD), sig).id).toBe('evt_test_001');
+  });
+
+  it('rejects an event whose timestamp is older than the configured tolerance window', async () => {
+    mockToleranceSeconds = 150;
+    const { constructStripeWebhookEvent } = await import(
+      '@/infrastructure/payment/stripe.client.js'
+    );
+    const timestamp = Math.floor(Date.now() / 1000) - 200; // 200s old — beyond the 150s window
+    const sig = Stripe.webhooks.generateTestHeaderString({
+      payload: PAYLOAD,
+      secret: SECRET_A,
+      timestamp,
+    });
+    expect(() => constructStripeWebhookEvent(Buffer.from(PAYLOAD), sig)).toThrow();
   });
 });

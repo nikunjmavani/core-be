@@ -2,6 +2,7 @@ import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { THIRTY_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
 import { env } from '@/shared/config/env.config.js';
+import { getShutdownTimeoutMs } from '@/infrastructure/queue/worker-runtime/shutdown-timing.util.js';
 import {
   isNeonPoolerConnection,
   isStrictDatabaseTlsVerification,
@@ -81,10 +82,17 @@ export const sql = postgres(env.DATABASE_URL, buildPostgresOptions(env.DATABASE_
 export const database = drizzle(sql);
 
 /**
- * Drains the postgres.js pool and waits up to `SHUTDOWN_TIMEOUT_MS` (30s default)
- * for in-flight queries before terminating. Called from the shutdown middleware.
+ * Drains the postgres.js pool and waits up to the shared shutdown drain budget
+ * (`SHUTDOWN_TIMEOUT_MS`, 15s default) for in-flight queries before terminating.
+ * Called from the shutdown middleware.
+ *
+ * @remarks
+ * Uses {@link getShutdownTimeoutMs} (not its own 30s default) so the database
+ * drain budget is always ≤ the force-exit watchdog (drain budget + buffer). A
+ * larger local default could let the watchdog kill the drain mid-flight, severing
+ * in-flight queries instead of letting them finish.
  */
 export async function closeDatabase(): Promise<void> {
-  const timeout = env.SHUTDOWN_TIMEOUT_MS ?? THIRTY_SECONDS_MS;
+  const timeout = getShutdownTimeoutMs();
   await sql.end({ timeout });
 }

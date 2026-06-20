@@ -9,6 +9,12 @@ import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
 import type { FastifyInstance } from 'fastify';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
+import { randomUUID } from 'node:crypto';
+
+/** Fresh X-Idempotency-Key for the idempotencyRequired POST /uploads write. */
+const idempotencyHeaders = (): Record<string, string> => ({
+  'x-idempotency-key': `idem-${randomUUID()}`,
+});
 
 describe('Upload Domain — Integration', () => {
   let app: FastifyInstance;
@@ -32,6 +38,7 @@ describe('Upload Domain — Integration', () => {
         method: 'POST',
         url: testApiPath('/uploads'),
         payload: {},
+        headers: idempotencyHeaders(),
       });
       expect(response.statusCode).toBe(401);
     });

@@ -62,6 +62,28 @@ export function isWorkerThroughputStalled(
 }
 
 /**
+ * Readiness stall decision: a worker is only "stalled" (unhealthy) when its throughput
+ * heartbeats are all stale AND there is queued work waiting to be processed.
+ *
+ * @remarks
+ * Heartbeat staleness alone is ambiguous — it cannot distinguish "work is queued but not moving"
+ * (genuinely stuck) from "no work has arrived" (healthy idle). On a quiet night/weekend, or for a
+ * cron-only worker whose jobs run every 15 min, heartbeats naturally age past the stall window
+ * between arrivals, so a staleness-only probe returns 503 and the orchestrator restarts a perfectly
+ * healthy worker in a loop. Gating on `waitingJobCount > 0` makes idle healthy and reserves "stalled"
+ * for the real failure (jobs waiting, throughput dead).
+ */
+export function isWorkerStalled({
+  isThroughputStalled,
+  waitingJobCount,
+}: {
+  isThroughputStalled: boolean;
+  waitingJobCount: number;
+}): boolean {
+  return isThroughputStalled && waitingJobCount > 0;
+}
+
+/**
  * Reads last job completion timestamps for the given BullMQ queue names.
  */
 export async function readWorkerQueueHeartbeats(

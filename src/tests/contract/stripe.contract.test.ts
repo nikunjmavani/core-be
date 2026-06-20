@@ -4,6 +4,7 @@ import {
   cancelStripeSubscription,
   createStripeCustomer,
   createStripeSubscription,
+  listRecentStripeEvents,
   resumeStripeSubscription,
   updateStripeSubscription,
 } from '@/infrastructure/payment/stripe.client.js';
@@ -229,5 +230,33 @@ describe('Stripe outbound SDK contract (`stripe.client`)', () => {
 
     StripeSubscriptionApiResponseContractSchema.parse(immediateCanceledStripeSubscriptionOutbound);
     expect(immediateCanceledStripeSubscriptionOutbound.status).toBe('canceled');
+  });
+
+  test('listRecentStripeEvents sends created[gte]+limit and maps the events.list page data', async () => {
+    const createdGteSeconds = 1_700_000_000;
+    let capturedQuery: Record<string, string> | undefined;
+
+    nock(stripeOutboundApiHostname)
+      .get('/v1/events')
+      .query((actualQuery) => {
+        capturedQuery = actualQuery as Record<string, string>;
+        return true;
+      })
+      .matchHeader('authorization', /^Bearer /)
+      .reply(200, {
+        object: 'list',
+        has_more: false,
+        data: [
+          { id: 'evt_catchup_1', object: 'event', type: 'customer.subscription.updated' },
+          { id: 'evt_catchup_2', object: 'event', type: 'customer.subscription.deleted' },
+        ],
+      });
+
+    const events = await listRecentStripeEvents({ createdGteSeconds, limit: 100 });
+
+    expect(events.map((event) => event.id)).toEqual(['evt_catchup_1', 'evt_catchup_2']);
+    // The SDK serializes range filters as created[gte] and forwards the page limit.
+    expect(capturedQuery?.['created[gte]']).toBe(String(createdGteSeconds));
+    expect(capturedQuery?.limit).toBe('100');
   });
 });

@@ -1,14 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { upsertJobSchedulerMock, queueCloseMock, getJobSchedulersMock, removeJobSchedulerMock } =
-  vi.hoisted(() => ({
-    upsertJobSchedulerMock: vi.fn().mockResolvedValue(undefined),
-    queueCloseMock: vi.fn().mockResolvedValue(undefined),
-    // sec-Q: scheduler reconciliation reads existing schedulers from Redis and drops any
-    // whose id is no longer in the canonical set (orphan rename/removal residue).
-    getJobSchedulersMock: vi.fn().mockResolvedValue([]),
-    removeJobSchedulerMock: vi.fn().mockResolvedValue(true),
-  }));
+const {
+  upsertJobSchedulerMock,
+  queueCloseMock,
+  getJobSchedulersMock,
+  removeJobSchedulerMock,
+  loggerMock,
+} = vi.hoisted(() => ({
+  upsertJobSchedulerMock: vi.fn().mockResolvedValue(undefined),
+  queueCloseMock: vi.fn().mockResolvedValue(undefined),
+  // sec-Q: scheduler reconciliation reads existing schedulers from Redis and drops any
+  // whose id is no longer in the canonical set (orphan rename/removal residue).
+  getJobSchedulersMock: vi.fn().mockResolvedValue([]),
+  removeJobSchedulerMock: vi.fn().mockResolvedValue(true),
+  loggerMock: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
 
 vi.mock('bullmq', () => ({
   Queue: class MockQueue {
@@ -18,6 +24,8 @@ vi.mock('bullmq', () => ({
     removeJobScheduler = removeJobSchedulerMock;
   },
 }));
+
+vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({ logger: loggerMock }));
 
 const TOMBSTONE_QUEUE_ORDER = [
   'upload-tombstone-retention',
@@ -46,7 +54,7 @@ describe('infrastructure queue scheduler', () => {
   it('getScheduledJobs returns audit, session, stripe retention, audit export, tombstone retention, idempotency, dlq depth, mail sweeper, upload pending sweep, stripe reclaim, and audit-outbox drain jobs', async () => {
     const { getScheduledJobs } = await import('@/infrastructure/queue/scheduler.js');
     const scheduledJobs = getScheduledJobs();
-    expect(scheduledJobs).toHaveLength(25);
+    expect(scheduledJobs).toHaveLength(26);
     expect(scheduledJobs.map((job) => job.queueName)).toEqual([
       'audit-retention',
       'audit-outbox-drain',
@@ -66,6 +74,7 @@ describe('infrastructure queue scheduler', () => {
       'mail-outbox-sweeper',
       'upload-pending-sweep',
       'stripe-webhook-event-reclaim',
+      'stripe-webhook-event-catchup',
     ]);
   });
 
@@ -135,12 +144,12 @@ describe('infrastructure queue scheduler', () => {
   it('registerScheduledJobs registers one repeatable job per cleanup queue when enabled', async () => {
     const { registerScheduledJobs } = await import('@/infrastructure/queue/scheduler.js');
     const schedulerHandle = await registerScheduledJobs();
-    expect(upsertJobSchedulerMock).toHaveBeenCalledTimes(25);
+    expect(upsertJobSchedulerMock).toHaveBeenCalledTimes(26);
     await schedulerHandle.close();
-    // Each scheduled job opens one Queue for upsert (25) + the reconcile pass opens one
-    // Queue per unique queue name (25) which is closed inside its own loop iteration.
-    // handle.close() then closes the 25 upsert queues, so the mock observes 50 close calls.
-    expect(queueCloseMock).toHaveBeenCalledTimes(50);
+    // Each scheduled job opens one Queue for upsert (26) + the reconcile pass opens one
+    // Queue per unique queue name (26) which is closed inside its own loop iteration.
+    // handle.close() then closes the 26 upsert queues, so the mock observes 52 close calls.
+    expect(queueCloseMock).toHaveBeenCalledTimes(52);
   });
 
   it('registerScheduledJobs does not instantiate queues when SCHEDULER_ENABLED is false', async () => {
@@ -171,5 +180,22 @@ describe('infrastructure queue scheduler', () => {
     // Only the orphan is dropped, never a canonical scheduler.
     expect(removeJobSchedulerMock).toHaveBeenCalledWith('orphan-scheduler-id');
     expect(removeJobSchedulerMock).not.toHaveBeenCalledWith('daily-audit-cleanup');
+  });
+
+  it('alerts when the orphan-reconcile page hits the 1000-scheduler cap (EX-29)', async () => {
+    // At the page cap the reconcile only sees the first 1000 schedulers and may silently miss
+    // orphans beyond it — that degradation must be observable, not silent.
+    loggerMock.error.mockClear();
+    getJobSchedulersMock.mockResolvedValue(
+      Array.from({ length: 1000 }, (_unused, index) => ({ key: `s${index}`, name: 'job' })),
+    );
+
+    const { registerScheduledJobs } = await import('@/infrastructure/queue/scheduler.js');
+    await registerScheduledJobs({ activeQueueNames: new Set(['audit-retention']) });
+
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      expect.objectContaining({ count: 1000 }),
+      'scheduler.reconcile.page_limit_reached',
+    );
   });
 });

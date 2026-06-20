@@ -414,6 +414,7 @@ describe('Tenancy Domain — Integration', () => {
         url: testApiPath('/tenancy/organization/roles'),
         token,
         payload: { name: 'New Role' },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
       });
       expect(response.statusCode).toBe(403);
     });
@@ -425,6 +426,7 @@ describe('Tenancy Domain — Integration', () => {
         url: testApiPath('/tenancy/organization/roles'),
         token,
         payload: { name: 'New Role', description: 'A test role' },
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
       });
       expect(response.statusCode).toBe(201);
       const body = response.json() as { data: { name: string } };

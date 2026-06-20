@@ -134,6 +134,8 @@ describe('worker-connection-budget', () => {
     const report = computeWorkerPostgresPoolDemand();
     expect(report.monolithicWorker).toBe(true);
     expect(report.peakPostgresConcurrency).toBe(19);
+    // EX-22: 1.25x burst-headroom margin, rounded up — ceil(19 * 1.25) = 24.
+    expect(report.peakPostgresConcurrencyWithSafetyMargin).toBe(24);
   });
 
   it('reports peakPostgresConcurrencyHoldingExternalIo for risky workers only', () => {
@@ -153,6 +155,8 @@ describe('worker-connection-budget', () => {
     expect(report.selectedFamilies).toEqual(['mail', 'webhook']);
     expect(report.peakPostgresConcurrency).toBe(13);
     expect(report.peakPostgresConcurrencyHoldingExternalIo).toBe(10);
+    // EX-22: ceil(13 * 1.25) = 17.
+    expect(report.peakPostgresConcurrencyWithSafetyMargin).toBe(17);
   });
 
   it('emits criticality + external-io flag per queue entry', () => {

@@ -5,11 +5,11 @@ description: Master index of all project skills with trigger conditions. Use thi
 
 # Skill index (core-be)
 
-Master directory of all **39 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
+Master directory of all **40 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
 
 For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global-skills**.
 
-## Project skills (39)
+## Project skills (40)
 
 | Skill                          | Path                                                                      |
 | ------------------------------ | ------------------------------------------------------------------------- |
@@ -52,6 +52,7 @@ For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global
 | cursor-global-skills           | `agent-os/skills/cursor-global-skills/SKILL.md` (reference only)           |
 | rls-tenant-isolation-guard     | `agent-os/skills/rls-tenant-isolation-guard/SKILL.md` |
 | idempotency-guard              | `agent-os/skills/idempotency-guard/SKILL.md` |
+| change-completeness-guard      | `agent-os/skills/change-completeness-guard/SKILL.md` |
 
 ## Skill trigger map
 
@@ -100,6 +101,7 @@ For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global
 | Authored or edited a folder `OVERVIEW.md` under `src/domains/`, `src/infrastructure/`, `src/shared/`, or `src/tests/`                                                                                            | **overview-doc-maintainer**                                                                                         | overview-doc-maintainer                                           |
 | Edited `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, or `src/POLICIES.md`                                                                                                                                | **system-narrative-maintainer**                                                                                     | system-narrative-maintainer                                       |
 | `pnpm tsdoc:check` reports a budget regression                                                                                                                                                                  | **tsdoc-export-guard**                                                                                              | tsdoc-export-guard                                                |
+| **Finishing any code change** — verify its own tests + cross-cutting suites + docs + rules + skills all moved with it (definition-of-done)                                                                       | **change-completeness-guard**                                                                                      | `agent-os/skills/change-completeness-guard/SKILL.md`              |
 
 ## Trigger detection rules
 
@@ -150,6 +152,14 @@ After completing any task, scan the changes and invoke matching skills:
 
 - **Trigger**: porting logic from `supabase/functions/` into `src/`
 - **Action**: read **supabase-porting** (manual invoke only)
+
+### Change completeness (definition-of-done)
+
+- **Trigger**: finishing **any** code change — before declaring it done — or when a single fact
+  (a count, a route set, a constant, an env key, a header) is stated in more than one place.
+- **Action**: read and follow **change-completeness-guard** — walk the five-layer checklist
+  (own tests at the right layer → cross-cutting suites → docs → rules → skills) and grep the
+  literal you changed across `src/`, `docs/`, and `agent-os/` so no mirror of the change is left stale.
 
 ### SQL migrations
 
@@ -243,6 +253,7 @@ Some changes trigger multiple skills. Run them in this order:
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `engineering-principles.mdc` | Every session — general engineering behavior (simplicity, quality, security, output style). Does not invoke a skill; complements CLAUDE.md and file-scoped rules below. |
 | `project-identity.mdc`       | Every session — product slug, image names, branch/env mapping via `project-identity.constants.ts`; never hardcode manifest-derived literals in `src/`, workflows, or tooling. |
+| `change-completeness.mdc`    | Every session — definition-of-done: a code change is done only when its own tests, cross-cutting suites, docs, rules, and skills have all moved with it. Mirrors **change-completeness-guard**. |
 
 ## Policy rules (glob-scoped, not always-on)
 

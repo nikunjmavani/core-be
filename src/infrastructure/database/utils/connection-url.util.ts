@@ -23,6 +23,8 @@ export function parseSslMode(databaseUrl: string): string | null {
   try {
     return decodeURIComponent(raw).toLowerCase();
   } catch {
+    // safe-catch: a malformed percent-encoding is not worth failing connection setup over — use the
+    // raw token (already extracted from sslmode=) so a stray `%` still yields a usable mode string.
     return raw.toLowerCase();
   }
 }
