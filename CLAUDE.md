@@ -8,7 +8,7 @@ For **any new requirement** (new domain, routes, worker, schema, etc.), use the 
 
 `agent-os/` at the repo root is the single source of truth for all AI tooling.
 Cursor reads agents/skills/rules via symlinks (`.cursor/agents → agent-os/agents`, etc.).
-Claude Code reads `agent-os/` directly via `.claude/` symlinks.
+Claude Code reads `agent-os/` directly via `.claude/` symlinks (`agents`, `skills`, `commands`, `hooks`) — there is intentionally **no** `.claude/rules`: Claude Code follows `CLAUDE.md`, while the `.mdc` rule files are Cursor's glob auto-attach (`.cursor/rules`).
 
 | File | Purpose |
 | ---- | ------- |
