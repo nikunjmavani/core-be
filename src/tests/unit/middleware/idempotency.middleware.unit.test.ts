@@ -656,6 +656,72 @@ describe('idempotency middleware happy paths and conflicts', () => {
     );
   });
 
+  it('onSend caches an empty 204 body (undefined payload) as JSON null without crashing', async () => {
+    // Regression: a client that attaches X-Idempotency-Key to a write returning 204 (empty
+    // body) previously 500'd here — `JSON.stringify(undefined)` returns `undefined`, which
+    // threw inside `Buffer.byteLength`. The empty body must normalize to JSON `null`.
+    const { onSend, onResponse } = await registerIdempotencyHooks();
+    const request = {
+      _idempotencyKey: IDEMPOTENCY_TEST_KEY,
+      _idempotencyClaimed: true,
+      _idempotencyScope: {
+        userId: TEST_USER_PUBLIC_ID,
+        organizationId: TEST_ORGANIZATION_PUBLIC_ID,
+      },
+    } as unknown as FastifyRequest;
+    const reply = {
+      statusCode: 204,
+      getHeader: vi.fn().mockReturnValue(undefined),
+    } as unknown as FastifyReply;
+
+    // Must not throw on an undefined (empty 204) payload; returns it untouched.
+    const payload = await onSend(request, reply, undefined);
+    expect(payload).toBeUndefined();
+
+    await onResponse(request, reply);
+
+    expect(mockRedisSet).toHaveBeenCalledWith(
+      expect.stringContaining(IDEMPOTENCY_TEST_KEY),
+      expect.stringContaining('"statusCode":204'),
+      'EX',
+      IDEMPOTENCY_RESPONSE_CACHE_TTL_SECONDS,
+    );
+    const storedEntry = mockRedisSet.mock.calls.at(-1)?.[1] as string;
+    expect(JSON.parse(storedEntry)).toMatchObject({
+      state: 'completed',
+      statusCode: 204,
+      body: 'null',
+    });
+  });
+
+  it('replays a cached empty 204 entry without crashing on JSON.parse', async () => {
+    // The stored body is JSON `null`; the replay path must `JSON.parse('null')` -> null and
+    // send an empty body, not throw — guarding `sendCachedIdempotencyResponse` for 204s.
+    mockRedisGet.mockResolvedValue(buildCompletedEntry(204, 'null'));
+    const { claimPreHandler } = await registerIdempotencyHooks();
+
+    const request = {
+      method: 'DELETE',
+      headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
+      auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
+      _idempotencyKey: IDEMPOTENCY_TEST_KEY,
+    } as unknown as FastifyRequest;
+
+    const send = vi.fn();
+    const reply = {
+      sent: false,
+      status: vi.fn().mockReturnThis(),
+      header: vi.fn().mockReturnThis(),
+      send,
+    } as unknown as FastifyReply;
+
+    await claimPreHandler(request, reply);
+
+    expect(reply.status).toHaveBeenCalledWith(204);
+    expect(reply.header).toHaveBeenCalledWith('x-idempotency-replay', 'true');
+    expect(send).toHaveBeenCalledWith(null);
+  });
+
   it('claimPreHandler returns early when reply is already sent', async () => {
     const { claimPreHandler } = await registerIdempotencyHooks();
     const request = {
