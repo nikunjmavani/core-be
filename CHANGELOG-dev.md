@@ -6,6 +6,23 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.12](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.12...v4.10.0-dev.12) (2026-06-20)
+
+
+### Added
+
+* **tooling:** local dashboards control room (pnpm dashboards:*) ([a0ab8c9](https://github.com/nikunjmavani/core-be/commit/a0ab8c9812b1a4799c98ee2928534b39c1aa96b3))
+
+
+### Fixed
+
+* **lint:** suppress two pre-existing biome findings surfaced by the PR lint gate ([b1b444a](https://github.com/nikunjmavani/core-be/commit/b1b444a0cce44e53c8befb0a5b8d65a508529fad))
+
+
+### Documentation
+
+* sync agent-os (CLAUDE.md, docs index, skills, rules) with code ([#737](https://github.com/nikunjmavani/core-be/issues/737)) ([7918a8e](https://github.com/nikunjmavani/core-be/commit/7918a8e25a0672e89c6024b5cce704ca6560e8b9))
+
 ## [4.9.1-dev.12](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.11...v4.9.1-dev.12) (2026-06-20)
 
 
