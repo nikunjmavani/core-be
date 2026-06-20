@@ -2035,6 +2035,7 @@ src/
     │   ├── tooling/
     │   │   ├── openapi/
     │   │   │   ├── field-examples.unit.test.ts
+    │   │   │   ├── header-parameters.unit.test.ts
     │   │   │   ├── locale-loader.unit.test.ts
     │   │   │   ├── mcp-openapi.unit.test.ts
     │   │   │   ├── operation-helpers.unit.test.ts
