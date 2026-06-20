@@ -25,7 +25,9 @@
       "code-smells-and-best-practices",
       "lint-warnings-handler",
       "before-commit-guard",
-      "change-completeness-guard"
+      "change-completeness-guard",
+      "ponytail",
+      "ponytail-audit"
     ],
     "security-hardening": [
       "rls-tenant-isolation-guard",
