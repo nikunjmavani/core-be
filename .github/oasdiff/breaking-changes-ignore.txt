@@ -1546,3 +1546,18 @@ api post /api/v1/uploads added the new required request property `content_type`
 api post /api/v1/uploads added the new required request property `file_name`
 api post /api/v1/uploads added the new required request property `file_size`
 api put /api/v1/users/me/avatar added the new required request property `avatar_key`
+
+# 30. CR-3 idempotency required-header documentation completion. The X-Idempotency-Key
+#     parameter is emitted on every mutating route (optional by default); for the 13
+#     idempotencyRequired writes it must be `required: true`. Section #27 (PR #13/#656)
+#     marked only 8 of the 13 — the OpenAPI emitter's hardcoded set omitted these 5,
+#     which the runtime has ALWAYS required (config.idempotencyRequired = true → 422
+#     without the header). CR-3 corrects the spec to match runtime, so oasdiff sees the
+#     pre-existing optional parameter "become required". No client behaviour changes
+#     (these routes already 422 without the header). Pinned by header-parameters.unit.test.ts
+#     (asserts all 13 required writes advertise the header) + idempotency.security.test.ts.
+api post /api/v1/notify/webhooks the `header` request parameter `x-idempotency-key` became required
+api post /api/v1/tenancy/organization/api-keys the `header` request parameter `x-idempotency-key` became required
+api post /api/v1/tenancy/organization/notification-policies the `header` request parameter `x-idempotency-key` became required
+api post /api/v1/tenancy/organization/roles the `header` request parameter `x-idempotency-key` became required
+api post /api/v1/uploads the `header` request parameter `x-idempotency-key` became required
