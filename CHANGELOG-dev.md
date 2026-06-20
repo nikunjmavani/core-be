@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.9.1-dev.11](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.10...v4.9.1-dev.11) (2026-06-20)
+
+
+### Fixed
+
+* harden real-world edge cases — 3 fixes + 7 coverage guards ([#732](https://github.com/nikunjmavani/core-be/issues/732)) ([85ca439](https://github.com/nikunjmavani/core-be/commit/85ca439d4fd05dbd25b55b3803565062c7643de9))
+
 ## [4.9.1-dev.10](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.9...v4.9.1-dev.10) (2026-06-20)
 
 
