@@ -127,6 +127,26 @@ describe('Security: Idempotency', () => {
     );
   });
 
+  it('rejects a too-short X-Idempotency-Key on an idempotency-required write (422)', async () => {
+    // A 16-char minimum is enforced (see parseIdempotencyKeyHeader); a shorter valid-charset key is
+    // malformed → 422 idempotencyKeyInvalid, not a 201. Guards the CR-3 length contract end-to-end.
+    const user = await createTestUser();
+    const token = await generateTestToken({ userId: user.public_id });
+
+    const response = await injectAuthenticated(app, {
+      method: 'POST',
+      url: testApiPath('/tenancy/organizations'),
+      token,
+      headers: { 'x-idempotency-key': 'tooshort' },
+      payload: { name: 'Too Short Key Org', slug: uniqueSlug('too-short-key-org') },
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect((response.json() as { error?: { code?: string } }).error?.code).toBe(
+      'unprocessable_entity',
+    );
+  });
+
   it('should not persist an idempotency Redis entry when write is unauthenticated', async () => {
     const key = uniqueKey('unauth-idem');
     const cacheKey = buildIdempotencyCacheKey(key, {

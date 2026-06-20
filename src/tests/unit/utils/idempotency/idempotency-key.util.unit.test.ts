@@ -145,8 +145,8 @@ describe('parseIdempotencyKeyHeader', () => {
   });
 
   it('returns valid and trims', () => {
-    const parsed = parseIdempotencyKeyHeader('  abc-123  ');
-    expect(parsed).toEqual({ kind: 'valid', value: 'abc-123' });
+    const parsed = parseIdempotencyKeyHeader('  abc-123-456-789-0  ');
+    expect(parsed).toEqual({ kind: 'valid', value: 'abc-123-456-789-0' });
   });
 
   it('returns invalid when too long', () => {
@@ -161,9 +161,26 @@ describe('parseIdempotencyKeyHeader', () => {
   });
 
   it('uses the first value when the header is an array', () => {
-    expect(parseIdempotencyKeyHeader(['  first  ', 'second'])).toEqual({
+    expect(parseIdempotencyKeyHeader(['  first-value-1234  ', 'second'])).toEqual({
       kind: 'valid',
-      value: 'first',
+      value: 'first-value-1234',
+    });
+  });
+
+  it('returns invalid when shorter than the minimum length', () => {
+    // 15 allowed-charset chars sit below the 16-char floor → invalid (422 idempotencyKeyInvalid).
+    expect(parseIdempotencyKeyHeader('abcdefghijklmno').kind).toBe('invalid');
+    expect(parseIdempotencyKeyHeader('a'.repeat(15)).kind).toBe('invalid');
+  });
+
+  it('accepts a key at exactly the minimum length and a UUID', () => {
+    expect(parseIdempotencyKeyHeader('abcdefghijklmnop')).toEqual({
+      kind: 'valid',
+      value: 'abcdefghijklmnop',
+    });
+    expect(parseIdempotencyKeyHeader('3f9c2a7e-9b1d-4f6a-8c2e-1a2b3c4d5e6f')).toEqual({
+      kind: 'valid',
+      value: '3f9c2a7e-9b1d-4f6a-8c2e-1a2b3c4d5e6f',
     });
   });
 });
