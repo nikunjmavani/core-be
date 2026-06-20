@@ -30,6 +30,14 @@ async function createResponseFormatApp() {
       meta: { request_id: 'existing-request-id' },
     });
   });
+  application.get('/reference/openapi.json', async (_request, reply) => {
+    reply.type('application/json');
+    return { openapi: '3.0.0' };
+  });
+  application.get('/admin/queues/api/queues', async (_request, reply) => {
+    reply.type('application/json');
+    return { queues: [] };
+  });
   await application.ready();
   return application;
 }
@@ -72,6 +80,14 @@ describe('response-format.middleware', () => {
     application = await createResponseFormatApp();
     const response = await application.inject({ method: 'GET', url: '/raw' });
     expect(response.json()).toEqual({ ok: true });
+  });
+
+  it('does not wrap non-API UI mounts (Scalar /reference, Bull Board /admin/queues)', async () => {
+    application = await createResponseFormatApp();
+    const reference = await application.inject({ method: 'GET', url: '/reference/openapi.json' });
+    expect(reference.json()).toEqual({ openapi: '3.0.0' });
+    const bullBoard = await application.inject({ method: 'GET', url: '/admin/queues/api/queues' });
+    expect(bullBoard.json()).toEqual({ queues: [] });
   });
 
   it('passes through existing Paddle-style envelopes', async () => {

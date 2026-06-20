@@ -110,6 +110,12 @@ tooling/setup.secrets.json
 .understand-anything/
 .cache/
 
+# Local dashboards orchestrator (pnpm dashboards:*) — detached process logs + pidfiles
+.dashboards/
+
 # Local scratch output from agent skills/tools (deep-research reports, moodboards,
 # market dumps, etc.). Machine-local and regenerable — never part of the codebase.
 outputs/
+
+# vendored Tailwind Play CDN for the local dashboards hub (regenerable: curl https://cdn.tailwindcss.com)
+tooling/dev/dashboards-hub.tw.js
