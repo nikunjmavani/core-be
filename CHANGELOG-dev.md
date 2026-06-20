@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.9.1-dev.10](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.9...v4.9.1-dev.10) (2026-06-20)
+
+
+### Documentation
+
+* add handoff summary, enforcement gates, and version override to release-dev-to-production ([#727](https://github.com/nikunjmavani/core-be/issues/727)) ([812afba](https://github.com/nikunjmavani/core-be/commit/812afbaf98b421cb516cd8cf50f6f00b3b825d2c))
+
 ## [4.9.1-dev.9](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.8...v4.9.1-dev.9) (2026-06-20)
 
 
