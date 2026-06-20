@@ -59,6 +59,8 @@ All error statuses share one envelope (`src/shared/middlewares/core/error-handle
 
 `details` appears on 400 only. `request_id` is the server-minted UUID (also echoed as `X-Request-Id`) — quote it in support tickets. All `message` values are i18n keys resolved per `Accept-Language`.
 
+**`error.reason` (optional, machine-readable):** select 4xx errors carry a stable snake_case `reason` sub-code so the frontend can branch on the specific cause without parsing the human `detail`. It is **additive** (present only where set) and is **omitted on 5xx** (masked alongside the detail). `code` stays the status-class slug (e.g. `conflict`); `reason` is the specific cause. Current slugs: `membership_already_exists`, `organization_slug_exists`, `invitation_revoked`, `invitation_already_accepted`, `invitation_expired` — extend as new FE-relevant cases arise by calling `AppError.withReason('<slug>')` at the throw site.
+
 ## Related
 
 - Header matrix and id conventions: `agent-os/skills/api-contract-guard/SKILL.md`

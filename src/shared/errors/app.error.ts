@@ -42,6 +42,13 @@ export class AppError extends Error {
   readonly messageKey: string;
   /** Interpolation params for request.t(messageKey, messageParams). */
   readonly messageParams?: Record<string, string | number>;
+  /**
+   * Optional stable, machine-readable sub-code (snake_case) the frontend can branch on
+   * (e.g. `membership_already_exists`, `organization_slug_exists`) — distinct from the
+   * status-class `code`. Set via {@link AppError.withReason}; the error handler serializes it as
+   * `error.reason` on non-5xx responses only.
+   */
+  reason?: string;
 
   constructor(
     code: AppErrorCode,
@@ -58,5 +65,14 @@ export class AppError extends Error {
       this.messageParams = messageParams;
     }
     this.name = this.constructor.name;
+  }
+
+  /**
+   * Attaches a stable machine-readable {@link AppError.reason} slug and returns `this` (fluent),
+   * e.g. `throw new ConflictError('errors:membershipAlreadyExists').withReason('membership_already_exists')`.
+   */
+  withReason(reason: string): this {
+    this.reason = reason;
+    return this;
   }
 }

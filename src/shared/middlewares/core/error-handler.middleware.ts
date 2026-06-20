@@ -27,17 +27,21 @@ function buildErrorPayload(
   code: string,
   detail: string,
   errors?: { field: string; message: string }[],
+  reason?: string,
 ) {
   const docsBaseUrl = getDocsBaseUrl();
   const payload: {
     type: string;
     code: string;
+    reason?: string;
     detail: string;
     documentation_url?: string;
     errors?: { field: string; message: string }[];
   } = {
     type,
     code,
+    // Optional stable machine-readable sub-code (REQ-6) — additive; the FE can branch on it.
+    ...(reason ? { reason } : {}),
     detail,
     ...(docsBaseUrl ? { documentation_url: `${docsBaseUrl}/${code}` } : {}),
   };
@@ -154,6 +158,8 @@ function handleAppErrorResponse(
       code,
       detail,
       errors,
+      // 5xx detail is masked, so omit the reason there too; only surface it on client-facing 4xx.
+      error.statusCode >= 500 ? undefined : error.reason,
     ),
     meta: { request_id: requestId },
   };

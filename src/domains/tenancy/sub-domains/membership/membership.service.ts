@@ -335,7 +335,9 @@ export class MembershipService {
         // surface a clean 409 instead of an unhandled unique_violation 500. Covers an existing
         // ACTIVE member and a still-live INVITED one (the FE resends in that case).
         if (isPostgresUniqueViolation(error)) {
-          throw new ConflictError('errors:membershipAlreadyExists');
+          throw new ConflictError('errors:membershipAlreadyExists').withReason(
+            'membership_already_exists',
+          );
         }
         throw error;
       }

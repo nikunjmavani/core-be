@@ -414,7 +414,7 @@ export class OrganizationService {
           'errors:organizationSlugExists',
           { slug: parsed.slug },
           `Organization with slug "${parsed.slug}" already exists`,
-        );
+        ).withReason('organization_slug_exists');
       try {
         // Atomically create the organization AND bootstrap the owner's role + full
         // permissions + membership — without this the creator resolves zero permissions
@@ -435,7 +435,7 @@ export class OrganizationService {
             'errors:organizationSlugExists',
             { slug: parsed.slug },
             `Organization with slug "${parsed.slug}" already exists`,
-          );
+          ).withReason('organization_slug_exists');
         }
         throw error;
       }
@@ -459,7 +459,7 @@ export class OrganizationService {
             'errors:organizationSlugExists',
             { slug: parsed.slug },
             `Organization with slug "${parsed.slug}" already exists`,
-          );
+          ).withReason('organization_slug_exists');
         }
       }
       let updated: Awaited<ReturnType<typeof this.repository.update>>;
@@ -475,7 +475,7 @@ export class OrganizationService {
             'errors:organizationSlugExists',
             { slug: parsed.slug },
             `Organization with slug "${parsed.slug}" already exists`,
-          );
+          ).withReason('organization_slug_exists');
         }
         throw error;
       }

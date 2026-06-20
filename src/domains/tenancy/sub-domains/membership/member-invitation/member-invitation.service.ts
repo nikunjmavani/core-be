@@ -22,13 +22,21 @@ const MEMBER_INVITATION_RESOURCE = 'Member invitation';
 
 function assertInvitationAcceptable(row: MemberInvitationRow, now: Date): void {
   if (row.revoked_at) {
-    throw new ValidationError('errors:validation.invitationRevoked', undefined, {});
+    throw new ValidationError('errors:validation.invitationRevoked', undefined, {}).withReason(
+      'invitation_revoked',
+    );
   }
   if (row.accepted_at) {
-    throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
+    throw new ValidationError(
+      'errors:validation.invitationAlreadyAccepted',
+      undefined,
+      {},
+    ).withReason('invitation_already_accepted');
   }
   if (now > row.expires_at) {
-    throw new ValidationError('errors:validation.invitationExpired', undefined, {});
+    throw new ValidationError('errors:validation.invitationExpired', undefined, {}).withReason(
+      'invitation_expired',
+    );
   }
 }
 
