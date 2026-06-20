@@ -109,7 +109,7 @@ Flat domains (`audit`, `upload`) keep layers at domain root (no `sub-domains/`).
 | Domain (folder) | Sub-domains (folders)                                                                                                                                                           |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **audit**       | (single domain, no sub-domains)                                                                                                                                                 |
-| **auth**        | auth-method (magic-link, oauth as services in auth-method/), auth-session, auth-mfa, auth-webauthn                                                                              |
+| **auth**        | auth-method (magic-link, oauth as services in auth-method/), auth-session, auth-mfa, auth-mfa-session (Redis MFA challenge-ticket store shared by auth-mfa/auth-webauthn), auth-webauthn |
 | **user**        | user-settings, user-notification-preferences, user-data-export                                                                                                                  |
 | **tenancy**     | organization (organization-settings, organization-notification-policy, organization-api-key), membership (member-invitation), member-roles (member-role-permission), permission |
 | **billing**     | plan, subscription, stripe-webhook                                                                                                                                              |
@@ -154,17 +154,26 @@ src/infrastructure/
     connection.ts             # Exports: database, sql, closeDatabase
     base-repository.ts        # Abstract BaseRepository with paginate()
     transaction.ts            # withTransaction() helper
-    migrate.ts                # Migration runner
+    resource-cap-lock.ts      # Advisory-lock guard for resource caps (+ resource-quota-lock.util.ts)
     pg-schemas.ts             # Shared pgSchema definitions (auth, tenancy, billing, notify, audit, upload)
+    migration/migrate.ts      # Migration runner (+ migration-version.ts, migration-execution-mode.ts)
+    contexts/                 # DB context wrappers (request / organization / user / retention / worker / system-audit) that set the RLS GUC
+    pool/                     # Pool instrumentation (organization-rls-checkout-counter.ts)
+    safety/                   # Boot guards: assert-database-rls-safety.ts, assert-database-tls-safety.ts
+    utils/                    # batch-delete, capped-count, force-rls-tables.constants, hosted-deployment, database-handle.types
   cache/
     redis.client.ts           # Redis connection (managed service)
+    bullmq-redis.client.ts    # Separate BullMQ Redis client (logical DB) + redis-url / redis-prefix utils
   queue/
     connection.ts             # Re-exports Redis for BullMQ + getBullMQConnectionOptions()
     health.ts                  # BullMQ readiness helper (notification queue client ping)
-    worker-options.ts         # Shared stall / lock tuning for workers
-    dead-letter.ts            # Per-source `<queue>-dlq` + final-retry Sentry from bootstrap
     bootstrap.ts              # Registers repeatable jobs + starts domain workers; attaches DLQ hooks
     scheduler.ts              # Central BullMQ repeatable-job registry (cron index for retention workers)
+    queue.constants.ts        # Shared queue names / constants
+    queue-dashboard.ts        # Bull-Board dashboard wiring (/admin/queues)
+    worker-runtime/           # Worker tuning + lifecycle: worker-options.ts, worker-processor.util.ts, worker-close.util.ts, worker-registration.registry.ts, worker-health.server.ts, scheduler-registry-audit.ts
+    dlq/                      # Dead-letter subsystem: dead-letter.ts (per-source `<queue>-dlq` + final-retry Sentry), dead-letter.repository.ts/.schema.ts, dlq-auto-retry.*, dlq-replay.util.ts, poison-job.util.ts
+    commit-dispatch/          # Post-commit dispatch recovery: commit-dispatch.executor.ts/.store.ts, commit-dispatch-recovery.worker.ts/.processor.ts
   mail/
     mail.service.ts           # Resend email service
     mail-outbox.schema.ts     # Transactional outbox table (shared infrastructure pattern)
@@ -173,17 +182,21 @@ src/infrastructure/
     queues/
       mail.queue.ts           # BullMQ queue + recordOutboxEmail / dispatchOutboxEmail
     workers/
-      mail.worker.ts          # BullMQ processor for email delivery
+      mail.worker.ts          # BullMQ processor for email delivery (+ mail-outbox-sweeper.worker.ts)
   payment/
     stripe.client.ts          # Stripe SDK client + helpers (customer, subscription, webhook)
   storage/
     storage.service.ts        # S3 storage service (presigned URLs, head object)
+    s3-adapter.ts             # S3 adapter behind object-storage.port.ts
+  outbound/                   # Hardened outbound HTTP (outbound-fetch.ts: timeouts, redaction) for third-party calls
   observability/
-    sentry.ts                        # Sentry: errors, tracing, continuous profiling (V8 CpuProfiler), structured logs
-    idempotency-cardinality.constants.ts  # BullMQ queue name for idempotency Redis cardinality sampling
-    idempotency-cardinality.service.ts    # Bounded SCAN + threshold log / Sentry
-    idempotency-cardinality.worker.ts     # Worker processor (repeatable schedule in queue/scheduler.ts)
-    redis-saturation/                     # Redis used_memory/maxmemory ratio + BullMQ waiting-depth sampling (log + Sentry; sampled by dlq-depth worker)
+    sentry/sentry.ts          # Sentry: errors, tracing, continuous profiling (V8 CpuProfiler), structured logs (+ sentry-sampling.util.ts)
+    tracing/                  # OpenTelemetry: otel.ts, trace-context.util.ts, trace-context-job-fields.schema.ts
+    metrics/                  # Prometheus / metrics registry (HTTP, DB-pool, BullMQ, business, event-loop)
+    idempotency-cardinality/  # Bounded SCAN of idempotency keys → threshold log / Sentry (constants, service, worker; scheduled in queue/scheduler.ts)
+    dlq-depth/                # DLQ depth + DB-pool alert sampling (service, worker, constants)
+    redis-saturation/         # Redis used_memory/maxmemory ratio + BullMQ waiting-depth sampling (sampled by dlq-depth worker)
+    unhandled-rejection.handler.ts  # Burst-tolerant unhandledRejection policy
   mcp/
     mcp-server.ts             # MCP (ENABLE_MCP_SERVER, dynamic import; @modelcontextprotocol/sdk optionalDependency): POST /api/v1/mcp
 ```
@@ -228,7 +241,7 @@ src/shared/
 - **Infrastructure only**: Connection (Redis), **scheduler** (repeatable retention cron registry), **bootstrap** that registers schedulers and starts each worker.
 - **Jobs and processors**: Live in **respective domains only** — never in `common` or `shared`.
 - Layout:
-  - `infrastructure/queue/`: `connection.ts`, `health.ts`, `scheduler.ts` (all `upsertJobScheduler` calls for retention), `dead-letter.ts` (per-queue `<name>-dlq` + final-failure Sentry), `bootstrap.ts`
+  - `infrastructure/queue/`: `connection.ts`, `health.ts`, `scheduler.ts` (all `upsertJobScheduler` calls for retention), `dlq/dead-letter.ts` (per-queue `<name>-dlq` + final-failure Sentry), `worker-runtime/` (worker options + lifecycle), `bootstrap.ts`
   - `domains/<domain>/<sub-domain>/queues/*`: Queue definition + enqueue helpers
   - `domains/<domain>/<sub-domain>/workers/*`: BullMQ processor(s)
 - **No** `infrastructure/queue/processors/` — processors live in domains.
@@ -315,7 +328,7 @@ This repo uses **Context7 MCP** for up-to-date, version-specific documentation. 
 Two committed, secret-free templates define the agent-only MCP set (each mirrored under [`agent-os/mcp/`](agent-os/mcp/)):
 
 - **Default auto-start pair — [`.mcp.default.json`](.mcp.default.json): `codegraph` + `headroom`** (zero-config local CLIs, no token). `pnpm setup:local`, the session-start hook, and the cloud bootstrap declare both in the gitignored `.mcp.json` so they are present before the first prompt.
-- **On-demand set — [`.mcp.example.json`](.mcp.example.json): the full set** (`context7`, `core-be:api`, `neon`, `sentry`, `railway`, `aws`, `stripe`, `semgrep`, `sonarqube`, `redis`, `postman`, `resend`, `codegraph`, `headroom`; most need a provider token). Scaffold with **`pnpm mcp:setup`** — all, or a subset by name (`pnpm mcp:setup stripe sentry`); `pnpm mcp:setup:default` for just the pair, `pnpm mcp:setup --list` for status (per-server runtime/token catalog: **`docs/integrations/agentic-third-party-tooling.md`**). The pair in `.mcp.default.json` mirrors its entries in `.mcp.example.json` — the `mcp-config` global test blocks drift.
+- **On-demand set — [`.mcp.example.json`](.mcp.example.json): the full set** (`context7`, `core-be:api`, `neon`, `sentry`, `railway`, `aws`, `stripe`, `semgrep`, `sonarqube`, `redis`, `postman`, `resend`, `dashboards`, `codegraph`, `headroom`; most need a provider token). Scaffold with **`pnpm mcp:setup`** — all, or a subset by name (`pnpm mcp:setup stripe sentry`); `pnpm mcp:setup:default` for just the pair, `pnpm mcp:setup --list` for status (per-server runtime/token catalog: **`docs/integrations/agentic-third-party-tooling.md`**). The pair in `.mcp.default.json` mirrors its entries in `.mcp.example.json` — the `mcp-config` global test blocks drift.
 
 On **Claude Code web** the live MCP set is loaded by the platform from the environment's MCP settings (web UI), **not** `.mcp.json` — configure `codegraph` + `headroom` there to auto-start, and add others as needed. `Composio`, `Descript`, and `Slack` are intentionally **not** part of this project. See **`docs/integrations/claude-code-web-environment.md`** and **`docs/integrations/agentic-third-party-tooling.md`**.
 
@@ -346,7 +359,7 @@ Every directory under `src/` participates in the in-source documentation system.
 | TSDoc on exports (canonical) | every `*.ts` file's `export <kind> <name>` declaration | **tsdoc-export-guard** |
 | Route schema (drives OpenAPI) | `schema: { summary, description, tags }` on Fastify route registrations | **route-schema-doc-guard** |
 
-The hard gate is `pnpm tsdoc:check` — a **budget-driven ratchet** at [`tooling/tsdoc-coverage/budget.json`](tooling/tsdoc-coverage/budget.json). Counts of `MISSING_DESCRIPTION` and `MISSING_REMARKS` may decrease but may not increase; the eventual target is 0/0. Runs on pre-commit (step 4d) and CI (`ci:local`, `ci:quality`).
+The hard gate is `pnpm tsdoc:check` — a **budget-driven ratchet** at [`tooling/tsdoc-coverage/budget.json`](tooling/tsdoc-coverage/budget.json). Counts of `MISSING_DESCRIPTION` and `MISSING_REMARKS` may decrease but may not increase; the eventual target is 0/0. Runs on pre-commit (step 8) and CI (`ci:local`, `ci:quality`).
 
 See [docs/reference/architecture/documentation-system.md](docs/reference/architecture/documentation-system.md) for the full system, including why the auto-generated DOCS.md aggregator was retired.
 
