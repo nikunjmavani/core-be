@@ -17,7 +17,12 @@ import type { AuthorizationService } from '@/domains/tenancy/sub-domains/permiss
 import type { PermissionRepository } from '@/domains/tenancy/sub-domains/permission/permission.repository.js';
 import { assertCallerCanGrantPermissionCodes } from '@/domains/tenancy/sub-domains/permission/assert-grantable-permissions.util.js';
 import type { MembershipRepository } from './membership.repository.js';
-import type { MembershipOutput, MembershipRow } from './membership.types.js';
+import type {
+  MembershipOutput,
+  MembershipRoleSummary,
+  MembershipRow,
+  MembershipUserSummary,
+} from './membership.types.js';
 import {
   validateCreateMembership,
   validateUpdateMembership,
@@ -25,6 +30,8 @@ import {
   validateTransferOwnership,
 } from './membership.validator.js';
 import { serializeMembership } from './membership.serializer.js';
+import { resolveStoredMediaReadUrl } from '@/shared/utils/infrastructure/media-url.util.js';
+import type { ObjectStoragePort } from '@/infrastructure/storage/object-storage.port.js';
 import { invalidatePermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import type { OrganizationApiKeyRepository } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.repository.js';
 
@@ -94,6 +101,9 @@ export class MembershipService {
     private readonly userSettingsService?: UserSettingsService,
     // reaudit-#7: optional so minimal test harnesses can omit it; the container always wires it.
     private readonly organizationApiKeyRepository?: OrganizationApiKeyRepository,
+    // REQ-2: presigns the embedded member `avatar_url`; optional so minimal harnesses can omit it
+    // (then the raw stored key is passed through). The container always wires the S3 adapter.
+    private readonly objectStorage?: ObjectStoragePort,
   ) {}
 
   /**
@@ -142,26 +152,65 @@ export class MembershipService {
   }
 
   /**
-   * Resolves a single membership's user + role public ids and serializes it. The internal
-   * `user_id`/`role_id` are never emitted; user ids go through the SECURITY DEFINER resolver
-   * (auth.users is FORCE RLS and unreachable by a plain join under org-only context).
+   * Resolves user + role summaries (and the live invitation for `INVITED` rows) for a page of
+   * memberships and serializes them. The internal `user_id`/`role_id` are never emitted; user
+   * summaries go through the SECURITY DEFINER resolver (auth.users is FORCE RLS and unreachable by a
+   * plain join under org-only context), and each distinct avatar key is presigned for read.
    */
+  private async serializeMemberships(
+    rows: MembershipRow[],
+    organization_public_id: string,
+  ): Promise<MembershipOutput[]> {
+    if (rows.length === 0) return [];
+    const [userSummaryRows, roleSummaryRows, invitationRows] = await Promise.all([
+      this.membershipRepository.resolveUserSummariesByInternalIds(rows.map((row) => row.user_id)),
+      this.membershipRepository.resolveRoleSummariesByInternalIds(rows.map((row) => row.role_id)),
+      this.membershipRepository.resolveLiveInvitationsByMembershipIds(
+        rows.filter((row) => row.status === 'INVITED').map((row) => row.id),
+      ),
+    ]);
+    const userSummaries = new Map<number, MembershipUserSummary>();
+    for (const [userInternalId, row] of userSummaryRows) {
+      userSummaries.set(userInternalId, {
+        id: row.public_id,
+        email: row.email,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        // Presign the raw avatar key for read (network-free signature); pass through when no
+        // object-storage adapter is wired (minimal test harness).
+        avatar_url: this.objectStorage
+          ? await resolveStoredMediaReadUrl(this.objectStorage, row.avatar_url)
+          : row.avatar_url,
+      });
+    }
+    return rows.map((row) => {
+      const user: MembershipUserSummary = userSummaries.get(row.user_id) ?? {
+        id: String(row.user_id),
+        email: '',
+        first_name: null,
+        last_name: null,
+        avatar_url: null,
+      };
+      const roleRow = roleSummaryRows.get(row.role_id);
+      const role: MembershipRoleSummary = roleRow
+        ? { id: roleRow.public_id, name: roleRow.name }
+        : { id: String(row.role_id), name: '' };
+      return serializeMembership(
+        row,
+        organization_public_id,
+        user,
+        role,
+        invitationRows.get(row.id) ?? null,
+      );
+    });
+  }
+
   private async resolveAndSerializeMembership(
     membership: MembershipRow,
     organization_public_id: string,
   ): Promise<MembershipOutput> {
-    const userPublicIds = await this.membershipRepository.resolveUserPublicIdsByInternalIds([
-      membership.user_id,
-    ]);
-    const rolePublicIds = await this.membershipRepository.resolveRolePublicIdsByInternalIds([
-      membership.role_id,
-    ]);
-    return serializeMembership(
-      membership,
-      organization_public_id,
-      userPublicIds.get(membership.user_id) ?? String(membership.user_id),
-      rolePublicIds.get(membership.role_id) ?? String(membership.role_id),
-    );
+    const [output] = await this.serializeMemberships([membership], organization_public_id);
+    return output!;
   }
 
   async list(organization_public_id: string, query: unknown) {
@@ -178,23 +227,10 @@ export class MembershipService {
           limit: parsed.limit,
         }),
       );
-      // Batch-resolve all user + role public ids for the page (one query each, no N+1).
-      const userPublicIds = await this.membershipRepository.resolveUserPublicIdsByInternalIds(
-        result.items.map((membership) => membership.user_id),
-      );
-      const rolePublicIds = await this.membershipRepository.resolveRolePublicIdsByInternalIds(
-        result.items.map((membership) => membership.role_id),
-      );
       return {
         ...result,
-        items: result.items.map((membership) =>
-          serializeMembership(
-            membership,
-            organization_public_id,
-            userPublicIds.get(membership.user_id) ?? String(membership.user_id),
-            rolePublicIds.get(membership.role_id) ?? String(membership.role_id),
-          ),
-        ),
+        // Batch-resolve user + role summaries + live invitations for the page (no N+1).
+        items: await this.serializeMemberships(result.items, organization_public_id),
       };
     });
   }

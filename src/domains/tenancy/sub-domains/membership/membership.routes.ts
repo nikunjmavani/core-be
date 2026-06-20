@@ -284,7 +284,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
         schema: {
           summary: 'Accept invitation',
           description:
-            "Accepts a pending invitation using the invitation token. Requires authentication; the authenticated user's email must match the invitee email on the invitation. Creates a membership for the user.",
+            "Accepts a pending invitation using the invitation token. Requires authentication; the authenticated user's email must match the invitee email on the invitation. Activates the invitee's pre-existing membership (sets it ACTIVE).",
           tags: ['Invitation'],
           params: invitationIdParamsDto,
           body: acceptMemberInvitationDto,

@@ -67,12 +67,26 @@ describe('MembershipService', () => {
     update: vi.fn().mockResolvedValue(membershipRow),
     softDelete: vi.fn().mockResolvedValue(membershipRow),
     findByUserAndOrganization: vi.fn().mockResolvedValue(membershipRow),
-    resolveUserPublicIdsByInternalIds: vi.fn(
-      async (ids: readonly number[]) => new Map(ids.map((id) => [id, `user_public_${id}`])),
+    resolveUserSummariesByInternalIds: vi.fn(
+      async (ids: readonly number[]) =>
+        new Map(
+          ids.map((id) => [
+            id,
+            {
+              public_id: `user_public_${id}`,
+              email: `user${id}@example.com`,
+              first_name: 'Test',
+              last_name: `User${id}`,
+              avatar_url: null,
+            },
+          ]),
+        ),
     ),
-    resolveRolePublicIdsByInternalIds: vi.fn(
-      async (ids: readonly number[]) => new Map(ids.map((id) => [id, `role_public_${id}`])),
+    resolveRoleSummariesByInternalIds: vi.fn(
+      async (ids: readonly number[]) =>
+        new Map(ids.map((id) => [id, { public_id: `role_public_${id}`, name: 'Admin' }])),
     ),
+    resolveLiveInvitationsByMembershipIds: vi.fn(async () => new Map()),
   } as unknown as MembershipRepository;
 
   const authorizationService = {

@@ -64,12 +64,26 @@ describe('MembershipService — permission cache invalidation', () => {
       updated_at: new Date(),
     }),
     softDelete: vi.fn().mockResolvedValue({ public_id: 'membership_public' }),
-    resolveUserPublicIdsByInternalIds: vi.fn(
-      async (ids: readonly number[]) => new Map(ids.map((id) => [id, `user_public_${id}`])),
+    resolveUserSummariesByInternalIds: vi.fn(
+      async (ids: readonly number[]) =>
+        new Map(
+          ids.map((id) => [
+            id,
+            {
+              public_id: `user_public_${id}`,
+              email: `user${id}@example.com`,
+              first_name: 'Test',
+              last_name: `User${id}`,
+              avatar_url: null,
+            },
+          ]),
+        ),
     ),
-    resolveRolePublicIdsByInternalIds: vi.fn(
-      async (ids: readonly number[]) => new Map(ids.map((id) => [id, `role_public_${id}`])),
+    resolveRoleSummariesByInternalIds: vi.fn(
+      async (ids: readonly number[]) =>
+        new Map(ids.map((id) => [id, { public_id: `role_public_${id}`, name: 'Admin' }])),
     ),
+    resolveLiveInvitationsByMembershipIds: vi.fn(async () => new Map()),
     findByUserAndOrganization: vi.fn().mockResolvedValue({
       public_id: 'membership_public',
       user_id: 20,

@@ -54,7 +54,7 @@ export type TenancyContainer = {
  */
 export function createTenancyContainer(
   userService: UserService,
-  _objectStorage: ObjectStoragePort,
+  objectStorage: ObjectStoragePort,
   userSettingsService?: UserSettingsService,
 ): TenancyContainer {
   const organizationRepository = new OrganizationRepository();
@@ -67,7 +67,7 @@ export function createTenancyContainer(
   const memberRolePermissionRepository = new MemberRolePermissionRepository();
   const permissionRepository = new PermissionRepository();
 
-  const organizationService = new OrganizationService(organizationRepository, _objectStorage);
+  const organizationService = new OrganizationService(organizationRepository, objectStorage);
   const organizationSettingsService = new OrganizationSettingsService(
     organizationRepository,
     organizationSettingsRepository,
@@ -104,6 +104,8 @@ export function createTenancyContainer(
     userSettingsService,
     // reaudit-#7: revoke a removed/departed member's API keys.
     organizationApiKeyRepository,
+    // REQ-2: presign embedded member avatars in list/get responses.
+    objectStorage,
   );
   const memberInvitationService = new MemberInvitationService(
     organizationRepository,

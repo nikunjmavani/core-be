@@ -265,15 +265,44 @@ describe('Tenancy Domain — Integration', () => {
       expect(response.statusCode).toBe(403);
     });
 
-    it('should return memberships with permission', async () => {
+    it('should return memberships with embedded user + role summaries (REQ-2)', async () => {
       const { token } = await createAuthorizedUserAndOrganization();
       const response = await injectAuthenticated(app, {
         url: testApiPath('/tenancy/organization/memberships'),
         token,
       });
       expect(response.statusCode).toBe(200);
-      const body = response.json() as { data?: unknown };
-      expect(body.data).toBeDefined();
+      const body = response.json() as {
+        data?: Array<{
+          status: string;
+          user_id: string;
+          role_id: string;
+          user?: {
+            id: string;
+            email: string;
+            first_name: string | null;
+            last_name: string | null;
+            avatar_url: string | null;
+          };
+          role?: { id: string; name: string };
+          invitation?: unknown;
+        }>;
+      };
+      expect(Array.isArray(body.data) && body.data!.length > 0).toBe(true);
+      const owner = body.data![0]!;
+      // Embedded user summary lets the FE render a members table without an N+1 per-row fetch.
+      expect(owner.user).toBeDefined();
+      expect(typeof owner.user!.id).toBe('string');
+      expect(typeof owner.user!.email).toBe('string');
+      expect(owner.user!.id).toBe(owner.user_id); // flat id mirrors the embedded public id
+      expect(owner.user).toHaveProperty('avatar_url');
+      // Embedded role summary (id + name).
+      expect(owner.role).toBeDefined();
+      expect(owner.role!.id).toBe(owner.role_id);
+      expect(typeof owner.role!.name).toBe('string');
+      // The owner membership is ACTIVE → no live invitation embedded.
+      expect(owner.status).toBe('ACTIVE');
+      expect(owner.invitation).toBeNull();
     });
   });
 
