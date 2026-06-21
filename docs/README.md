@@ -137,7 +137,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [reference/architecture/domains-and-public-api-design.md](reference/architecture/domains-and-public-api-design.md) | Domain layout and Paddle-style API responses.                                          |
 | [reference/architecture/sub-domains-layout.md](reference/architecture/sub-domains-layout.md) | Sub-domain and nested sub-domain folder layout rules. |
 | [reference/architecture/documentation-system.md](reference/architecture/documentation-system.md) | In-source doc system (narratives, OVERVIEWs, TSDoc, route schema); `tsdoc:check` ratchet. |
-| [reference/architecture/personal-team-organizations.md](reference/architecture/personal-team-organizations.md) | Personal vs team organization model and the single route surface. |
+| [reference/architecture/personal-vs-team-organizations.md](reference/architecture/personal-vs-team-organizations.md) | Personal vs team organization model and the single route surface. |
 | [reference/architecture/typescript-strictness.md](reference/architecture/typescript-strictness.md) | TypeScript strictness settings and rationale. |
 | [reference/architecture/scripts-layout.md](reference/architecture/scripts-layout.md) | `src/scripts/` layout and script conventions. |
 | [reference/api/api-versioning.md](reference/api/api-versioning.md)                                                 | `/api/v1`, deprecation, `Sunset` / `Deprecation` headers.                              |
