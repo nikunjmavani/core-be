@@ -3,22 +3,18 @@ import type { FastifyServerOptions } from 'fastify';
 import type { IncomingMessage } from 'node:http';
 import { env } from '@/shared/config/env.config.js';
 import { TEN_SECONDS_MS, THIRTY_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
-import { redactSensitive } from '@/shared/utils/security/sensitive-redaction.util.js';
+import {
+  redactSensitive,
+  SENSITIVE_KEY_FRAGMENTS,
+} from '@/shared/utils/security/sensitive-redaction.util.js';
 
 /**
- * Shared Pino redact paths — fast exact-path scrubbing for well-known fields. Keep in sync
- * with logger.util.ts. Recursive, case-insensitive scrubbing of everything else (nested
- * headers, raw_key, set-cookie, x-api-key, …) is handled by the `redactSensitive` formatter.
+ * Explicit NESTED Pino redact paths (header/body shapes Pino cannot reach by bare key name).
+ * The bare top-level keys come from the single source {@link SENSITIVE_KEY_FRAGMENTS}; this list
+ * only adds the dotted/bracketed paths plus `secret_access_key` (caught recursively by the
+ * `secret` fragment, but pinned here for the exact Pino fast-path).
  */
-export const PINO_REDACT_PATHS = [
-  'authorization',
-  'password',
-  'token',
-  'secret',
-  'email',
-  'cookie',
-  'api_key',
-  'access_key_id',
+const PINO_REDACT_NESTED_PATHS = [
   'secret_access_key',
   'req.headers.authorization',
   'req.headers.cookie',
@@ -32,6 +28,14 @@ export const PINO_REDACT_PATHS = [
   'body.email',
   'req.body.email',
 ] as const;
+
+/**
+ * Shared Pino redact paths — fast exact-path scrubbing for well-known fields. The bare key set
+ * is DERIVED from {@link SENSITIVE_KEY_FRAGMENTS} (audit #27: one source of truth, no drift)
+ * and combined with {@link PINO_REDACT_NESTED_PATHS}. Recursive, case-insensitive scrubbing of
+ * everything else is handled by the `redactSensitive` formatter.
+ */
+export const PINO_REDACT_PATHS = [...SENSITIVE_KEY_FRAGMENTS, ...PINO_REDACT_NESTED_PATHS] as const;
 
 /**
  * Resolves the Fastify `trustProxy` value from the validated env. `TRUST_PROXY` is parsed

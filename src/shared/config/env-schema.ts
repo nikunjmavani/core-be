@@ -10,9 +10,35 @@
  * When you add a new env key that's conditionally required, mark it OPTIONAL in
  * `.env.example` and pair it with a corresponding `.optional()` / refinement here.
  */
+import { createPrivateKey, createPublicKey } from 'node:crypto';
 import { validateProductionRedisTopology } from '@/infrastructure/cache/redis-url.parse.util.js';
 import { PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { z } from 'zod';
+
+/** Minimum accepted RSA modulus (bits) for the RS256 signing keys (audit #8). */
+const MIN_JWT_RSA_MODULUS_BITS = 2048;
+
+/** True for deployed runtimes (production/staging) where placeholder/ephemeral keys are unacceptable. */
+const isDeployedRuntime = (nodeEnv: string): boolean =>
+  nodeEnv === 'production' || nodeEnv === 'staging';
+
+/**
+ * Returns true when `pem` parses as an RSA key (of `kind`) whose modulus is at
+ * least {@link MIN_JWT_RSA_MODULUS_BITS} bits. Used by the boot-time refine so a
+ * truncated PEM or an accidental sub-2048-bit / non-RSA key fails fast instead of
+ * issuing forgeable tokens or failing opaquely at first sign/verify (audit #8).
+ */
+const isStrongRsaPem = (pem: string, kind: 'private' | 'public'): boolean => {
+  try {
+    const key = kind === 'private' ? createPrivateKey(pem) : createPublicKey(pem);
+    return (
+      key.asymmetricKeyType === 'rsa' &&
+      (key.asymmetricKeyDetails?.modulusLength ?? 0) >= MIN_JWT_RSA_MODULUS_BITS
+    );
+  } catch {
+    return false;
+  }
+};
 
 const nodeEnvSchema = z
   .enum(['local', 'development', 'staging', 'production', 'test'])
@@ -226,7 +252,10 @@ const envSchemaBase = z.object({
   API_DOCS_BASE_URL: z.url().optional(),
 
   // Rate limiting
-  RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(100),
+  // Upper bound (audit #34) catches a fat-fingered value that would silently disable global
+  // throttling. NOTE: during a Redis failover the fallback store counts PER PROCESS, so the
+  // effective cluster-wide ceiling while degraded is RATE_LIMIT_MAX × instance count.
+  RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(100_000).default(100),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1).default(60_000),
   /** Comma-separated hostnames allowed for outbound webhooks (optional; empty = no extra restriction). */
   WEBHOOK_URL_ALLOWLIST: z.string().optional(),
@@ -689,6 +718,12 @@ const envSchemaBase = z.object({
     .optional()
     .default('false')
     .transform((v) => v === 'true' || v === '1'),
+  /**
+   * Deliberate override (audit #7) allowing the unauthenticated `/reference` UI in production.
+   * Off by default; the cross-field refine on {@link envSchema} rejects
+   * `ENABLE_API_REFERENCE=true` in production unless this is also set.
+   */
+  API_REFERENCE_ALLOW_PRODUCTION: booleanString('false'),
   OPENAPI_SPEC_PATH: z.string().min(1).optional(),
 
   // Organization capability flags — toggle the two organization kinds independently so one
@@ -1181,6 +1216,42 @@ export const envSchema = envSchemaBase
       message:
         'In production, STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET must both be set or both unset (see sec-B5).',
       path: ['STRIPE_SECRET_KEY'],
+    },
+  )
+  // audit #8: the RS256 signing keys were validated only by `min(1)`. A truncated PEM, a
+  // non-RSA key, or an accidental sub-2048-bit key passed boot and either failed opaquely at
+  // first sign/verify or (weak-but-valid) issued practically-forgeable tokens. Assert real RSA
+  // PEMs of adequate modulus in DEPLOYED runtimes (production/staging) — mirroring the entropy
+  // floor already gated on SECRETS_ENCRYPTION_KEY. local/development/test use ephemeral keys.
+  .refine(
+    (data) => !isDeployedRuntime(data.NODE_ENV) || isStrongRsaPem(data.JWT_PRIVATE_KEY, 'private'),
+    {
+      message: `JWT_PRIVATE_KEY must be a valid RSA private-key PEM of at least ${MIN_JWT_RSA_MODULUS_BITS} bits.`,
+      path: ['JWT_PRIVATE_KEY'],
+    },
+  )
+  .refine(
+    (data) => !isDeployedRuntime(data.NODE_ENV) || isStrongRsaPem(data.JWT_PUBLIC_KEY, 'public'),
+    {
+      message: `JWT_PUBLIC_KEY must be a valid RSA public-key PEM of at least ${MIN_JWT_RSA_MODULUS_BITS} bits.`,
+      path: ['JWT_PUBLIC_KEY'],
+    },
+  )
+  // audit #7: the Scalar API reference UI (GET /reference) mounts with no auth pre-handler and
+  // no environment restriction. Exposing the full internal API contract unauthenticated in
+  // production is a recon aid (and relaxes CSP on that subtree). Refuse to enable it in
+  // production unless an operator explicitly opts in via API_REFERENCE_ALLOW_PRODUCTION=true.
+  .refine(
+    (data) =>
+      !(
+        data.NODE_ENV === 'production' &&
+        data.ENABLE_API_REFERENCE &&
+        !data.API_REFERENCE_ALLOW_PRODUCTION
+      ),
+    {
+      message:
+        'ENABLE_API_REFERENCE=true is not permitted in production (the /reference UI is unauthenticated and exposes the full API contract). Set API_REFERENCE_ALLOW_PRODUCTION=true to override deliberately.',
+      path: ['ENABLE_API_REFERENCE'],
     },
   );
 
