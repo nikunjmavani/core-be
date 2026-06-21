@@ -1,4 +1,5 @@
 import { ConflictError, NotFoundError, UnprocessableEntityError } from '@/shared/errors/index.js';
+import { randomUUID } from 'node:crypto';
 
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { INACTIVE_SUBSCRIPTION_STATUSES } from './subscription.repository.js';
@@ -55,6 +56,25 @@ import {
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { enqueueSubscriptionSeatSyncBestEffort } from './queues/subscription-seat-sync.queue.js';
+
+/**
+ * Namespaces a client-supplied `X-Idempotency-Key` by organization (and operation) before it is
+ * forwarded to Stripe (audit #3).
+ *
+ * @remarks
+ * Stripe idempotency keys are scoped per Stripe *account* (the whole platform), not per tenant, so
+ * forwarding a bare client header lets a key chosen by org A collide with the same string from org B
+ * at Stripe — leaking A's cached object to B, or erroring B's request (`idempotency_error`) as a
+ * chosen-key cross-tenant DoS. Prefixing with `op:org` keeps each tenant's key space disjoint.
+ * Returns `undefined` when no client key was supplied (the caller passes nothing to Stripe).
+ */
+export function buildStripeIdempotencyKey(
+  operation: string,
+  organizationPublicId: string,
+  clientKey: string | undefined,
+): string | undefined {
+  return clientKey === undefined ? undefined : `${operation}:${organizationPublicId}:${clientKey}`;
+}
 
 /**
  * Coordinates plan lookups, payment-provider calls, and subscription updates
@@ -171,8 +191,18 @@ export class SubscriptionService {
    *   add/remove commits, and `changePlan` calls after a successful plan change.
    */
   enqueueSeatQuantitySync(organization_public_id: string, idempotencyKey?: string): void {
+    // audit #1: stamp a STABLE per-enqueue idempotency token when the caller (the member
+    // add/remove hot path) provides none. It is stored in the BullMQ job data, so every RETRY of
+    // the same job reuses it — the Stripe quantity update is then deduped at Stripe instead of
+    // re-issued (which, with proration/usage billing, would post duplicate proration line items).
+    // A separate enqueue gets a fresh token (avoids a stale idempotent replay on an N→M→N seat
+    // oscillation); `changePlan` keeps passing its own client-derived key.
+    const seatSyncToken = idempotencyKey ?? `seat-sync:${organization_public_id}:${randomUUID()}`;
     enqueueSubscriptionSeatSyncBestEffort(
-      omitUndefined({ organizationPublicId: organization_public_id, idempotencyKey }),
+      omitUndefined({
+        organizationPublicId: organization_public_id,
+        idempotencyKey: seatSyncToken,
+      }),
     );
   }
 
@@ -221,12 +251,20 @@ export class SubscriptionService {
     // empty-membership read cannot fail the sync.
     const quantity = Math.max(1, seatsUsed);
 
+    // audit #1: scope the Stripe idempotency key by the resolved quantity. The base token is stable
+    // across a job's retries (so a retried update with the SAME quantity is deduped at Stripe — no
+    // duplicate proration); appending the quantity means a retry that recomputes a DIFFERENT desired
+    // quantity becomes a distinct operation instead of a Stripe param-mismatch error. Undefined only
+    // on a non-queue direct call (the enqueue path always stamps a token).
+    const quantityUpdateIdempotencyKey =
+      idempotencyKey !== undefined ? `${idempotencyKey}:qty:${quantity}` : undefined;
+
     // Stripe network call — OUTSIDE any database context.
     if (subscription.provider_subscription_id) {
       await this.paymentProvider.updateSubscriptionQuantity(
         subscription.provider_subscription_id,
         quantity,
-        idempotencyKey,
+        quantityUpdateIdempotencyKey,
       );
     }
 
@@ -444,7 +482,12 @@ export class SubscriptionService {
         organization,
         plan,
         billingCycle: parsed.billing_cycle,
-        idempotencyKey,
+        // audit #3: namespace the client key by org before it reaches Stripe's global key space.
+        idempotencyKey: buildStripeIdempotencyKey(
+          'sub-create',
+          organization_public_id,
+          idempotencyKey,
+        ),
       }),
     );
 
@@ -555,7 +598,7 @@ export class SubscriptionService {
       await this.paymentProvider.updateSubscriptionPrice(
         subscription.provider_subscription_id,
         providerPriceId,
-        idempotencyKey,
+        buildStripeIdempotencyKey('sub-change-plan', organization_public_id, idempotencyKey),
       );
       providerPlanUpdated = true;
     }
@@ -630,7 +673,7 @@ export class SubscriptionService {
       if (subscription.provider_subscription_id) {
         await this.paymentProvider.cancelSubscriptionImmediately(
           subscription.provider_subscription_id,
-          idempotencyKey,
+          buildStripeIdempotencyKey('sub-cancel-now', organization_public_id, idempotencyKey),
         );
       }
       const canceled = await withOrganizationDatabaseContext(organization_public_id, async () =>
@@ -651,7 +694,7 @@ export class SubscriptionService {
     if (subscription.provider_subscription_id) {
       await this.paymentProvider.cancelSubscriptionAtPeriodEnd(
         subscription.provider_subscription_id,
-        idempotencyKey,
+        buildStripeIdempotencyKey('sub-cancel', organization_public_id, idempotencyKey),
       );
     }
 
@@ -735,7 +778,7 @@ export class SubscriptionService {
     if (subscription.provider_subscription_id) {
       await this.paymentProvider.resumeSubscription(
         subscription.provider_subscription_id,
-        idempotencyKey,
+        buildStripeIdempotencyKey('sub-resume', organization_public_id, idempotencyKey),
       );
     }
 

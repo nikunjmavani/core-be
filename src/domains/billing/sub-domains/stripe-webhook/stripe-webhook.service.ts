@@ -163,6 +163,13 @@ export class StripeWebhookService {
         logger.info({ eventId: event.id, eventType: event.type }, 'stripe.webhook.reclaimed');
       }
 
+      // audit #44 — IDEMPOTENCY BOUNDARY: `markProcessed` (below) runs on a different context than
+      // the business write, so a crash between the two leaves the ledger row `processing` and the
+      // reclaim lease re-runs this dispatch. That is safe ONLY because every side effect here is a
+      // Postgres write guarded by the `last_stripe_event_created_at` watermark + unique-violation
+      // handling (a re-run is a no-op), and there is NO outbound call in this handler. Any NEW side
+      // effect added to `dispatchEvent` MUST be idempotency-keyed or watermark-guarded — do not
+      // assume `markProcessed` is a transactional barrier.
       try {
         await runStripeWebhookHandlerWithOrganizationContext(
           event,
