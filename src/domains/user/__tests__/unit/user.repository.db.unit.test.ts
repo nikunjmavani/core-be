@@ -119,4 +119,23 @@ describe('UserRepository (database)', () => {
       Date.now(),
     );
   });
+
+  // audit #13: admin search is now case-INSENSITIVE (was `like` — "john" missed "John") and
+  // matches against the concatenated display name, targeting the trigram GIN indexes.
+  it('admin search is case-insensitive and matches the display name (audit #13)', async () => {
+    const user = await createTestUser({
+      email: 'case-search-target@example.com',
+      firstName: 'Johnathan',
+      lastName: 'Quibblesworth',
+    });
+
+    const byFirstNameLower = await repository.findMany({ limit: 20, search: 'johnathan' });
+    expect(byFirstNameLower.items.some((row) => row.public_id === user.public_id)).toBe(true);
+
+    const byDisplayName = await repository.findMany({ limit: 20, search: 'johnathan quibbles' });
+    expect(byDisplayName.items.some((row) => row.public_id === user.public_id)).toBe(true);
+
+    const byEmailUpper = await repository.findMany({ limit: 20, search: 'CASE-SEARCH-TARGET' });
+    expect(byEmailUpper.items.some((row) => row.public_id === user.public_id)).toBe(true);
+  });
 });
