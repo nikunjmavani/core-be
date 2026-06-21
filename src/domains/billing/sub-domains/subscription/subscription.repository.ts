@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { plans } from '@/domains/billing/sub-domains/plan/plan.schema.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
@@ -108,6 +108,9 @@ export class SubscriptionRepository {
       .from(subscriptions)
       .leftJoin(plans, eq(subscriptions.plan_id, plans.id))
       .where(eq(subscriptions.organization_id, organization_id))
+      // audit #37: deterministic order so the cap truncates the OLDEST rows, not an arbitrary set,
+      // if an org ever exceeds the cap (churned CANCELED history).
+      .orderBy(desc(subscriptions.created_at), desc(subscriptions.id))
       .limit(limit + 1);
     return capListWithWarning({
       rows,
