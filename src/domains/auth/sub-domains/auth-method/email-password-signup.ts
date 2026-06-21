@@ -39,17 +39,18 @@ function isUniqueViolation(error: unknown): boolean {
  * @remarks
  * - **Algorithm:** normalize the email; reject disposable domains; fast-path `409` when the email
  *   already has an account (the chosen signup UX, unlike the anti-enumeration silence of
- *   login/forgot/magic-link); hash the password OUTSIDE the transaction (argon2 is CPU-bound); then,
- *   in one `withTransaction` pinned via {@link runWithPinnedDatabaseHandle}: insert the user
- *   (`is_email_verified=false`), insert the `PASSWORD` auth-method, best-effort provision the personal
- *   organization (when `PERSONAL_ORGANIZATION_ENABLED`), and call {@link completeFirstFactorAuth} to
- *   issue the session.
+ *   login/forgot/magic-link); hash the password OUTSIDE the transaction (argon2 is CPU-bound); then
+ *   (1) in one `withTransaction` pinned via {@link runWithPinnedDatabaseHandle}, atomically insert
+ *   the user (`is_email_verified=false`) + the `PASSWORD` auth-method; (2) AFTER that commits,
+ *   best-effort provision the personal organization (when `PERSONAL_ORGANIZATION_ENABLED`); (3) call
+ *   {@link completeFirstFactorAuth} to issue the session so the token carries the personal-org claim.
  * - **Failure modes:** disposable email → `ValidationError`; existing email (pre-check or the
  *   race-proof unique-index violation) → `ConflictError('errors:emailAlreadyRegistered')`. A new user
  *   never has MFA, so the result is the access-token arm of {@link FirstFactorAuthResult} in practice.
- * - **Side effects:** inserts a user + a `PASSWORD` auth-method (atomic), best-effort inserts the
- *   personal organization on a separate admin connection, and creates a session row. The caller is
- *   responsible for setting the session cookie and triggering the verification email afterward.
+ * - **Side effects:** atomically inserts a user + a `PASSWORD` auth-method; then (post-commit)
+ *   best-effort inserts the personal organization via a separate global-admin connection — which is
+ *   exactly why it runs after the commit, since that connection cannot see an uncommitted user — and
+ *   creates a session row. The caller sets the session cookie and triggers the verification email.
  * - **Notes:** the personal-org provision is best-effort (the partial unique index makes a retry
  *   idempotent; `tool:backfill-personal-orgs` recovers a miss), matching OAuth signup.
  */
@@ -92,11 +93,13 @@ export async function completeEmailPasswordSignup(parameters: {
   // connection open inside the transaction.
   const passwordHash = await hashPassword(parameters.password);
 
-  return withTransaction((transaction) =>
+  // Atomic: the user row and its PASSWORD auth-method commit together (a failed method insert rolls
+  // the user back rather than leaving a password-less orphan).
+  const user = await withTransaction((transaction) =>
     runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
-      let user: UserAuthRecord;
+      let created: UserAuthRecord;
       try {
-        user = await userService.createWithPassword(
+        created = await userService.createWithPassword(
           omitUndefined({
             email: normalizedEmail,
             password_hash: passwordHash,
@@ -109,41 +112,43 @@ export async function completeEmailPasswordSignup(parameters: {
         if (isUniqueViolation(error)) throw new ConflictError('errors:emailAlreadyRegistered');
         throw error;
       }
-
-      // PASSWORD auth_method row in the SAME pinned transaction so it commits atomically with the
-      // user (a failed insert rolls the user back instead of leaving a password-less orphan).
-      await authMethodService.createPasswordMethod(user.id, user.public_id);
-
-      // Account-level personal organization, mirroring OAuth signup. Best-effort: a provisioning
-      // failure must not fail signup; the partial unique index makes a retry idempotent and the
-      // tool:backfill-personal-orgs script recovers it. Skipped in team-only mode.
-      if (env.PERSONAL_ORGANIZATION_ENABLED) {
-        try {
-          await provisionPersonalOrganization(user.id);
-        } catch (error) {
-          logger.error(
-            { err: error, userId: user.public_id },
-            'signup.user.personal_org_provision_failed',
-          );
-        }
-      }
-
-      const authResult = await completeFirstFactorAuth({
-        user: {
-          id: user.id,
-          public_id: user.public_id,
-          email: user.email,
-          status: user.status,
-          is_email_verified: user.is_email_verified,
-          is_mfa_enabled: user.is_mfa_enabled,
-        },
-        ipAddress: parameters.ipAddress,
-        userAgent: parameters.userAgent,
-        organizationSettingsService,
-        mfaService,
-        authSessionService,
-      });
-      return { ...authResult, user };
+      await authMethodService.createPasswordMethod(created.id, created.public_id);
+      return created;
     }),
   );
+
+  // Personal organization, mirroring OAuth signup — provisioned AFTER the user commits. It runs in a
+  // SEPARATE global-admin transaction (its own pool connection) which cannot see an uncommitted user,
+  // so doing it inside the transaction above would always FK-fail; post-commit it succeeds. Still
+  // best-effort: a failure must not fail signup (the partial unique index makes a retry idempotent
+  // and tool:backfill-personal-orgs recovers a miss). Skipped in team-only mode.
+  if (env.PERSONAL_ORGANIZATION_ENABLED) {
+    try {
+      await provisionPersonalOrganization(user.id);
+    } catch (error) {
+      logger.error(
+        { err: error, userId: user.public_id },
+        'signup.user.personal_org_provision_failed',
+      );
+    }
+  }
+
+  // Mint the session AFTER provisioning so the access token carries the personal-org claim. Like
+  // login, completeFirstFactorAuth runs on the request handle (no pinned transaction needed).
+  const authResult = await completeFirstFactorAuth({
+    user: {
+      id: user.id,
+      public_id: user.public_id,
+      email: user.email,
+      status: user.status,
+      is_email_verified: user.is_email_verified,
+      is_mfa_enabled: user.is_mfa_enabled,
+    },
+    ipAddress: parameters.ipAddress,
+    userAgent: parameters.userAgent,
+    organizationSettingsService,
+    mfaService,
+    authSessionService,
+  });
+  return { ...authResult, user };
 }
