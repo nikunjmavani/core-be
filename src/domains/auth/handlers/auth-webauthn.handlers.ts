@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
+import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import {
   getIpAddress,
   getUserAgent,
@@ -8,6 +9,7 @@ import {
   setSessionCookie,
 } from '@/domains/auth/auth.http.util.js';
 import { AuthSerializer } from '@/domains/auth/auth.serializer.js';
+import { validateWebauthnCredentialIdParam } from '@/domains/auth/sub-domains/auth-webauthn/webauthn.validator.js';
 import {
   recordLoginAuditEvent,
   recordLoginFailureAuditEvent,
@@ -16,7 +18,7 @@ import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
 type AuthWebauthnHandlersDependencies = Pick<AuthContainer, 'webauthnService'>;
 
-/** Builds the WebAuthn Fastify handlers: `webauthnRegisterOptions` / `webauthnRegisterVerify` for credential enrollment and `webauthnAuthenticateOptions` / `webauthnAuthenticateVerify` for passkey login (sets the session cookie on success). */
+/** Builds the WebAuthn Fastify handlers: `webauthnRegisterOptions` / `webauthnRegisterVerify` for credential enrollment, `webauthnAuthenticateOptions` / `webauthnAuthenticateVerify` for passkey login (sets the session cookie on success), and `webauthnListCredentials` / `webauthnRevokeCredential` for owner-scoped passkey management. */
 export function createAuthWebauthnHandlers({ webauthnService }: AuthWebauthnHandlersDependencies) {
   return {
     webauthnRegisterOptions: async (request: FastifyRequest, _reply: FastifyReply) => {
@@ -35,6 +37,26 @@ export function createAuthWebauthnHandlers({ webauthnService }: AuthWebauthnHand
         readRequestOrigin(request),
       );
       return successResponse(data, getRequestIdentifier(request));
+    },
+    webauthnListCredentials: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      const data = await webauthnService.listCredentials(auth.userId);
+      return successResponse(data, getRequestIdentifier(request));
+    },
+    webauthnRevokeCredential: async (
+      request: FastifyRequest<{ Params: { credential_id: string } }>,
+      reply: FastifyReply,
+    ) => {
+      const auth = requireAuth(request);
+      const credentialPublicId = validateWebauthnCredentialIdParam(request.params.credential_id);
+      await webauthnService.revokeCredential(auth.userId, credentialPublicId);
+      await recordScopedAuditEvent(request, {
+        actorUserPublicId: auth.userId,
+        action: 'auth.webauthn.revoke',
+        resource_type: 'webauthn_credential',
+        metadata: { credential_id: credentialPublicId },
+      });
+      return reply.code(204).send();
     },
     webauthnAuthenticateOptions: async (request: FastifyRequest, _reply: FastifyReply) => {
       const data = await webauthnService.generateAuthenticationOptions(

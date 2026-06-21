@@ -5,6 +5,10 @@
   },
   "DELETE /api/v1/auth/me/sessions/:session_id": { "model": "user", "verifyNoMutation": true },
   "DELETE /api/v1/auth/me/mfa/:mfa_method_id": { "model": "user", "verifyNoMutation": true },
+  "DELETE /api/v1/auth/me/webauthn/credentials/:credential_id": {
+    "model": "user",
+    "verifyNoMutation": true
+  },
 
   "GET /api/v1/billing/subscriptions/:subscription_id": { "model": "org" },
   "PATCH /api/v1/billing/subscriptions/:subscription_id": {
