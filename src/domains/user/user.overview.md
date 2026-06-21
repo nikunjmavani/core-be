@@ -9,7 +9,7 @@ User profile, settings, notification preferences, and GDPR data export. The doma
 What it owns:
 
 - The `users` table (email, status, profile fields, `deleted_at` for soft-delete).
-- The `user_settings`, `user_notification_preferences`, and `user_data_export` resource tables.
+- The `user_settings`, `user_notification_preferences`, and `user_data_exports` resource tables.
 - The GDPR export pipeline that produces a downloadable bundle of every row this user owns across the platform.
 - The `GET /api/v1/users/me` and the user profile / settings / preferences APIs.
 
