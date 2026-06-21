@@ -229,7 +229,26 @@ const envSchemaBase = z.object({
   RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(100),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1).default(60_000),
   /** Comma-separated hostnames allowed for outbound webhooks (optional; empty = no extra restriction). */
-  WEBHOOK_URL_ALLOWLIST: z.string().optional(),
+  WEBHOOK_URL_ALLOWLIST: z
+    .string()
+    .optional()
+    .refine(
+      (value) => {
+        if (value === undefined) return true;
+        // audit #32: reject an over-broad wildcard (`*.com`, `*.io`) that whitelists nearly the
+        // entire internet and silently neutralizes the production allowlist. Require at least a
+        // registrable domain (>= 2 labels) after `*.`.
+        return value
+          .split(',')
+          .map((entry) => entry.trim().toLowerCase())
+          .filter(Boolean)
+          .every((entry) => !entry.startsWith('*.') || entry.slice(2).split('.').length >= 2);
+      },
+      {
+        message:
+          'WEBHOOK_URL_ALLOWLIST wildcard entries must target at least a registrable domain (e.g. `*.example.com`, not `*.com`).',
+      },
+    ),
   /**
    * Per-organization cap on active webhook subscribers (sec-N4). The service
    * rejects further creates beyond this number with a 409. The fan-out loop

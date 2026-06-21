@@ -26,6 +26,15 @@ const MAGIC_SIGNATURES: ReadonlyArray<{
 ];
 
 /**
+ * WebP (RIFF container) layout (audit #33): `RIFF` at bytes 0-4, the 4-byte file size at 4-8, and
+ * the `WEBP` format marker at bytes 8-12 — so a valid WebP needs at least 12 bytes. Named here so
+ * the bounds can't silently drift from a magic-signature edit.
+ */
+const WEBP_FORMAT_MARKER_OFFSET = 8;
+const WEBP_FORMAT_MARKER = Buffer.from([0x57, 0x45, 0x42, 0x50]); // 'WEBP'
+const WEBP_MINIMUM_LENGTH = WEBP_FORMAT_MARKER_OFFSET + WEBP_FORMAT_MARKER.length; // 12
+
+/**
  * Returns true when {@link verifyFileMagicBytes} knows a magic-byte signature for
  * `contentType` (i.e. the type can be content-verified). Used to skip enforcement for
  * allowed-but-signature-less types (e.g. text-based SVG, which is sanitized instead).
@@ -44,17 +53,23 @@ export function verifyFileMagicBytes(buffer: Buffer, contentType: string): boole
 
   const offset = entry.offset ?? 0;
   const signature = entry.signature;
-  const minimumLength = offset + signature.length + (contentType === 'image/webp' ? 8 : 0);
+  // audit #33: WebP needs the full 12-byte RIFF+WEBP header (explicit constant, not a `+8` addend
+  // that could drift if the RIFF signature/offset changes); other types need just their signature.
+  const minimumLength =
+    contentType === 'image/webp' ? WEBP_MINIMUM_LENGTH : offset + signature.length;
 
   if (buffer.length < minimumLength) return false;
 
   const slice = buffer.subarray(offset, offset + signature.length);
   if (!slice.equals(Buffer.from(signature))) return false;
 
-  // WebP: RIFF at 0, WEBP at 8
+  // WebP: 'RIFF' at 0-4 (checked above), 'WEBP' format marker at 8-12.
   if (contentType === 'image/webp') {
-    const webpMarker = Buffer.from([0x57, 0x45, 0x42, 0x50]); // WEBP
-    if (!buffer.subarray(8, 12).equals(webpMarker)) return false;
+    const webpMarker = buffer.subarray(
+      WEBP_FORMAT_MARKER_OFFSET,
+      WEBP_FORMAT_MARKER_OFFSET + WEBP_FORMAT_MARKER.length,
+    );
+    if (!webpMarker.equals(WEBP_FORMAT_MARKER)) return false;
   }
 
   return true;
