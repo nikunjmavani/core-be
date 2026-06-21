@@ -63,7 +63,7 @@ export class MemberRolePermissionService {
     created_by_user_public_id: string | undefined,
   ) {
     const parsed = validatePutMemberRolePermissions(body);
-    return withOrganizationDatabaseContext(organization_public_id, async () => {
+    const result = await withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization = await this.organizationRepository.findByPublicId(organization_public_id);
       if (!organization) throw new NotFoundError('Organization');
       const role = await this.memberRoleRepository.findByPublicId(role_public_id, organization.id);
@@ -117,13 +117,16 @@ export class MemberRolePermissionService {
       const userId = created_by_user_public_id
         ? await this.organizationRepository.resolveUserIdByPublicId(created_by_user_public_id)
         : null;
-      const result = await this.memberRolePermissionRepository.replace(
+      return this.memberRolePermissionRepository.replace(
         role.id,
         parsed.permission_codes,
         userId ?? null,
       );
-      await invalidateOrganizationPermissions(organization_public_id);
-      return result;
     });
+    // sec-R11: invalidate AFTER the write transaction commits. Doing it inside the transaction
+    // (pre-commit) left a race where a concurrent permission recompute read the old committed set
+    // and re-cached it, so a downgraded/removed member kept access until the cache TTL.
+    await invalidateOrganizationPermissions(organization_public_id);
+    return result;
   }
 }
