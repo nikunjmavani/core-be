@@ -1,10 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isSensitiveKey,
   redactSensitive,
   redactSensitiveQueryString,
   redactSensitiveUrl,
+  SENSITIVE_KEY_FRAGMENTS,
   SENSITIVE_REDACTION_PLACEHOLDER,
 } from '@/shared/utils/security/sensitive-redaction.util.js';
+import { PINO_REDACT_PATHS } from '@/shared/utils/http/fastify-server.util.js';
+
+// audit #27: PINO_REDACT_PATHS is now derived from SENSITIVE_KEY_FRAGMENTS (one source of truth).
+// This pins the no-drift invariant: every recursive fragment is also a Pino fast-path, and every
+// bare (non-nested) Pino path is recognised as sensitive by the recursive matcher.
+describe('redaction single-source invariant (audit #27)', () => {
+  it('PINO_REDACT_PATHS includes every SENSITIVE_KEY_FRAGMENTS entry', () => {
+    for (const fragment of SENSITIVE_KEY_FRAGMENTS) {
+      expect(PINO_REDACT_PATHS).toContain(fragment);
+    }
+  });
+
+  it('every bare Pino path is caught by the recursive isSensitiveKey matcher', () => {
+    const barePaths = PINO_REDACT_PATHS.filter(
+      (path) => !(path.includes('.') || path.includes('[')),
+    );
+    for (const path of barePaths) {
+      expect(isSensitiveKey(path)).toBe(true);
+    }
+  });
+});
 
 describe('redactSensitive', () => {
   it('redacts case-insensitive and nested sensitive keys', () => {

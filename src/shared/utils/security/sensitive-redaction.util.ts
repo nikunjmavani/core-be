@@ -21,7 +21,7 @@ const MAX_REDACTION_DEPTH = 8;
  * this also redacts incidental flags such as `is_email_verified`, which is an acceptable
  * fail-closed trade-off.
  */
-const SENSITIVE_KEY_FRAGMENTS = [
+export const SENSITIVE_KEY_FRAGMENTS = [
   'authorization',
   'password',
   'passwd',

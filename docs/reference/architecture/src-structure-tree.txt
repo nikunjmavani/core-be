@@ -388,6 +388,7 @@ src/
     │   │   │       │   ├── subscription.service.seats.unit.test.ts
     │   │   │       │   ├── subscription.service.stripe-reconciliation.unit.test.ts
     │   │   │       │   ├── subscription.service.unit.test.ts
+    │   │   │       │   ├── subscription.stripe-idempotency-key.unit.test.ts
     │   │   │       │   └── subscription.validator.unit.test.ts
     │   │   │   ├── queues/
     │   │   │       ├── subscription-seat-sync.job.schema.ts

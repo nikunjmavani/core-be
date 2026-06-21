@@ -125,14 +125,60 @@ describe('SubscriptionService seat counters (REQ-4)', () => {
     await expect(service.reserveSeatCeilingForMemberAdd(1)).resolves.toBe(3);
   });
 
-  it('syncSeatQuantityForOrganization pushes max(1, memberCount) to Stripe and persists seats', async () => {
+  it('syncSeatQuantityForOrganization pushes max(1, memberCount) to Stripe with a quantity-scoped idempotency key (audit #1)', async () => {
     vi.mocked(repository.findActiveByOrganization).mockResolvedValue(baseRow() as never);
     vi.mocked(membershipSeatUsage.countActiveMembers).mockResolvedValue(4);
 
     await service.syncSeatQuantityForOrganization('org_public', 'idem-1');
 
-    expect(paymentProvider.updateSubscriptionQuantity).toHaveBeenCalledWith('sub_x', 4, 'idem-1');
+    // The Stripe key is the stable base token scoped by the resolved quantity, so a retry of the
+    // SAME job (same quantity) reuses ONE key (Stripe dedups → no duplicate proration).
+    expect(paymentProvider.updateSubscriptionQuantity).toHaveBeenCalledWith(
+      'sub_x',
+      4,
+      'idem-1:qty:4',
+    );
     expect(repository.update).toHaveBeenCalledWith('sub_public', 1, { seats: 4 });
+  });
+
+  it('syncSeatQuantityForOrganization derives a DIFFERENT key when the recomputed quantity changes (no Stripe param-mismatch on retry)', async () => {
+    vi.mocked(repository.findActiveByOrganization).mockResolvedValue(baseRow() as never);
+
+    vi.mocked(membershipSeatUsage.countActiveMembers).mockResolvedValue(6);
+    await service.syncSeatQuantityForOrganization('org_public', 'tok-A');
+    vi.mocked(membershipSeatUsage.countActiveMembers).mockResolvedValue(5);
+    await service.syncSeatQuantityForOrganization('org_public', 'tok-A');
+
+    expect(paymentProvider.updateSubscriptionQuantity).toHaveBeenNthCalledWith(
+      1,
+      'sub_x',
+      6,
+      'tok-A:qty:6',
+    );
+    expect(paymentProvider.updateSubscriptionQuantity).toHaveBeenNthCalledWith(
+      2,
+      'sub_x',
+      5,
+      'tok-A:qty:5',
+    );
+  });
+
+  it('enqueueSeatQuantitySync stamps a stable per-enqueue token when the hot path passes none (audit #1)', () => {
+    service.enqueueSeatQuantitySync('org_public');
+    const call = vi.mocked(seatSyncMocks.enqueueSubscriptionSeatSyncBestEffort).mock
+      .calls[0]![0] as {
+      idempotencyKey?: string;
+    };
+    expect(call.idempotencyKey).toMatch(/^seat-sync:org_public:/);
+  });
+
+  it('enqueueSeatQuantitySync forwards an explicit caller key unchanged (changePlan path)', () => {
+    service.enqueueSeatQuantitySync('org_public', 'client-key-123');
+    const call = vi.mocked(seatSyncMocks.enqueueSubscriptionSeatSyncBestEffort).mock
+      .calls[0]![0] as {
+      idempotencyKey?: string;
+    };
+    expect(call.idempotencyKey).toBe('client-key-123');
   });
 
   it('syncSeatQuantityForOrganization is a no-op when there is no active subscription', async () => {
