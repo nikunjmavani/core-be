@@ -23,7 +23,7 @@ edit only the code and the other four go stale, invisibly, until CI or a human t
    `src/tests/global/` (repo-wide invariants), `src/tests/contract/`, `src/tests/chaos/`,
    `src/tests/load/k6/scenarios/`, `src/tests/performance/`. Test the mechanism **once** at the
    layer that owns it on a representative case — do not fan the same assertion across every suite.
-3. **Docs.** Update the nearest `src/**/OVERVIEW.md`, the relevant `docs/reference/**`, TSDoc on
+3. **Docs.** Update the nearest `src/**/*.overview.md`, the relevant `docs/reference/**`, TSDoc on
    any added/renamed export (`pnpm tsdoc:check`), route `schema` blocks, and `.env.example` for new env vars.
 4. **Rules.** If the change alters a convention or an enforced count, update the relevant
    `agent-os/rules/*.mdc`. Skill: **structure-maintainer**.

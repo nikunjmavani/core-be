@@ -58,7 +58,7 @@ The full `src/` file tree is **not** duplicated here (it drifts from code quickl
 
 | File             | Where it lives                                        | Owner skill |
 | ---------------- | ----------------------------------------------------- | --------------------------------------- |
-| `OVERVIEW.md`    | At meaningful boundaries (domains, sub-domains, infra subsystems, test suites). Hand-written: Purpose, design decisions, failure modes, tuning | overview-doc-maintainer |
+| `<folder>.overview.md`    | At meaningful boundaries (domains, sub-domains, infra subsystems, test suites). Hand-written: Purpose, design decisions, failure modes, tuning | overview-doc-maintainer |
 | TSDoc            | Inline on every public export in `*.ts` (canonical, gated by `pnpm tsdoc:check`) | tsdoc-export-guard |
 | Route schema     | Inline `schema.summary` / `schema.description` / `schema.tags` on every Fastify route (drives OpenAPI) | route-schema-doc-guard |
 

@@ -2,7 +2,7 @@
 
 # Plan
 
-Parent: [billing](../../OVERVIEW.md)
+Parent: [billing](../../billing.overview.md)
 
 ## Purpose
 

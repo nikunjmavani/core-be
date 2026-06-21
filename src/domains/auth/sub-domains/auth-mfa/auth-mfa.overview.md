@@ -2,11 +2,11 @@
 
 # Auth MFA
 
-Parent: [auth](../../OVERVIEW.md)
+Parent: [auth](../../auth.overview.md)
 
 ## Purpose
 
-TOTP-based multi-factor authentication: enrolment (generate secret, return provisioning URL + QR code data), verification (during login), backup codes (single-use one-shot codes for recovery), and disable. Backed by [otplib](https://github.com/yeojz/otplib) for TOTP arithmetic and the [auth-mfa-session](../auth-mfa-session/OVERVIEW.md) module for the in-flight challenge ticket store.
+TOTP-based multi-factor authentication: enrolment (generate secret, return provisioning URL + QR code data), verification (during login), backup codes (single-use one-shot codes for recovery), and disable. Backed by [otplib](https://github.com/yeojz/otplib) for TOTP arithmetic and the [auth-mfa-session](../auth-mfa-session/auth-mfa-session.overview.md) module for the in-flight challenge ticket store.
 
 ## Key invariants
 

@@ -113,7 +113,7 @@ app.get(
 );
 ```
 
-**Layered docs:** Every sub-domain folder must additionally have an `OVERVIEW.md` (Template A.2) and TSDoc on every public export. See [documentation-system.md](./documentation-system.md).
+**Layered docs:** Every sub-domain folder must additionally have an `<folder>.overview.md` (Template A.2) and TSDoc on every public export. See [documentation-system.md](./documentation-system.md).
 
 ### 1.5 Tests (layout)
 

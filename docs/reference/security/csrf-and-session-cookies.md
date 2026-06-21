@@ -86,7 +86,7 @@ flowchart TB
 
 Login and other session-establishing routes set both **`session_id`** and **`csrf_token`**. **`POST /api/v1/auth/refresh`** rotates **`csrf_token`** on success. Logout clears both cookies.
 
-See [`src/shared/middlewares/cookie-session-origin.pre-handler.ts`](../../../src/shared/middlewares/cookie-session-origin.pre-handler.ts) (`requireAllowedSourceOriginForCookieSessionRoute`).
+See [`src/shared/middlewares/session/cookie-session-origin.pre-handler.ts`](../../../src/shared/middlewares/session/cookie-session-origin.pre-handler.ts) (`requireAllowedSourceOriginForCookieSessionRoute`).
 
 ---
 
@@ -113,5 +113,5 @@ Document the new mechanism here and in release notes when that happens.
 - Cookie plugin: [`src/shared/middlewares/session/cookie.middleware.ts`](../../../src/shared/middlewares/session/cookie.middleware.ts)
 - CORS: [`src/shared/middlewares/security/cors.middleware.ts`](../../../src/shared/middlewares/security/cors.middleware.ts)
 - Refresh route: [`src/domains/auth/auth.routes.ts`](../../../src/domains/auth/auth.routes.ts)
-- [`src/domains/auth/sub-domains/auth-session/OVERVIEW.md`](../../../src/domains/auth/sub-domains/auth-session/OVERVIEW.md) — session lifecycle invariants, JWT-per-session rule, retention
+- [`src/domains/auth/sub-domains/auth-session/auth-session.overview.md`](../../../src/domains/auth/sub-domains/auth-session/auth-session.overview.md) — session lifecycle invariants, JWT-per-session rule, retention
 - [`src/POLICIES.md`](../../../src/POLICIES.md) — `JWT_*`, `SESSION_*` policy constants

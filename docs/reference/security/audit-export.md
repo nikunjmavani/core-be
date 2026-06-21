@@ -71,5 +71,5 @@ The worker does **not** push directly to a SIEM. Ingest is **pull-based from S3*
 
 ## Related
 
-- [`src/domains/audit/OVERVIEW.md`](../../../src/domains/audit/OVERVIEW.md) — audit domain invariants (append-only, best-effort writes, actor-scoped RLS, read-restricted)
+- [`src/domains/audit/audit.overview.md`](../../../src/domains/audit/audit.overview.md) — audit domain invariants (append-only, best-effort writes, actor-scoped RLS, read-restricted)
 - [`src/PATTERNS.md`](../../../src/PATTERNS.md) § Audit Emission — the cross-cutting pattern that funnels writes through `recordAuditEvent`

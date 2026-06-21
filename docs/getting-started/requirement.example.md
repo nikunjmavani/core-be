@@ -83,7 +83,7 @@ src/domains/billing/
     ├── invoice.validator.ts
     ├── invoice.serializer.ts
     ├── invoice.types.ts
-    ├── OVERVIEW.md
+    ├── invoice.overview.md
     ├── events/invoice-created-emit.ts
     ├── queues/invoice-delivery.queue.ts
     ├── workers/invoice-delivery.worker.ts

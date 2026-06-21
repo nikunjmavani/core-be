@@ -31,11 +31,11 @@ Every sub-domain (top-level or nested) must have:
 
 | Layer | Source of truth | Owner skill |
 | --- | --- | --- |
-| `<sub-domain>/OVERVIEW.md` | Hand-written narrative — Purpose, Key invariants, Lifecycle, Events, Failure modes, Policy constants | overview-doc-maintainer |
+| `<sub-domain>/<sub-domain>.overview.md` | Hand-written narrative — Purpose, Key invariants, Lifecycle, Events, Failure modes, Policy constants | overview-doc-maintainer |
 | TSDoc summaries on every public export; `@remarks` on `*.service.ts` / `*.worker.ts` / `*.processor.ts` / `*.policy.ts` | TSDoc on the export itself | tsdoc-export-guard |
 | Inline Fastify `schema.summary` / `schema.description` for every route (drives OpenAPI) | Zod schema in `*.routes.ts` | route-schema-doc-guard |
 
-The first line of `OVERVIEW.md` must be the bare backticked relative path (e.g. ``` `src/domains/tenancy/sub-domains/organization/` ```). See [documentation-system.md](./documentation-system.md) for the full system.
+The first line of `<folder>.overview.md` must be the bare backticked relative path (e.g. ``` `src/domains/tenancy/sub-domains/organization/` ```). See [documentation-system.md](./documentation-system.md) for the full system.
 
 ## Upload content types
 

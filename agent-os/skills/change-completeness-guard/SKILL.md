@@ -44,7 +44,7 @@ does not apply (not by forgetting it).
    > on a representative case — not duplicated into every suite. A route-agnostic middleware is
    > proven on one representative route; a shared util is unit-tested directly. Mirror the
    > convention of the suites already present rather than fanning the same assertion across layers.
-3. **Docs.** Update every doc that states what you changed: the nearest `src/**/OVERVIEW.md`,
+3. **Docs.** Update every doc that states what you changed: the nearest `src/**/*.overview.md`,
    the relevant `docs/reference/**`, TSDoc on any added/renamed export (gate: `pnpm tsdoc:check`),
    route `schema` blocks for OpenAPI, and `.env.example` for any new env var. Run the matching
    skill (**overview-doc-maintainer**, **docs-maintainer**, **tsdoc-export-guard**,

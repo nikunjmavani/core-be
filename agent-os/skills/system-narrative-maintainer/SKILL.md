@@ -86,7 +86,7 @@ First line: `` `src/` ``.
 
 ### Add a new domain
 
-1. Read the domain's `OVERVIEW.md` (variant A.1 — written by **overview-doc-maintainer**).
+1. Read the domain's `<folder>.overview.md` (variant A.1 — written by **overview-doc-maintainer**).
 2. Append a row to the Domains table in `src/OVERVIEW.md`.
 3. If the domain introduces a new cross-cutting pattern, add it under `src/PATTERNS.md` (see below).
 4. If the domain participates in a new end-to-end flow, add it under `src/FLOWS.md`.
@@ -96,12 +96,12 @@ First line: `` `src/` ``.
 
 1. Identify the canonical implementation file(s) — usually a context wrapper, a middleware, or a service helper.
 2. Add an H2 block under `src/PATTERNS.md` following Template G. Required H3 sections are `Purpose`, `Where it lives`, `Implementation`, `How to apply`.
-3. Cross-link from any domain `OVERVIEW.md` whose `## Patterns used` list mentions this pattern.
+3. Cross-link from any domain `<folder>.overview.md` whose `## Patterns used` list mentions this pattern.
 
 ### Add a new flow
 
 1. Add an H2 block under `src/FLOWS.md` following Template H. The Sequence diagram should name the same actors as the implementation (controller → service → context → DB → event-bus → worker).
-2. Cross-link from the participating domain `OVERVIEW.md` files in their `## Cross-domain flows` section.
+2. Cross-link from the participating domain `<folder>.overview.md` files in their `## Cross-domain flows` section.
 
 ### Add a new policy constant
 
@@ -111,7 +111,7 @@ First line: `` `src/` ``.
 
 ## Anti-patterns
 
-- ❌ Mentioning a pattern in a domain `OVERVIEW.md` without adding it to `src/PATTERNS.md`.
+- ❌ Mentioning a pattern in a domain `<folder>.overview.md` without adding it to `src/PATTERNS.md`.
 - ❌ Adding a flow that crosses 3+ domains without an entry in `src/FLOWS.md`.
 - ❌ Adding a policy constant without `## Consequences of change` (every value here is a deliberate trade-off; the table records the rationale).
 - ❌ Changing a Mermaid actor name without updating the implementation or vice-versa — the diagrams are read alongside the code.
@@ -119,7 +119,7 @@ First line: `` `src/` ``.
 ## Cross-skill triggers
 
 - Adding a new policy constant → also invoke **tsdoc-export-guard** (the constant export needs `@remarks` describing rationale + consequences + last reviewed).
-- Adding a new domain → also invoke **overview-doc-maintainer** (the new domain folder needs an `OVERVIEW.md`).
+- Adding a new domain → also invoke **overview-doc-maintainer** (the new domain folder needs an `<folder>.overview.md`).
 
 ## Related references
 

@@ -2,7 +2,7 @@
 
 # Auth WebAuthn
 
-Parent: [auth](../../OVERVIEW.md)
+Parent: [auth](../../auth.overview.md)
 
 ## Purpose
 

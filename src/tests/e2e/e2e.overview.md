@@ -24,7 +24,7 @@ pnpm test:e2e
 
 ## Fixtures and helpers
 
-Same as integration tests — see [src/tests/integration/OVERVIEW.md](src/tests/integration/OVERVIEW.md).
+Same as integration tests — see [src/tests/integration/integration.overview.md](src/tests/integration/integration.overview.md).
 
 ## Dependencies
 

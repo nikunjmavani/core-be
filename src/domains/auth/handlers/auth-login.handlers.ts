@@ -21,7 +21,7 @@ export function createAuthLoginHandlers({ authService }: AuthLoginHandlersDepend
       try {
         data = await authService.login(request.body, ipAddress, userAgent ?? undefined);
       } catch (error) {
-        // sec-A8 follow-up: record the failure side of the OVERVIEW invariant
+        // sec-A8 follow-up: record the failure side of the auth.overview.md invariant
         // ("every login (success or failure) records a row"). The helper is
         // best-effort and never throws — we always re-raise the original error
         // so the global error handler maps it to the right HTTP status.

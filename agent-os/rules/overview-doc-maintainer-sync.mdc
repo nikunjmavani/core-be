@@ -1,12 +1,12 @@
 ---
-description: When authoring or editing a folder OVERVIEW.md under src/, run overview-doc-maintainer so templates and required sections stay correct.
-globs: src/**/OVERVIEW.md
+description: When authoring or editing a folder <folder>.overview.md under src/, run overview-doc-maintainer so templates and required sections stay correct.
+globs: src/**/*.overview.md
 alwaysApply: false
 ---
 
 ## Overview doc maintainer sync
 
-When any `OVERVIEW.md` under `src/` is created or modified:
+When any `<folder>.overview.md` under `src/` is created or modified:
 
 1. **Read** `agent-os/skills/overview-doc-maintainer/SKILL.md`.
 2. **Verify** line 1 is the bare backticked relative path and required sections match the folder template (domain, sub-domain, infra, or test suite).

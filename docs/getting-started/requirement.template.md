@@ -117,7 +117,7 @@ src/domains/<domain>/
 └── sub-domains/<sub-domain>/
     ├── <sub-domain>.schema.ts
     ├── <sub-domain>.{repository, service, controller, dto, validator, serializer, types}.ts
-    ├── OVERVIEW.md
+    ├── <sub-domain>.overview.md
     ├── events/ queues/ workers/               # only if section 4 declares events/jobs
     ├── seed/{index, reference, bulk, faker}
     └── __tests__/{<sub-domain>.test.ts, unit/}

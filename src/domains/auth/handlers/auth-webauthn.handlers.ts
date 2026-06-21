@@ -53,7 +53,7 @@ export function createAuthWebauthnHandlers({ webauthnService }: AuthWebauthnHand
           getUserAgent(request) ?? undefined,
         );
       } catch (error) {
-        // sec-A8 follow-up: record the failure side of the OVERVIEW invariant.
+        // sec-A8 follow-up: record the failure side of the auth.overview.md invariant.
         await recordLoginFailureAuditEvent(request, 'webauthn', error);
         throw error;
       }
@@ -67,7 +67,7 @@ export function createAuthWebauthnHandlers({ webauthnService }: AuthWebauthnHand
         typeof data.session_refresh_secret === 'string'
       ) {
         setSessionCookie(reply, data.session_public_id, data.session_refresh_secret);
-        // sec-A8: audit WebAuthn passkey login so the OVERVIEW.md "every login
+        // sec-A8: audit WebAuthn passkey login so the auth.overview.md "every login
         // records a row" invariant holds across every entrypoint.
         if ('access_token' in data && typeof data.access_token === 'string') {
           await recordLoginAuditEvent(
