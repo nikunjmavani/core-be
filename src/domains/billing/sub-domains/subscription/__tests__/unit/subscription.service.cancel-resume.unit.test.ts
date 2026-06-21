@@ -165,8 +165,12 @@ describe('SubscriptionService cancel / resume / changePlan guards', () => {
 
     await service.cancelActiveForOrganizationOffboarding('org_public');
 
-    // Immediate Stripe cancel (org is going away — stop billing now, not at period end)...
-    expect(paymentProvider.cancelSubscriptionImmediately).toHaveBeenCalledWith('sub_provider');
+    // Immediate Stripe cancel (org is going away — stop billing now, not at period end)
+    // with a deterministic idempotency key so an org-delete retry dedups (audit L1).
+    expect(paymentProvider.cancelSubscriptionImmediately).toHaveBeenCalledWith(
+      'sub_provider',
+      'sub-cancel-offboarding:org_public:sub_provider',
+    );
     expect(paymentProvider.cancelSubscriptionAtPeriodEnd).not.toHaveBeenCalled();
     // ...and the local row is set CANCELED.
     expect(repository.update).toHaveBeenCalledWith(
