@@ -56,21 +56,23 @@ describe('VerificationTokenService', () => {
   });
 
   describe('consumeIfValid', () => {
-    it('delegates to repository and returns token row on valid token', async () => {
-      const result = await service.consumeIfValid('hashed-token-abc');
-      expect(repository.consumeIfValid).toHaveBeenCalledWith('hashed-token-abc');
+    it('delegates to repository with the expected token type and returns the row', async () => {
+      const result = await service.consumeIfValid('hashed-token-abc', 'MAGIC_LINK');
+      expect(repository.consumeIfValid).toHaveBeenCalledWith('hashed-token-abc', 'MAGIC_LINK');
       expect(result).toEqual(tokenRow);
     });
 
     it('returns null for missing or already-used token (repository returns null)', async () => {
       vi.mocked(repository.consumeIfValid).mockResolvedValueOnce(null);
-      const result = await service.consumeIfValid('expired-token-hash');
+      const result = await service.consumeIfValid('expired-token-hash', 'PASSWORD_RESET');
       expect(result).toBeNull();
     });
 
     it('propagates repository errors', async () => {
       vi.mocked(repository.consumeIfValid).mockRejectedValueOnce(new Error('Connection timeout'));
-      await expect(service.consumeIfValid('token-hash')).rejects.toThrow('Connection timeout');
+      await expect(service.consumeIfValid('token-hash', 'MAGIC_LINK')).rejects.toThrow(
+        'Connection timeout',
+      );
     });
   });
 

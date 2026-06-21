@@ -9,6 +9,7 @@ import {
 import { users } from '@/domains/user/user.schema.js';
 import { database } from '@/infrastructure/database/connection.js';
 import { withAuditOutboxDrainDatabaseContext } from '@/infrastructure/database/contexts/audit-outbox-drain-database.context.js';
+import { setLocalDatabaseConfig } from '@/infrastructure/database/contexts/request-database.context.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 
 /** Stable actor public id reused across runs (truncated by cleanupDatabase each test). */
@@ -135,5 +136,69 @@ describe('Integration: audit transactional outbox drain', () => {
     const outboxRows = await database.select().from(audit_outbox);
     expect(outboxRows).toHaveLength(ROW_COUNT);
     expect(outboxRows.every((row) => row.status === 'PROCESSED')).toBe(true);
+  });
+
+  it('sec-r7/M2: a nested-transaction savepoint isolates a failed audit.logs insert from the batch', async () => {
+    // Drives the EXACT mechanism `drainOutboxRow` now uses against the real postgres-js / drizzle
+    // drain transaction: the per-row INSERT runs in a NESTED transaction (a SAVEPOINT). A genuinely
+    // failing insert (invalid severity violates chk_audit_severity) rolls the nested transaction
+    // back and re-throws; the OUTER batch transaction must stay usable so a subsequent VALID insert
+    // still commits. This proves the failed row does NOT wedge the batch on the real driver — raw
+    // `SAVEPOINT` via execute() does not survive postgres-js's transaction-error state, so the
+    // nested transaction is the supported mechanism.
+    await database.insert(users).values({
+      public_id: ACTOR_PUBLIC_ID,
+      email: 'audit-drain-savepoint@example.com',
+      email_hash: 'audit-drain-savepoint-hash',
+    });
+    const [actor] = await database
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.public_id, ACTOR_PUBLIC_ID));
+
+    const failedThenRecovered = await withAuditOutboxDrainDatabaseContext(
+      async (databaseHandle) => {
+        let failed = false;
+        try {
+          await databaseHandle.transaction(async (savepoint) => {
+            await setLocalDatabaseConfig(savepoint, 'app.system_audit_insert', 'true');
+            await savepoint.insert(logs).values({
+              actor_user_id: actor!.id,
+              organization_id: null,
+              action: 'poison.savepoint',
+              resource_type: 'user',
+              severity: 'NOT_A_VALID_SEVERITY', // violates chk_audit_severity
+              metadata: {},
+            });
+          });
+        } catch {
+          // drizzle rolled the nested transaction back to its savepoint and re-threw.
+          failed = true;
+        }
+
+        // The outer batch transaction must still be usable: this VALID insert commits.
+        await setLocalDatabaseConfig(databaseHandle, 'app.system_audit_insert', 'true');
+        await databaseHandle.insert(logs).values({
+          actor_user_id: actor!.id,
+          organization_id: null,
+          action: 'recovered.savepoint',
+          resource_type: 'user',
+          severity: 'INFO',
+          metadata: {},
+        });
+        return failed;
+      },
+    );
+
+    expect(failedThenRecovered).toBe(true);
+    // The valid row committed despite the earlier failed statement → savepoint isolation works.
+    const recovered = await database
+      .select()
+      .from(logs)
+      .where(eq(logs.action, 'recovered.savepoint'));
+    expect(recovered).toHaveLength(1);
+    // The poison row was rolled back with the nested transaction — never persisted.
+    const poison = await database.select().from(logs).where(eq(logs.action, 'poison.savepoint'));
+    expect(poison).toHaveLength(0);
   });
 });

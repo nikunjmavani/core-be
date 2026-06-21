@@ -20,7 +20,7 @@ describe('VerificationTokenRepository (database)', () => {
     const valid = await repository.findValidByTokenHash(tokenHash);
     expect(valid?.user_id).toBe(user.id);
 
-    const consumed = await repository.consumeIfValid(tokenHash);
+    const consumed = await repository.consumeIfValid(tokenHash, 'MAGIC_LINK');
     expect(consumed?.token_hash).toBe(tokenHash);
 
     const afterConsume = await repository.findValidByTokenHash(tokenHash);
@@ -28,7 +28,7 @@ describe('VerificationTokenRepository (database)', () => {
 
     // A second consume of the same token returns null (single-use; the unguarded markUsed that
     // could double-consume was removed in audit #19).
-    expect(await repository.consumeIfValid(tokenHash)).toBeNull();
+    expect(await repository.consumeIfValid(tokenHash, 'MAGIC_LINK')).toBeNull();
   });
 
   it('invalidates all unused tokens of a type for user', async () => {

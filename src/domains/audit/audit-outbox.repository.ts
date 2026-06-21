@@ -157,6 +157,58 @@ export function createDrainAuditOutboxRepository(databaseHandle: RequestScopedPo
     },
 
     /**
+     * Backstop telemetry (sec-r7/M2) for the drain worker: the count of still-PENDING rows, the
+     * highest `attempt_count` among them, and the age in seconds of the oldest one. A wedged or
+     * chronically-failing queue shows up as a growing oldest-age / max-attempts even though the
+     * per-row attempt cap now bounds retries.
+     *
+     * @remarks
+     * - **Algorithm:** single aggregate `SELECT` over `audit.outbox WHERE status = 'PENDING'`.
+     * - **Failure modes:** propagates query errors; expected to run inside the drain context.
+     * - **Side effects:** read-only.
+     * - **Notes:** `oldestPendingAgeSeconds` / `maxAttemptCount` are `0` when nothing is pending.
+     */
+    async getPendingBacklogStats(): Promise<{
+      pendingCount: number;
+      oldestPendingAgeSeconds: number;
+      maxAttemptCount: number;
+    }> {
+      const result = await databaseHandle.execute<{
+        pending_count: number;
+        oldest_age_seconds: number;
+        max_attempt_count: number;
+      }>(drizzleSql`
+        SELECT
+          COUNT(*)::int AS pending_count,
+          COALESCE(EXTRACT(EPOCH FROM (NOW() - MIN(created_at))), 0)::int AS oldest_age_seconds,
+          COALESCE(MAX(attempt_count), 0)::int AS max_attempt_count
+        FROM audit.outbox
+        WHERE status = 'PENDING'
+      `);
+      const rows = Array.isArray(result)
+        ? (result as {
+            pending_count: number;
+            oldest_age_seconds: number;
+            max_attempt_count: number;
+          }[])
+        : ((
+            result as {
+              rows?: {
+                pending_count: number;
+                oldest_age_seconds: number;
+                max_attempt_count: number;
+              }[];
+            }
+          ).rows ?? []);
+      const stats = rows[0];
+      return {
+        pendingCount: stats?.pending_count ?? 0,
+        oldestPendingAgeSeconds: stats?.oldest_age_seconds ?? 0,
+        maxAttemptCount: stats?.max_attempt_count ?? 0,
+      };
+    },
+
+    /**
      * Returns ids of PROCESSED rows older than `olderThan` so the retention worker
      * can prune them. PROCESSED rows are safe to delete — the canonical record is
      * in `audit.logs`.

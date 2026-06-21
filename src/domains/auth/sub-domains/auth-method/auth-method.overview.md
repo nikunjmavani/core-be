@@ -14,7 +14,7 @@ The folder also houses the [magic-link](src/domains/auth/sub-domains/auth-method
 
 - **One auth method per `(user, method_type[, provider, provider_user_id])`**: enforced by a partial unique index. A user cannot have two Google OAuth links to the same Google account.
 - **Hashed-at-rest secrets**: passwords use argon2id; verification-token / magic-link / password-reset tokens are stored as `sha256(raw)`. Raw tokens leave the platform only through outbound email (one-shot) or the OAuth callback URL.
-- **One-shot consumption**: every `verification_tokens` row is consumed by an atomic `UPDATE ... SET consumed_at = NOW() WHERE consumed_at IS NULL RETURNING *`. Two concurrent verifies cannot both succeed.
+- **One-shot, type-scoped consumption**: every `verification_tokens` row is consumed by an atomic `UPDATE ... SET used_at = NOW() WHERE token_hash = $1 AND token_type = $2 AND used_at IS NULL AND expires_at > NOW() RETURNING *`. Two concurrent verifies cannot both succeed, and the `token_type` predicate (sec-r5-L2) means a token replayed against the wrong flow (e.g. a `PASSWORD_RESET` token sent to the magic-link verify path) never matches — so it is never burned, staying redeemable on its own flow.
 - **Single live magic link**: issuing a new magic link invalidates prior unused `MAGIC_LINK` tokens for that user (same semantics as password reset).
 - **Anti-enumeration on send**: magic-link send and password-reset request return identical responses for known and unknown emails. No row inserted, no event emitted, no email sent for unknown emails.
 

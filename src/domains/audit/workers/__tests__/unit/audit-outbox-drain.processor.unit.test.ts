@@ -5,6 +5,9 @@ const drainRepositoryMock = vi.hoisted(() => ({
   markProcessed: vi.fn().mockResolvedValue(undefined),
   recordTransientFailure: vi.fn().mockResolvedValue(undefined),
   markPermanentlyFailed: vi.fn().mockResolvedValue(undefined),
+  getPendingBacklogStats: vi
+    .fn()
+    .mockResolvedValue({ pendingCount: 0, oldestPendingAgeSeconds: 0, maxAttemptCount: 0 }),
 }));
 
 vi.mock('@/domains/audit/audit-outbox.repository.js', () => ({
@@ -20,13 +23,20 @@ vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => 
 interface FakeDatabaseHandle {
   select: ReturnType<typeof vi.fn>;
   insert: ReturnType<typeof vi.fn>;
+  execute: ReturnType<typeof vi.fn>;
+  /**
+   * sec-r7/M2: the per-row audit.logs INSERT runs in a nested transaction (a SAVEPOINT). The fake
+   * mirrors drizzle: it runs the callback and re-throws on failure (drizzle rolls the savepoint
+   * back then re-throws), so `drainOutboxRow`'s catch records the failure on the still-valid batch.
+   */
+  transaction: ReturnType<typeof vi.fn>;
 }
 
 function buildDatabaseHandle(
   userIdByPublicId: Record<string, number>,
   orgIdByPublicId: Record<string, number>,
   apiKeyIdByPublicId: Record<string, number>,
-  insertOverride?: () => Promise<void>,
+  insertOverride?: (row: Record<string, unknown>) => Promise<void>,
 ): FakeDatabaseHandle {
   const userRows = Object.entries(userIdByPublicId).map(([public_id, id]) => ({ id, public_id }));
   const orgRows = Object.entries(orgIdByPublicId).map(([public_id, id]) => ({ id, public_id }));
@@ -50,17 +60,27 @@ function buildDatabaseHandle(
   }));
 
   const insert = vi.fn().mockImplementation(() => ({
-    values: vi.fn().mockImplementation(async (_row: unknown) => {
-      if (insertOverride) return insertOverride();
+    values: vi.fn().mockImplementation(async (row: Record<string, unknown>) => {
+      if (insertOverride) return insertOverride(row);
       return undefined;
     }),
   }));
 
-  return { select, insert };
+  const execute = vi.fn().mockResolvedValue(undefined);
+
+  const handle = { select, insert, execute } as FakeDatabaseHandle;
+  // Nested transaction (SAVEPOINT): run the callback with the same handle so its insert hits the
+  // override; on failure the callback rejects and `transaction` re-throws (like drizzle's savepoint
+  // rollback + rethrow), exercising `drainOutboxRow`'s catch on the still-valid outer transaction.
+  handle.transaction = vi.fn(async (callback: (sp: FakeDatabaseHandle) => Promise<unknown>) =>
+    callback(handle),
+  );
+  return handle;
 }
 
 interface OutboxRowOverride {
   id?: number;
+  action?: string;
   actor_user_public_id?: string | null;
   actor_api_key_public_id?: string | null;
   target_user_public_id?: string | null;
@@ -85,7 +105,7 @@ function buildOutboxRow(overrides: OutboxRowOverride = {}): Record<string, unkno
     actor_api_key_public_id: pickNullable('actor_api_key_public_id', null),
     target_user_public_id: pickNullable('target_user_public_id', null),
     organization_public_id: pickNullable('organization_public_id', 'org_a'),
-    action: 'user.login',
+    action: overrides.action ?? 'user.login',
     resource_type: 'user',
     resource_id: null,
     ip_address: '203.0.113.1',
@@ -246,5 +266,83 @@ describe('runAuditOutboxDrainJob', () => {
       'rls-rejected',
     );
     expect(drainRepositoryMock.recordTransientFailure).not.toHaveBeenCalled();
+  });
+
+  it('sec-r7/M2: a poison row is isolated by SAVEPOINT and does NOT roll back the rest of the batch', async () => {
+    // One row's audit.logs INSERT errors; the other is healthy. Without the per-row SAVEPOINT the
+    // failed INSERT would abort the whole batch transaction, the failure-mark UPDATE would itself
+    // throw, the job would propagate the error, and the claim's attempt_count bump (plus the good
+    // row's insert) would roll back — re-heading the poison row forever. With the savepoint, the
+    // poison row is rolled back to its savepoint, marked transient, and the good row still PROCESSES.
+    const poison = buildOutboxRow({
+      id: 200,
+      action: 'poison.action',
+      actor_user_public_id: 'user_a',
+      organization_public_id: 'org_a',
+      attempt_count: 1,
+    });
+    const healthy = buildOutboxRow({
+      id: 201,
+      action: 'user.login',
+      actor_user_public_id: 'user_a',
+      organization_public_id: 'org_a',
+      attempt_count: 1,
+    });
+    drainRepositoryMock.claimPendingBatch.mockResolvedValueOnce([poison, healthy]);
+    const databaseHandle = buildDatabaseHandle({ user_a: 5 }, { org_a: 10 }, {}, async (row) => {
+      if (row.action === 'poison.action') throw new Error('constraint-violation');
+      return undefined;
+    });
+    const { runAuditOutboxDrainJob } = await import(
+      '@/domains/audit/workers/audit-outbox-drain.processor.js'
+    );
+
+    // The job RETURNS a result (does not throw) — the poison row did not wedge the batch.
+    const result = await runAuditOutboxDrainJob(databaseHandle as never);
+
+    expect(result).toEqual({ drained: 1, transientFailed: 1, permanentlyFailed: 0 });
+    // The healthy row committed (PROCESSED); the poison row was kept PENDING for a bounded retry.
+    expect(drainRepositoryMock.markProcessed).toHaveBeenCalledExactlyOnceWith([201]);
+    expect(drainRepositoryMock.recordTransientFailure).toHaveBeenCalledExactlyOnceWith(
+      200,
+      'constraint-violation',
+    );
+    // Each row's INSERT ran in its own nested transaction (savepoint): one per row.
+    expect(databaseHandle.transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it('sec-r7/M2: checks the PENDING backlog after a drain pass (stall telemetry)', async () => {
+    // The backstop runs after a non-empty pass: a leftover poison/transient row that stays
+    // PENDING surfaces as a non-zero oldest-age so an operator can be paged.
+    const row = buildOutboxRow({
+      id: 300,
+      action: 'poison.action',
+      actor_user_public_id: 'user_a',
+      organization_public_id: 'org_a',
+      attempt_count: 1,
+    });
+    drainRepositoryMock.claimPendingBatch.mockResolvedValueOnce([row]);
+    drainRepositoryMock.getPendingBacklogStats.mockResolvedValueOnce({
+      pendingCount: 1,
+      oldestPendingAgeSeconds: 60 * 60, // 1h — well past the 15-min warn threshold
+      maxAttemptCount: 1,
+    });
+    const databaseHandle = buildDatabaseHandle(
+      { user_a: 5 },
+      { org_a: 10 },
+      {},
+      async (insertRow) => {
+        if (insertRow.action === 'poison.action') throw new Error('constraint-violation');
+        return undefined;
+      },
+    );
+    const { runAuditOutboxDrainJob } = await import(
+      '@/domains/audit/workers/audit-outbox-drain.processor.js'
+    );
+
+    const result = await runAuditOutboxDrainJob(databaseHandle as never);
+
+    expect(result).toEqual({ drained: 0, transientFailed: 1, permanentlyFailed: 0 });
+    expect(drainRepositoryMock.getPendingBacklogStats).toHaveBeenCalled();
   });
 });

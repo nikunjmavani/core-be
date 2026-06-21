@@ -351,8 +351,13 @@ export class AuthMethodService {
     await withTransaction((transaction) =>
       runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
         // Atomic UPDATE also prevents two concurrent resets from both succeeding.
-        const record = await this.verificationTokenRepository.consumeIfValid(tokenHash);
-        if (record?.token_type !== 'PASSWORD_RESET') {
+        // sec-r5-L2: the consume is scoped to PASSWORD_RESET, so a token of another flow
+        // is never matched (returns null) rather than burned and then rejected.
+        const record = await this.verificationTokenRepository.consumeIfValid(
+          tokenHash,
+          'PASSWORD_RESET',
+        );
+        if (!record) {
           throw new UnauthorizedError('errors:invalidOrExpiredResetToken');
         }
 
@@ -460,8 +465,12 @@ export class AuthMethodService {
     // prevents two concurrent verifies from both succeeding.
     await withTransaction((transaction) =>
       runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
-        const record = await this.verificationTokenRepository.consumeIfValid(tokenHash);
-        if (record?.token_type !== 'EMAIL_VERIFICATION') {
+        // sec-r5-L2: scoped to EMAIL_VERIFICATION so a wrong-flow token never matches/burns.
+        const record = await this.verificationTokenRepository.consumeIfValid(
+          tokenHash,
+          'EMAIL_VERIFICATION',
+        );
+        if (!record) {
           throw new UnauthorizedError('errors:invalidOrExpiredVerificationToken');
         }
 
