@@ -1876,6 +1876,7 @@ src/
     │   │   ├── rls-matrix.security.test.ts
     │   │   ├── system-tables-rls.security.test.ts
     │   │   ├── tenancy-with-check-write-confinement.security.test.ts
+    │   │   ├── tenant-isolation-with-check-retention.security.test.ts
     │   │   ├── tenant-isolation.security.test.ts
     │   │   ├── tenant-rls-concurrency.security.test.ts
     │   │   ├── upload-rls.security.test.ts

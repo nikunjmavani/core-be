@@ -85,6 +85,7 @@ export const organizations = tenancySchema
         to: 'public',
         using: sql`${table.public_id} = current_setting('app.current_organization_id', true)
           OR current_setting('app.global_retention_cleanup', true) = 'true'`,
+        withCheck: sql`${table.public_id} = current_setting('app.current_organization_id', true)`,
       }),
     ],
   )
