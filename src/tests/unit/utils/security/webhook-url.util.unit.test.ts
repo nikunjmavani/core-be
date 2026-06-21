@@ -116,4 +116,40 @@ describe('webhook-url.util', () => {
     ).resolves.toBeUndefined();
     expect(mockedLookup).not.toHaveBeenCalled();
   });
+
+  // audit #10: NAT64 well-known prefix (rfc6052) and IPv4-compatible IPv6 (`::a.b.c.d`) were not in
+  // the blocked-range set, so a hostname resolving to one reached internal/loopback IPv4.
+  it.each([
+    ['64:ff9b::a9fe:a9fe', 'NAT64-embedded cloud metadata 169.254.169.254'],
+    ['64:ff9b::7f00:1', 'NAT64-embedded loopback 127.0.0.1'],
+    ['::127.0.0.1', 'IPv4-compatible loopback'],
+    ['::10.0.0.1', 'IPv4-compatible private'],
+  ])('rejects a hostname resolving to %s (%s)', async (address) => {
+    mockDnsLookupAll([{ address, family: 6 }]);
+    await expect(validateWebhookUrl('https://partner.example.com/hook')).rejects.toMatchObject({
+      messageKey: 'errors:webhookUrlNotAllowed',
+    });
+  });
+
+  it('rejects the NAT64 metadata literal without DNS lookup (audit #10)', async () => {
+    await expect(validateWebhookUrl('https://[64:ff9b::a9fe:a9fe]/hook')).rejects.toThrow(
+      ValidationError,
+    );
+    expect(mockedLookup).not.toHaveBeenCalled();
+  });
+
+  // audit #9: webhook delivery is HTTPS-only, so 443 is the only legitimate port; any other port
+  // turns the platform into an outbound port-prober.
+  it('rejects a non-443 destination port even on a public host (audit #9)', async () => {
+    mockDnsLookupAll([{ address: '93.184.216.34', family: 4 }]);
+    await expect(validateWebhookUrl('https://example.com:9200/hook')).rejects.toMatchObject({
+      messageKey: 'errors:webhookUrlNotAllowed',
+    });
+  });
+
+  it('accepts an explicit :443 and the default port (audit #9)', async () => {
+    mockDnsLookupAll([{ address: '93.184.216.34', family: 4 }]);
+    await expect(validateWebhookUrl('https://example.com:443/hook')).resolves.toBeUndefined();
+    await expect(validateWebhookUrl('https://example.com/hook')).resolves.toBeUndefined();
+  });
 });
