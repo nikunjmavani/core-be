@@ -7,7 +7,9 @@ function createMockDatabase() {
   const mockInsert = vi.fn().mockReturnValue({ values: mockValues });
   const mockWhereDelete = vi.fn().mockResolvedValue(undefined);
   const mockDelete = vi.fn().mockReturnValue({ where: mockWhereDelete });
-  const mockWhereSelect = vi.fn().mockResolvedValue([]);
+  // audit #36: listByUserId now chains `.where().limit()` (limit+1 + capListWithWarning).
+  const mockLimit = vi.fn().mockResolvedValue([]);
+  const mockWhereSelect = vi.fn().mockReturnValue({ limit: mockLimit });
   const mockFrom = vi.fn().mockReturnValue({ where: mockWhereSelect });
   const mockSelect = vi.fn().mockReturnValue({ from: mockFrom });
 
@@ -19,6 +21,7 @@ function createMockDatabase() {
     mockValues,
     mockFrom,
     mockWhereSelect,
+    mockLimit,
     mockWhereDelete,
     mockInsert,
     mockDelete,
@@ -38,7 +41,8 @@ describe('UserNotificationPreferencesRepository', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockDatabase.mockReturning.mockResolvedValue([]);
-    mockDatabase.mockWhereSelect.mockResolvedValue([]);
+    mockDatabase.mockLimit.mockResolvedValue([]);
+    mockDatabase.mockWhereSelect.mockReturnValue({ limit: mockDatabase.mockLimit });
     mockDatabase.mockWhereDelete.mockResolvedValue(undefined);
     mockDatabase.mockSelect.mockReturnValue({ from: mockDatabase.mockFrom });
     mockDatabase.mockFrom.mockReturnValue({ where: mockDatabase.mockWhereSelect });
@@ -47,7 +51,7 @@ describe('UserNotificationPreferencesRepository', () => {
   });
 
   it('listByUserId queries preferences for user', async () => {
-    mockDatabase.mockWhereSelect.mockResolvedValueOnce([
+    mockDatabase.mockLimit.mockResolvedValueOnce([
       { id: 1, notification_type: 'SUBSCRIPTION_UPDATED' },
     ]);
     const rows = await repository.listByUserId(10);

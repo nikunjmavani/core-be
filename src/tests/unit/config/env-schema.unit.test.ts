@@ -953,4 +953,36 @@ describe('env-schema', () => {
       expect(parsed.success).toBe(true);
     });
   });
+
+  describe('WEBHOOK_URL_ALLOWLIST wildcard guard (audit #32)', () => {
+    it('rejects an over-broad single-label wildcard (`*.com`)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NODE_ENV: 'test',
+        WEBHOOK_URL_ALLOWLIST: '*.com',
+      });
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues.some((i) => i.path[0] === 'WEBHOOK_URL_ALLOWLIST')).toBe(true);
+      }
+    });
+
+    it('rejects an over-broad wildcard mixed with valid entries', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NODE_ENV: 'test',
+        WEBHOOK_URL_ALLOWLIST: 'hooks.example.com, *.io',
+      });
+      expect(parsed.success).toBe(false);
+    });
+
+    it('accepts a registrable-domain wildcard and exact hosts', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NODE_ENV: 'test',
+        WEBHOOK_URL_ALLOWLIST: '*.example.com, hooks.partner.io',
+      });
+      expect(parsed.success).toBe(true);
+    });
+  });
 });

@@ -197,5 +197,36 @@ describe('Tenancy Organization Settings Sub-Domain — Integration', () => {
       expect(body.data.is_email_notifications_enabled).toBe(false);
       expect(body.data.security_policy).toMatchObject({ mfa_required: true });
     });
+
+    // audit #11: security_policy is MERGED, not whole-object replaced — so a second PATCH editing a
+    // different key cannot silently revert the first (e.g. an admin enabling org-mandated MFA).
+    it('merges security_policy keys across sequential PATCHes (no lost update)', async () => {
+      const { token } = await createAuthorizedOrganizationContext([
+        TENANCY_PERMISSIONS.ORGANIZATION_READ,
+        TENANCY_PERMISSIONS.ORGANIZATION_UPDATE,
+      ]);
+
+      const first = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'PATCH',
+        url: ORGANIZATION_SETTINGS_PATH,
+        token,
+        payload: { security_policy: { mfa_required: true } },
+      });
+      expect(first.statusCode).toBe(200);
+
+      const second = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'PATCH',
+        url: ORGANIZATION_SETTINGS_PATH,
+        token,
+        payload: { security_policy: { sso_enforced: true } },
+      });
+      expect(second.statusCode).toBe(200);
+
+      const body = second.json() as {
+        data: { security_policy: Record<string, unknown> };
+      };
+      // Both keys survive — the second PATCH did NOT clobber the first admin's mfa_required toggle.
+      expect(body.data.security_policy).toMatchObject({ mfa_required: true, sso_enforced: true });
+    });
   });
 });

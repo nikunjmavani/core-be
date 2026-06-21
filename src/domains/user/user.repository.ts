@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
-import { and, asc, eq, isNotNull, isNull, like, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, ilike, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { countWithCap } from '@/infrastructure/database/utils/capped-count.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { users } from '@/domains/user/user.schema.js';
@@ -208,14 +208,13 @@ export class UserRepository {
       filterConditions.push(eq(users.status, status));
     }
     if (search) {
+      // audit #13: case-INSENSITIVE search (was `like` — "john" missed "John") targeting the
+      // trigram-indexed shapes so the GIN indexes are actually used instead of a full seq scan:
+      // `email` engages idx_users_email_trgm; the concatenated display-name expression must match
+      // idx_users_display_name_trgm verbatim. `escapeLikePattern` neutralises %/_ (injection-safe).
       const pattern = `%${escapeLikePattern(search)}%`;
-      filterConditions.push(
-        or(
-          like(users.email, pattern),
-          like(users.first_name, pattern),
-          like(users.last_name, pattern),
-        )!,
-      );
+      const displayName = sql`(coalesce(${users.first_name}, '') || ' ' || coalesce(${users.last_name}, ''))`;
+      filterConditions.push(or(ilike(users.email, pattern), sql`${displayName} ILIKE ${pattern}`)!);
     }
     const countWhere = and(...filterConditions);
     const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
