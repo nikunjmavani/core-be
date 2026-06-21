@@ -14,6 +14,8 @@ vi.mock('@/shared/config/env.config.js', async () => {
     ...actual.env,
     CAPTCHA_PROVIDER: 'turnstile',
     CAPTCHA_SECRET: 'test-turnstile-secret',
+    // audit #20: pin an allowlist so the hostname-mismatch assertions are deterministic.
+    ALLOWED_ORIGINS: 'https://app.example.com',
   };
   return {
     ...actual,
@@ -90,6 +92,29 @@ describe('Cloudflare Turnstile siteverify contract', () => {
 
     expect(result.success).toBe(false);
     expect(result.errorCodes).toEqual(['invalid-input-response', 'timeout-or-duplicate']);
+  });
+
+  // audit #20: a token solved on another property must not be replayable here.
+  test('rejects a success response whose hostname is outside ALLOWED_ORIGINS', async () => {
+    nock(SITEVERIFY_HOSTNAME)
+      .post(SITEVERIFY_PATH)
+      .reply(200, { success: true, hostname: 'attacker.evil.example' });
+
+    const result = await verifyTurnstileToken({ token: 'farmed-token-from-another-site' });
+
+    expect(result.success).toBe(false);
+    expect(result.errorCodes).toEqual(['hostname-mismatch']);
+  });
+
+  test('accepts a success response whose hostname is in ALLOWED_ORIGINS', async () => {
+    nock(SITEVERIFY_HOSTNAME)
+      .post(SITEVERIFY_PATH)
+      .reply(200, { success: true, hostname: 'app.example.com' });
+
+    const result = await verifyTurnstileToken({ token: 'legit-token' });
+
+    expect(result.success).toBe(true);
+    expect(result.errorCodes).toBeUndefined();
   });
 
   test('Cloudflare missing `success` field is treated as failure (strict === true check)', async () => {

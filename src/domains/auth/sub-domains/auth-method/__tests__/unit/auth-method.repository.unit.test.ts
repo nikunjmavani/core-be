@@ -36,7 +36,8 @@ describe('AuthMethodRepository', () => {
 
   it('listByUserId returns active auth methods', async () => {
     const methods = [{ id: 1, method_type: 'PASSWORD' }];
-    mockFrom.mockReturnValueOnce({ where: vi.fn().mockResolvedValue(methods) });
+    // audit #36: listByUserId now chains `.where().limit()` (limit+1 + capListWithWarning).
+    mockLimit.mockResolvedValueOnce(methods);
 
     const result = await repository.listByUserId(10);
 
@@ -45,7 +46,7 @@ describe('AuthMethodRepository', () => {
 
   it('listMfaByUserId returns MFA methods', async () => {
     const methods = [{ id: 2, method_type: 'MFA_TOTP' }];
-    mockFrom.mockReturnValueOnce({ where: vi.fn().mockResolvedValue(methods) });
+    mockLimit.mockResolvedValueOnce(methods);
 
     const result = await repository.listMfaByUserId(10);
 

@@ -1,6 +1,8 @@
 import { and, eq, isNull, lt } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
+import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
+import { capListWithWarning } from '@/shared/utils/infrastructure/list-cap.util.js';
 import { webauthn_credentials } from './webauthn-credential.schema.js';
 
 /** Drizzle row type inferred from {@link webauthn_credentials}; used by the WebAuthn service when reading stored passkeys. */
@@ -16,12 +18,18 @@ export type WebauthnCredentialRow = typeof webauthn_credentials.$inferSelect;
  */
 export class WebauthnCredentialRepository {
   async listActiveByUserId(userId: number): Promise<WebauthnCredentialRow[]> {
-    return getRequestDatabase()
+    // audit #36: bound this user-self-scoped read (limit+1 + capListWithWarning).
+    const rows = await getRequestDatabase()
       .select()
       .from(webauthn_credentials)
-      .where(
-        and(eq(webauthn_credentials.user_id, userId), isNull(webauthn_credentials.revoked_at)),
-      );
+      .where(and(eq(webauthn_credentials.user_id, userId), isNull(webauthn_credentials.revoked_at)))
+      .limit(DEFAULT_REPOSITORY_LIST_LIMIT + 1);
+    return capListWithWarning({
+      rows,
+      limit: DEFAULT_REPOSITORY_LIST_LIMIT,
+      resource: 'auth.webauthn_credentials',
+      context: { userId },
+    });
   }
 
   async findActiveByCredentialId(credentialId: string): Promise<WebauthnCredentialRow | null> {
