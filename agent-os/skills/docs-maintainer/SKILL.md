@@ -13,7 +13,7 @@ When **documentation under `docs/`** is added, renamed, or reorganized, this ski
 
 - **Trigger**: Added, renamed, or moved any hand-written file under `docs/` (markdown only; exclude generated `docs/openapi/`, `postman-collection.json`, `routes.txt`).
 - **Trigger**: Changed links from README, CLAUDE, skills, or rules to a doc in `docs/`.
-- **Out of scope**: hand-written narratives **inside** `src/` (`src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md`, every `src/<area>/OVERVIEW.md`). Those are owned by **system-narrative-maintainer** / **overview-doc-maintainer**. Per-symbol docs live in TSDoc and are owned by **tsdoc-export-guard**. This skill stays focused on `docs/`.
+- **Out of scope**: hand-written narratives **inside** `src/` (`src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md`, every `src/<area>/<area>.overview.md`). Those are owned by **system-narrative-maintainer** / **overview-doc-maintainer**. Per-symbol docs live in TSDoc and are owned by **tsdoc-export-guard**. This skill stays focused on `docs/`.
 
 ## Responsibilities
 

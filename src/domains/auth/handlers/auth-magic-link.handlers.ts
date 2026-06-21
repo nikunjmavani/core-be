@@ -37,7 +37,7 @@ export function createAuthMagicLinkHandlers({
       try {
         data = await magicLinkService.verify(request.body, ipAddress, userAgent);
       } catch (error) {
-        // sec-A8 follow-up: record the failure side of the OVERVIEW invariant.
+        // sec-A8 follow-up: record the failure side of the auth.overview.md invariant.
         await recordLoginFailureAuditEvent(request, 'magic_link', error);
         throw error;
       }

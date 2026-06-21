@@ -2,7 +2,7 @@
 
 # Membership
 
-Parent: [tenancy](../../OVERVIEW.md)
+Parent: [tenancy](../../tenancy.overview.md)
 
 ## Purpose
 

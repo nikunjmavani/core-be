@@ -106,5 +106,5 @@ Linux agent image with full devDependencies: [cursor-cloud-agent-environment.md]
 
 ## Related
 
-- [documentation-system.md](../reference/architecture/documentation-system.md) — in-source TSDoc, OVERVIEW.md, route schema
+- [documentation-system.md](../reference/architecture/documentation-system.md) — in-source TSDoc, <folder>.overview.md, route schema
 - [pr-review.md](../process/pr-review.md) — human and agent PR rubric

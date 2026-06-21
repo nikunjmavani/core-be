@@ -2,7 +2,7 @@
 
 # Notification
 
-Parent: [notify](../../OVERVIEW.md)
+Parent: [notify](../../notify.overview.md)
 
 ## Purpose
 

@@ -2,11 +2,11 @@
 
 # MFA challenge ticket store
 
-Parent: [auth](../../OVERVIEW.md)
+Parent: [auth](../../auth.overview.md)
 
 ## Purpose
 
-Redis-backed store for the short-lived "user has proven primary credential, awaiting second factor" tickets that bridge primary auth and second-factor verification. Used by both [auth-mfa](../auth-mfa/OVERVIEW.md) (TOTP) and [auth-webauthn](../auth-webauthn/OVERVIEW.md) (passkey) sub-domains.
+Redis-backed store for the short-lived "user has proven primary credential, awaiting second factor" tickets that bridge primary auth and second-factor verification. Used by both [auth-mfa](../auth-mfa/auth-mfa.overview.md) (TOTP) and [auth-webauthn](../auth-webauthn/auth-webauthn.overview.md) (passkey) sub-domains.
 
 ## Key invariants
 

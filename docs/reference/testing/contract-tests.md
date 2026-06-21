@@ -46,5 +46,5 @@ See **`src/tests/contract/README.md`** for a short developer checklist.
 
 ## Related
 
-- [`src/tests/contract/OVERVIEW.md`](../../../src/tests/contract/OVERVIEW.md) — suite scope, fixture organisation, dependencies
-- [`src/infrastructure/payment/OVERVIEW.md`](../../../src/infrastructure/payment/OVERVIEW.md), [`src/infrastructure/mail/OVERVIEW.md`](../../../src/infrastructure/mail/OVERVIEW.md), [`src/infrastructure/storage/OVERVIEW.md`](../../../src/infrastructure/storage/OVERVIEW.md) — wrappers under test
+- [`src/tests/contract/contract.overview.md`](../../../src/tests/contract/contract.overview.md) — suite scope, fixture organisation, dependencies
+- [`src/infrastructure/payment/payment.overview.md`](../../../src/infrastructure/payment/payment.overview.md), [`src/infrastructure/mail/mail.overview.md`](../../../src/infrastructure/mail/mail.overview.md), [`src/infrastructure/storage/storage.overview.md`](../../../src/infrastructure/storage/storage.overview.md) — wrappers under test

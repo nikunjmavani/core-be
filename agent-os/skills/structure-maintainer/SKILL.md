@@ -21,7 +21,7 @@ Whenever you change code structure (e.g. add a domain, rename layers, add infras
   - `agent-os/skills/supabase-porting/SKILL.md` (if Supabase porting conventions changed)
   - `agent-os/skills/db-migration-maintainer/SKILL.md` (if SQL migration conventions changed)
   - `agent-os/skills/test-generator/SKILL.md` (if test layout or scripts changed)
-  - `agent-os/skills/overview-doc-maintainer/SKILL.md` (if a new folder role appears that needs a new `OVERVIEW.md` template)
+  - `agent-os/skills/overview-doc-maintainer/SKILL.md` (if a new folder role appears that needs a new `<folder>.overview.md` template)
   - `agent-os/skills/tsdoc-export-guard/SKILL.md` (if the TSDoc coverage gate inputs changed)
   - Any other `agent-os/skills/*/SKILL.md` that references paths or layer names
 - **Docs:** `CLAUDE.md` (architecture and domain layout), `README.md` (project structure and diagrams), `AGENTS.md` (agent entry + custom subagents).
@@ -148,14 +148,14 @@ tooling/
 ```text
 src/scripts/    # e.g. generate-openapi.ts → docs/openapi/openapi.json for ApiDog
   seed/         # seed orchestrator + contract (bulk.ts, bulk-config.ts, seed-contract.ts,
-                # production-guard.ts, seed-registry.ts, minimal.ts, full.ts); OVERVIEW.md
+                # production-guard.ts, seed-registry.ts, minimal.ts, full.ts); <folder>.overview.md
 ```
 
 ### Seed layout
 
 - Every folder that **owns tables** (domain, sub-domain, nested sub-domain) carries a co-located `seed/` dir: `<name>.reference.seed.ts`, `<name>.bulk.seed.ts`, `<name>.faker.ts`, `index.ts`.
 - `seed/index.ts` exports a `SeedContribution` **except** a top-level domain's, which exports a `DomainSeedModule` (`name` + `dependsOn`). Parents fold children up with `composeContributions(...)`; the orchestrator (`src/scripts/seed/bulk.ts`) registers one module per domain.
-- Three tiers: `pnpm db:seed` (reference) · `pnpm db:seed:full` (demo) · `pnpm db:seed:bulk` (scaled). Detail: **seed-maintainer**, `agent-os/rules/seed-conventions.mdc`, `src/scripts/seed/OVERVIEW.md`.
+- Three tiers: `pnpm db:seed` (reference) · `pnpm db:seed:full` (demo) · `pnpm db:seed:bulk` (scaled). Detail: **seed-maintainer**, `agent-os/rules/seed-conventions.mdc`, `src/scripts/seed/seed.overview.md`.
 - **Validator allowlist**: `seed/` is permitted at domain root by the domain-structure validator (`src/scripts/validators/domain/validate-domain.ts`).
 
 ### Test layout

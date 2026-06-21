@@ -126,5 +126,5 @@ export async function seedDemoEntity(payload: Payload) {
 ## Related
 
 - Rule: `agent-os/rules/seed-conventions.mdc` (auto-attaches under `src/domains/**`, `src/scripts/seed/**`).
-- Overview: `src/scripts/seed/OVERVIEW.md`.
+- Overview: `src/scripts/seed/seed.overview.md`.
 - New table/domain scaffolding: **domain-generator** (scaffolds the `seed/` dir); **structure-maintainer** if layout/paths change.

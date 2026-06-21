@@ -83,8 +83,8 @@ MFA recovery codes (10 single-use) remain under the MFA sub-domain for TOTP back
 - [csrf-and-session-cookies.md](../security/csrf-and-session-cookies.md)
 - [api-versioning.md](../api/api-versioning.md)
 - [data-lifecycle-deletion.md](../data/data-lifecycle-deletion.md) — session retention
-- [`src/domains/auth/OVERVIEW.md`](../../../src/domains/auth/OVERVIEW.md) — domain overview, the five credential types, anti-enumeration invariant
-- [`src/domains/auth/sub-domains/auth-method/OVERVIEW.md`](../../../src/domains/auth/sub-domains/auth-method/OVERVIEW.md) — credential records, token flows
-- [`src/domains/auth/sub-domains/auth-mfa/OVERVIEW.md`](../../../src/domains/auth/sub-domains/auth-mfa/OVERVIEW.md) — TOTP enrolment and challenge
-- [`src/domains/auth/sub-domains/auth-webauthn/OVERVIEW.md`](../../../src/domains/auth/sub-domains/auth-webauthn/OVERVIEW.md) — passkey ceremonies
+- [`src/domains/auth/auth.overview.md`](../../../src/domains/auth/auth.overview.md) — domain overview, the five credential types, anti-enumeration invariant
+- [`src/domains/auth/sub-domains/auth-method/auth-method.overview.md`](../../../src/domains/auth/sub-domains/auth-method/auth-method.overview.md) — credential records, token flows
+- [`src/domains/auth/sub-domains/auth-mfa/auth-mfa.overview.md`](../../../src/domains/auth/sub-domains/auth-mfa/auth-mfa.overview.md) — TOTP enrolment and challenge
+- [`src/domains/auth/sub-domains/auth-webauthn/auth-webauthn.overview.md`](../../../src/domains/auth/sub-domains/auth-webauthn/auth-webauthn.overview.md) — passkey ceremonies
 - [`src/POLICIES.md`](../../../src/POLICIES.md) — `JWT_*`, `MAGIC_LINK_*`, `MFA_*`, `LOCKOUT_*`, `STRICT_PUBLIC_RATE_LIMIT` policy constants

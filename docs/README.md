@@ -21,7 +21,7 @@ Hand-written guides live in **topic subfolders**; generated API artifacts stay a
 **In-source documentation (lives under `src/`, not `docs/`):**
 
 - System narratives — `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` (hand-authored).
-- Per-folder overviews — `src/<folder>/OVERVIEW.md` at meaningful boundaries (hand-authored).
+- Per-folder overviews — `src/<folder>/<folder>.overview.md` at meaningful boundaries (hand-authored).
 - TSDoc on every public export, plus `@remarks` on services/workers/processors/policy files (canonical; gated by `pnpm tsdoc:check`).
 - Route documentation lives in inline Fastify `schema.summary` / `schema.description` and drives [openapi/openapi.json](openapi/openapi.json).
 

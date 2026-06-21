@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /**
  * sec-A8: regression suite for the shared login-audit helper.
  *
- * OVERVIEW.md promises "every login (success or failure) records a row" in
+ * auth.overview.md promises "every login (success or failure) records a row" in
  * audit.events, but before this helper only the password-login success path
  * called `recordScopedAuditEvent`. OAuth, magic-link, and WebAuthn success
  * paths emitted nothing — making credential-stuffing / brute-force detection

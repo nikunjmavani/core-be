@@ -2,7 +2,7 @@
 
 # User notification preferences
 
-Parent: [user](../../OVERVIEW.md)
+Parent: [user](../../user.overview.md)
 
 ## Purpose
 
