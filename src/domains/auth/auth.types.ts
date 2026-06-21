@@ -1,8 +1,3 @@
-/** Minimal HTTP-response shape for endpoints that return only an access token (e.g. refresh). */
-export interface AuthLoginResult {
-  access_token: string;
-}
-
 /**
  * Magic-link send result.
  *

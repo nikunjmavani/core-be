@@ -5,11 +5,11 @@ description: Master index of all project skills with trigger conditions. Use thi
 
 # Skill index (core-be)
 
-Master directory of all **40 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
+Master directory of all **42 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
 
 For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global-skills**.
 
-## Project skills (40)
+## Project skills (42)
 
 | Skill                          | Path                                                                      |
 | ------------------------------ | ------------------------------------------------------------------------- |
@@ -53,6 +53,8 @@ For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global
 | rls-tenant-isolation-guard     | `agent-os/skills/rls-tenant-isolation-guard/SKILL.md` |
 | idempotency-guard              | `agent-os/skills/idempotency-guard/SKILL.md` |
 | change-completeness-guard      | `agent-os/skills/change-completeness-guard/SKILL.md` |
+| ponytail                       | `agent-os/skills/ponytail/SKILL.md` (user-invoked; YAGNI/minimalism discipline — no file trigger) |
+| ponytail-audit                 | `agent-os/skills/ponytail-audit/SKILL.md` (user-invoked; repo-wide over-engineering scan — no file trigger) |
 
 ## Skill trigger map
 

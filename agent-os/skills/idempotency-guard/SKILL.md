@@ -21,7 +21,7 @@ Source of truth = the `config: { idempotencyRequired: true }` flag on each route
 
 | # | Route | File |
 | - | ----- | ---- |
-| 1 | `POST /tenancy/organization` | `tenancy/sub-domains/organization/organization.routes.ts` |
+| 1 | `POST /tenancy/organizations` | `tenancy/sub-domains/organization/organization.routes.ts` |
 | 2 | `POST /tenancy/organization/memberships` | `tenancy/sub-domains/membership/membership.routes.ts` |
 | 3 | `POST /tenancy/organization/transfer-ownership` | `…/membership/membership.routes.ts` |
 | 4 | `POST /tenancy/organization/invitations` | `…/membership/membership.routes.ts` |

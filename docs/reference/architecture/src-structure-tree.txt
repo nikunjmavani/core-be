@@ -198,7 +198,6 @@ src/
     │   │   │   ├── auth-mfa-recovery-code.util.ts
     │   │   │   ├── auth-mfa.repository.ts
     │   │   │   ├── auth-mfa.service.ts
-    │   │   │   ├── auth-mfa.types.ts
     │   │   │   └── OVERVIEW.md
     │   │   ├── auth-mfa-session/
     │   │   │   ├── __tests__/
@@ -1753,6 +1752,7 @@ src/
     ├── load/
     │   ├── k6/
     │   │   ├── data/
+    │   │   │   └── credential-pool.json
     │   │   ├── helpers/
     │   │   │   ├── auth.js
     │   │   │   ├── checks.js
