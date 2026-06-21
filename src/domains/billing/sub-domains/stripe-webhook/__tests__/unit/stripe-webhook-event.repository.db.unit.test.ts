@@ -94,4 +94,33 @@ describe('StripeWebhookEventRepository', () => {
     expect(failedRows[0]?.processing_status).toBe('failed');
     expect(failedRows[0]?.failure_reason).toBe('synthetic failure');
   });
+
+  // audit #15: the capped count query (LIMIT sub-select) still returns the live
+  // failed tally end-to-end against the partial index.
+  it('countFailedEvents tallies failed ledger rows', async () => {
+    const failedEventId = `${stripeEventId}_count_failed`;
+    await repository.tryClaimEvent({
+      stripe_event_id: failedEventId,
+      event_type: 'customer.subscription.updated',
+      stripe_created_at: new Date(),
+    });
+    await repository.markFailed(failedEventId, 'synthetic failure for count');
+
+    const failedCount = await repository.countFailedEvents();
+    expect(failedCount).toBeGreaterThanOrEqual(1);
+
+    await database
+      .delete(stripe_webhook_events)
+      .where(eq(stripe_webhook_events.stripe_event_id, failedEventId));
+  });
+
+  // audit #2: the SECURITY DEFINER customer resolver is wired and granted; an
+  // unmapped customer id resolves to undefined so the webhook handler fails
+  // closed rather than trusting attacker-influencable metadata.
+  it('resolveOrganizationPublicIdByStripeCustomerId returns undefined for an unmapped customer', async () => {
+    const resolved = await repository.resolveOrganizationPublicIdByStripeCustomerId(
+      `cus_unmapped_${Date.now()}`,
+    );
+    expect(resolved).toBeUndefined();
+  });
 });
