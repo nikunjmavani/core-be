@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z, ZodError } from 'zod';
 import errorHandlerMiddleware from '@/shared/middlewares/core/error-handler.middleware.js';
-import { AppError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import { AppError, ConflictError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
 
 vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
   captureException: vi.fn(),
@@ -46,6 +46,16 @@ async function createErrorHandlerApp() {
   });
   application.get('/server-error', async () => {
     throw new AppError('INTERNAL_ERROR', 500, 'errors:internal', undefined, 'Internal');
+  });
+  application.get('/conflict-with-reason', async () => {
+    throw new ConflictError('errors:conflict', undefined, 'Conflict').withReason(
+      'membership_already_exists',
+    );
+  });
+  application.get('/server-error-with-reason', async () => {
+    throw new AppError('INTERNAL_ERROR', 500, 'errors:internal', undefined, 'Internal').withReason(
+      'should_not_leak',
+    );
   });
   application.get('/unauthorized-with-params', async () => {
     throw new AppError(
@@ -130,6 +140,26 @@ describe('error-handler.middleware', () => {
     const response = await application.inject({ method: 'GET', url: '/server-error' });
     expect(response.statusCode).toBe(500);
     expect(response.json().error.code).toBe('internal_error');
+  });
+
+  it('includes the machine-readable reason on non-5xx AppError responses (REQ-6)', async () => {
+    application = await createErrorHandlerApp();
+    const response = await application.inject({ method: 'GET', url: '/conflict-with-reason' });
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error.reason).toBe('membership_already_exists');
+  });
+
+  it('omits reason when none is set on the error', async () => {
+    application = await createErrorHandlerApp();
+    const response = await application.inject({ method: 'GET', url: '/not-found-resource' });
+    expect(response.json().error.reason).toBeUndefined();
+  });
+
+  it('does not leak reason on masked 5xx responses (REQ-6)', async () => {
+    application = await createErrorHandlerApp();
+    const response = await application.inject({ method: 'GET', url: '/server-error-with-reason' });
+    expect(response.statusCode).toBe(500);
+    expect(response.json().error.reason).toBeUndefined();
   });
 
   it('translates validation error item messages when messageKey is present', async () => {

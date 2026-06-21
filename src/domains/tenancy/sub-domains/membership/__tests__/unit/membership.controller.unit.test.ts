@@ -74,7 +74,7 @@ describe('createMembershipController', () => {
     await controller.createMembership(
       mockRequest({
         params: { organization_id: organizationPublicId },
-        body: { user_id: generatePublicId('user'), role_id: generatePublicId('memberRole') },
+        body: { email: 'invitee@example.com', role_id: generatePublicId('memberRole') },
       }),
       reply as unknown as FastifyReply,
     );
@@ -202,9 +202,9 @@ describe('createMembershipController', () => {
       mockRequest({
         params: { organization_id: organizationPublicId },
         body: {
-          user_id: generatePublicId('user'),
+          email: 'invitee@example.com',
           role_id: generatePublicId('memberRole'),
-          status: 'ACTIVE',
+          expires_in_days: 14,
         },
       }),
       reply,

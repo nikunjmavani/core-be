@@ -4,10 +4,11 @@ import { describe, expect, it } from 'vitest';
 
 /**
  * sec-r4-I3 regression — membership lifecycle routes (leave, transfer-ownership,
- * decline invitation, cancel invitation) must each carry a rate-limit preset.
- * Without these caps a hijacked session could probe membership/invitation
- * existence by status code, churn ownership transfers, or starve a victim
- * org's bucket.
+ * revoke/resend invitation) must each carry a rate-limit preset. Without these
+ * caps a hijacked session could probe membership/invitation existence by status
+ * code, churn ownership transfers, or starve a victim org's bucket. (The invitee
+ * decline route was removed in REQ-1 — add-member now issues invitations via
+ * POST /organization/memberships.)
  */
 describe('membership routes rate-limit policy (sec-r4-I3)', () => {
   const membershipRoutesPath = join(
@@ -49,9 +50,9 @@ describe('membership routes rate-limit policy (sec-r4-I3)', () => {
     );
   });
 
-  it('POST /invitations/:invitation_id/decline has MODERATE_AUTHED_RATE_LIMIT applied', () => {
-    expect(findRouteBlock('post', '/invitations/:invitation_id/decline')).toContain(
-      '...MODERATE_AUTHED_RATE_LIMIT',
+  it('POST /organization/invitations/:invitation_id/resend has STRICT_AUTHED_RATE_LIMIT applied', () => {
+    expect(findRouteBlock('post', '/organization/invitations/:invitation_id/resend')).toContain(
+      '...STRICT_AUTHED_RATE_LIMIT',
     );
   });
 });

@@ -61,7 +61,6 @@ import {
 } from '@/domains/tenancy/sub-domains/membership/membership.dto.js';
 
 import {
-  createMemberInvitationDto,
   acceptMemberInvitationDto,
   resendMemberInvitationDto,
 } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.dto.js';
@@ -142,8 +141,7 @@ export const routeSchemaMap: Record<string, ZodTypeAny> = {
   'PATCH /api/v1/tenancy/organization/memberships/{membership_id}': updateMembershipDto,
   'POST /api/v1/tenancy/organization/transfer-ownership': transferOwnershipDto,
 
-  // ── Invitations ──
-  'POST /api/v1/tenancy/organization/invitations': createMemberInvitationDto,
+  // ── Invitations ── (add-member issues invitations via POST /organization/memberships, REQ-1)
   'POST /api/v1/tenancy/invitations/{invitation_id}/accept': acceptMemberInvitationDto,
   'POST /api/v1/tenancy/organization/invitations/{invitation_id}/resend': resendMemberInvitationDto,
 

@@ -1,6 +1,6 @@
 ================================================================================
   ROUTE CATALOG — core-be
-  Total routes: 131
+  Total routes: 127
 ================================================================================
 
 Legend:
@@ -105,13 +105,11 @@ Legend:
 
 ================================================================================
   DOMAIN: TENANCY (/api/v1/tenancy)
-  Routes: 45
+  Routes: 41
 ================================================================================
 
   — Sub Domains —
   POST   /api/v1/tenancy/invitations/:invitation_id/accept        201  -    both  AUTH
-  POST   /api/v1/tenancy/invitations/:invitation_id/decline       201  -    both  AUTH
-  GET    /api/v1/tenancy/invitations/pending                      200  -    both  AUTH
   GET    /api/v1/tenancy/organization                             200  -    both  AUTH
   PATCH  /api/v1/tenancy/organization                             200  -    both  PERM: organization:update
   DELETE /api/v1/tenancy/organization                             204  -    team  PERM: organization:delete
@@ -122,8 +120,6 @@ Legend:
   DELETE /api/v1/tenancy/organization/api-keys/:api_key_id        204  -    both  PERM: api-key:manage
   POST   /api/v1/tenancy/organization/api-keys/:api_key_id/rotate  201  -    both  PERM: api-key:manage
   GET    /api/v1/tenancy/organization/audit-logs                  200  -    both  PERM: audit-log:read
-  GET    /api/v1/tenancy/organization/invitations                 200  -    both  PERM: invitation:manage
-  POST   /api/v1/tenancy/organization/invitations                 201  req  team  PERM: invitation:manage
   DELETE /api/v1/tenancy/organization/invitations/:invitation_id  204  -    both  PERM: invitation:manage
   POST   /api/v1/tenancy/organization/invitations/:invitation_id/resend  201  -    both  PERM: invitation:manage
   POST   /api/v1/tenancy/organization/leave                       201  -    both  AUTH
@@ -215,16 +211,16 @@ Legend:
   SUMMARY
 ================================================================================
 
-  Total routes    : 131
+  Total routes    : 127
   Public          : 18
-  Authenticated   : 50
+  Authenticated   : 48
   Role-guarded    : 9
-  Perm-guarded    : 50
+  Perm-guarded    : 48
   Token-guarded   : 4
-  Team-only (O)   : 5
+  Team-only (O)   : 4
 
 ================================================================================
-  IDEMPOTENCY-REQUIRED WRITES (13) — X-Idempotency-Key required
+  IDEMPOTENCY-REQUIRED WRITES (12) — X-Idempotency-Key required
 ================================================================================
 
   Routes flagged I = req reject a missing or reused key (422); every other write
@@ -236,7 +232,6 @@ Legend:
     POST /api/v1/billing/subscriptions/:subscription_id/resume
     POST /api/v1/notify/webhooks
     POST /api/v1/tenancy/organization/api-keys
-    POST /api/v1/tenancy/organization/invitations
     POST /api/v1/tenancy/organization/memberships
     POST /api/v1/tenancy/organization/notification-policies
     POST /api/v1/tenancy/organization/roles

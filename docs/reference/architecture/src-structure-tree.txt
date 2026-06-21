@@ -372,6 +372,8 @@ src/
     │   │   │       │   ├── subscription-happy.integration.test.ts
     │   │   │       │   └── subscription.integration.test.ts
     │   │   │       └── unit/
+    │   │   │       │   ├── workers/
+    │   │   │       │       └── subscription-seat-sync.processor.unit.test.ts
     │   │   │       │   ├── payment-provider.port.unit.test.ts
     │   │   │       │   ├── stripe-payment-provider.email.unit.test.ts
     │   │   │       │   ├── subscription-routes-rate-limit.policy.unit.test.ts
@@ -383,12 +385,19 @@ src/
     │   │   │       │   ├── subscription.serializer.shape.unit.test.ts
     │   │   │       │   ├── subscription.serializer.unit.test.ts
     │   │   │       │   ├── subscription.service.cancel-resume.unit.test.ts
+    │   │   │       │   ├── subscription.service.seats.unit.test.ts
     │   │   │       │   ├── subscription.service.stripe-reconciliation.unit.test.ts
     │   │   │       │   ├── subscription.service.unit.test.ts
     │   │   │       │   └── subscription.validator.unit.test.ts
+    │   │   │   ├── queues/
+    │   │   │       ├── subscription-seat-sync.job.schema.ts
+    │   │   │       └── subscription-seat-sync.queue.ts
     │   │   │   ├── seed/
     │   │   │       ├── subscription.bulk.seed.ts
     │   │   │       └── subscription.faker.ts
+    │   │   │   ├── workers/
+    │   │   │       ├── subscription-seat-sync.processor.ts
+    │   │   │       └── subscription-seat-sync.worker.ts
     │   │   │   ├── OVERVIEW.md
     │   │   │   ├── payment-provider.port.ts
     │   │   │   ├── stripe-payment-provider.ts

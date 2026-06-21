@@ -145,38 +145,49 @@ describe('Security: unique-violation conflict handling', () => {
         userId: owner.public_id,
         organizationPublicId: organization.public_id,
       });
-      const targetUser = await createTestUser();
-      return { organization, token, memberRolePublicId: memberRole.public_id, targetUser };
+      // Pre-provision the invitee so add-member-by-email takes findOrCreateInvitedByEmail's
+      // "return existing user" path. This isolates the test to the membership-level conflict
+      // (the subject here) instead of the separate, documented user-creation race in
+      // findOrCreateInvitedByEmail. The invitee has no membership yet, so the first add succeeds.
+      const invitee = await createTestUser();
+      return {
+        organization,
+        token,
+        memberRolePublicId: memberRole.public_id,
+        inviteeEmail: invitee.email,
+      };
     }
 
-    function addMember(token: string, userPublicId: string, rolePublicId: string) {
+    // REQ-1: "Add member" is invite-by-email. It provisions/finds the invitee, creates an INVITED
+    // membership, and emails a token (raw token never returned). Re-adding the same email collides on
+    // the (user_id, organization_id) unique index (the email resolves to the same user) — the service
+    // maps that unique_violation to a clean 409 (errors:membershipAlreadyExists), not a raw 500.
+    function addMember(token: string, email: string, rolePublicId: string) {
       return injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
         url: testApiPath('/tenancy/organization/memberships'),
         token,
         extraHeaders: { 'x-idempotency-key': randomUUID() },
-        // INVITED keeps joined_at null (chk_memberships_joined allows it); the test
-        // targets the (user_id, organization_id) unique constraint, not the activation rule.
-        payload: { user_id: userPublicId, role_id: rolePublicId, status: 'INVITED' },
+        payload: { email, role_id: rolePublicId },
       });
     }
 
-    it('adding the same user twice is a clean 409 (not 500)', async () => {
-      const { token, memberRolePublicId, targetUser } = await membershipAdminContext();
+    it('adding the same email twice is a clean 409 (not 500)', async () => {
+      const { token, memberRolePublicId, inviteeEmail } = await membershipAdminContext();
 
-      const first = await addMember(token, targetUser.public_id, memberRolePublicId);
+      const first = await addMember(token, inviteeEmail, memberRolePublicId);
       expect(first.statusCode).toBe(201);
 
-      const second = await addMember(token, targetUser.public_id, memberRolePublicId);
+      const second = await addMember(token, inviteeEmail, memberRolePublicId);
       expect(second.statusCode).toBe(409);
     });
 
-    it('concurrent adds of the same user: exactly one 201, rest 409, no 5xx', async () => {
-      const { token, memberRolePublicId, targetUser } = await membershipAdminContext();
+    it('concurrent adds of the same email: exactly one 201, rest 409, no 5xx', async () => {
+      const { token, memberRolePublicId, inviteeEmail } = await membershipAdminContext();
 
       const statuses = await Promise.all(
         Array.from({ length: 4 }, () =>
-          addMember(token, targetUser.public_id, memberRolePublicId).then((r) => r.statusCode),
+          addMember(token, inviteeEmail, memberRolePublicId).then((r) => r.statusCode),
         ),
       );
       const result = tally(statuses);

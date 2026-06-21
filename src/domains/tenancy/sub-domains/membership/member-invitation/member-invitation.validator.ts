@@ -1,46 +1,10 @@
 import { parseWithSchema } from '@/shared/utils/validation/parse-with-schema.util.js';
-import { parseCursorPaginatedQuery } from '@/shared/utils/http/pagination.util.js';
 import {
   acceptMemberInvitationDto,
-  createMemberInvitationDto,
-  listMemberInvitationsQueryDto,
-  listPendingMemberInvitationsQueryDto,
   resendMemberInvitationDto,
   type AcceptMemberInvitationInput,
-  type CreateMemberInvitationInput,
-  type ListMemberInvitationsQueryInput,
-  type ListPendingMemberInvitationsQueryInput,
   type ResendMemberInvitationInput,
 } from './member-invitation.dto.js';
-
-/**
- * Validates the `GET /organization/invitations` query string. Rejects
- * legacy page-number pagination first, then parses against
- * {@link listMemberInvitationsQueryDto}.
- */
-export function validateListMemberInvitationsQuery(data: unknown): ListMemberInvitationsQueryInput {
-  return parseCursorPaginatedQuery(listMemberInvitationsQueryDto, data);
-}
-
-/**
- * Validates the `GET /invitations/pending` query string. Rejects legacy
- * page-number pagination first, then parses against
- * {@link listPendingMemberInvitationsQueryDto}.
- */
-export function validateListPendingMemberInvitationsQuery(
-  data: unknown,
-): ListPendingMemberInvitationsQueryInput {
-  return parseCursorPaginatedQuery(listPendingMemberInvitationsQueryDto, data);
-}
-
-/**
- * Validates a `POST /organization/invitations` body against
- * {@link createMemberInvitationDto}, throwing
- * `ValidationError('errors:invalidInput')` with per-field details on failure.
- */
-export function validateCreateMemberInvitation(data: unknown): CreateMemberInvitationInput {
-  return parseWithSchema(createMemberInvitationDto, data);
-}
 
 /**
  * Validates a `POST /invitations/:invitation_id/accept` body against

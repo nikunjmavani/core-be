@@ -12,6 +12,9 @@ const planRow = {
   price_yearly: '100',
   currency: 'USD',
   is_active: true,
+  // REQ-4: features map + seat allowance now flow through toOutput.
+  features: { priority_support: true },
+  included_seats: 25,
   created_at: new Date(),
   updated_at: new Date(),
 };
@@ -57,6 +60,23 @@ describe('PlanService', () => {
   it('getByPublicId returns plan output', async () => {
     const plan = await service.getByPublicId('plan_public');
     expect(plan.name).toBe('Pro');
+  });
+
+  it('REQ-4: surfaces features verbatim and maps included_seats to limits.seats', async () => {
+    const plan = await service.getByPublicId('plan_public');
+    expect(plan.features).toEqual({ priority_support: true });
+    expect(plan.limits).toEqual({ seats: 25 });
+  });
+
+  it('REQ-4: a null included_seats maps to limits.seats=null (unlimited) and missing features → {}', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...planRow,
+      included_seats: null,
+      features: null,
+    } as never);
+    const plan = await service.getByPublicId('plan_public');
+    expect(plan.limits).toEqual({ seats: null });
+    expect(plan.features).toEqual({});
   });
 
   it('getByPublicId maps null description values', async () => {

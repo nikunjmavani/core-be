@@ -7,6 +7,7 @@ import {
   listRecentStripeEvents,
   resumeStripeSubscription,
   updateStripeSubscription,
+  updateStripeSubscriptionQuantity,
 } from '@/infrastructure/payment/stripe.client.js';
 
 import customerCreateRequestSubset from './fixtures/stripe/customer.create.request.fields.json' with {
@@ -158,6 +159,48 @@ describe('Stripe outbound SDK contract (`stripe.client`)', () => {
           next_sync: subscriptionUpdateFixtureRequestSubset['metadata[next_sync]'],
         },
       },
+    );
+
+    StripeSubscriptionApiResponseContractSchema.parse(patchedStripeSubscriptionOutbound);
+    expect(patchedStripeSubscriptionOutbound.id).toBe(subscriptionRetrieveFixtureResponse.id);
+  });
+
+  test('updateStripeSubscriptionQuantity retrieves then posts the item id + quantity + proration (REQ-4)', async () => {
+    const subscriptionFixtureIdentifierOutbound = subscriptionRetrieveFixtureResponse.id;
+    const subscriptionResourceGetPathPrefixOutbound = `/v1/subscriptions/${subscriptionFixtureIdentifierOutbound}`;
+    const outboundIdempotencyKeyForQuantitySync = `idem-contract-seat-sync-${Date.now().toFixed(0)}`;
+
+    nock(stripeOutboundApiHostname)
+      .get((requestPathOutbound) =>
+        requestPathOutbound.startsWith(subscriptionResourceGetPathPrefixOutbound),
+      )
+      .matchHeader('authorization', /^Bearer /)
+      .reply(200, subscriptionRetrieveFixtureResponse);
+
+    nock(stripeOutboundApiHostname)
+      .post(
+        `/v1/subscriptions/${subscriptionFixtureIdentifierOutbound}`,
+        (encodedOutboundBodyUnknown) => {
+          assertStripeEncodedFormContainsExpectedFields({
+            stripeOutboundRequestBody: encodedOutboundBodyUnknown,
+            expectedStripeFields: {
+              // The quantity is applied to the EXISTING line item (no second item), prorated.
+              'items[0][id]': subscriptionRetrieveFixtureResponse.items.data[0]!.id,
+              'items[0][quantity]': '7',
+              proration_behavior: 'create_prorations',
+            },
+          });
+          return true;
+        },
+      )
+      .matchHeader('authorization', /^Bearer /)
+      .matchHeader('idempotency-key', outboundIdempotencyKeyForQuantitySync)
+      .reply(200, subscriptionUpdateFixtureResponse);
+
+    const patchedStripeSubscriptionOutbound = await updateStripeSubscriptionQuantity(
+      subscriptionFixtureIdentifierOutbound,
+      7,
+      { idempotencyKey: outboundIdempotencyKeyForQuantitySync },
     );
 
     StripeSubscriptionApiResponseContractSchema.parse(patchedStripeSubscriptionOutbound);

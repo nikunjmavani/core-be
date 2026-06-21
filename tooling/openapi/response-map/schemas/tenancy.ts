@@ -142,6 +142,38 @@ export const membershipSchema = {
     joined_at: { type: 'string', format: 'date-time', nullable: true },
     created_at: { type: 'string', format: 'date-time' },
     updated_at: { type: 'string', format: 'date-time' },
+    // Embedded display summary so a members table renders without an N+1 per-row user fetch.
+    user: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        email: { type: 'string', format: 'email' },
+        first_name: { type: 'string', nullable: true },
+        last_name: { type: 'string', nullable: true },
+        avatar_url: {
+          type: 'string',
+          nullable: true,
+          description: 'Presigned read URL (or absolute provider URL); never a raw object key.',
+        },
+      },
+    },
+    role: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        name: { type: 'string' },
+      },
+    },
+    // Live (pending) invitation reference — present only on INVITED rows so the frontend can
+    // Resend/Revoke from the members table; null for ACTIVE/SUSPENDED rows.
+    invitation: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        id: { type: 'string' },
+        expires_at: { type: 'string', format: 'date-time' },
+      },
+    },
   },
 };
 
@@ -154,6 +186,18 @@ export const membershipExample = {
   joined_at: '2026-01-15T10:30:00.000Z',
   created_at: '2026-01-15T10:30:00.000Z',
   updated_at: '2026-02-10T14:20:00.000Z',
+  user: {
+    id: 'usr_k7x9m2pqr4w8n1v3a1b2c',
+    email: 'john.doe@example.com',
+    first_name: 'John',
+    last_name: 'Doe',
+    avatar_url: 'https://cdn.example.com/avatars/john-doe.jpg',
+  },
+  role: {
+    id: 'rol_m3n7p2q8w5k1r4t6a1b2c',
+    name: 'Admin',
+  },
+  invitation: null,
 };
 
 // ── Member Invitation ──

@@ -9,6 +9,9 @@ describe('subscription.serializer', () => {
       organization_id: 7,
       plan_id: 3, // bigserial — must NOT leak
       plan_public_id: 'pln_publicpublicpublic', // sec-re-07: surfaced as `plan_id` in the output
+      // REQ-4: seat counters attached by the service before serialization.
+      seats_total: 25,
+      seats_used: 4,
       provider: 'stripe',
       provider_subscription_id: 'sub_xxx',
       provider_customer_id: 'cus_yyy',
@@ -39,6 +42,8 @@ describe('subscription.serializer', () => {
       canceled_at: null,
       provider: 'stripe',
       plan_id: 'pln_publicpublicpublic',
+      seats_total: 25,
+      seats_used: 4,
       created_at: '2026-06-01T00:00:00.000Z',
       updated_at: '2026-06-05T00:00:00.000Z',
     });

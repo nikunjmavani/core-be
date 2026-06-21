@@ -43,7 +43,11 @@ export function createMembershipController(service: MembershipService) {
     createMembership: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requirePrincipal(request);
       const organizationId = resolveActiveOrganizationId(request);
-      const data = await service.create(organizationId, request.body, getActingUserPublicId(auth));
+      // REQ-1: "Add member" — the raw invitation token is delivered ONLY via email, never returned;
+      // the response carries the created INVITED membership (with its embedded invitation ref).
+      const data = await service.create(organizationId, request.body, getActingUserPublicId(auth), {
+        requestId: getRequestIdentifier(request),
+      });
       reply.code(201);
       return successResponse(data, getRequestIdentifier(request));
     },

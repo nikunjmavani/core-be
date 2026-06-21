@@ -10,6 +10,7 @@ import {
   cancelStripeSubscription,
   resumeStripeSubscription,
   updateStripeSubscription,
+  updateStripeSubscriptionQuantity,
 } from '@/infrastructure/payment/stripe.client.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { ConfigurationError, ServiceUnavailableError } from '@/shared/errors/index.js';
@@ -210,6 +211,24 @@ export class StripePaymentProvider implements PaymentProvider {
       );
     } catch (error) {
       logger.error({ error }, 'stripe.subscription.change_plan.failed');
+      throw new ServiceUnavailableError('errors:paymentProviderUnavailable');
+    }
+  }
+
+  async updateSubscriptionQuantity(
+    providerSubscriptionId: string,
+    quantity: number,
+    idempotencyKey?: string,
+  ): Promise<void> {
+    if (!isStripeConfigured()) return;
+    try {
+      await updateStripeSubscriptionQuantity(
+        providerSubscriptionId,
+        quantity,
+        idempotencyKey !== undefined ? { idempotencyKey } : undefined,
+      );
+    } catch (error) {
+      logger.error({ error }, 'stripe.subscription.update_quantity.failed');
       throw new ServiceUnavailableError('errors:paymentProviderUnavailable');
     }
   }

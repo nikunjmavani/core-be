@@ -19,10 +19,9 @@ import { member_invitations } from '@/domains/tenancy/sub-domains/membership/mem
 
 /**
  * Invitation email-binding matrix — model `email` in
- * route-authorization-model.json. The invitation accept/decline routes are
- * bound to the invitee's email, not merely "any authenticated user": a user
- * whose email differs from the invitation can neither decline it
- * (`declineOwnInvitationOnly`) nor accept it even when holding the raw token
+ * route-authorization-model.json. The invitation accept route is bound to the
+ * invitee's email, not merely "any authenticated user": a user whose email
+ * differs from the invitation cannot accept it even when holding the raw token
  * (`invitationEmailMismatch`), and the invitation stays pending. The legitimate
  * invitee (matching email) can act on it. e2e — runs in CI (Postgres + Redis).
  */
@@ -81,23 +80,6 @@ describe('Security: invitation email-binding matrix (model: email)', () => {
 
   const uniqueEmail = () => `invitee-${randomUUID()}@example.test`;
 
-  it('a user whose email differs DECLINE the invitation → 403 and it stays pending', async () => {
-    const { invitation } = await pendingInvitationFor(uniqueEmail());
-    const attacker = await createTestUser();
-    const attackerToken = await generateTestToken({ userId: attacker.public_id });
-    const res = await injectAuthenticated(app, {
-      method: 'POST',
-      url: testApiPath(`/tenancy/invitations/${invitation.public_id}/decline`),
-      token: attackerToken,
-    });
-    expect(res.statusCode).toBe(403);
-    const [row] = await database
-      .select()
-      .from(member_invitations)
-      .where(eq(member_invitations.public_id, invitation.public_id));
-    expect(row?.revoked_at).toBeNull();
-  });
-
   it('a user whose email differs ACCEPT with the valid token → 403 and it stays pending', async () => {
     const { invitation } = await pendingInvitationFor(uniqueEmail());
     const attacker = await createTestUser();
@@ -114,19 +96,5 @@ describe('Security: invitation email-binding matrix (model: email)', () => {
       .from(member_invitations)
       .where(eq(member_invitations.public_id, invitation.public_id));
     expect(row?.accepted_at).toBeNull();
-  });
-
-  it('baseline: the invitee (matching email) can decline their own invitation → 201', async () => {
-    const inviteeEmail = uniqueEmail();
-    const { invitee, invitation } = await pendingInvitationFor(inviteeEmail);
-    const inviteeToken = await generateTestToken({ userId: invitee.public_id });
-    const res = await injectAuthenticated(app, {
-      method: 'POST',
-      url: testApiPath(`/tenancy/invitations/${invitation.public_id}/decline`),
-      token: inviteeToken,
-    });
-    // POST → 201 under the method→status policy (the invitee is allowed; contrast
-    // with the email-mismatch caller's 403 above).
-    expect(res.statusCode).toBe(201);
   });
 });

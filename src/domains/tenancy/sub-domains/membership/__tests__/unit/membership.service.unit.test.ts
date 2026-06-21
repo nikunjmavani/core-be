@@ -14,13 +14,20 @@ vi.mock('@/domains/tenancy/sub-domains/permission/permission-cache.service.js', 
 vi.mock('@/domains/tenancy/sub-domains/permission/assert-grantable-permissions.util.js', () => ({
   assertCallerCanGrantPermissionCodes: vi.fn().mockResolvedValue(undefined),
 }));
-import { ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
+
+vi.mock('@/shared/utils/text/email.util.js', () => ({
+  isDisposableEmailBlocked: vi.fn().mockReturnValue(false),
+}));
+import { ForbiddenError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
 import { MembershipService } from '@/domains/tenancy/sub-domains/membership/membership.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { MemberRoleService } from '@/domains/tenancy/sub-domains/member-roles/member-role.service.js';
 import type { MemberRolePermissionService } from '@/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.service.js';
 import type { MembershipRepository } from '@/domains/tenancy/sub-domains/membership/membership.repository.js';
+import type { UserService } from '@/domains/user/user.service.js';
+import type { MemberInvitationService } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.service.js';
 import { invalidatePermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
+import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 
 const organization = { id: 1, public_id: 'org_public', owner_user_id: 99 };
 const role = { id: 2, public_id: 'role_public', name: 'Admin' };
@@ -67,12 +74,26 @@ describe('MembershipService', () => {
     update: vi.fn().mockResolvedValue(membershipRow),
     softDelete: vi.fn().mockResolvedValue(membershipRow),
     findByUserAndOrganization: vi.fn().mockResolvedValue(membershipRow),
-    resolveUserPublicIdsByInternalIds: vi.fn(
-      async (ids: readonly number[]) => new Map(ids.map((id) => [id, `user_public_${id}`])),
+    resolveUserSummariesByInternalIds: vi.fn(
+      async (ids: readonly number[]) =>
+        new Map(
+          ids.map((id) => [
+            id,
+            {
+              public_id: `user_public_${id}`,
+              email: `user${id}@example.com`,
+              first_name: 'Test',
+              last_name: `User${id}`,
+              avatar_url: null,
+            },
+          ]),
+        ),
     ),
-    resolveRolePublicIdsByInternalIds: vi.fn(
-      async (ids: readonly number[]) => new Map(ids.map((id) => [id, `role_public_${id}`])),
+    resolveRoleSummariesByInternalIds: vi.fn(
+      async (ids: readonly number[]) =>
+        new Map(ids.map((id) => [id, { public_id: `role_public_${id}`, name: 'Admin' }])),
     ),
+    resolveLiveInvitationsByMembershipIds: vi.fn(async () => new Map()),
   } as unknown as MembershipRepository;
 
   const authorizationService = {
@@ -82,6 +103,18 @@ describe('MembershipService', () => {
     findAll: vi.fn().mockResolvedValue([]),
   } as never;
 
+  const userService = {
+    findOrCreateInvitedByEmail: vi.fn().mockResolvedValue({
+      id: 10,
+      public_id: 'user_public',
+      email: 'invitee@example.com',
+    }),
+  } as unknown as UserService;
+
+  const memberInvitationService = {
+    createForMembership: vi.fn().mockResolvedValue({ id: 'inv_public' }),
+  } as unknown as MemberInvitationService;
+
   const service = new MembershipService(
     organizationService,
     memberRoleService,
@@ -89,6 +122,12 @@ describe('MembershipService', () => {
     membershipRepository,
     authorizationService,
     permissionRepository,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    userService,
+    memberInvitationService,
   );
 
   beforeEach(() => {
@@ -130,30 +169,39 @@ describe('MembershipService', () => {
     );
   });
 
-  it('create adds membership for user', async () => {
+  it('create adds an INVITED membership by email and issues the invitation', async () => {
     const result = await service.create(
       'org_public',
-      { user_id: 'user_public', role_id: 'role_public', status: 'INVITED' },
+      { email: 'invitee@example.com', role_id: 'role_public' },
       'inviter_public',
     );
+    expect(userService.findOrCreateInvitedByEmail).toHaveBeenCalledWith({
+      email: 'invitee@example.com',
+    });
     expect(memberRoleService.requireRoleRecordByPublicId).toHaveBeenCalledWith(
       'org_public',
       'role_public',
     );
-    expect(membershipRepository.create).toHaveBeenCalled();
+    expect(membershipRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: 10, role_id: 2, status: 'INVITED' }),
+    );
+    expect(memberInvitationService.createForMembership).toHaveBeenCalledWith(
+      expect.objectContaining({ membership_id: 3, email: 'invitee@example.com' }),
+    );
     expect(invalidatePermissions).toHaveBeenCalledWith('user_public', 'org_public');
     expect(result.id).toBe('mem_public');
   });
 
-  it('create rejects an ACTIVE status (activation requires invitation acceptance)', async () => {
+  it('create rejects a disposable invitee email before any provisioning or write', async () => {
+    vi.mocked(isDisposableEmailBlocked).mockReturnValueOnce(true);
     await expect(
       service.create(
         'org_public',
-        { user_id: 'user_public', role_id: 'role_public', status: 'ACTIVE' },
+        { email: 'throwaway@mailinator.com', role_id: 'role_public' },
         'inviter_public',
       ),
-    ).rejects.toMatchObject({ messageKey: 'errors:membershipActivationRequiresInvitationAccept' });
-    // The guard fires before any persistence — no write is attempted.
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(userService.findOrCreateInvitedByEmail).not.toHaveBeenCalled();
     expect(membershipRepository.create).not.toHaveBeenCalled();
   });
 
@@ -165,7 +213,7 @@ describe('MembershipService', () => {
     await expect(
       service.create(
         'org_public',
-        { user_id: 'user_public', role_id: 'role_public', status: 'INVITED' },
+        { email: 'invitee@example.com', role_id: 'role_public' },
         'inviter_public',
       ),
     ).rejects.toMatchObject({ messageKey: 'errors:personalOrganizationNoMembers' });
@@ -189,6 +237,22 @@ describe('MembershipService', () => {
   it('update changes membership status', async () => {
     await service.update('org_public', 'mem_public', { status: 'SUSPENDED' }, 'updater_public');
     expect(membershipRepository.update).toHaveBeenCalled();
+  });
+
+  it('update changes a member role (REQ-3): resolves the role and persists its internal id', async () => {
+    await service.update('org_public', 'mem_public', { role_id: 'role_public' }, 'updater_public');
+    expect(memberRoleService.requireRoleRecordByPublicId).toHaveBeenCalledWith(
+      'org_public',
+      'role_public',
+    );
+    // The privilege-escalation guard runs for the new role's permission codes before persisting.
+    expect(memberRolePermissionService.listPermissionCodesForRole).toHaveBeenCalledWith(role.id);
+    expect(membershipRepository.update).toHaveBeenCalledWith(
+      'mem_public',
+      organization.id,
+      expect.objectContaining({ role_id: role.id }),
+      expect.anything(),
+    );
   });
 
   // sec-new-T1: owner membership cannot be modified (would enable Admin lockout of owner)
@@ -358,12 +422,12 @@ describe('MembershipService', () => {
     );
   });
 
-  it('create throws when user public id cannot be resolved', async () => {
+  it('create throws NotFoundError when the inviter cannot be resolved', async () => {
     vi.mocked(organizationService.resolveUserInternalIdByPublicId).mockResolvedValue(null);
     await expect(
       service.create(
         'org_public',
-        { user_id: 'missing_user', role_id: 'role_public', status: 'INVITED' },
+        { email: 'invitee@example.com', role_id: 'role_public' },
         'inviter_public',
       ),
     ).rejects.toBeInstanceOf(NotFoundError);
@@ -419,24 +483,6 @@ describe('MembershipService', () => {
         'owner_public',
       ),
     ).rejects.toBeInstanceOf(NotFoundError);
-  });
-
-  it('create allows null inviter when inviter public id cannot be resolved', async () => {
-    vi.mocked(organizationService.resolveUserInternalIdByPublicId).mockImplementation(
-      async (publicId: string | undefined) => {
-        if (publicId === 'user_public') return 10;
-        if (publicId === 'missing_inviter') return null;
-        return 10;
-      },
-    );
-    await service.create(
-      'org_public',
-      { user_id: 'user_public', role_id: 'role_public', status: 'INVITED' },
-      'missing_inviter',
-    );
-    expect(membershipRepository.create).toHaveBeenCalledWith(
-      expect.objectContaining({ invited_by_user_id: null, created_by_user_id: null }),
-    );
   });
 
   it('transferOwnership requires new owner membership', async () => {

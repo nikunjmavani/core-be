@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// REQ-4: stub the seat-sync producer queue so changePlan's best-effort enqueue never opens Redis.
+vi.mock(
+  '@/domains/billing/sub-domains/subscription/queues/subscription-seat-sync.queue.js',
+  () => ({
+    enqueueSubscriptionSeatSyncBestEffort: vi.fn(),
+  }),
+);
+
 vi.mock('@/infrastructure/database/contexts/organization-database.context.js', () => ({
   withOrganizationDatabaseContext: vi.fn(
     async (_organizationPublicId: string, callback: () => Promise<unknown>) => callback(),
@@ -98,7 +106,9 @@ describe('SubscriptionService', () => {
 
   it('list returns subscriptions for organization', async () => {
     const result = await service.list('org_public');
-    expect(result).toEqual([subscriptionRow]);
+    // REQ-4: each row is decorated with seats_total / seats_used (superset of the repo row).
+    expect(result).toMatchObject([subscriptionRow]);
+    expect(result[0]).toHaveProperty('seats_total');
   });
 
   it('get returns subscription when found', async () => {
@@ -120,7 +130,10 @@ describe('SubscriptionService', () => {
     );
     expect(repository.findActiveByOrganization).toHaveBeenCalledWith(organization.id);
     expect(repository.create).toHaveBeenCalled();
-    expect(result).toEqual(subscriptionRow);
+    // REQ-4: the row is now decorated with seats_total / seats_used, so it is a superset of the
+    // repository row — assert the original fields survived rather than exact equality.
+    expect(result).toMatchObject(subscriptionRow);
+    expect(result).toHaveProperty('seats_used');
   });
 
   it('create rejects with ConflictError before Stripe when an active subscription exists', async () => {
@@ -166,7 +179,10 @@ describe('SubscriptionService', () => {
       'user_public',
     );
     expect(repository.create).toHaveBeenCalled();
-    expect(result).toEqual(subscriptionRow);
+    // REQ-4: the row is now decorated with seats_total / seats_used, so it is a superset of the
+    // repository row — assert the original fields survived rather than exact equality.
+    expect(result).toMatchObject(subscriptionRow);
+    expect(result).toHaveProperty('seats_used');
     // audit-#2: a local-only subscription (no Stripe) leaves status unset so the
     // repository default (TRIALING) applies — there is no payment to be pending on.
     const createPayload = vi.mocked(repository.create).mock.calls[0]![0] as unknown as Record<
@@ -208,7 +224,10 @@ describe('SubscriptionService', () => {
 
   it('update with empty body returns the existing subscription (no-op)', async () => {
     const result = await service.update('org_public', 'sub_public', {});
-    expect(result).toEqual(subscriptionRow);
+    // REQ-4: the row is now decorated with seats_total / seats_used, so it is a superset of the
+    // repository row — assert the original fields survived rather than exact equality.
+    expect(result).toMatchObject(subscriptionRow);
+    expect(result).toHaveProperty('seats_used');
     expect(repository.update).not.toHaveBeenCalled();
   });
 

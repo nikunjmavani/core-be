@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// REQ-4: stub the seat-sync producer queue so changePlan's best-effort enqueue never opens Redis.
+vi.mock(
+  '@/domains/billing/sub-domains/subscription/queues/subscription-seat-sync.queue.js',
+  () => ({
+    enqueueSubscriptionSeatSyncBestEffort: vi.fn(),
+  }),
+);
+
 vi.mock('@/infrastructure/database/contexts/organization-database.context.js', () => ({
   withOrganizationDatabaseContext: vi.fn(
     async (_organizationPublicId: string, callback: () => Promise<unknown>) => callback(),
@@ -74,6 +82,7 @@ function buildService() {
     cancelSubscriptionImmediately: vi.fn().mockResolvedValue(undefined),
     resumeSubscription: vi.fn().mockResolvedValue(undefined),
     updateSubscriptionPrice: vi.fn().mockResolvedValue(undefined),
+    updateSubscriptionQuantity: vi.fn().mockResolvedValue(undefined),
     compensateFailedCreate: vi.fn().mockResolvedValue(undefined),
     compensatePlanChange: vi.fn().mockResolvedValue(undefined),
   } satisfies PaymentProvider;

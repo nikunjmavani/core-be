@@ -1561,3 +1561,21 @@ api post /api/v1/tenancy/organization/api-keys the `header` request parameter `x
 api post /api/v1/tenancy/organization/notification-policies the `header` request parameter `x-idempotency-key` became required
 api post /api/v1/tenancy/organization/roles the `header` request parameter `x-idempotency-key` became required
 api post /api/v1/uploads the `header` request parameter `x-idempotency-key` became required
+
+# 31. REQ-1 add-member-by-email overhaul (PR #740). The standalone invitation surface
+#     was folded into the membership resource: adding a member is now a single
+#     POST /tenancy/organization/memberships that identifies the invitee by `email`
+#     (previously `user_id`) and issues the invitation server-side, so the four
+#     now-redundant invitation routes were removed and the create-membership body
+#     swapped `user_id` (+ optional `status`) for a required `email`. Intentional and
+#     documented; the `status`/`user_id` body removals surface only as non-fatal WARN
+#     findings (the gate runs --fail-on ERR). Pinned by membership.validator.unit.test.ts
+#     (accepts + normalizes `email`, rejects the legacy `user_id`), tenancy.test.ts
+#     (POST /memberships 400/422 on missing body + records the removals) and
+#     membership.integration.test.ts (full add-member flow); the removed paths are held
+#     out of docs/routes.txt by routes:catalog:check.
+api get /api/v1/tenancy/invitations/pending api path removed without deprecation
+api post /api/v1/tenancy/invitations/{invitation_id}/decline api path removed without deprecation
+api get /api/v1/tenancy/organization/invitations api path removed without deprecation
+api post /api/v1/tenancy/organization/invitations api path removed without deprecation
+api post /api/v1/tenancy/organization/memberships added the new required request property `email`

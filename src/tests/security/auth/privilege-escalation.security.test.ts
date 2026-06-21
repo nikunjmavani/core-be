@@ -229,10 +229,12 @@ describe('Security: Privilege escalation', () => {
       url: testApiPath('/tenancy/organization/memberships'),
       token,
       headers: { 'x-idempotency-key': randomUUID() },
+      // REQ-1: "Add member" is now invite-by-email. A valid body that passes the strict DTO so the
+      // request reaches the MEMBERSHIP_MANAGE permission preHandler (the role/email need not exist —
+      // authorization runs before any lookup).
       payload: {
-        user_id: 'usr_000000000000000000000',
+        email: 'escalation-attempt@example.test',
         role_id: 'rol_000000000000000000000',
-        status: 'ACTIVE',
       },
     });
 
