@@ -94,6 +94,7 @@
   "POST /api/v1/auth/password/forgot": "both",
   "POST /api/v1/auth/password/reset": "both",
   "POST /api/v1/auth/refresh": "both",
+  "POST /api/v1/auth/signup": "both",
   "POST /api/v1/auth/step-up": "both",
   "POST /api/v1/auth/switch-to-organization": "both",
   "POST /api/v1/auth/switch-to-personal": "both",

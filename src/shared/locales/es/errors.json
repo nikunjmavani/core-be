@@ -62,6 +62,7 @@
   },
   "missingSessionCookie": "Falta la cookie de sesión",
   "disposableEmail": "Este dominio de correo no está permitido.",
+  "emailAlreadyRegistered": "Ya existe una cuenta con este correo electrónico.",
   "invalidEmailOrPassword": "Correo o contraseña no válidos",
   "accountLocked": "Cuenta bloqueada temporalmente. Inténtalo más tarde.",
   "invalidOrRevokedToken": "Token no válido o ya revocado",

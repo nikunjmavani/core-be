@@ -281,6 +281,29 @@ export class UserService {
     });
   }
 
+  /**
+   * Inserts an email/password signup user with `is_email_verified=false` and a generated `public_id`.
+   *
+   * @remarks
+   * Mirrors {@link UserService.createFromOAuth}: generates the `public_id`, enters that user's
+   * `withUserDatabaseContext` (so the FORCE-RLS owner WITH CHECK passes), and retries on the rare
+   * public-id collision. The caller supplies the pre-computed argon2 `password_hash` so hashing
+   * never holds a pooled connection open inside the insert transaction.
+   */
+  async createWithPassword(data: {
+    email: string;
+    password_hash: string;
+    first_name?: string;
+    last_name?: string;
+  }): Promise<UserAuthRecord> {
+    return runInsertWithPublicIdentifierRetry(async () => {
+      const publicId = generatePublicId('user');
+      return withUserDatabaseContext(publicId, () =>
+        this.repository.insertWithPassword(publicId, data),
+      );
+    });
+  }
+
   async updatePassword(public_id: string, password_hash: string): Promise<UserAuthRecord | null> {
     return withUserDatabaseContext(public_id, () =>
       this.repository.updatePassword(public_id, password_hash),

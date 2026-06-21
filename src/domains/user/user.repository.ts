@@ -198,6 +198,34 @@ export class UserRepository {
     return rows[0]!;
   }
 
+  /**
+   * Inserts an email/password signup user with a caller-supplied `public_id`. The password is
+   * pre-hashed by the caller (argon2 is CPU-bound and must not run inside a transaction) and
+   * `is_email_verified` is always false — signup never trusts the address until the verification
+   * code is confirmed. Mirrors {@link UserRepository.insertOAuthUser}; the public-id generation,
+   * collision retry, and `withUserDatabaseContext` wrapper live in {@link UserService.createWithPassword}.
+   */
+  async insertWithPassword(
+    publicId: string,
+    data: { email: string; password_hash: string; first_name?: string; last_name?: string },
+  ) {
+    const emailHash = createHash('sha256').update(data.email.toLowerCase()).digest('hex');
+    const rows = await getRequestDatabase()
+      .insert(users)
+      .values({
+        public_id: publicId,
+        email: data.email,
+        email_hash: emailHash,
+        password_hash: data.password_hash,
+        first_name: data.first_name ?? null,
+        last_name: data.last_name ?? null,
+        is_email_verified: false,
+        status: 'ACTIVE',
+      })
+      .returning();
+    return rows[0]!;
+  }
+
   // ── Admin methods ──────────────────────────────────────────
 
   async findMany(pagination: UserListPagination) {
