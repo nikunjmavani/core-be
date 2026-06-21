@@ -152,6 +152,7 @@
   "subscriptionAlreadyExists": "Ya existe una suscripción activa para esta organización",
   "seatLimitReached": "Se alcanzó el límite de asientos de tu plan ({{limit}}). Mejora tu plan o elimina un miembro antes de agregar otro.",
   "subscriptionNotMutable": "Esta suscripción está en estado terminal y ya no puede modificarse; crea una nueva suscripción en su lugar",
+  "planNotAvailableForBillingCycle": "Este plan no está disponible para el ciclo de facturación de tu suscripción",
   "paymentProviderUnavailable": "El proveedor de pagos no está disponible temporalmente. Vuelve a intentarlo.",
   "mailNotConfigured": "El envío de correo no está disponible temporalmente. Vuelve a intentarlo más tarde.",
   "captchaRequired": "Se requiere verificación CAPTCHA",
