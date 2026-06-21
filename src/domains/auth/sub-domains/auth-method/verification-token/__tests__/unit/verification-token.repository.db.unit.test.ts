@@ -10,7 +10,7 @@ describe('VerificationTokenRepository (database)', () => {
     await cleanupDatabase();
   });
 
-  it('creates, finds valid, consumes, and marks used tokens', async () => {
+  it('creates, finds valid, and atomically consumes tokens (audit #19)', async () => {
     const user = await createTestUser();
     const tokenHash = `hash-${user.public_id}`;
     const expiresAt = new Date(Date.now() + 3_600_000);
@@ -26,11 +26,9 @@ describe('VerificationTokenRepository (database)', () => {
     const afterConsume = await repository.findValidByTokenHash(tokenHash);
     expect(afterConsume).toBeNull();
 
-    const secondHash = `hash-second-${user.public_id}`;
-    await repository.create('PASSWORD_RESET', user.id, user.email, secondHash, expiresAt);
-    await repository.markUsed(secondHash);
-    const marked = await repository.findValidByTokenHash(secondHash);
-    expect(marked).toBeNull();
+    // A second consume of the same token returns null (single-use; the unguarded markUsed that
+    // could double-consume was removed in audit #19).
+    expect(await repository.consumeIfValid(tokenHash)).toBeNull();
   });
 
   it('invalidates all unused tokens of a type for user', async () => {

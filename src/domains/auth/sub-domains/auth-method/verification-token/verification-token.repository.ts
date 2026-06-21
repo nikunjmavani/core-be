@@ -82,15 +82,6 @@ export class VerificationTokenRepository {
     return rows[0] ?? null;
   }
 
-  async markUsed(tokenHash: string) {
-    const rows = await getRequestDatabase()
-      .update(verification_tokens)
-      .set({ used_at: new Date() })
-      .where(eq(verification_tokens.token_hash, tokenHash))
-      .returning();
-    return rows[0] ?? null;
-  }
-
   /** Invalidate all unused tokens of a given type for a user. */
   async invalidateAllForUser(userId: number, tokenType: VerificationTokenType) {
     await getRequestDatabase()

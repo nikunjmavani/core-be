@@ -62,14 +62,8 @@ describe('VerificationTokenRepository', () => {
     expect(await repository.consumeIfValid('missing')).toBeNull();
   });
 
-  it('markUsed updates token by hash', async () => {
-    const used = { id: 4, used_at: new Date() };
-    mockReturning.mockResolvedValueOnce([used]);
-    expect(await repository.markUsed('hash')).toEqual(used);
-
-    mockReturning.mockResolvedValueOnce([]);
-    expect(await repository.markUsed('missing')).toBeNull();
-  });
+  // audit #19: the unguarded `markUsed` was removed (dead code that bypassed the expiry/used-once
+  // guards — a latent single-use-token double-consume). Consumers use the atomic `consumeIfValid`.
 
   it('invalidateAllForUser marks unused tokens used', async () => {
     mockWhereForUpdate.mockReturnValueOnce({ returning: vi.fn().mockResolvedValue([]) });
