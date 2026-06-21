@@ -246,6 +246,7 @@ src/
     │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.unit.test.ts
     │   │   │       │   ├── webauthn-user-verification.policy.unit.test.ts
     │   │   │       │   ├── webauthn.service.authenticate-options.unit.test.ts
+    │   │   │       │   ├── webauthn.service.credential-management.unit.test.ts
     │   │   │       │   └── webauthn.validator.unit.test.ts
     │   │   │   ├── seed/
     │   │   │       ├── auth-webauthn.bulk.seed.ts
@@ -257,6 +258,7 @@ src/
     │   │   │   ├── webauthn-credential.schema.ts
     │   │   │   ├── webauthn.config.ts
     │   │   │   ├── webauthn.dto.ts
+    │   │   │   ├── webauthn.serializer.ts
     │   │   │   ├── webauthn.service.ts
     │   │   │   └── webauthn.validator.ts
     │   ├── auth-me-context.serializer.ts

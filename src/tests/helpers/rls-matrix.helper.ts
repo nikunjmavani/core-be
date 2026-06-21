@@ -540,6 +540,7 @@ export async function seedUserScopedRlsFixtures(): Promise<RlsUserFixture> {
   const [credentialA] = await database
     .insert(webauthn_credentials)
     .values({
+      public_id: generatePublicId('webauthnCredential'),
       user_id: userA.id,
       credential_id: generatePublicId('organization'),
       public_key: 'key-a',
@@ -548,6 +549,7 @@ export async function seedUserScopedRlsFixtures(): Promise<RlsUserFixture> {
   const [credentialB] = await database
     .insert(webauthn_credentials)
     .values({
+      public_id: generatePublicId('webauthnCredential'),
       user_id: userB.id,
       credential_id: generatePublicId('organization'),
       public_key: 'key-b',

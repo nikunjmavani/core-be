@@ -109,3 +109,20 @@ export const webauthnAuthenticateVerifyDto = z
     }),
   })
   .strict();
+
+/**
+ * Zod schema for the `:credential_id` path param on the passkey-management routes
+ * (`DELETE /api/v1/auth/me/webauthn/credentials/{credential_id}`). The value is the opaque
+ * `wac_`-prefixed public id returned by `GET /auth/me/webauthn/credentials`, never the raw
+ * WebAuthn credential blob or the sequential DB id.
+ */
+export const webauthnCredentialIdParamsDto = z
+  .object({
+    credential_id: z
+      .string()
+      .trim()
+      .regex(/^wac_[a-z0-9]{21}$/),
+  })
+  .strict();
+/** Inferred input type of {@link webauthnCredentialIdParamsDto}. */
+export type WebauthnCredentialIdParamsInput = z.infer<typeof webauthnCredentialIdParamsDto>;
