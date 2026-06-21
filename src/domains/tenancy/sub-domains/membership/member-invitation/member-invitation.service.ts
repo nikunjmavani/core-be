@@ -188,40 +188,53 @@ export class MemberInvitationService {
     const lookup =
       await this.invitationRepository.lookupOrganizationByInvitationPublicId(invitation_public_id);
     if (!lookup) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-    return withOrganizationDatabaseContext(lookup.organization_public_id, async () => {
-      const row = await this.invitationRepository.findByPublicId(invitation_public_id);
-      if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-      if (row.email.toLowerCase() !== actingUser.email.toLowerCase()) {
-        throw new ForbiddenError('errors:invitationEmailMismatch');
-      }
-      const tokenHash = hashInvitationToken(parsed.token);
-      const now = new Date();
-      assertInvitationAcceptable(row, now);
-      const updated = await this.invitationRepository.accept(invitation_public_id, tokenHash, now);
-      if (!updated) {
-        const current = await this.invitationRepository.findByPublicId(invitation_public_id);
-        throwInvitationAcceptFailure(current, now);
-      }
-      /**
-       * Atomically activate the membership in the same transaction so accepting
-       * the token actually grants access (permission resolution requires
-       * `memberships.status = 'ACTIVE'`). Without this the invitation flow set
-       * `accepted_at` but left the membership `INVITED`, so the user appeared
-       * to have no access until a manager separately PATCHed the status.
-       */
-      const activatedMembership = await this.membershipRepository.activateForInvitationAccept(
-        lookup.membership_id,
-        lookup.organization_id,
-      );
-      if (!activatedMembership) throw new NotFoundError('Membership');
-      const memberUserPublicId = await this.organizationRepository.resolveUserPublicIdByInternalId(
-        activatedMembership.user_id,
-      );
-      if (memberUserPublicId) {
-        await invalidatePermissions(memberUserPublicId, lookup.organization_public_id);
-      }
-      return serializeMemberInvitation(updated, lookup.membership_public_id);
-    });
+    let acceptedMemberPublicId: string | null = null;
+    const result = await withOrganizationDatabaseContext(
+      lookup.organization_public_id,
+      async () => {
+        const row = await this.invitationRepository.findByPublicId(invitation_public_id);
+        if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+        if (row.email.toLowerCase() !== actingUser.email.toLowerCase()) {
+          throw new ForbiddenError('errors:invitationEmailMismatch');
+        }
+        const tokenHash = hashInvitationToken(parsed.token);
+        const now = new Date();
+        assertInvitationAcceptable(row, now);
+        const updated = await this.invitationRepository.accept(
+          invitation_public_id,
+          tokenHash,
+          now,
+        );
+        if (!updated) {
+          const current = await this.invitationRepository.findByPublicId(invitation_public_id);
+          throwInvitationAcceptFailure(current, now);
+        }
+        /**
+         * Atomically activate the membership in the same transaction so accepting
+         * the token actually grants access (permission resolution requires
+         * `memberships.status = 'ACTIVE'`). Without this the invitation flow set
+         * `accepted_at` but left the membership `INVITED`, so the user appeared
+         * to have no access until a manager separately PATCHed the status.
+         */
+        const activatedMembership = await this.membershipRepository.activateForInvitationAccept(
+          lookup.membership_id,
+          lookup.organization_id,
+        );
+        if (!activatedMembership) throw new NotFoundError('Membership');
+        acceptedMemberPublicId =
+          (await this.organizationRepository.resolveUserPublicIdByInternalId(
+            activatedMembership.user_id,
+          )) ?? null;
+        return serializeMemberInvitation(updated, lookup.membership_public_id);
+      },
+    );
+    // sec-R11: invalidate AFTER commit so the newly-activated member's permissions are recomputed
+    // from the committed ACTIVE membership — a pre-commit invalidation could be re-populated with
+    // the stale (pre-acceptance) set by a concurrent recompute, delaying the access grant.
+    if (acceptedMemberPublicId) {
+      await invalidatePermissions(acceptedMemberPublicId, lookup.organization_public_id);
+    }
+    return result;
   }
 
   async revoke(organization_public_id: string, invitation_public_id: string): Promise<void> {

@@ -7,6 +7,7 @@ import type { UserService } from '@/domains/user/user.service.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { withGlobalAdminDatabaseContext } from '@/infrastructure/database/contexts/global-admin-database.context.js';
+import { withSystemAuditInsertContext } from '@/infrastructure/database/contexts/system-audit-insert-database.context.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
@@ -92,19 +93,32 @@ export class AuditService {
       return;
     }
 
-    await insertAuditOutboxRow({
-      actorUserPublicId: input.actorUserPublicId,
-      actorApiKeyPublicId: input.actorApiKeyPublicId,
-      targetUserPublicId: input.target_user_public_id ?? undefined,
-      organizationPublicId: input.organization_public_id ?? undefined,
-      action: input.action,
-      resourceType: input.resource_type,
-      resourceId: input.resource_id ?? null,
-      ipAddress: input.ip_address ?? null,
-      userAgent: input.user_agent ?? null,
-      severity: input.severity ?? 'INFO',
-      metadata: input.metadata ?? {},
-    });
+    const insert = (): Promise<number> =>
+      insertAuditOutboxRow({
+        actorUserPublicId: input.actorUserPublicId,
+        actorApiKeyPublicId: input.actorApiKeyPublicId,
+        targetUserPublicId: input.target_user_public_id ?? undefined,
+        organizationPublicId: input.organization_public_id ?? undefined,
+        action: input.action,
+        resourceType: input.resource_type,
+        resourceId: input.resource_id ?? null,
+        ipAddress: input.ip_address ?? null,
+        userAgent: input.user_agent ?? null,
+        severity: input.severity ?? 'INFO',
+        metadata: input.metadata ?? {},
+      });
+
+    // sec-R10: the `audit.outbox` INSERT is gated by RLS (audit_outbox_tenant_isolation_insert:
+    // org rows need `app.current_organization_id`, tenantless rows need `app.system_audit_insert`).
+    // Post-sec-M4 the per-request org RLS transaction is a no-op and controllers emit audit AFTER
+    // the service's withOrganizationDatabaseContext block has closed — so without establishing the
+    // matching context here the bare-pool INSERT is rejected under the production core_be_app role
+    // and the row is silently dropped by `recordAuditEvent`. Open the right context per row.
+    if (input.organization_public_id) {
+      await withOrganizationDatabaseContext(input.organization_public_id, insert);
+    } else {
+      await withSystemAuditInsertContext(insert);
+    }
   }
 
   /**

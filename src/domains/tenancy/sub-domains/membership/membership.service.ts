@@ -431,10 +431,12 @@ export class MembershipService {
         inviter_label: invited_by_user_public_id ?? 'Team member',
         ...(options?.requestId !== undefined ? { requestId: options.requestId } : {}),
       });
-      await invalidatePermissions(inviteeUser.public_id, organization_public_id);
       await this.applyOrganizationLocaleDefaults(inviteeUser.public_id, organization_public_id);
       return this.resolveAndSerializeMembership(created, organization_public_id);
     });
+    // sec-R11: invalidate the invitee's cached permissions AFTER the org transaction commits.
+    // Doing it pre-commit left a race where a concurrent recompute re-cached the stale set.
+    await invalidatePermissions(inviteeUser.public_id, organization_public_id);
     // REQ-4: the seat count just grew — reconcile the Stripe subscription quantity out-of-band.
     // Enqueued AFTER the org transaction commits so the worker re-reads the new count. Best-effort.
     this.enqueueSeatQuantitySync(organization_public_id);
@@ -448,7 +450,8 @@ export class MembershipService {
     updated_by_user_public_id: string | undefined,
   ): Promise<MembershipOutput> {
     const parsed = validateUpdateMembership(body);
-    return withOrganizationDatabaseContext(organization_public_id, async () => {
+    let affectedUserInternalId: number | undefined;
+    const result = await withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
@@ -506,12 +509,18 @@ export class MembershipService {
         userId ?? null,
       );
       if (!updated) throw new NotFoundError('Membership');
-      await this.invalidatePermissionsForMembership(updated.user_id, organization_public_id);
+      affectedUserInternalId = updated.user_id;
       return this.resolveAndSerializeMembership(updated, organization_public_id);
     });
+    // sec-R11: invalidate AFTER commit so a racing recompute can't re-cache the stale role set.
+    if (affectedUserInternalId !== undefined) {
+      await this.invalidatePermissionsForMembership(affectedUserInternalId, organization_public_id);
+    }
+    return result;
   }
 
   async delete(organization_public_id: string, membership_public_id: string): Promise<void> {
+    let affectedUserInternalId: number | undefined;
     await withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationMembershipByPublicId(
@@ -545,8 +554,13 @@ export class MembershipService {
       }
       // reaudit-#7: revoke the removed member's API keys so they lose access too.
       await this.revokeApiKeysForDepartedMember(deleted.user_id, organization.id);
-      await this.invalidatePermissionsForMembership(deleted.user_id, organization_public_id);
+      affectedUserInternalId = deleted.user_id;
     });
+    // sec-R11: invalidate AFTER commit so a racing recompute can't re-cache the removed member's
+    // stale permissions (delayed revocation).
+    if (affectedUserInternalId !== undefined) {
+      await this.invalidatePermissionsForMembership(affectedUserInternalId, organization_public_id);
+    }
     // REQ-4: the seat count just shrank — reconcile the Stripe subscription quantity out-of-band.
     this.enqueueSeatQuantitySync(organization_public_id);
   }
@@ -607,8 +621,9 @@ export class MembershipService {
       }
       // reaudit-#7: revoke the departing member's API keys so they lose access too.
       await this.revokeApiKeysForDepartedMember(userId, organization.id);
-      await invalidatePermissions(user_public_id, organization_public_id);
     });
+    // sec-R11: invalidate AFTER commit so a racing recompute can't re-cache the stale set.
+    await invalidatePermissions(user_public_id, organization_public_id);
     // REQ-4: the seat count just shrank — reconcile the Stripe subscription quantity out-of-band.
     this.enqueueSeatQuantitySync(organization_public_id);
   }
@@ -619,7 +634,7 @@ export class MembershipService {
     current_user_public_id: string,
   ): Promise<MembershipOutput> {
     const parsed = validateTransferOwnership(body);
-    return withOrganizationDatabaseContext(organization_public_id, async () => {
+    const result = await withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
@@ -649,6 +664,12 @@ export class MembershipService {
       );
       return this.resolveAndSerializeMembership(newOwnerMembership, organization_public_id);
     });
+    // sec-R11b: ownership itself is a live DB check (never cached), but invalidate both parties'
+    // cached permission sets after commit for defense-in-depth and consistency with the other
+    // membership mutations, so no owner-implied permission can ever linger in cache.
+    await invalidatePermissions(current_user_public_id, organization_public_id);
+    await invalidatePermissions(parsed.new_owner_user_id, organization_public_id);
+    return result;
   }
 
   /**
