@@ -218,11 +218,17 @@ describe('MagicLinkService', () => {
   it('verify rejects invalid or expired magic link tokens', async () => {
     vi.mocked(verificationTokenRepository.consumeIfValid).mockResolvedValue(null);
     await expect(service.verify({ token: 'bad' }, '127.0.0.1')).rejects.toThrow();
+  });
 
-    vi.mocked(verificationTokenRepository.consumeIfValid).mockResolvedValue({
-      token_type: 'PASSWORD_RESET',
-      user_id: user.id,
-    } as never);
+  it('sec-r5-L2: verify consumes scoped to the MAGIC_LINK token type', async () => {
+    // The repository now filters the atomic consume by token_type, so a wrong-flow token
+    // (e.g. PASSWORD_RESET) never matches and returns null rather than being burned and
+    // then rejected. The service must declare the MAGIC_LINK type at the call site.
+    vi.mocked(verificationTokenRepository.consumeIfValid).mockResolvedValue(null);
     await expect(service.verify({ token: 'wrong-type' }, '127.0.0.1')).rejects.toThrow();
+    expect(verificationTokenRepository.consumeIfValid).toHaveBeenCalledWith(
+      expect.any(String),
+      'MAGIC_LINK',
+    );
   });
 });
