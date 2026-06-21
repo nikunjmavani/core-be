@@ -40,6 +40,16 @@ export const stripe_webhook_events = billingSchema.table(
       table.stripe_created_at,
     ),
     index('idx_stripe_webhook_events_status_updated').on(table.processing_status, table.updated_at),
+    // audit #15: partial index over only the live working set (failed +
+    // in-flight processing). The reclaim scan and the failed-count gauge touch
+    // exclusively these statuses, while the retention worker prunes the bulk
+    // `processed` / `skipped_duplicate` rows — so this index stays tiny even as
+    // the ledger grows, keeping the reclaim sort and the capped count index-only
+    // instead of scanning every processed row. Predicate kept in lockstep with
+    // the reclaim/count repository queries.
+    index('idx_stripe_webhook_events_reclaimable')
+      .on(table.updated_at)
+      .where(sql`${table.processing_status} IN ('failed', 'processing')`),
     check(
       'stripe_webhook_events_processing_status_check',
       sql`${table.processing_status} IN ('processing', 'processed', 'skipped_duplicate', 'failed')`,

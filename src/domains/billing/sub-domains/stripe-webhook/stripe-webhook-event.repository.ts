@@ -6,6 +6,7 @@ import {
 } from '@/infrastructure/database/contexts/worker-database.context.js';
 import {
   MILLISECONDS_PER_MINUTE,
+  STRIPE_WEBHOOK_FAILED_COUNT_CAP,
   STRIPE_WEBHOOK_STUCK_PROCESSING_LEASE_MINUTES,
 } from '@/shared/constants/index.js';
 import {
@@ -186,11 +187,34 @@ export class StripeWebhookEventRepository {
     return rows.length > 0;
   }
 
+  /**
+   * Counts `failed` ledger rows for the reclaim worker's alert gauge, capped at
+   * {@link STRIPE_WEBHOOK_FAILED_COUNT_CAP} (audit #15).
+   *
+   * @remarks
+   * - **Algorithm:** counts over a `LIMIT cap` sub-select so Postgres stops
+   *   scanning the `failed` slice once `cap` rows are seen. The partial index
+   *   `idx_stripe_webhook_events_reclaimable` (`WHERE processing_status IN
+   *   ('failed','processing')`) makes this an index-only scan of the small
+   *   working set rather than the whole — possibly multi-million-row — ledger.
+   * - **Failure modes:** propagates Postgres errors to the periodic refresh,
+   *   which logs and retries on the next sweep.
+   * - **Side effects:** none — pure read.
+   * - **Notes:** the gauge only drives a "failed rows are lingering" alert, so a
+   *   value pinned at the cap is operationally equivalent to the true count; the
+   *   cap exists purely to bound the worst-case scan during a Stripe outage.
+   */
   async countFailedEvents(): Promise<number> {
     const rows = await stripeWebhookLedgerDatabase()
       .select({ count: sql<number>`count(*)::int` })
-      .from(stripe_webhook_events)
-      .where(eq(stripe_webhook_events.processing_status, 'failed'));
+      .from(
+        stripeWebhookLedgerDatabase()
+          .select({ one: sql<number>`1`.as('one') })
+          .from(stripe_webhook_events)
+          .where(eq(stripe_webhook_events.processing_status, 'failed'))
+          .limit(STRIPE_WEBHOOK_FAILED_COUNT_CAP)
+          .as('capped_failed_events'),
+      );
     return rows[0]?.count ?? 0;
   }
 
@@ -315,6 +339,39 @@ export class StripeWebhookEventRepository {
   ): Promise<string | undefined> {
     const rows = await stripeWebhookLedgerDatabase().execute(
       sql`SELECT billing.resolve_organization_public_id_for_stripe_subscription(${provider_subscription_id}) AS public_id`,
+    );
+    const resultRows = ((rows as { rows?: unknown[] }).rows ?? rows) as Array<{
+      public_id: string | null;
+    }>;
+    const organizationPublicId = resultRows[0]?.public_id;
+    return organizationPublicId ?? undefined;
+  }
+
+  /**
+   * Resolves the owning organization's public id for a Stripe **customer** via
+   * the `billing.resolve_organization_public_id_for_stripe_customer` SECURITY
+   * DEFINER resolver (audit #2). The customer mapping is the authoritative
+   * fallback for a `customer.subscription.created` event whose provider
+   * subscription id is not yet persisted locally — the local subscription row
+   * carries `provider_customer_id` from the moment the service creates it, so
+   * the customer id binds the event to a tenant even before the subscription id
+   * is mapped.
+   *
+   * @remarks
+   * Mirrors {@link resolveOrganizationPublicIdByProviderSubscriptionId}: the
+   * lookup lives on the repository because the util layer is forbidden from
+   * importing the raw `sql` template (architecture rule). Each org gets its own
+   * Stripe customer, so the mapping is unambiguous; `LIMIT 1` in the resolver
+   * tolerates an org holding several subscription rows for the same customer
+   * (e.g. a canceled row plus a re-subscribed row). Returns `undefined` when no
+   * row maps the customer, letting the caller fail closed rather than trust
+   * attacker-influencable Stripe metadata.
+   */
+  async resolveOrganizationPublicIdByStripeCustomerId(
+    provider_customer_id: string,
+  ): Promise<string | undefined> {
+    const rows = await stripeWebhookLedgerDatabase().execute(
+      sql`SELECT billing.resolve_organization_public_id_for_stripe_customer(${provider_customer_id}) AS public_id`,
     );
     const resultRows = ((rows as { rows?: unknown[] }).rows ?? rows) as Array<{
       public_id: string | null;
