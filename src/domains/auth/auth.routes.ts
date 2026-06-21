@@ -26,6 +26,7 @@ import {
   OauthCallbackQueryDto,
   oauthProviderParamsDto,
   ResetPasswordDto,
+  SignupDto,
   sessionIdParamsDto,
   StepUpVerifyDto,
   VerifyEmailDto,
@@ -59,6 +60,18 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       body: LoginDto,
     },
     handler: controller.login,
+  });
+  zodApplication.post('/signup', {
+    ...STRICT_PUBLIC_RATE_LIMIT,
+    preHandler: [perEmailRateLimit, captchaPreHandler],
+    schema: {
+      summary: 'Sign up with email and password',
+      description:
+        'Creates a new account with email and password and logs the user in immediately (returns an access token and sets the session cookie). The email starts unverified and a verification code is emailed; login is allowed before verification. Returns 409 if an account with the email already exists.',
+      tags: ['Auth'],
+      body: SignupDto,
+    },
+    handler: controller.signup,
   });
   zodApplication.post(
     '/logout',

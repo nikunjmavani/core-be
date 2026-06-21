@@ -247,6 +247,31 @@ export class AuthMethodService {
     return this.authMethodRepository.create(data);
   }
 
+  /**
+   * Creates the user's `PASSWORD` auth_method row during email/password signup.
+   *
+   * @remarks
+   * - **Algorithm:** inserts one `method_type=PASSWORD` row owned by the user, pinning the owner
+   *   `withUserDatabaseContext` so the FORCE-RLS owner WITH CHECK authorizes the write. Intended to
+   *   run inside the signup pinned transaction so it commits atomically with the user row.
+   * - **Failure modes:** propagates the insert error (e.g. a CHECK/constraint violation) to roll the
+   *   signup transaction back.
+   * - **Side effects:** one `auth.auth_methods` insert.
+   * - **Notes:** login authenticates against `users.password_hash`; this row exists so the credential
+   *   appears in `GET /auth/me/auth-methods` and is counted by the last-login-capable-credential guard
+   *   (a password user cannot then delete their only login surface).
+   */
+  async createPasswordMethod(userId: number, userPublicId: string): Promise<void> {
+    await withUserDatabaseContext(userPublicId, () =>
+      this.authMethodRepository.create({
+        user_id: userId,
+        method_type: AUTH_METHOD_TYPE.PASSWORD,
+        is_primary: true,
+        created_by_user_id: userId,
+      }),
+    );
+  }
+
   async updateAuthMethodLastUsedAt(methodId: number, userId: number): Promise<void> {
     await this.authMethodRepository.updateLastUsedAt(methodId, userId);
   }

@@ -114,6 +114,22 @@ export const ResetPasswordDto = z
 /** Inferred input type of {@link ResetPasswordDto}. */
 export type ResetPasswordInput = z.infer<typeof ResetPasswordDto>;
 
+/**
+ * Zod schema for the `POST /api/v1/auth/signup` request body: email + a policy-compliant
+ * password (the same strength rule as reset/change) plus optional display name. A successful
+ * signup creates the user with `is_email_verified=false` and logs them in immediately.
+ */
+export const SignupDto = z
+  .object({
+    email: trimmedEmail(),
+    password: passwordPolicy(),
+    first_name: trimmedStringMinMax(1, 100).optional(),
+    last_name: trimmedStringMinMax(1, 100).optional(),
+  })
+  .strict();
+/** Inferred input type of {@link SignupDto}. */
+export type SignupInput = z.infer<typeof SignupDto>;
+
 /** Zod schema for the authenticated `POST /api/v1/auth/password/change` request body. */
 export const ChangePasswordDto = z
   .object({
