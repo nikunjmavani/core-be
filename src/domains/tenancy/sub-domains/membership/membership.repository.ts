@@ -170,7 +170,10 @@ export class MembershipRepository extends BaseRepository {
     const rows = await getRequestDatabase()
       .select({ id: roles.id, public_id: roles.public_id, name: roles.name })
       .from(roles)
-      .where(inArray(roles.id, [...roleInternalIds]));
+      // audit #38: exclude soft-deleted roles so a membership referencing a deleted role does not
+      // surface the deleted role's name in the member-list response (the serializer then falls
+      // through to its `{ name: '' }` placeholder).
+      .where(and(inArray(roles.id, [...roleInternalIds]), isNull(roles.deleted_at)));
     return new Map(rows.map((row) => [row.id, { public_id: row.public_id, name: row.name }]));
   }
 
