@@ -31,8 +31,8 @@ When you add a **new table in a tenant-owned schema** (`tenancy`, `billing`, `no
 - [ ] `ALTER TABLE … ENABLE ROW LEVEL SECURITY`
 - [ ] `ALTER TABLE … FORCE ROW LEVEL SECURITY` — **without FORCE, the table-owning `core_be_app` role bypasses RLS → cross-org leak.**
 - [ ] `CREATE POLICY … FOR ALL` with predicate `organization_id = (SELECT id FROM tenancy.organizations WHERE public_id = current_setting('app.current_organization_id', true)) OR current_setting('app.global_retention_cleanup', true) = 'true'`.
-- [ ] **Writable tables define both `USING` and `WITH CHECK`.** A `USING`-only policy lets an UPDATE/INSERT move or plant a row into another tenant.
-- [ ] Keep the `app.global_retention_cleanup` escape clause, or the retention/tombstone worker can't clean cross-tenant.
+- [ ] **Writable tables define both `USING` and an explicit `WITH CHECK`.** A `USING`-only policy makes Postgres reuse `USING` for the write check — and since `USING` carries the `app.global_retention_cleanup` (and any `app.global_admin`) bypass, that bypass then leaks to INSERT/UPDATE, letting a retention/admin context plant a row in **any** tenant (audit #41 / H1). The explicit `WITH CHECK` MUST pin to the active-org GUC **without** the retention/admin bypass arm: `WITH CHECK (organization_id = (SELECT id FROM tenancy.organizations WHERE public_id = current_setting('app.current_organization_id', true)))`. Add it with `ALTER POLICY … WITH CHECK (…)` (no policy-gap) and mirror it in the schema `pgPolicy({ … withCheck })`.
+- [ ] Keep the `app.global_retention_cleanup` escape clause **in `USING` only**, so the retention/tombstone worker can still SELECT/DELETE cross-tenant but can never write cross-tenant.
 - [ ] Add the table to `EXPECTED_FORCE_RLS_TABLES` (`force-rls-tables.constants.ts`, alphabetical) — `diffForceRlsTables` asserts the live DB FORCE-RLS set matches exactly.
 
 For **worker / processor** code touching tenant data:

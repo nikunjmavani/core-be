@@ -79,6 +79,13 @@ export const member_invitations = tenancySchema
             )
           )
           OR current_setting('app.global_retention_cleanup', true) = 'true'`,
+        withCheck: sql`${table.membership_id} IN (
+            SELECT id FROM tenancy.memberships
+            WHERE organization_id = (
+              SELECT id FROM tenancy.organizations
+              WHERE public_id = current_setting('app.current_organization_id', true)
+            )
+          )`,
       }),
     ],
   )
