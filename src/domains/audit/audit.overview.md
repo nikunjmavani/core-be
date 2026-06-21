@@ -8,7 +8,7 @@ Append-only audit log of every security- and governance-relevant action that hap
 
 What it owns:
 
-- The `audit_logs.audit_log` table, its schema, and its retention policy.
+- The `audit.logs` table, its schema, and its retention policy, plus the `audit.audit_outbox` transactional-outbox table and its drain worker (`audit-outbox-drain`).
 - The single `AuditService.record()` write entry-point that all other domains call (directly or through `recordAuditEvent` helper).
 - `GET /api/v1/audit/logs` — cross-tenant cursor-paginated listing (global `SUPER_ADMIN` / `ADMIN` only).
 - Org-scoped listing is exposed from tenancy as `GET /api/v1/tenancy/organizations/:id/audit-logs` (`audit-log:read`); implemented by `AuditService.listForOrganization`.

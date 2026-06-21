@@ -6,7 +6,7 @@ Parent: [tenancy](../../tenancy.overview.md)
 
 ## Purpose
 
-Resolves "is user X allowed to perform permission P in organization O?" — backed by a Redis cache for read performance and a SETNX lock to prevent thundering-herd recomputes. The two services here back the `requireOrganizationPermission(...)` Fastify preHandler used across the API.
+Resolves "is user X allowed to perform permission P in organization O?" — backed by a Redis cache for read performance and a SETNX lock to prevent thundering-herd recomputes. The three services here (`authorization.service`, `permission-cache.service`, `permission.service`) back the `requireOrganizationPermission(...)` Fastify preHandler used across the API.
 
 ## Key invariants
 
