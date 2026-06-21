@@ -23,6 +23,7 @@ What it does not own: deciding **when** to emit an audit event — that's the re
 - **Two read paths, two RLS contexts**: org listing runs in `withOrganizationDatabaseContext` (`app.current_organization_id`); global admin listing runs in `withGlobalAdminDatabaseContext` (`app.global_admin = true`) so cross-tenant reads are explicit under FORCE RLS, not table-owner bypass.
 - **Global admin gate**: `GET /api/v1/audit/logs` requires global `SUPER_ADMIN` or `ADMIN`. Org path requires `audit-log:read` on the target organization.
 - **Severity is a fixed set**: `INFO` (default), `WARNING` (denied/failed actions still worth recording), `CRITICAL` (global-admin lifecycle and security-incident events).
+- **Outbox drain isolates poison rows** (sec-r7/M2): the drain processes a claimed batch in one transaction, but each row's `audit.logs` INSERT runs in a nested transaction (a SAVEPOINT). A row whose INSERT errors is rolled back to its savepoint and marked (transient until the `attempt_count` cap, then `FAILED`) while the rest of the batch still commits — a single poison row can no longer abort the batch and re-head the queue forever. After each pass the drain emits `audit.outbox.drain.backlog.stalled` when the oldest still-PENDING row exceeds the stale threshold.
 
 ## Sub-domains
 
