@@ -35,7 +35,7 @@ What it does not own: invoicing UI, dunning emails (those flow through `notify`)
 
 This domain implements the contracts documented in [src/PATTERNS.md](src/PATTERNS.md):
 
-- `tenant-isolation` / `rls-context` — subscriptions are organization-scoped; reads/writes run inside `withOrganizationDatabaseContext`.
+- `tenant-isolation` / `rls-context` — subscriptions are organization-scoped; reads/writes run inside `withOrganizationDatabaseContext`. The `subscriptions_tenant_isolation` policy carries an explicit `WITH CHECK` pinned to the active-org GUC (the `USING` arm keeps the retention bypass for SELECT/DELETE), so no write — including a retention-context one — can land a foreign `organization_id`. Stripe webhook side effects resolve their tenant from the **database mapping** (subscription id, then customer id) whenever one exists, overriding attacker-influencable Stripe metadata; metadata is only the last-resort binding for a first-contact Dashboard-origin subscription, backstopped by the WITH CHECK.
 - `idempotency` — every mutating subscription endpoint requires `X-Idempotency-Key`; the same key is forwarded to Stripe.
 - `transactional-outbox` — applied **inbound** to Stripe webhooks (claim row, process, mark processed; reclaim if stuck).
 - `audit-emission` — every state transition records an audit row.
