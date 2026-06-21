@@ -19,7 +19,7 @@ What it does not own: deciding **when** to emit an audit event — that's the re
 
 - **Append-only**: rows are never updated or deleted by the API. Hard-delete only happens via the retention worker after the retention window passes.
 - **Best-effort writes**: an audit failure must not fail the originating HTTP request. Callers go through `recordAuditEvent(auditService, input, log)` from `@/shared/utils/infrastructure/audit-record.util.ts`, which catches and logs failures.
-- **Actor-scoped RLS**: writes run inside `withUserDatabaseContext(actorUserPublicId, ...)` so RLS sees the actor's organization scope, not the caller's.
+- **Outbox-staging RLS context** (audit R10): `AuditService.record` stages the row in `audit.outbox`, whose INSERT policy (`audit_outbox_tenant_isolation_insert`) has only two arms — an org arm (`organization_public_id = app.current_organization_id`) and a tenantless system arm (`organization_public_id IS NULL AND app.system_audit_insert = 'true'`); there is **no** user arm. So `record` opens the matching context per row: org-scoped rows under `withOrganizationDatabaseContext`, tenantless rows (login, auth, admin, queue-dashboard) under `withSystemAuditInsertContext`. Without this the bare-pool INSERT is rejected under the production `core_be_app` role (FORCE/ENABLE RLS) and the row is silently dropped by `recordAuditEvent`. The staged row is its own short transaction — decoupled from the originating business write (which already committed in its own scoped context post-sec-M4) and best-effort.
 - **Two read paths, two RLS contexts**: org listing runs in `withOrganizationDatabaseContext` (`app.current_organization_id`); global admin listing runs in `withGlobalAdminDatabaseContext` (`app.global_admin = true`) so cross-tenant reads are explicit under FORCE RLS, not table-owner bypass.
 - **Global admin gate**: `GET /api/v1/audit/logs` requires global `SUPER_ADMIN` or `ADMIN`. Org path requires `audit-log:read` on the target organization.
 - **Severity is a fixed set**: `INFO` (default), `WARNING` (denied/failed actions still worth recording), `CRITICAL` (global-admin lifecycle and security-incident events).
@@ -34,7 +34,7 @@ What it does not own: deciding **when** to emit an audit event — that's the re
 This domain implements the contracts documented in [src/PATTERNS.md](src/PATTERNS.md):
 
 - `audit-emission` — the domain **is** this pattern's owner; other domains call into `AuditService.record()` (or the helper) to participate.
-- `tenant-isolation` / `rls-context` — actor-scoped writes run inside the actor's user database context so RLS attributes the row to the correct organization.
+- `tenant-isolation` / `rls-context` — outbox-staging writes run under the org context (`withOrganizationDatabaseContext`) for org-scoped rows or the system-audit-insert context (`withSystemAuditInsertContext`) for tenantless rows, matching the two arms of the `audit.outbox` INSERT policy.
 - `soft-delete` does **not** apply: audit rows are immutable until retention purges them.
 
 ## Cross-domain flows

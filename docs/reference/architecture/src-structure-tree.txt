@@ -1866,6 +1866,7 @@ src/
     │   ├── rls/
     │   │   ├── audit-append-only.security.test.ts
     │   │   ├── audit-insert-rls-privilege-bypass.security.test.ts
+    │   │   ├── audit-outbox-insert-rls.security.test.ts
     │   │   ├── audit-system-audit-insert-arm.security.test.ts
     │   │   ├── billing-subscriptions-with-check.security.test.ts
     │   │   ├── bola-cross-tenant.security.test.ts
