@@ -7,6 +7,7 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUserWithPassword } from '@/tests/factories/user.factory.js';
 import { database } from '@/infrastructure/database/connection.js';
 import { users } from '@/domains/user/user.schema.js';
+import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import type { FastifyInstance } from 'fastify';
 
 const SIGNUP_PATH = '/auth/signup';
@@ -45,10 +46,19 @@ describe('Auth Domain — Signup (integration)', () => {
 
     // The account exists and the email starts unverified (login is allowed before verification).
     const [row] = await database
-      .select({ is_email_verified: users.is_email_verified })
+      .select({ id: users.id, is_email_verified: users.is_email_verified })
       .from(users)
       .where(eq(users.email, email));
     expect(row?.is_email_verified).toBe(false);
+
+    // Signup provisions the account's PERSONAL organization (default hybrid mode). This is the
+    // regression guard for the post-commit provisioning fix — the prior in-transaction provision
+    // silently FK-failed because the global-admin connection could not see the uncommitted user.
+    const ownedOrganizations = await database
+      .select({ type: organizations.type })
+      .from(organizations)
+      .where(eq(organizations.owner_user_id, row!.id));
+    expect(ownedOrganizations).toEqual([{ type: 'PERSONAL' }]);
   });
 
   it('returns 409 when an account with the email already exists', async () => {
