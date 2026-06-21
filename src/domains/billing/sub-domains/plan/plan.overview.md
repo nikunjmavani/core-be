@@ -10,10 +10,10 @@ Plan catalog: the set of subscription plans offered to organizations, with price
 
 ## Key invariants
 
-- **`stripe_price_id` is unique per plan**: a single plan maps to exactly one Stripe price.
+- **Dual Stripe price ids**: a plan carries `stripe_price_monthly_id` and `stripe_price_yearly_id` (varchar, nullable) — one plan maps to a monthly **and** a yearly Stripe price. A cycle with no price id is not Stripe-billable (e.g. a free plan, or a plan offered on only one cycle); changing a Stripe-backed subscription to such a plan is rejected (`422`, see `billing.overview.md`).
 - **Public read endpoint cached by HTTP**: `Cache-Control: max-age=300, stale-while-revalidate=60` aligned with `CATALOG_CACHE_*` constants.
 - **Hard delete forbidden**: plans soft-delete only (subscriptions reference them by FK).
-- **Slug is URL-safe** and unique; matches `SLUG_REGEX`.
+- **Identified by `public_id`** (Paddle-style prefixed id), not a slug — the `plans` table has no slug column.
 
 ## Lifecycle
 
@@ -34,7 +34,6 @@ stateDiagram-v2
 
 - **Stripe `price_id` doesn't exist** → 400 on plan create/update.
 - **Plan referenced by an active subscription** → 409 on delete; admin must migrate subscribers first.
-- **Slug collision** → 409.
 
 ## Policy constants
 
