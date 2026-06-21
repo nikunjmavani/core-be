@@ -154,7 +154,7 @@ src/infrastructure/
     connection.ts             # Exports: database, sql, closeDatabase
     base-repository.ts        # Abstract BaseRepository with paginate()
     transaction.ts            # withTransaction() helper
-    resource-cap-lock.ts      # Advisory-lock guard for resource caps (+ resource-quota-lock.util.ts)
+    resource-quota-lock.util.ts # Advisory-lock guard for resource caps (per-scope count+insert serialization)
     pg-schemas.ts             # Shared pgSchema definitions (auth, tenancy, billing, notify, audit, upload)
     migration/migrate.ts      # Migration runner (+ migration-version.ts, migration-execution-mode.ts)
     contexts/                 # DB context wrappers (request / organization / user / retention / worker / system-audit) that set the RLS GUC
