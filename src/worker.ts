@@ -4,6 +4,11 @@ import {
   captureException,
   flushSentry,
 } from '@/infrastructure/observability/sentry/sentry.js';
+import {
+  initOpenTelemetry,
+  shutdownOpenTelemetry,
+} from '@/infrastructure/observability/tracing/otel.js';
+import { OTEL_SERVICE_NAME_WORKER } from '@/shared/constants/project-identity.constants.js';
 import { createUnhandledRejectionHandler } from '@/infrastructure/observability/unhandled-rejection.handler.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { closeRedis, connectRedis } from '@/infrastructure/cache/redis.client.js';
@@ -42,6 +47,9 @@ import { closeUserDataExportQueue } from '@/domains/user/sub-domains/user-data-e
 
 // Initialize Sentry before anything else
 initSentry();
+// audit M5: start OpenTelemetry for the worker process (no-op unless
+// OTEL_EXPORTER_OTLP_ENDPOINT is set).
+initOpenTelemetry(OTEL_SERVICE_NAME_WORKER);
 
 process.on('uncaughtException', (error) => {
   captureException(error, { tags: { source: 'worker_uncaughtException' } });
@@ -116,6 +124,9 @@ async function main() {
         closeUserDataExportQueue(), // sec-r4-R1: was missing from shutdown sequence
       ]);
       await Promise.allSettled([closeRedis(), closeBullMqRedis(), closeDatabase()]);
+      // audit M5: tear down the OpenTelemetry SDK (no-op when never started)
+      // before the Sentry flush so pending OTLP spans flush on shutdown.
+      await shutdownOpenTelemetry();
       await flushSentry();
       clearTimeout(watchdogTimer);
       process.exit(0);

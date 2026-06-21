@@ -4,6 +4,8 @@ import {
   captureException,
   flushSentry,
 } from '@/infrastructure/observability/sentry/sentry.js';
+import { initOpenTelemetry } from '@/infrastructure/observability/tracing/otel.js';
+import { OTEL_SERVICE_NAME_API } from '@/shared/constants/project-identity.constants.js';
 import { createUnhandledRejectionHandler } from '@/infrastructure/observability/unhandled-rejection.handler.js';
 import { connectRedis } from '@/infrastructure/cache/redis.client.js';
 import { connectBullMqRedis } from '@/infrastructure/cache/bullmq-redis.client.js';
@@ -22,6 +24,9 @@ import { buildApp } from '@/app.js';
 
 // Initialize Sentry before anything else
 initSentry();
+// audit M5: actually start OpenTelemetry (no-op unless OTEL_EXPORTER_OTLP_ENDPOINT
+// is set) so the validated OTLP env config is not silently inert in production.
+initOpenTelemetry(OTEL_SERVICE_NAME_API);
 
 process.on('uncaughtException', (error) => {
   captureException(error, { tags: { source: 'uncaughtException' } });
