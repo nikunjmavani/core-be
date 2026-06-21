@@ -47,4 +47,14 @@ describe('file-magic.util', () => {
     Buffer.from([0x52, 0x49, 0x46, 0x46]).copy(buffer, 0);
     expect(verifyFileMagicBytes(buffer, 'image/webp')).toBe(false);
   });
+
+  // audit #33: a valid WebP needs the full 12-byte RIFF+WEBP header. Exactly 12 bytes is the
+  // minimum; 11 bytes must be rejected (the explicit WEBP_MINIMUM_LENGTH, not a brittle `+8`).
+  it('accepts a WebP at exactly the 12-byte minimum', () => {
+    expect(verifyFileMagicBytes(webpBuffer().subarray(0, 12), 'image/webp')).toBe(true);
+  });
+
+  it('rejects an 11-byte WebP (one byte short of the WEBP marker)', () => {
+    expect(verifyFileMagicBytes(webpBuffer().subarray(0, 11), 'image/webp')).toBe(false);
+  });
 });
