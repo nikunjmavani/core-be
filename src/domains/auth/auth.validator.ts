@@ -9,6 +9,7 @@ import type {
   CreateAuthMethodInput,
   ForgotPasswordInput,
   ResetPasswordInput,
+  SignupInput,
   ChangePasswordInput,
   StepUpVerifyInput,
   VerifyEmailInput,
@@ -25,6 +26,7 @@ import {
   CreateAuthMethodDto,
   ForgotPasswordDto,
   ResetPasswordDto,
+  SignupDto,
   ChangePasswordDto,
   StepUpVerifyDto,
   VerifyEmailDto,
@@ -67,6 +69,11 @@ export function validateForgotPassword(body: unknown): ForgotPasswordInput {
 /** Validates the `POST /api/v1/auth/password/reset` request body against {@link ResetPasswordDto}. */
 export function validateResetPassword(body: unknown): ResetPasswordInput {
   return parseWithSchema(ResetPasswordDto, body);
+}
+
+/** Validates the `POST /api/v1/auth/signup` request body against {@link SignupDto}; throws {@link ValidationError} with field errors on failure. */
+export function validateSignup(body: unknown): SignupInput {
+  return parseWithSchema(SignupDto, body);
 }
 
 /** Validates the authenticated `POST /api/v1/auth/password/change` request body against {@link ChangePasswordDto}. */

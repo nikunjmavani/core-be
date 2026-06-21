@@ -62,6 +62,7 @@
   },
   "missingSessionCookie": "Missing session cookie",
   "disposableEmail": "This email domain is not allowed.",
+  "emailAlreadyRegistered": "An account with this email already exists.",
   "invalidEmailOrPassword": "Invalid email or password",
   "accountLocked": "Account is temporarily locked. Please try again later.",
   "invalidOrRevokedToken": "Invalid or already revoked token",

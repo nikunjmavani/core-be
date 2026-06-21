@@ -94,6 +94,7 @@ You don't watch a clock. When a call returns `401` (token expired), refresh once
 
 | Step | Request | Result |
 |------|---------|--------|
+| **Signup** | `POST /auth/signup` | `201` → `{ data: { access_token } }` + `Set-Cookie: session_id`. Creates the account (email starts **unverified** — a verification code is emailed — and login is allowed before verifying) and logs in. `409` if the email already exists. |
 | Login | `POST /auth/login` | `201` → `{ data: { access_token } }` + `Set-Cookie: session_id` |
 | Use | any route + `Authorization: Bearer` | `200/201/…` |
 | Expiry | any route | `401` → trigger refresh |

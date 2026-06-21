@@ -5,6 +5,7 @@ import { AuthService } from '@/domains/auth/auth.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
 import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service.js';
+import type { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-method.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { ACCOUNT_LOCKOUT_MINUTES, MAX_FAILED_LOGIN_ATTEMPTS } from '@/shared/constants/index.js';
@@ -124,12 +125,20 @@ describe('AuthService', () => {
     eval: vi.fn().mockResolvedValue(1),
   } as unknown as Redis;
 
+  const authMethodService = {
+    createPasswordMethod: vi.fn().mockResolvedValue(undefined),
+    resendEmailVerification: vi
+      .fn()
+      .mockResolvedValue({ messageKey: 'success:verificationEmailSent' }),
+  } as unknown as AuthMethodService;
+
   const service = new AuthService(
     userService,
     authSessionService,
     mfaService,
     organizationSettingsService,
     redis,
+    authMethodService,
   );
 
   beforeEach(() => {
