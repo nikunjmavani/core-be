@@ -12,14 +12,21 @@ import type {
   RegistrationResponseJSON,
 } from '@simplewebauthn/server';
 import { env } from '@/shared/config/env.config.js';
-import { ConflictError, UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import {
+  ConflictError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from '@/shared/errors/index.js';
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
+import type { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-method.service.js';
 import type { WebauthnCredentialRepository } from './webauthn-credential.repository.js';
+import { serializeWebauthnCredentialList } from './webauthn.serializer.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service.js';
 import {
@@ -100,6 +107,7 @@ export class WebauthnService {
     private readonly redis: Redis,
     private readonly organizationSettingsService: OrganizationSettingsService,
     private readonly mfaService: MfaService,
+    private readonly authMethodService: AuthMethodService,
   ) {}
 
   async generateRegistrationOptions(
@@ -381,6 +389,73 @@ export class WebauthnService {
       organizationSettingsService: this.organizationSettingsService,
       mfaService: this.mfaService,
       authSessionService: this.authSessionService,
+    });
+  }
+
+  /**
+   * Lists the authenticated user's active (non-revoked) passkeys for the management UI.
+   *
+   * @remarks
+   * - **Algorithm:** resolves the user record, then reads active credentials under the owner DB
+   *   context and projects each through {@link serializeWebauthnCredentialList}.
+   * - **Failure modes:** `UnauthorizedError` when the user record is missing.
+   * - **Side effects:** transient owner-scoped DB context only.
+   * - **Notes:** sec-r5-M3 — never emits credential material, the raw WebAuthn `credential_id`
+   *   blob, or internal ids; the external `id` is the opaque `wac_` public id.
+   */
+  async listCredentials(userPublicId: string) {
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    if (!user) {
+      throw new UnauthorizedError('errors:userNotFound');
+    }
+    const rows = await withUserDatabaseContext(user.public_id, () =>
+      this.credentialRepository.listActiveByUserId(user.id),
+    );
+    return serializeWebauthnCredentialList(rows);
+  }
+
+  /**
+   * Revokes one of the authenticated user's passkeys by its public id, refusing to remove the
+   * user's last remaining login credential.
+   *
+   * @remarks
+   * - **Algorithm:** under the owner DB context, takes the shared per-user credential-mutation
+   *   advisory lock (the same one `deleteMfa` uses, so concurrent passkey/MFA mutations serialize),
+   *   resolves the target passkey by public id, and — when it is the only active passkey — refuses
+   *   the revoke unless the user retains a login-capable auth method
+   *   ({@link AuthMethodService.hasLoginCapableMethod}). Otherwise soft-revokes via
+   *   {@link WebauthnCredentialRepository.revokeByUserId} (sets `revoked_at`).
+   * - **Failure modes:** `UnauthorizedError` (missing user), `NotFoundError` (no such owned active
+   *   passkey), `ConflictError` (`errors:webauthnCannotRevokeLastCredential`) when the revoke would
+   *   strip a passkey-only user of every login credential.
+   * - **Side effects:** writes `revoked_at` on the credential row; the partial unique index keeps the
+   *   raw `credential_id` re-registrable afterwards.
+   * - **Notes:** sec-r5-M3 — wires the previously-orphaned `revokeByUserId`. A user with a password /
+   *   OAuth / magic-link method may remove every passkey.
+   */
+  async revokeCredential(userPublicId: string, credentialPublicId: string): Promise<void> {
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    if (!user) {
+      throw new UnauthorizedError('errors:userNotFound');
+    }
+    await withUserDatabaseContext(user.public_id, async () => {
+      // Serialize concurrent credential mutations for this user so the "is this the last
+      // login credential?" check + revoke cannot interleave with a sibling passkey/MFA delete.
+      await this.authMethodService.acquireCredentialMutationLock(user.id);
+      const active = await this.credentialRepository.listActiveByUserId(user.id);
+      const target = active.find((credential) => credential.public_id === credentialPublicId);
+      if (!target) {
+        throw new NotFoundError('Passkey');
+      }
+      if (active.length <= 1) {
+        const hasOtherLoginMethod = await this.authMethodService.hasLoginCapableMethod(
+          user.public_id,
+        );
+        if (!hasOtherLoginMethod) {
+          throw new ConflictError('errors:webauthnCannotRevokeLastCredential');
+        }
+      }
+      await this.credentialRepository.revokeByUserId(user.id, target.id);
     });
   }
 }

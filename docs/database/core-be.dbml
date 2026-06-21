@@ -318,6 +318,7 @@ Table auth.webauthn_credentials {
   device_type varchar(32) [not null]
   id bigint [pk, increment, not null]
   last_used_at timestamptz
+  public_id varchar(28)
   public_key text [not null]
   revoked_at timestamptz
   transports jsonb [not null]

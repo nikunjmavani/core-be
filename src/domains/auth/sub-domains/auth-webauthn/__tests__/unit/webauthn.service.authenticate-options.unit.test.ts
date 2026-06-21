@@ -39,6 +39,7 @@ describe('WebauthnService.generateAuthenticationOptions', () => {
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
   );
 
   beforeEach(() => {

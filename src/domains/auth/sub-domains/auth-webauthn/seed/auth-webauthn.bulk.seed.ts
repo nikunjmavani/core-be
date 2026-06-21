@@ -9,6 +9,7 @@
 import { createHash } from 'node:crypto';
 import { inArray } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { webauthn_credentials } from '@/domains/auth/sub-domains/auth-webauthn/webauthn-credential.schema.js';
 import type { SeedContext } from '@/scripts/seed/seed-contract.js';
 import { generateBulkWebauthn } from './auth-webauthn.faker.js';
@@ -54,6 +55,7 @@ export async function seedAuthWebauthnBulk(context: SeedContext): Promise<void> 
     await database
       .insert(webauthn_credentials)
       .values({
+        public_id: generatePublicId('webauthnCredential'),
         user_id: user.id,
         credential_id: credential,
         public_key: profile.public_key,

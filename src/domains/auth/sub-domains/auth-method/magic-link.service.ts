@@ -166,9 +166,15 @@ export class MagicLinkService {
     // pinned transaction — so the session insert commits atomically with the token consumption.
     const result = await withTransaction((transaction) =>
       runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
-        /** Atomic UPDATE prevents two concurrent verifies from both producing a session. */
-        const record = await this.verificationTokenRepository.consumeIfValid(tokenHash);
-        if (record?.token_type !== 'MAGIC_LINK') {
+        /**
+         * Atomic UPDATE prevents two concurrent verifies from both producing a session.
+         * sec-r5-L2: scoped to MAGIC_LINK so a token from another flow never matches/burns.
+         */
+        const record = await this.verificationTokenRepository.consumeIfValid(
+          tokenHash,
+          'MAGIC_LINK',
+        );
+        if (!record) {
           throw new UnauthorizedError('errors:invalidOrExpiredMagicLink');
         }
         const user = await this.userService.findById(record.user_id);

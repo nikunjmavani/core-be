@@ -76,6 +76,7 @@ export function createAuthContainer(
     redisConnection,
     organizationSettingsService,
     mfaService,
+    authMethodService,
   );
   const oauthService = new OAuthService(
     userService,

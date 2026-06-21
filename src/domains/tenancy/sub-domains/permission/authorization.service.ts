@@ -40,6 +40,33 @@ function getPermissionRepository(): PermissionRepository {
   return permissionRepository;
 }
 
+/**
+ * Authoritative DB read of a user's permission codes within an organization, bypassing the
+ * Redis cache entirely (no read, no write).
+ *
+ * @remarks
+ * - **Algorithm:** runs the 5-table join under {@link withOrganizationContext} so RLS is
+ *   satisfied; never consults or writes the `perm:*` cache.
+ * - **Failure modes:** database errors bubble up.
+ * - **Side effects:** transient Postgres GUC mutation via `withOrganizationContext` only.
+ * - **Notes:** used by privilege-escalation guards (sec-r5-L3) where a stale, up-to-5-minute
+ *   cached set could let a just-revoked code still be granted. Most callers should prefer the
+ *   cached {@link resolvePermissionsWithRepository} path.
+ */
+async function resolvePermissionsFromDatabase(
+  repository: PermissionRepository,
+  userPublicId: string,
+  organizationPublicId: string,
+): Promise<string[]> {
+  return withOrganizationContext(organizationPublicId, async (databaseHandle) =>
+    repository.findPermissionCodesForUserInOrganization(
+      userPublicId,
+      organizationPublicId,
+      databaseHandle as PostgresJsDatabase,
+    ),
+  );
+}
+
 async function resolvePermissionsWithRepository(
   repository: PermissionRepository,
   userPublicId: string,
@@ -54,13 +81,7 @@ async function resolvePermissionsWithRepository(
   // write and guards it on the lock nonce, so a racing invalidatePermissions cannot be
   // clobbered by a stale write.
   return withPermissionCacheRecomputeLock(userPublicId, organizationPublicId, async () =>
-    withOrganizationContext(organizationPublicId, async (databaseHandle) =>
-      repository.findPermissionCodesForUserInOrganization(
-        userPublicId,
-        organizationPublicId,
-        databaseHandle as PostgresJsDatabase,
-      ),
-    ),
+    resolvePermissionsFromDatabase(repository, userPublicId, organizationPublicId),
   );
 }
 
@@ -98,6 +119,31 @@ export async function resolveUserOrganizationPermissions(
 }
 
 /**
+ * Resolves a user's permission codes within an organization straight from the database,
+ * bypassing the Redis cache.
+ *
+ * @remarks
+ * - **Algorithm:** delegates to {@link resolvePermissionsFromDatabase} with the module-level
+ *   repository singleton — no cache read or write.
+ * - **Failure modes:** `ConfigurationError` if {@link configureAuthorization} has not run;
+ *   database errors bubble up.
+ * - **Side effects:** transient Postgres GUC mutation only.
+ * - **Notes:** sec-r5-L3 — for privilege-escalation checks that must not trust a stale
+ *   (up-to-5-minute) cached permission set. Prefer {@link resolveUserOrganizationPermissions}
+ *   for hot-path authorization.
+ */
+export async function resolveUserOrganizationPermissionsFromDatabase(
+  userPublicId: string,
+  organizationPublicId: string,
+): Promise<string[]> {
+  return resolvePermissionsFromDatabase(
+    getPermissionRepository(),
+    userPublicId,
+    organizationPublicId,
+  );
+}
+
+/**
  * Class-based entry point used by tenancy DI and by Fastify preHandlers
  * (e.g. `requireOrganizationPermission`) to resolve the permission codes a
  * user has within an organization.
@@ -126,6 +172,29 @@ export class AuthorizationService {
     organizationPublicId: string,
   ): Promise<string[]> {
     return resolvePermissionsWithRepository(
+      this.permissionRepository,
+      userPublicId,
+      organizationPublicId,
+    );
+  }
+
+  /**
+   * Cache-bypassing variant of {@link resolveUserOrganizationPermissions} that reads the
+   * permission codes straight from the database.
+   *
+   * @remarks
+   * - **Algorithm:** delegates to {@link resolvePermissionsFromDatabase} — no `perm:*` cache
+   *   read or write.
+   * - **Failure modes:** database errors surface to the caller.
+   * - **Side effects:** transient Postgres GUC mutation via `withOrganizationContext`.
+   * - **Notes:** sec-r5-L3 — used by {@link assertCallerCanGrantPermissionCodes} so a
+   *   privilege-escalation check never trusts a stale (up-to-5-minute) cached set.
+   */
+  resolveUserOrganizationPermissionsFromDatabase(
+    userPublicId: string,
+    organizationPublicId: string,
+  ): Promise<string[]> {
+    return resolvePermissionsFromDatabase(
       this.permissionRepository,
       userPublicId,
       organizationPublicId,

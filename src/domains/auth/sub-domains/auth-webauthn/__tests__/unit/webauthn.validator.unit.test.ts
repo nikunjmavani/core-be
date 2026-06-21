@@ -4,6 +4,7 @@ import {
   validateWebauthnAuthenticateOptions,
   validateWebauthnRegisterVerify,
   validateWebauthnAuthenticateVerify,
+  validateWebauthnCredentialIdParam,
 } from '@/domains/auth/sub-domains/auth-webauthn/webauthn.validator.js';
 
 describe('webauthn.validator', () => {
@@ -180,6 +181,18 @@ describe('webauthn.validator', () => {
           injected: 'payload',
         }),
       ).toThrow(ValidationError);
+    });
+  });
+
+  describe('validateWebauthnCredentialIdParam', () => {
+    it('accepts a well-formed public id', () => {
+      const id = 'wac_a1b2c3d4e5f6g7h8i9j0k';
+      expect(validateWebauthnCredentialIdParam(id)).toBe(id);
+    });
+
+    it('throws ValidationError for the raw bigserial id or a malformed value', () => {
+      expect(() => validateWebauthnCredentialIdParam('42')).toThrow(ValidationError);
+      expect(() => validateWebauthnCredentialIdParam('wac_TOOSHORT')).toThrow(ValidationError);
     });
   });
 });

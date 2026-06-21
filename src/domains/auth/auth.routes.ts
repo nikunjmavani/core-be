@@ -33,6 +33,7 @@ import {
 import {
   webauthnAuthenticateOptionsDto,
   webauthnAuthenticateVerifyDto,
+  webauthnCredentialIdParamsDto,
   webauthnRegisterVerifyDto,
 } from './sub-domains/auth-webauthn/webauthn.dto.js';
 
@@ -363,6 +364,36 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       },
     },
     controller.webauthnRegisterVerify,
+  );
+  zodApplication.get(
+    '/me/webauthn/credentials',
+    {
+      onRequest: [app.authenticate],
+      ...STRICT_AUTHED_RATE_LIMIT,
+      schema: {
+        summary: 'List registered passkeys',
+        description:
+          'Returns the authenticated user’s active WebAuthn passkeys (opaque id, device type, transports, created/last-used timestamps). Never returns credential material or the raw WebAuthn credential blob.',
+        tags: ['WebAuthn'],
+      },
+    },
+    controller.webauthnListCredentials,
+  );
+  zodApplication.delete<{ Params: { credential_id: string } }>(
+    '/me/webauthn/credentials/:credential_id',
+    {
+      onRequest: [app.authenticate],
+      preHandler: [requireRecentStepUpPreHandler],
+      ...STRICT_AUTHED_RATE_LIMIT,
+      schema: {
+        summary: 'Revoke a passkey',
+        description:
+          'Revokes one of the authenticated user’s passkeys by its opaque id. Requires recent step-up authentication. Refused with 409 if it would remove a passkey-only user’s last remaining login credential.',
+        tags: ['WebAuthn'],
+        params: webauthnCredentialIdParamsDto,
+      },
+    },
+    controller.webauthnRevokeCredential,
   );
   zodApplication.get(
     '/me/mfa',
