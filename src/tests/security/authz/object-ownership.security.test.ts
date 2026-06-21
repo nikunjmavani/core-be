@@ -20,6 +20,7 @@ import { uploads } from '@/domains/upload/upload.schema.js';
 import { notifications } from '@/domains/notify/sub-domains/notification/notification.schema.js';
 import { sessions } from '@/domains/auth/sub-domains/auth-session/auth-session.schema.js';
 import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method.schema.js';
+import { webauthn_credentials } from '@/domains/auth/sub-domains/auth-webauthn/webauthn-credential.schema.js';
 
 /**
  * Object-ownership (BOLA) attack matrix — Phase 2 of the in-house authorization
@@ -324,6 +325,47 @@ describe('Security: object-ownership BOLA matrix', () => {
       const res = await injectAuthenticated(app, {
         method: 'DELETE',
         url: testApiPath(`/auth/me/auth-methods/${generatePublicId('authMethod')}`),
+        token,
+      });
+      expect(res.statusCode).toBe(403);
+    });
+  });
+
+  describe('model: user — WebAuthn passkeys (step-up gated)', () => {
+    it("attacker (with step-up) DELETE victim's passkey → denied and not revoked", async () => {
+      const attacker = await userWithStepUp();
+      const victim = await createTestUser();
+      const [victimCredential] = await database
+        .insert(webauthn_credentials)
+        .values({
+          public_id: generatePublicId('webauthnCredential'),
+          user_id: victim.id,
+          credential_id: `raw-${generatePublicId('webauthnCredential')}`,
+          public_key: 'victim-key',
+        })
+        .returning();
+      const res = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/auth/me/webauthn/credentials/${victimCredential!.public_id}`),
+        token: attacker.token,
+      });
+      // step-up is satisfied, so a denial here is the ownership check (404), not the step-up gate.
+      // The attacker's owner-scoped list never contains the victim's row, so it resolves to 404.
+      expect(res.statusCode).not.toBe(403);
+      expect([401, 404]).toContain(res.statusCode);
+      const [row] = await database
+        .select()
+        .from(webauthn_credentials)
+        .where(eq(webauthn_credentials.public_id, victimCredential!.public_id));
+      expect(row?.revoked_at).toBeNull();
+    });
+
+    it('step-up gate: without recent step-up, DELETE passkey → 403', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const res = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/auth/me/webauthn/credentials/${generatePublicId('webauthnCredential')}`),
         token,
       });
       expect(res.statusCode).toBe(403);

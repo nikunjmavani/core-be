@@ -122,6 +122,33 @@ describe('AuthMethodService', () => {
     await expect(service.revokeAllForUser('missing')).rejects.toBeInstanceOf(NotFoundError);
   });
 
+  describe('hasLoginCapableMethod (sec-r5-M3)', () => {
+    it('returns true when the user holds a login-capable method (PASSWORD/OAUTH/MAGIC_LINK)', async () => {
+      vi.mocked(authMethodRepository.listByUserId).mockResolvedValue([
+        { id: 4, user_id: 1, method_type: 'MFA_TOTP' },
+        { id: 5, user_id: 1, method_type: 'PASSWORD' },
+      ] as never);
+      await expect(service.hasLoginCapableMethod('user_public')).resolves.toBe(true);
+    });
+
+    it('returns false when the user holds only non-login-capable methods (MFA only)', async () => {
+      vi.mocked(authMethodRepository.listByUserId).mockResolvedValue([
+        { id: 4, user_id: 1, method_type: 'MFA_TOTP' },
+      ] as never);
+      await expect(service.hasLoginCapableMethod('user_public')).resolves.toBe(false);
+    });
+
+    it('returns false when the user has no auth methods at all', async () => {
+      vi.mocked(authMethodRepository.listByUserId).mockResolvedValue([] as never);
+      await expect(service.hasLoginCapableMethod('user_public')).resolves.toBe(false);
+    });
+
+    it('throws NotFoundError when the user record is missing', async () => {
+      vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(null as never);
+      await expect(service.hasLoginCapableMethod('missing')).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
   it('lists and mutates auth methods for user', async () => {
     // sec-A5 guard: `delete()` reads the target method then verifies that another
     // login-capable method survives. Provide both so the happy-path mutation

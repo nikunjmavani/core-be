@@ -20,6 +20,10 @@ export const webauthn_credentials = authSchema
     'webauthn_credentials',
     {
       id: bigserial('id', { mode: 'number' }).primaryKey(),
+      // audit R5b / M3: opaque external identifier (`wac_<21>`) returned by the passkey-management
+      // API and accepted by DELETE …/credentials/{credential_id}; never the bigserial `id` or the
+      // raw WebAuthn credential_id blob. App-generated via generatePublicId('webauthnCredential').
+      public_id: varchar('public_id', { length: 28 }).notNull(),
       user_id: bigint('user_id', { mode: 'number' })
         .notNull()
         .references(() => users.id, { onDelete: 'cascade' }),
@@ -37,6 +41,7 @@ export const webauthn_credentials = authSchema
       uniqueIndex('webauthn_credentials_credential_id_unique')
         .on(table.credential_id)
         .where(sql`${table.revoked_at} IS NULL`),
+      uniqueIndex('webauthn_credentials_public_id_unique').on(table.public_id),
       index('webauthn_credentials_user_id_idx')
         .on(table.user_id)
         .where(sql`${table.revoked_at} IS NULL`),

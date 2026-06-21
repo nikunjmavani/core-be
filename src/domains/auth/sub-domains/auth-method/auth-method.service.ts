@@ -93,6 +93,30 @@ export class AuthMethodService {
     );
   }
 
+  /**
+   * Whether the user retains at least one active login-capable auth method
+   * (`PASSWORD` / `OAUTH` / `MAGIC_LINK`) — i.e. a way to authenticate that does NOT depend on a
+   * passkey.
+   *
+   * @remarks
+   * - **Algorithm:** lists the user's active `auth_methods` under the owner DB context and tests
+   *   membership in {@link LOGIN_CAPABLE_METHOD_TYPES} (the same set used by the last-method delete
+   *   guard). MFA factors (`MFA_TOTP`) are second factors and are intentionally excluded.
+   * - **Failure modes:** `NotFoundError` when the user record is missing.
+   * - **Side effects:** transient owner-scoped DB context only.
+   * - **Notes:** sec-r5-M3 — consulted by {@link WebauthnService.revokeCredential} so a passkey-only
+   *   user cannot delete their last passkey and lock themselves out, while a user with a password /
+   *   OAuth / magic-link method may remove every passkey.
+   */
+  async hasLoginCapableMethod(userPublicId: string): Promise<boolean> {
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    if (!user) throw new NotFoundError('User');
+    const methods = await withUserDatabaseContext(userPublicId, () =>
+      this.authMethodRepository.listByUserId(user.id),
+    );
+    return methods.some((method) => LOGIN_CAPABLE_METHOD_TYPES.has(String(method.method_type)));
+  }
+
   async create(userPublicId: string, body: unknown) {
     // route-#3: the DTO restricts method_type to MAGIC_LINK — the only type that is a functional
     // credential-less row. PASSWORD/MFA_* (need a stored secret) and OAUTH (proves an external

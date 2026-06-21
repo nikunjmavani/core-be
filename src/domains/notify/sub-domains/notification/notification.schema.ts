@@ -64,6 +64,13 @@ export const notifications = notifySchema
             )
           )
           OR current_setting('app.global_retention_cleanup', true) = 'true'`,
+        withCheck: sql`(
+            ${table.organization_id} IS NOT NULL
+            AND ${table.organization_id} = (
+              SELECT id FROM tenancy.organizations
+              WHERE public_id = current_setting('app.current_organization_id', true)
+            )
+          )`,
       }),
       // Owner access so a user can read/manage their own notifications (the service queries by
       // user_id). Permissive → OR'd with tenant isolation; inert until app.current_user_id is set.
