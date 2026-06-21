@@ -8,7 +8,7 @@ frontend exactly what to do.
 > Backend internals live elsewhere: credential types and rate limits in
 > [authentication.md](../security/authentication.md); cookie/CSRF posture in
 > [csrf-and-session-cookies.md](../security/csrf-and-session-cookies.md); the organization model in
-> [personal-team-organizations.md](../architecture/personal-team-organizations.md).
+> [personal-vs-team-organizations.md](../architecture/personal-vs-team-organizations.md).
 
 ---
 
@@ -362,7 +362,7 @@ The auth/tenancy flow was reshaped across mid-2026 — if you integrated against
 - **`X-Organization-Id` is no longer used by the app routes** — only the upload domain still reads it.
 - **`/auth/mfa/login` now accepts `X-Captcha-Token`** (bot-protection at the MFA step).
 
-See [personal-team-organizations.md](../architecture/personal-team-organizations.md) for the full
+See [personal-vs-team-organizations.md](../architecture/personal-vs-team-organizations.md) for the full
 organization model and capability flags.
 
 ---
@@ -371,7 +371,7 @@ organization model and capability flags.
 
 - [authentication.md](../security/authentication.md) — auth methods, rate limits, CAPTCHA boot guard
 - [csrf-and-session-cookies.md](../security/csrf-and-session-cookies.md) — cookie + CSRF posture, Origin checks
-- [personal-team-organizations.md](../architecture/personal-team-organizations.md) — org model, `org` claim, switching
+- [personal-vs-team-organizations.md](../architecture/personal-vs-team-organizations.md) — org model, `org` claim, switching
 - [response-codes.md](response-codes.md) — method→status policy, error envelope
 - [idempotency.md](../reliability/idempotency.md) — idempotency-key semantics
 - [api-versioning.md](api-versioning.md) — `/api/v1`, deprecation headers
