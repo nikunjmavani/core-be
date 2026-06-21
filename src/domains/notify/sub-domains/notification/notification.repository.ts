@@ -1,5 +1,6 @@
-import { and, count, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import { countWithCap } from '@/infrastructure/database/utils/capped-count.util.js';
+import { NOTIFICATION_MARK_ALL_READ_BATCH_SIZE } from '@/shared/constants/notification.constants.js';
 import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
@@ -213,22 +214,47 @@ export class NotificationRepository {
     return rows[0] ?? null;
   }
 
+  /**
+   * Marks every unread notification for a user as read, returning the number of
+   * rows actually flipped.
+   *
+   * @remarks
+   * - **Algorithm:** loops `UPDATE ... WHERE id IN (SELECT id ... WHERE
+   *   is_read=false LIMIT N)` in batches of {@link NOTIFICATION_MARK_ALL_READ_BATCH_SIZE},
+   *   summing the per-batch `RETURNING` counts until a short (or empty) batch
+   *   signals the backlog is drained (audit #39). Each statement is atomic and
+   *   bounded, so a user with a very large unread backlog cannot turn this into
+   *   one unbounded, long-held write that locks every unread row at once and
+   *   stalls concurrent notification inserts for that user.
+   * - **Failure modes:** propagates Postgres errors to the controller.
+   * - **Side effects:** updates `is_read`/`read_at` on up to the whole unread set.
+   * - **Notes:** sec-D10 — the count is summed from each statement's `RETURNING`,
+   *   never a separate pre-count, so the caller-visible total can never drift
+   *   from the DB effect even as notifications arrive concurrently; a row that
+   *   arrives mid-loop is simply "after" the mark-all.
+   */
   async markAllReadForUser(user_id: number): Promise<number> {
-    /**
-     * sec-D10: previously a SELECT-then-UPDATE — the count was sourced from a
-     * separate `countUnreadForUser` call ahead of the atomic UPDATE, so any
-     * concurrent notification arriving between the two would leave the API
-     * reporting a different number than the row count the DB actually marked.
-     * Using `UPDATE ... RETURNING { id }` returns the count atomically from the
-     * same statement, so the caller-visible value can never drift from the DB
-     * effect.
-     */
-    const rows = await this.db()
-      .update(notifications)
-      .set({ is_read: true, read_at: new Date() })
-      .where(and(eq(notifications.user_id, user_id), eq(notifications.is_read, false)))
-      .returning({ id: notifications.id });
-    return rows.length;
+    let totalMarked = 0;
+    for (;;) {
+      const database = this.db();
+      const batchRows = await database
+        .update(notifications)
+        .set({ is_read: true, read_at: new Date() })
+        .where(
+          inArray(
+            notifications.id,
+            database
+              .select({ id: notifications.id })
+              .from(notifications)
+              .where(and(eq(notifications.user_id, user_id), eq(notifications.is_read, false)))
+              .limit(NOTIFICATION_MARK_ALL_READ_BATCH_SIZE),
+          ),
+        )
+        .returning({ id: notifications.id });
+      totalMarked += batchRows.length;
+      if (batchRows.length < NOTIFICATION_MARK_ALL_READ_BATCH_SIZE) break;
+    }
+    return totalMarked;
   }
 
   async countUnreadForUser(user_id: number): Promise<number> {

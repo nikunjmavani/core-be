@@ -45,6 +45,25 @@ export class WebhookDeliveryAttemptRepository {
     return resolveRepositoryDatabaseHandle(this.databaseHandle);
   }
 
+  /**
+   * Lists delivery attempts for one webhook (dashboard history), keyset-paginated.
+   *
+   * @remarks
+   * - **Tenant-isolation precondition (audit #42):** `webhook_id` MUST be an
+   *   internal id the caller resolved for the active organization — the
+   *   controller obtains it via {@link getWebhookId}`(public_id, organization_id)`,
+   *   so a webhook from another org never reaches this query. It is also a pure
+   *   defense-in-depth backstop: this runs on the request-scoped handle, and the
+   *   `webhook_delivery_attempts_tenant_isolation` RLS policy scopes visibility to
+   *   `webhook_id IN (SELECT id FROM notify.webhooks WHERE organization_id =
+   *   current_org)`, so even a forged `webhook_id` from a foreign org returns zero
+   *   rows. No explicit org predicate is added here to avoid duplicating the RLS
+   *   join on every page read.
+   * - **Algorithm:** descending `(created_at, id)` keyset page of `limit + 1`
+   *   rows; an optional capped total when `include_total` is set.
+   * - **Side effects:** none — read-only. `payload` and `response_body` are
+   *   intentionally not projected (sec-r4-D6: they can carry PII).
+   */
   async listByWebhook(webhook_id: number, pagination: WebhookDeliveryAttemptListPagination) {
     const { after, limit } = pagination;
     const includeTotal = pagination.include_total === true;

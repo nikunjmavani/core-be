@@ -442,6 +442,7 @@ src/
     │   │   │   │   │   ├── notification-dispatch.service.unit.test.ts
     │   │   │   │   │   ├── notification-email-content.unit.test.ts
     │   │   │   │   │   ├── notification.controller.unit.test.ts
+    │   │   │   │   │   ├── notification.queue.unit.test.ts
     │   │   │   │   │   ├── notification.repository.db.unit.test.ts
     │   │   │   │   │   ├── notification.serializer.shape.unit.test.ts
     │   │   │   │   │   ├── notification.serializer.unit.test.ts
