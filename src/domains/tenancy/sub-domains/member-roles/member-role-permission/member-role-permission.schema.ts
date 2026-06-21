@@ -44,6 +44,13 @@ export const role_permissions = tenancySchema
             )
           )
           OR current_setting('app.global_retention_cleanup', true) = 'true'`,
+        withCheck: sql`${table.role_id} IN (
+            SELECT id FROM tenancy.roles
+            WHERE organization_id = (
+              SELECT id FROM tenancy.organizations
+              WHERE public_id = current_setting('app.current_organization_id', true)
+            )
+          )`,
       }),
     ],
   )
