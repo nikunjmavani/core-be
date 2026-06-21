@@ -111,3 +111,25 @@ describe('compress.middleware — sec-re-03: BREACH suppression', () => {
     expect(response.headers['content-encoding']).toBe('identity-no-compress');
   });
 });
+
+describe('compress.middleware — audit #4: inbound decompression disabled', () => {
+  it('does NOT inflate a gzip-encoded request body (no CPU-amplification surface)', async () => {
+    const { gzipSync } = await import('node:zlib');
+    const app = fastify();
+    await app.register(compressMiddleware);
+    app.post('/echo', async (request) => request.body);
+
+    const compressedBody = gzipSync(Buffer.from(JSON.stringify({ hello: 'world' })));
+    const response = await app.inject({
+      method: 'POST',
+      url: '/echo',
+      headers: { 'content-type': 'application/json', 'content-encoding': 'gzip' },
+      payload: compressedBody,
+    });
+    await app.close();
+
+    // With globalDecompression:false the gzip bytes are NOT inflated, so the JSON parser
+    // cannot read the original object — the request is rejected rather than silently inflated.
+    expect(response.statusCode).toBeGreaterThanOrEqual(400);
+  });
+});

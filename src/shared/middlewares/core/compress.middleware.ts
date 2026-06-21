@@ -84,6 +84,12 @@ const compressMiddlewareInner: FastifyPluginAsync = async (app) => {
     // Brotli is enabled by default in @fastify/compress when the runtime supports it.
     // Prefer brotli for large JSON payloads; gzip remains the fallback for older clients.
     encodings: ['br', 'gzip', 'deflate'],
+    // audit #4: disable INBOUND request decompression. In global mode @fastify/compress
+    // transparently inflates any request carrying `Content-Encoding: gzip|deflate|br`. The
+    // 1 MiB bodyLimit bounds memory but NOT the CPU of the inflate — a ~1 KB body can inflate
+    // toward 1 MiB (~1000:1), a cheap CPU-amplification DoS. This API only consumes JSON, so
+    // no client needs to send a compressed request body; refuse them outright.
+    globalDecompression: false,
   });
 };
 
