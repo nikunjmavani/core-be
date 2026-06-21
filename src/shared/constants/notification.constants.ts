@@ -11,3 +11,11 @@ export const NOTIFICATION_CHANNELS = ['EMAIL', 'SMS', 'PUSH', 'IN_APP'] as const
 
 /** A delivery channel accepted by notification preference / policy endpoints. */
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
+
+/**
+ * Maximum rows a single `markAllReadForUser` UPDATE touches before looping
+ * (audit #39). Bounds the lock footprint and the RETURNING id set so a user with
+ * a very large unread backlog cannot turn "mark all read" into one unbounded,
+ * long-held write that blocks concurrent notification inserts for that user.
+ */
+export const NOTIFICATION_MARK_ALL_READ_BATCH_SIZE = 1000;

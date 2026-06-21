@@ -148,6 +148,29 @@ describe('NotificationRepository (database)', () => {
     expect(await repository.countUnreadForUser(user.id)).toBe(0);
   });
 
+  // audit #39: the batched `WHERE id IN (SELECT ... LIMIT N)` loop must drain the
+  // whole unread set (summing per-batch counts) and then terminate — a marked row
+  // leaves the `is_read=false` set, so the next sub-select returns fewer rows.
+  it('markAllReadForUser drains all unread rows and terminates (audit #39)', async () => {
+    const user = await createTestUser({ email: 'notify-batch-drain@example.com' });
+    const unreadCount = 5;
+    for (let index = 0; index < unreadCount; index += 1) {
+      await repository.create({
+        user_id: user.id,
+        type: 'SYSTEM',
+        title: `N${String(index)}`,
+        message: 'body',
+      });
+    }
+
+    const marked = await repository.markAllReadForUser(user.id);
+    expect(marked).toBe(unreadCount);
+    expect(await repository.countUnreadForUser(user.id)).toBe(0);
+
+    // A second call has nothing left to mark — the loop exits on the empty batch.
+    expect(await repository.markAllReadForUser(user.id)).toBe(0);
+  });
+
   it('findOrganizationPublicIdByOrganizationId resolves public id by internal id', async () => {
     const user = await createTestUser({ email: 'notify-resolve-org@example.com' });
     const organization = await createTestOrganization({ ownerUserId: user.id });

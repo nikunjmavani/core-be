@@ -51,7 +51,17 @@ export async function enqueueNotification(
     }),
     NOTIFICATION_QUEUE_NAME,
   );
-  await queue.add('dispatch-notification', jobData);
+  // audit #6: deduplicate on the notification id. A recovery/redelivery path
+  // (post-commit dispatch recovery, an event handler firing twice, or a
+  // producer-side retry) that re-enqueues the same persisted notification must
+  // not produce a second dispatch — and therefore a second outbound email — for
+  // one in-app notification row. BullMQ drops an add whose jobId still exists in
+  // any bucket (retained for SEVEN_DAYS_SECONDS), so a re-enqueue inside that
+  // window is a no-op. notification ids are unique bigserials, so the jobId is
+  // globally unique per notification.
+  await queue.add('dispatch-notification', jobData, {
+    jobId: `notification-${String(notificationId)}`,
+  });
 }
 
 /** Close the lazily-initialised notification queue (graceful-shutdown hook for tests/runtime). */
