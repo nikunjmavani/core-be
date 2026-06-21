@@ -4,6 +4,7 @@ import type { AuditRepository } from '@/domains/audit/audit.repository.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 
 vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
   captureMessage: vi.fn(),
@@ -43,6 +44,16 @@ const globalAdminContextMock = vi.hoisted(() =>
 
 vi.mock('@/infrastructure/database/contexts/global-admin-database.context.js', () => ({
   withGlobalAdminDatabaseContext: globalAdminContextMock,
+}));
+
+// sec-R10: tenantless audit rows now reserve their outbox slot under the system-audit-insert
+// context. The unit test just runs the callback (the RLS gate is exercised in the security suite).
+const systemAuditInsertContextMock = vi.hoisted(() =>
+  vi.fn((callback: () => Promise<unknown>) => callback()),
+);
+
+vi.mock('@/infrastructure/database/contexts/system-audit-insert-database.context.js', () => ({
+  withSystemAuditInsertContext: systemAuditInsertContextMock,
 }));
 
 describe('AuditService', () => {
@@ -140,6 +151,31 @@ describe('AuditService', () => {
           severity: 'WARNING',
         }),
       );
+    });
+
+    it('R10: org-scoped rows reserve the outbox slot under organization RLS context', async () => {
+      await service.record({
+        actorUserPublicId: 'user_public',
+        action: 'tenancy.role.create',
+        resource_type: 'role',
+        organization_public_id: 'org_public',
+      });
+      // Without this context the outbox WITH CHECK rejects the INSERT under core_be_app.
+      expect(vi.mocked(withOrganizationDatabaseContext)).toHaveBeenCalledWith(
+        'org_public',
+        expect.any(Function),
+      );
+      expect(systemAuditInsertContextMock).not.toHaveBeenCalled();
+    });
+
+    it('R10: tenantless rows reserve the outbox slot under the system-audit-insert context', async () => {
+      await service.record({
+        actorUserPublicId: 'user_public',
+        action: 'user.login',
+        resource_type: 'user',
+      });
+      expect(systemAuditInsertContextMock).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(withOrganizationDatabaseContext)).not.toHaveBeenCalled();
     });
 
     it('skips outbox INSERT when neither user nor API-key actor is supplied', async () => {
