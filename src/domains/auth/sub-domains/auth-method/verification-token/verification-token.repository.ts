@@ -62,18 +62,29 @@ export class VerificationTokenRepository {
   }
 
   /**
-   * Atomically consume a token: mark used only if it is still valid and unused.
-   * Returns the row when this caller actually consumed the token; returns null
-   * when the token is missing, expired, or was already consumed by a concurrent caller.
+   * Atomically consume a token: mark used only if it is still valid, unused, and of the
+   * `expectedType`. Returns the row when this caller actually consumed the token; returns
+   * null when the token is missing, expired, already consumed by a concurrent caller, or
+   * of a different category.
    * Use this instead of `findValidByTokenHash` + `markUsed` to prevent TOCTOU double-consume races.
+   *
+   * @remarks
+   * sec-r5-L2: the `token_type` predicate is pinned into the atomic `UPDATE … WHERE` itself
+   * rather than checked after consumption. Token hashes are globally unique, so cross-type
+   * collision is practically impossible — but scoping the write by category means a token of
+   * the wrong flow (e.g. a `PASSWORD_RESET` token replayed against the magic-link verify path)
+   * is never matched, locked, or burned in the first place, instead of relying on the caller's
+   * surrounding transaction to roll the consume back. The match is fail-closed against the
+   * caller's declared type.
    */
-  async consumeIfValid(tokenHash: string) {
+  async consumeIfValid(tokenHash: string, expectedType: VerificationTokenType) {
     const rows = await getRequestDatabase()
       .update(verification_tokens)
       .set({ used_at: new Date() })
       .where(
         and(
           eq(verification_tokens.token_hash, tokenHash),
+          eq(verification_tokens.token_type, expectedType),
           gt(verification_tokens.expires_at, new Date()),
           isNull(verification_tokens.used_at),
         ),

@@ -54,4 +54,18 @@ describe('AuthorizationService', () => {
     expect(permissionRepository.findPermissionCodesForUserInOrganization).toHaveBeenCalled();
     expect(redisConnection.set).toHaveBeenCalled();
   });
+
+  it('sec-r5-L3: resolveUserOrganizationPermissionsFromDatabase bypasses the cache (no read, no write)', async () => {
+    // A fresh cache value is present — the DB-direct path must ignore it and hit the join,
+    // and must not read or write Redis.
+    vi.mocked(redisConnection.get).mockResolvedValue(JSON.stringify(['stale:cached']));
+    const codes = await authorizationService.resolveUserOrganizationPermissionsFromDatabase(
+      'user_public',
+      'org_public',
+    );
+    expect(codes).toEqual(['organization:read', 'organization:manage']);
+    expect(permissionRepository.findPermissionCodesForUserInOrganization).toHaveBeenCalled();
+    expect(redisConnection.get).not.toHaveBeenCalled();
+    expect(redisConnection.set).not.toHaveBeenCalled();
+  });
 });
