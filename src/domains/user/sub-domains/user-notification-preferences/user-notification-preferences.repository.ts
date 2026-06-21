@@ -1,5 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
+import { capListWithWarning } from '@/shared/utils/infrastructure/list-cap.util.js';
 import { user_notification_preferences } from '@/domains/user/sub-domains/user-notification-preferences/user-notification-preferences.schema.js';
 
 /** Insert payload accepted by {@link UserNotificationPreferencesRepository.replaceAll}. */
@@ -17,10 +19,19 @@ export type PreferenceRow = {
  */
 export class UserNotificationPreferencesRepository {
   async listByUserId(user_id: number) {
-    return getRequestDatabase()
+    // audit #36: bound this user-self-scoped read with limit+1 + capListWithWarning (the preference
+    // matrix is small, but this enforces a hard ceiling and surfaces an alert if it is ever hit).
+    const rows = await getRequestDatabase()
       .select()
       .from(user_notification_preferences)
-      .where(eq(user_notification_preferences.user_id, user_id));
+      .where(eq(user_notification_preferences.user_id, user_id))
+      .limit(DEFAULT_REPOSITORY_LIST_LIMIT + 1);
+    return capListWithWarning({
+      rows,
+      limit: DEFAULT_REPOSITORY_LIST_LIMIT,
+      resource: 'user.user_notification_preferences',
+      context: { userId: user_id },
+    });
   }
 
   async replaceAll(user_id: number, preferences: PreferenceRow[], created_by_user_id?: number) {

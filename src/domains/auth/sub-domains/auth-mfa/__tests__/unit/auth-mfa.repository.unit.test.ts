@@ -46,7 +46,8 @@ describe('MfaRepository', () => {
 
   it('listMfaByUserId returns MFA methods for user', async () => {
     const methods = [{ id: 1, method_type: 'MFA_TOTP' }];
-    mockFrom.mockReturnValueOnce({ where: vi.fn().mockResolvedValue(methods) });
+    // audit #36: listMfaByUserId now chains `.where().limit()` (limit+1 + capListWithWarning).
+    mockLimit.mockResolvedValueOnce(methods);
 
     const result = await repository.listMfaByUserId(5);
 

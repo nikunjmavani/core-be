@@ -1,5 +1,7 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
+import { capListWithWarning } from '@/shared/utils/infrastructure/list-cap.util.js';
 import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method.schema.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { AuthMethodCreateData, AuthMethodProviderLookup } from './auth-method.types.js';
@@ -15,14 +17,23 @@ const CREDENTIAL_MUTATION_ADVISORY_LOCK_NAMESPACE = 0x41_43_52_44;
 /** Drizzle repository for the {@link auth_methods} table; reads and writes use the request-scoped database handle so Postgres RLS enforces organization isolation. Soft-deletes via `revoked_at` rather than physical deletion. */
 export class AuthMethodRepository {
   async listByUserId(userId: number) {
-    return getRequestDatabase()
+    // audit #36: bound this user-self-scoped read (limit+1 + capListWithWarning).
+    const rows = await getRequestDatabase()
       .select()
       .from(auth_methods)
-      .where(and(eq(auth_methods.user_id, userId), isNull(auth_methods.revoked_at)));
+      .where(and(eq(auth_methods.user_id, userId), isNull(auth_methods.revoked_at)))
+      .limit(DEFAULT_REPOSITORY_LIST_LIMIT + 1);
+    return capListWithWarning({
+      rows,
+      limit: DEFAULT_REPOSITORY_LIST_LIMIT,
+      resource: 'auth.auth_methods',
+      context: { userId },
+    });
   }
 
   async listMfaByUserId(userId: number) {
-    return getRequestDatabase()
+    // audit #36: bound this user-self-scoped read (limit+1 + capListWithWarning).
+    const rows = await getRequestDatabase()
       .select()
       .from(auth_methods)
       .where(
@@ -31,7 +42,14 @@ export class AuthMethodRepository {
           eq(auth_methods.method_type, 'MFA_TOTP'),
           isNull(auth_methods.revoked_at),
         ),
-      );
+      )
+      .limit(DEFAULT_REPOSITORY_LIST_LIMIT + 1);
+    return capListWithWarning({
+      rows,
+      limit: DEFAULT_REPOSITORY_LIST_LIMIT,
+      resource: 'auth.auth_methods.mfa',
+      context: { userId },
+    });
   }
 
   async findTotpByUserId(userId: number) {
