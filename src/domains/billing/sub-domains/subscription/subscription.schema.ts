@@ -4,6 +4,7 @@ import {
   bigserial,
   varchar,
   boolean,
+  integer,
   timestamp,
   index,
   uniqueIndex,
@@ -37,6 +38,10 @@ export const subscriptions = billingSchema
       provider_subscription_id: varchar('provider_subscription_id', { length: 255 }),
       provider_customer_id: varchar('provider_customer_id', { length: 255 }),
       billing_cycle: varchar('billing_cycle', { length: 20 }).notNull(),
+      // REQ-4: purchased seat quantity synced FROM Stripe (the subscription item
+      // quantity). NULL = not yet synced — seats_total then falls back to the
+      // plan's included_seats.
+      seats: integer('seats'),
       status: varchar('status', { length: 20 }).notNull().default('TRIALING'),
       current_period_start: timestamp('current_period_start', { withTimezone: true }).notNull(),
       current_period_end: timestamp('current_period_end', { withTimezone: true }).notNull(),
@@ -78,6 +83,8 @@ export const subscriptions = billingSchema
         sql`${table.status} IN ('TRIALING', 'ACTIVE', 'PAST_DUE', 'CANCELED', 'PAUSED', 'UNPAID', 'INCOMPLETE', 'INCOMPLETE_EXPIRED')`,
       ),
       check('chk_subs_cycle', sql`${table.billing_cycle} IN ('MONTHLY', 'YEARLY')`),
+      // REQ-4: a NULL seat count means "not yet synced from Stripe"; any concrete value is non-negative.
+      check('chk_subs_seats', sql`${table.seats} IS NULL OR ${table.seats} >= 0`),
       check('chk_subs_period', sql`${table.current_period_end} > ${table.current_period_start}`),
       check('chk_subs_updated', sql`${table.updated_at} >= ${table.created_at}`),
       pgPolicy('subscriptions_tenant_isolation', {

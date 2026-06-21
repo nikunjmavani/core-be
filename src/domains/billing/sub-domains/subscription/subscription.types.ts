@@ -45,6 +45,12 @@ export interface SubscriptionUpdateData {
   current_period_end?: Date;
   plan_id?: number;
   billing_cycle?: string;
+  /**
+   * REQ-4: purchased seat quantity, written by the Stripe webhook reconcile path from the
+   * subscription item's `quantity`. Left unset by every other update path so a partial patch
+   * never clobbers the seat count.
+   */
+  seats?: number;
   updated_at?: Date;
   /**
    * Set by HTTP-side mutations (`cancel`/`resume`/`changePlan`) to `new Date()` so a

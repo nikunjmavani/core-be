@@ -34,6 +34,7 @@ import {
 } from '@/infrastructure/queue/worker-runtime/worker-health.server.js';
 import { getShutdownWatchdogMs } from '@/infrastructure/queue/worker-runtime/shutdown-timing.util.js';
 import { closeStripeWebhookQueue } from '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.queue.js';
+import { closeSubscriptionSeatSyncQueue } from '@/domains/billing/sub-domains/subscription/queues/subscription-seat-sync.queue.js';
 import { closeMailQueue } from '@/infrastructure/mail/queues/mail.queue.js';
 import { closeNotificationQueue } from '@/domains/notify/sub-domains/notification/queues/notification.queue.js';
 import { closeWebhookDeliveryQueue } from '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js';
@@ -108,6 +109,7 @@ async function main() {
       await Promise.allSettled([
         closeDeadLetterQueues(),
         closeStripeWebhookQueue(),
+        closeSubscriptionSeatSyncQueue(), // REQ-4: seat-quantity sync producer queue
         closeMailQueue(),
         closeNotificationQueue(),
         closeWebhookDeliveryQueue(),

@@ -43,6 +43,26 @@ import type { UserService } from '@/domains/user/user.service.js';
 import type { MemberInvitationService } from './member-invitation/member-invitation.service.js';
 import { invalidatePermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import type { OrganizationApiKeyRepository } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.repository.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+
+/**
+ * Cross-domain port for REQ-4 seat enforcement and Stripe seat reconciliation, satisfied by
+ * billing's `SubscriptionService`.
+ *
+ * @remarks
+ * - **Algorithm:** declared as a minimal structural interface (not a `SubscriptionService` import)
+ *   so tenancy does not depend on billing — billing already depends on tenancy, so importing the
+ *   concrete service here would create a cycle. The composition root late-wires the concrete
+ *   service in via {@link MembershipService.wireSeatEnforcement}.
+ * - **Failure modes:** `reserveSeatCeilingForMemberAdd` returns `null` (no ceiling) when the org has
+ *   no active subscription or the plan is unlimited; the implementer takes a row lock so concurrent
+ *   adds serialize. `enqueueSeatQuantitySync` is best-effort (swallows enqueue failures).
+ * - **Side effects:** the implementer acquires a `FOR UPDATE` lock (reserve) / enqueues a job (sync).
+ */
+export type MembershipSeatEnforcementPort = {
+  reserveSeatCeilingForMemberAdd(organizationId: number): Promise<number | null>;
+  enqueueSeatQuantitySync(organizationPublicId: string, idempotencyKey?: string): void;
+};
 
 /**
  * HTTP response shape for `GET
@@ -120,6 +140,23 @@ export class MembershipService {
   ) {}
 
   /**
+   * REQ-4 seat enforcement + Stripe seat-sync port, late-wired by the composition root.
+   *
+   * @remarks
+   * billing's `SubscriptionService` (which enforces the seat ceiling and enqueues the Stripe
+   * quantity sync) itself depends on tenancy for `seats_used`, so the membership↔subscription
+   * relationship is a true cycle. It is broken by constructing both services, then setting this
+   * field via {@link MembershipService.wireSeatEnforcement} — never a constructor param. Left
+   * `null` in minimal test harnesses, where seat enforcement is simply skipped.
+   */
+  private seatEnforcement: MembershipSeatEnforcementPort | null = null;
+
+  /** Late-wires the billing seat-enforcement port (REQ-4); see {@link seatEnforcement}. */
+  wireSeatEnforcement(seatEnforcement: MembershipSeatEnforcementPort): void {
+    this.seatEnforcement = seatEnforcement;
+  }
+
+  /**
    * Revokes every API key the departing member created in this organization (reaudit-#7), so a
    * removed/left member's keys lose access along with their session. Runs inside the caller's
    * organization DB context (RLS-scoped). Best-effort: skipped when the api-key repository is not
@@ -134,6 +171,44 @@ export class MembershipService {
       organizationId,
       userId,
     );
+  }
+
+  /**
+   * Enforces the plan seat limit before a member is added (REQ-4). MUST run inside the org
+   * transaction so the FOR UPDATE lock taken by the billing port serializes concurrent adds.
+   * No-op when the seat-enforcement port is unwired (minimal harness), when the org has no active
+   * subscription, or when the plan grants unlimited seats (`ceiling === null`). Throws
+   * `ConflictError('errors:seatLimitReached')` with reason `seat_limit_reached` once
+   * `used >= ceiling` (a seat is consumed by ACTIVE + INVITED memberships, so an outstanding invite
+   * already counts and a burst of invites cannot overshoot the limit).
+   */
+  private async assertSeatAvailableForMemberAdd(organizationInternalId: number): Promise<void> {
+    if (!this.seatEnforcement) return;
+    const seatCeiling =
+      await this.seatEnforcement.reserveSeatCeilingForMemberAdd(organizationInternalId);
+    if (seatCeiling === null) return;
+    const seatsUsed =
+      await this.membershipRepository.countActiveByOrganization(organizationInternalId);
+    if (seatsUsed >= seatCeiling) {
+      throw new ConflictError('errors:seatLimitReached', {
+        used: seatsUsed,
+        limit: seatCeiling,
+      }).withReason('seat_limit_reached');
+    }
+  }
+
+  /**
+   * Best-effort enqueue of a Stripe seat-quantity reconciliation after a member add/remove (REQ-4).
+   * Swallows when the port is unwired; the billing port itself swallows enqueue failures so member
+   * management never fails on a Redis blip.
+   */
+  private enqueueSeatQuantitySync(organizationPublicId: string): void {
+    if (!this.seatEnforcement) return;
+    try {
+      this.seatEnforcement.enqueueSeatQuantitySync(organizationPublicId);
+    } catch (error) {
+      logger.warn({ error, organizationPublicId }, 'membership.seat_sync.enqueue_failed');
+    }
   }
 
   private async invalidatePermissionsForMembership(
@@ -291,7 +366,7 @@ export class MembershipService {
     // collision retry can open fresh transactions — a pinned org transaction would abort on retry.
     // A user left with no membership by a later failure is harmless and reused on the next attempt.
     const inviteeUser = await userService.findOrCreateInvitedByEmail({ email: parsed.email });
-    return withOrganizationDatabaseContext(organization_public_id, async () => {
+    const result = await withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
@@ -316,7 +391,11 @@ export class MembershipService {
         organizationPublicId: organization_public_id,
         requestedPermissionCodes: rolePermissionCodes,
       });
-      // [REQ-4] seat-availability check goes here (no-op until the seat model lands in PR4).
+      // REQ-4: enforce the plan seat limit before persisting the new membership. Runs INSIDE the
+      // existing org transaction so the FOR UPDATE lock taken inside the check serializes concurrent
+      // adds (two simultaneous adds cannot both pass the same count and exceed the limit). No-op when
+      // the org has no active subscription (the billing-free flow still works) or the plan is unlimited.
+      await this.assertSeatAvailableForMemberAdd(organization.id);
       const inviterId =
         await this.organizationService.resolveUserInternalIdByPublicId(invited_by_user_public_id);
       if (inviterId === null) throw new NotFoundError('User');
@@ -356,6 +435,10 @@ export class MembershipService {
       await this.applyOrganizationLocaleDefaults(inviteeUser.public_id, organization_public_id);
       return this.resolveAndSerializeMembership(created, organization_public_id);
     });
+    // REQ-4: the seat count just grew — reconcile the Stripe subscription quantity out-of-band.
+    // Enqueued AFTER the org transaction commits so the worker re-reads the new count. Best-effort.
+    this.enqueueSeatQuantitySync(organization_public_id);
+    return result;
   }
 
   async update(
@@ -429,7 +512,7 @@ export class MembershipService {
   }
 
   async delete(organization_public_id: string, membership_public_id: string): Promise<void> {
-    return withOrganizationDatabaseContext(organization_public_id, async () => {
+    await withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
@@ -464,6 +547,8 @@ export class MembershipService {
       await this.revokeApiKeysForDepartedMember(deleted.user_id, organization.id);
       await this.invalidatePermissionsForMembership(deleted.user_id, organization_public_id);
     });
+    // REQ-4: the seat count just shrank — reconcile the Stripe subscription quantity out-of-band.
+    this.enqueueSeatQuantitySync(organization_public_id);
   }
 
   async getPermissions(
@@ -488,7 +573,7 @@ export class MembershipService {
   }
 
   async leaveOrganization(organization_public_id: string, user_public_id: string): Promise<void> {
-    return withOrganizationDatabaseContext(organization_public_id, async () => {
+    await withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
@@ -524,6 +609,8 @@ export class MembershipService {
       await this.revokeApiKeysForDepartedMember(userId, organization.id);
       await invalidatePermissions(user_public_id, organization_public_id);
     });
+    // REQ-4: the seat count just shrank — reconcile the Stripe subscription quantity out-of-band.
+    this.enqueueSeatQuantitySync(organization_public_id);
   }
 
   async transferOwnership(
@@ -561,6 +648,28 @@ export class MembershipService {
         newOwnerUserId,
       );
       return this.resolveAndSerializeMembership(newOwnerMembership, organization_public_id);
+    });
+  }
+
+  /**
+   * Counts the seat-occupying memberships (ACTIVE + INVITED) in an organization (REQ-4).
+   *
+   * @remarks
+   * - **Algorithm:** runs {@link MembershipRepository.countActiveByOrganization} inside
+   *   {@link withOrganizationDatabaseContext} so the `memberships` RLS policy resolves the
+   *   org's rows. Resolves the org's internal id from its public id first.
+   * - **Failure modes:** `NotFoundError('Organization')` when the public id does not resolve.
+   * - **Side effects:** one read-only COUNT query under the org GUC.
+   * - **Notes:** this is the cross-domain SERVICE entry point billing's `SubscriptionService`
+   *   calls to compute `seats_used` — billing never reaches the membership repository/schema
+   *   directly (cross-domain reads go service→service).
+   */
+  async countActiveMembers(options: { organizationPublicId: string }): Promise<number> {
+    return withOrganizationDatabaseContext(options.organizationPublicId, async () => {
+      const organization = await this.organizationService.requireOrganizationByPublicId(
+        options.organizationPublicId,
+      );
+      return this.membershipRepository.countActiveByOrganization(organization.id);
     });
   }
 

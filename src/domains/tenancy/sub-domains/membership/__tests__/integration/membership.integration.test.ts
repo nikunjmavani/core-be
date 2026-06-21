@@ -12,6 +12,8 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { database } from '@/infrastructure/database/connection.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
+import { createTestPlan } from '@/tests/factories/plan.factory.js';
+import { createTestSubscription } from '@/domains/billing/__tests__/factories/subscription.factory.js';
 import {
   generateTestToken,
   generateTestTokenWithActiveSession,
@@ -220,6 +222,98 @@ describe('Membership Sub-Domain — Integration', () => {
         .where(eq(memberships.public_id, created.id));
       expect(row!.status).toBe('INVITED');
       expect(row!.joined_at).toBeNull();
+    });
+  });
+
+  describe('POST /api/v1/tenancy/organization/memberships — REQ-4 seat enforcement', () => {
+    // Builds an org whose owner+admin already holds a seat, optionally with an active subscription on
+    // a plan that grants `includedSeats` seats. Returns the admin token + a grantable member role.
+    async function createSeatLimitedContext(
+      includedSeats: number | null,
+      withSubscription: boolean,
+    ) {
+      const admin = await createTestUser();
+      const organization = await createTestOrganization({ ownerUserId: admin.id });
+      const adminRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: MEMBERSHIP_PERMISSIONS,
+      });
+      // The owner's membership occupies one seat (ACTIVE).
+      await createMembership({
+        userId: admin.id,
+        organizationId: organization.id,
+        roleId: adminRole.id,
+      });
+      if (withSubscription) {
+        const plan = await createTestPlan({ includedSeats });
+        // Local-only subscription so the seat check never touches Stripe.
+        await createTestSubscription({
+          organizationId: organization.id,
+          planId: plan.id,
+          status: 'ACTIVE',
+          provider: null,
+          providerSubscriptionId: null,
+        });
+      }
+      const { token: adminToken } = await generateTestTokenWithActiveSession(app, admin.public_id, {
+        organizationPublicId: organization.public_id,
+      });
+      // A member role carrying a subset of the admin's permissions (passes the escalation guard).
+      const memberRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [TENANCY_PERMISSIONS.MEMBERSHIP_READ],
+      });
+      return { organization, adminToken, memberRole };
+    }
+
+    async function inviteMember(
+      organizationPublicId: string,
+      adminToken: string,
+      memberRolePublicId: string,
+    ) {
+      return injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: testApiPath('/tenancy/organization/memberships'),
+        token: adminToken,
+        organizationPublicId,
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
+        payload: { email: `seat-${randomUUID()}@test.com`, role_id: memberRolePublicId },
+      });
+    }
+
+    it('returns 409 seat_limit_reached when the plan seat limit is already filled', async () => {
+      // Plan grants 1 seat; the owner already occupies it, so the next add must be rejected.
+      const { organization, adminToken, memberRole } = await createSeatLimitedContext(1, true);
+      const response = await inviteMember(organization.public_id, adminToken, memberRole.public_id);
+      expect(response.statusCode).toBe(409);
+      const body = response.json() as { error: { reason?: string } };
+      expect(body.error.reason).toBe('seat_limit_reached');
+    });
+
+    it('allows the add when the plan still has free seats', async () => {
+      // Plan grants 5 seats; only the owner is using one, so adding a member succeeds.
+      const { organization, adminToken, memberRole } = await createSeatLimitedContext(5, true);
+      const response = await inviteMember(organization.public_id, adminToken, memberRole.public_id);
+      expect(response.statusCode).toBe(201);
+    });
+
+    it('allows the add when the org has no active subscription (billing-free flow)', async () => {
+      // No subscription → no seat ceiling → unlimited members even with no billing configured.
+      const { organization, adminToken, memberRole } = await createSeatLimitedContext(null, false);
+      const response = await inviteMember(organization.public_id, adminToken, memberRole.public_id);
+      expect(response.statusCode).toBe(201);
+    });
+
+    it('counts an outstanding INVITED membership against the seat limit', async () => {
+      // Plan grants 2 seats: owner (1) + one invite (1) = full; a second invite must 409.
+      const { organization, adminToken, memberRole } = await createSeatLimitedContext(2, true);
+      const first = await inviteMember(organization.public_id, adminToken, memberRole.public_id);
+      expect(first.statusCode).toBe(201);
+      const second = await inviteMember(organization.public_id, adminToken, memberRole.public_id);
+      expect(second.statusCode).toBe(409);
+      expect((second.json() as { error: { reason?: string } }).error.reason).toBe(
+        'seat_limit_reached',
+      );
     });
   });
 

@@ -7,6 +7,7 @@ import { closeRedis } from '@/infrastructure/cache/redis.client.js';
 import { closeMailQueue } from '@/infrastructure/mail/queues/mail.queue.js';
 import { closeNotificationQueue } from '@/domains/notify/sub-domains/notification/queues/notification.queue.js';
 import { closeWebhookDeliveryQueue } from '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js';
+import { closeSubscriptionSeatSyncQueue } from '@/domains/billing/sub-domains/subscription/queues/subscription-seat-sync.queue.js';
 import { flushSentry } from '@/infrastructure/observability/sentry/sentry.js';
 import { THREE_SECONDS_MS } from '@/shared/constants/index.js';
 import { setApplicationDraining } from '@/shared/utils/infrastructure/application-lifecycle.util.js';
@@ -53,6 +54,8 @@ const shutdownMiddleware: FastifyPluginAsync = async (app) => {
       closeMailQueue(),
       closeNotificationQueue(),
       closeWebhookDeliveryQueue(),
+      // REQ-4: producer queue used by change-plan + member add/remove on the request path.
+      closeSubscriptionSeatSyncQueue(),
     ]);
     await Promise.allSettled([closeRedis(), closeBullMqRedis(), closeDatabase()]);
     await flushSentry();

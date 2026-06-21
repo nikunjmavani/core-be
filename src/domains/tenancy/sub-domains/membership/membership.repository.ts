@@ -243,6 +243,31 @@ export class MembershipRepository extends BaseRepository {
     return rows[0]?.count ?? 0;
   }
 
+  /**
+   * Counts the seat-occupying memberships in an organization (REQ-4).
+   *
+   * @remarks
+   * A "seat" is consumed by any membership that is either ACTIVE or still INVITED
+   * (`deleted_at IS NULL`) — an outstanding invitation already reserves a seat so a
+   * burst of invites cannot exceed the plan limit once everyone accepts. The count
+   * is exact (no LIMIT) because it feeds a binary `used >= total` seat-availability
+   * check; it is bounded by the per-org member cap. Mirrors {@link countActiveByRoleId}.
+   * SUSPENDED members are intentionally NOT counted (a suspended seat is not in use).
+   */
+  async countActiveByOrganization(organization_id: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ count: sql<number>`count(*)::int` })
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.organization_id, organization_id),
+          inArray(memberships.status, ['ACTIVE', 'INVITED']),
+          isNull(memberships.deleted_at),
+        ),
+      );
+    return rows[0]?.count ?? 0;
+  }
+
   async findByUserAndOrganization(
     user_id: number,
     organization_id: number,

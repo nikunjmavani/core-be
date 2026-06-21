@@ -32,6 +32,13 @@ async function registerDomainContainers(application: FastifyInstance): Promise<v
     application.billingDomain.subscriptionService,
   );
 
+  // REQ-4: break the membership↔subscription cycle by late-wiring. billing was built with the
+  // tenancy membership service (for seats_used); now inject billing's subscription service into the
+  // membership service so add-member enforces the seat limit and reconciles the Stripe quantity.
+  application.tenancyDomain.membershipService.wireSeatEnforcement(
+    application.billingDomain.subscriptionService,
+  );
+
   application.userDomain.userDataExportService.wireCrossDomainServices({
     authSessionService: application.authDomain.authSessionService,
     membershipService: application.tenancyDomain.membershipService,
