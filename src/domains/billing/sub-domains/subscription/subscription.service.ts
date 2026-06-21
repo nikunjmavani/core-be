@@ -76,6 +76,23 @@ export function buildStripeIdempotencyKey(
   return clientKey === undefined ? undefined : `${operation}:${organizationPublicId}:${clientKey}`;
 }
 
+// audit H2: a Stripe-backed subscription must NOT change to a plan that has no
+// Stripe price id for its billing cycle. The Stripe price update in changePlan is
+// gated on `providerPriceId`, but the local `plan_id` write is unconditional — so
+// without this guard the local entitlement switches to the new tier while Stripe
+// keeps billing the OLD price, and the watermark stamp blocks the reconciling
+// `customer.subscription.updated` webhook (un-self-healing divergence). Only a
+// genuinely local-only subscription (no `provider_subscription_id`) may change to
+// a price-less plan. Extracted so changePlan stays within its complexity budget.
+function assertProviderPriceForStripeBackedPlanChange(
+  providerSubscriptionId: string | null,
+  providerPriceId: string | null | undefined,
+): void {
+  if (providerSubscriptionId && !providerPriceId) {
+    throw new UnprocessableEntityError('errors:planNotAvailableForBillingCycle');
+  }
+}
+
 /**
  * Coordinates plan lookups, payment-provider calls, and subscription updates
  * for a single organization.
@@ -590,6 +607,14 @@ export class SubscriptionService {
     );
     let providerPlanUpdated = false;
 
+    // audit H2: fail closed before any local write when a Stripe-backed subscription
+    // would change to a plan with no Stripe price for its cycle (extracted to keep
+    // changePlan's cognitive complexity within budget).
+    assertProviderPriceForStripeBackedPlanChange(
+      subscription.provider_subscription_id,
+      providerPriceId,
+    );
+
     // Stripe network call — outside any database context. Fail-closed: a provider
     // failure throws ServiceUnavailableError here (before any local write), so the
     // local plan never silently diverges from Stripe. Local-only subscriptions
@@ -738,8 +763,17 @@ export class SubscriptionService {
 
     // Stripe network call — outside any database context.
     if (subscription.provider_subscription_id) {
+      // audit L1: stamp a deterministic idempotency key so an org-delete retry
+      // re-issues the SAME cancel (Stripe dedups) instead of an un-keyed duplicate.
+      // No client key exists on the offboarding path, so the provider subscription
+      // id is the stable per-subscription discriminator.
       await this.paymentProvider.cancelSubscriptionImmediately(
         subscription.provider_subscription_id,
+        buildStripeIdempotencyKey(
+          'sub-cancel-offboarding',
+          organization_public_id,
+          subscription.provider_subscription_id,
+        ),
       );
     }
     await withOrganizationDatabaseContext(organization_public_id, async () =>

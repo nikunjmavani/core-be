@@ -18,6 +18,7 @@ import {
   ConflictError,
   NotFoundError,
   ServiceUnavailableError,
+  UnprocessableEntityError,
   ValidationError,
 } from '@/shared/errors/index.js';
 import { SubscriptionService } from '@/domains/billing/sub-domains/subscription/subscription.service.js';
@@ -605,11 +606,37 @@ describe('SubscriptionService', () => {
     expect(createPayload).not.toHaveProperty('created_by_user_id');
   });
 
-  it('changePlan proceeds local-only when target plan has no Stripe price id', async () => {
+  // audit H2: a Stripe-backed subscription changing to a plan with no Stripe price id
+  // for its cycle must FAIL CLOSED — otherwise the local plan_id is updated while
+  // Stripe keeps billing the old price (un-self-healing divergence). The old test
+  // enshrined the buggy "proceeds local-only" behavior; flipped to assert the throw.
+  it('changePlan fails closed when a Stripe-backed subscription targets a plan with no Stripe price id (audit H2)', async () => {
     stripeMocks.isStripeConfigured.mockReturnValue(true);
     vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...subscriptionRow,
       provider_subscription_id: 'sub_stripe',
+    } as never);
+    vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
+      ...plan,
+      stripe_price_monthly_id: null,
+      stripe_price_yearly_id: null,
+    } as never);
+
+    await expect(
+      service.changePlan('org_public', 'sub_public', { plan_id: 'plan_public' }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityError);
+    expect(stripeMocks.updateStripeSubscription).not.toHaveBeenCalled();
+    // Local entitlement must NOT diverge from Stripe.
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  // The genuinely local-only path (no provider_subscription_id) may still change to a
+  // plan without a Stripe price — there is no Stripe state to diverge from.
+  it('changePlan proceeds local-only for a subscription with no provider_subscription_id', async () => {
+    stripeMocks.isStripeConfigured.mockReturnValue(true);
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...subscriptionRow,
+      provider_subscription_id: null,
     } as never);
     vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
       ...plan,

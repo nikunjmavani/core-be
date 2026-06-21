@@ -22,6 +22,7 @@ What it does not own: invoicing UI, dunning emails (those flow through `notify`)
 - **Stale-event rejection**: if a webhook arrives with `event.created_at` older than the row's last update, we reject the change so out-of-order delivery doesn't roll state backwards.
 - **Network I/O outside RLS contexts**: Stripe API calls **must not** run inside `withOrganizationDatabaseContext` (would hold a pool checkout across a remote round trip). Enforced by `pnpm test:global` (`rls-context-network-isolation.global.test.ts`).
 - **One subscription per organization**: enforced at the service layer; many concurrent attempts to create a second subscription resolve to a single Stripe subscription via the forwarded idempotency key.
+- **No Stripe-vs-DB plan divergence**: a Stripe-backed subscription cannot change to a plan that has no Stripe price id for its billing cycle — `changePlan` fails closed (`422 planNotAvailableForBillingCycle`) rather than updating the local plan while Stripe keeps billing the old price. Only a genuinely local-only subscription (no `provider_subscription_id`) may change to a price-less plan. Every mutating Stripe call (create / change-plan / cancel / cancel-now / **offboarding cancel** / resume) carries a stable idempotency key so retries dedup.
 
 ## Sub-domains
 
