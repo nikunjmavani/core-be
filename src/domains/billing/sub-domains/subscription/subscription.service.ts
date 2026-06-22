@@ -574,6 +574,26 @@ export class SubscriptionService {
     return decorated!;
   }
 
+  /**
+   * F2: rejects a plan change that would leave the organization over the new plan's seat allowance,
+   * so changePlan cannot silently keep premium headcount on a cheaper plan. No-op when the new plan
+   * grants unlimited seats (`included_seats === null`) or the seat-usage port is unwired
+   * (worker/test composition roots). `countActiveMembers` counts ACTIVE + INVITED memberships.
+   */
+  private async assertDowngradeWithinSeatAllowance(
+    organizationPublicId: string,
+    newPlan: { included_seats: number | null },
+  ): Promise<void> {
+    if (newPlan.included_seats === null || !this.membershipSeatUsage) return;
+    const seatsUsed = await this.membershipSeatUsage.countActiveMembers({ organizationPublicId });
+    if (seatsUsed > newPlan.included_seats) {
+      throw new ConflictError('errors:planDowngradeSeatsExceeded', {
+        used: seatsUsed,
+        limit: newPlan.included_seats,
+      }).withReason('seat_limit_exceeded_for_plan');
+    }
+  }
+
   async changePlan(
     organization_public_id: string,
     subscription_public_id: string,
@@ -600,6 +620,10 @@ export class SubscriptionService {
         );
         return { organization, plan, subscription, previousPlan };
       });
+
+    // F2: fail closed BEFORE the Stripe price change when the new plan cannot seat the org's
+    // current members (extracted to a helper to keep changePlan's cognitive complexity in budget).
+    await this.assertDowngradeWithinSeatAllowance(organization_public_id, plan);
 
     const providerPriceId = this.paymentProvider.getProviderPriceId(
       plan,

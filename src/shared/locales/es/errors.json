@@ -152,6 +152,7 @@
   "stripeWebhookEventInFlight": "El evento de webhook de Stripe {{eventId}} aún se está procesando; reintente en breve.",
   "subscriptionAlreadyExists": "Ya existe una suscripción activa para esta organización",
   "seatLimitReached": "Se alcanzó el límite de asientos de tu plan ({{limit}}). Mejora tu plan o elimina un miembro antes de agregar otro.",
+  "planDowngradeSeatsExceeded": "Este plan permite {{limit}} asientos, pero la organización tiene {{used}} miembros activos. Elimina miembros antes de cambiar a este plan.",
   "subscriptionNotMutable": "Esta suscripción está en estado terminal y ya no puede modificarse; crea una nueva suscripción en su lugar",
   "planNotAvailableForBillingCycle": "Este plan no está disponible para el ciclo de facturación de tu suscripción",
   "paymentProviderUnavailable": "El proveedor de pagos no está disponible temporalmente. Vuelve a intentarlo.",
