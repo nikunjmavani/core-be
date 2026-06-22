@@ -101,6 +101,20 @@ function assertWebhookHostnameNotBlocked(hostname: string): void {
   }
 }
 
+/**
+ * audit R13: reject embedded credentials (`https://user:pass@host`). They are inert in the pinned
+ * `node:http` transport today (never translated to an `Authorization` header) and are stripped from
+ * logs via `parsed.origin`, but an unvalidated userinfo component is a footgun if the transport ever
+ * changes — reject it so the no-credentials property is enforced, not incidental.
+ */
+function assertWebhookNoUserinfo(parsed: URL): void {
+  if (parsed.username !== '' || parsed.password !== '') {
+    throw new ValidationError(WEBHOOK_URL_NOT_ALLOWED_KEY, undefined, undefined, [
+      { field: 'url', messageKey: WEBHOOK_URL_NOT_ALLOWED_KEY },
+    ]);
+  }
+}
+
 function assertResolvedAddressesNotPrivate(addresses: WebhookResolvedAddress[]): void {
   for (const entry of addresses) {
     if (isUnsafeIpLiteral(entry.address)) {
@@ -164,6 +178,7 @@ export async function assertWebhookUrlSafe(urlString: string): Promise<WebhookRe
   }
 
   assertWebhookScheme(parsed);
+  assertWebhookNoUserinfo(parsed);
   assertWebhookPort(parsed);
   assertWebhookHostnameNotBlocked(parsed.hostname);
   const addresses = await resolveWebhookUrlAddresses(parsed.hostname);

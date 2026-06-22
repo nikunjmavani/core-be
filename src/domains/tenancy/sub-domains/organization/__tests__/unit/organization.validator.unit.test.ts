@@ -52,6 +52,12 @@ describe('organization.validator', () => {
     expect(() => validateUploadLogo({ key: 'avatars/abc.png' })).toThrow(ValidationError);
   });
 
+  it('R13: validateUploadLogo rejects key containing path traversal (..)', () => {
+    expect(() => validateUploadLogo({ key: 'organization-logos/../../secret.png' })).toThrow(
+      ValidationError,
+    );
+  });
+
   it('validateUpdateOrganization rejects invalid status', () => {
     expect(() => validateUpdateOrganization({ status: 'DELETED' })).toThrow(ValidationError);
   });

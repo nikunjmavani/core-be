@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
-import { trimmedSlug, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
+import {
+  trimmedSlug,
+  trimmedStringMinMax,
+  isTraversalFreeStorageKey,
+} from '@/shared/utils/validation/validation.util.js';
 
 /** Path params for `/organizations/by-slug/:slug` (URL-friendly organization slug). */
 export const organizationSlugParamsDto = z
@@ -61,9 +65,13 @@ export const listOrganizationsQueryDto = cursorPaginationSchema.strict();
  */
 export const uploadLogoDto = z
   .object({
-    key: trimmedStringMinMax(1, 512).refine((key) => key.startsWith('organization-logos/'), {
-      message: 'Key must start with organization-logos/',
-    }),
+    key: trimmedStringMinMax(1, 512)
+      .refine((key) => key.startsWith('organization-logos/'), {
+        message: 'Key must start with organization-logos/',
+      })
+      .refine(isTraversalFreeStorageKey, {
+        message: 'Key must not contain path traversal',
+      }),
   })
   .strict();
 
