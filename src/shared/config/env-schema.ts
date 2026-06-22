@@ -131,6 +131,16 @@ const envSchemaBase = z.object({
    * stalls (a long sync op / GC pause). Lower it to shed sooner; raise it to tolerate longer stalls.
    */
   OVERLOAD_MAX_EVENT_LOOP_DELAY_MS: z.coerce.number().int().min(1).max(60_000).default(250),
+  /**
+   * Fraction of `DATABASE_POOL_MAX` in-flight org-RLS checkouts at which the overload guard sheds
+   * new (non-health) requests with a fast 503 + Retry-After. DB-pool exhaustion manifests as
+   * awaiting-promise time (the event loop stays idle), so the event-loop valve alone never trips on
+   * it — requests instead queue behind postgres.js with no acquire deadline up to the request
+   * timeout. Shedding at saturation bounds that tail. Decoupled from the alerter's
+   * `DATABASE_POOL_ACTIVE_CRITICAL_RATIO` so shedding can be tuned independently; set to `0` to
+   * disable pool-saturation shedding (event-loop shedding stays active).
+   */
+  OVERLOAD_DB_POOL_SHED_RATIO: z.coerce.number().min(0).max(1).default(0.9),
 
   // Database (managed service)
   DATABASE_URL: isLocalRuntime ? z.string().min(1).default(LOCAL_DATABASE_URL) : z.string().min(1),
