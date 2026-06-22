@@ -106,10 +106,12 @@ describe('AuthMethodService', () => {
   } as unknown as AuthSessionService;
 
   // OTP verify uses a per-user attempt cap: `eval` (incrementWithExpiryOnFirst) returns the attempt
-  // count (1 = under the cap by default), `del` clears it on success.
+  // count (1 = under the cap by default), `del` clears it on success. `set` is the SET NX EX resend
+  // cooldown claim: 'OK' (default) = slot claimed → issue proceeds; null = on cooldown → skipped.
   const redis = {
     eval: vi.fn().mockResolvedValue(1),
     del: vi.fn().mockResolvedValue(0),
+    set: vi.fn().mockResolvedValue('OK'),
   } as unknown as Redis;
 
   const webauthnCredentialRepository = {
@@ -128,6 +130,7 @@ describe('AuthMethodService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(user as never);
+    vi.mocked(redis.set).mockResolvedValue('OK');
   });
 
   it('throws NotFoundError when user record is missing', async () => {
@@ -283,6 +286,16 @@ describe('AuthMethodService', () => {
     expect(verificationTokenRepository.create).not.toHaveBeenCalled();
   });
 
+  it('forgotPassword skips issuing a reset when the per-email cooldown is already held', async () => {
+    vi.mocked(redis.set).mockResolvedValueOnce(null);
+    const result = await service.forgotPassword({ email: user.email });
+    expect(result.messageKey).toBe('success:passwordResetEmailSent');
+    // On cooldown the user is never looked up and no token is issued (no email), but the uniform
+    // success is preserved so the cooldown is not an account-existence oracle.
+    expect(userService.findByEmail).not.toHaveBeenCalled();
+    expect(verificationTokenRepository.create).not.toHaveBeenCalled();
+  });
+
   it('forgotPassword enforces a constant-time floor on both account-existence branches', async () => {
     const { enforceMinimumDuration } = await import(
       '@/shared/utils/security/anti-enumeration.util.js'
@@ -406,6 +419,16 @@ describe('AuthMethodService', () => {
     const result = await service.resendEmailVerification('user_public');
     expect(result.messageKey).toBe('success:verificationEmailSent');
     expect(redis.del).toHaveBeenCalledWith(`auth:email_otp_verify_attempts:${user.id}`);
+  });
+
+  it('resendEmailVerification skips re-issuing when the per-user cooldown is already held', async () => {
+    vi.mocked(redis.set).mockResolvedValueOnce(null);
+    const result = await service.resendEmailVerification('user_public');
+    expect(result.messageKey).toBe('success:verificationEmailSent');
+    // The prior code is still valid within its TTL, so nothing is re-issued and the attempt cap is
+    // left untouched.
+    expect(verificationTokenRepository.create).not.toHaveBeenCalled();
+    expect(redis.del).not.toHaveBeenCalled();
   });
 
   it('resendEmailVerification returns already verified message', async () => {

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
 import type { Redis } from 'ioredis';
 import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
@@ -11,6 +12,7 @@ import { env } from '@/shared/config/env.config.js';
 import { provisionPersonalOrganization } from '@/domains/tenancy/sub-domains/organization/organization-provisioning.js';
 import {
   EMAIL_OTP_MAX_VERIFY_ATTEMPTS,
+  EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
   generateEmailOtp,
   hashEmailOtp,
 } from '@/domains/auth/sub-domains/auth-method/email-otp.js';
@@ -44,6 +46,9 @@ import {
 
 /** Redis key prefix for the per-user magic-link OTP attempt counter (brute-force cap). */
 const MAGIC_LINK_OTP_VERIFY_ATTEMPT_KEY_PREFIX = 'auth:magic_link_otp_verify_attempts:';
+
+/** Redis key prefix for the per-email magic-link send cooldown (anti-mail-bomb spacing). */
+const MAGIC_LINK_SEND_COOLDOWN_KEY_PREFIX = 'auth:magic_link_send_cooldown:';
 
 /**
  * Issues and verifies one-shot magic-link sign-in **codes** (6-digit OTPs) for the passwordless
@@ -107,15 +112,31 @@ export class MagicLinkService {
         { field: 'email', messageKey: 'errors:disposableEmail' },
       ]);
     }
-    // Auto-signup: an unknown email creates a new passwordless user (mirrors OAuth find-or-create).
-    // New and existing users then run the identical issue-code path, so the response body cannot
-    // reveal which case occurred; enforceMinimumDuration below masks the create-vs-existing latency
-    // difference so timing is not an account-existence oracle either.
-    const user =
-      (await this.userService.findByEmail(parsed.email)) ??
-      (await this.createMagicLinkUser(parsed.email));
-
-    await this.issueMagicLinkOtp(user);
+    // Anti-mail-bomb spacing: atomically claim a per-email cooldown slot BEFORE any find-or-create.
+    // If one is already held (a code was sent within EMAIL_OTP_RESEND_COOLDOWN_SECONDS), skip the
+    // auto-signup + issue + email entirely and fall through to the SAME uniform success. The slot is
+    // keyed on the requested email regardless of account existence, so it is never an existence
+    // oracle, and the constant-time floor below still applies on both paths.
+    const cooldownKey = `${MAGIC_LINK_SEND_COOLDOWN_KEY_PREFIX}${createHash('sha256')
+      .update(parsed.email)
+      .digest('hex')}`;
+    const cooldownClaimed = await this.redis.set(
+      cooldownKey,
+      '1',
+      'EX',
+      EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
+      'NX',
+    );
+    if (cooldownClaimed) {
+      // Auto-signup: an unknown email creates a new passwordless user (mirrors OAuth find-or-create).
+      // New and existing users then run the identical issue-code path, so the response body cannot
+      // reveal which case occurred; enforceMinimumDuration below masks the create-vs-existing latency
+      // difference so timing is not an account-existence oracle either.
+      const user =
+        (await this.userService.findByEmail(parsed.email)) ??
+        (await this.createMagicLinkUser(parsed.email));
+      await this.issueMagicLinkOtp(user);
+    }
     await enforceMinimumDuration(startedAtMillis);
     return {
       messageKey: 'success:magicLinkEmailSent',
