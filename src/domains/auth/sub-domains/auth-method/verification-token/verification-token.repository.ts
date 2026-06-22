@@ -82,6 +82,35 @@ export class VerificationTokenRepository {
     return rows[0] ?? null;
   }
 
+  /**
+   * Atomically consume a numeric OTP scoped to a specific user and token type: marks the row used
+   * only if a matching, unexpired, unused row exists. Returns the row when this caller consumed it,
+   * else `null` (missing / expired / already used / wrong code).
+   *
+   * @remarks
+   * Unlike {@link VerificationTokenRepository.consumeIfValid} — which looks up by the high-entropy
+   * 32-byte token hash alone — a 6-digit OTP has only ~1e6 values, so the lookup MUST be bound to
+   * `user_id` + `token_type` (and gated by a per-user attempt cap at the call site). Without that
+   * scoping an attacker could spray codes against ANY pending OTP across all users. The single
+   * atomic UPDATE also prevents two concurrent verifies from both succeeding.
+   */
+  async consumeOtpForUser(userId: number, tokenType: VerificationTokenType, codeHash: string) {
+    const rows = await getRequestDatabase()
+      .update(verification_tokens)
+      .set({ used_at: new Date() })
+      .where(
+        and(
+          eq(verification_tokens.user_id, userId),
+          eq(verification_tokens.token_type, tokenType),
+          eq(verification_tokens.token_hash, codeHash),
+          gt(verification_tokens.expires_at, new Date()),
+          isNull(verification_tokens.used_at),
+        ),
+      )
+      .returning();
+    return rows[0] ?? null;
+  }
+
   async markUsed(tokenHash: string) {
     const rows = await getRequestDatabase()
       .update(verification_tokens)
