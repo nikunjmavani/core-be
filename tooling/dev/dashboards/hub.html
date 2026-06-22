@@ -245,8 +245,8 @@ function parseHttpRoutes(text) {
     const method = (labels.match(/method="([^"]*)"/) || [])[1] || '';
     const status = parseInt((labels.match(/status_code="([^"]*)"/) || [])[1] || '0', 10);
     const key = `${method} ${route}`;
-    const r = routes[key] || (routes[key] = { method, route, count: 0, sum: 0, errors: 0, errStatuses: {} });
-    if (m[1] === 'count') { r.count += val; if (status >= 500) { r.errors += val; r.errStatuses[status] = (r.errStatuses[status] || 0) + val; } } else r.sum += val;
+    const r = routes[key] || (routes[key] = { method, route, count: 0, sum: 0, errors: 0, clientErrors: 0, errStatuses: {} });
+    if (m[1] === 'count') { r.count += val; if (status >= 400) { r.errStatuses[status] = (r.errStatuses[status] || 0) + val; if (status >= 500) r.errors += val; else r.clientErrors += val; } } else r.sum += val;
   }
   return Object.values(routes);
 }
@@ -653,28 +653,51 @@ function renderQueues(queues, agg, sS, worker, opts) {
 }
 
 /* ── 6. Requests (top routes by traffic · avg latency · 5xx) ── */
+let reqFilter = 'all'; // active Requests tab (persists across polls + manual refresh)
 function renderRequests(routes, opts) {
   const host = $('requests'); if (!host) return;
   const stale = !!(opts && opts.stale) && everLoaded.requests;
-  if (!routes) return;
+  if (!routes) { if (!everLoaded.requests) return; routes = lastGood.routes || []; }
   const INFRA = /^\/(metrics|livez|readyz|admin)|^\/reference|^\/_/;
-  // ALL unique app routes (deduped by method + clean path; query strings already stripped), busiest first
-  const list = routes.filter((r) => r.route && r.route !== '__unmatched__' && !INFRA.test(r.route)).sort((a, b) => b.count - a.count);
+  const avgMsOf = (r) => (r.count ? (r.sum / r.count) * 1000 : 0);
+  const base = routes.filter((r) => r.route && r.route !== '__unmatched__' && !INFRA.test(r.route));
+  // ── tab filter group: All / Slowest / Failed (5xx) / 4xx — each re-sorts/filters the same data ──
+  const TABS = [
+    { k: 'all',    label: 'All',     n: base.length,                                  rows: base.slice().sort((a, b) => b.count - a.count) },
+    { k: 'slow',   label: 'Slowest', n: base.filter((r) => avgMsOf(r) >= 200).length, rows: base.slice().sort((a, b) => avgMsOf(b) - avgMsOf(a)) },
+    { k: 'failed', label: 'Failed',  n: base.filter((r) => r.errors > 0).length,       rows: base.filter((r) => r.errors > 0).sort((a, b) => b.errors - a.errors || b.count - a.count) },
+    { k: 'client', label: '4xx',     n: base.filter((r) => r.clientErrors > 0).length, rows: base.filter((r) => r.clientErrors > 0).sort((a, b) => b.clientErrors - a.clientErrors) },
+  ];
+  if (!TABS.some((t) => t.k === reqFilter)) reqFilter = 'all';
+  const active = TABS.find((t) => t.k === reqFilter);
+  const list = active.rows;
   // FLIP: remember each row's current position so the re-sort animates (slides) instead of jumping
   const oldTop = {};
   host.querySelectorAll('[data-rkey]').forEach((e) => { oldTop[e.getAttribute('data-rkey')] = e.getBoundingClientRect().top; });
   const card = el('div', `${CARD} overflow-hidden${stale ? ' stale' : ''}`);
-  const cols = 'grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-4 px-4 sm:gap-x-8';
-  const head = el('div', `${cols} border-b border-border py-2.5`);
-  const cap = el('div', 'flex items-center gap-2');
+  const tabbar = el('div', 'flex flex-wrap items-center gap-1.5 border-b border-border px-3 py-2');
+  const cap = el('div', 'mr-1 flex items-center gap-1.5');
   cap.appendChild(iconEl('route', 'text-muted-foreground'));
-  cap.appendChild(el('span', 'font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground', `Requests · ${list.length}`)); if (stale) cap.appendChild(staleTag());
-  head.appendChild(cap);
+  cap.appendChild(el('span', 'font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground', 'Requests'));
+  tabbar.appendChild(cap);
+  TABS.forEach((t) => {
+    const on = t.k === reqFilter, fail = t.k === 'failed' && t.n > 0;
+    const b = el('button', `inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition ${on ? (fail ? 'border-destructive/40 bg-destructive/15 text-destructive' : 'border-brand/45 bg-brand/15 text-foreground') : 'border-border bg-muted/40 text-muted-foreground hover:text-foreground'}`);
+    b.type = 'button';
+    b.append(el('span', '', t.label), el('span', `font-mono text-[10px] tabular-nums ${fail ? 'text-destructive' : (on ? 'text-foreground/70' : 'text-muted-foreground/70')}`, String(t.n)));
+    b.onclick = () => { reqFilter = t.k; renderRequests(lastGood.routes || routes, {}); };
+    tabbar.appendChild(b);
+  });
+  if (stale) tabbar.appendChild(staleTag());
+  card.appendChild(tabbar);
+  const cols = 'grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-4 px-4 sm:gap-x-8';
+  const head = el('div', `${cols} border-b border-border py-2`);
+  head.appendChild(el('div', 'font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground', `${active.label} · ${list.length}`));
   head.appendChild(el('div', 'w-[60px] text-right text-[11px] font-semibold', 'calls'));
   head.appendChild(el('div', 'w-[60px] text-right text-[11px] font-semibold', 'avg'));
-  head.appendChild(el('div', 'w-[52px] text-right text-[11px] font-semibold', '5xx'));
+  head.appendChild(el('div', 'w-[52px] text-right text-[11px] font-semibold', reqFilter === 'client' ? '4xx' : '5xx'));
   card.appendChild(head);
-  if (!list.length) card.appendChild(el('div', 'px-4 py-6 text-center text-[13px] text-muted-foreground', 'No application requests yet.'));
+  if (!list.length) card.appendChild(el('div', 'px-4 py-6 text-center text-[13px] text-muted-foreground', reqFilter === 'failed' ? 'No 5xx failures — all clear.' : reqFilter === 'client' ? 'No 4xx responses.' : 'No application requests yet.'));
   list.forEach((r) => {
     const avgMs = r.count ? (r.sum / r.count) * 1000 : 0;
     const slow = avgMs > 500, err = r.errors > 0;
@@ -686,14 +709,15 @@ function renderRequests(routes, opts) {
     // errored routes show the FULL path (no truncation) so you can see exactly what failed
     line.appendChild(el('span', `font-mono text-[12px]${err ? ' break-all text-destructive' : ' truncate'}`, r.route));
     nm.appendChild(line);
-    if (err) {
-      const breakdown = Object.keys(r.errStatuses).sort().map((s) => `${s}×${r.errStatuses[s].toLocaleString()}`).join(' · ');
-      nm.appendChild(el('div', 'font-mono text-[10px] text-destructive/80', `⚠ ${breakdown}`));
+    if ((err || reqFilter === 'client') && Object.keys(r.errStatuses).length) {
+      const breakdown = Object.keys(r.errStatuses).sort((a, b) => a - b).map((s) => `${s}×${r.errStatuses[s].toLocaleString()}`).join(' · ');
+      nm.appendChild(el('div', `font-mono text-[10px] ${err ? 'text-destructive/80' : 'text-muted-foreground'}`, `${err ? '⚠ ' : ''}${breakdown}`));
     }
     row.appendChild(nm);
     row.appendChild(el('div', 'w-[60px] text-right font-mono text-[12px] tabular-nums text-muted-foreground', r.count.toLocaleString()));
     row.appendChild(el('div', `w-[60px] text-right font-mono text-[12px] tabular-nums${slow ? ' text-warning' : ' text-muted-foreground'}`, `${avgMs < 10 ? avgMs.toFixed(1) : Math.round(avgMs)}ms`));
-    row.appendChild(el('div', `w-[52px] text-right font-mono text-[12px] tabular-nums${err ? ' font-semibold text-destructive' : ' text-muted-foreground'}`, err ? r.errors.toLocaleString() : '·'));
+    const show4xx = reqFilter === 'client', lastBad = show4xx ? r.clientErrors > 0 : err;
+    row.appendChild(el('div', `w-[52px] text-right font-mono text-[12px] tabular-nums${lastBad ? ' font-semibold ' + (err ? 'text-destructive' : 'text-warning') : ' text-muted-foreground'}`, lastBad ? (show4xx ? r.clientErrors : r.errors).toLocaleString() : '·'));
     card.appendChild(row);
   });
   host.replaceChildren(card); everLoaded.requests = true;
