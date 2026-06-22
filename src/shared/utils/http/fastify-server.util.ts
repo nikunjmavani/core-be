@@ -153,5 +153,10 @@ export function buildFastifyServerOptions(): FastifyServerOptions {
     bodyLimit: DEFAULT_BODY_LIMIT_BYTES,
     requestTimeout: env.FASTIFY_REQUEST_TIMEOUT_MS ?? THIRTY_SECONDS_MS,
     connectionTimeout: env.FASTIFY_CONNECTION_TIMEOUT_MS ?? TEN_SECONDS_MS,
+    // On shutdown, immediately close keep-alive sockets sitting idle between requests rather than
+    // waiting out their keep-alive timeout; in-flight requests still drain normally. Without this a
+    // rolling deploy can hang on idle-but-open client connections until the platform force-kills the
+    // process — a slower, less graceful drain.
+    forceCloseConnections: 'idle',
   };
 }

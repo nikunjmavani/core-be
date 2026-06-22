@@ -15,6 +15,7 @@ import {
   invalidateCachedSessionToken,
   setCachedSessionTokenValid,
 } from './session-token-cache.service.js';
+import { runReadWithTransientRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 
 function hashAccessToken(rawToken: string): string {
   return createHash('sha256').update(rawToken).digest('hex');
@@ -192,8 +193,14 @@ export class AuthSessionService {
       return { sessionPublicId: cachedSessionPublicId };
     }
 
-    const session = await withSessionTokenHashDatabaseContext(tokenHash, (_databaseHandle) =>
-      this.sessionRepository.findActiveByTokenHash(tokenHash),
+    // These two reads run in the auth pre-handler, outside any service transaction (autocommit), so
+    // a transient managed-Postgres connection drop is safe to retry rather than spuriously 401 an
+    // otherwise-authenticated request. Only connection-level errors are retried (see
+    // runReadWithTransientRetry); an invalid/expired session still returns null on the first attempt.
+    const session = await runReadWithTransientRetry(() =>
+      withSessionTokenHashDatabaseContext(tokenHash, (_databaseHandle) =>
+        this.sessionRepository.findActiveByTokenHash(tokenHash),
+      ),
     );
 
     if (!session) {
@@ -203,7 +210,9 @@ export class AuthSessionService {
     // sec-new-A2: verify the owning user is still active. Runs only on cache miss
     // (first request per 60 s window) to avoid a per-request DB round-trip.
     // findUserRecordByPublicId wraps withUserDatabaseContext internally.
-    const user = await this.userService.findUserRecordByPublicId(userPublicId);
+    const user = await runReadWithTransientRetry(() =>
+      this.userService.findUserRecordByPublicId(userPublicId),
+    );
     if (user?.status !== 'ACTIVE' || user.deleted_at !== null) {
       throw new UnauthorizedError('errors:accountNotActive');
     }

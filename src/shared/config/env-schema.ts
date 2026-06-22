@@ -448,6 +448,13 @@ const envSchemaBase = z.object({
   /** AWS SDK maxAttempts for S3 (each attempt bounded by service/client timeouts). */
   S3_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
   /**
+   * Per-attempt socket-inactivity timeout (ms) for S3 requests, so a stalled S3 call can't hang a
+   * worker or request indefinitely. Bounds each of the `S3_MAX_ATTEMPTS` attempts.
+   */
+  S3_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(15000),
+  /** TCP connection-establishment timeout (ms) for S3 requests. */
+  S3_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(500).max(60000).default(5000),
+  /**
    * audit-#13: public base URL (e.g. a CloudFront distribution) for PUBLIC media only
    * (avatars, organization logos). When set, `getObjectUrl` builds links from this base instead
    * of the raw `https://<bucket>.s3.<region>.amazonaws.com/<key>` form, so the S3 bucket can keep
