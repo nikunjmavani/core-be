@@ -114,7 +114,10 @@ describe('auth.validator', () => {
     });
   });
 
-  it('validateVerifyEmail accepts token', () => {
-    expect(validateVerifyEmail({ token: 'verify-token' })).toEqual({ token: 'verify-token' });
+  it('validateVerifyEmail accepts email + 6-digit code', () => {
+    expect(validateVerifyEmail({ email: 'user@example.com', code: '123456' })).toEqual({
+      email: 'user@example.com',
+      code: '123456',
+    });
   });
 });

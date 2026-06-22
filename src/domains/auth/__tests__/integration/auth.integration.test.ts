@@ -15,6 +15,7 @@ import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper
 import { database } from '@/infrastructure/database/connection.js';
 import { users } from '@/domains/user/user.schema.js';
 import { verification_tokens } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.schema.js';
+import { hashEmailOtp } from '@/domains/auth/sub-domains/auth-method/email-otp.js';
 import type { FastifyInstance } from 'fastify';
 
 const AUTH_LOGIN_PATH = '/auth/login';
@@ -748,26 +749,24 @@ describe('Auth Domain — Integration', () => {
       expect([400, 422]).toContain(response.statusCode);
     });
 
-    it('should return 401 for invalid verification token', async () => {
+    it('should return 401 for an unknown email (no account-existence oracle)', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
         url: testApiPath('/auth/email/verify'),
-        payload: { token: 'invalid-verification-token' },
+        payload: { email: 'nobody@example.com', code: '000000' },
       });
       expect(response.statusCode).toBe(401);
     });
 
-    it('should verify email with a valid token', async () => {
+    it('should verify email with a valid code', async () => {
       const user = await createTestUser({ isEmailVerified: false });
 
-      // Create an email verification token directly in DB
-      const rawToken = randomBytes(32).toString('hex');
-      const tokenHash = createHash('sha256').update(rawToken).digest('hex');
-      const expiresAt = new Date(Date.now() + 86_400_000); // 24 hours
-
+      // Seed the hashed 6-digit code directly in DB (the raw code is normally emailed).
+      const code = '424242';
+      const expiresAt = new Date(Date.now() + 15 * 60_000);
       await database.insert(verification_tokens).values({
         token_type: 'EMAIL_VERIFICATION',
-        token_hash: tokenHash,
+        token_hash: hashEmailOtp(code),
         user_id: user.id,
         email: user.email,
         expires_at: expiresAt,
@@ -776,7 +775,7 @@ describe('Auth Domain — Integration', () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
         url: testApiPath('/auth/email/verify'),
-        payload: { token: rawToken },
+        payload: { email: user.email, code },
       });
       expect(response.statusCode).toBe(201);
       expect((response.json() as { data: Record<string, unknown> }).data).toHaveProperty('message');

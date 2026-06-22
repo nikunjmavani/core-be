@@ -150,10 +150,11 @@ export const StepUpVerifyDto = z
 export type StepUpVerifyInput = z.infer<typeof StepUpVerifyDto>;
 
 // Email verification
-/** Zod schema for the `POST /api/v1/auth/email/verify` request body. */
+/** Zod schema for the `POST /api/v1/auth/email/verify` request body (email + 6-digit verification code). */
 export const VerifyEmailDto = z
   .object({
-    token: trimmedStringMinMax(1, 512),
+    email: trimmedEmail(),
+    code: z.string().trim().length(6).regex(/^\d+$/),
   })
   .strict();
 /** Inferred input type of {@link VerifyEmailDto}. */
