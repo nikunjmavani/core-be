@@ -29,6 +29,17 @@ describe('webhook service SSRF guard (validateWebhookUrl)', () => {
     expect(mockedLookup).not.toHaveBeenCalled();
   });
 
+  it('R13: rejects URLs with embedded userinfo (https://user:pass@host) before any DNS lookup', async () => {
+    await expect(validateWebhookUrl('https://user:pass@example.com/hook')).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    await expect(validateWebhookUrl('https://user@example.com/hook')).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    // Credentials are rejected pre-resolution, so DNS is never reached.
+    expect(mockedLookup).not.toHaveBeenCalled();
+  });
+
   it('createWebhook rejects URLs pointing to RFC1918 private IPs', async () => {
     mockResolvedAddresses([{ address: '10.0.0.5', family: 4 }]);
     await expect(validateWebhookUrl('https://internal-10.example/hook')).rejects.toMatchObject({

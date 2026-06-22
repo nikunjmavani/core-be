@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { trimmedString, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
+import {
+  trimmedString,
+  trimmedStringMinMax,
+  isTraversalFreeStorageKey,
+} from '@/shared/utils/validation/validation.util.js';
 
 /** Zod schema for the admin `:user_id` path param (get/update/delete/suspend/unsuspend). */
 export const userIdParamsDto = z
@@ -31,6 +35,9 @@ export const UpdateMeDto = z
       .refine((key) => key.startsWith('avatars/'), {
         message: 'Avatar key must start with "avatars/"',
       })
+      .refine(isTraversalFreeStorageKey, {
+        message: 'Avatar key must not contain path traversal',
+      })
       .optional(),
   })
   .strict();
@@ -47,6 +54,9 @@ export const UploadAvatarDto = z
       .max(512)
       .refine((key) => key.startsWith('avatars/'), {
         message: 'Avatar key must start with "avatars/"',
+      })
+      .refine(isTraversalFreeStorageKey, {
+        message: 'Avatar key must not contain path traversal',
       }),
   })
   .strict();
