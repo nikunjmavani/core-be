@@ -325,6 +325,20 @@ export class UserService {
     });
   }
 
+  /**
+   * Creates a passwordless user for magic-link auto-signup with `is_email_verified=false`.
+   *
+   * @remarks
+   * Delegates to {@link UserService.createFromOAuth} (the shared passwordless-insert path: generate
+   * `public_id`, enter the owner `withUserDatabaseContext` so the FORCE-RLS owner WITH CHECK passes,
+   * retry on the rare public-id collision). Used when `POST /auth/magic-link/send` receives an
+   * unknown email — the account is created on the spot (no password) and the magic-link OTP it then
+   * receives is the proof-of-email-control that flips `is_email_verified` on verify.
+   */
+  async createForMagicLink(data: { email: string }): Promise<UserAuthRecord> {
+    return this.createFromOAuth({ email: data.email, is_email_verified: false });
+  }
+
   async updatePassword(public_id: string, password_hash: string): Promise<UserAuthRecord | null> {
     return withUserDatabaseContext(public_id, () =>
       this.repository.updatePassword(public_id, password_hash),

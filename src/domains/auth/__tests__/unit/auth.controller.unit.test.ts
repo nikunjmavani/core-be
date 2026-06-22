@@ -195,7 +195,10 @@ describe('createAuthController', () => {
       mockRequest({ body: { email: 'user@example.com' } }),
       mockReply(),
     );
-    await controller.verifyMagicLink(mockRequest({ body: { token: 'raw-token' } }), verifyReply);
+    await controller.verifyMagicLink(
+      mockRequest({ body: { email: 'user@example.com', code: '123456' } }),
+      verifyReply,
+    );
     expect(magicLinkService.send).toHaveBeenCalled();
     expect(verifyReply.setCookie).toHaveBeenCalled();
   });

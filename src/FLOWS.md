@@ -24,28 +24,30 @@ sequenceDiagram
   participant Bus as event-bus
   participant Mail as mail.processor
   participant Resend
-  Client->>Auth: POST /auth/magic-link {email}
+  Client->>Auth: POST /auth/magic-link/send {email}
   Auth->>ML: send({email})
   ML->>US: findByEmail(email)
   US-->>ML: user | null
-  alt user exists
-    ML->>DB: insert verification_tokens (MAGIC_LINK, sha256(token), expires_at = now + 15m)
-    ML->>Bus: emit AUTH_EVENT.MAGIC_LINK_REQUESTED {email, magic_link_token, expires_in_minutes}
-    Bus->>Mail: recordOutboxEmail (via event handler)
-  else user does not exist
-    Note over ML: silent success — no token, no event, no email
+  alt user does not exist (auto-signup)
+    ML->>DB: insert users (passwordless, is_email_verified=false) + auth_methods (MAGIC_LINK), atomic
+    Note over ML: post-commit best-effort provisionPersonalOrganization (when enabled)
   end
+  Note over ML: new and existing users converge on the same issue-code path
+  ML->>DB: invalidate prior MAGIC_LINK + insert verification_tokens (MAGIC_LINK, sha256(code), expires_at = now + 15m)
+  ML->>Bus: emit AUTH_EVENT.MAGIC_LINK_REQUESTED {email, otp_code, expires_in_minutes}
+  Bus->>Mail: recordOutboxEmail (via event handler)
   ML-->>Auth: {messageKey: success:magicLinkEmailSent, expires_in_minutes: 15}
-  Auth-->>Client: 200
-  Mail->>Resend: POST /emails (signed)
+  Auth-->>Client: 201
+  Mail->>Resend: POST /emails (signed, 6-digit code)
   Resend-->>Mail: 200
-  Client->>Auth: GET /auth/magic-link/verify?token=...
-  Auth->>ML: verify({token})
-  ML->>DB: UPDATE verification_tokens SET consumed_at=NOW() WHERE token_hash=$1 AND consumed_at IS NULL RETURNING *
-  ML->>DB: SELECT user
+  Client->>Auth: POST /auth/magic-link/verify {email, code}
+  Auth->>ML: verify({email, code})
+  ML->>US: findByEmail(email) + per-user attempt cap (Redis)
+  ML->>DB: UPDATE verification_tokens SET used_at=NOW() WHERE user_id=$1 AND token_type='MAGIC_LINK' AND token_hash=$2 AND used_at IS NULL RETURNING *
+  ML->>DB: UPDATE users SET is_email_verified=true (when not already)
   ML->>DB: INSERT auth_sessions
   ML-->>Auth: {access_token, session_public_id}
-  Auth-->>Client: 200 + Set-Cookie session_id
+  Auth-->>Client: 201 + Set-Cookie session_id
 ```
 
 ### Side effects

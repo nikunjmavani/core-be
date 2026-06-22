@@ -283,6 +283,31 @@ export class AuthMethodService {
     );
   }
 
+  /**
+   * Creates the user's `MAGIC_LINK` auth_method row during magic-link auto-signup.
+   *
+   * @remarks
+   * - **Algorithm:** inserts one `method_type=MAGIC_LINK` row owned by the user, pinning the owner
+   *   `withUserDatabaseContext` so the FORCE-RLS owner WITH CHECK authorizes the write. Intended to
+   *   run inside the auto-signup pinned transaction so it commits atomically with the user row.
+   * - **Failure modes:** propagates the insert error (e.g. a CHECK/constraint violation) to roll the
+   *   auto-signup transaction back.
+   * - **Side effects:** one `auth.auth_methods` insert.
+   * - **Notes:** `MAGIC_LINK` is a functional credential-less row (no stored secret), so a
+   *   magic-link-only user has a real login-capable method that appears in
+   *   `GET /auth/me/auth-methods` and is counted by the last-login-capable-credential guard.
+   */
+  async createMagicLinkMethod(userId: number, userPublicId: string): Promise<void> {
+    await withUserDatabaseContext(userPublicId, () =>
+      this.authMethodRepository.create({
+        user_id: userId,
+        method_type: AUTH_METHOD_TYPE.MAGIC_LINK,
+        is_primary: true,
+        created_by_user_id: userId,
+      }),
+    );
+  }
+
   async updateAuthMethodLastUsedAt(methodId: number, userId: number): Promise<void> {
     await this.authMethodRepository.updateLastUsedAt(methodId, userId);
   }

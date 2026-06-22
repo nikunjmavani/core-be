@@ -41,10 +41,8 @@ async function handleMagicLinkEmail(
     throw new ServiceUnavailableError('errors:mailNotConfigured');
   }
 
-  const frontendUrl = env.FRONTEND_URL ?? DEFAULT_FRONTEND_URL;
-  const magicLinkUrl = `${frontendUrl}/auth/magic-link/verify?token=${payload.magic_link_token}&email=${encodeURIComponent(payload.email)}`;
   const html = magicLinkTemplate({
-    magicLinkUrl,
+    code: payload.otp_code,
     expiresInMinutes: payload.expires_in_minutes,
   });
 

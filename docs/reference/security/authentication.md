@@ -17,9 +17,10 @@ Implementation lives under `src/domains/auth/` (see [sub-domains-layout.md](../a
 
 ## Signup and bot abuse (no CAPTCHA vendor)
 
-There is no separate `POST /auth/signup` route. New accounts are created through:
+New accounts are created through:
 
-- **Magic link** — `POST /api/v1/auth/magic-link/send` (existing users only; disposable domains blocked at send time)
+- **Email/password signup** — `POST /api/v1/auth/signup` (creates the user with `is_email_verified=false`, logs them in immediately, and emails a 6-digit verification code; returns **409** if the email already exists; disposable domains blocked at signup time)
+- **Magic link** — `POST /api/v1/auth/magic-link/send` (auto-signs-up an unknown email as a passwordless user, then emails a 6-digit sign-in code; disposable domains blocked at send time)
 - **OAuth** — `GET /api/v1/auth/oauth/{provider}/callback` (new users via `completeOAuthUserSession`; disposable domains blocked before `userService.createFromOAuth`)
 
 **Disposable email:** `isDisposableEmailBlocked()` (package `disposable-email-domains-js`) runs on login, magic-link send, password forgot, OAuth user creation, and member invitations. When blocked, the API returns **400** with `errors:disposableEmail`. Toggle with `BLOCK_DISPOSABLE_EMAIL` (default `true`).
@@ -48,13 +49,13 @@ Outside production (`development`, `test`), the middleware fail-opens by default
 
 ## Magic-link environment safety
 
-`MagicLinkService.send` **never** returns the raw magic-link token in the JSON body. The token leaves the service only via the `AUTH_EVENT.MAGIC_LINK_REQUESTED` event payload (consumed by the mail handler) and the resulting email URL — identical behavior across every environment.
+`MagicLinkService.send` **never** returns the raw 6-digit sign-in code in the JSON body. The code leaves the service only via the `AUTH_EVENT.MAGIC_LINK_REQUESTED` event payload (consumed by the mail handler) and the resulting email — identical behavior across every environment. Verification is `POST /api/v1/auth/magic-link/verify` with `{ email, code }`, gated by a per-user attempt cap (the code is low-entropy).
 
 | Guard                     | When it runs                                                  |
 | ------------------------- | ------------------------------------------------------------- |
 | Zod `FRONTEND_URL` refine | Boot — when set, `FRONTEND_URL` must be a valid `http(s)` URL |
 
-**Test code path:** tests subscribe to `AUTH_EVENT.MAGIC_LINK_REQUESTED` via the `captureNextMagicLinkToken(email)` helper in `src/tests/helpers/magic-link.helper.ts` to obtain the raw token for assertions.
+**Test code path:** tests subscribe to `AUTH_EVENT.MAGIC_LINK_REQUESTED` via the `captureNextMagicLinkCode(email)` helper in `src/tests/helpers/magic-link.helper.ts` to obtain the raw code for assertions.
 
 **Deployed environments (Railway development, production):** any valid public `FRONTEND_URL` is accepted. The previous environment-based inline-token leak and its localhost-only `FRONTEND_URL` restriction have been removed.
 

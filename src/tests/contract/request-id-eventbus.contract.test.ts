@@ -81,7 +81,7 @@ describe('Request id event-bus to mail worker contract', () => {
       type: AUTH_EVENT.MAGIC_LINK_REQUESTED,
       payload: {
         email: 'user@example.com',
-        magic_link_token: 'raw-token',
+        otp_code: '123456',
         expires_in_minutes: 15,
       },
       timestamp: new Date(),

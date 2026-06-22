@@ -54,7 +54,7 @@ describe('auth event handlers', () => {
       type: AUTH_EVENT.MAGIC_LINK_REQUESTED,
       payload: {
         email: 'user@example.com',
-        magic_link_token: 'raw-token',
+        otp_code: '123456',
         expires_in_minutes: 15,
       },
       timestamp: new Date(),
@@ -122,7 +122,7 @@ describe('auth event handlers', () => {
       type: AUTH_EVENT.MAGIC_LINK_REQUESTED,
       payload: {
         email: 'user@example.com',
-        magic_link_token: 'raw-token',
+        otp_code: '123456',
         expires_in_minutes: 15,
       },
       timestamp: new Date(),
@@ -138,7 +138,7 @@ describe('auth event handlers', () => {
   it.each([
     [
       AUTH_EVENT.MAGIC_LINK_REQUESTED,
-      { email: 'user@example.com', magic_link_token: 'raw', expires_in_minutes: 15 },
+      { email: 'user@example.com', otp_code: '123456', expires_in_minutes: 15 },
     ],
     [
       AUTH_EVENT.PASSWORD_RESET_REQUESTED,
@@ -175,7 +175,7 @@ describe('auth event handlers', () => {
         AUTH_EVENT.MAGIC_LINK_REQUESTED,
         {
           email: 'user@example.com',
-          magic_link_token: 'raw-token',
+          otp_code: '123456',
           expires_in_minutes: 15,
         },
       ],
