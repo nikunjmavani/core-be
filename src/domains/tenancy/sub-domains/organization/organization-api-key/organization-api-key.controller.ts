@@ -8,6 +8,10 @@ import {
   resolveActiveOrganizationId,
 } from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
+import {
+  buildAuditActorFields,
+  recordScopedAuditEvent,
+} from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import type { OrganizationApiKeyService } from './organization-api-key.service.js';
 
 /**
@@ -45,6 +49,14 @@ export function createOrganizationApiKeyController(service: OrganizationApiKeySe
       const auth = requireAuth(request);
       const organizationId = resolveActiveOrganizationId(request);
       const result = await service.create(organizationId, request.body, auth.userId);
+      // Long-lived org bearer credentials: audit minting at WARNING so creation is never silent.
+      await recordScopedAuditEvent(request, {
+        actorUserPublicId: auth.userId,
+        action: 'organization.api_key.create',
+        resource_type: 'organization_api_key',
+        severity: 'WARNING',
+        metadata: { api_key_id: result.api_key.id },
+      });
       reply.code(201);
       return successResponse(
         { api_key: result.api_key, raw_key: result.raw_key },
@@ -67,10 +79,16 @@ export function createOrganizationApiKeyController(service: OrganizationApiKeySe
         request.body,
         getActingUserPublicId(auth),
       );
+      await recordScopedAuditEvent(request, {
+        ...buildAuditActorFields(auth),
+        action: 'organization.api_key.update',
+        resource_type: 'organization_api_key',
+        metadata: { api_key_id: apiKeyId },
+      });
       return successResponse(data, getRequestIdentifier(request));
     },
     deleteApiKey: async (request: FastifyRequest, reply: FastifyReply) => {
-      requirePrincipal(request);
+      const auth = requirePrincipal(request);
       const rawParams = (request.params as { api_key_id: string }) ?? {
         api_key_id: '',
       };
@@ -80,6 +98,14 @@ export function createOrganizationApiKeyController(service: OrganizationApiKeySe
       const organizationId = resolveActiveOrganizationId(request);
       const apiKeyId = validatePublicIdParam(rawParams.api_key_id ?? '', 'api_key_id');
       await service.delete(organizationId, apiKeyId);
+      // Revoking a long-lived org credential is a security-relevant change; audit at WARNING.
+      await recordScopedAuditEvent(request, {
+        ...buildAuditActorFields(auth),
+        action: 'organization.api_key.revoke',
+        resource_type: 'organization_api_key',
+        severity: 'WARNING',
+        metadata: { api_key_id: apiKeyId },
+      });
       return reply.code(204).send();
     },
     rotateApiKey: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -93,6 +119,14 @@ export function createOrganizationApiKeyController(service: OrganizationApiKeySe
       const organizationId = resolveActiveOrganizationId(request);
       const apiKeyId = validatePublicIdParam(rawParams.api_key_id ?? '', 'api_key_id');
       const result = await service.rotate(organizationId, apiKeyId, auth.userId);
+      // Rotation mints a new secret and invalidates the old one — audit at WARNING.
+      await recordScopedAuditEvent(request, {
+        actorUserPublicId: auth.userId,
+        action: 'organization.api_key.rotate',
+        resource_type: 'organization_api_key',
+        severity: 'WARNING',
+        metadata: { api_key_id: apiKeyId },
+      });
       reply.code(201);
       return successResponse(
         { api_key: result.api_key, raw_key: result.raw_key },

@@ -73,6 +73,16 @@ export function createAuthAuthMethodHandlers({
       const userAgent = getUserAgent(request) ?? undefined;
       const data = await authService.resetPassword(request.body, ipAddress, userAgent);
 
+      // A completed reset is a credential change — record it DISTINCTLY (and at WARNING) from the
+      // subsequent login so a reset is queryable on its own (previously it surfaced only as
+      // auth.login). Recorded for both the MFA-required and auto-login branches; the adjacent login
+      // event and the captured IP/UA tie it to the actor.
+      await recordScopedAuditEvent(request, {
+        action: 'auth.password.reset',
+        resource_type: 'user',
+        severity: 'WARNING',
+      });
+
       // MFA users complete the second factor before a session is issued (the reset never bypasses MFA).
       if ('mfa_required' in data) {
         return successResponse(AuthSerializer.mfaRequired(data), getRequestIdentifier(request));
