@@ -109,5 +109,9 @@ describe('Auth recovery atomicity — password reset', () => {
     expect(response.statusCode).toBe(201);
     expect(await readPasswordHash(user.id)).not.toBe(passwordHashBefore);
     expect(await readTokenUsedAt(tokenHash)).not.toBeNull();
+    // Auto-login: the reset response logs the user straight in (access token + session cookie).
+    const body = response.json() as { data: { access_token?: string } };
+    expect(body.data.access_token).toBeTruthy();
+    expect(response.headers['set-cookie']).toBeDefined();
   });
 });

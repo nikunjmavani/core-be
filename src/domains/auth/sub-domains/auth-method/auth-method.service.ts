@@ -32,6 +32,7 @@ import {
   runWithPinnedDatabaseHandle,
   type RequestScopedPostgresDatabase,
 } from '@/infrastructure/database/contexts/request-database.context.js';
+import type { UserAuthRecord } from '@/domains/user/user.types.js';
 import type { AuthMethodCreateData } from './auth-method.types.js';
 import type { AuthMethodRepository } from './auth-method.repository.js';
 import type { VerificationTokenRepository } from './verification-token/verification-token.repository.js';
@@ -396,7 +397,7 @@ export class AuthMethodService {
     );
   }
 
-  async resetPassword(body: unknown): Promise<void> {
+  async resetPassword(body: unknown): Promise<UserAuthRecord> {
     const parsed = validateResetPassword(body);
     const tokenHash = createHash('sha256').update(parsed.token).digest('hex');
 
@@ -409,7 +410,9 @@ export class AuthMethodService {
     // compromised account's existing sessions live after a recovery reset. One pinned
     // transaction makes every nested `withUserDatabaseContext` call reuse it (all-or-nothing);
     // a mid-operation failure rolls the password change back rather than committing it alone.
-    await withTransaction((transaction) =>
+    // Returns the reset user so the caller (AuthService.resetPassword) can mint a fresh session
+    // AFTER this revoke-all-sessions, leaving the resetter's new session as the only live one.
+    return withTransaction((transaction) =>
       runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
         // Atomic UPDATE also prevents two concurrent resets from both succeeding.
         // sec-r5-L2: the consume is scoped to PASSWORD_RESET, so a token of another flow
@@ -432,6 +435,7 @@ export class AuthMethodService {
         // session is revoked. The Redis token-cache invalidation inside `revokeAllSessions` is a
         // sub-millisecond local call; on rollback it merely causes a cache miss, never a leak.
         await this.authSessionService.revokeAllSessions(user.public_id);
+        return user;
       }),
     );
   }

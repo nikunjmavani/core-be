@@ -275,6 +275,42 @@ export class AuthService {
     return authResult;
   }
 
+  /**
+   * Completes `POST /auth/password/reset` and logs the user straight back in.
+   *
+   * @remarks
+   * - **Algorithm:** delegate the token-consume + password-update + revoke-all-sessions to
+   *   {@link AuthMethodService.resetPassword} (one pinned transaction), then mint a fresh session via
+   *   {@link completeFirstFactorAuth} AFTER that commits — so the resetter's new session is the only
+   *   live one, while any attacker-held session from before the reset is gone.
+   * - **Failure modes:** invalid/expired token → `UnauthorizedError` (from the delegate); a
+   *   suspended/locked/deleted account is refused a session via {@link assertUserAccountActive} even
+   *   though its password was reset (mirrors `login`); an MFA user gets the `mfa_required` arm of
+   *   {@link LoginResult} (the reset never bypasses MFA).
+   * - **Side effects:** the delegate's writes (password, token invalidation, session revoke) plus one
+   *   new `auth_sessions` row (unless MFA is required). The caller sets the session cookie + audits.
+   */
+  async resetPassword(body: unknown, ipAddress: string, userAgent?: string): Promise<LoginResult> {
+    const user = await this.authMethodService.resetPassword(body);
+    // The password was reset, but a suspended/locked/deleted account is never issued a session.
+    assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
+    return completeFirstFactorAuth({
+      user: {
+        id: user.id,
+        public_id: user.public_id,
+        email: user.email,
+        status: user.status,
+        is_email_verified: user.is_email_verified,
+        is_mfa_enabled: user.is_mfa_enabled,
+      },
+      ipAddress,
+      userAgent,
+      organizationSettingsService: this.organizationSettingsService,
+      mfaService: this.mfaService,
+      authSessionService: this.authSessionService,
+    });
+  }
+
   async logout(token: string): Promise<void> {
     await this.authSessionService.revokeSessionByAccessToken(token);
   }
