@@ -23,7 +23,7 @@ import { STRIPE_WEBHOOK_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-
 import { IDEMPOTENCY_CARDINALITY_QUEUE_NAME } from '@/infrastructure/observability/idempotency-cardinality/idempotency-cardinality.constants.js';
 import { DLQ_DEPTH_QUEUE_NAME } from '@/infrastructure/observability/dlq-depth/dlq-depth.constants.js';
 import { getEnv } from '@/shared/config/env.config.js';
-import { UnauthorizedError } from '@/shared/errors/index.js';
+import { ForbiddenError } from '@/shared/errors/index.js';
 import { GLOBAL_ROLES } from '@/shared/constants/index.js';
 import { requireRole } from '@/shared/utils/auth/authorization.util.js';
 const SOURCE_QUEUE_NAMES = [
@@ -234,7 +234,9 @@ export async function registerQueueDashboard(
           await handler.call(scope, request, reply);
         }
         if (!getEnv().ENABLE_QUEUE_DASHBOARD_MUTATIONS && MUTATING_METHODS.has(request.method)) {
-          throw new UnauthorizedError('errors:queueDashboardReadOnly');
+          // re-audit LOW: the caller IS an authenticated SUPER_ADMIN; the action is forbidden in
+          // read-only mode → 403 (matches the documented behavior), not 401 (unauthenticated).
+          throw new ForbiddenError('errors:queueDashboardReadOnly');
         }
       });
 

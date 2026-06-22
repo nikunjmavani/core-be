@@ -954,6 +954,37 @@ describe('env-schema', () => {
     });
   });
 
+  describe('Bull-Board queue dashboard production guard (re-audit A1)', () => {
+    it('rejects ENABLE_QUEUE_DASHBOARD=true in production without the explicit override', () => {
+      const parsed = envSchema.safeParse({
+        ...productionRequiredBase,
+        ENABLE_QUEUE_DASHBOARD: 'true',
+      });
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues.some((i) => i.path[0] === 'ENABLE_QUEUE_DASHBOARD')).toBe(true);
+      }
+    });
+
+    it('allows ENABLE_QUEUE_DASHBOARD=true in production with QUEUE_DASHBOARD_ALLOW_PRODUCTION=true', () => {
+      const parsed = envSchema.safeParse({
+        ...productionRequiredBase,
+        ENABLE_QUEUE_DASHBOARD: 'true',
+        QUEUE_DASHBOARD_ALLOW_PRODUCTION: 'true',
+      });
+      expect(parsed.success).toBe(true);
+    });
+
+    it('allows ENABLE_QUEUE_DASHBOARD=true outside production (dev/local)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NODE_ENV: 'development',
+        ENABLE_QUEUE_DASHBOARD: 'true',
+      });
+      expect(parsed.success).toBe(true);
+    });
+  });
+
   describe('WEBHOOK_URL_ALLOWLIST wildcard guard (audit #32)', () => {
     it('rejects an over-broad single-label wildcard (`*.com`)', () => {
       const parsed = envSchema.safeParse({
