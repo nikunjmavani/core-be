@@ -27,6 +27,12 @@ function getS3Client(): S3Client {
   s3Client = new S3Client({
     region: env.S3_REGION ?? 'us-east-1',
     maxAttempts: env.S3_MAX_ATTEMPTS,
+    // Bound each attempt so a stalled S3 endpoint can't hang a request/worker indefinitely. Without
+    // an explicit handler the AWS SDK uses Node's default (effectively unbounded socket) timeout.
+    requestHandler: {
+      requestTimeout: env.S3_REQUEST_TIMEOUT_MS,
+      connectionTimeout: env.S3_CONNECTION_TIMEOUT_MS,
+    },
     ...(env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY
       ? {
           credentials: {

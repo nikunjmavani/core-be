@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   isPostgresForeignKeyViolation,
   isPostgresUniqueViolation,
+  isTransientConnectionError,
   runInsertWithPublicIdentifierRetry,
+  runReadWithTransientRetry,
 } from '@/shared/utils/infrastructure/postgres-error.util.js';
 
 describe('postgres-error.util', () => {
@@ -61,5 +63,50 @@ describe('postgres-error.util', () => {
         throw new Error('other');
       }),
     ).rejects.toThrow('other');
+  });
+
+  describe('isTransientConnectionError', () => {
+    it('detects SQLSTATE class-08 and socket-reset codes, top-level and wrapped', () => {
+      expect(isTransientConnectionError({ code: '08006' })).toBe(true); // connection_failure
+      expect(isTransientConnectionError({ code: '57P01' })).toBe(true); // admin_shutdown
+      expect(isTransientConnectionError({ cause: { code: 'ECONNRESET' } })).toBe(true);
+      expect(isTransientConnectionError({ cause: { code: 'CONNECTION_ENDED' } })).toBe(true);
+    });
+
+    it('returns false for query-logic errors (never retry a doomed query) and non-objects', () => {
+      expect(isTransientConnectionError({ code: '23505' })).toBe(false); // unique_violation
+      expect(isTransientConnectionError({ code: '42601' })).toBe(false); // syntax_error
+      expect(isTransientConnectionError(null)).toBe(false);
+      expect(isTransientConnectionError(new Error('plain'))).toBe(false);
+    });
+  });
+
+  describe('runReadWithTransientRetry', () => {
+    it('retries a transient connection drop, then succeeds', async () => {
+      const read = vi
+        .fn()
+        .mockRejectedValueOnce({ code: 'ECONNRESET' })
+        .mockResolvedValueOnce('row');
+
+      const result = await runReadWithTransientRetry(read, 3);
+      expect(result).toBe('row');
+      expect(read).toHaveBeenCalledTimes(2);
+    });
+
+    it('does NOT retry a non-transient error — rethrows immediately', async () => {
+      const notFound = { code: '23505' };
+      const read = vi.fn().mockRejectedValue(notFound);
+
+      await expect(runReadWithTransientRetry(read, 3)).rejects.toBe(notFound);
+      expect(read).toHaveBeenCalledTimes(1);
+    });
+
+    it('gives up after maxAttempts transient failures and rethrows the last error', async () => {
+      const drop = { cause: { code: '08006' } };
+      const read = vi.fn().mockRejectedValue(drop);
+
+      await expect(runReadWithTransientRetry(read, 3)).rejects.toBe(drop);
+      expect(read).toHaveBeenCalledTimes(3);
+    });
   });
 });
