@@ -21,10 +21,11 @@ export const MagicLinkSendDto = z
 /** Inferred input type of {@link MagicLinkSendDto}. */
 export type MagicLinkSendInput = z.infer<typeof MagicLinkSendDto>;
 
-/** Zod schema for the `POST /api/v1/auth/magic-link/verify` request body. */
+/** Zod schema for the `POST /api/v1/auth/magic-link/verify` request body (email + the 6-digit sign-in code emailed by `magic-link/send`). */
 export const MagicLinkVerifyDto = z
   .object({
-    token: trimmedStringMinMax(1, 512),
+    email: trimmedEmail(),
+    code: z.string().trim().length(6).regex(/^\d+$/),
   })
   .strict();
 /** Inferred input type of {@link MagicLinkVerifyDto}. */
@@ -114,6 +115,22 @@ export const ResetPasswordDto = z
 /** Inferred input type of {@link ResetPasswordDto}. */
 export type ResetPasswordInput = z.infer<typeof ResetPasswordDto>;
 
+/**
+ * Zod schema for the `POST /api/v1/auth/signup` request body: email + a policy-compliant
+ * password (the same strength rule as reset/change) plus optional display name. A successful
+ * signup creates the user with `is_email_verified=false` and logs them in immediately.
+ */
+export const SignupDto = z
+  .object({
+    email: trimmedEmail(),
+    password: passwordPolicy(),
+    first_name: trimmedStringMinMax(1, 100).optional(),
+    last_name: trimmedStringMinMax(1, 100).optional(),
+  })
+  .strict();
+/** Inferred input type of {@link SignupDto}. */
+export type SignupInput = z.infer<typeof SignupDto>;
+
 /** Zod schema for the authenticated `POST /api/v1/auth/password/change` request body. */
 export const ChangePasswordDto = z
   .object({
@@ -134,10 +151,11 @@ export const StepUpVerifyDto = z
 export type StepUpVerifyInput = z.infer<typeof StepUpVerifyDto>;
 
 // Email verification
-/** Zod schema for the `POST /api/v1/auth/email/verify` request body. */
+/** Zod schema for the `POST /api/v1/auth/email/verify` request body (email + 6-digit verification code). */
 export const VerifyEmailDto = z
   .object({
-    token: trimmedStringMinMax(1, 512),
+    email: trimmedEmail(),
+    code: z.string().trim().length(6).regex(/^\d+$/),
   })
   .strict();
 /** Inferred input type of {@link VerifyEmailDto}. */

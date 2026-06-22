@@ -14,8 +14,41 @@ export const AES_GCM_ALGORITHM = 'aes-256-gcm';
 /** Failed login attempts before the account is temporarily locked. */
 export const MAX_FAILED_LOGIN_ATTEMPTS = 10;
 
+/**
+ * Maximum active (non-revoked) auth-method rows a single user may hold.
+ *
+ * @remarks
+ * `POST /auth/me/auth-methods` only ever inserts credential-less `MAGIC_LINK` rows, so the risk is
+ * benign self-bloat (a user accumulating rows that also truncate their own capped list view) rather
+ * than a credential issue. This ceiling — enforced under the credential-mutation advisory lock so
+ * concurrent creates cannot overshoot — bounds that growth well above any legitimate need.
+ */
+export const MAX_LINKED_AUTH_METHODS_PER_USER = 20;
+
+/**
+ * Maximum active (non-revoked) WebAuthn passkeys a single user may register.
+ *
+ * @remarks
+ * Each registration already requires an authenticated session, a recent step-up, and a real
+ * authenticator completing a cryptographic ceremony, so abuse potential is low; this cap simply
+ * bounds unbounded accumulation. Enforced under the credential-mutation advisory lock.
+ */
+export const MAX_WEBAUTHN_CREDENTIALS_PER_USER = 20;
+
 /** Account lockout duration after max failed login attempts (minutes). */
 export const ACCOUNT_LOCKOUT_MINUTES = 30;
+
+/**
+ * Maximum concurrent active (non-revoked, non-expired) sessions per user.
+ *
+ * @remarks
+ * Each successful login mints a new session row. Without a ceiling a single account (or a holder of
+ * valid credentials) could mint unbounded sessions — table bloat plus a wide stolen-credential blast
+ * radius. On login the oldest sessions beyond this cap are evicted (revoked) rather than rejecting
+ * the login, so a legitimate multi-device user is never locked out — only their stalest session is
+ * dropped. Set generously so no normal user is affected; tune down for higher-assurance deployments.
+ */
+export const MAX_ACTIVE_SESSIONS_PER_USER = 30;
 
 /**
  * Failed MFA verification attempts (TOTP or recovery code) per user before MFA

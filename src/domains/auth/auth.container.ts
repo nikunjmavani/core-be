@@ -60,6 +60,7 @@ export function createAuthContainer(
     mfaService,
     organizationSettingsService,
     redisConnection,
+    authMethodService,
   );
   const magicLinkService = new MagicLinkService(
     userService,
@@ -67,6 +68,8 @@ export function createAuthContainer(
     organizationSettingsService,
     mfaService,
     authSessionService,
+    authMethodService,
+    redisConnection,
   );
   const webauthnCredentialRepository = new WebauthnCredentialRepository();
   const webauthnService = new WebauthnService(

@@ -98,7 +98,8 @@ export interface CreateInvitationForMembershipParams {
  *   `withOrganizationDatabaseContext`.
  * - **Failure modes:** `NotFoundError` for missing org/membership/invitation; `ValidationError`
  *   (i18n keys `errors:validation.invalidToken`, `invitationRevoked`, `invitationAlreadyAccepted`,
- *   `invitationExpired`) for state/input violations; `ForbiddenError('errors:invitationEmailMismatch')`
+ *   `invitationExpired`) for state/input violations; `ForbiddenError('errors:invitationRequiresVerifiedEmail')`
+ *   when the accepting user's email is not verified; `ForbiddenError('errors:invitationEmailMismatch')`
  *   when the accepting user's email does not match the invitee.
  * - **Side effects:** writes to `tenancy.member_invitations`; `accept` additionally activates the
  *   linked `tenancy.memberships` row (`status='ACTIVE'`, `joined_at=now()`) and purges the member's
@@ -180,6 +181,14 @@ export class MemberInvitationService {
     }
     const actingUser = await this.userService.requireUserRecordByPublicId(actingUserPublicId);
     if (!actingUser) throw new NotFoundError('User');
+    // sec-T4 follow-up: require a VERIFIED email to join an org. magic-link / OAuth onboarding prove
+    // email control (and set is_email_verified); an email/password signup-claim of a pre-provisioned
+    // invited account stays unverified until the emailed code is entered. Without this, someone merely
+    // FORWARDED the invite email could claim the invited address via password signup and accept —
+    // re-opening exactly the takeover the email-match check (below) was added to close.
+    if (!actingUser.is_email_verified) {
+      throw new ForbiddenError('errors:invitationRequiresVerifiedEmail');
+    }
     /**
      * Public route: no org context up front. Resolve the owning org via the
      * SECURITY DEFINER lookup, then wrap the read + UPDATE in

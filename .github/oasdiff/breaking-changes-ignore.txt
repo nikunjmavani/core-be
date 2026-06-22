@@ -1579,3 +1579,15 @@ api post /api/v1/tenancy/invitations/{invitation_id}/decline api path removed wi
 api get /api/v1/tenancy/organization/invitations api path removed without deprecation
 api post /api/v1/tenancy/organization/invitations api path removed without deprecation
 api post /api/v1/tenancy/organization/memberships added the new required request property `email`
+
+# 32. OTP-conversion of the email-verification and magic-link verify endpoints. Both
+#     switched from a single emailed token to a 6-digit code resolved against the
+#     account, so each verify body now requires `email` + `code` (was `token`). The
+#     four new-required-property errors below are intentional; the matching `token`
+#     removals surface only as non-fatal WARN findings (the gate runs --fail-on ERR).
+#     Pinned by magic-link.service.unit.test.ts and auth-method.service.unit.test.ts
+#     (both assert verify takes `{ email, code }`) + magic-link-flow.e2e.test.ts.
+api post /api/v1/auth/email/verify added the new required request property `code`
+api post /api/v1/auth/email/verify added the new required request property `email`
+api post /api/v1/auth/magic-link/verify added the new required request property `code`
+api post /api/v1/auth/magic-link/verify added the new required request property `email`

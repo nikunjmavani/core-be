@@ -12,7 +12,13 @@ import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
  * `oauth_google`, `oauth_github` — to preserve that information without
  * adding a separate column.
  */
-export type LoginAuditSource = 'password' | 'magic_link' | 'webauthn' | `oauth_${string}`;
+export type LoginAuditSource =
+  | 'password'
+  | 'magic_link'
+  | 'webauthn'
+  | 'mfa_totp'
+  | 'mfa_recovery_code'
+  | `oauth_${string}`;
 
 /**
  * Subset of the first-factor auth result that carries enough to identify the

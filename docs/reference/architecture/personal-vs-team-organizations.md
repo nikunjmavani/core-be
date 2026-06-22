@@ -33,6 +33,79 @@ TEAM_ORGANIZATION_ENABLED       (default true)   — at least one must be true
 `GET /users/me` returns `capabilities { personal_organizations, team_organizations }` and
 `personal_organization_id` so the frontend can render the switcher and hide the disabled kind.
 
+## Configuring the mode
+
+The mode is set **per environment** via two flags — no code change, no migration. Both
+default to `true`, so **hybrid works out of the box**; set these only to opt into a
+single-kind product. At least one must be `true` or the API/worker refuses to boot.
+
+| Where | How |
+|-------|-----|
+| Local dev | Set them in `.env.local` (or `.env.<environment>`). |
+| Hosted | GitHub Environment **Variables** (not Secrets) — they are operational booleans, name-classified as Variables. Push with `pnpm github:sync <environment>`. |
+
+```dotenv
+# Hybrid (default) — personal workspace + teams
+PERSONAL_ORGANIZATION_ENABLED=true
+TEAM_ORGANIZATION_ENABLED=true
+
+# B2C — personal workspaces only
+PERSONAL_ORGANIZATION_ENABLED=true
+TEAM_ORGANIZATION_ENABLED=false
+
+# B2B — team orgs only
+PERSONAL_ORGANIZATION_ENABLED=false
+TEAM_ORGANIZATION_ENABLED=true
+```
+
+`MAX_TEAM_ORGANIZATIONS_PER_OWNER` (default 20) caps how many TEAM orgs one user may
+create; personal orgs are exempt.
+
+```mermaid
+flowchart TD
+    account["User account — always exists (auth, login)"]
+    account -->|PERSONAL_ORGANIZATION_ENABLED| personal["PERSONAL org<br/>auto @ signup · one per user · immutable"]
+    account -->|TEAM_ORGANIZATION_ENABLED| team["TEAM orgs (N)<br/>create / join · members · roles · billing"]
+```
+
+### Route effects by mode
+
+Route *registration* is identical in every mode — the flags never add or remove routes.
+Two mechanisms change behavior: the **deployment flags** (403 / 404) and the **active-org
+type** matrix (`assertTeamOrganization` → 422 when the active org is PERSONAL). Every route
+not listed operates on the active org regardless of type.
+
+| Route | B2C (personal only) | Hybrid | B2B (team only) |
+|-------|---------------------|--------|-----------------|
+| `POST /auth/switch-to-personal` | 201 | 201 | **404** (no personal org) |
+| `POST /auth/switch-to-organization` | — (no teams) | 201 | 201 |
+| `POST /tenancy/organizations` (create team) | **403** `teamOrganizationsDisabled` | 201 | 201 |
+| `GET /tenancy/organizations` (list teams) | 200 (empty) | 200 | 200 |
+| `DELETE /tenancy/organization` | **422** | 204 team · **422** personal | 204 |
+| `POST /tenancy/organization/invitations` | **422** | 201 team · **422** personal | 201 |
+| `POST /tenancy/organization/memberships` | **422** | 201 team · **422** personal | 201 |
+| `POST /tenancy/organization/roles` | **422** | 201 team · **422** personal | 201 |
+| `POST /tenancy/organization/transfer-ownership` | **422** | 201 team · **422** personal | 201 |
+
+The 422s come from the org-type guard: `personalOrganizationNoMembers`
+(invitations / memberships), `personalOrganizationNoRoles` (roles), and
+`personalOrganizationImmutable` (delete / transfer-ownership). All other routes — auth,
+`/users/*`, the rest of `/tenancy/organization/*` (settings, logo, api-keys, audit-logs,
+notification-policies, membership / role reads, leave), `/billing/*`, `/notify/*`,
+`/uploads/*`, `/audit/*` — behave identically in all three modes.
+
+### Switching mode after launch
+
+- **`PERSONAL` off → on** (B2B → hybrid): existing users have no personal org — run
+  `pnpm tool:backfill-personal-orgs` to provision one for each (idempotent).
+- **`TEAM` on → off** (hybrid → B2C): `POST /tenancy/organizations` returns
+  `403 teamOrganizationsDisabled`; existing team orgs are not deleted, only no longer
+  creatable. The frontend hides team UI from the `/users/me` `capabilities` flags.
+- **`PERSONAL` on → off** (hybrid → B2B): no new personal orgs are provisioned and
+  `switch-to-personal` returns `404`; users default to their most-recent team (or the
+  onboarding redirect when they have none). Existing personal orgs persist until account
+  deletion.
+
 ## Token model (active organization = signed claim)
 
 The active organization is a signed JWT claim (`org`), not a header or path parameter. It is

@@ -10,7 +10,7 @@ describe('Auth - Magic Link', () => {
     if (app) await app.close();
   });
 
-  it('POST /api/v1/auth/magic-link/send returns 200 with message', async () => {
+  it('POST /api/v1/auth/magic-link/send returns 201 with message', async () => {
     const testApp = await createTestApp();
     app = testApp.app;
     request = testApp.request;
@@ -20,15 +20,15 @@ describe('Auth - Magic Link', () => {
       .send({ email: 'nonexistent@example.com' });
 
     expect(response.status).toBe(201);
-    expect((response.body as { data: { message: string } }).data.message).toContain('magic link');
+    expect((response.body as { data: { message: string } }).data.message).toContain('sign-in code');
   });
 
-  it('POST /api/v1/auth/magic-link/verify returns 4xx with invalid token', async () => {
+  it('POST /api/v1/auth/magic-link/verify returns 4xx with an unknown email / wrong code', async () => {
     const response = await request
       .post('/api/v1/auth/magic-link/verify')
-      .send({ token: 'invalid-token-that-does-not-exist' });
+      .send({ email: 'nobody-magic-verify@example.com', code: '000000' });
 
-    // 401/400 when token invalid; 500 if auth.verification_tokens table missing (migrations not applied)
+    // 401 for an unknown email / wrong code; 400 on a malformed body.
     expect(response.status).toBeGreaterThanOrEqual(400);
   });
 });

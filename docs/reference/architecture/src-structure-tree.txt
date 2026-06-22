@@ -77,6 +77,7 @@ src/
     │   │   │   ├── auth-me-context.integration.test.ts
     │   │   │   ├── auth-recovery-atomicity.integration.test.ts
     │   │   │   ├── auth-route-smoke.integration.test.ts
+    │   │   │   ├── auth-signup.integration.test.ts
     │   │   │   ├── auth.integration.test.ts
     │   │   │   ├── logout-revokes-token.integration.test.ts
     │   │   │   ├── refresh-preserves-active-organization.integration.test.ts
@@ -92,6 +93,7 @@ src/
     │   │   │   ├── auth.serializer.unit.test.ts
     │   │   │   ├── auth.service.unit.test.ts
     │   │   │   ├── auth.validator.oauth-callback.unit.test.ts
+    │   │   │   ├── auth.validator.signup.unit.test.ts
     │   │   │   └── auth.validator.unit.test.ts
     │   │   └── auth.test.ts
     │   ├── events/
@@ -105,6 +107,7 @@ src/
     │   │   ├── auth-mfa.handlers.ts
     │   │   ├── auth-oauth.handlers.ts
     │   │   ├── auth-session.handlers.ts
+    │   │   ├── auth-signup.handlers.ts
     │   │   └── auth-webauthn.handlers.ts
     │   ├── seed/
     │   │   └── index.ts
@@ -130,6 +133,7 @@ src/
     │   │   │   │   │   ├── auth-method.service.unit.test.ts
     │   │   │   │   │   ├── auth-method.validator.unit.test.ts
     │   │   │   │   │   ├── auth-method.verify-email.db.unit.test.ts
+    │   │   │   │   │   ├── email-otp.unit.test.ts
     │   │   │   │   │   ├── magic-link.service.unit.test.ts
     │   │   │   │   │   └── magic-link.verify-atomicity.db.unit.test.ts
     │   │   │   ├── events/
@@ -176,6 +180,8 @@ src/
     │   │   │   ├── auth-method.schema.ts
     │   │   │   ├── auth-method.service.ts
     │   │   │   ├── auth-method.types.ts
+    │   │   │   ├── email-otp.ts
+    │   │   │   ├── email-password-signup.ts
     │   │   │   └── magic-link.service.ts
     │   │   ├── auth-mfa/
     │   │   │   ├── __tests__/
@@ -247,6 +253,7 @@ src/
     │   │   │       │   ├── webauthn-user-verification.policy.unit.test.ts
     │   │   │       │   ├── webauthn.service.authenticate-options.unit.test.ts
     │   │   │       │   ├── webauthn.service.credential-management.unit.test.ts
+    │   │   │       │   ├── webauthn.service.registration-cap.unit.test.ts
     │   │   │       │   └── webauthn.validator.unit.test.ts
     │   │   │   ├── seed/
     │   │   │       ├── auth-webauthn.bulk.seed.ts
