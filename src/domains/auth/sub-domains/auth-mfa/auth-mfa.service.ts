@@ -112,7 +112,12 @@ export class MfaService {
     body: unknown,
     ipAddress: string,
     userAgent?: string,
-  ): Promise<{ access_token: string; session_public_id: string; session_refresh_secret: string }> {
+  ): Promise<{
+    access_token: string;
+    session_public_id: string;
+    session_refresh_secret: string;
+    factor: 'totp' | 'recovery_code';
+  }> {
     const parsed = validateMfaLoginVerify(body);
     const session = await verifyMfaSession(this.redis, parsed.mfa_session_token);
     const user = await this.userService.requireUserRecordByPublicId(session.user_public_id);
@@ -123,6 +128,7 @@ export class MfaService {
     assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
 
     let verified = false;
+    let factor: 'totp' | 'recovery_code' = 'totp';
     if (parsed.totp_code) {
       // audit-#12 / reaudit-#3: the brute-force lockout gates ONLY the TOTP path (6-digit,
       // guessable). Recovery codes are single-use high-entropy break-glass and are
@@ -167,6 +173,7 @@ export class MfaService {
         throw new UnauthorizedError('errors:mfaInvalidOrExpiredRecoveryCode');
       }
       verified = true;
+      factor = 'recovery_code';
     }
 
     if (!verified) {
@@ -175,7 +182,10 @@ export class MfaService {
 
     // audit-#12: successful second factor clears the failure counter.
     await this.clearMfaVerificationFailures(user.id);
-    return this.issueAccessTokenAndSession(user, ipAddress, userAgent);
+    const issued = await this.issueAccessTokenAndSession(user, ipAddress, userAgent);
+    // Surface the factor so the handler can audit recovery-code use (the TOTP-bypass break-glass
+    // path) distinctly from a normal TOTP second factor.
+    return { ...issued, factor };
   }
 
   /**

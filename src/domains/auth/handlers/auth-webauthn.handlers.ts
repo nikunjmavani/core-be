@@ -36,6 +36,14 @@ export function createAuthWebauthnHandlers({ webauthnService }: AuthWebauthnHand
         request.body,
         readRequestOrigin(request),
       );
+      // Enrolling a new passkey adds a login credential (a takeover-persistence move), so audit it —
+      // symmetric with the already-audited passkey revoke.
+      await recordScopedAuditEvent(request, {
+        actorUserPublicId: auth.userId,
+        action: 'auth.webauthn.register',
+        resource_type: 'webauthn_credential',
+        metadata: { credential_id: data.credential_id },
+      });
       return successResponse(data, getRequestIdentifier(request));
     },
     webauthnListCredentials: async (request: FastifyRequest, _reply: FastifyReply) => {
