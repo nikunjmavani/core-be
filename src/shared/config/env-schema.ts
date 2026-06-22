@@ -735,6 +735,28 @@ const envSchemaBase = z.object({
     .optional()
     .default('false')
     .transform((v) => v === 'true' || v === '1'),
+  // R14: the `call_api` MCP tool is an admin-authority in-process API proxy. It defaults to
+  // READ-ONLY (GET); set this to allow mutating methods (POST/PATCH/PUT/DELETE). Off by default
+  // so enabling MCP cannot, on its own, expose destructive admin mutations through the tool.
+  MCP_CALL_API_ALLOW_MUTATIONS: z
+    .string()
+    .optional()
+    .default('false')
+    .transform((v) => v === 'true' || v === '1'),
+  // R14: optional operator allowlist of path prefixes the `call_api` tool may target (CSV). When
+  // unset/empty the existing `/api/v1/` (+ /livez, /readyz) gate applies; when set, the path must
+  // ALSO match one of these prefixes — a defense-in-depth narrowing of the admin proxy's reach.
+  MCP_CALL_API_ALLOWED_PATH_PREFIXES: z
+    .string()
+    .optional()
+    .transform((v) =>
+      v
+        ? v
+            .split(',')
+            .map((entry) => entry.trim())
+            .filter((entry) => entry.length > 0)
+        : [],
+    ),
   ENABLE_API_REFERENCE: z
     .string()
     .optional()

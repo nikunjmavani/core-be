@@ -24,10 +24,13 @@ import {
   MCP_ROUTES_RESOURCE_URI,
   MCP_TOOLS,
   callApiInputSchema,
+  evaluateCallApiPolicy,
 } from '@/infrastructure/mcp/mcp-capabilities.js';
 import { MCP_CLIENT_GUIDE } from '@/infrastructure/mcp/mcp-client-guide.js';
 import { requireRole } from '@/shared/utils/auth/authorization.util.js';
 import { STRICT_AUTHED_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
+import { getEnv } from '@/shared/config/env.config.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const ROUTES_CATALOG_PATH = join(process.cwd(), 'docs', 'routes.txt');
 const OPENAPI_SPEC_PATH = join(process.cwd(), 'docs', 'openapi', 'openapi.json');
@@ -200,17 +203,18 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
         };
       }
       const data = parsed.data;
-      if (
-        !(
-          data.path.startsWith('/api/v1/') ||
-          data.path.startsWith('/livez') ||
-          data.path.startsWith('/readyz')
-        )
-      ) {
-        return {
-          content: [{ type: 'text', text: 'Path must start with /api/v1/, /livez, or /readyz' }],
-          isError: true,
-        };
+      const environment = getEnv();
+      // R14: call_api is an admin-authority in-process API proxy. Every gate (path, read-only-by-
+      // default method, optional operator allowlist) is consolidated in evaluateCallApiPolicy so it
+      // is pure and unit-testable. Mutating methods require explicit MCP_CALL_API_ALLOW_MUTATIONS.
+      const policy = evaluateCallApiPolicy({
+        method: data.method,
+        path: data.path,
+        allowMutations: environment.MCP_CALL_API_ALLOW_MUTATIONS,
+        allowedPathPrefixes: environment.MCP_CALL_API_ALLOWED_PATH_PREFIXES,
+      });
+      if (!policy.allowed) {
+        return { content: [{ type: 'text', text: policy.message }], isError: true };
       }
       try {
         // Strip headers that could override authentication, session identity, or tenant context.
@@ -258,8 +262,13 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
           ],
         };
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { content: [{ type: 'text', text: `API call failed: ${message}` }], isError: true };
+        // R14: MCP responses bypass the global error-handler masker (reply.hijack), so do NOT
+        // reflect the raw error to the client — log the detail server-side, return a generic message.
+        logger.warn({ error, method: data.method, path: data.path }, 'mcp.call_api.failed');
+        return {
+          content: [{ type: 'text', text: 'API call failed (see server logs for details).' }],
+          isError: true,
+        };
       }
     },
   );

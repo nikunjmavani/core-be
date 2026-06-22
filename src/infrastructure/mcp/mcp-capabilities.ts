@@ -33,6 +33,56 @@ export const callApiInputSchema = z.object({
     ),
 });
 
+/** Options for {@link evaluateCallApiPolicy}: the requested call plus the deployment's MCP config. */
+export interface CallApiPolicyOptions {
+  /** HTTP method the `call_api` tool was asked to invoke. */
+  method: string;
+  /** API path the tool was asked to invoke. */
+  path: string;
+  /** `MCP_CALL_API_ALLOW_MUTATIONS` — when false, only GET is permitted. */
+  allowMutations: boolean;
+  /** `MCP_CALL_API_ALLOWED_PATH_PREFIXES` — when non-empty, the path must match one. */
+  allowedPathPrefixes: readonly string[];
+}
+
+/** Outcome of {@link evaluateCallApiPolicy}: allowed, or rejected with a client-safe message. */
+export type CallApiPolicyResult = { allowed: true } | { allowed: false; message: string };
+
+/**
+ * R14: decides whether a `call_api` invocation is permitted, consolidating every gate the
+ * admin-authority in-process proxy enforces — the `/api/v1/` (+ health) path gate, the
+ * read-only-by-default method restriction, and the optional operator path-prefix allowlist.
+ *
+ * @remarks
+ * - **Algorithm:** path-prefix gate → method gate (GET unless `allowMutations`) → optional
+ *   allowlist gate; returns `{ allowed: true }` only when all pass.
+ * - **Failure modes:** none thrown — every rejection returns a client-safe `message` string.
+ * - **Side effects:** pure; reads no globals (config is passed in), so it is fully unit-testable.
+ * - **Notes:** the message is safe to surface to the (admin) MCP client; it carries no internals.
+ */
+export function evaluateCallApiPolicy(options: CallApiPolicyOptions): CallApiPolicyResult {
+  const { method, path, allowMutations, allowedPathPrefixes } = options;
+  if (!(path.startsWith('/api/v1/') || path.startsWith('/livez') || path.startsWith('/readyz'))) {
+    return { allowed: false, message: 'Path must start with /api/v1/, /livez, or /readyz' };
+  }
+  if (method !== 'GET' && !allowMutations) {
+    return {
+      allowed: false,
+      message: `Method ${method} is not permitted: call_api is read-only unless MCP_CALL_API_ALLOW_MUTATIONS is enabled.`,
+    };
+  }
+  if (
+    allowedPathPrefixes.length > 0 &&
+    !allowedPathPrefixes.some((prefix) => path.startsWith(prefix))
+  ) {
+    return {
+      allowed: false,
+      message: 'Path is not in the MCP call_api allowlist for this deployment.',
+    };
+  }
+  return { allowed: true };
+}
+
 /** Static descriptor for an MCP resource — used to register resources on the server and to render the OpenAPI page. */
 export type McpResourceDefinition = {
   name: string;
