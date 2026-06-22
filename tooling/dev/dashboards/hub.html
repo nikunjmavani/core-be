@@ -88,6 +88,12 @@
         <div class="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-[12.5px] shadow-sm">
           <span id="sys-led" class="h-2 w-2 rounded-full bg-muted"></span><span id="sys-text" class="text-muted-foreground">checking…</span>
         </div>
+        <div class="relative">
+          <button id="alert-btn" type="button" aria-haspopup="true" aria-expanded="false" title="Alerts — failed jobs, DLQ, reliability counters, paused queues, down services" class="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-[5px] text-[12px] text-muted-foreground shadow-sm transition hover:text-foreground hover:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <span id="alert-icon" class="inline-flex"></span><span id="alert-label" class="max-w-[180px] truncate">—</span>
+          </button>
+          <div id="alert-pop" class="absolute right-0 z-30 mt-2 hidden w-[300px] overflow-hidden rounded-xl border border-border bg-card shadow-lg"></div>
+        </div>
         <button id="refresh" type="button" title="Refresh now — every section updates together (one request to all endpoints), automatically every 10s" class="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-[5px] text-[12px] text-muted-foreground shadow-sm transition hover:text-foreground hover:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <span id="refresh-icon" class="inline-flex"></span><span id="refresh-status" class="hidden tabular-nums sm:inline">updating…</span>
         </button>
@@ -97,29 +103,18 @@
     </div>
   </header>
 
-  <main class="w-full space-y-7 px-6 py-7 lg:px-10 2xl:px-16">
-    <section id="status" aria-live="polite"></section>
-
+  <main class="w-full space-y-5 px-6 py-5 lg:px-10 2xl:px-16">
     <!-- launcher strip: the dashboards you can jump to, always in reach -->
     <section>
       <div id="links" class="flex flex-wrap items-center gap-2"></div>
     </section>
 
-    <div class="grid grid-cols-1 items-start gap-6 lg:gap-8 2xl:grid-cols-[minmax(0,1136px)_minmax(560px,1fr)]">
-      <section class="min-w-0">
-        <h2 class="mb-3 text-[16px] font-semibold tracking-tight">Vital signs</h2>
-        <div id="vitals"></div>
-      </section>
-      <section class="min-w-0">
-        <h2 class="mb-3 text-[16px] font-semibold tracking-tight">Requests</h2>
-        <div id="requests"></div>
-      </section>
-    </div>
+    <section class="min-w-0"><div id="vitals"></div></section>
 
-    <section class="min-w-0">
-      <h2 class="mb-3 text-[16px] font-semibold tracking-tight">Queues</h2>
-      <div id="queues"></div>
-    </section>
+    <div class="grid min-w-0 grid-cols-1 items-start gap-5 lg:gap-6 xl:grid-cols-2">
+      <section class="min-w-0"><div id="requests"></div></section>
+      <section class="min-w-0"><div id="queues"></div></section>
+    </div>
 
     <footer class="border-t border-border pt-5 text-[12px] text-muted-foreground">
       Gated tools proxy through <span class="font-mono">localhost:3010</span> with credentials injected. Every section refreshes together (global) every 10s — hit <span class="font-mono">↻</span> to refresh now · sparklines hold the last <span class="font-mono">5&nbsp;min</span> · <span id="node-ver" class="font-mono">—</span>.
@@ -144,6 +139,8 @@ function bindTip(elm, html) {
 
 /* ── icons ── */
 const ICON = {
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  check2: '<path d="M20 6 9 17l-5-5"/>',
   memory: '<rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/>',
   loop: '<path d="M3 12h3.5l2.5 7 4-14 2.5 7H21"/>',
   cpu: '<rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/>',
@@ -296,68 +293,46 @@ function computeStatus(statusObj, agg, sums, sumsW) {
   if (unh > 0) alerts.push({ level: 'destructive', text: `${unh.toLocaleString()} unhandled rejection${plural(unh)}` });
   if (paused > 0) alerts.push({ level: 'warning', text: `${paused.toLocaleString()} paused` });
   const count = alerts.length;
-  const capped = alerts.slice(0, MAX_ALERTS);
-  if (count > MAX_ALERTS) capped.push({ level: 'warning', text: `+${count - MAX_ALERTS} more` });
   let level, label;
   if (down.length) { level = 'destructive'; label = up === 0 ? 'Major outage' : 'Partial outage'; }
+  else if (alerts.some((a) => a.level === 'destructive')) { level = 'destructive'; label = 'Needs attention'; }
   else if (count) { level = 'warning'; label = 'Operational · attention'; }
   else if (total) { level = 'success'; label = 'All systems operational'; }
   else { level = 'muted'; label = 'Connecting…'; }
-  return { up, total, alerts: capped, count, level, label };
+  return { up, total, alerts, count, level, label };
 }
-let cycleAlerts = [], cycleIdx = 0, cyclePaused = false, alertsExpanded = false, lastHeroStatus = null;
-function alertChip(a, animate) {
-  const chip = el('span', `${animate ? 'alertin ' : ''}inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-${a.level}/30 bg-${a.level}/10 px-2.5 py-1 text-[12px] font-medium text-${a.level}`);
-  chip.append(dot(a.level), el('span', '', a.text)); if (a.hint) chip.title = a.hint;
-  return chip;
-}
-function showAlert() {
-  const slot = $('alert-slot'); if (!slot || !cycleAlerts.length) return;
-  const i = cycleIdx % cycleAlerts.length;
-  slot.replaceChildren(alertChip(cycleAlerts[i], true));
-  const dots = $('alert-dots');
-  if (dots) [...dots.children].forEach((d, k) => { d.className = `h-1.5 rounded-full transition-all ${k === i ? `w-3.5 bg-${cycleAlerts[i].level}` : 'w-1.5 bg-muted-foreground/35'}`; });
-}
-function cycleTick() { if (cyclePaused || alertsExpanded || cycleAlerts.length < 2) return; cycleIdx = (cycleIdx + 1) % cycleAlerts.length; showAlert(); }
-function toggleBtn(expanded, count) {
-  const b = el('button', 'inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-1 text-[11px] font-medium text-muted-foreground transition hover:text-foreground');
-  b.type = 'button'; b.textContent = expanded ? 'show less' : `all ${count}`;
-  b.onclick = () => { alertsExpanded = !alertsExpanded; if (lastHeroStatus) renderStatusHero(lastHeroStatus); };
-  return b;
-}
-function renderStatusHero(s, opts) {
-  if (s.level === 'muted' && !everLoaded.status) return;
-  lastHeroStatus = s;
-  const stale = !!(opts && opts.stale) && everLoaded.status;
-  const wrap = el('div', `relative flex flex-wrap items-center gap-x-4 gap-y-2.5 overflow-hidden rounded-xl border border-border bg-card px-4 py-3 shadow-sm sm:px-5${stale ? ' stale' : ''}`);
-  if (s.level !== 'muted') wrap.style.backgroundImage = `radial-gradient(120% 200% at 0% 0%, hsl(var(--${s.level}) / 0.10), transparent 60%)`;
-  const left = el('div', 'flex min-w-0 items-center gap-2.5');
-  left.appendChild(statusBeacon(s.level));
-  left.appendChild(el('span', 'text-[15px] font-semibold tracking-tight sm:text-[16.5px]', s.label));
-  left.appendChild(el('span', 'hidden font-mono text-[12px] text-muted-foreground sm:inline', `${s.up}/${s.total || '—'} services`));
-  wrap.appendChild(left);
-  const right = el('div', 'ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-2.5 gap-y-2');
-  if (s.alerts.length) {
-    if (alertsExpanded) {
-      const all = el('div', 'flex flex-wrap items-center justify-end gap-1.5');
-      s.alerts.forEach((a) => all.appendChild(alertChip(a, false)));
-      right.appendChild(all); right.appendChild(toggleBtn(true, s.count));
-    } else {
-      const slot = el('div', 'relative flex items-center'); slot.id = 'alert-slot'; right.appendChild(slot);
-      if (s.alerts.length > 1) {
-        const dots = el('div', 'flex items-center gap-1'); dots.id = 'alert-dots';
-        s.alerts.forEach((a, i) => { const d = el('button', 'h-1.5 w-1.5 rounded-full bg-muted-foreground/35 transition-all'); d.type = 'button'; d.title = `alert ${i + 1}`; d.onclick = () => { cycleIdx = i; cyclePaused = true; showAlert(); }; dots.appendChild(d); });
-        right.appendChild(dots); right.appendChild(toggleBtn(false, s.count));
-      }
-    }
-  } else if (s.level === 'success') {
-    const chip = el('span', 'inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-[12px] font-medium text-success');
-    chip.append(dot('success'), el('span', '', 'All clear')); right.appendChild(chip);
+// Status now lives in the header: a bell button (count + worst-level tint) that opens a
+// popover listing every alert. No standing hero box — operational state is a header glance.
+let alertPopOpen = false;
+function renderHeaderAlerts(s) {
+  const btn = $('alert-btn'), label = $('alert-label'), pop = $('alert-pop');
+  if (!btn) return;
+  const has = s.count > 0;
+  btn.className = `inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-[5px] text-[12px] shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${has ? `border-${s.level}/45 bg-${s.level}/12 font-medium text-${s.level}` : 'border-border bg-card text-muted-foreground hover:text-foreground hover:border-brand/40'}`;
+  label.textContent = has ? (s.count === 1 ? s.alerts[0].text : `${s.count} alerts`) : 'All clear';
+  if (!has) {
+    pop.replaceChildren(el('div', 'flex items-center gap-2 px-3.5 py-3 text-[12.5px] text-muted-foreground', 'No active alerts — all systems nominal.'));
+  } else {
+    const head = el('div', `border-b border-border px-3.5 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-${s.level}`, `${s.count} alert${s.count > 1 ? 's' : ''} · ${s.label}`);
+    const body = el('div', 'max-h-[320px] overflow-y-auto py-1');
+    s.alerts.forEach((a) => {
+      const row = el('div', 'flex items-start gap-2.5 px-3.5 py-2');
+      row.appendChild(dot(a.level === 'muted' ? 'muted' : a.level));
+      const tw = el('div', 'min-w-0 flex-1');
+      tw.appendChild(el('div', `text-[12.5px] font-medium leading-snug text-${a.level === 'warning' ? 'warning' : a.level === 'destructive' ? 'destructive' : 'foreground'}`, a.text));
+      if (a.hint) tw.appendChild(el('div', 'mt-0.5 truncate font-mono text-[11px] text-muted-foreground', a.hint));
+      row.appendChild(tw);
+      body.appendChild(row);
+    });
+    pop.replaceChildren(head, body);
   }
-  wrap.appendChild(right);
-  $('status').replaceChildren(wrap); everLoaded.status = true;
-  cycleAlerts = s.alerts; if (cycleIdx >= cycleAlerts.length) cycleIdx = 0;
-  if (!alertsExpanded) showAlert();
+  everLoaded.status = true;
+}
+function toggleAlertPop(force) {
+  const pop = $('alert-pop'), btn = $('alert-btn'); if (!pop) return;
+  alertPopOpen = force != null ? force : !alertPopOpen;
+  pop.classList.toggle('hidden', !alertPopOpen);
+  if (btn) btn.setAttribute('aria-expanded', String(alertPopOpen));
 }
 
 /* ── 2. OVERVIEW: Jobs + Runtime + System health ── */
@@ -420,43 +395,38 @@ function runtimeCell(key, procSums, m, proc) {
   const raw = procSums ? m.get(procSums) : null;
   const bad = raw != null && m.warnAbove != null && raw > m.warnAbove;
   const color = bad ? 'warning' : 'brand';
-  const cell = el('div', `w-[84px] flex-none text-right sm:w-[112px]${procSums && m.detail ? ' cursor-help' : ''}`);
+  const cell = el('div', `w-[84px] flex-none sm:w-[112px]${procSums && m.detail ? ' cursor-help' : ''}`);
+  const line = el('div', 'flex items-center justify-end gap-1.5'); // sparkline/bar inline LEFT of the value → single-line rows
   if (m.bar) {
     const max = (procSums && procSums.postgres_pool_max_connections) || 0;
     const act = (procSums && procSums.pg_pool_active) || 0, idle = (procSums && procSums.pg_pool_idle) || 0, wait = (procSums && procSums.pg_pool_waiting) || 0;
-    const v = el('div', `font-mono text-[17px] font-semibold leading-none tabular-nums${wait > 0 ? ' text-destructive' : ''}`);
-    if (!procSums) v.innerHTML = '<span class="text-[13px] font-normal text-muted-foreground">—</span>';
-    else v.innerHTML = `${act} <span class="text-[11px] font-normal text-muted-foreground">/ ${max || '?'}</span>`;
-    cell.appendChild(v);
-    const bar = el('div', 'mt-1.5 flex h-1.5 w-full overflow-hidden rounded-full bg-muted');
+    const bar = el('div', 'flex h-1.5 w-9 flex-none overflow-hidden rounded-full bg-muted');
     if (max) { const seg = (n, cls) => { if (!n) return; const s = el('div', cls); s.style.width = `${Math.min(100, (n / max) * 100)}%`; bar.appendChild(s); }; seg(wait, 'bg-destructive'); seg(act, 'bg-brand'); seg(idle, 'bg-muted-foreground/30'); }
-    cell.appendChild(bar);
+    line.appendChild(bar);
+    const v = el('div', `font-mono text-[14.5px] font-semibold leading-none tabular-nums${wait > 0 ? ' text-destructive' : ''}`);
+    if (!procSums) v.innerHTML = '<span class="text-[12px] font-normal text-muted-foreground">—</span>';
+    else v.innerHTML = `${act}<span class="text-[10px] font-normal text-muted-foreground">/${max || '?'}</span>`;
+    line.appendChild(v); cell.appendChild(line);
     if (procSums && m.detail) bindTip(cell, `<div class="mb-0.5 font-semibold">${m.label} · ${proc}</div><div class="text-muted-foreground">${m.detail(procSums)}</div>`);
     return cell;
   }
+  if (m.spark) { const sk = el('div', 'w-10 flex-none opacity-90'); sk.innerHTML = spark(series[key], color, 15); line.appendChild(sk); }
   const [num, unit] = fmtNum(raw, m.fmt);
-  const v = el('div', `font-mono text-[17px] font-semibold leading-none tabular-nums${bad ? ' text-warning' : ''}`);
-  if (raw == null) v.innerHTML = '<span class="text-[13px] font-normal text-muted-foreground">—</span>';
-  else v.innerHTML = num + (unit ? ` <span class="text-[11px] font-normal text-muted-foreground">${unit}</span>` : '');
-  cell.appendChild(v);
-  if (m.peak && raw != null) {
-    // Show a peak only for SUSTAINED elevation (>=2 consecutive samples over the threshold). A lone
-    // isolated spike is monitoring/boot/outage noise — a heavy /metrics or /admin/queues scrape
-    // momentarily stalling the loop, or a tsx-watch reload boot — not a real event-loop problem, so
-    // it's dropped instead of lingering as "peak 5110 ms" for ~5 min after one blip.
+  const v = el('div', `font-mono text-[14.5px] font-semibold leading-none tabular-nums${bad ? ' text-warning' : ''}`);
+  if (raw == null) v.innerHTML = '<span class="text-[12px] font-normal text-muted-foreground">—</span>';
+  else v.innerHTML = num + (unit ? ` <span class="text-[10px] font-normal text-muted-foreground">${unit}</span>` : '');
+  line.appendChild(v); cell.appendChild(line);
+  if (m.peak && raw != null) { // sustained-only event-loop peak (lone spikes are scrape/boot noise)
     const buf = series[key] || [];
     const thresh = Math.max(raw * 1.5, m.warnAbove || 0);
     let peak = null;
-    for (let i = 1; i < buf.length; i++) {
-      if (buf[i] > thresh && buf[i - 1] > thresh) peak = Math.max(peak ?? 0, buf[i], buf[i - 1]);
-    }
+    for (let i = 1; i < buf.length; i++) { if (buf[i] > thresh && buf[i - 1] > thresh) peak = Math.max(peak ?? 0, buf[i], buf[i - 1]); }
     if (peak != null) {
       const [peakNum, peakUnit] = fmtNum(peak, m.fmt);
       const peakBad = m.warnAbove != null && peak > m.warnAbove;
-      cell.appendChild(el('div', `mt-0.5 font-mono text-[10px] leading-none tabular-nums ${peakBad ? 'text-warning/80' : 'text-muted-foreground'}`, `peak ${peakNum}${peakUnit ? ' ' + peakUnit : ''}`));
+      cell.appendChild(el('div', `mt-0.5 text-right font-mono text-[9.5px] leading-none tabular-nums ${peakBad ? 'text-warning/80' : 'text-muted-foreground'}`, `peak ${peakNum}${peakUnit || ''}`));
     }
   }
-  const sk = el('div', 'mt-1.5'); sk.innerHTML = m.spark ? spark(series[key], color, 14) : `<div style="height:14px"></div>`; cell.appendChild(sk);
   if (procSums && m.detail) bindTip(cell, `<div class="mb-0.5 font-semibold">${m.label} · ${proc}</div><div class="text-muted-foreground">${m.detail(procSums)}</div>`);
   return cell;
 }
@@ -471,7 +441,7 @@ function renderRuntime(sS, sW, worker, stale) {
     return card;
   }
   const cols = 'grid grid-cols-[1fr_auto_auto] items-center gap-x-3 px-4 sm:gap-x-6';
-  const head = el('div', `${cols} border-b border-border py-2.5`);
+  const head = el('div', `${cols} border-b border-border py-1.5`);
   const cap = el('div', 'flex items-center gap-2');
   cap.appendChild(el('span', 'font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground', 'Runtime')); if (stale) cap.appendChild(staleTag());
   head.appendChild(cap);
@@ -479,7 +449,7 @@ function renderRuntime(sS, sW, worker, stale) {
   head.appendChild(el('div', 'w-[84px] text-right text-[11px] font-semibold sm:w-[112px]', 'Worker'));
   card.appendChild(head);
   RUNTIME.forEach((m) => {
-    const row = el('div', `${cols} py-2.5`);
+    const row = el('div', `${cols} py-[5px]`);
     const lab = el('div', 'flex min-w-0 items-center gap-2');
     lab.appendChild(iconEl(m.icon, 'text-muted-foreground'));
     lab.appendChild(el('span', 'truncate text-[13px] font-medium', m.label));
@@ -488,7 +458,7 @@ function renderRuntime(sS, sW, worker, stale) {
     row.appendChild(runtimeCell('w_' + m.key, sW, m, 'Worker'));
     card.appendChild(row);
   });
-  const foot = el('div', `${cols} border-t border-border py-2 font-mono text-[11px] text-muted-foreground`);
+  const foot = el('div', `${cols} border-t border-border py-1.5 font-mono text-[11px] text-muted-foreground`);
   foot.appendChild(el('div', '', 'process'));
   foot.appendChild(el('div', 'w-[84px] text-right sm:w-[112px]', sS && sS.http_requests_total != null ? `${Math.round(sS.http_requests_total).toLocaleString()} req` : '—'));
   foot.appendChild(el('div', 'w-[84px] text-right sm:w-[112px]', worker && worker.workersRegistered != null ? `${worker.workersRegistered} workers` : '—'));
@@ -517,7 +487,7 @@ function healthCell(dep, d) {
 }
 function renderHealthCard(api, worker, apiPing, sS, stale) {
   const card = el('div', `${CARD} overflow-hidden${stale ? ' stale' : ''}`);
-  const top = el('div', 'flex flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-border px-4 py-2.5');
+  const top = el('div', 'flex flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-border px-4 py-2');
   const cap = el('div', 'flex items-center gap-2');
   cap.appendChild(el('span', 'font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground', 'System health')); if (stale) cap.appendChild(staleTag());
   top.appendChild(cap);
@@ -525,7 +495,7 @@ function renderHealthCard(api, worker, apiPing, sS, stale) {
   pills.append(procPill('API', api, apiPing != null ? `${apiPing}ms` : null), procPill('Worker', worker));
   top.appendChild(pills); card.appendChild(top);
   const cols = 'grid grid-cols-[1fr_auto_auto] items-center gap-x-3 px-4 sm:gap-x-6';
-  const head = el('div', `${cols} py-2`);
+  const head = el('div', `${cols} py-1.5`);
   head.appendChild(el('div', 'font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground', 'Dependency'));
   head.appendChild(el('div', 'w-[84px] text-right text-[11px] font-semibold sm:w-[112px]', 'API'));
   head.appendChild(el('div', 'w-[84px] text-right text-[11px] font-semibold sm:w-[112px]', 'Worker'));
@@ -534,7 +504,7 @@ function renderHealthCard(api, worker, apiPing, sS, stale) {
     const av = api ? api[dep.toLowerCase()] : undefined; const wv = worker ? worker[dep.toLowerCase()] : undefined;
     const bothUp = statusColor(av) === 'success' && statusColor(wv) === 'success';
     const anyDown = (av !== undefined && statusColor(av) !== 'success') || (wv !== undefined && statusColor(wv) !== 'success');
-    const row = el('div', `${cols} border-t border-border py-2.5${anyDown ? ' bg-destructive/10' : ''}`);
+    const row = el('div', `${cols} border-t border-border py-1.5${anyDown ? ' bg-destructive/10' : ''}`);
     const lab = el('div', 'flex min-w-0 items-center gap-2');
     lab.appendChild(dot(av === undefined && wv === undefined ? 'muted' : (anyDown ? 'destructive' : 'success'), bothUp));
     lab.appendChild(el('span', `truncate text-[13px] font-medium${anyDown ? ' text-destructive' : ''}`, dep));
@@ -628,7 +598,7 @@ function renderQueues(queues, agg, sS, worker, opts) {
 
   if (!active.length) wrap.appendChild(el('div', `${CARD} px-4 py-10 text-center text-[13px] text-muted-foreground`, 'All queues idle — no pending, failed, or paused jobs.'));
   else {
-    const grid = el('div', 'grid grid-cols-1 gap-2 xl:grid-cols-2 min-[2100px]:grid-cols-3');
+    const grid = el('div', 'grid grid-cols-1 gap-2 max-h-[44vh] overflow-y-auto pr-0.5');
     active.forEach((q) => {
       const c = q.counts || {}; const isDlq = /-dlq$/.test(q.name);
       const total = QSTATES.reduce((s, [k]) => s + (c[k] || 0), 0);
@@ -697,7 +667,9 @@ function renderRequests(routes, opts) {
   head.appendChild(el('div', 'w-[60px] text-right text-[11px] font-semibold', 'avg'));
   head.appendChild(el('div', 'w-[52px] text-right text-[11px] font-semibold', reqFilter === 'client' ? '4xx' : '5xx'));
   card.appendChild(head);
-  if (!list.length) card.appendChild(el('div', 'px-4 py-6 text-center text-[13px] text-muted-foreground', reqFilter === 'failed' ? 'No 5xx failures — all clear.' : reqFilter === 'client' ? 'No 4xx responses.' : 'No application requests yet.'));
+  const scroll = el('div', 'max-h-[58vh] overflow-y-auto');
+  card.appendChild(scroll);
+  if (!list.length) scroll.appendChild(el('div', 'px-4 py-6 text-center text-[13px] text-muted-foreground', reqFilter === 'failed' ? 'No 5xx failures — all clear.' : reqFilter === 'client' ? 'No 4xx responses.' : 'No application requests yet.'));
   list.forEach((r) => {
     const avgMs = r.count ? (r.sum / r.count) * 1000 : 0;
     const slow = avgMs > 500, err = r.errors > 0;
@@ -718,7 +690,7 @@ function renderRequests(routes, opts) {
     row.appendChild(el('div', `w-[60px] text-right font-mono text-[12px] tabular-nums${slow ? ' text-warning' : ' text-muted-foreground'}`, `${avgMs < 10 ? avgMs.toFixed(1) : Math.round(avgMs)}ms`));
     const show4xx = reqFilter === 'client', lastBad = show4xx ? r.clientErrors > 0 : err;
     row.appendChild(el('div', `w-[52px] text-right font-mono text-[12px] tabular-nums${lastBad ? ' font-semibold ' + (err ? 'text-destructive' : 'text-warning') : ' text-muted-foreground'}`, lastBad ? (show4xx ? r.clientErrors : r.errors).toLocaleString() : '·'));
-    card.appendChild(row);
+    scroll.appendChild(row);
   });
   host.replaceChildren(card); everLoaded.requests = true;
   // FLIP step 2: slide each surviving row from its old position to the new sorted spot
@@ -769,7 +741,7 @@ async function poll() {
   if (qOk || mServer || mWorker) bufferVitals(agg, sS, sW, qOk, !!mServer, !!mWorker);
   if (api) lastGood.api = api; if (worker) lastGood.worker = worker;
 
-  renderStatusHero(computeStatus(last, agg, sS, sW), { stale: !status });
+  renderHeaderAlerts(computeStatus(last, agg, sS, sW));
   renderOverview({ sS, sW, api: api || lastGood.api, worker: worker || lastGood.worker, apiPing: last?.api?.ms },
     { runtimeStale: !mServer && !mWorker, healthStale: !api || !worker });
   renderQueues(qOk ? qd.queues : lastGood.queues, agg, sS, worker || lastGood.worker, { stale: !qOk });
@@ -784,7 +756,9 @@ function tick() { $('clock').textContent = new Date().toLocaleTimeString([], { h
 
 /* ── boot ── */
 $('refresh-icon').innerHTML = iconSvg('refresh'); $('refresh').onclick = () => poll();
-$('status').replaceChildren(el('div', `${CARD} skel h-[52px] rounded-xl`));
+$('alert-icon').innerHTML = iconSvg('bell', 15);
+$('alert-btn').onclick = (e) => { e.stopPropagation(); toggleAlertPop(); };
+document.addEventListener('click', (e) => { if (alertPopOpen && !$('alert-pop').contains(e.target) && !$('alert-btn').contains(e.target)) toggleAlertPop(false); });
 (() => {
   const box = el('div', 'flex flex-wrap items-start gap-3.5');
   for (let i = 0; i < 2; i++) { const c = el('div', 'flex-1 basis-[400px]'); c.appendChild(el('div', `${CARD} skel h-[210px]`)); box.appendChild(c); }
@@ -796,11 +770,8 @@ $('status').replaceChildren(el('div', `${CARD} skel h-[52px] rounded-xl`));
   $('queues').replaceChildren(jg);
 })();
 
-$('status').addEventListener('mouseenter', () => { cyclePaused = true; });
-$('status').addEventListener('mouseleave', () => { cyclePaused = false; });
 poll(); setInterval(poll, 10000);
 tick(); setInterval(tick, 1000);
-setInterval(cycleTick, 3200);
 setInterval(freshTick, 1000);
 </script>
 </body>
