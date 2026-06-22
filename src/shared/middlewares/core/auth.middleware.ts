@@ -54,11 +54,14 @@ async function rederiveSuperAdminRole(
   }
   const user = await userService.findUserRecordByPublicId(userPublicId);
   if (!user) return undefined;
-  // reaudit-#10: gate the SUPER_ADMIN re-grant on the live account state. Previously only the
-  // non-allowlist branch checked status, so a suspended/inactive super-admin whose email is
-  // still allowlisted kept admin via this path. Drop the role for any non-active account
-  // (defense in depth alongside the session-layer status check).
-  if (user.status !== 'ACTIVE') return undefined;
+  // reaudit-#10 + reaudit-#13: gate the SUPER_ADMIN re-grant on the live account state, mirroring the
+  // token-minting side (resolveAccessTokenRoleForUser requires status==='ACTIVE' AND a verified
+  // email). Keeping the two derivation sites symmetric means safety here does not depend on the
+  // invariant that no mint path emits a super_admin claim for an unverified allowlisted account: if
+  // one ever did, this path would otherwise keep re-granting admin on every subsequent request. Fail
+  // closed for any non-active OR unverified account (defense in depth alongside the session-layer
+  // status check).
+  if (user.status !== 'ACTIVE' || !user.is_email_verified) return undefined;
   const currentGlobalRole = resolveGlobalRoleForEmail(user.email);
   if (currentGlobalRole === GLOBAL_ROLES.SUPER_ADMIN) {
     return GLOBAL_ROLES.SUPER_ADMIN;
