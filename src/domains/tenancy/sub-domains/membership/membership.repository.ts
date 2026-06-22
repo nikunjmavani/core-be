@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne, sql, type SQL } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
@@ -269,6 +269,53 @@ export class MembershipRepository extends BaseRepository {
         ),
       );
     return rows[0]?.count ?? 0;
+  }
+
+  /**
+   * F2: suspends up to `suspend_count` non-owner ACTIVE members, most-recently-joined first.
+   *
+   * @remarks
+   * - **Algorithm:** selects the candidate ids (`ACTIVE`, not the owner, not soft-deleted) ordered
+   *   by `joined_at DESC` and capped at `suspend_count`, then flips them to `SUSPENDED` in one
+   *   `UPDATE … WHERE id IN (…)`. Two steps (select then update) avoid a self-referential update
+   *   subquery and let the caller log exactly how many were suspended.
+   * - **Failure modes:** none beyond the underlying queries; runs inside the caller's organization
+   *   DB context (RLS-scoped) and transaction.
+   * - **Side effects:** writes `status = 'SUSPENDED'` (a suspended seat is not counted toward the
+   *   cap, so this lowers the org's seat usage). Returns the internal `user_id`s actually suspended
+   *   (empty when no non-owner ACTIVE members remain — e.g. an owner-only org that can't shrink
+   *   further) so the caller can purge each suspended member's permission cache.
+   */
+  async suspendExcessActiveMembers(options: {
+    organization_id: number;
+    owner_user_id: number;
+    suspend_count: number;
+  }): Promise<number[]> {
+    if (options.suspend_count <= 0) return [];
+    const candidates = await getRequestDatabase()
+      .select({ id: memberships.id, user_id: memberships.user_id })
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.organization_id, options.organization_id),
+          eq(memberships.status, 'ACTIVE'),
+          ne(memberships.user_id, options.owner_user_id),
+          isNull(memberships.deleted_at),
+        ),
+      )
+      .orderBy(desc(memberships.joined_at))
+      .limit(options.suspend_count);
+    if (candidates.length === 0) return [];
+    await getRequestDatabase()
+      .update(memberships)
+      .set({ status: 'SUSPENDED', updated_at: new Date() })
+      .where(
+        inArray(
+          memberships.id,
+          candidates.map((candidate) => candidate.id),
+        ),
+      );
+    return candidates.map((candidate) => candidate.user_id);
   }
 
   async findByUserAndOrganization(
