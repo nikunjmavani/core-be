@@ -48,7 +48,9 @@ describe('SubscriptionService seat counters (REQ-4)', () => {
   const organizationService = {
     requireOrganizationByPublicId: vi.fn().mockResolvedValue(organization),
   } as unknown as OrganizationService;
-  const planService = {} as unknown as PlanService;
+  const planService = {
+    getFreePlanSeatCeiling: vi.fn().mockResolvedValue(1),
+  } as unknown as PlanService;
   const paymentProvider = {
     updateSubscriptionQuantity: vi.fn().mockResolvedValue(undefined),
   } as unknown as PaymentProvider;
@@ -106,23 +108,57 @@ describe('SubscriptionService seat counters (REQ-4)', () => {
     expect(row.seats_used).toBe(3);
   });
 
-  it('reserveSeatCeilingForMemberAdd returns null when the org has no active subscription (no ceiling)', async () => {
+  it('reserveSeatCeilingForMemberAdd falls back to the Free-tier ceiling when the org has no active subscription (F3)', async () => {
     vi.mocked(repository.findActiveSeatStateByOrganizationForUpdate).mockResolvedValue(null);
-    await expect(service.reserveSeatCeilingForMemberAdd(1)).resolves.toBeNull();
+    vi.mocked(planService.getFreePlanSeatCeiling).mockResolvedValue(1);
+    await expect(service.reserveSeatCeilingForMemberAdd(1)).resolves.toBe(1);
+    expect(planService.getFreePlanSeatCeiling).toHaveBeenCalledTimes(1);
   });
 
-  it('reserveSeatCeilingForMemberAdd prefers purchased seats, else plan included_seats', async () => {
+  it('reserveSeatCeilingForMemberAdd prefers purchased seats, else plan included_seats (active sub)', async () => {
     vi.mocked(repository.findActiveSeatStateByOrganizationForUpdate).mockResolvedValueOnce({
       seats: 7,
       plan_included_seats: 3,
+      status: 'ACTIVE',
+      current_period_end: new Date('2026-06-01'),
     });
     await expect(service.reserveSeatCeilingForMemberAdd(1)).resolves.toBe(7);
 
     vi.mocked(repository.findActiveSeatStateByOrganizationForUpdate).mockResolvedValueOnce({
       seats: null,
       plan_included_seats: 3,
+      status: 'ACTIVE',
+      current_period_end: new Date('2026-06-01'),
     });
     await expect(service.reserveSeatCeilingForMemberAdd(1)).resolves.toBe(3);
+    expect(planService.getFreePlanSeatCeiling).not.toHaveBeenCalled();
+  });
+
+  it('reserveSeatCeilingForMemberAdd keeps the plan ceiling for a dunning sub WITHIN grace (F4)', async () => {
+    // PAST_DUE, period ended yesterday — well within the default 14-day grace window.
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    vi.mocked(repository.findActiveSeatStateByOrganizationForUpdate).mockResolvedValueOnce({
+      seats: null,
+      plan_included_seats: 5,
+      status: 'PAST_DUE',
+      current_period_end: yesterday,
+    });
+    await expect(service.reserveSeatCeilingForMemberAdd(1)).resolves.toBe(5);
+    expect(planService.getFreePlanSeatCeiling).not.toHaveBeenCalled();
+  });
+
+  it('reserveSeatCeilingForMemberAdd lapses to the Free-tier ceiling for a dunning sub PAST grace (F4)', async () => {
+    // UNPAID, period ended 30 days ago — past the 14-day grace window.
+    const longAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    vi.mocked(repository.findActiveSeatStateByOrganizationForUpdate).mockResolvedValueOnce({
+      seats: 99,
+      plan_included_seats: 25,
+      status: 'UNPAID',
+      current_period_end: longAgo,
+    });
+    vi.mocked(planService.getFreePlanSeatCeiling).mockResolvedValue(1);
+    await expect(service.reserveSeatCeilingForMemberAdd(1)).resolves.toBe(1);
+    expect(planService.getFreePlanSeatCeiling).toHaveBeenCalledTimes(1);
   });
 
   it('syncSeatQuantityForOrganization pushes max(1, memberCount) to Stripe with a quantity-scoped idempotency key (audit #1)', async () => {

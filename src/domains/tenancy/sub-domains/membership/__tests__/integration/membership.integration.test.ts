@@ -297,11 +297,25 @@ describe('Membership Sub-Domain — Integration', () => {
       expect(response.statusCode).toBe(201);
     });
 
-    it('allows the add when the org has no active subscription (billing-free flow)', async () => {
-      // No subscription → no seat ceiling → unlimited members even with no billing configured.
+    it('allows the add when no billing is configured at all (empty plan catalog → unlimited)', async () => {
+      // No subscription AND no plan catalog → the Free-tier ceiling resolves to null (unlimited), so
+      // a deployment with no plans seeded imposes no cap. F3 only bites once a catalog exists.
       const { organization, adminToken, memberRole } = await createSeatLimitedContext(null, false);
       const response = await inviteMember(organization.public_id, adminToken, memberRole.public_id);
       expect(response.statusCode).toBe(201);
+    });
+
+    it('caps an unsubscribed org at the Free-tier ceiling when a plan catalog exists (F3)', async () => {
+      // A plan catalog exists (cheapest active plan grants 1 seat) but the org has NO subscription.
+      // Its entitlement falls to the Free-tier ceiling, so the owner's seat fills it and the next add
+      // is rejected — "no members until you subscribe".
+      const { organization, adminToken, memberRole } = await createSeatLimitedContext(null, false);
+      await createTestPlan({ includedSeats: 1 });
+      const response = await inviteMember(organization.public_id, adminToken, memberRole.public_id);
+      expect(response.statusCode).toBe(409);
+      expect((response.json() as { error: { reason?: string } }).error.reason).toBe(
+        'seat_limit_reached',
+      );
     });
 
     it('counts an outstanding INVITED membership against the seat limit', async () => {

@@ -158,11 +158,19 @@ export class SubscriptionRepository {
    *   transaction's COMMIT/ROLLBACK; the caller MUST run inside a transaction for the lock to span
    *   the subsequent insert.
    */
-  async findActiveSeatStateByOrganizationForUpdate(
-    organization_id: number,
-  ): Promise<{ seats: number | null; plan_included_seats: number | null } | null> {
+  async findActiveSeatStateByOrganizationForUpdate(organization_id: number): Promise<{
+    seats: number | null;
+    plan_included_seats: number | null;
+    status: string;
+    current_period_end: Date;
+  } | null> {
     const lockedRows = await this.db()
-      .select({ seats: subscriptions.seats, plan_id: subscriptions.plan_id })
+      .select({
+        seats: subscriptions.seats,
+        plan_id: subscriptions.plan_id,
+        status: subscriptions.status,
+        current_period_end: subscriptions.current_period_end,
+      })
       .from(subscriptions)
       .where(
         and(
@@ -180,7 +188,12 @@ export class SubscriptionRepository {
       .from(plans)
       .where(eq(plans.id, locked.plan_id))
       .limit(1);
-    return { seats: locked.seats, plan_included_seats: planRows[0]?.included_seats ?? null };
+    return {
+      seats: locked.seats,
+      plan_included_seats: planRows[0]?.included_seats ?? null,
+      status: locked.status,
+      current_period_end: locked.current_period_end,
+    };
   }
 
   async findByPublicId(public_id: string, organization_id: number) {

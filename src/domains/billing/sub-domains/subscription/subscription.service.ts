@@ -2,6 +2,7 @@ import { ConflictError, NotFoundError, UnprocessableEntityError } from '@/shared
 import { randomUUID } from 'node:crypto';
 
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
+import { env } from '@/shared/config/env.config.js';
 import { INACTIVE_SUBSCRIPTION_STATUSES } from './subscription.repository.js';
 
 /**
@@ -18,6 +19,15 @@ import { INACTIVE_SUBSCRIPTION_STATUSES } from './subscription.repository.js';
  * subscription slot" definitions stay in lockstep (audit-#1).
  */
 const TERMINAL_STATUSES = new Set<string>(INACTIVE_SUBSCRIPTION_STATUSES);
+
+/**
+ * Dunning subscription statuses — a payment has failed but the subscription has not yet been
+ * canceled. The org keeps its full plan ceiling until `current_period_end + BILLING_DUNNING_GRACE_DAYS`
+ * (F4), after which its entitlement lapses to the Free-tier ceiling.
+ */
+const DUNNING_STATUSES = new Set<string>(['PAST_DUE', 'UNPAID', 'INCOMPLETE']);
+
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { PlanService } from '@/domains/billing/sub-domains/plan/plan.service.js';
 import type { PaymentProvider } from './payment-provider.port.js';
@@ -179,20 +189,46 @@ export class SubscriptionService {
    *
    * @remarks
    * - **Algorithm:** delegates to {@link SubscriptionRepository.findActiveSeatStateByOrganizationForUpdate},
-   *   which takes `FOR UPDATE` on the active subscription row. Returns `seats_total` (purchased
-   *   `seats` ?? plan `included_seats`) or `null` when the org has no active subscription OR the
-   *   plan grants unlimited seats — both mean "no seat ceiling to enforce".
-   * - **Failure modes:** none beyond the underlying query; the caller MUST already hold an
+   *   which takes `FOR UPDATE` on the active subscription row, then resolves the ceiling:
+   *   active entitlement → purchased `seats` ?? plan `included_seats`; **no active subscription**
+   *   (F3) or a **dunning subscription past its grace window** (F4) → the Free-tier ceiling
+   *   ({@link PlanService.getFreePlanSeatCeiling}). `null` still means "no ceiling to enforce"
+   *   (unlimited plan, or no plan catalog configured).
+   * - **Failure modes:** none beyond the underlying queries; the caller MUST already hold an
    *   organization DB context + transaction so the lock spans the subsequent membership insert.
-   * - **Side effects:** acquires a `FOR UPDATE` row lock (released at the caller's COMMIT).
+   * - **Side effects:** acquires a `FOR UPDATE` row lock (released at the caller's COMMIT) when an
+   *   active subscription exists. The Free-tier path has no subscription row to lock; with the
+   *   seeded Free plan at 1 seat (owner-only) the `used >= ceiling` check blocks any member add, so
+   *   serialization is not required there — see `docs/reference/architecture/production-audit-decisions.md`.
    * - **Notes:** this is the cross-domain entry point tenancy's `MembershipService` calls to
    *   enforce the seat limit on add-member; it returns only the numeric ceiling, never the row.
    */
   async reserveSeatCeilingForMemberAdd(organization_id: number): Promise<number | null> {
     const seatState =
       await this.repository.findActiveSeatStateByOrganizationForUpdate(organization_id);
-    if (!seatState) return null;
+    // F3/F4: no active subscription, or a dunning subscription past its grace window, falls back to
+    // the Free-tier ceiling (the cheapest active plan's included_seats) rather than "unlimited".
+    if (!seatState || this.isDunningEntitlementLapsed(seatState)) {
+      return this.planService.getFreePlanSeatCeiling();
+    }
     return seatState.seats ?? seatState.plan_included_seats ?? null;
+  }
+
+  /**
+   * F4: true when `seatState` is a dunning subscription (PAST_DUE / UNPAID / INCOMPLETE) whose grace
+   * window (`current_period_end + BILLING_DUNNING_GRACE_DAYS`) has elapsed, so its entitlement has
+   * lapsed to the Free tier. Non-dunning (ACTIVE / TRIALING / PAUSED) and within-grace dunning keep
+   * the full plan ceiling.
+   */
+  private isDunningEntitlementLapsed(seatState: {
+    status: string;
+    current_period_end: Date;
+  }): boolean {
+    if (!DUNNING_STATUSES.has(seatState.status)) return false;
+    const graceEndsAt =
+      new Date(seatState.current_period_end).getTime() +
+      env.BILLING_DUNNING_GRACE_DAYS * MILLISECONDS_PER_DAY;
+    return Date.now() > graceEndsAt;
   }
 
   /**

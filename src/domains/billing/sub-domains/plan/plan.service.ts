@@ -52,6 +52,19 @@ export class PlanService {
     return row;
   }
 
+  /**
+   * Resolves the Free-tier seat ceiling (the cheapest active plan's `included_seats`).
+   *
+   * @remarks
+   * - **Algorithm:** delegates to {@link PlanRepository.findFreePlanSeatCeiling}.
+   * - **Notes:** used by `SubscriptionService.reserveSeatCeilingForMemberAdd` as the entitlement
+   *   floor for organizations with no active subscription or a dunning subscription past grace.
+   *   Returns `null` when no active plan exists or the entry tier grants unlimited seats.
+   */
+  async getFreePlanSeatCeiling(): Promise<number | null> {
+    return this.repository.findFreePlanSeatCeiling();
+  }
+
   async list(): Promise<PlanOutput[]> {
     const rows = await this.repository.findAllActive();
     return rows.map(toOutput);
