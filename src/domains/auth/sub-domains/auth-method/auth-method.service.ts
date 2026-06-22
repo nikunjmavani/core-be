@@ -15,6 +15,7 @@ import { redisConnection } from '@/infrastructure/cache/redis.client.js';
 import { WebauthnCredentialRepository } from '@/domains/auth/sub-domains/auth-webauthn/webauthn-credential.repository.js';
 import {
   EMAIL_OTP_MAX_VERIFY_ATTEMPTS,
+  EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
   EMAIL_OTP_TTL_MINUTES,
   generateEmailOtp,
   hashEmailOtp,
@@ -51,6 +52,12 @@ import {
 const PASSWORD_RESET_EXPIRES_IN_MINUTES = 60;
 /** Redis key prefix for the per-user email-verification OTP attempt counter (brute-force cap). */
 const EMAIL_OTP_VERIFY_ATTEMPT_KEY_PREFIX = 'auth:email_otp_verify_attempts:';
+
+/** Redis key prefix for the per-email password-reset send cooldown (anti-mail-bomb spacing). */
+const PASSWORD_RESET_COOLDOWN_KEY_PREFIX = 'auth:password_reset_cooldown:';
+
+/** Redis key prefix for the per-user email-verification resend cooldown (anti-mail-bomb spacing). */
+const EMAIL_VERIFY_RESEND_COOLDOWN_KEY_PREFIX = 'auth:email_verify_resend_cooldown:';
 
 /**
  * Auth-method types that can mint a session on their own (sec-A5). Used by
@@ -399,7 +406,23 @@ export class AuthMethodService {
       ]);
     }
 
-    await this.issuePasswordResetIfUserExists(parsed.email);
+    // Anti-mail-bomb spacing: atomically claim a per-email cooldown slot. If one is already held
+    // (a reset was requested within EMAIL_OTP_RESEND_COOLDOWN_SECONDS), skip issuing/sending entirely
+    // and fall through to the SAME uniform success — the cooldown is keyed on the requested email
+    // regardless of whether an account exists, so it never becomes an existence oracle.
+    const cooldownKey = `${PASSWORD_RESET_COOLDOWN_KEY_PREFIX}${createHash('sha256')
+      .update(parsed.email)
+      .digest('hex')}`;
+    const cooldownClaimed = await this.redis.set(
+      cooldownKey,
+      '1',
+      'EX',
+      EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
+      'NX',
+    );
+    if (cooldownClaimed) {
+      await this.issuePasswordResetIfUserExists(parsed.email);
+    }
     // Both branches return the same body; hold them to a common minimum duration so the extra
     // token-issuing writes on the known-account path cannot leak existence via response latency.
     await enforceMinimumDuration(startedAtMillis);
@@ -625,6 +648,21 @@ export class AuthMethodService {
     if (!user) throw new NotFoundError('User');
     if (user.is_email_verified) {
       return { messageKey: 'success:emailAlreadyVerified' };
+    }
+
+    // Anti-mail-bomb spacing: atomically claim a per-user cooldown slot. If one is already held
+    // (a code was sent within EMAIL_OTP_RESEND_COOLDOWN_SECONDS), the prior code is still valid, so
+    // return the same success without re-issuing/re-sending.
+    const cooldownKey = `${EMAIL_VERIFY_RESEND_COOLDOWN_KEY_PREFIX}${user.id}`;
+    const cooldownClaimed = await this.redis.set(
+      cooldownKey,
+      '1',
+      'EX',
+      EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
+      'NX',
+    );
+    if (!cooldownClaimed) {
+      return { messageKey: 'success:verificationEmailSent' };
     }
 
     const code = generateEmailOtp();

@@ -109,10 +109,12 @@ describe('MagicLinkService', () => {
   } as unknown as VerificationTokenRepository;
 
   // incrementWithExpiryOnFirst (real util) calls redis.eval and returns the attempt count;
-  // 1 = under the cap by default, del clears it on success.
+  // 1 = under the cap by default, del clears it on success. `set` is the SET NX EX cooldown claim;
+  // 'OK' (default) = slot claimed → send proceeds; null = on cooldown → send is skipped.
   const redis = {
     eval: vi.fn().mockResolvedValue(1),
     del: vi.fn().mockResolvedValue(0),
+    set: vi.fn().mockResolvedValue('OK'),
   } as unknown as Redis;
 
   const service = new MagicLinkService(
@@ -128,6 +130,7 @@ describe('MagicLinkService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(redis.eval).mockResolvedValue(1);
+    vi.mocked(redis.set).mockResolvedValue('OK');
   });
 
   it('send auto-signs-up an unknown email then issues a code', async () => {
@@ -185,6 +188,21 @@ describe('MagicLinkService', () => {
     // Issuing a new code clears the attempt counter keyed by the resolved user id, so an attacker who
     // burned the cap against the prior code cannot keep the legitimate owner locked out.
     expect(redis.del).toHaveBeenCalledWith(`auth:magic_link_otp_verify_attempts:${user.id}`);
+  });
+
+  it('send skips issuing (no signup, no email) when the per-email cooldown is already held', async () => {
+    // SET NX returns null → a code was issued within the cooldown window → skip everything but still
+    // return the same uniform success (anti-mail-bomb spacing without leaking account existence).
+    vi.mocked(redis.set).mockResolvedValueOnce(null);
+    vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
+
+    const result = await service.send({ email: user.email });
+
+    expect(result.messageKey).toBe('success:magicLinkEmailSent');
+    expect(userService.findByEmail).not.toHaveBeenCalled();
+    expect(userService.createForMagicLink).not.toHaveBeenCalled();
+    expect(verificationTokenRepository.create).not.toHaveBeenCalled();
+    expect(vi.mocked(eventBus.emitStrict)).not.toHaveBeenCalled();
   });
 
   it('send enforces a constant-time floor on both account-existence branches', async () => {
