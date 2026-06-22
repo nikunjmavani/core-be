@@ -77,6 +77,7 @@
   "invalidOrExpiredMagicLink": "Invalid or expired magic link",
   "declineOwnInvitationOnly": "You can only decline invitations sent to your email",
   "invitationEmailMismatch": "You can only accept invitations sent to your email",
+  "invitationRequiresVerifiedEmail": "Verify your email address before accepting an organization invitation.",
   "organizationSlugExists": "Organization with slug \"{{slug}}\" already exists",
   "roleNameExists": "A role named \"{{name}}\" already exists in this organization",
   "apiKeyRotationConflict": "This API key was already rotated or revoked by a concurrent request; reload and try again",

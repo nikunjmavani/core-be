@@ -320,7 +320,12 @@ describe('Membership Sub-Domain — Integration', () => {
   describe('POST /api/v1/invitations/:invitation_id/accept (membership activation)', () => {
     async function createPendingInvitation() {
       const { organization, token, user: admin } = await createAuthorizedContext();
-      const invitee = await createTestUser({ email: `invitee-${randomUUID()}@test.com` });
+      // The invitee must have a verified email to accept (they onboard via magic-link / OAuth /
+      // email-verified signup first); the accept route rejects an unverified caller (sec-T4 follow-up).
+      const invitee = await createTestUser({
+        email: `invitee-${randomUUID()}@test.com`,
+        isEmailVerified: true,
+      });
       const memberRole = await createRoleWithPermissions({
         organizationId: organization.id,
         permissionCodes: [TENANCY_PERMISSIONS.MEMBERSHIP_READ],

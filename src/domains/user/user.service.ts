@@ -339,6 +339,26 @@ export class UserService {
     return this.createFromOAuth({ email: data.email, is_email_verified: false });
   }
 
+  /**
+   * Claims a pre-provisioned passwordless account by setting its first password (signup-claim of an
+   * invite / add-member-by-email user whose bare row otherwise blocks `POST /auth/signup` with a 409).
+   *
+   * @remarks
+   * Pins the owner `withUserDatabaseContext` for the FORCE-RLS owner WITH CHECK; the repository UPDATE
+   * is guarded by `password_hash IS NULL`, so a concurrent claim that already set a password makes
+   * this return `null` (the caller surfaces a 409). The claimed account stays `is_email_verified=false`
+   * — signup still emails a verification code, and invitation-accept requires a verified email — so a
+   * claim does not, by itself, grant any email-control-gated capability.
+   */
+  async claimWithPassword(
+    public_id: string,
+    data: { passwordHash: string; firstName?: string | undefined; lastName?: string | undefined },
+  ): Promise<UserAuthRecord | null> {
+    return withUserDatabaseContext(public_id, () =>
+      this.repository.claimWithPassword(public_id, data),
+    );
+  }
+
   async updatePassword(public_id: string, password_hash: string): Promise<UserAuthRecord | null> {
     return withUserDatabaseContext(public_id, () =>
       this.repository.updatePassword(public_id, password_hash),
