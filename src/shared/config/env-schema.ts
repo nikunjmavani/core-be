@@ -372,6 +372,14 @@ const envSchemaBase = z.object({
    * now matches the documented posture in `constructStripeWebhookEvent`.
    */
   STRIPE_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().min(150).max(600).default(150),
+  /**
+   * Grace window (days) after a subscription enters a dunning status (PAST_DUE / UNPAID /
+   * INCOMPLETE) during which it retains its full plan seat ceiling. Anchored at
+   * `current_period_end`; once `now > current_period_end + this`, the org's entitlement lapses to
+   * the Free-tier ceiling (F4). Keeps the standard dunning UX (a failed payment does not instantly
+   * revoke collaborators) while preventing indefinite premium headcount on an unpaid subscription.
+   */
+  BILLING_DUNNING_GRACE_DAYS: z.coerce.number().int().min(0).max(120).default(14),
 
   // Sentry
   SENTRY_DSN: z.url().optional(),
