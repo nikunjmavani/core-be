@@ -7,7 +7,7 @@ engineStrict: true
 useNodeVersion: 24.13.0
 
 allowBuilds:
-  '@sentry-internal/node-cpu-profiler': true
+  '@sentry/node-cpu-profiler': true
   argon2: true
   cpu-features: true
   esbuild: true
