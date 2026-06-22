@@ -84,13 +84,13 @@ describe('Integration: Scalar API reference', () => {
         url: '/reference/openapi.json',
       });
 
-      const parsed = JSON.parse(response.body) as {
-        data?: {
-          paths: Record<string, unknown>;
-          'x-mcp'?: { tools: Array<{ name: string }>; resources: Array<{ uri: string }> };
-        };
+      // @scalar/fastify-api-reference serves the raw normalized OpenAPI document
+      // (parsed by @scalar/openapi-parser) at the top level — not under a `data`
+      // wrapper — so read the specification directly from the parsed body.
+      const specification = JSON.parse(response.body) as {
+        paths: Record<string, unknown>;
+        'x-mcp'?: { tools: Array<{ name: string }>; resources: Array<{ uri: string }> };
       };
-      const specification = parsed.data;
       expect(specification).toBeDefined();
 
       expect(specification?.paths['/api/v1/mcp']).toBeDefined();
