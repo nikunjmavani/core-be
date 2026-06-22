@@ -243,6 +243,11 @@ export class MagicLinkService {
       throw new UnauthorizedError('errors:invalidOrExpiredMagicLink');
     }
 
+    // First successful completion for an as-yet-unverified account: the email is about to be proven,
+    // so this is the moment a bare invited placeholder (created without a personal org) gets claimed.
+    // Captured here so the post-commit provision below can mirror signup / OAuth.
+    const isFirstVerification = !user.is_email_verified;
+
     // audit-#12: consume the one-time code AND complete first-factor auth (session creation, or the
     // MFA-challenge decision) in ONE pinned transaction. A transient failure after consumption would
     // otherwise permanently burn a valid single-use code ("invalid or expired" on retry). The atomic
@@ -265,7 +270,7 @@ export class MagicLinkService {
         assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
         // Completing the code proves the user controls this email, so mark it verified (parity with
         // OAuth, and the natural completion of magic-link auto-signup).
-        if (!user.is_email_verified) {
+        if (isFirstVerification) {
           await this.userService.updateEmailVerified(user.public_id);
         }
 
@@ -289,6 +294,26 @@ export class MagicLinkService {
 
     // Clear the attempt counter so a verified user's later legitimate flows are never pre-throttled.
     await this.redis.del(attemptKey);
+
+    // On the first successful verification, ensure the personal organization exists — a bare invited
+    // placeholder is created WITHOUT one, so a magic-link claimer would otherwise have no personal org
+    // (a brand-new passwordless signup already provisioned one at send time, making this an idempotent
+    // no-op for that path). Runs post-commit in a separate global-admin connection that cannot see an
+    // uncommitted user — and after the code is consumed, so a wrong code can never force-provision.
+    // Best-effort + idempotent (partial unique index; tool:backfill-personal-orgs recovers a miss),
+    // matching signup / OAuth. The just-minted token may not yet carry the personal-org claim; the
+    // next refresh picks it up.
+    if (isFirstVerification && env.PERSONAL_ORGANIZATION_ENABLED) {
+      try {
+        await provisionPersonalOrganization(user.id);
+      } catch (error) {
+        logger.error(
+          { err: error, userId: user.public_id },
+          'magic_link.verify.personal_org_provision_failed',
+        );
+      }
+    }
+
     return result;
   }
 }
