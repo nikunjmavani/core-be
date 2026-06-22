@@ -10,11 +10,15 @@ function createMockDatabase() {
   const mockWhereSelect = vi.fn().mockResolvedValue([]);
   const mockFrom = vi.fn().mockReturnValue({ where: mockWhereSelect });
   const mockSelect = vi.fn().mockReturnValue({ from: mockFrom });
+  // replaceAll acquires a per-user pg_advisory_xact_lock via `execute(...)` before
+  // the delete-then-insert, so the mock DB must expose `execute` like the real handle.
+  const mockExecute = vi.fn().mockResolvedValue(undefined);
 
   return {
     select: mockSelect,
     insert: mockInsert,
     delete: mockDelete,
+    execute: mockExecute,
     mockReturning,
     mockValues,
     mockFrom,
@@ -23,6 +27,7 @@ function createMockDatabase() {
     mockInsert,
     mockDelete,
     mockSelect,
+    mockExecute,
   };
 }
 
@@ -44,6 +49,7 @@ describe('UserNotificationPreferencesRepository', () => {
     mockDatabase.mockFrom.mockReturnValue({ where: mockDatabase.mockWhereSelect });
     mockDatabase.mockDelete.mockReturnValue({ where: mockDatabase.mockWhereDelete });
     mockDatabase.mockInsert.mockReturnValue({ values: mockDatabase.mockValues });
+    mockDatabase.mockExecute.mockResolvedValue(undefined);
   });
 
   it('listByUserId queries preferences for user', async () => {
@@ -80,6 +86,8 @@ describe('UserNotificationPreferencesRepository', () => {
     );
 
     expect(rows).toHaveLength(1);
+    // the per-user advisory lock must be acquired before the replace mutation
+    expect(mockDatabase.mockExecute).toHaveBeenCalled();
     expect(mockDatabase.mockDelete).toHaveBeenCalled();
     expect(mockDatabase.mockInsert).toHaveBeenCalled();
   });
