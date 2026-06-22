@@ -52,12 +52,17 @@ All error statuses share one envelope (`src/shared/middlewares/core/error-handle
 
 ```json
 {
-  "error": { "code": "VALIDATION_ERROR", "message": "Invalid request body", "details": [{ "field": "email", "message": "Invalid email format" }] },
+  "error": {
+    "type": "validation_error",
+    "code": "validation_error",
+    "detail": "Invalid request body",
+    "errors": [{ "field": "email", "message": "Invalid email format" }]
+  },
   "meta": { "request_id": "018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b" }
 }
 ```
 
-`details` appears on 400 only. `request_id` is the server-minted UUID (also echoed as `X-Request-Id`) — quote it in support tickets. All `message` values are i18n keys resolved per `Accept-Language`.
+Fields: `type` is `request_error` or `validation_error` (always present); `code` is the status-class slug (e.g. `validation_error`, `conflict`, `not_found`); `detail` is the human, i18n-resolved message (per `Accept-Language`); `errors` (the per-field array) appears on validation (400) only; `documentation_url` is added when `API_DOCS_BASE_URL` is configured. `request_id` (under `meta`) is the server-minted UUID (also echoed as `X-Request-Id`) — quote it in support tickets. Every error path — including the idempotency-middleware 409/422/429/503 responses — emits this same `{ error, meta }` envelope.
 
 **`error.reason` (optional, machine-readable):** select 4xx errors carry a stable snake_case `reason` sub-code so the frontend can branch on the specific cause without parsing the human `detail`. It is **additive** (present only where set) and is **omitted on 5xx** (masked alongside the detail). `code` stays the status-class slug (e.g. `conflict`); `reason` is the specific cause. Current slugs: `membership_already_exists`, `organization_slug_exists`, `invitation_revoked`, `invitation_already_accepted`, `invitation_expired` — extend as new FE-relevant cases arise by calling `AppError.withReason('<slug>')` at the throw site.
 
