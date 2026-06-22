@@ -8,9 +8,10 @@ import type { AuthMethodCreateData, AuthMethodProviderLookup } from './auth-meth
 
 /**
  * Postgres advisory-lock namespace (`classid`, ASCII `ACRD`) serializing per-user credential
- * mutations. Combined with the user's internal id as `objid` in the two-key
+ * mutations. Combined with a positive int4 hash of the user's internal id as `objid` in the two-key
  * `pg_advisory_xact_lock(classid, objid)` form so it occupies a distinct lock space from other
- * advisory locks (e.g. the upload-quota namespace). Only its stability matters.
+ * advisory locks (e.g. the upload-quota namespace). The hash keeps `bigserial` ids beyond int4's
+ * 2.1B max from overflowing the int4 `objid` (B-1). Only its stability matters.
  */
 const CREDENTIAL_MUTATION_ADVISORY_LOCK_NAMESPACE = 0x41_43_52_44;
 
@@ -190,7 +191,7 @@ export class AuthMethodRepository {
    */
   async acquireCredentialMutationLock(userId: number): Promise<void> {
     await getRequestDatabase().execute(
-      sql`SELECT pg_advisory_xact_lock(${CREDENTIAL_MUTATION_ADVISORY_LOCK_NAMESPACE}::int, ${userId}::int)`,
+      sql`SELECT pg_advisory_xact_lock(${CREDENTIAL_MUTATION_ADVISORY_LOCK_NAMESPACE}::int, (hashtextextended(${userId}::text, 0) & 2147483647::bigint)::int)`,
     );
   }
 
