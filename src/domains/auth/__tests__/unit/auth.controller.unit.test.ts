@@ -84,6 +84,11 @@ describe('createAuthController', () => {
     refreshToken: vi
       .fn()
       .mockResolvedValue({ access_token: 'new-token', refresh_secret: 'new-refresh-secret' }),
+    resetPassword: vi.fn().mockResolvedValue({
+      access_token: 'token',
+      session_public_id: 'session',
+      session_refresh_secret: 'refresh-secret',
+    }),
   };
 
   const authMethodService = {
@@ -296,8 +301,9 @@ describe('createAuthController', () => {
     await controller.changePassword(mockRequest({ body: { password: 'new' } }), changeReply);
     await controller.verifyEmail(mockRequest({ body: { token: 'verify' } }), mockReply());
     await controller.resendEmailVerification(mockRequest(), mockReply());
-    expect(authMethodService.resetPassword).toHaveBeenCalled();
-    expect(resetReply.code).toHaveBeenCalledWith(204);
+    // Reset now auto-logs-in via authService: it sets the session cookie instead of returning 204.
+    expect(authService.resetPassword).toHaveBeenCalled();
+    expect(resetReply.setCookie).toHaveBeenCalled();
   });
 
   it('refreshToken uses session cookie and revokeAllSessions does NOT clear the cookie', async () => {
