@@ -209,6 +209,12 @@ export class MagicLinkService {
         });
       }),
     );
+
+    // A freshly issued code gets a fresh per-user verify budget: clearing the attempt counter here
+    // means an attacker who burned the cap against the prior code cannot keep the legitimate owner
+    // locked out — requesting a new code restores their attempts. Brute-force is unaffected (each new
+    // code is an independent random target, and `send` is itself per-email + per-IP rate-limited).
+    await this.redis.del(`${MAGIC_LINK_OTP_VERIFY_ATTEMPT_KEY_PREFIX}${user.id}`);
   }
 
   /** Verify a magic-link sign-in code; returns an MFA challenge or an access token + session. */

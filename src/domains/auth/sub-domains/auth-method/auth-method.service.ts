@@ -611,6 +611,13 @@ export class AuthMethodService {
       }),
     );
 
+    // Reset the per-user verify-attempt cap on each fresh code issuance. The prior code was just
+    // invalidated, so its accumulated attempts are meaningless against the new code — and without this
+    // an attacker who burned the cap against the old code would lock the legitimate owner out of
+    // verifying the new one. Brute force is not weakened: each new code is an independent random
+    // target and issuance itself is rate-limited per email + IP.
+    await this.redis.del(`${EMAIL_OTP_VERIFY_ATTEMPT_KEY_PREFIX}${user.id}`);
+
     return { messageKey: 'success:verificationEmailSent' };
   }
 }

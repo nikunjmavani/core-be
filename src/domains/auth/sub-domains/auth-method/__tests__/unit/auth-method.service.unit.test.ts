@@ -338,6 +338,15 @@ describe('AuthMethodService', () => {
     expect(resent.messageKey).toBe('success:verificationEmailSent');
   });
 
+  it('resendEmailVerification resets the per-user verify-attempt cap on each fresh code', async () => {
+    // user.is_email_verified is false, so resend issues a new code and must clear the attempt
+    // counter — otherwise an attacker who burned the cap against the prior code would keep the
+    // legitimate owner locked out of verifying the new one.
+    const result = await service.resendEmailVerification('user_public');
+    expect(result.messageKey).toBe('success:verificationEmailSent');
+    expect(redis.del).toHaveBeenCalledWith(`auth:email_otp_verify_attempts:${user.id}`);
+  });
+
   it('resendEmailVerification returns already verified message', async () => {
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue({
       ...user,
@@ -345,6 +354,8 @@ describe('AuthMethodService', () => {
     } as never);
     const result = await service.resendEmailVerification('user_public');
     expect(result.messageKey).toBe('success:emailAlreadyVerified');
+    // No fresh code is issued, so the attempt counter is left untouched.
+    expect(redis.del).not.toHaveBeenCalled();
   });
 
   it('forgotPassword rejects disposable email', async () => {

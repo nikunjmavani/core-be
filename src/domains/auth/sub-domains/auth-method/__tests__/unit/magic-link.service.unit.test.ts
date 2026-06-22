@@ -176,6 +176,16 @@ describe('MagicLinkService', () => {
     expect(emittedPayload.otp_code).toMatch(/^\d{6}$/);
   });
 
+  it('send resets the per-user verify-attempt cap so a fresh code restores the budget', async () => {
+    vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
+
+    await service.send({ email: user.email });
+
+    // Issuing a new code clears the attempt counter keyed by the resolved user id, so an attacker who
+    // burned the cap against the prior code cannot keep the legitimate owner locked out.
+    expect(redis.del).toHaveBeenCalledWith(`auth:magic_link_otp_verify_attempts:${user.id}`);
+  });
+
   it('send enforces a constant-time floor on both account-existence branches', async () => {
     const { enforceMinimumDuration } = await import(
       '@/shared/utils/security/anti-enumeration.util.js'
