@@ -118,6 +118,43 @@ describe('Billing Subscription Mutations — Integration', () => {
       expect(body.data).toBeDefined();
     });
 
+    it('returns 409 when downgrading to a plan whose seat allowance is below the active member count (F2)', async () => {
+      // The owner already holds 1 active membership; switching to a 0-seat plan would leave the org
+      // over its allowance, so the change must be rejected (fail closed before any Stripe call).
+      const { organization, subscription, token } = await createBillingMutationContext();
+      const smallerPlan = await createTestPlan({ name: 'Tiny Plan', includedSeats: 0 });
+
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/change-plan`),
+        token,
+        organizationPublicId: organization.public_id,
+        payload: { plan_id: smallerPlan.public_id },
+        headers: { 'x-idempotency-key': generatePublicId('subscription') },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect((response.json() as { error: { reason?: string } }).error.reason).toBe(
+        'seat_limit_exceeded_for_plan',
+      );
+    });
+
+    it('allows the downgrade when the new plan still has enough seats for the active members (F2)', async () => {
+      const { organization, subscription, token } = await createBillingMutationContext();
+      const fittingPlan = await createTestPlan({ name: 'Roomy Plan', includedSeats: 5 });
+
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/change-plan`),
+        token,
+        organizationPublicId: organization.public_id,
+        payload: { plan_id: fittingPlan.public_id },
+        headers: { 'x-idempotency-key': generatePublicId('subscription') },
+      });
+
+      expect(response.statusCode).toBe(201);
+    });
+
     it('should return 401 when no auth header is provided', async () => {
       const { subscription } = await createBillingMutationContext();
       const newPlan = await createTestPlan();

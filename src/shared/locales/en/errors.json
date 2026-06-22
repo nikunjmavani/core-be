@@ -152,6 +152,7 @@
   "stripeWebhookEventInFlight": "Stripe webhook event {{eventId}} is still being processed; retry shortly.",
   "subscriptionAlreadyExists": "An active subscription already exists for this organization",
   "seatLimitReached": "Your plan's seat limit ({{limit}}) has been reached. Upgrade your plan or remove a member before adding another.",
+  "planDowngradeSeatsExceeded": "This plan allows {{limit}} seats but the organization has {{used}} active members. Remove members before switching to this plan.",
   "subscriptionNotMutable": "This subscription is in a terminal state and can no longer be modified; create a new subscription instead",
   "planNotAvailableForBillingCycle": "This plan is not available for your subscription's billing cycle",
   "paymentProviderUnavailable": "The payment provider is temporarily unavailable. Please try again.",

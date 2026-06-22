@@ -480,6 +480,16 @@ export class MembershipService {
       if (parsed.status === 'ACTIVE' && membership.joined_at === null) {
         throw new ForbiddenError('errors:membershipActivationRequiresInvitationAccept');
       }
+      /**
+       * F1: reactivating a SUSPENDED member re-consumes a seat — SUSPENDED memberships are NOT
+       * counted toward the cap, so a `SUSPENDED -> ACTIVE` transition adds one to the live seat
+       * count. Without this check, suspend → add-a-new-member-into-the-freed-slot → reactivate
+       * overshoots the plan's seat ceiling unbounded. Run the same seat-availability check as
+       * `create`, inside this org transaction so the subscription `FOR UPDATE` lock serializes it.
+       */
+      if (parsed.status === 'ACTIVE' && membership.status !== 'ACTIVE') {
+        await this.assertSeatAvailableForMemberAdd(organization.id);
+      }
       let roleInternalId: number | undefined;
       if (parsed.role_id !== undefined) {
         // REQ-3: resolve the target role and run the same privilege-escalation guard as create — a

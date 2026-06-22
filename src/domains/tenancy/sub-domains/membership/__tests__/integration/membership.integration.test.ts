@@ -315,6 +315,59 @@ describe('Membership Sub-Domain — Integration', () => {
         'seat_limit_reached',
       );
     });
+
+    // F1: a SUSPENDED membership is not counted toward the seat cap, so reactivating it
+    // (SUSPENDED -> ACTIVE via PATCH) re-consumes a seat and must pass the same seat check as add.
+    async function reactivateSuspendedMember(
+      organizationPublicId: string,
+      organizationId: number,
+      adminToken: string,
+      memberRoleId: number,
+    ) {
+      const member = await createTestUser();
+      const suspended = await createMembership({
+        userId: member.id,
+        organizationId,
+        roleId: memberRoleId,
+        status: 'SUSPENDED',
+      });
+      return injectAuthenticatedOrganizationMutation(app, {
+        method: 'PATCH',
+        url: testApiPath(`/tenancy/organization/memberships/${suspended.public_id}`),
+        token: adminToken,
+        organizationPublicId,
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
+        payload: { status: 'ACTIVE' },
+      });
+    }
+
+    it('returns 409 seat_limit_reached when reactivating a SUSPENDED member would exceed the cap (F1)', async () => {
+      // Plan grants 1 seat; the owner occupies it. The SUSPENDED member does not count, but
+      // reactivating it would make 2 ACTIVE on a 1-seat plan — must be rejected.
+      const { organization, adminToken, memberRole } = await createSeatLimitedContext(1, true);
+      const response = await reactivateSuspendedMember(
+        organization.public_id,
+        organization.id,
+        adminToken,
+        memberRole.id,
+      );
+      expect(response.statusCode).toBe(409);
+      expect((response.json() as { error: { reason?: string } }).error.reason).toBe(
+        'seat_limit_reached',
+      );
+    });
+
+    it('allows reactivating a SUSPENDED member when the plan still has a free seat (F1)', async () => {
+      // Plan grants 5 seats; only the owner is active, so reactivation fits under the cap.
+      const { organization, adminToken, memberRole } = await createSeatLimitedContext(5, true);
+      const response = await reactivateSuspendedMember(
+        organization.public_id,
+        organization.id,
+        adminToken,
+        memberRole.id,
+      );
+      expect(response.statusCode).toBe(200);
+    });
   });
 
   describe('POST /api/v1/invitations/:invitation_id/accept (membership activation)', () => {
