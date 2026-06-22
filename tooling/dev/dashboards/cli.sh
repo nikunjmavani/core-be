@@ -75,6 +75,11 @@ precheck_env() {
   [ "$(env_val ENABLE_API_REFERENCE)" = "true" ]   || warn "ENABLE_API_REFERENCE≠true — /reference will be hidden"
   [ "$(env_val ENABLE_QUEUE_DASHBOARD)" = "true" ] || warn "ENABLE_QUEUE_DASHBOARD≠true — /admin/queues will be hidden"
   [ "$(env_val CAPTCHA_PROVIDER)" = "turnstile" ]  || warn "CAPTCHA_PROVIDER≠turnstile — Bull Board login needs X-Captcha-Bypass enforced (see dashboards token hint)"
+  local demo_email="${DEMO_EMAIL:-demo@example.com}"
+  case ",$(env_val GLOBAL_ADMIN_EMAILS)," in
+    *",$demo_email,"*) : ;;
+    *) warn "GLOBAL_ADMIN_EMAILS lacks $demo_email — Bull Board login won't be super_admin" ;;
+  esac
 }
 
 status_line() { # _  label  code  urlnotes
@@ -110,6 +115,10 @@ cmd_up() {
   pnpm compose:wait >/dev/null 2>&1 && ok "postgres ready"  || warn "postgres wait timed out"
   log "→ migrations…"
   pnpm db:migrate   >/dev/null 2>&1 && ok "migrations applied" || warn "migrate failed (run: pnpm db:migrate)"
+  log "→ demo super_admin (the user the proxy logs in as for Bull Board)…"
+  pnpm db:seed:demo-admin >/dev/null 2>&1 \
+    && ok "demo super_admin ready" \
+    || warn "demo super_admin seed failed — Bull Board may 502 (run: pnpm db:seed:demo-admin)"
   if [ ! -f docs/openapi/openapi.json ]; then
     log "→ OpenAPI spec for /reference…"
     pnpm docs:generate >/dev/null 2>&1 && ok "spec generated" || warn "docs:generate failed"
