@@ -18,6 +18,7 @@ import {
   responseBodyContainsSecretFields,
 } from '@/shared/utils/idempotency/idempotency-fingerprint.util.js';
 import { translateRequestMessage } from '@/shared/utils/i18n/translate-request.util.js';
+import { getRequestIdentifier } from '@/shared/utils/http/request.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { assertIdempotencyKeyPresentWhenRequired } from '@/shared/utils/idempotency/idempotency-required.util.js';
 import {
@@ -232,6 +233,35 @@ function sendCachedIdempotencyResponse(
   return reply.send(JSON.parse(response.body));
 }
 
+/**
+ * Builds an idempotency error body that matches the standard API error envelope — `error` plus a
+ * `meta.request_id` block (audit api-contract-#1: these middleware responses previously `reply.send`-d
+ * a bare `{ error }` with no `meta`, so every idempotency 409/422/429/503 dropped the `request_id`
+ * that every other error carries). Keeps the exact `type`/`code`/`detail` each caller already used;
+ * `retry_after_seconds` is snake_case per the body-key contract (was `retryAfterSeconds`).
+ */
+function buildIdempotencyErrorBody(
+  request: FastifyRequest,
+  error: {
+    type: string;
+    code: string;
+    detail: string;
+    retryable?: boolean;
+    retry_after_seconds?: number;
+  },
+) {
+  return {
+    error: omitUndefined({
+      type: error.type,
+      code: error.code,
+      detail: error.detail,
+      retryable: error.retryable,
+      retry_after_seconds: error.retry_after_seconds,
+    }),
+    meta: { request_id: getRequestIdentifier(request) },
+  };
+}
+
 function sendInFlightConflict(request: FastifyRequest, reply: FastifyReply): FastifyReply {
   const detail = translateRequestMessage(
     request,
@@ -239,13 +269,13 @@ function sendInFlightConflict(request: FastifyRequest, reply: FastifyReply): Fas
     'A request with this idempotency key is still in flight',
   );
   reply.status(409);
-  return reply.send({
-    error: {
+  return reply.send(
+    buildIdempotencyErrorBody(request, {
       type: 'request_error',
       code: 'conflict_in_flight',
       detail,
-    },
-  });
+    }),
+  );
 }
 
 /**
@@ -264,13 +294,13 @@ function sendIdempotencyKeyReuseConflict(
     'This idempotency key was already used with a different request payload',
   );
   reply.status(422);
-  return reply.send({
-    error: {
+  return reply.send(
+    buildIdempotencyErrorBody(request, {
       type: 'request_error',
       code: 'idempotency_key_reuse',
       detail,
-    },
-  });
+    }),
+  );
 }
 
 /**
@@ -343,15 +373,15 @@ function sendIdempotencyPerActorCapExceeded(
   );
   reply.header('Retry-After', String(retryAfterSeconds));
   reply.status(429);
-  return reply.send({
-    error: {
+  return reply.send(
+    buildIdempotencyErrorBody(request, {
       type: 'rate_limit_error',
       code: 'idempotency_per_actor_cap',
       detail,
       retryable: true,
-      retryAfterSeconds,
-    },
-  });
+      retry_after_seconds: retryAfterSeconds,
+    }),
+  );
 }
 
 async function idempotencyClaimPreHandler(
@@ -490,15 +520,15 @@ function respondIdempotencyStoreUnavailable(
   );
   reply.header('Retry-After', String(IDEMPOTENCY_STORE_UNAVAILABLE_RETRY_AFTER_SECONDS));
   reply.status(503);
-  reply.send({
-    error: {
+  reply.send(
+    buildIdempotencyErrorBody(request, {
       type: 'service_error',
       code: 'service_unavailable',
       detail,
       retryable: true,
-      retryAfterSeconds: IDEMPOTENCY_STORE_UNAVAILABLE_RETRY_AFTER_SECONDS,
-    },
-  });
+      retry_after_seconds: IDEMPOTENCY_STORE_UNAVAILABLE_RETRY_AFTER_SECONDS,
+    }),
+  );
   return reply;
 }
 
@@ -534,13 +564,13 @@ async function handleIdempotencyClaimRace(
     'Concurrent request with same idempotency key',
   );
   reply.status(409);
-  reply.send({
-    error: {
+  reply.send(
+    buildIdempotencyErrorBody(request, {
       type: 'request_error',
       code: 'conflict',
       detail,
-    },
-  });
+    }),
+  );
   return reply;
 }
 
