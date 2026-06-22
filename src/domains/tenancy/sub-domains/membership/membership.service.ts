@@ -705,6 +705,54 @@ export class MembershipService {
   }
 
   /**
+   * F2: suspends the most-recently-joined non-owner ACTIVE members until the org's active headcount
+   * fits `ceiling`; returns how many were suspended. Cross-domain entry point billing's
+   * `SubscriptionService` calls after a downgrade commits.
+   *
+   * @remarks
+   * - **Algorithm:** counts ACTIVE + INVITED seats; if `seatsUsed > ceiling`, suspends
+   *   `seatsUsed - ceiling` non-owner ACTIVE members ordered by `joined_at DESC` (longest-tenured
+   *   kept), then purges each suspended member's Redis permission cache so access is revoked at once
+   *   rather than lingering for the cache TTL. The **owner is never suspended**, so an owner-only or
+   *   owner-plus-invites org may remain above `ceiling` (invitations are not suspendable) — the
+   *   add-member ceiling check still blocks further growth.
+   * - **Failure modes:** `NotFoundError('Organization')` for a missing org; otherwise none beyond the
+   *   underlying queries. Runs in the org DB context + transaction so the count and suspend are
+   *   consistent and RLS-scoped.
+   * - **Side effects:** flips excess memberships to `SUSPENDED`; invalidates permission caches.
+   */
+  async suspendExcessActiveMembersToFitCeiling(options: {
+    organizationPublicId: string;
+    ceiling: number;
+  }): Promise<number> {
+    const suspendedUserIds = await withOrganizationDatabaseContext(
+      options.organizationPublicId,
+      async () => {
+        const organization = await this.organizationService.requireOrganizationMembershipByPublicId(
+          options.organizationPublicId,
+        );
+        const seatsUsed = await this.membershipRepository.countActiveByOrganization(
+          organization.id,
+        );
+        const excess = seatsUsed - options.ceiling;
+        if (excess <= 0) return [];
+        return this.membershipRepository.suspendExcessActiveMembers({
+          organization_id: organization.id,
+          owner_user_id: organization.owner_user_id,
+          suspend_count: excess,
+        });
+      },
+    );
+    // Post-commit (policy audit R11): purge each suspended member's permission cache OUTSIDE the
+    // org context block, so a concurrent recompute can't re-cache the pre-suspension permission set
+    // before the suspend transaction commits.
+    for (const userInternalId of suspendedUserIds) {
+      await this.invalidatePermissionsForMembership(userInternalId, options.organizationPublicId);
+    }
+    return suspendedUserIds.length;
+  }
+
+  /**
    * Lists organization memberships for a GDPR data-export bundle under the requesting user's RLS
    * context (cross-organization read scoped to the owner).
    */

@@ -17,6 +17,9 @@ import {
   createMembership,
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import { createTestSubscription } from '@/domains/billing/__tests__/factories/subscription.factory.js';
+import { database } from '@/infrastructure/database/connection.js';
+import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
+import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
@@ -118,25 +121,98 @@ describe('Billing Subscription Mutations — Integration', () => {
       expect(body.data).toBeDefined();
     });
 
-    it('returns 409 when downgrading to a plan whose seat allowance is below the active member count (F2)', async () => {
-      // The owner already holds 1 active membership; switching to a 0-seat plan would leave the org
-      // over its allowance, so the change must be rejected (fail closed before any Stripe call).
-      const { organization, subscription, token } = await createBillingMutationContext();
-      const smallerPlan = await createTestPlan({ name: 'Tiny Plan', includedSeats: 0 });
+    it('auto-suspends the most-recently-joined excess members on an over-cap downgrade, keeping the owner (F2)', async () => {
+      // Owner + 2 active members = 3 seats used. Downgrade to a 1-seat plan: the 2 non-owner members
+      // are suspended (longest-tenured-kept ordering, owner never suspended), so the change succeeds.
+      const {
+        user: owner,
+        organization,
+        subscription,
+        token,
+      } = await createBillingMutationContext();
+      const memberRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: ALL_BILLING_PERMISSIONS,
+      });
+      const memberA = await createTestUser({
+        email: `member-a-${generatePublicId('user')}@test.com`,
+      });
+      const memberB = await createTestUser({
+        email: `member-b-${generatePublicId('user')}@test.com`,
+      });
+      await createMembership({
+        userId: memberA.id,
+        organizationId: organization.id,
+        roleId: memberRole.id,
+      });
+      await createMembership({
+        userId: memberB.id,
+        organizationId: organization.id,
+        roleId: memberRole.id,
+      });
+
+      const oneSeatPlan = await createTestPlan({ name: 'Solo Plan', includedSeats: 1 });
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/change-plan`),
+        token,
+        organizationPublicId: organization.public_id,
+        payload: { plan_id: oneSeatPlan.public_id },
+        headers: { 'x-idempotency-key': generatePublicId('subscription') },
+      });
+
+      expect(response.statusCode).toBe(201);
+      // The two non-owner members are now SUSPENDED; the owner stays ACTIVE.
+      const statusOf = async (userId: number) =>
+        (
+          await database
+            .select({ status: memberships.status })
+            .from(memberships)
+            .where(
+              and(
+                eq(memberships.organization_id, organization.id),
+                eq(memberships.user_id, userId),
+              ),
+            )
+        )[0]?.status;
+      expect(await statusOf(memberA.id)).toBe('SUSPENDED');
+      expect(await statusOf(memberB.id)).toBe('SUSPENDED');
+      expect(await statusOf(owner.id)).toBe('ACTIVE');
+    });
+
+    it('downgrade of an owner-only org to a 0-seat plan succeeds without suspending the owner (F2)', async () => {
+      // Only the owner holds a seat; the owner is never suspended, so an over-cap downgrade still
+      // succeeds (the org simply remains at its owner-only floor).
+      const {
+        user: owner,
+        organization,
+        subscription,
+        token,
+      } = await createBillingMutationContext();
+      const zeroSeatPlan = await createTestPlan({ name: 'Tiny Plan', includedSeats: 0 });
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
         url: testApiPath(`/billing/subscriptions/${subscription.public_id}/change-plan`),
         token,
         organizationPublicId: organization.public_id,
-        payload: { plan_id: smallerPlan.public_id },
+        payload: { plan_id: zeroSeatPlan.public_id },
         headers: { 'x-idempotency-key': generatePublicId('subscription') },
       });
 
-      expect(response.statusCode).toBe(409);
-      expect((response.json() as { error: { reason?: string } }).error.reason).toBe(
-        'seat_limit_exceeded_for_plan',
-      );
+      expect(response.statusCode).toBe(201);
+      const ownerStatus = (
+        await database
+          .select({ status: memberships.status })
+          .from(memberships)
+          .where(
+            and(
+              eq(memberships.organization_id, organization.id),
+              eq(memberships.user_id, owner.id),
+            ),
+          )
+      )[0]?.status;
+      expect(ownerStatus).toBe('ACTIVE');
     });
 
     it('allows the downgrade when the new plan still has enough seats for the active members (F2)', async () => {

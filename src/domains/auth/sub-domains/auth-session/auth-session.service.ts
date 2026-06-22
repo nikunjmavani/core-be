@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { NotFoundError, UnauthorizedError } from '@/shared/errors/index.js';
+import { MAX_ACTIVE_SESSIONS_PER_USER } from '@/shared/constants/security.constants.js';
 import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import { generateRefreshSecret } from '@/domains/auth/auth.http.util.js';
@@ -15,6 +16,7 @@ import {
   invalidateCachedSessionToken,
   setCachedSessionTokenValid,
 } from './session-token-cache.service.js';
+import { runReadWithTransientRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 
 function hashAccessToken(rawToken: string): string {
   return createHash('sha256').update(rawToken).digest('hex');
@@ -141,13 +143,30 @@ export class AuthSessionService {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
     const refreshSecret = generateRefreshSecret();
-    const session = await withUserDatabaseContext(userPublicId, (_databaseHandle) =>
-      this.sessionRepository.create({
-        user_id: user.id,
-        refresh_token_hash: hashRefreshSecret(refreshSecret),
-        ...data,
-      }),
+    const { session, evictedSessions } = await withUserDatabaseContext(
+      userPublicId,
+      async (_databaseHandle) => {
+        // Bound the user's concurrent live sessions. Under a per-user advisory lock (so concurrent
+        // logins cannot overshoot), evict the oldest sessions beyond MAX_ACTIVE_SESSIONS_PER_USER - 1
+        // so there is room for this new one. Evicting (not rejecting) means a legitimate multi-device
+        // user is never locked out — only their stalest session is dropped — while a single account
+        // can no longer mint unbounded sessions (bloat + stolen-credential blast radius).
+        await this.sessionRepository.acquireCreationQuotaLock(user.id);
+        const evicted = await this.sessionRepository.revokeOldestActiveBeyond(
+          user.id,
+          MAX_ACTIVE_SESSIONS_PER_USER - 1,
+        );
+        const created = await this.sessionRepository.create({
+          user_id: user.id,
+          refresh_token_hash: hashRefreshSecret(refreshSecret),
+          ...data,
+        });
+        return { session: created, evictedSessions: evicted };
+      },
     );
+    // Purge the session-token cache for any evicted session so its access token stops authenticating
+    // on the next request (a revocation tombstone), mirroring explicit logout/revoke.
+    await this.invalidateRevokedSessionCaches(evictedSessions);
     return { public_id: session.public_id, refresh_secret: refreshSecret };
   }
 
@@ -192,8 +211,14 @@ export class AuthSessionService {
       return { sessionPublicId: cachedSessionPublicId };
     }
 
-    const session = await withSessionTokenHashDatabaseContext(tokenHash, (_databaseHandle) =>
-      this.sessionRepository.findActiveByTokenHash(tokenHash),
+    // These two reads run in the auth pre-handler, outside any service transaction (autocommit), so
+    // a transient managed-Postgres connection drop is safe to retry rather than spuriously 401 an
+    // otherwise-authenticated request. Only connection-level errors are retried (see
+    // runReadWithTransientRetry); an invalid/expired session still returns null on the first attempt.
+    const session = await runReadWithTransientRetry(() =>
+      withSessionTokenHashDatabaseContext(tokenHash, (_databaseHandle) =>
+        this.sessionRepository.findActiveByTokenHash(tokenHash),
+      ),
     );
 
     if (!session) {
@@ -203,7 +228,9 @@ export class AuthSessionService {
     // sec-new-A2: verify the owning user is still active. Runs only on cache miss
     // (first request per 60 s window) to avoid a per-request DB round-trip.
     // findUserRecordByPublicId wraps withUserDatabaseContext internally.
-    const user = await this.userService.findUserRecordByPublicId(userPublicId);
+    const user = await runReadWithTransientRetry(() =>
+      this.userService.findUserRecordByPublicId(userPublicId),
+    );
     if (user?.status !== 'ACTIVE' || user.deleted_at !== null) {
       throw new UnauthorizedError('errors:accountNotActive');
     }

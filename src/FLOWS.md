@@ -24,28 +24,31 @@ sequenceDiagram
   participant Bus as event-bus
   participant Mail as mail.processor
   participant Resend
-  Client->>Auth: POST /auth/magic-link {email}
+  Client->>Auth: POST /auth/magic-link/send {email}
   Auth->>ML: send({email})
   ML->>US: findByEmail(email)
   US-->>ML: user | null
-  alt user exists
-    ML->>DB: insert verification_tokens (MAGIC_LINK, sha256(token), expires_at = now + 15m)
-    ML->>Bus: emit AUTH_EVENT.MAGIC_LINK_REQUESTED {email, magic_link_token, expires_in_minutes}
-    Bus->>Mail: recordOutboxEmail (via event handler)
-  else user does not exist
-    Note over ML: silent success — no token, no event, no email
+  alt user does not exist (auto-signup)
+    ML->>DB: insert users (passwordless, is_email_verified=false) + auth_methods (MAGIC_LINK), atomic
+    Note over ML: post-commit best-effort provisionPersonalOrganization (when enabled)
   end
+  Note over ML: new and existing users converge on the same issue-code path
+  ML->>DB: invalidate prior MAGIC_LINK + insert verification_tokens (MAGIC_LINK, sha256(code), expires_at = now + 15m)
+  ML->>Bus: emit AUTH_EVENT.MAGIC_LINK_REQUESTED {email, otp_code, expires_in_minutes}
+  Bus->>Mail: recordOutboxEmail (via event handler)
   ML-->>Auth: {messageKey: success:magicLinkEmailSent, expires_in_minutes: 15}
-  Auth-->>Client: 200
-  Mail->>Resend: POST /emails (signed)
+  Auth-->>Client: 201
+  Mail->>Resend: POST /emails (signed, 6-digit code)
   Resend-->>Mail: 200
-  Client->>Auth: GET /auth/magic-link/verify?token=...
-  Auth->>ML: verify({token})
-  ML->>DB: UPDATE verification_tokens SET consumed_at=NOW() WHERE token_hash=$1 AND consumed_at IS NULL RETURNING *
-  ML->>DB: SELECT user
+  Client->>Auth: POST /auth/magic-link/verify {email, code}
+  Auth->>ML: verify({email, code})
+  ML->>US: findByEmail(email) + per-user attempt cap (Redis)
+  ML->>DB: UPDATE verification_tokens SET used_at=NOW() WHERE user_id=$1 AND token_type='MAGIC_LINK' AND token_hash=$2 AND used_at IS NULL RETURNING *
+  ML->>DB: UPDATE users SET is_email_verified=true (when not already)
   ML->>DB: INSERT auth_sessions
+  Note over ML: post-commit best-effort provisionPersonalOrganization on FIRST verification (claims a bare invited placeholder created without one; idempotent no-op for a brand-new user already provisioned at send)
   ML-->>Auth: {access_token, session_public_id}
-  Auth-->>Client: 200 + Set-Cookie session_id
+  Auth-->>Client: 201 + Set-Cookie session_id
 ```
 
 ### Side effects
@@ -183,8 +186,9 @@ sequenceDiagram
   Bus->>Mail: recordOutboxEmail (via event handler)
   Mail-->>Invitee: invitation email (raw_token in URL)
 
-  Note over Invitee,Auth: invitee logs in via OAuth / magic-link (find-by-email reuses the pre-created user)
-  Invitee->>Inv: POST /tenancy/invitations/:invitation_id/accept {token}
+  Note over Invitee,Auth: invitee onboards (claims the pre-created user) via password signup, magic-link, or OAuth — find-by-email reuses the row; magic-link/OAuth set is_email_verified, a password-claim verifies via the emailed code
+  Invitee->>Inv: POST /tenancy/invitations/:invitation_id/accept {token} (authenticated)
+  Inv->>Usr: requireUserRecordByPublicId(actingUser) — 403 if email unverified, 403 if email ≠ invitee
   Inv->>DB: BEGIN; SET LOCAL app.current_organization_id
   Inv->>DB: UPDATE member_invitations SET accepted_at=NOW() WHERE token_hash=$1 (atomic, single-use)
   Inv->>DB: UPDATE memberships SET status=ACTIVE, joined_at=NOW() (activateForInvitationAccept)
@@ -194,10 +198,10 @@ sequenceDiagram
 
 ### Side effects
 
-- New invitee → a bare ACTIVE `auth.users` row (`is_email_verified=false`, no auth method), claimed on first OAuth/magic-link login; an existing address resolves to that account.
+- New invitee → a bare ACTIVE `auth.users` row (`is_email_verified=false`, no auth method), claimed on first onboarding — **password signup** (`POST /auth/signup` sets the first password instead of returning 409), **magic-link**, or **OAuth**; an existing address resolves to that account.
 - `INVITED` `memberships` row + `member_invitations` row (hashed token; the raw token leaves the platform only via the email payload, parallel to `magic-link`).
 - `MEMBER_INVITATION_EVENT.CREATED` (emitStrict — a failed outbox write rolls back the whole org transaction) → mail outbox → invitation email.
-- On accept: the membership is activated (`status=ACTIVE`, `joined_at`) and the member's permission cache invalidated.
+- Accept requires authentication, a **verified** email, and an email matching the invitee (sec-T4 + follow-up) — so a forwarded invite token alone, or a password-claim that has not yet verified, cannot join the org. On accept the membership is activated (`status=ACTIVE`, `joined_at`) and the member's permission cache invalidated.
 - On revoke (`DELETE /organization/invitations/:id`): the invitation is revoked AND the auto-created `INVITED` membership is soft-deleted (no ghost invitee in the members table).
 
 ### Failure modes

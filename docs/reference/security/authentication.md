@@ -17,10 +17,15 @@ Implementation lives under `src/domains/auth/` (see [sub-domains-layout.md](../a
 
 ## Signup and bot abuse (no CAPTCHA vendor)
 
-There is no separate `POST /auth/signup` route. New accounts are created through:
+New accounts are created through:
 
-- **Magic link** — `POST /api/v1/auth/magic-link/send` (existing users only; disposable domains blocked at send time)
-- **OAuth** — `GET /api/v1/auth/oauth/{provider}/callback` (new users via `completeOAuthUserSession`; disposable domains blocked before `userService.createFromOAuth`)
+- **Email/password signup** — `POST /api/v1/auth/signup` (creates the user with `is_email_verified=false`, logs them in immediately, and emails a 6-digit verification code; returns **409** if a *real* account already exists, but **claims** a pre-provisioned invited account — a bare, credential-less, unverified row from add-member-by-email — by setting its first password instead of dead-ending the invitee; disposable domains blocked at signup time)
+- **Magic link** — `POST /api/v1/auth/magic-link/send` (auto-signs-up an unknown email as a passwordless user, then emails a 6-digit sign-in code; disposable domains blocked at send time)
+- **OAuth** — `GET /api/v1/auth/oauth/{provider}/callback` (new users via `completeOAuthUserSession`; disposable domains blocked before `userService.createFromOAuth`; **claims** a bare invited placeholder — the provider proves control of the email, so the placeholder is flipped to verified and its personal org provisioned, rather than being blocked by the unverified-account takeover guard)
+
+**Invitation onboarding.** A user added to an org by email gets a pre-created **bare** account (no credential, `is_email_verified=false`) so the `INVITED` membership has a `user_id`. "Bare" is determined by `AuthMethodService.hasActiveLoginCredential` — no password, **no** login-capable auth method (`PASSWORD`/`OAUTH`/`MAGIC_LINK`), **and no WebAuthn passkey** — so an account holding any real credential (including a passkey-only account) is never misclassified as claimable, regardless of its `is_email_verified` state. They onboard via any path above — signup **claims** the bare row (sets a password, email stays unverified), while magic-link / OAuth claim it **and flip `is_email_verified=true`** because completing either flow proves control of the inbox. Accepting the invitation (`POST /api/v1/tenancy/invitations/{invitation_id}/accept`) requires authentication, an email **matching** the invitee, **and a verified email** — so a forwarded invite token cannot be used to join by someone who merely password-claimed the address without proving email control. A claimer arriving via magic-link or OAuth clears the verified-email gate in the same step that claims the account. A bare invited row is created **without** a personal organization, so each onboarding path provisions one when it claims the account — signup and OAuth post-commit, magic-link on the first successful verification — keeping the personal-org guarantee consistent across all three (best-effort + idempotent; `tool:backfill-personal-orgs` recovers a miss).
+
+**Accepted residual risk — invite-email squatting (low).** Because signup-claim sets a password on a bare invited row without first proving email control, someone who *knows* an invited address can claim it before the real invitee. This is accepted as low-severity and self-healing: the squatter gets an **empty, unverified** account that **cannot** accept the invitation (the verified-email + matching-email + token gate) and cannot obtain the global-admin role (unverified); the real owner reclaims via forgot-password or magic-link (both email-control gated), which revokes the squatter's session. The verified-email accept gate is the control that keeps this non-exploitable for org access. (The only way to fully eliminate it is to drop password onboarding for invited emails and require magic-link/OAuth first — a UX trade-off we chose not to make.)
 
 **Disposable email:** `isDisposableEmailBlocked()` (package `disposable-email-domains-js`) runs on login, magic-link send, password forgot, OAuth user creation, and member invitations. When blocked, the API returns **400** with `errors:disposableEmail`. Toggle with `BLOCK_DISPOSABLE_EMAIL` (default `true`).
 
@@ -48,13 +53,15 @@ Outside production (`development`, `test`), the middleware fail-opens by default
 
 ## Magic-link environment safety
 
-`MagicLinkService.send` **never** returns the raw magic-link token in the JSON body. The token leaves the service only via the `AUTH_EVENT.MAGIC_LINK_REQUESTED` event payload (consumed by the mail handler) and the resulting email URL — identical behavior across every environment.
+`MagicLinkService.send` **never** returns the raw 6-digit sign-in code in the JSON body. The code leaves the service only via the `AUTH_EVENT.MAGIC_LINK_REQUESTED` event payload (consumed by the mail handler) and the resulting email — identical behavior across every environment. Verification is `POST /api/v1/auth/magic-link/verify` with `{ email, code }`, gated by a per-user attempt cap (the code is low-entropy).
+
+**Verify-attempt cap resets on each fresh code.** The per-user attempt counter (magic-link sign-in, email verification) is cleared whenever a new code is issued. This closes a victim-lockout DoS: without it, an attacker who burned the cap against an old code would keep the legitimate owner locked out of redeeming the new one. Brute-force is not weakened — each issued code is an independent random target, the prior code is invalidated atomically with issuance, and `send` / resend are themselves rate-limited per email + IP.
 
 | Guard                     | When it runs                                                  |
 | ------------------------- | ------------------------------------------------------------- |
 | Zod `FRONTEND_URL` refine | Boot — when set, `FRONTEND_URL` must be a valid `http(s)` URL |
 
-**Test code path:** tests subscribe to `AUTH_EVENT.MAGIC_LINK_REQUESTED` via the `captureNextMagicLinkToken(email)` helper in `src/tests/helpers/magic-link.helper.ts` to obtain the raw token for assertions.
+**Test code path:** tests subscribe to `AUTH_EVENT.MAGIC_LINK_REQUESTED` via the `captureNextMagicLinkCode(email)` helper in `src/tests/helpers/magic-link.helper.ts` to obtain the raw code for assertions.
 
 **Deployed environments (Railway development, production):** any valid public `FRONTEND_URL` is accepted. The previous environment-based inline-token leak and its localhost-only `FRONTEND_URL` restriction have been removed.
 

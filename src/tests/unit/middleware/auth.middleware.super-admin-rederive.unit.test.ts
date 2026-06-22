@@ -136,6 +136,36 @@ describe('auth.middleware — super_admin per-request re-derive (sec-A6)', () =>
     await application.close();
   });
 
+  it('reaudit-#13: drops SUPER_ADMIN when the account email is unverified even if still allowlisted', async () => {
+    // Symmetry with the token-minting side (resolveAccessTokenRoleForUser requires a verified email).
+    // The email is allowlisted and the account is ACTIVE, but unverified → the role must be dropped so
+    // the two derivation sites cannot drift into a re-grant for an unverified allowlisted account.
+    vi.mocked(resolveGlobalRoleForEmail).mockReturnValue(GLOBAL_ROLES.SUPER_ADMIN);
+    findUserRecordByPublicId.mockResolvedValue({
+      id: 1,
+      public_id: 'user_pub',
+      email: 'admin@example.com',
+      status: 'ACTIVE',
+      is_email_verified: false,
+    });
+    await setup();
+    const userPublicId = generatePublicId('user');
+    const accessToken = await signAccessToken({
+      userId: userPublicId,
+      role: GLOBAL_ROLES.SUPER_ADMIN,
+    });
+
+    const response = await application.inject({
+      method: 'GET',
+      url: '/protected',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect((response.json() as { role?: string }).role).toBeUndefined();
+    await application.close();
+  });
+
   it('route-#6: re-derives an ADMIN JWT claim against live state instead of trusting it', async () => {
     // No code path mints `admin` today, but if a stale/forged admin claim ever appeared it must
     // be re-validated (not honored for the token lifetime). resolveGlobalRoleForEmail returns the

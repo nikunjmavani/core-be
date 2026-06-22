@@ -2,6 +2,7 @@ import { ConflictError, NotFoundError, UnprocessableEntityError } from '@/shared
 import { randomUUID } from 'node:crypto';
 
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
+import { env } from '@/shared/config/env.config.js';
 import { INACTIVE_SUBSCRIPTION_STATUSES } from './subscription.repository.js';
 
 /**
@@ -18,6 +19,15 @@ import { INACTIVE_SUBSCRIPTION_STATUSES } from './subscription.repository.js';
  * subscription slot" definitions stay in lockstep (audit-#1).
  */
 const TERMINAL_STATUSES = new Set<string>(INACTIVE_SUBSCRIPTION_STATUSES);
+
+/**
+ * Dunning subscription statuses — a payment has failed but the subscription has not yet been
+ * canceled. The org keeps its full plan ceiling until `current_period_end + BILLING_DUNNING_GRACE_DAYS`
+ * (F4), after which its entitlement lapses to the Free-tier ceiling.
+ */
+const DUNNING_STATUSES = new Set<string>(['PAST_DUE', 'UNPAID', 'INCOMPLETE']);
+
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { PlanService } from '@/domains/billing/sub-domains/plan/plan.service.js';
 import type { PaymentProvider } from './payment-provider.port.js';
@@ -41,6 +51,16 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
  */
 export type MembershipSeatUsagePort = {
   countActiveMembers(options: { organizationPublicId: string }): Promise<number>;
+  /**
+   * F2: suspends the most-recently-joined non-owner ACTIVE members until the org's active headcount
+   * fits `ceiling`; returns how many were suspended. The owner is never suspended. Optional so the
+   * worker composition root and minimal test harnesses can omit it (then downgrade auto-suspend is a
+   * no-op). Implemented structurally by `MembershipService.suspendExcessActiveMembersToFitCeiling`.
+   */
+  suspendExcessActiveMembersToFitCeiling?(options: {
+    organizationPublicId: string;
+    ceiling: number;
+  }): Promise<number>;
 };
 
 /** Repository row enriched with the REQ-4 seat counters before serialization. */
@@ -179,20 +199,46 @@ export class SubscriptionService {
    *
    * @remarks
    * - **Algorithm:** delegates to {@link SubscriptionRepository.findActiveSeatStateByOrganizationForUpdate},
-   *   which takes `FOR UPDATE` on the active subscription row. Returns `seats_total` (purchased
-   *   `seats` ?? plan `included_seats`) or `null` when the org has no active subscription OR the
-   *   plan grants unlimited seats — both mean "no seat ceiling to enforce".
-   * - **Failure modes:** none beyond the underlying query; the caller MUST already hold an
+   *   which takes `FOR UPDATE` on the active subscription row, then resolves the ceiling:
+   *   active entitlement → purchased `seats` ?? plan `included_seats`; **no active subscription**
+   *   (F3) or a **dunning subscription past its grace window** (F4) → the Free-tier ceiling
+   *   ({@link PlanService.getFreePlanSeatCeiling}). `null` still means "no ceiling to enforce"
+   *   (unlimited plan, or no plan catalog configured).
+   * - **Failure modes:** none beyond the underlying queries; the caller MUST already hold an
    *   organization DB context + transaction so the lock spans the subsequent membership insert.
-   * - **Side effects:** acquires a `FOR UPDATE` row lock (released at the caller's COMMIT).
+   * - **Side effects:** acquires a `FOR UPDATE` row lock (released at the caller's COMMIT) when an
+   *   active subscription exists. The Free-tier path has no subscription row to lock; with the
+   *   seeded Free plan at 1 seat (owner-only) the `used >= ceiling` check blocks any member add, so
+   *   serialization is not required there — see `docs/reference/architecture/production-audit-decisions.md`.
    * - **Notes:** this is the cross-domain entry point tenancy's `MembershipService` calls to
    *   enforce the seat limit on add-member; it returns only the numeric ceiling, never the row.
    */
   async reserveSeatCeilingForMemberAdd(organization_id: number): Promise<number | null> {
     const seatState =
       await this.repository.findActiveSeatStateByOrganizationForUpdate(organization_id);
-    if (!seatState) return null;
+    // F3/F4: no active subscription, or a dunning subscription past its grace window, falls back to
+    // the Free-tier ceiling (the cheapest active plan's included_seats) rather than "unlimited".
+    if (!seatState || this.isDunningEntitlementLapsed(seatState)) {
+      return this.planService.getFreePlanSeatCeiling();
+    }
     return seatState.seats ?? seatState.plan_included_seats ?? null;
+  }
+
+  /**
+   * F4: true when `seatState` is a dunning subscription (PAST_DUE / UNPAID / INCOMPLETE) whose grace
+   * window (`current_period_end + BILLING_DUNNING_GRACE_DAYS`) has elapsed, so its entitlement has
+   * lapsed to the Free tier. Non-dunning (ACTIVE / TRIALING / PAUSED) and within-grace dunning keep
+   * the full plan ceiling.
+   */
+  private isDunningEntitlementLapsed(seatState: {
+    status: string;
+    current_period_end: Date;
+  }): boolean {
+    if (!DUNNING_STATUSES.has(seatState.status)) return false;
+    const graceEndsAt =
+      new Date(seatState.current_period_end).getTime() +
+      env.BILLING_DUNNING_GRACE_DAYS * MILLISECONDS_PER_DAY;
+    return Date.now() > graceEndsAt;
   }
 
   /**
@@ -575,22 +621,48 @@ export class SubscriptionService {
   }
 
   /**
-   * F2: rejects a plan change that would leave the organization over the new plan's seat allowance,
-   * so changePlan cannot silently keep premium headcount on a cheaper plan. No-op when the new plan
-   * grants unlimited seats (`included_seats === null`) or the seat-usage port is unwired
-   * (worker/test composition roots). `countActiveMembers` counts ACTIVE + INVITED memberships.
+   * F2: brings the org's active headcount within the new plan's seat allowance by auto-suspending
+   * the most-recently-joined non-owner members (the owner is never suspended), AFTER the plan change
+   * has committed.
+   *
+   * @remarks
+   * - **Algorithm:** delegates to the tenancy seat port's `suspendExcessActiveMembersToFitCeiling`,
+   *   which suspends `activeCount - ceiling` non-owner ACTIVE members ordered by `joined_at DESC`.
+   * - **Failure modes:** **best-effort** — a suspend failure is logged but never rethrown, because
+   *   the plan change is already committed; throwing here would trip the Stripe-compensation catch
+   *   and roll back the *price* while leaving the local plan changed (divergence). The add-member
+   *   ceiling check still blocks further growth until the org is back within its allowance.
+   * - **Side effects:** flips excess memberships to `SUSPENDED`. No-op when the new plan grants
+   *   unlimited seats (`included_seats === null`) or the port is unwired (worker/test harnesses).
+   * - **Notes:** suspended members re-consume a seat on reactivation and are re-checked against the
+   *   ceiling (the F1 guard), so they can be restored after an upgrade.
    */
-  private async assertDowngradeWithinSeatAllowance(
+  private async suspendExcessMembersForDowngrade(
     organizationPublicId: string,
     newPlan: { included_seats: number | null },
   ): Promise<void> {
-    if (newPlan.included_seats === null || !this.membershipSeatUsage) return;
-    const seatsUsed = await this.membershipSeatUsage.countActiveMembers({ organizationPublicId });
-    if (seatsUsed > newPlan.included_seats) {
-      throw new ConflictError('errors:planDowngradeSeatsExceeded', {
-        used: seatsUsed,
-        limit: newPlan.included_seats,
-      }).withReason('seat_limit_exceeded_for_plan');
+    if (
+      newPlan.included_seats === null ||
+      !this.membershipSeatUsage?.suspendExcessActiveMembersToFitCeiling
+    ) {
+      return;
+    }
+    try {
+      const suspended = await this.membershipSeatUsage.suspendExcessActiveMembersToFitCeiling({
+        organizationPublicId,
+        ceiling: newPlan.included_seats,
+      });
+      if (suspended > 0) {
+        logger.info(
+          { organizationPublicId, ceiling: newPlan.included_seats, suspended },
+          'billing.changePlan.members_suspended',
+        );
+      }
+    } catch (error) {
+      logger.error(
+        { organizationPublicId, ceiling: newPlan.included_seats, error },
+        'billing.changePlan.suspend_excess_failed',
+      );
     }
   }
 
@@ -620,10 +692,6 @@ export class SubscriptionService {
         );
         return { organization, plan, subscription, previousPlan };
       });
-
-    // F2: fail closed BEFORE the Stripe price change when the new plan cannot seat the org's
-    // current members (extracted to a helper to keep changePlan's cognitive complexity in budget).
-    await this.assertDowngradeWithinSeatAllowance(organization_public_id, plan);
 
     const providerPriceId = this.paymentProvider.getProviderPriceId(
       plan,
@@ -667,6 +735,11 @@ export class SubscriptionService {
         }),
       );
       if (!updated) throw new NotFoundError('Subscription');
+      // F2: the plan change is now committed, so the new ceiling is in effect. Auto-suspend the
+      // most-recently-joined non-owner members down to the new allowance (best-effort; never rolls
+      // back the committed plan change). Runs before the Stripe quantity sync so it reconciles to the
+      // post-suspension headcount.
+      await this.suspendExcessMembersForDowngrade(organization_public_id, plan);
       // REQ-4: a plan change can change the seat allowance and proration, so reconcile the
       // Stripe subscription quantity to the current member count out-of-band (never inline —
       // a Stripe outage must not fail the plan change). No-op for local-only subscriptions.

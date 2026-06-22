@@ -372,6 +372,14 @@ const envSchemaBase = z.object({
    * now matches the documented posture in `constructStripeWebhookEvent`.
    */
   STRIPE_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().min(150).max(600).default(150),
+  /**
+   * Grace window (days) after a subscription enters a dunning status (PAST_DUE / UNPAID /
+   * INCOMPLETE) during which it retains its full plan seat ceiling. Anchored at
+   * `current_period_end`; once `now > current_period_end + this`, the org's entitlement lapses to
+   * the Free-tier ceiling (F4). Keeps the standard dunning UX (a failed payment does not instantly
+   * revoke collaborators) while preventing indefinite premium headcount on an unpaid subscription.
+   */
+  BILLING_DUNNING_GRACE_DAYS: z.coerce.number().int().min(0).max(120).default(14),
 
   // Sentry
   SENTRY_DSN: z.url().optional(),
@@ -447,6 +455,13 @@ const envSchemaBase = z.object({
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   /** AWS SDK maxAttempts for S3 (each attempt bounded by service/client timeouts). */
   S3_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+  /**
+   * Per-attempt socket-inactivity timeout (ms) for S3 requests, so a stalled S3 call can't hang a
+   * worker or request indefinitely. Bounds each of the `S3_MAX_ATTEMPTS` attempts.
+   */
+  S3_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(15000),
+  /** TCP connection-establishment timeout (ms) for S3 requests. */
+  S3_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(500).max(60000).default(5000),
   /**
    * audit-#13: public base URL (e.g. a CloudFront distribution) for PUBLIC media only
    * (avatars, organization logos). When set, `getObjectUrl` builds links from this base instead

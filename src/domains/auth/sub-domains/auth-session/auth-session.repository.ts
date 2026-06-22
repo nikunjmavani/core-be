@@ -1,5 +1,9 @@
-import { and, desc, eq, gt, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, ne, or, sql } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import {
+  RESOURCE_QUOTA_LOCK_NAMESPACE,
+  acquireResourceQuotaLock,
+} from '@/infrastructure/database/resource-quota-lock.util.js';
 import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
 import { REFRESH_TOKEN_REUSE_GRACE_MS } from '@/shared/constants/security.constants.js';
 import { capListWithWarning } from '@/shared/utils/infrastructure/list-cap.util.js';
@@ -227,6 +231,52 @@ export class AuthSessionRepository {
           eq(sessions.user_id, userId),
           eq(sessions.is_revoked, false),
           ne(sessions.token_hash, exceptTokenHash),
+        ),
+      )
+      .returning({ token_hash: sessions.token_hash });
+  }
+
+  /**
+   * Takes the per-user session creation-quota advisory lock (auto-releases at commit).
+   *
+   * @remarks
+   * Must run inside the same transaction as the subsequent eviction + insert so concurrent logins
+   * cannot each pass the cap check and overshoot {@link MAX_ACTIVE_SESSIONS_PER_USER}.
+   */
+  async acquireCreationQuotaLock(userId: number): Promise<void> {
+    await acquireResourceQuotaLock(RESOURCE_QUOTA_LOCK_NAMESPACE.AUTH_SESSION, userId);
+  }
+
+  /**
+   * Revokes the user's oldest active (non-revoked, non-expired) sessions beyond the newest
+   * `keepCount`, returning their token hashes so the caller can invalidate the session-token cache.
+   *
+   * @remarks
+   * Keeps the `keepCount` most-recently-created live sessions and revokes the rest (oldest-first), so
+   * minting one more leaves the user at most `keepCount + 1` live sessions. Two statements (select the
+   * ids to revoke via `OFFSET`, then revoke by id) run under the creation-quota advisory lock; expired
+   * rows are excluded so the daily cleanup worker's not-yet-purged rows never count toward the cap.
+   */
+  async revokeOldestActiveBeyond(userId: number, keepCount: number) {
+    const liveCondition = and(
+      eq(sessions.user_id, userId),
+      eq(sessions.is_revoked, false),
+      gt(sessions.expires_at, sql`now()`),
+    );
+    const oldest = await getRequestDatabase()
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(liveCondition)
+      .orderBy(desc(sessions.created_at), desc(sessions.id))
+      .offset(keepCount);
+    if (oldest.length === 0) return [] as { token_hash: string | null }[];
+    return getRequestDatabase()
+      .update(sessions)
+      .set({ is_revoked: true })
+      .where(
+        inArray(
+          sessions.id,
+          oldest.map((row) => row.id),
         ),
       )
       .returning({ token_hash: sessions.token_hash });
