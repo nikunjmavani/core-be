@@ -14,8 +14,17 @@ describe('auth-method.validator', () => {
     });
   });
 
-  it('validateMagicLinkVerify accepts token', () => {
-    expect(validateMagicLinkVerify({ token: 'abc-token' })).toEqual({ token: 'abc-token' });
+  it('validateMagicLinkVerify accepts email + 6-digit code', () => {
+    expect(validateMagicLinkVerify({ email: 'user@example.com', code: '123456' })).toEqual({
+      email: 'user@example.com',
+      code: '123456',
+    });
+  });
+
+  it('validateMagicLinkVerify rejects a non-6-digit code', () => {
+    expect(() => validateMagicLinkVerify({ email: 'user@example.com', code: '12345' })).toThrow(
+      ValidationError,
+    );
   });
 
   it('validateForgotPassword accepts email', () => {

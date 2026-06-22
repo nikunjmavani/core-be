@@ -68,6 +68,8 @@ export function createAuthContainer(
     organizationSettingsService,
     mfaService,
     authSessionService,
+    authMethodService,
+    redisConnection,
   );
   const webauthnCredentialRepository = new WebauthnCredentialRepository();
   const webauthnService = new WebauthnService(

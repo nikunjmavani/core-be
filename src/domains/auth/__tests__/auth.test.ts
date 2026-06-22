@@ -373,14 +373,14 @@ describe('Auth Domain — Integration', () => {
       const body = response.json() as { data: { message?: string } };
       expect(body.data.message).toBeDefined();
       expect([
-        'If an account exists with this email, you will receive a magic link shortly.',
-        'Si existe una cuenta con este correo, recibirás un enlace mágico en breve.',
+        'If an account exists with this email, you will receive a sign-in code shortly.',
+        'Si existe una cuenta con este correo, recibirás un código de inicio de sesión en breve.',
       ]).toContain(body.data.message);
     });
   });
 
   describe('POST /api/v1/auth/magic-link/verify', () => {
-    it('should return 400 for missing token', async () => {
+    it('should return 400 for missing email/code', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
         url: testApiPath('/auth/magic-link/verify'),
@@ -389,11 +389,11 @@ describe('Auth Domain — Integration', () => {
       expect([400, 422]).toContain(response.statusCode);
     });
 
-    it('should return 401 for invalid token', async () => {
+    it('should return 401 for an unknown email / wrong code', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
         url: testApiPath('/auth/magic-link/verify'),
-        payload: { token: 'invalid-token' },
+        payload: { email: 'unknown-magic-verify@example.com', code: '000000' },
       });
       expect([401, 404]).toContain(response.statusCode);
     });

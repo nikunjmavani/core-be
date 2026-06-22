@@ -21,10 +21,11 @@ export const MagicLinkSendDto = z
 /** Inferred input type of {@link MagicLinkSendDto}. */
 export type MagicLinkSendInput = z.infer<typeof MagicLinkSendDto>;
 
-/** Zod schema for the `POST /api/v1/auth/magic-link/verify` request body. */
+/** Zod schema for the `POST /api/v1/auth/magic-link/verify` request body (email + the 6-digit sign-in code emailed by `magic-link/send`). */
 export const MagicLinkVerifyDto = z
   .object({
-    token: trimmedStringMinMax(1, 512),
+    email: trimmedEmail(),
+    code: z.string().trim().length(6).regex(/^\d+$/),
   })
   .strict();
 /** Inferred input type of {@link MagicLinkVerifyDto}. */

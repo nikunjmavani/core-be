@@ -8,10 +8,10 @@ export const AUTH_EVENT = {
 /** Union of valid event-bus topic codes in {@link AUTH_EVENT}. */
 export type AuthEventType = (typeof AUTH_EVENT)[keyof typeof AUTH_EVENT];
 
-/** Payload of `AUTH_EVENT.MAGIC_LINK_REQUESTED`; carries the raw token (only persisted in-flight) and TTL minutes that the email handler interpolates into the verify URL. */
+/** Payload of `AUTH_EVENT.MAGIC_LINK_REQUESTED`; carries the 6-digit passwordless sign-in code (persisted only as a hash) and the TTL minutes the email displays. */
 export interface MagicLinkEmailPayload {
   email: string;
-  magic_link_token: string;
+  otp_code: string;
   expires_in_minutes: number;
 }
 
