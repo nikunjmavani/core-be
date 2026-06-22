@@ -768,6 +768,14 @@ const envSchemaBase = z.object({
    * `ENABLE_API_REFERENCE=true` in production unless this is also set.
    */
   API_REFERENCE_ALLOW_PRODUCTION: booleanString('false'),
+  /**
+   * Deliberate override (re-audit A1) allowing the Bull-Board queue dashboard (`/admin/queues`)
+   * in production. Off by default; the cross-field refine on {@link envSchema} rejects
+   * `ENABLE_QUEUE_DASHBOARD=true` in production unless this is also set. The dashboard is still
+   * SUPER_ADMIN-gated at runtime — this is a boot-time safety net so the protection does not rest
+   * solely on a single preHandler wiring.
+   */
+  QUEUE_DASHBOARD_ALLOW_PRODUCTION: booleanString('false'),
   OPENAPI_SPEC_PATH: z.string().min(1).optional(),
 
   // Organization capability flags — toggle the two organization kinds independently so one
@@ -1296,6 +1304,23 @@ export const envSchema = envSchemaBase
       message:
         'ENABLE_API_REFERENCE=true is not permitted in production (the /reference UI is unauthenticated and exposes the full API contract). Set API_REFERENCE_ALLOW_PRODUCTION=true to override deliberately.',
       path: ['ENABLE_API_REFERENCE'],
+    },
+  )
+  // re-audit A1: the Bull-Board queue dashboard (/admin/queues) is SUPER_ADMIN-gated at runtime,
+  // but unlike /reference it had no boot-time guard — so its protection rested entirely on a single
+  // preHandler wiring. Refuse to enable it in production unless an operator explicitly opts in via
+  // QUEUE_DASHBOARD_ALLOW_PRODUCTION=true (defense-in-depth safety net, mirroring ENABLE_API_REFERENCE).
+  .refine(
+    (data) =>
+      !(
+        data.NODE_ENV === 'production' &&
+        data.ENABLE_QUEUE_DASHBOARD &&
+        !data.QUEUE_DASHBOARD_ALLOW_PRODUCTION
+      ),
+    {
+      message:
+        'ENABLE_QUEUE_DASHBOARD=true is not permitted in production (the Bull-Board dashboard exposes job payloads and destructive job operations). Set QUEUE_DASHBOARD_ALLOW_PRODUCTION=true to override deliberately.',
+      path: ['ENABLE_QUEUE_DASHBOARD'],
     },
   );
 
