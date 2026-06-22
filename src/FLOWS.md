@@ -46,6 +46,7 @@ sequenceDiagram
   ML->>DB: UPDATE verification_tokens SET used_at=NOW() WHERE user_id=$1 AND token_type='MAGIC_LINK' AND token_hash=$2 AND used_at IS NULL RETURNING *
   ML->>DB: UPDATE users SET is_email_verified=true (when not already)
   ML->>DB: INSERT auth_sessions
+  Note over ML: post-commit best-effort provisionPersonalOrganization on FIRST verification (claims a bare invited placeholder created without one; idempotent no-op for a brand-new user already provisioned at send)
   ML-->>Auth: {access_token, session_public_id}
   Auth-->>Client: 201 + Set-Cookie session_id
 ```

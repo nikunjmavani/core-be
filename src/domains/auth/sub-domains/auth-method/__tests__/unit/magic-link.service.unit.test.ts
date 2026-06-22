@@ -58,6 +58,7 @@ vi.mock('@/domains/tenancy/sub-domains/organization/organization-provisioning.js
 }));
 
 import { eventBus } from '@/core/events/event-bus.js';
+import { env } from '@/shared/config/env.config.js';
 import { AUTH_EVENT } from '@/domains/auth/sub-domains/auth-method/events/auth.events.js';
 import { completeFirstFactorAuth } from '@/domains/auth/shared/complete-first-factor-auth.js';
 import { provisionPersonalOrganization } from '@/domains/tenancy/sub-domains/organization/organization-provisioning.js';
@@ -272,6 +273,49 @@ describe('MagicLinkService', () => {
     expect(verificationTokenRepository.consumeOtpForUser).toHaveBeenCalled();
     // The success-only attempt-counter clear must NOT run when verify throws.
     expect(redis.del).not.toHaveBeenCalled();
+  });
+
+  it('verify provisions the personal org on the first verification (claims a bare invited account)', async () => {
+    env.PERSONAL_ORGANIZATION_ENABLED = true;
+    try {
+      vi.mocked(userService.findByEmail).mockResolvedValue({
+        ...user,
+        is_email_verified: false,
+      } as never);
+      vi.mocked(verificationTokenRepository.consumeOtpForUser).mockResolvedValue({
+        token_type: 'MAGIC_LINK',
+        user_id: user.id,
+      } as never);
+
+      await service.verify({ email: user.email, code: '123456' }, '127.0.0.1', 'vitest');
+
+      // A bare invited placeholder is created without a personal org; the first magic-link
+      // verification provisions it post-commit (idempotent), at parity with signup / OAuth.
+      expect(vi.mocked(provisionPersonalOrganization)).toHaveBeenCalledWith(user.id);
+    } finally {
+      env.PERSONAL_ORGANIZATION_ENABLED = false;
+    }
+  });
+
+  it('verify does not re-provision a personal org for an already-verified returning user', async () => {
+    env.PERSONAL_ORGANIZATION_ENABLED = true;
+    try {
+      vi.mocked(userService.findByEmail).mockResolvedValue({
+        ...user,
+        is_email_verified: true,
+      } as never);
+      vi.mocked(verificationTokenRepository.consumeOtpForUser).mockResolvedValue({
+        token_type: 'MAGIC_LINK',
+        user_id: user.id,
+      } as never);
+
+      await service.verify({ email: user.email, code: '123456' }, '127.0.0.1', 'vitest');
+
+      // Already verified → not a first verification → no provisioning churn on every magic-link login.
+      expect(vi.mocked(provisionPersonalOrganization)).not.toHaveBeenCalled();
+    } finally {
+      env.PERSONAL_ORGANIZATION_ENABLED = false;
+    }
   });
 
   it('does not provision a personal org in team-only mode (env flag off)', async () => {
