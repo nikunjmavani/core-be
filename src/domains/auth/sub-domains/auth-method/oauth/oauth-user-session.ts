@@ -23,7 +23,7 @@ import { provisionPersonalOrganization } from '@/domains/tenancy/sub-domains/org
 import type { OAuthProfile, OAuthProvider } from './oauth.types.js';
 import type { UserAuthRecord } from '@/domains/user/user.types.js';
 
-/** Account-takeover guard + bare-placeholder claim for an OAuth find-or-link into a PRE-EXISTING account. Refuses to silently merge into an account whose email is unverified — throwing `ForbiddenError('errors:oauthLinkRequiresVerifiedAccount')` — UNLESS this OAuth identity is already linked, the account's email is already verified, or the account is a bare invited placeholder (no password and no login-capable method), which has no credential or data to take over and whose email the provider has now proven. A claimed bare placeholder has its email flipped to verified (parity with a fresh OAuth signup, and so the claimer can accept their org invite). Returns the (possibly re-read) user row and whether a bare placeholder was claimed. Extracted from {@link completeOAuthUserSession} to keep that function under the cognitive-complexity budget. */
+/** Account-takeover guard + bare-placeholder claim for an OAuth find-or-link into a PRE-EXISTING account. Refuses to silently merge into an account whose email is unverified — throwing `ForbiddenError('errors:oauthLinkRequiresVerifiedAccount')` — UNLESS this OAuth identity is already linked, the account's email is already verified, or the account is a bare invited placeholder (no password, no login-capable method, and no WebAuthn passkey), which has no credential or data to take over and whose email the provider has now proven. A claimed bare placeholder has its email flipped to verified (parity with a fresh OAuth signup, and so the claimer can accept their org invite). Returns the (possibly re-read) user row and whether a bare placeholder was claimed. Extracted from {@link completeOAuthUserSession} to keep that function under the cognitive-complexity budget. */
 async function resolveExistingOAuthAccount(parameters: {
   authMethodService: AuthMethodService;
   userService: UserService;
@@ -39,11 +39,13 @@ async function resolveExistingOAuthAccount(parameters: {
     profile.provider_user_id,
   );
   const isOAuthIdentityAlreadyLinked = existingProviderMethod?.user_id === resolvedUser.id;
-  // A bare placeholder has no usable credential: no password AND no login-capable method. Check the
-  // password first so the DB round-trip for methods is skipped when a password already exists.
+  // A bare placeholder has NO usable credential of any kind: no password, no login-capable auth
+  // method, AND no WebAuthn passkey. Counting passkeys (not just `hasLoginCapableMethod`) means
+  // takeover safety does not rely on the implicit "passkey ⇒ verified email" invariant. Check the
+  // password first so the credential DB read is skipped when a password already exists.
   const hasUsableCredential =
     Boolean(resolvedUser.password_hash) ||
-    (await authMethodService.hasLoginCapableMethod(resolvedUser.public_id));
+    (await authMethodService.hasActiveLoginCredential(resolvedUser.public_id));
   const isUnclaimedBareAccount = !hasUsableCredential;
   if (!(isOAuthIdentityAlreadyLinked || resolvedUser.is_email_verified || isUnclaimedBareAccount)) {
     logger.warn({ email: profile.email, provider }, 'oauth.user.link_blocked_unverified_account');
@@ -61,7 +63,7 @@ async function resolveExistingOAuthAccount(parameters: {
   return { user: resolvedUser, claimedBareAccount };
 }
 
-/** Final stage of an OAuth callback: finds-or-creates the user and idempotently links the OAuth provider (via {@link AuthMethodService.linkOAuthProviderIfMissing}) inside one {@link withTransaction} pinned through {@link runWithPinnedDatabaseHandle}, so a failed auth-method insert (e.g. the `method_type` CHECK) rolls back the freshly created user instead of leaving a verified orphan. AFTER that transaction commits, a first-time signup — or a freshly-claimed bare invited placeholder — best-effort provisions the personal organization — it runs in a separate global-admin connection that cannot see an uncommitted user, so it must run post-commit — then mints an access token + persisted session via {@link completeFirstFactorAuth} so the issued token carries the personal-org claim. Inserts use {@link AUTH_METHOD_TYPE.OAUTH} to match the database CHECK constraint. Rejects disposable emails for first-time signups. Refuses to silently find-or-link into a pre-existing account whose email is not verified, throwing `ForbiddenError` to prevent account takeover — EXCEPT when this OAuth identity is already linked, or the account is a bare invited placeholder (no password and no login-capable method), which has no credential or data to take over and whose email the provider has now proven; that placeholder is claimed (its email flipped to verified). Rejects suspended/locked accounts with `UnauthorizedError('errors:accountNotActive')` before issuing a session. */
+/** Final stage of an OAuth callback: finds-or-creates the user and idempotently links the OAuth provider (via {@link AuthMethodService.linkOAuthProviderIfMissing}) inside one {@link withTransaction} pinned through {@link runWithPinnedDatabaseHandle}, so a failed auth-method insert (e.g. the `method_type` CHECK) rolls back the freshly created user instead of leaving a verified orphan. AFTER that transaction commits, a first-time signup — or a freshly-claimed bare invited placeholder — best-effort provisions the personal organization — it runs in a separate global-admin connection that cannot see an uncommitted user, so it must run post-commit — then mints an access token + persisted session via {@link completeFirstFactorAuth} so the issued token carries the personal-org claim. Inserts use {@link AUTH_METHOD_TYPE.OAUTH} to match the database CHECK constraint. Rejects disposable emails for first-time signups. Refuses to silently find-or-link into a pre-existing account whose email is not verified, throwing `ForbiddenError` to prevent account takeover — EXCEPT when this OAuth identity is already linked, or the account is a bare invited placeholder (no password, no login-capable method, and no WebAuthn passkey), which has no credential or data to take over and whose email the provider has now proven; that placeholder is claimed (its email flipped to verified). Rejects suspended/locked accounts with `UnauthorizedError('errors:accountNotActive')` before issuing a session. */
 export async function completeOAuthUserSession(parameters: {
   userService: UserService;
   authMethodService: AuthMethodService;

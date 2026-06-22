@@ -104,12 +104,17 @@ describe('AuthMethodService', () => {
     del: vi.fn().mockResolvedValue(0),
   } as unknown as Redis;
 
+  const webauthnCredentialRepository = {
+    listActiveByUserId: vi.fn().mockResolvedValue([]),
+  };
+
   const service = new AuthMethodService(
     userService,
     authMethodRepository,
     verificationTokenRepository,
     authSessionService,
     redis,
+    webauthnCredentialRepository as never,
   );
 
   beforeEach(() => {
@@ -157,6 +162,42 @@ describe('AuthMethodService', () => {
     it('throws NotFoundError when the user record is missing', async () => {
       vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(null as never);
       await expect(service.hasLoginCapableMethod('missing')).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
+  describe('hasActiveLoginCredential (counts passkeys — bare-account guard)', () => {
+    it('returns true on a login-capable method and does not even query passkeys (short-circuit)', async () => {
+      vi.mocked(authMethodRepository.listByUserId).mockResolvedValue([
+        { id: 5, user_id: 1, method_type: 'PASSWORD' },
+      ] as never);
+      await expect(service.hasActiveLoginCredential('user_public')).resolves.toBe(true);
+      expect(webauthnCredentialRepository.listActiveByUserId).not.toHaveBeenCalled();
+    });
+
+    it('returns true for a passkey-only account with no login-capable method', async () => {
+      // The key regression: hasLoginCapableMethod would return false here, but a passkey IS a
+      // credential — so the account is NOT a claimable bare placeholder.
+      vi.mocked(authMethodRepository.listByUserId).mockResolvedValue([
+        { id: 4, user_id: 1, method_type: 'MFA_TOTP' },
+      ] as never);
+      vi.mocked(webauthnCredentialRepository.listActiveByUserId).mockResolvedValue([
+        { id: 9, user_id: 1 },
+      ] as never);
+      await expect(service.hasActiveLoginCredential('user_public')).resolves.toBe(true);
+      expect(webauthnCredentialRepository.listActiveByUserId).toHaveBeenCalledWith(user.id);
+    });
+
+    it('returns false when there is no login-capable method and no passkey (truly bare)', async () => {
+      vi.mocked(authMethodRepository.listByUserId).mockResolvedValue([] as never);
+      vi.mocked(webauthnCredentialRepository.listActiveByUserId).mockResolvedValue([] as never);
+      await expect(service.hasActiveLoginCredential('user_public')).resolves.toBe(false);
+    });
+
+    it('throws NotFoundError when the user record is missing', async () => {
+      vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(null as never);
+      await expect(service.hasActiveLoginCredential('missing')).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
     });
   });
 

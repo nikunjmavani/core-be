@@ -38,7 +38,7 @@ function isUniqueViolation(error: unknown): boolean {
  *
  * @remarks
  * - **Algorithm:** normalize the email; reject disposable domains; resolve any existing account and
- *   either `409` (a real account: has a password, a login-capable auth method, or a verified email) or
+ *   either `409` (a real account: has a password, a login-capable auth method, a WebAuthn passkey, or a verified email) or
  *   CLAIM it (a pre-provisioned, credential-less invited account from add-member-by-email — so the
  *   invitee is not dead-ended at a 409); hash the password OUTSIDE the transaction (argon2 is
  *   CPU-bound); then (1) in one `withTransaction` pinned via {@link runWithPinnedDatabaseHandle},
@@ -94,13 +94,15 @@ export async function completeEmailPasswordSignup(parameters: {
   // a password, a login-capable auth method, or a verified email) still returns 409.
   const existing = await userService.findByEmail(normalizedEmail);
   if (existing) {
-    // A "real" account has a usable credential (password or a login-capable auth method) or a verified
-    // email — it stays a 409. A pre-provisioned invited account has none of these, so it is claimed
-    // (its first password is set) in the transaction below instead of dead-ending the invitee.
+    // A "real" account has a usable credential (password, a login-capable auth method, or a WebAuthn
+    // passkey) or a verified email — it stays a 409. A pre-provisioned invited account has none of
+    // these, so it is claimed (its first password is set) in the transaction below instead of
+    // dead-ending the invitee. Passkeys are counted (via hasActiveLoginCredential) so claim safety
+    // does not rely on the implicit "passkey ⇒ verified email" invariant.
     const hasRealCredential =
       Boolean(existing.password_hash) ||
       existing.is_email_verified ||
-      (await authMethodService.hasLoginCapableMethod(existing.public_id));
+      (await authMethodService.hasActiveLoginCredential(existing.public_id));
     if (hasRealCredential) {
       throw new ConflictError('errors:emailAlreadyRegistered');
     }

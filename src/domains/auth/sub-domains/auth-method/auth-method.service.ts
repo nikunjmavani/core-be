@@ -10,6 +10,7 @@ import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { enforceMinimumDuration } from '@/shared/utils/security/anti-enumeration.util.js';
 import { incrementWithExpiryOnFirst } from '@/shared/utils/infrastructure/redis-counter.util.js';
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
+import { WebauthnCredentialRepository } from '@/domains/auth/sub-domains/auth-webauthn/webauthn-credential.repository.js';
 import {
   EMAIL_OTP_MAX_VERIFY_ATTEMPTS,
   EMAIL_OTP_TTL_MINUTES,
@@ -94,6 +95,7 @@ export class AuthMethodService {
     private readonly verificationTokenRepository: VerificationTokenRepository,
     private readonly authSessionService: AuthSessionService,
     private readonly redis: Redis = redisConnection,
+    private readonly webauthnCredentialRepository: WebauthnCredentialRepository = new WebauthnCredentialRepository(),
   ) {}
 
   async list(userPublicId: string) {
@@ -128,6 +130,36 @@ export class AuthMethodService {
       this.authMethodRepository.listByUserId(user.id),
     );
     return methods.some((method) => LOGIN_CAPABLE_METHOD_TYPES.has(String(method.method_type)));
+  }
+
+  /**
+   * Whether the user holds ANY active authentication credential — a login-capable `auth_methods`
+   * row (`PASSWORD` / `OAUTH` / `MAGIC_LINK`) **or** an active WebAuthn passkey. Used to decide
+   * whether a pre-existing account is a still-unclaimed bare invited placeholder (and therefore
+   * safe to claim via OAuth / signup) vs. a real account that must never be silently merged into.
+   *
+   * @remarks
+   * - **Algorithm:** under the owner DB context, short-circuits on the first login-capable
+   *   `auth_methods` row; otherwise checks for at least one non-revoked `webauthn_credentials` row.
+   *   Both tables are FORCE RLS keyed on the owner, so the read runs inside `withUserDatabaseContext`.
+   * - **Failure modes:** `NotFoundError` when the user record is missing.
+   * - **Side effects:** transient owner-scoped DB context only.
+   * - **Notes:** unlike {@link AuthMethodService.hasLoginCapableMethod} (which intentionally EXCLUDES
+   *   passkeys so a passkey-only user can still delete their last passkey), this counts passkeys —
+   *   the account-claim guards must treat a passkey-only account as a real, non-bare account so
+   *   takeover safety does not rely on the implicit "passkey ⇒ verified email" invariant.
+   */
+  async hasActiveLoginCredential(userPublicId: string): Promise<boolean> {
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    if (!user) throw new NotFoundError('User');
+    return withUserDatabaseContext(userPublicId, async () => {
+      const methods = await this.authMethodRepository.listByUserId(user.id);
+      if (methods.some((method) => LOGIN_CAPABLE_METHOD_TYPES.has(String(method.method_type)))) {
+        return true;
+      }
+      const passkeys = await this.webauthnCredentialRepository.listActiveByUserId(user.id);
+      return passkeys.length > 0;
+    });
   }
 
   async create(userPublicId: string, body: unknown) {
