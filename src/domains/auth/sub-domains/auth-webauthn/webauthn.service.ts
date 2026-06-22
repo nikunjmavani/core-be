@@ -12,6 +12,7 @@ import type {
   RegistrationResponseJSON,
 } from '@simplewebauthn/server';
 import { env } from '@/shared/config/env.config.js';
+import { MAX_WEBAUTHN_CREDENTIALS_PER_USER } from '@/shared/constants/security.constants.js';
 import {
   ConflictError,
   NotFoundError,
@@ -192,8 +193,18 @@ export class WebauthnService {
     const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
     let created: Awaited<ReturnType<WebauthnCredentialRepository['createCredential']>>;
     try {
-      created = await withUserDatabaseContext(user.public_id, () =>
-        this.credentialRepository.createCredential({
+      created = await withUserDatabaseContext(user.public_id, async () => {
+        // Serialize the count + insert under a per-user advisory lock so concurrent registrations
+        // cannot both pass the cap check and overshoot MAX_WEBAUTHN_CREDENTIALS_PER_USER. The xact
+        // lock auto-releases at commit.
+        await this.credentialRepository.acquireCreationQuotaLock(user.id);
+        const activeCount = await this.credentialRepository.countActiveByUserId(user.id);
+        if (activeCount >= MAX_WEBAUTHN_CREDENTIALS_PER_USER) {
+          throw new ConflictError('errors:webauthnCredentialMaxReached', {
+            max: MAX_WEBAUTHN_CREDENTIALS_PER_USER,
+          });
+        }
+        return this.credentialRepository.createCredential({
           user_id: user.id,
           credential_id: credential.id,
           public_key: Buffer.from(credential.publicKey).toString('base64url'),
@@ -201,8 +212,8 @@ export class WebauthnService {
           device_type: credentialDeviceType,
           backed_up: credentialBackedUp,
           transports: credential.transports ?? [],
-        }),
-      );
+        });
+      });
     } catch (error) {
       // This passkey is already enrolled (webauthn_credentials_credential_id_unique).
       // excludeCredentials is only a client-side hint, so a replayed/forced registration

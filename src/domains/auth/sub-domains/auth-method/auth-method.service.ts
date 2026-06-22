@@ -1,10 +1,12 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
+  ConflictError,
   ForbiddenError,
   NotFoundError,
   UnauthorizedError,
   ValidationError,
 } from '@/shared/errors/index.js';
+import { MAX_LINKED_AUTH_METHODS_PER_USER } from '@/shared/constants/security.constants.js';
 import type { Redis } from 'ioredis';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { enforceMinimumDuration } from '@/shared/utils/security/anti-enumeration.util.js';
@@ -170,16 +172,26 @@ export class AuthMethodService {
     const parsed = validateCreateAuthMethod(body);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
-    return withUserDatabaseContext(userPublicId, () =>
-      this.authMethodRepository.create(
+    return withUserDatabaseContext(userPublicId, async () => {
+      // Serialize the count + insert under the same per-user credential-mutation advisory lock the
+      // delete guard uses, so concurrent creates cannot both pass the cap check and overshoot
+      // MAX_LINKED_AUTH_METHODS_PER_USER. The xact lock auto-releases at commit.
+      await this.authMethodRepository.acquireCredentialMutationLock(user.id);
+      const activeCount = await this.authMethodRepository.countActiveByUserId(user.id);
+      if (activeCount >= MAX_LINKED_AUTH_METHODS_PER_USER) {
+        throw new ConflictError('errors:authMethodMaxReached', {
+          max: MAX_LINKED_AUTH_METHODS_PER_USER,
+        });
+      }
+      return this.authMethodRepository.create(
         omitUndefined({
           user_id: user.id,
           method_type: parsed.method_type,
           is_primary: parsed.is_primary,
           created_by_user_id: user.id,
         }),
-      ),
-    );
+      );
+    });
   }
 
   /**

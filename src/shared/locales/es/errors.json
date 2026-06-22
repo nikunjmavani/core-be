@@ -91,6 +91,8 @@
   "memberRoleMaxReached": "Se alcanzó el número máximo de roles personalizados ({{max}}) para esta organización. Elimina un rol existente antes de agregar otro.",
   "organizationNotificationPolicyMaxReached": "Se alcanzó el número máximo de políticas de notificación ({{max}}) para esta organización. Elimina una política existente antes de agregar otra.",
   "webauthnCredentialExists": "Esta clave de acceso ya está registrada",
+  "webauthnCredentialMaxReached": "Se alcanzó el número máximo de claves de acceso ({{max}}). Elimina una clave de acceso existente antes de agregar otra.",
+  "authMethodMaxReached": "Se alcanzó el número máximo de métodos de autenticación vinculados ({{max}}). Elimina un método existente antes de agregar otro.",
   "webauthnCannotRevokeLastCredential": "Esta clave de acceso es tu única forma de iniciar sesión. Agrega una contraseña u otro método de inicio de sesión antes de eliminarla.",
   "ownerCannotLeave": "El propietario no puede abandonar la organización; transfiere la propiedad primero",
   "ownerCannotBeRemoved": "No se puede eliminar al propietario de la organización; transfiere la propiedad primero",
