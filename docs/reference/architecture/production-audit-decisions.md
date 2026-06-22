@@ -73,31 +73,32 @@ rejected (the previous F2 behavior was a `409 seat_limit_exceeded_for_plan` bloc
 The enforced ceiling (above) and the `seats_total` shown on the subscription serializer should stay
 consistent; the serializer's `seats_total` is derived from the same resolution.
 
-### 1.4 Implementation notes & open considerations
+### 1.4 Implementation status & resolved considerations
 
-Two consequences of this policy must be handled when it is implemented (they are why the change is
-larger than a one-line ceiling tweak and why it lands as a reviewed, CI-backed PR rather than a
-hot-patch):
+**Status: shipped.** F3 (Free-tier cap) and F4 (dunning grace) landed in PR #773; F2 (over-cap-downgrade
+auto-suspend) in PR #774. The two considerations flagged before implementation were resolved as follows:
 
-1. **The seeded Free plan is 1 seat (solo).** "Cap unsubscribed orgs at the Free tier" therefore means
-   a subscription-less team org can hold **only its owner** — practically "no members until you
-   subscribe." If the intent is to allow a few free collaborators, the Free plan's `included_seats`
-   should be raised first (a billing-catalog decision), since the ceiling is derived from it.
-2. **Test ripple.** Today many membership tests add members to orgs that have **no** subscription,
-   relying on the old "unlimited when unsubscribed" behavior. Enforcing the Free-tier ceiling makes
-   those adds hit the cap, so the shared test fixtures must provision an adequately-seated
-   plan/subscription (or explicitly assert the new cap). This is a broad, mechanical update best
-   validated by the full CI suite.
+1. **Free plan stays at 1 seat (solo) — confirmed.** "Cap unsubscribed orgs at the Free tier" therefore
+   means a subscription-less team org holds **only its owner** — i.e. no members until it subscribes.
+   This is the deliberate product decision (the alternative — raising the Free plan's `included_seats`
+   to allow a few free collaborators — was considered and declined). The ceiling is still derived from
+   the cheapest active plan, so bumping the Free tier later changes the allowance with no code change.
+2. **Test ripple was smaller than feared.** F3 enforcement only bites when a plan catalog exists; the
+   integration tests that add members to subscription-less orgs don't seed one, so the Free-tier ceiling
+   resolves to `null` (unlimited) there and the suite stayed green. A dedicated F3 integration case was
+   added that *does* seed a catalog (plan + no subscription → `409 seat_limit_reached`), distinct from
+   the no-catalog-unlimited case.
 
-**Seams (for the implementing PR):**
+**Implementation (shipped):**
 
 - `PlanRepository.findFreePlanSeatCeiling()` — `included_seats` of the cheapest active plan.
-- `SubscriptionRepository.findActiveSeatStateByOrganizationForUpdate` — extend its projection to return
-  `status` + `current_period_end` so the service can evaluate the dunning-grace window.
-- `SubscriptionService.reserveSeatCeilingForMemberAdd` — apply §1.1; `changePlan` — replace the F2
-  409-block (`assertDowngradeWithinSeatAllowance`) with the §1.2 auto-suspend.
-- `MembershipSeatUsagePort` — add `suspendExcessActiveMembersToFitCeiling({ organizationPublicId, ceiling })`,
-  implemented by `MembershipService` (owner-excluded, `joined_at DESC`, in the org tx).
+- `SubscriptionRepository.findActiveSeatStateByOrganizationForUpdate` — projection extended to return
+  `status` + `current_period_end` so the service evaluates the dunning-grace window.
+- `SubscriptionService.reserveSeatCeilingForMemberAdd` applies §1.1; `changePlan` replaced the F2
+  409-block (`assertDowngradeWithinSeatAllowance`) with the §1.2 auto-suspend (best-effort, post-commit).
+- `MembershipSeatUsagePort` gained `suspendExcessActiveMembersToFitCeiling({ organizationPublicId, ceiling })`,
+  implemented by `MembershipService` (owner-excluded, `joined_at DESC`, in the org tx; permission-cache
+  invalidation runs **post-commit**, outside the org context, per the audit-R11 policy).
 
 ---
 
