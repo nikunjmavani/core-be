@@ -37,16 +37,21 @@ function isUniqueViolation(error: unknown): boolean {
  * caller is logged in immediately — all in one pinned transaction (mirrors {@link completeOAuthUserSession}).
  *
  * @remarks
- * - **Algorithm:** normalize the email; reject disposable domains; fast-path `409` when the email
- *   already has an account (the chosen signup UX, unlike the anti-enumeration silence of
- *   login/forgot/magic-link); hash the password OUTSIDE the transaction (argon2 is CPU-bound); then
- *   (1) in one `withTransaction` pinned via {@link runWithPinnedDatabaseHandle}, atomically insert
- *   the user (`is_email_verified=false`) + the `PASSWORD` auth-method; (2) AFTER that commits,
- *   best-effort provision the personal organization (when `PERSONAL_ORGANIZATION_ENABLED`); (3) call
- *   {@link completeFirstFactorAuth} to issue the session so the token carries the personal-org claim.
- * - **Failure modes:** disposable email → `ValidationError`; existing email (pre-check or the
- *   race-proof unique-index violation) → `ConflictError('errors:emailAlreadyRegistered')`. A new user
- *   never has MFA, so the result is the access-token arm of {@link FirstFactorAuthResult} in practice.
+ * - **Algorithm:** normalize the email; reject disposable domains; resolve any existing account and
+ *   either `409` (a real account: has a password, a login-capable auth method, or a verified email) or
+ *   CLAIM it (a pre-provisioned, credential-less invited account from add-member-by-email — so the
+ *   invitee is not dead-ended at a 409); hash the password OUTSIDE the transaction (argon2 is
+ *   CPU-bound); then (1) in one `withTransaction` pinned via {@link runWithPinnedDatabaseHandle},
+ *   atomically insert-or-claim the user (`is_email_verified=false`) + link the `PASSWORD` auth-method;
+ *   (2) AFTER that commits, best-effort provision the personal organization (when
+ *   `PERSONAL_ORGANIZATION_ENABLED`); (3) call {@link completeFirstFactorAuth} to issue the session so
+ *   the token carries the personal-org claim.
+ * - **Failure modes:** disposable email → `ValidationError`; a real existing account (pre-check or the
+ *   race-proof unique-index / guarded-claim miss) → `ConflictError('errors:emailAlreadyRegistered')`.
+ *   A new/claimed user never has MFA, so the result is the access-token arm of
+ *   {@link FirstFactorAuthResult} in practice. The claimed account stays unverified (a verification
+ *   code is emailed) and invitation-accept independently requires a verified email, so a claim alone
+ *   grants no email-control-gated capability.
  * - **Side effects:** atomically inserts a user + a `PASSWORD` auth-method; then (post-commit)
  *   best-effort inserts the personal organization via a separate global-admin connection — which is
  *   exactly why it runs after the commit, since that connection cannot see an uncommitted user — and
@@ -82,21 +87,45 @@ export async function completeEmailPasswordSignup(parameters: {
     ]);
   }
 
-  // Explicit 409 on an already-registered email (the chosen signup UX, in contrast to the
-  // anti-enumeration silence of login / forgot-password / magic-link). The DB unique index is the
-  // race-proof source of truth (mapped below); this pre-check just avoids a wasted argon2 hash.
-  if (await userService.findByEmail(normalizedEmail)) {
-    throw new ConflictError('errors:emailAlreadyRegistered');
+  // An already-registered email is a 409 (the chosen signup UX, unlike the anti-enumeration silence
+  // of login / forgot-password / magic-link) — EXCEPT a pre-provisioned, credential-less invited
+  // account (created by add-member-by-email so its INVITED membership has a user_id). That bare row
+  // is "claimed" by this signup instead of dead-ending the invitee at a 409. A real account (one with
+  // a password, a login-capable auth method, or a verified email) still returns 409.
+  const existing = await userService.findByEmail(normalizedEmail);
+  if (existing) {
+    // A "real" account has a usable credential (password or a login-capable auth method) or a verified
+    // email — it stays a 409. A pre-provisioned invited account has none of these, so it is claimed
+    // (its first password is set) in the transaction below instead of dead-ending the invitee.
+    const hasRealCredential =
+      Boolean(existing.password_hash) ||
+      existing.is_email_verified ||
+      (await authMethodService.hasLoginCapableMethod(existing.public_id));
+    if (hasRealCredential) {
+      throw new ConflictError('errors:emailAlreadyRegistered');
+    }
   }
 
   // Hash BEFORE opening the transaction: argon2 is CPU-bound (~100ms) and must not hold a pooled
   // connection open inside the transaction.
   const passwordHash = await hashPassword(parameters.password);
 
-  // Atomic: the user row and its PASSWORD auth-method commit together (a failed method insert rolls
-  // the user back rather than leaving a password-less orphan).
+  // Atomic: the user row (created or claimed) and its PASSWORD auth-method commit together (a failed
+  // method insert rolls the user back rather than leaving a password-less orphan).
   const user = await withTransaction((transaction) =>
     runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
+      if (existing) {
+        // Claim the pre-provisioned invited account: set its first password + link the PASSWORD
+        // method. The guarded UPDATE returns null if a concurrent claim already set a password.
+        const claimed = await userService.claimWithPassword(existing.public_id, {
+          passwordHash,
+          firstName: parameters.firstName,
+          lastName: parameters.lastName,
+        });
+        if (!claimed) throw new ConflictError('errors:emailAlreadyRegistered');
+        await authMethodService.createPasswordMethod(claimed.id, claimed.public_id);
+        return claimed;
+      }
       let created: UserAuthRecord;
       try {
         created = await userService.createWithPassword(

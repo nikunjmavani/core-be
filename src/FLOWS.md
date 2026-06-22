@@ -185,8 +185,9 @@ sequenceDiagram
   Bus->>Mail: recordOutboxEmail (via event handler)
   Mail-->>Invitee: invitation email (raw_token in URL)
 
-  Note over Invitee,Auth: invitee logs in via OAuth / magic-link (find-by-email reuses the pre-created user)
-  Invitee->>Inv: POST /tenancy/invitations/:invitation_id/accept {token}
+  Note over Invitee,Auth: invitee onboards (claims the pre-created user) via password signup, magic-link, or OAuth — find-by-email reuses the row; magic-link/OAuth set is_email_verified, a password-claim verifies via the emailed code
+  Invitee->>Inv: POST /tenancy/invitations/:invitation_id/accept {token} (authenticated)
+  Inv->>Usr: requireUserRecordByPublicId(actingUser) — 403 if email unverified, 403 if email ≠ invitee
   Inv->>DB: BEGIN; SET LOCAL app.current_organization_id
   Inv->>DB: UPDATE member_invitations SET accepted_at=NOW() WHERE token_hash=$1 (atomic, single-use)
   Inv->>DB: UPDATE memberships SET status=ACTIVE, joined_at=NOW() (activateForInvitationAccept)
@@ -196,10 +197,10 @@ sequenceDiagram
 
 ### Side effects
 
-- New invitee → a bare ACTIVE `auth.users` row (`is_email_verified=false`, no auth method), claimed on first OAuth/magic-link login; an existing address resolves to that account.
+- New invitee → a bare ACTIVE `auth.users` row (`is_email_verified=false`, no auth method), claimed on first onboarding — **password signup** (`POST /auth/signup` sets the first password instead of returning 409), **magic-link**, or **OAuth**; an existing address resolves to that account.
 - `INVITED` `memberships` row + `member_invitations` row (hashed token; the raw token leaves the platform only via the email payload, parallel to `magic-link`).
 - `MEMBER_INVITATION_EVENT.CREATED` (emitStrict — a failed outbox write rolls back the whole org transaction) → mail outbox → invitation email.
-- On accept: the membership is activated (`status=ACTIVE`, `joined_at`) and the member's permission cache invalidated.
+- Accept requires authentication, a **verified** email, and an email matching the invitee (sec-T4 + follow-up) — so a forwarded invite token alone, or a password-claim that has not yet verified, cannot join the org. On accept the membership is activated (`status=ACTIVE`, `joined_at`) and the member's permission cache invalidated.
 - On revoke (`DELETE /organization/invitations/:id`): the invitation is revoked AND the auto-created `INVITED` membership is soft-deleted (no ghost invitee in the members table).
 
 ### Failure modes

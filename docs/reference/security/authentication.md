@@ -19,9 +19,11 @@ Implementation lives under `src/domains/auth/` (see [sub-domains-layout.md](../a
 
 New accounts are created through:
 
-- **Email/password signup** — `POST /api/v1/auth/signup` (creates the user with `is_email_verified=false`, logs them in immediately, and emails a 6-digit verification code; returns **409** if the email already exists; disposable domains blocked at signup time)
+- **Email/password signup** — `POST /api/v1/auth/signup` (creates the user with `is_email_verified=false`, logs them in immediately, and emails a 6-digit verification code; returns **409** if a *real* account already exists, but **claims** a pre-provisioned invited account — a bare, credential-less, unverified row from add-member-by-email — by setting its first password instead of dead-ending the invitee; disposable domains blocked at signup time)
 - **Magic link** — `POST /api/v1/auth/magic-link/send` (auto-signs-up an unknown email as a passwordless user, then emails a 6-digit sign-in code; disposable domains blocked at send time)
 - **OAuth** — `GET /api/v1/auth/oauth/{provider}/callback` (new users via `completeOAuthUserSession`; disposable domains blocked before `userService.createFromOAuth`)
+
+**Invitation onboarding.** A user added to an org by email gets a pre-created **bare** account (no credential, `is_email_verified=false`) so the `INVITED` membership has a `user_id`. They onboard via any path above — signup **claims** the bare row, or magic-link / OAuth reuse it. Accepting the invitation (`POST /api/v1/tenancy/invitations/{invitation_id}/accept`) requires authentication, an email **matching** the invitee, **and a verified email** — so a forwarded invite token cannot be used to join by someone who merely password-claimed the address without proving email control.
 
 **Disposable email:** `isDisposableEmailBlocked()` (package `disposable-email-domains-js`) runs on login, magic-link send, password forgot, OAuth user creation, and member invitations. When blocked, the API returns **400** with `errors:disposableEmail`. Toggle with `BLOCK_DISPOSABLE_EMAIL` (default `true`).
 

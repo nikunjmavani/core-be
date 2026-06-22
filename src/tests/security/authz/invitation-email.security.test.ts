@@ -82,7 +82,9 @@ describe('Security: invitation email-binding matrix (model: email)', () => {
 
   it('a user whose email differs ACCEPT with the valid token → 403 and it stays pending', async () => {
     const { invitation } = await pendingInvitationFor(uniqueEmail());
-    const attacker = await createTestUser();
+    // Verified so the request reaches the email-MISMATCH check (the focus of this test) rather than
+    // tripping the verified-email accept gate first.
+    const attacker = await createTestUser({ isEmailVerified: true });
     const attackerToken = await generateTestToken({ userId: attacker.public_id });
     const res = await injectAuthenticated(app, {
       method: 'POST',

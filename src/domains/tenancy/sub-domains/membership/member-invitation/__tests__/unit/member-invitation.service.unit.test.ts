@@ -92,6 +92,7 @@ describe('MemberInvitationService', () => {
       id: 5,
       public_id: 'user_public_id',
       email: 'invitee@example.com',
+      is_email_verified: true,
     }),
   } as unknown as UserService;
 
@@ -135,6 +136,7 @@ describe('MemberInvitationService', () => {
       id: 5,
       public_id: 'user_public_id',
       email: 'invitee@example.com',
+      is_email_verified: true,
     } as never);
   });
 
@@ -187,10 +189,25 @@ describe('MemberInvitationService', () => {
         id: 99,
         public_id: 'user_attacker',
         email: 'attacker@example.com',
+        is_email_verified: true,
       } as never);
       await expect(service.accept('inv_public_123', body, 'user_attacker')).rejects.toMatchObject({
         name: 'ForbiddenError',
       });
+    });
+
+    it('throws ForbiddenError when the acting user email is not verified (sec-T4 follow-up)', async () => {
+      vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValueOnce({
+        id: 5,
+        public_id: 'user_public_id',
+        email: 'invitee@example.com',
+        is_email_verified: false,
+      } as never);
+      await expect(service.accept('inv_public_123', body, 'user_public_id')).rejects.toMatchObject({
+        name: 'ForbiddenError',
+      });
+      // The unverified caller is rejected before the invitation row is even consumed.
+      expect(invitationRepository.accept).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundError when lookup returns null', async () => {
