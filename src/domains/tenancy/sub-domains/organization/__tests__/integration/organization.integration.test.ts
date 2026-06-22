@@ -78,6 +78,37 @@ describe('Organization Sub-Domain — Integration', () => {
       });
       expect(response.statusCode).toBe(200);
     });
+
+    it('discovers both owned and member organizations (owner branch + membership subquery)', async () => {
+      const user = await createTestUser();
+      // Org A: the user is the owner (found via the owner_user_id branch).
+      const ownedOrg = await createTestOrganization({ ownerUserId: user.id });
+      // Org B: owned by someone else; the user is an ACTIVE non-owner member (found via the
+      // membership subquery branch — the path rewritten for the keyset-index Perf fix).
+      const otherOwner = await createTestUser();
+      const memberOrg = await createTestOrganization({ ownerUserId: otherOwner.id });
+      const memberRole = await createRoleWithPermissions({
+        organizationId: memberOrg.id,
+        permissionCodes: [TENANCY_PERMISSIONS.ORGANIZATION_READ],
+      });
+      await createMembership({
+        userId: user.id,
+        organizationId: memberOrg.id,
+        roleId: memberRole.id,
+      });
+
+      const token = await generateTestToken({ userId: user.public_id });
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/tenancy/organizations'),
+        token,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const ids = (response.json() as { data: { id: string }[] }).data.map((org) => org.id);
+      expect(ids).toContain(ownedOrg.public_id);
+      expect(ids).toContain(memberOrg.public_id);
+    });
   });
 
   describe('PATCH /api/v1/tenancy/organization', () => {

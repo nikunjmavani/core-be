@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
@@ -121,36 +121,40 @@ export class OrganizationRepository extends BaseRepository {
       organizations.id,
       parseListCursor(after),
     );
+    // Perf: push the membership predicate into a subquery rather than a LEFT JOIN so the access
+    // filter references only `organizations`. That lets the partial keyset index
+    // `idx_organizations_created_id_active (created_at, id) WHERE deleted_at IS NULL` drive an
+    // index-ordered scan — a join-side predicate in the OR branch forced a join + sort over the
+    // whole org table per page, so latency grew with total tenant count, not the user's org count.
+    // The subquery reads `memberships` with the identical predicate, so the result set is unchanged.
     const accessWhere = and(
       isNull(organizations.deleted_at),
       cursorCondition,
       or(
         eq(organizations.owner_user_id, userId),
-        and(
-          eq(memberships.user_id, userId),
-          eq(memberships.status, 'ACTIVE'),
-          isNull(memberships.deleted_at),
+        inArray(
+          organizations.id,
+          getRequestDatabase()
+            .select({ organizationId: memberships.organization_id })
+            .from(memberships)
+            .where(
+              and(
+                eq(memberships.user_id, userId),
+                eq(memberships.status, 'ACTIVE'),
+                isNull(memberships.deleted_at),
+              ),
+            ),
         ),
       ),
     );
     const rows = await getRequestDatabase()
       .select()
       .from(organizations)
-      .leftJoin(
-        memberships,
-        and(
-          eq(memberships.organization_id, organizations.id),
-          eq(memberships.user_id, userId),
-          eq(memberships.status, 'ACTIVE'),
-          isNull(memberships.deleted_at),
-        ),
-      )
       .where(accessWhere)
       .orderBy(asc(organizations.created_at), asc(organizations.id))
       .limit(limit + 1);
     const hasMore = rows.length > limit;
-    const pageRows = hasMore ? rows.slice(0, limit) : rows;
-    const organizationsOnly = pageRows.map((row) => row.organizations);
+    const organizationsOnly = hasMore ? rows.slice(0, limit) : rows;
     const lastItem = organizationsOnly.at(-1);
     return {
       items: organizationsOnly,
