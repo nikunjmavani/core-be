@@ -132,6 +132,8 @@ describe('MfaService', () => {
       '127.0.0.1',
     );
     expect(result.access_token).toBe('access-token');
+    // The handler audits recovery-code use distinctly, so the factor must be surfaced.
+    expect(result.factor).toBe('totp');
     expect(authSessionService.createSessionForUser).toHaveBeenCalled();
     // H1 regression guard: the MFA-login token MUST carry the active-org `org` claim, exactly like
     // the first-factor path. Without it an MFA user gets an org-less token and is locked out of
@@ -152,6 +154,8 @@ describe('MfaService', () => {
       '127.0.0.1',
     );
     expect(result.access_token).toBe('access-token');
+    // Recovery-code use must be distinguishable (the TOTP-bypass break-glass path the handler flags).
+    expect(result.factor).toBe('recovery_code');
     expect(consumeMfaRecoveryCode).toHaveBeenCalledWith(user.id, 'ABCD-1234');
   });
 

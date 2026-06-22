@@ -34,6 +34,7 @@ const EXPECTED_PUBLIC_ROUTES: readonly string[] = [
   'POST /api/v1/auth/password/forgot',
   'POST /api/v1/auth/password/reset',
   'POST /api/v1/auth/refresh',
+  'POST /api/v1/auth/signup',
   'POST /api/v1/auth/webauthn/authenticate/options',
   'POST /api/v1/auth/webauthn/authenticate/verify',
   // Billing — public plan catalog + Stripe-signature-verified webhook ingress

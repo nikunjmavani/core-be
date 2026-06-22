@@ -5,7 +5,7 @@ import { invitationTemplate } from '@/infrastructure/mail/templates/invitation.t
 describe('mail templates (snapshots)', () => {
   it('magicLinkTemplate matches snapshot', () => {
     const html = magicLinkTemplate({
-      magicLinkUrl: 'https://app.example.com/auth/magic?token=test',
+      code: '123456',
       expiresInMinutes: 15,
     });
     expect(html).toMatchSnapshot();

@@ -25,8 +25,10 @@ import type { UserService } from '@/domains/user/user.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import type { AuthSessionService } from './sub-domains/auth-session/auth-session.service.js';
 import type { MfaService } from './sub-domains/auth-mfa/auth-mfa.service.js';
-import { validateLogin } from './auth.validator.js';
+import type { AuthMethodService } from './sub-domains/auth-method/auth-method.service.js';
+import { validateLogin, validateSignup } from './auth.validator.js';
 import { completeFirstFactorAuth } from './shared/complete-first-factor-auth.js';
+import { completeEmailPasswordSignup } from './sub-domains/auth-method/email-password-signup.js';
 import {
   resolveDefaultActiveOrganizationPublicId,
   findUserActiveOrganizationByPublicId,
@@ -83,6 +85,7 @@ export class AuthService {
     private readonly mfaService: MfaService,
     private readonly organizationSettingsService: OrganizationSettingsService,
     private readonly redis: Redis,
+    private readonly authMethodService: AuthMethodService,
   ) {}
 
   private buildIpKey(ipAddress: string): string {
@@ -215,6 +218,82 @@ export class AuthService {
       await this.userService.updatePassword(user.public_id, newHash);
     }
 
+    return completeFirstFactorAuth({
+      user: {
+        id: user.id,
+        public_id: user.public_id,
+        email: user.email,
+        status: user.status,
+        is_email_verified: user.is_email_verified,
+        is_mfa_enabled: user.is_mfa_enabled,
+      },
+      ipAddress,
+      userAgent,
+      organizationSettingsService: this.organizationSettingsService,
+      mfaService: this.mfaService,
+      authSessionService: this.authSessionService,
+    });
+  }
+
+  /**
+   * Email/password signup: creates the account (email starts unverified), provisions the personal
+   * organization, and logs the caller in immediately, then best-effort issues the verification email.
+   *
+   * @remarks
+   * - **Algorithm:** validate the body, delegate create + auto-login to {@link completeEmailPasswordSignup}
+   *   (one pinned transaction), then trigger email-verification issuance out-of-band.
+   * - **Failure modes:** `ValidationError` (weak/invalid body or disposable email);
+   *   `ConflictError('errors:emailAlreadyRegistered')` when the email already has an account.
+   * - **Side effects:** inserts a user + PASSWORD auth-method, best-effort personal org, a session, and
+   *   an email-verification token (mail enqueue). A mail failure is swallowed — the account is already
+   *   created and logged in.
+   * - **Notes:** returns the same {@link LoginResult} shape as {@link AuthService.login}; a brand-new
+   *   user never has MFA enabled, so the access-token arm is returned in practice.
+   */
+  async signup(body: unknown, ipAddress: string, userAgent?: string): Promise<LoginResult> {
+    const parsed = validateSignup(body);
+    const { user, ...authResult } = await completeEmailPasswordSignup({
+      userService: this.userService,
+      authMethodService: this.authMethodService,
+      authSessionService: this.authSessionService,
+      organizationSettingsService: this.organizationSettingsService,
+      mfaService: this.mfaService,
+      email: parsed.email,
+      password: parsed.password,
+      firstName: parsed.first_name,
+      lastName: parsed.last_name,
+      ipAddress,
+      userAgent,
+    });
+    // Issue email verification out-of-band. Best-effort: the account is already created and logged
+    // in, so a mail hiccup must never fail the signup response.
+    try {
+      await this.authMethodService.resendEmailVerification(user.public_id);
+    } catch (error) {
+      logger.warn({ error, userId: user.public_id }, 'signup.verification_email.enqueue_failed');
+    }
+    return authResult;
+  }
+
+  /**
+   * Completes `POST /auth/password/reset` and logs the user straight back in.
+   *
+   * @remarks
+   * - **Algorithm:** delegate the token-consume + password-update + revoke-all-sessions to
+   *   {@link AuthMethodService.resetPassword} (one pinned transaction), then mint a fresh session via
+   *   {@link completeFirstFactorAuth} AFTER that commits — so the resetter's new session is the only
+   *   live one, while any attacker-held session from before the reset is gone.
+   * - **Failure modes:** invalid/expired token → `UnauthorizedError` (from the delegate); a
+   *   suspended/locked/deleted account is refused a session via {@link assertUserAccountActive} even
+   *   though its password was reset (mirrors `login`); an MFA user gets the `mfa_required` arm of
+   *   {@link LoginResult} (the reset never bypasses MFA).
+   * - **Side effects:** the delegate's writes (password, token invalidation, session revoke) plus one
+   *   new `auth_sessions` row (unless MFA is required). The caller sets the session cookie + audits.
+   */
+  async resetPassword(body: unknown, ipAddress: string, userAgent?: string): Promise<LoginResult> {
+    const user = await this.authMethodService.resetPassword(body);
+    // The password was reset, but a suspended/locked/deleted account is never issued a session.
+    assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
     return completeFirstFactorAuth({
       user: {
         id: user.id,

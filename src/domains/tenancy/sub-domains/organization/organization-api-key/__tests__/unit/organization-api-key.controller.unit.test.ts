@@ -5,6 +5,13 @@ import type { OrganizationApiKeyService } from '@/domains/tenancy/sub-domains/or
 import { UnauthorizedError } from '@/shared/errors/index.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
+// The controller records best-effort lifecycle audit events; stub the audit util so the unit test
+// (a minimal request without `server.auditDomain`) exercises authorization + service delegation only.
+vi.mock('@/shared/utils/infrastructure/audit-request-context.util.js', () => ({
+  recordScopedAuditEvent: vi.fn().mockResolvedValue(undefined),
+  buildAuditActorFields: vi.fn(() => ({})),
+}));
+
 describe('createOrganizationApiKeyController', () => {
   const organizationPublicId = generatePublicId('organization');
   const apiKeyPublicId = generatePublicId('organizationApiKey');

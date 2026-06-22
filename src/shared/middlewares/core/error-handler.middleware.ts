@@ -227,11 +227,14 @@ function handleUnhandledErrorResponse(
       organizationId: request.organizationId ?? undefined,
     }),
   );
+  // `error` is serialized by Pino's stdSerializers.err (configured for both `err` and `error`), so
+  // it already carries the message + stack as structured fields. Duplicating them as top-level
+  // plain strings (errorMessage/errorStack) only added an extra free-text copy that the key-based
+  // redactor cannot scrub — a third-party exception message can embed a secret. errorName/errorCode
+  // stay: they are low-risk structured values useful for log filtering.
   logger.error(
     {
       error,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorStack: error instanceof Error ? error.stack : undefined,
       errorName: error instanceof Error ? error.name : undefined,
       errorCode:
         error instanceof Error && 'code' in error

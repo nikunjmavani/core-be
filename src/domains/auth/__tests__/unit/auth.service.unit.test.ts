@@ -5,6 +5,7 @@ import { AuthService } from '@/domains/auth/auth.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
 import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service.js';
+import type { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-method.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { ACCOUNT_LOCKOUT_MINUTES, MAX_FAILED_LOGIN_ATTEMPTS } from '@/shared/constants/index.js';
@@ -124,12 +125,23 @@ describe('AuthService', () => {
     eval: vi.fn().mockResolvedValue(1),
   } as unknown as Redis;
 
+  const authMethodService = {
+    createPasswordMethod: vi.fn().mockResolvedValue(undefined),
+    resendEmailVerification: vi
+      .fn()
+      .mockResolvedValue({ messageKey: 'success:verificationEmailSent' }),
+    // resetPassword consumes the token + updates the password + revokes sessions, then returns the
+    // reset user so AuthService can mint a fresh session (auto-login).
+    resetPassword: vi.fn().mockResolvedValue(user),
+  } as unknown as AuthMethodService;
+
   const service = new AuthService(
     userService,
     authSessionService,
     mfaService,
     organizationSettingsService,
     redis,
+    authMethodService,
   );
 
   beforeEach(() => {
@@ -178,6 +190,39 @@ describe('AuthService', () => {
     );
     expect('access_token' in result && result.access_token).toBe('jwt-access-token');
     expect(authSessionService.createSessionForUser).toHaveBeenCalled();
+  });
+
+  describe('resetPassword (auto-login)', () => {
+    const resetBody = { token: 'reset-token', password: 'BrandNewPassword456!' };
+
+    it('logs the user straight in (access token + session) after a successful reset', async () => {
+      vi.mocked(authMethodService.resetPassword).mockResolvedValue(user as never);
+      const result = await service.resetPassword(resetBody, '127.0.0.1', 'agent');
+      expect(authMethodService.resetPassword).toHaveBeenCalledWith(resetBody);
+      expect('access_token' in result && result.access_token).toBe('jwt-access-token');
+      expect(authSessionService.createSessionForUser).toHaveBeenCalled();
+    });
+
+    it('returns mfa_required (no session) when the reset user has MFA — the reset never bypasses MFA', async () => {
+      vi.mocked(authMethodService.resetPassword).mockResolvedValue({
+        ...user,
+        is_mfa_enabled: true,
+      } as never);
+      const result = await service.resetPassword(resetBody, '127.0.0.1');
+      expect(result).toEqual({ mfa_required: true, mfa_session_token: 'mfa_session_token' });
+      expect(authSessionService.createSessionForUser).not.toHaveBeenCalled();
+    });
+
+    it('refuses a session for a suspended account even though the password was reset', async () => {
+      vi.mocked(authMethodService.resetPassword).mockResolvedValue({
+        ...user,
+        status: 'SUSPENDED',
+      } as never);
+      await expect(service.resetPassword(resetBody, '127.0.0.1')).rejects.toBeInstanceOf(
+        UnauthorizedError,
+      );
+      expect(authSessionService.createSessionForUser).not.toHaveBeenCalled();
+    });
   });
 
   it('login rejects unknown user', async () => {

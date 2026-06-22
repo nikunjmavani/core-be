@@ -1,5 +1,6 @@
 import type { AuthContainer } from './auth.container.js';
 import { createAuthLoginHandlers } from './handlers/auth-login.handlers.js';
+import { createAuthSignupHandlers } from './handlers/auth-signup.handlers.js';
 import { createAuthSessionHandlers } from './handlers/auth-session.handlers.js';
 import { createAuthMagicLinkHandlers } from './handlers/auth-magic-link.handlers.js';
 import { createAuthOauthHandlers } from './handlers/auth-oauth.handlers.js';
@@ -12,6 +13,7 @@ import { createAuthMeContextHandlers } from './handlers/auth-me-context.handlers
 export function createAuthController(container: AuthContainer) {
   return {
     ...createAuthLoginHandlers(container),
+    ...createAuthSignupHandlers(container),
     ...createAuthSessionHandlers(container),
     ...createAuthMagicLinkHandlers(container),
     ...createAuthOauthHandlers(container),

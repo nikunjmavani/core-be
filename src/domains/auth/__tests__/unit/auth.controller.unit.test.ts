@@ -84,6 +84,11 @@ describe('createAuthController', () => {
     refreshToken: vi
       .fn()
       .mockResolvedValue({ access_token: 'new-token', refresh_secret: 'new-refresh-secret' }),
+    resetPassword: vi.fn().mockResolvedValue({
+      access_token: 'token',
+      session_public_id: 'session',
+      session_refresh_secret: 'refresh-secret',
+    }),
   };
 
   const authMethodService = {
@@ -195,7 +200,10 @@ describe('createAuthController', () => {
       mockRequest({ body: { email: 'user@example.com' } }),
       mockReply(),
     );
-    await controller.verifyMagicLink(mockRequest({ body: { token: 'raw-token' } }), verifyReply);
+    await controller.verifyMagicLink(
+      mockRequest({ body: { email: 'user@example.com', code: '123456' } }),
+      verifyReply,
+    );
     expect(magicLinkService.send).toHaveBeenCalled();
     expect(verifyReply.setCookie).toHaveBeenCalled();
   });
@@ -293,8 +301,9 @@ describe('createAuthController', () => {
     await controller.changePassword(mockRequest({ body: { password: 'new' } }), changeReply);
     await controller.verifyEmail(mockRequest({ body: { token: 'verify' } }), mockReply());
     await controller.resendEmailVerification(mockRequest(), mockReply());
-    expect(authMethodService.resetPassword).toHaveBeenCalled();
-    expect(resetReply.code).toHaveBeenCalledWith(204);
+    // Reset now auto-logs-in via authService: it sets the session cookie instead of returning 204.
+    expect(authService.resetPassword).toHaveBeenCalled();
+    expect(resetReply.setCookie).toHaveBeenCalled();
   });
 
   it('refreshToken uses session cookie and revokeAllSessions does NOT clear the cookie', async () => {

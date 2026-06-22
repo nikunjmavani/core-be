@@ -3,5 +3,5 @@
   "passwordResetSubject": "Reset your password",
   "passwordResetHtml": "Click <a href=\"{{resetUrl}}\">here</a> to reset your password. This link expires in {{expiresInMinutes}} minutes.",
   "emailVerificationSubject": "Verify your email address",
-  "emailVerificationHtml": "Click <a href=\"{{verifyUrl}}\">here</a> to verify your email. This link expires in {{expiresInHours}} hours."
+  "emailVerificationHtml": "Your email verification code is <strong>{{code}}</strong>. It expires in {{expiresInMinutes}} minutes."
 }
