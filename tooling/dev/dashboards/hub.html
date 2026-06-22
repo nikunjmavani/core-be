@@ -128,7 +128,7 @@ const CARD = 'rounded-xl border border-border bg-card shadow-sm';
 
 /* ── shared cursor tooltip (hover + tap) ── */
 const tip = el('div', 'pointer-events-none fixed z-50 hidden max-w-[280px] rounded-lg border border-border bg-card px-3 py-2 text-[12px] leading-relaxed text-foreground shadow-lg'); tip.id = 'tip'; document.body.appendChild(tip);
-function showTip(html, x, y) { tip.innerHTML = html; tip.classList.remove('hidden'); const r = tip.getBoundingClientRect(), pad = 12; if (x + r.width > innerWidth - pad) x = Math.max(pad, innerWidth - r.width - pad); if (y + r.height > innerHeight - pad) y = Math.max(pad, y - r.height - 26); tip.style.left = `${x}px`; tip.style.top = `${y}px`; }
+function showTip(html, x, y) { tip.innerHTML = html; tip.classList.remove('hidden'); const r = tip.getBoundingClientRect(), pad = 12; let px = x, py = y; if (px + r.width > innerWidth - pad) px = Math.max(pad, innerWidth - r.width - pad); if (py + r.height > innerHeight - pad) py = Math.max(pad, py - r.height - 26); tip.style.left = `${px}px`; tip.style.top = `${py}px`; }
 const hideTip = () => tip.classList.add('hidden');
 function bindTip(elm, html) {
   elm.addEventListener('mouseenter', (e) => showTip(html, e.clientX + 14, e.clientY + 14));
@@ -207,8 +207,8 @@ const staleTag = () => el('span', 'rounded border border-warning/40 px-1 text-[9
 const HISTORY = 30; const series = {}; const prevCpu = {};
 function pushSeries(name, v) { if (v == null) return; const a = series[name] || (series[name] = []); a.push(v); if (a.length > HISTORY) a.shift(); }
 function pushRate(name, raw) { if (raw == null) return; const p = prevCpu[name]; prevCpu[name] = raw; if (p != null) pushSeries(name, Math.max(0, raw - p)); }
-function spark(values, color, h) {
-  const w = 100; h = h || 24;
+function spark(values, color, hArg) {
+  const w = 100, h = hArg || 24;
   if (!values || values.length < 2) return `<div style="height:${h}px"></div>`;
   const min = Math.min(...values), max = Math.max(...values), span = (max - min) || 1;
   const x = (i) => i * (w / (values.length - 1));
@@ -266,13 +266,6 @@ function aggregateQueues(queues, fresh) {
 }
 
 /* ── 1. STATUS HERO ── */
-const MAX_ALERTS = 5;
-function statusBeacon(level) {
-  const wrap = el('span', 'relative flex h-3 w-3 flex-none');
-  if (level === 'success') wrap.appendChild(el('span', `absolute inline-flex h-full w-full rounded-full bg-${level} opacity-60 ping`));
-  wrap.appendChild(el('span', `relative inline-flex h-3 w-3 rounded-full bg-${level}${level === 'success' ? '' : ' pulse'}`));
-  return wrap;
-}
 function computeStatus(statusObj, agg, sums, sumsW) {
   let up = 0, total = 0; const down = [];
   if (statusObj) for (const [k, v] of Object.entries(statusObj)) { total++; if (v.up) up++; else down.push(k); }
@@ -627,10 +620,11 @@ let reqFilter = 'all'; // active Requests tab (persists across polls + manual re
 function renderRequests(routes, opts) {
   const host = $('requests'); if (!host) return;
   const stale = !!(opts && opts.stale) && everLoaded.requests;
-  if (!routes) { if (!everLoaded.requests) return; routes = lastGood.routes || []; }
+  if (!routes && !everLoaded.requests) return;
+  const data = routes || lastGood.routes || [];
   const INFRA = /^\/(metrics|livez|readyz|admin)|^\/reference|^\/_/;
   const avgMsOf = (r) => (r.count ? (r.sum / r.count) * 1000 : 0);
-  const base = routes.filter((r) => r.route && r.route !== '__unmatched__' && !INFRA.test(r.route));
+  const base = data.filter((r) => r.route && r.route !== '__unmatched__' && !INFRA.test(r.route));
   // ── tab filter group: All / Slowest / Failed (5xx) / 4xx — each re-sorts/filters the same data ──
   const TABS = [
     { k: 'all',    label: 'All',     n: base.length,                                  rows: base.slice().sort((a, b) => b.count - a.count) },
