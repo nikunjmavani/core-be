@@ -99,8 +99,8 @@ describe('auth event handlers', () => {
       type: AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED,
       payload: {
         email: 'user@example.com',
-        verification_token: 'verify-token',
-        expires_in_hours: 24,
+        otp_code: '123456',
+        expires_in_minutes: 15,
       },
       timestamp: new Date(),
     });
@@ -148,8 +148,8 @@ describe('auth event handlers', () => {
       AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED,
       {
         email: 'user@example.com',
-        verification_token: 'verify',
-        expires_in_hours: 24,
+        otp_code: '123456',
+        expires_in_minutes: 15,
       },
     ],
   ])('throws when mail is not configured for %s', async (eventType, payload) => {
@@ -191,8 +191,8 @@ describe('auth event handlers', () => {
         AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED,
         {
           email: 'user@example.com',
-          verification_token: 'verify-token',
-          expires_in_hours: 24,
+          otp_code: '123456',
+          expires_in_minutes: 15,
         },
       ],
     ])('re-throws so the event bus surfaces the failure for %s', async (eventType, payload) => {

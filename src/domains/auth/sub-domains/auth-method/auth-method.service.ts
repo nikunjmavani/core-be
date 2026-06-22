@@ -5,8 +5,17 @@ import {
   UnauthorizedError,
   ValidationError,
 } from '@/shared/errors/index.js';
+import type { Redis } from 'ioredis';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { enforceMinimumDuration } from '@/shared/utils/security/anti-enumeration.util.js';
+import { incrementWithExpiryOnFirst } from '@/shared/utils/infrastructure/redis-counter.util.js';
+import { redisConnection } from '@/infrastructure/cache/redis.client.js';
+import {
+  EMAIL_OTP_MAX_VERIFY_ATTEMPTS,
+  EMAIL_OTP_TTL_MINUTES,
+  generateEmailOtp,
+  hashEmailOtp,
+} from '@/domains/auth/sub-domains/auth-method/email-otp.js';
 import { hashPassword, verifyPassword } from '@/shared/utils/security/password.util.js';
 import { eventBus } from '@/core/events/event-bus.js';
 import type { UserService } from '@/domains/user/user.service.js';
@@ -36,7 +45,8 @@ import {
 } from '@/domains/auth/auth.validator.js';
 
 const PASSWORD_RESET_EXPIRES_IN_MINUTES = 60;
-const EMAIL_VERIFICATION_EXPIRES_IN_HOURS = 24;
+/** Redis key prefix for the per-user email-verification OTP attempt counter (brute-force cap). */
+const EMAIL_OTP_VERIFY_ATTEMPT_KEY_PREFIX = 'auth:email_otp_verify_attempts:';
 
 /**
  * Auth-method types that can mint a session on their own (sec-A5). Used by
@@ -81,6 +91,7 @@ export class AuthMethodService {
     private readonly authMethodRepository: AuthMethodRepository,
     private readonly verificationTokenRepository: VerificationTokenRepository,
     private readonly authSessionService: AuthSessionService,
+    private readonly redis: Redis = redisConnection,
   ) {}
 
   async list(userPublicId: string) {
@@ -450,28 +461,42 @@ export class AuthMethodService {
     body: unknown,
   ): Promise<{ messageKey: string; messageParams?: Record<string, string | number> }> {
     const parsed = validateVerifyEmail(body);
-    const tokenHash = createHash('sha256').update(parsed.token).digest('hex');
+    const normalizedEmail = parsed.email.trim().toLowerCase();
 
-    // audit-#12: the token consumption and the verified-flag update must be ONE atomic unit.
-    // Previously the token was consumed first and the user update ran separately, so a
-    // transient failure after consumption permanently burned a valid single-use link and
-    // forced the user to request another email (stranding onboarding during a provider
-    // outage). The pinned transaction makes `consumeIfValid` roll back if the downstream
-    // update fails, leaving the link retryable. The atomic UPDATE in `consumeIfValid` still
-    // prevents two concurrent verifies from both succeeding.
+    // The 6-digit code is low-entropy, so resolve the owner first and gate guessing with a per-user
+    // attempt cap (mirrors MFA) BEFORE any DB work. An unknown email is treated like a wrong code so
+    // the response is not an account-existence oracle (the route also rate-limits per email + IP).
+    const user = await this.userService.findByEmail(normalizedEmail);
+    if (!user) throw new UnauthorizedError('errors:invalidOrExpiredVerificationToken');
+
+    const attemptKey = `${EMAIL_OTP_VERIFY_ATTEMPT_KEY_PREFIX}${user.id}`;
+    const attempts = await incrementWithExpiryOnFirst(
+      this.redis,
+      attemptKey,
+      EMAIL_OTP_TTL_MINUTES * 60,
+    );
+    if (attempts > EMAIL_OTP_MAX_VERIFY_ATTEMPTS) {
+      throw new UnauthorizedError('errors:invalidOrExpiredVerificationToken');
+    }
+
+    // audit-#12: consume the code and flip the verified flag in ONE atomic transaction, so a failure
+    // after consumption rolls the consume back and the code stays redeemable. consumeOtpForUser is
+    // scoped to (user_id, EMAIL_VERIFICATION) — see the repository note on why OTP lookups must be
+    // user-scoped rather than by code-hash alone, and its atomic UPDATE blocks concurrent verifies.
     await withTransaction((transaction) =>
       runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
-        const record = await this.verificationTokenRepository.consumeIfValid(tokenHash);
-        if (record?.token_type !== 'EMAIL_VERIFICATION') {
-          throw new UnauthorizedError('errors:invalidOrExpiredVerificationToken');
-        }
-
-        const user = await this.userService.findById(record.user_id);
-        if (!user) throw new NotFoundError('User');
-
+        const record = await this.verificationTokenRepository.consumeOtpForUser(
+          user.id,
+          'EMAIL_VERIFICATION',
+          hashEmailOtp(parsed.code),
+        );
+        if (!record) throw new UnauthorizedError('errors:invalidOrExpiredVerificationToken');
         await this.userService.updateEmailVerified(user.public_id);
       }),
     );
+
+    // Clear the attempt counter so a verified user's later legitimate flows are never pre-throttled.
+    await this.redis.del(attemptKey);
 
     return { messageKey: 'success:emailVerified' };
   }
@@ -486,14 +511,12 @@ export class AuthMethodService {
       return { messageKey: 'success:emailAlreadyVerified' };
     }
 
-    const rawToken = randomBytes(32).toString('hex');
-    const tokenHash = createHash('sha256').update(rawToken).digest('hex');
-    const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_EXPIRES_IN_HOURS * 3_600_000);
+    const code = generateEmailOtp();
+    const expiresAt = new Date(Date.now() + EMAIL_OTP_TTL_MINUTES * 60_000);
 
-    // audit-#11: invalidate prior tokens, persist the new token, and record the outbound
-    // mail-outbox row (done inside the EMAIL_VERIFICATION_REQUESTED handler) as ONE atomic unit so
-    // a handler/Redis/process failure cannot invalidate the old link and leave a new valid token
-    // that was never delivered. Queue dispatch stays post-commit (handler schedules it).
+    // audit-#11: invalidate prior codes, persist the new one (hashed), and record the outbound email
+    // as ONE atomic unit so a handler/Redis/process failure cannot invalidate the old code and leave a
+    // new valid code that was never delivered. Queue dispatch stays post-commit (handler schedules it).
     await withTransaction((transaction) =>
       runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
         await this.verificationTokenRepository.invalidateAllForUser(user.id, 'EMAIL_VERIFICATION');
@@ -501,15 +524,15 @@ export class AuthMethodService {
           'EMAIL_VERIFICATION',
           user.id,
           user.email,
-          tokenHash,
+          hashEmailOtp(code),
           expiresAt,
         );
         await eventBus.emitStrict({
           type: AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED,
           payload: {
             email: user.email,
-            verification_token: rawToken,
-            expires_in_hours: EMAIL_VERIFICATION_EXPIRES_IN_HOURS,
+            otp_code: code,
+            expires_in_minutes: EMAIL_OTP_TTL_MINUTES,
           } satisfies EmailVerificationEmailPayload,
           timestamp: new Date(),
         });
