@@ -3,6 +3,7 @@ import { NotFoundError, UnauthorizedError, ValidationError } from '@/shared/erro
 import { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-method.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthMethodRepository } from '@/domains/auth/sub-domains/auth-method/auth-method.repository.js';
+import type { Redis } from 'ioredis';
 import type { VerificationTokenRepository } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.repository.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
 import type * as EventBusModule from '@/core/events/event-bus.js';
@@ -85,6 +86,7 @@ describe('AuthMethodService', () => {
     invalidateAllForUser: vi.fn().mockResolvedValue(undefined),
     create: vi.fn().mockResolvedValue({ id: 3 }),
     consumeIfValid: vi.fn(),
+    consumeOtpForUser: vi.fn(),
     findValidByTokenHash: vi.fn(),
     markUsed: vi.fn(),
   } as unknown as VerificationTokenRepository;
@@ -94,11 +96,19 @@ describe('AuthMethodService', () => {
     revokeAllSessionsExceptCurrent: vi.fn().mockResolvedValue(undefined),
   } as unknown as AuthSessionService;
 
+  // OTP verify uses a per-user attempt cap: `eval` (incrementWithExpiryOnFirst) returns the attempt
+  // count (1 = under the cap by default), `del` clears it on success.
+  const redis = {
+    eval: vi.fn().mockResolvedValue(1),
+    del: vi.fn().mockResolvedValue(0),
+  } as unknown as Redis;
+
   const service = new AuthMethodService(
     userService,
     authMethodRepository,
     verificationTokenRepository,
     authSessionService,
+    redis,
   );
 
   beforeEach(() => {
@@ -283,15 +293,18 @@ describe('AuthMethodService', () => {
     expect(userService.updatePassword).toHaveBeenCalled();
   });
 
-  it('AUTH-10: verifyEmail propagates a verified-flag update failure so the token consume rolls back', async () => {
-    vi.mocked(verificationTokenRepository.consumeIfValid).mockResolvedValue({
+  it('AUTH-10: verifyEmail propagates a verified-flag update failure so the code consume rolls back', async () => {
+    vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
+    vi.mocked(verificationTokenRepository.consumeOtpForUser).mockResolvedValue({
       token_type: 'EMAIL_VERIFICATION',
       user_id: user.id,
     } as never);
     vi.mocked(userService.updateEmailVerified).mockRejectedValueOnce(new Error('db error'));
-    await expect(service.verifyEmail({ token: 'verify-token' })).rejects.toThrow('db error');
-    // consumeIfValid ran inside the same transaction, so the single-use token is not burned.
-    expect(verificationTokenRepository.consumeIfValid).toHaveBeenCalled();
+    await expect(service.verifyEmail({ email: user.email, code: '123456' })).rejects.toThrow(
+      'db error',
+    );
+    // consumeOtpForUser ran inside the same transaction, so the single-use code is not burned.
+    expect(verificationTokenRepository.consumeOtpForUser).toHaveBeenCalled();
   });
 
   it('changePassword rejects when password auth disabled', async () => {
@@ -308,11 +321,12 @@ describe('AuthMethodService', () => {
   });
 
   it('verifyEmail and resendEmailVerification handle verification flow', async () => {
-    vi.mocked(verificationTokenRepository.consumeIfValid).mockResolvedValue({
+    vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
+    vi.mocked(verificationTokenRepository.consumeOtpForUser).mockResolvedValue({
       token_type: 'EMAIL_VERIFICATION',
       user_id: user.id,
     } as never);
-    const verified = await service.verifyEmail({ token: 'verify-token' });
+    const verified = await service.verifyEmail({ email: user.email, code: '123456' });
     expect(verified.messageKey).toBe('success:emailVerified');
 
     const resent = await service.resendEmailVerification('user_public');
@@ -380,28 +394,40 @@ describe('AuthMethodService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
-  it('verifyEmail throws when user record is missing after token consume', async () => {
-    vi.mocked(verificationTokenRepository.consumeIfValid).mockResolvedValue({
-      token_type: 'EMAIL_VERIFICATION',
-      user_id: user.id,
-    } as never);
-    vi.mocked(userService.findById).mockResolvedValue(null);
-    await expect(service.verifyEmail({ token: 'verify-token' })).rejects.toBeInstanceOf(
-      NotFoundError,
+  it('verifyEmail rejects an unknown email without leaking account existence', async () => {
+    vi.mocked(userService.findByEmail).mockResolvedValue(null);
+    await expect(
+      service.verifyEmail({ email: 'missing@example.com', code: '123456' }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it('verifyEmail rejects a wrong or expired code', async () => {
+    vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
+    vi.mocked(verificationTokenRepository.consumeOtpForUser).mockResolvedValue(null);
+    await expect(service.verifyEmail({ email: user.email, code: '000000' })).rejects.toBeInstanceOf(
+      UnauthorizedError,
     );
   });
 
-  it('sec-r5-L2: verifyEmail consumes scoped to the EMAIL_VERIFICATION token type', async () => {
-    // The repository filters the atomic consume by token_type, so a wrong-flow token
-    // (e.g. PASSWORD_RESET) never matches and returns null instead of being burned and
-    // then rejected. A null consume surfaces as UnauthorizedError.
-    vi.mocked(verificationTokenRepository.consumeIfValid).mockResolvedValue(null);
-    await expect(service.verifyEmail({ token: 'verify-token' })).rejects.toBeInstanceOf(
+  it('verifyEmail rejects once the per-user attempt cap is exceeded', async () => {
+    vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
+    vi.mocked(redis.eval).mockResolvedValueOnce(99);
+    await expect(service.verifyEmail({ email: user.email, code: '123456' })).rejects.toBeInstanceOf(
       UnauthorizedError,
     );
-    expect(verificationTokenRepository.consumeIfValid).toHaveBeenCalledWith(
-      expect.any(String),
+    // The cap short-circuits before any DB consume is attempted.
+    expect(verificationTokenRepository.consumeOtpForUser).not.toHaveBeenCalled();
+  });
+
+  it('verifyEmail consume is scoped to (user.id, EMAIL_VERIFICATION) — wrong-flow codes never match', async () => {
+    vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
+    vi.mocked(redis.eval).mockResolvedValueOnce(1);
+    vi.mocked(verificationTokenRepository.consumeOtpForUser).mockResolvedValue({} as never);
+    await service.verifyEmail({ email: user.email, code: '123456' });
+    expect(verificationTokenRepository.consumeOtpForUser).toHaveBeenCalledWith(
+      user.id,
       'EMAIL_VERIFICATION',
+      expect.any(String),
     );
   });
 

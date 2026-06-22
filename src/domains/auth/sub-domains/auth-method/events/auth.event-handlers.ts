@@ -93,17 +93,14 @@ async function handleEmailVerificationEmail(
     throw new ServiceUnavailableError('errors:mailNotConfigured');
   }
 
-  const frontendUrl = env.FRONTEND_URL ?? DEFAULT_FRONTEND_URL;
-  const verifyUrl = `${frontendUrl}/auth/email/verify?token=${payload.verification_token}`;
-
   await recordAndScheduleOutboxEmail(
     {
       to: payload.email,
       subject: i18next.t('mail:emailVerificationSubject', { lng: 'en' }),
       html: i18next.t('mail:emailVerificationHtml', {
         lng: 'en',
-        verifyUrl,
-        expiresInHours: payload.expires_in_hours,
+        code: payload.otp_code,
+        expiresInMinutes: payload.expires_in_minutes,
       }),
       tags: [{ name: 'category', value: 'email-verification' }],
     },

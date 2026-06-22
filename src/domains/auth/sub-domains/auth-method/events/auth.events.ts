@@ -22,9 +22,9 @@ export interface PasswordResetEmailPayload {
   expires_in_minutes: number;
 }
 
-/** Payload of `AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED`; carries the raw verification token and TTL hours used to build the email verify link. */
+/** Payload of `AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED`; carries the 6-digit verification code (persisted only as a hash) and the TTL minutes the email displays. */
 export interface EmailVerificationEmailPayload {
   email: string;
-  verification_token: string;
-  expires_in_hours: number;
+  otp_code: string;
+  expires_in_minutes: number;
 }
