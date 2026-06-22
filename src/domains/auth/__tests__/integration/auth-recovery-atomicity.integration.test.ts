@@ -113,5 +113,11 @@ describe('Auth recovery atomicity — password reset', () => {
     const body = response.json() as { data: { access_token?: string } };
     expect(body.data.access_token).toBeTruthy();
     expect(response.headers['set-cookie']).toBeDefined();
+    // The reset also marks the email verified — the reset token proves control of the address.
+    const [reset] = await database
+      .select({ is_email_verified: users.is_email_verified })
+      .from(users)
+      .where(eq(users.id, user.id));
+    expect(reset!.is_email_verified).toBe(true);
   });
 });

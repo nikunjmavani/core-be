@@ -66,6 +66,7 @@ describe('AuthMethodService', () => {
     findById: vi.fn().mockResolvedValue(user),
     updatePassword: vi.fn().mockResolvedValue(user),
     updateEmailVerified: vi.fn().mockResolvedValue(user),
+    updateLoginAttempt: vi.fn().mockResolvedValue(user),
   } as unknown as UserService;
 
   const authMethodRepository = {
@@ -239,6 +240,10 @@ describe('AuthMethodService', () => {
     } as never);
     await service.resetPassword({ token: 'reset-token', password: 'NewPassword123!' });
     expect(userService.updatePassword).toHaveBeenCalled();
+    // The reset token proves email control → mark verified; and the password changed → clear the
+    // failed-login lockout so the owner is not held out of the next sign-in.
+    expect(userService.updateEmailVerified).toHaveBeenCalledWith(user.public_id);
+    expect(userService.updateLoginAttempt).toHaveBeenCalledWith(user.public_id, 0, null);
     expect(authSessionService.revokeAllSessions).toHaveBeenCalledWith(user.public_id);
   });
 

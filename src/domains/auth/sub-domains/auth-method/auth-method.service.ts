@@ -79,9 +79,10 @@ const LOGIN_CAPABLE_METHOD_TYPES = new Set<string>([
  *   emits `AUTH_EVENT.PASSWORD_RESET_REQUESTED` and `AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED`
  *   (mail enqueue happens in the auth-method event handlers); rehashes user
  *   passwords via {@link UserService.updatePassword}. A password reset revokes
- *   all of the user's sessions; an authenticated change revokes every session
- *   except the caller's current one (or all sessions when no current token is
- *   supplied) via {@link AuthSessionService}.
+ *   all of the user's sessions, marks the email verified (the reset token proves email control), and
+ *   clears any failed-login lockout, then returns the user so the caller can auto-login; an
+ *   authenticated change revokes every session except the caller's current one (or all sessions when
+ *   no current token is supplied) via {@link AuthSessionService}.
  * - **Notes:** the forgot-password flow always returns the same success message
  *   even when the email is unknown, to prevent account enumeration. OAuth
  *   linkage is idempotent via {@link AuthMethodService.linkOAuthProviderIfMissing}.
@@ -429,13 +430,23 @@ export class AuthMethodService {
         if (!user) throw new NotFoundError('User');
 
         await this.userService.updatePassword(user.public_id, passwordHash);
+        // Completing a reset proves control of the email (the token was delivered there), so verify
+        // it — parity with magic-link / OAuth, and it unblocks an invited user from accepting their
+        // org invitation after recovering access.
+        await this.userService.updateEmailVerified(user.public_id);
+        // The password just changed, so any prior failed-login lockout is moot — clear the counter +
+        // lock window (mirrors a successful login) so the owner is not held out of the next sign-in.
+        const recovered = await this.userService.updateLoginAttempt(user.public_id, 0, null);
         await this.verificationTokenRepository.invalidateAllForUser(user.id, 'PASSWORD_RESET');
 
         // A reset is the recovery path for a potentially compromised account, so every existing
         // session is revoked. The Redis token-cache invalidation inside `revokeAllSessions` is a
         // sub-millisecond local call; on rollback it merely causes a cache miss, never a leak.
         await this.authSessionService.revokeAllSessions(user.public_id);
-        return user;
+        // `recovered` carries every in-transaction change (new password, verified flag, cleared
+        // lockout); fall back to the pre-update row only on the soft-deleted edge (guarded UPDATEs
+        // return null), where the caller's assertUserAccountActive then refuses a session anyway.
+        return recovered ?? user;
       }),
     );
   }

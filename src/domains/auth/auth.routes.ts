@@ -164,7 +164,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     schema: {
       summary: 'Reset password with token',
       description:
-        'Resets the user password using a valid reset token received via email, revokes all prior sessions, and logs the user in immediately (returns an access token and sets the session cookie). MFA-enabled users receive an mfa_required challenge instead of a session.',
+        'Resets the user password using a valid reset token received via email, revokes all prior sessions, marks the email verified (the token proves email control), clears any failed-login lockout, and logs the user in immediately (returns an access token and sets the session cookie). MFA-enabled users receive an mfa_required challenge instead of a session.',
       tags: ['Password'],
       body: ResetPasswordDto,
     },
