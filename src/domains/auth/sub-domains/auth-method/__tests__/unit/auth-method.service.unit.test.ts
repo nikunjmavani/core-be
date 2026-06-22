@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { NotFoundError, UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import {
+  ConflictError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from '@/shared/errors/index.js';
+import { MAX_LINKED_AUTH_METHODS_PER_USER } from '@/shared/constants/security.constants.js';
 import { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-method.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthMethodRepository } from '@/domains/auth/sub-domains/auth-method/auth-method.repository.js';
@@ -71,6 +77,8 @@ describe('AuthMethodService', () => {
 
   const authMethodRepository = {
     listByUserId: vi.fn().mockResolvedValue([]),
+    countActiveByUserId: vi.fn().mockResolvedValue(0),
+    acquireCredentialMutationLock: vi.fn().mockResolvedValue(undefined),
     create: vi.fn().mockResolvedValue({ id: 2 }),
     revoke: vi.fn().mockResolvedValue({ id: 2 }),
     revokeUnlessLastLoginCapable: vi.fn().mockResolvedValue({ id: 2 }),
@@ -231,6 +239,18 @@ describe('AuthMethodService', () => {
     const createArgs = vi.mocked(authMethodRepository.create).mock.calls.at(-1)?.[0];
     expect(createArgs).not.toHaveProperty('provider');
     expect(createArgs).not.toHaveProperty('provider_user_id');
+  });
+
+  it('rejects create once the per-user auth-method cap is reached (under the advisory lock)', async () => {
+    vi.mocked(authMethodRepository.countActiveByUserId).mockResolvedValueOnce(
+      MAX_LINKED_AUTH_METHODS_PER_USER,
+    );
+    await expect(
+      service.create('user_public', { method_type: 'MAGIC_LINK' }),
+    ).rejects.toBeInstanceOf(ConflictError);
+    // The lock is taken before the count, and no row is inserted when the cap is hit.
+    expect(authMethodRepository.acquireCredentialMutationLock).toHaveBeenCalledWith(user.id);
+    expect(authMethodRepository.create).not.toHaveBeenCalled();
   });
 
   it('rejects manual OAUTH linking (account-takeover guard)', async () => {

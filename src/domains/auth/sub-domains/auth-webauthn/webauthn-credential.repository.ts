@@ -1,5 +1,9 @@
-import { and, eq, isNull, lt } from 'drizzle-orm';
+import { and, eq, isNull, lt, sql } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import {
+  RESOURCE_QUOTA_LOCK_NAMESPACE,
+  acquireResourceQuotaLock,
+} from '@/infrastructure/database/resource-quota-lock.util.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
 import { capListWithWarning } from '@/shared/utils/infrastructure/list-cap.util.js';
@@ -45,6 +49,27 @@ export class WebauthnCredentialRepository {
       )
       .limit(1);
     return rows[0] ?? null;
+  }
+
+  async countActiveByUserId(userId: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ value: sql<number>`count(*)::int` })
+      .from(webauthn_credentials)
+      .where(
+        and(eq(webauthn_credentials.user_id, userId), isNull(webauthn_credentials.revoked_at)),
+      );
+    return rows[0]?.value ?? 0;
+  }
+
+  /**
+   * Takes the per-user WebAuthn-credential creation-quota advisory lock (auto-releases at commit).
+   *
+   * @remarks
+   * Must run inside the same transaction as the subsequent `countActiveByUserId` + `createCredential`
+   * so concurrent registrations cannot both pass the cap check and overshoot the per-user passkey cap.
+   */
+  async acquireCreationQuotaLock(userId: number): Promise<void> {
+    await acquireResourceQuotaLock(RESOURCE_QUOTA_LOCK_NAMESPACE.WEBAUTHN_CREDENTIAL, userId);
   }
 
   async createCredential(data: {

@@ -21,6 +21,8 @@ export const RESOURCE_QUOTA_LOCK_NAMESPACE = {
   ORGANIZATION_NOTIFICATION_POLICY: 0x4e_50_4f_4c,
   /** Organization webhook cap, keyed by organization id. ASCII `WHKS`. */
   WEBHOOK: 0x57_48_4b_53,
+  /** Per-user WebAuthn-credential cap, keyed by user id. ASCII `WBAN`. */
+  WEBAUTHN_CREDENTIAL: 0x57_42_41_4e,
 } as const;
 
 /**

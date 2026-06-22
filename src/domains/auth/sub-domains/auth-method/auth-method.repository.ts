@@ -31,6 +31,14 @@ export class AuthMethodRepository {
     });
   }
 
+  async countActiveByUserId(userId: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ value: sql<number>`count(*)::int` })
+      .from(auth_methods)
+      .where(and(eq(auth_methods.user_id, userId), isNull(auth_methods.revoked_at)));
+    return rows[0]?.value ?? 0;
+  }
+
   async listMfaByUserId(userId: number) {
     // audit #36: bound this user-self-scoped read (limit+1 + capListWithWarning).
     const rows = await getRequestDatabase()
