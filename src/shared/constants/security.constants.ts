@@ -39,6 +39,18 @@ export const MAX_WEBAUTHN_CREDENTIALS_PER_USER = 20;
 export const ACCOUNT_LOCKOUT_MINUTES = 30;
 
 /**
+ * Maximum concurrent active (non-revoked, non-expired) sessions per user.
+ *
+ * @remarks
+ * Each successful login mints a new session row. Without a ceiling a single account (or a holder of
+ * valid credentials) could mint unbounded sessions — table bloat plus a wide stolen-credential blast
+ * radius. On login the oldest sessions beyond this cap are evicted (revoked) rather than rejecting
+ * the login, so a legitimate multi-device user is never locked out — only their stalest session is
+ * dropped. Set generously so no normal user is affected; tune down for higher-assurance deployments.
+ */
+export const MAX_ACTIVE_SESSIONS_PER_USER = 30;
+
+/**
  * Failed MFA verification attempts (TOTP or recovery code) per user before MFA
  * verification is temporarily locked (audit-#12).
  *

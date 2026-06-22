@@ -24,6 +24,8 @@ export const RESOURCE_QUOTA_LOCK_NAMESPACE = {
   WEBHOOK: 0x57_48_4b_53,
   /** Per-user WebAuthn-credential cap, keyed by user id. ASCII `WBAN`. */
   WEBAUTHN_CREDENTIAL: 0x57_42_41_4e,
+  /** Per-user concurrent active-session cap, keyed by user id. ASCII `SESN`. */
+  AUTH_SESSION: 0x53_45_53_4e,
 } as const;
 
 /**
