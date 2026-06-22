@@ -1320,6 +1320,7 @@ src/
     │   │   └── full-seed.integration.test.ts
     │   ├── bulk-config.ts
     │   ├── bulk.ts
+    │   ├── ensure-demo-admin.ts
     │   ├── faker-data.ts
     │   ├── full.ts
     │   ├── helpers.ts
