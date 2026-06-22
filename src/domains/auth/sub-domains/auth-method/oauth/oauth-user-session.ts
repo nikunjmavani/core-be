@@ -23,7 +23,45 @@ import { provisionPersonalOrganization } from '@/domains/tenancy/sub-domains/org
 import type { OAuthProfile, OAuthProvider } from './oauth.types.js';
 import type { UserAuthRecord } from '@/domains/user/user.types.js';
 
-/** Final stage of an OAuth callback: finds-or-creates the user and idempotently links the OAuth provider (via {@link AuthMethodService.linkOAuthProviderIfMissing}) inside one {@link withTransaction} pinned through {@link runWithPinnedDatabaseHandle}, so a failed auth-method insert (e.g. the `method_type` CHECK) rolls back the freshly created user instead of leaving a verified orphan. AFTER that transaction commits, a first-time signup best-effort provisions the personal organization — it runs in a separate global-admin connection that cannot see an uncommitted user, so it must run post-commit — then mints an access token + persisted session via {@link completeFirstFactorAuth} so the issued token carries the personal-org claim. Inserts use {@link AUTH_METHOD_TYPE.OAUTH} to match the database CHECK constraint. Rejects disposable emails for first-time signups. Refuses to silently find-or-link into a pre-existing account whose email is not verified (unless that OAuth identity is already linked), throwing `ForbiddenError` to prevent account takeover. Rejects suspended/locked accounts with `UnauthorizedError('errors:accountNotActive')` before issuing a session. */
+/** Account-takeover guard + bare-placeholder claim for an OAuth find-or-link into a PRE-EXISTING account. Refuses to silently merge into an account whose email is unverified — throwing `ForbiddenError('errors:oauthLinkRequiresVerifiedAccount')` — UNLESS this OAuth identity is already linked, the account's email is already verified, or the account is a bare invited placeholder (no password and no login-capable method), which has no credential or data to take over and whose email the provider has now proven. A claimed bare placeholder has its email flipped to verified (parity with a fresh OAuth signup, and so the claimer can accept their org invite). Returns the (possibly re-read) user row and whether a bare placeholder was claimed. Extracted from {@link completeOAuthUserSession} to keep that function under the cognitive-complexity budget. */
+async function resolveExistingOAuthAccount(parameters: {
+  authMethodService: AuthMethodService;
+  userService: UserService;
+  existingUser: UserAuthRecord;
+  provider: OAuthProvider;
+  profile: OAuthProfile;
+}): Promise<{ user: UserAuthRecord; claimedBareAccount: boolean }> {
+  const { authMethodService, userService, provider, profile } = parameters;
+  let resolvedUser = parameters.existingUser;
+
+  const existingProviderMethod = await authMethodService.findByProviderUserId(
+    provider,
+    profile.provider_user_id,
+  );
+  const isOAuthIdentityAlreadyLinked = existingProviderMethod?.user_id === resolvedUser.id;
+  // A bare placeholder has no usable credential: no password AND no login-capable method. Check the
+  // password first so the DB round-trip for methods is skipped when a password already exists.
+  const hasUsableCredential =
+    Boolean(resolvedUser.password_hash) ||
+    (await authMethodService.hasLoginCapableMethod(resolvedUser.public_id));
+  const isUnclaimedBareAccount = !hasUsableCredential;
+  if (!(isOAuthIdentityAlreadyLinked || resolvedUser.is_email_verified || isUnclaimedBareAccount)) {
+    logger.warn({ email: profile.email, provider }, 'oauth.user.link_blocked_unverified_account');
+    throw new ForbiddenError('errors:oauthLinkRequiresVerifiedAccount');
+  }
+
+  // Claiming a bare invited placeholder: the provider verified the email, so mark it verified.
+  let claimedBareAccount = false;
+  if (isUnclaimedBareAccount && !resolvedUser.is_email_verified) {
+    const verified = await userService.updateEmailVerified(resolvedUser.public_id);
+    if (verified) resolvedUser = verified;
+    claimedBareAccount = true;
+  }
+
+  return { user: resolvedUser, claimedBareAccount };
+}
+
+/** Final stage of an OAuth callback: finds-or-creates the user and idempotently links the OAuth provider (via {@link AuthMethodService.linkOAuthProviderIfMissing}) inside one {@link withTransaction} pinned through {@link runWithPinnedDatabaseHandle}, so a failed auth-method insert (e.g. the `method_type` CHECK) rolls back the freshly created user instead of leaving a verified orphan. AFTER that transaction commits, a first-time signup — or a freshly-claimed bare invited placeholder — best-effort provisions the personal organization — it runs in a separate global-admin connection that cannot see an uncommitted user, so it must run post-commit — then mints an access token + persisted session via {@link completeFirstFactorAuth} so the issued token carries the personal-org claim. Inserts use {@link AUTH_METHOD_TYPE.OAUTH} to match the database CHECK constraint. Rejects disposable emails for first-time signups. Refuses to silently find-or-link into a pre-existing account whose email is not verified, throwing `ForbiddenError` to prevent account takeover — EXCEPT when this OAuth identity is already linked, or the account is a bare invited placeholder (no password and no login-capable method), which has no credential or data to take over and whose email the provider has now proven; that placeholder is claimed (its email flipped to verified). Rejects suspended/locked accounts with `UnauthorizedError('errors:accountNotActive')` before issuing a session. */
 export async function completeOAuthUserSession(parameters: {
   userService: UserService;
   authMethodService: AuthMethodService;
@@ -56,10 +94,11 @@ export async function completeOAuthUserSession(parameters: {
   // repository call shares the checkout), so a failed auth-method link rolls the freshly created user
   // back instead of leaving a verified orphan. Provisioning + session minting run AFTER the commit
   // (below) — they cannot run correctly inside this transaction.
-  const { user, isNewUser } = await withTransaction((transaction) =>
+  const { user, isNewUser, claimedBareAccount } = await withTransaction((transaction) =>
     runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
       let resolvedUser = await userService.findByEmail(normalizedEmail);
       let createdNow = false;
+      let claimedBare = false;
       if (!resolvedUser) {
         if (isDisposableEmailBlocked(normalizedEmail)) {
           throw new ForbiddenError('errors:disposableEmail');
@@ -77,22 +116,17 @@ export async function completeOAuthUserSession(parameters: {
         createdNow = true;
         logger.info({ email: normalizedEmail, provider }, 'oauth.user.created');
       } else {
-        // Account-takeover guard: a pre-existing account (e.g. created by password) must not be
-        // silently merged into via find-or-link. Only auto-link when this OAuth identity is already
-        // linked to the account, or the account's email is already verified (proving the account
-        // owner controls the address). Otherwise require explicit linking from an authenticated session.
-        const existingProviderMethod = await authMethodService.findByProviderUserId(
+        // Pre-existing account: enforce the takeover guard and, for a bare invited placeholder, claim
+        // it (verify its email). Extracted to keep this function under the complexity budget.
+        const resolved = await resolveExistingOAuthAccount({
+          authMethodService,
+          userService,
+          existingUser: resolvedUser,
           provider,
-          profile.provider_user_id,
-        );
-        const isOAuthIdentityAlreadyLinked = existingProviderMethod?.user_id === resolvedUser.id;
-        if (!(isOAuthIdentityAlreadyLinked || resolvedUser.is_email_verified)) {
-          logger.warn(
-            { email: profile.email, provider },
-            'oauth.user.link_blocked_unverified_account',
-          );
-          throw new ForbiddenError('errors:oauthLinkRequiresVerifiedAccount');
-        }
+          profile,
+        });
+        resolvedUser = resolved.user;
+        claimedBare = resolved.claimedBareAccount;
       }
 
       await authMethodService.linkOAuthProviderIfMissing({
@@ -112,16 +146,18 @@ export async function completeOAuthUserSession(parameters: {
       // soft-deleted users (sec-U1 defense in depth).
       assertUserAccountActive({ status: resolvedUser.status, deleted_at: resolvedUser.deleted_at });
 
-      return { user: resolvedUser, isNewUser: createdNow };
+      return { user: resolvedUser, isNewUser: createdNow, claimedBareAccount: claimedBare };
     }),
   );
 
-  // Account-level personal organization for a NEW user — provisioned AFTER the user commits. It runs
+  // Account-level personal organization for a first-time onboard — a brand-new OAuth user OR a
+  // freshly-claimed bare invited placeholder (which `findOrCreateInvitedByEmail` created without one,
+  // so the claimer would otherwise have no personal org). Provisioned AFTER the user commits: it runs
   // in a SEPARATE global-admin transaction (its own pool connection) which cannot see an uncommitted
   // user, so doing it inside the transaction above always FK-failed and was silently swallowed;
-  // post-commit it succeeds. Best-effort: a failure must not fail signup (the partial unique index
-  // makes a retry idempotent and tool:backfill-personal-orgs recovers a miss). Team-only mode skips it.
-  if (isNewUser && env.PERSONAL_ORGANIZATION_ENABLED) {
+  // post-commit it succeeds. Best-effort + idempotent (the partial unique index makes a retry a no-op
+  // and tool:backfill-personal-orgs recovers a miss). Team-only mode skips it.
+  if ((isNewUser || claimedBareAccount) && env.PERSONAL_ORGANIZATION_ENABLED) {
     try {
       await provisionPersonalOrganization(user.id);
       logger.info({ userId: user.public_id, provider }, 'oauth.user.personal_org_provisioned');
