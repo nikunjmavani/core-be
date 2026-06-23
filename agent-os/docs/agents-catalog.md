@@ -1,6 +1,6 @@
 # Agent catalog (core-be)
 
-All 9 project agents. Each is read-only; most wrap a project skill (verifier and changelog-reviewer are inline).
+All 10 project agents. Each is read-only; most wrap a project skill (verifier, changelog-reviewer, and stack-monitor are inline).
 See [platform-access.md](platform-access.md) for how to invoke on each platform.
 
 | Agent | File | Wraps skill | Use when |
@@ -14,3 +14,4 @@ See [platform-access.md](platform-access.md) for how to invoke on each platform.
 | **dependency-auditor** | [`agent-os/agents/dependency-auditor.md`](../agents/dependency-auditor.md) | dependency-security | `pnpm audit` — vulnerabilities + prioritized fix plan |
 | **tsdoc-coverage-reviewer** | [`agent-os/agents/tsdoc-coverage-reviewer.md`](../agents/tsdoc-coverage-reviewer.md) | tsdoc-export-guard *(check phase)* | TSDoc gap scan — missing summaries and @remarks |
 | **changelog-reviewer** | [`agent-os/agents/changelog-reviewer.md`](../agents/changelog-reviewer.md) | *(inline)* | Verify CHANGELOG.md vs git log / merged PR titles — gap report |
+| **stack-monitor** | [`agent-os/agents/stack-monitor.md`](../agents/stack-monitor.md) | *(inline)* | Periodic / continuous stack monitoring — health verdict + anomalies from the dashboards MCP data tools (never the HTML UI) |
