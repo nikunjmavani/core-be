@@ -6,6 +6,63 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.14](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.13...v4.10.0-dev.14) (2026-06-23)
+
+
+### Added
+
+* **agent-os:** add stack-monitor sub-agent for data-driven stack monitoring ([#787](https://github.com/nikunjmavani/core-be/issues/787)) ([0d62e6d](https://github.com/nikunjmavani/core-be/commit/0d62e6d38c7b75d0942292b952322a4d84c075d9))
+* **auth,tenancy:** claim invited account on signup + verified-email accept gate ([3803076](https://github.com/nikunjmavani/core-be/commit/38030763ad88db57db6dbc5c32989aab5493fded))
+* **auth,tenancy:** switch endpoints return active-org delta; accept returns organization_id ([#789](https://github.com/nikunjmavani/core-be/issues/789)) ([75e3c69](https://github.com/nikunjmavani/core-be/commit/75e3c699732e20ccd9410e1f844886130ef59a76))
+* **auth:** add email OTP primitive (6-digit code generation + scoped consume) ([df747c2](https://github.com/nikunjmavani/core-be/commit/df747c20e329b0c8675c0642d45938e73f85ebf9))
+* **auth:** add POST /auth/signup (email/password signup with auto-login) ([0c32fb2](https://github.com/nikunjmavani/core-be/commit/0c32fb2f6b70eae69a4caf01d4460590a30c6b88))
+* **auth:** audit MFA outcomes, recovery-code use, API-key lifecycle, org-switch, passkey register, reset ([9a5a3a4](https://github.com/nikunjmavani/core-be/commit/9a5a3a495078e1a170914d273ec355005edb861a))
+* **auth:** auto-login after password reset (MFA-safe) + document invite-squatting risk ([22d1ce5](https://github.com/nikunjmavani/core-be/commit/22d1ce50b78dc48c21d8e059ce6e1db0b82bdd28))
+* **auth:** email verification via 6-digit OTP (replaces the token link) ([e3939a1](https://github.com/nikunjmavani/core-be/commit/e3939a109a3c6c70c9329a539b191ce92c1ac506))
+* **auth:** magic-link via 6-digit OTP + auto-signup ([52f87f7](https://github.com/nikunjmavani/core-be/commit/52f87f7624781c4437488d0b1768ec33d3c61249))
+* **auth:** OTP login + signup, invitation onboarding, and auth security hardening ([b4faba6](https://github.com/nikunjmavani/core-be/commit/b4faba64d8c3d5710f6d89d542a7cfaf81f928f2))
+* **billing:** auto-suspend excess members on over-cap downgrade (F2) ([9877d24](https://github.com/nikunjmavani/core-be/commit/9877d24b545677aa404964812a1c6320d7ff20b4))
+* **billing:** auto-suspend excess members on over-cap downgrade (F2) ([f3496d5](https://github.com/nikunjmavani/core-be/commit/f3496d5a5e243da3974390424f702dd4c61deeee))
+* **billing:** entitlement seat-ceiling — Free-tier cap for unsubscribed + dunning grace (F3/F4) ([8092bd0](https://github.com/nikunjmavani/core-be/commit/8092bd03d0c3bc2914d492ece991bb1293578ccb))
+* **billing:** entitlement seat-ceiling — Free-tier cap for unsubscribed + dunning grace (F3/F4) ([1b808eb](https://github.com/nikunjmavani/core-be/commit/1b808eb590e7addad983e6ce37d675236b5d0329))
+* **dev:** resizable + draggable dashboard panel grid (gridstack) ([#785](https://github.com/nikunjmavani/core-be/issues/785)) ([0b3b77c](https://github.com/nikunjmavani/core-be/commit/0b3b77c109a4780a649b390cc79cd9397178dc74))
+* **tenancy,billing:** personal-org billing guard + can_manage_billing capability ([#788](https://github.com/nikunjmavani/core-be/issues/788)) ([3f10347](https://github.com/nikunjmavani/core-be/commit/3f10347060cd60f8b49e4b09c10bec379c562ff0))
+
+
+### Fixed
+
+* **api:** idempotency error responses emit the standard meta envelope + snake_case (audit api-contract-[#1](https://github.com/nikunjmavani/core-be/issues/1)) ([1502cc2](https://github.com/nikunjmavani/core-be/commit/1502cc2b5cc8338ad7149cd5cfdbb60dd777141e))
+* **api:** idempotency error responses emit the standard meta envelope + snake_case (audit api-contract-[#1](https://github.com/nikunjmavani/core-be/issues/1)) ([a5f8a5f](https://github.com/nikunjmavani/core-be/commit/a5f8a5f65790c06a623161e535722c4528bb98e9))
+* **auth:** cap concurrent sessions per user with oldest-eviction on login ([c402ad7](https://github.com/nikunjmavani/core-be/commit/c402ad792b4dbfbfee5c31341aa436aefc41d8c7))
+* **auth:** cap linked auth-methods + passkeys, trim error-log free-text, guard signup over-post ([638aed7](https://github.com/nikunjmavani/core-be/commit/638aed78f20a24e0ffe355b2df4ef025938d5fa9))
+* **auth:** claim bare invited accounts via OAuth + reset OTP attempt cap on resend ([d81cb45](https://github.com/nikunjmavani/core-be/commit/d81cb450a390ee136bea1f616380d260a19cc5b5))
+* **auth:** count passkeys when classifying a claimable bare account ([1256247](https://github.com/nikunjmavani/core-be/commit/12562478b4e47f5fde89246bc5ab1195b2481154))
+* **auth:** enforce OTP/magic-link resend cooldown (wire the dead constant) ([eef15a9](https://github.com/nikunjmavani/core-be/commit/eef15a915513e5f06e433d2a0c64a79003b2f453))
+* **auth:** provision personal org after the OAuth signup commit (FK visibility) ([feda7a5](https://github.com/nikunjmavani/core-be/commit/feda7a5fb5e44aa52efc428eb4fad4a36cfbd67f))
+* **auth:** provision personal org after the signup commit (FK visibility) ([6e0c626](https://github.com/nikunjmavani/core-be/commit/6e0c626af059d26bb9d45ca66de6f43ffb372e29))
+* **auth:** provision personal org on first magic-link verification ([c051df5](https://github.com/nikunjmavani/core-be/commit/c051df5bfad9d397e6e1606807c50033b129e5e0))
+* **auth:** re-derive super-admin with the same email-verified gate as minting ([907daf7](https://github.com/nikunjmavani/core-be/commit/907daf7fc8295e16afb37689c1126b93af981174))
+* **auth:** verify email + clear failed-login lockout on password reset ([77d1594](https://github.com/nikunjmavani/core-be/commit/77d15949dc0a87292d6ac2111a39958694a91757))
+* **dev:** stop a stale event-loop peak lingering on the dashboard ([#783](https://github.com/nikunjmavani/core-be/issues/783)) ([a1ac4d2](https://github.com/nikunjmavani/core-be/commit/a1ac4d2278fa89a9dd95c97728471ecdd097e970))
+* magic-link Redis resilience, flaky test teardown, and local-startup blockers ([#791](https://github.com/nikunjmavani/core-be/issues/791)) ([e0917ba](https://github.com/nikunjmavani/core-be/commit/e0917ba42b136bcee4c969a4eeb2388b66279296))
+* **user:** serialize concurrent notification-preferences replace (+ local dashboards hardening) ([#780](https://github.com/nikunjmavani/core-be/issues/780)) ([a617c9d](https://github.com/nikunjmavani/core-be/commit/a617c9dd1820871180d7736cfa916a8643094098))
+
+
+### Performance
+
+* **db:** index attribution FK columns for online user deletes ([#781](https://github.com/nikunjmavani/core-be/issues/781)) ([dd7efac](https://github.com/nikunjmavani/core-be/commit/dd7efac9ea5a338b650ea2147c8cdd7cf104fa74))
+
+
+### Documentation
+
+* add route-effects-by-mode table; fix switch-to-personal status ([c9125b9](https://github.com/nikunjmavani/core-be/commit/c9125b9ba685861c745c5dc6d57c23247ebc654c))
+* **api-reference:** correct overview to match the implemented /reference UI ([2eda32b](https://github.com/nikunjmavani/core-be/commit/2eda32b7aafd7a23993ef737039a3a31402dc5bf))
+* document organization capability flags (B2C/B2B/hybrid mode) ([dbbb193](https://github.com/nikunjmavani/core-be/commit/dbbb193f5c64dd51ab9005222fd44b114bb5d0f9))
+* **frontend-auth-guide:** document the new-user invited join flow ([#790](https://github.com/nikunjmavani/core-be/issues/790)) ([f8a22e3](https://github.com/nikunjmavani/core-be/commit/f8a22e329fee5bf10fe652c842ef9540499b1ce1))
+* mark seat-entitlement policy as shipped + resolve open considerations ([830b457](https://github.com/nikunjmavani/core-be/commit/830b457e4087f10ea17017e4777ce764d837363c))
+* mark seat-entitlement policy as shipped + resolve open considerations ([c4f4790](https://github.com/nikunjmavani/core-be/commit/c4f47903f6c6fd97037f736567d24c27baf986a4))
+* rename personal-team-organizations -&gt; personal-vs-team-organizations ([ef04d39](https://github.com/nikunjmavani/core-be/commit/ef04d39a358b7f5abeb15b0a359ce04c9c6b091f))
+
 ## [4.10.0-dev.13](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.12...v4.10.0-dev.13) (2026-06-22)
 
 
