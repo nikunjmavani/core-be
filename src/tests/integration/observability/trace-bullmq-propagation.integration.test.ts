@@ -34,6 +34,9 @@ describe('Integration: trace context propagation to BullMQ', () => {
         organizationPublicId: 'org_public_123',
         requestId: 'req-correlation-abc',
       }),
+      // enqueueNotification dedupes on a stable jobId (audit PR-5, commit f5649a2)
+      // so a redelivery of the same persisted notification is a BullMQ no-op.
+      expect.objectContaining({ jobId: 'notification-42' }),
     );
   });
 });
