@@ -119,3 +119,6 @@ outputs/
 
 # vendored Tailwind Play CDN for the local dashboards hub (regenerable: curl https://cdn.tailwindcss.com)
 tooling/dev/dashboards/tailwind.js
+# vendored gridstack for the resizable dashboard grid (regenerable: curl https://cdn.jsdelivr.net/npm/gridstack@11/dist/gridstack-all.min.js + .../gridstack.min.css)
+tooling/dev/dashboards/gridstack.js
+tooling/dev/dashboards/gridstack.css
