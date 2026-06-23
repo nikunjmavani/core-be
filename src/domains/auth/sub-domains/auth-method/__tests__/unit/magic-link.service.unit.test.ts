@@ -205,6 +205,33 @@ describe('MagicLinkService', () => {
     expect(vi.mocked(eventBus.emitStrict)).not.toHaveBeenCalled();
   });
 
+  it('send fails open and still issues a code when the cooldown Redis SET rejects (Redis down)', async () => {
+    // The shared Redis client uses enableOfflineQueue:false, so a blip rejects the SET NX
+    // immediately. send() must NOT surface a 500 — it fails open (treats the cooldown slot as
+    // claimed) so passwordless login keeps working; the per-IP/per-email rate limits remain the
+    // mail-bomb backstop and the email enqueue degrades to the durable outbox path.
+    vi.mocked(redis.set).mockRejectedValueOnce(new Error("Stream isn't writeable"));
+    vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
+
+    const result = await service.send({ email: user.email });
+
+    expect(result.messageKey).toBe('success:magicLinkEmailSent');
+    expect(verificationTokenRepository.create).toHaveBeenCalled();
+    expect(vi.mocked(eventBus.emitStrict)).toHaveBeenCalledTimes(1);
+  });
+
+  it('send does not fail when the best-effort attempt-counter reset rejects (Redis down)', async () => {
+    // The counter del runs after the issue commits and is best-effort (the key self-expires via
+    // TTL), so a Redis rejection here must be swallowed rather than turned into a 500.
+    vi.mocked(redis.del).mockRejectedValueOnce(new Error("Stream isn't writeable"));
+    vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
+
+    const result = await service.send({ email: user.email });
+
+    expect(result.messageKey).toBe('success:magicLinkEmailSent');
+    expect(vi.mocked(eventBus.emitStrict)).toHaveBeenCalledTimes(1);
+  });
+
   it('send enforces a constant-time floor on both account-existence branches', async () => {
     const { enforceMinimumDuration } = await import(
       '@/shared/utils/security/anti-enumeration.util.js'
