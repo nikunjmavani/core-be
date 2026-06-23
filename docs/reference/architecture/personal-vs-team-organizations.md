@@ -86,12 +86,19 @@ not listed operates on the active org regardless of type.
 | `POST /tenancy/organization/memberships` | **422** | 201 team · **422** personal | 201 |
 | `POST /tenancy/organization/roles` | **422** | 201 team · **422** personal | 201 |
 | `POST /tenancy/organization/transfer-ownership` | **422** | 201 team · **422** personal | 201 |
+| `POST /billing/subscriptions` | **422** | 201 team · **422** personal | 201 |
+| `POST /billing/subscriptions/{subscription_id}/change-plan` | **422** | 201 team · **422** personal | 201 |
+| `POST /billing/subscriptions/{subscription_id}/cancel` | **422** | 201 team · **422** personal | 201 |
+| `POST /billing/subscriptions/{subscription_id}/resume` | **422** | 201 team · **422** personal | 201 |
 
 The 422s come from the org-type guard: `personalOrganizationNoMembers`
-(invitations / memberships), `personalOrganizationNoRoles` (roles), and
-`personalOrganizationImmutable` (delete / transfer-ownership). All other routes — auth,
+(invitations / memberships), `personalOrganizationNoRoles` (roles),
+`personalOrganizationImmutable` (delete / transfer-ownership), and
+`personalOrganizationNoBilling` (subscription create / change-plan / cancel / resume —
+a personal org cannot manage billing). All other routes — auth,
 `/users/*`, the rest of `/tenancy/organization/*` (settings, logo, api-keys, audit-logs,
-notification-policies, membership / role reads, leave), `/billing/*`, `/notify/*`,
+notification-policies, membership / role reads, leave), the rest of `/billing/*` (plan
+catalog, subscription reads + PATCH update, Stripe webhook), `/notify/*`,
 `/uploads/*`, `/audit/*` — behave identically in all three modes.
 
 ### Switching mode after launch

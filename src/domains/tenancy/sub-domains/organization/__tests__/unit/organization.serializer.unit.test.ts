@@ -33,6 +33,7 @@ describe('organization serializers', () => {
         can_manage_roles: true,
         can_transfer_ownership: true,
         can_delete: true,
+        can_manage_billing: true,
       },
       created_at: createdAt.toISOString(),
       updated_at: updatedAt.toISOString(),
@@ -57,6 +58,7 @@ describe('organization serializers', () => {
       can_manage_roles: false,
       can_transfer_ownership: false,
       can_delete: false,
+      can_manage_billing: false,
     });
   });
 

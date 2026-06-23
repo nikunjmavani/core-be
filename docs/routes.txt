@@ -69,12 +69,12 @@ Legend:
   GET    /api/v1/billing/plans                                    200  -    both  PUBLIC
   GET    /api/v1/billing/plans/:plan_id                           200  -    both  PUBLIC
   GET    /api/v1/billing/subscriptions                            200  -    both  PERM: subscription:read
-  POST   /api/v1/billing/subscriptions                            201  req  both  PERM: subscription:manage
+  POST   /api/v1/billing/subscriptions                            201  req  team  PERM: subscription:manage
   GET    /api/v1/billing/subscriptions/:subscription_id           200  -    both  PERM: subscription:read
   PATCH  /api/v1/billing/subscriptions/:subscription_id           200  -    both  PERM: subscription:manage
-  POST   /api/v1/billing/subscriptions/:subscription_id/cancel    201  req  both  PERM: subscription:manage
-  POST   /api/v1/billing/subscriptions/:subscription_id/change-plan  201  req  both  PERM: subscription:manage
-  POST   /api/v1/billing/subscriptions/:subscription_id/resume    201  req  both  PERM: subscription:manage
+  POST   /api/v1/billing/subscriptions/:subscription_id/cancel    201  req  team  PERM: subscription:manage
+  POST   /api/v1/billing/subscriptions/:subscription_id/change-plan  201  req  team  PERM: subscription:manage
+  POST   /api/v1/billing/subscriptions/:subscription_id/resume    201  req  team  PERM: subscription:manage
   POST   /api/v1/billing/webhook                                  200  -    both  PUBLIC
 
 ================================================================================
@@ -220,7 +220,7 @@ Legend:
   Role-guarded    : 9
   Perm-guarded    : 48
   Token-guarded   : 4
-  Team-only (O)   : 4
+  Team-only (O)   : 8
 
 ================================================================================
   IDEMPOTENCY-REQUIRED WRITES (12) — X-Idempotency-Key required

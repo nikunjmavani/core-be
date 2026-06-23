@@ -16,6 +16,7 @@ const organization = (id: string, type: 'PERSONAL' | 'TEAM'): OrganizationOutput
     can_manage_roles: type === 'TEAM',
     can_transfer_ownership: type === 'TEAM',
     can_delete: type === 'TEAM',
+    can_manage_billing: type === 'TEAM',
   },
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',

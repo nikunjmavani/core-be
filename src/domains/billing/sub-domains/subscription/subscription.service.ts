@@ -29,6 +29,7 @@ const DUNNING_STATUSES = new Set<string>(['PAST_DUE', 'UNPAID', 'INCOMPLETE']);
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
+import { assertTeamOrganization } from '@/domains/tenancy/sub-domains/organization/organization-capability.js';
 import type { PlanService } from '@/domains/billing/sub-domains/plan/plan.service.js';
 import type { PaymentProvider } from './payment-provider.port.js';
 import type { SubscriptionRepository } from './subscription.repository.js';
@@ -127,7 +128,10 @@ function assertProviderPriceForStripeBackedPlanChange(
  *   accept a repository override so the webhook worker can pass its own
  *   worker-scoped handle.
  * - **Failure modes:** Throws {@link NotFoundError} when the organization,
- *   plan, or subscription cannot be loaded. On `create`, throws
+ *   plan, or subscription cannot be loaded. The mutating operations (`create` /
+ *   `changePlan` / `cancel` / `resume`) first reject a PERSONAL organization with
+ *   422 via `assertTeamOrganization(organization, 'BILLING')` — billing is a
+ *   team-only capability (`can_manage_billing: false` for PERSONAL). On `create`, throws
  *   {@link ConflictError} (`errors:subscriptionAlreadyExists`) when the
  *   organization already has a non-terminal subscription (checked before the
  *   Stripe call) or when a concurrent create loses the partial-unique-index
@@ -522,6 +526,9 @@ export class SubscriptionService {
       async () => {
         const organization =
           await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        // Personal organizations cannot manage billing (capability `can_manage_billing: false`).
+        // Reject before the Stripe call so a personal org gets 422, not a churned provider call.
+        assertTeamOrganization(organization, 'BILLING');
         // Reject before the Stripe call when a non-terminal subscription already
         // exists, so a duplicate request never churns the payment provider.
         const existingActive = await this.repository.findActiveByOrganization(organization.id);
@@ -677,6 +684,9 @@ export class SubscriptionService {
       await withOrganizationDatabaseContext(organization_public_id, async () => {
         const organization =
           await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        // Personal organizations cannot manage billing — reject before the subscription
+        // lookup so a personal org gets 422 (capability unavailable), not 404.
+        assertTeamOrganization(organization, 'BILLING');
         const plan = await this.planService.requireActivePlanByPublicId(parsed.plan_id);
         const subscription = await this.repository.findByPublicId(
           subscription_public_id,
@@ -773,6 +783,9 @@ export class SubscriptionService {
       async () => {
         const organization =
           await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        // Personal organizations cannot manage billing — reject before the subscription
+        // lookup so a personal org gets 422 (capability unavailable), not 404.
+        assertTeamOrganization(organization, 'BILLING');
         const subscription = await this.repository.findByPublicId(
           subscription_public_id,
           organization.id,
@@ -892,6 +905,9 @@ export class SubscriptionService {
       async () => {
         const organization =
           await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        // Personal organizations cannot manage billing — reject before the subscription
+        // lookup so a personal org gets 422 (capability unavailable), not 404.
+        assertTeamOrganization(organization, 'BILLING');
         const subscription = await this.repository.findByPublicId(
           subscription_public_id,
           organization.id,

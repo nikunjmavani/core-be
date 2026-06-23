@@ -10,6 +10,7 @@
   "personalOrganizationImmutable": "Tu organización personal no se puede eliminar ni transferir; solo se elimina cuando eliminas tu cuenta.",
   "personalOrganizationNoMembers": "Tu organización personal no puede tener miembros adicionales; crea una organización de equipo para colaborar con otros.",
   "personalOrganizationNoRoles": "Tu organización personal no puede definir roles personalizados; crea una organización de equipo para gestionar roles y miembros.",
+  "personalOrganizationNoBilling": "Tu organización personal no puede gestionar una suscripción; crea una organización de equipo para configurar la facturación.",
   "teamOrganizationsDisabled": "Las organizaciones de equipo no están habilitadas en este despliegue.",
   "mfaStepUpRequired": "Se requiere autenticación multifactor para esta confirmación; verifica a través del endpoint MFA en lugar de la contraseña.",
   "lastMfaRequiredByOrganization": "No puedes eliminar tu último método MFA mientras tu organización requiere MFA. Desactiva primero el requisito de MFA a nivel de organización o transfiere tu membresía.",

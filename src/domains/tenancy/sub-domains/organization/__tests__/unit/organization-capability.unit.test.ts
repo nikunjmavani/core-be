@@ -14,6 +14,7 @@ describe('organizationCapabilities', () => {
       can_manage_roles: true,
       can_transfer_ownership: true,
       can_delete: true,
+      can_manage_billing: true,
     });
   });
 
@@ -24,6 +25,7 @@ describe('organizationCapabilities', () => {
       can_manage_roles: false,
       can_transfer_ownership: false,
       can_delete: false,
+      can_manage_billing: false,
     });
   });
 });
@@ -33,12 +35,14 @@ describe('assertTeamOrganization', () => {
     expect(() => assertTeamOrganization({ type: 'TEAM' }, 'MEMBERS')).not.toThrow();
     expect(() => assertTeamOrganization({ type: 'TEAM' }, 'ROLES')).not.toThrow();
     expect(() => assertTeamOrganization({ type: 'TEAM' }, 'MUTATION')).not.toThrow();
+    expect(() => assertTeamOrganization({ type: 'TEAM' }, 'BILLING')).not.toThrow();
   });
 
   it.each<[OrganizationCapability, string]>([
     ['MEMBERS', 'errors:personalOrganizationNoMembers'],
     ['ROLES', 'errors:personalOrganizationNoRoles'],
     ['MUTATION', 'errors:personalOrganizationImmutable'],
+    ['BILLING', 'errors:personalOrganizationNoBilling'],
   ])('rejects %s on a PERSONAL organization with 422 and key %s', (capability, messageKey) => {
     let caught: unknown;
     try {

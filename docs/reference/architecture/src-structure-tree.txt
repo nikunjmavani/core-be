@@ -393,6 +393,7 @@ src/
     │   │   │       │   ├── subscription.repository.unit.test.ts
     │   │   │       │   ├── subscription.serializer.shape.unit.test.ts
     │   │   │       │   ├── subscription.serializer.unit.test.ts
+    │   │   │       │   ├── subscription.service.billing-guard.unit.test.ts
     │   │   │       │   ├── subscription.service.cancel-resume.unit.test.ts
     │   │   │       │   ├── subscription.service.seats.unit.test.ts
     │   │   │       │   ├── subscription.service.stripe-reconciliation.unit.test.ts

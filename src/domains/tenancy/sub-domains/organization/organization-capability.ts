@@ -8,8 +8,9 @@ import { UnprocessableEntityError } from '@/shared/errors/index.js';
  * - `MEMBERS` — add or invite a second member (collaboration).
  * - `ROLES` — create or manage custom member roles.
  * - `MUTATION` — owner-level structural change (delete or transfer ownership).
+ * - `BILLING` — manage the organization subscription (create / change plan / cancel / resume).
  */
-export type OrganizationCapability = 'MEMBERS' | 'ROLES' | 'MUTATION';
+export type OrganizationCapability = 'MEMBERS' | 'ROLES' | 'MUTATION' | 'BILLING';
 
 /**
  * Public, type-derived capability flags embedded on every serialized organization.
@@ -27,6 +28,8 @@ export interface OrganizationCapabilities {
   can_transfer_ownership: boolean;
   /** TEAM organizations can be deleted on their own; a PERSONAL org cascades with the account only. */
   can_delete: boolean;
+  /** TEAM organizations can manage a subscription (create / change plan / cancel / resume); PERSONAL cannot. */
+  can_manage_billing: boolean;
 }
 
 /** Organization `type` for a single-owner account workspace (no collaboration). */
@@ -39,6 +42,7 @@ const CAPABILITY_REJECTION_KEY: Record<OrganizationCapability, string> = {
   MEMBERS: 'errors:personalOrganizationNoMembers',
   ROLES: 'errors:personalOrganizationNoRoles',
   MUTATION: 'errors:personalOrganizationImmutable',
+  BILLING: 'errors:personalOrganizationNoBilling',
 };
 
 /**
@@ -64,6 +68,7 @@ export function organizationCapabilities(type: string): OrganizationCapabilities
     can_manage_roles: isTeam,
     can_transfer_ownership: isTeam,
     can_delete: isTeam,
+    can_manage_billing: isTeam,
   };
 }
 
@@ -84,8 +89,8 @@ export function organizationCapabilities(type: string): OrganizationCapabilities
  * - **Side effects:** none (pure guard; throws or returns).
  * - **Notes:** single source for the personal-vs-team rule shared by
  *   member-invitation, membership (add member / transfer ownership), member-role,
- *   and organization delete, so enforcement and {@link organizationCapabilities}
- *   never drift.
+ *   organization delete, and subscription billing (create / change-plan / cancel /
+ *   resume), so enforcement and {@link organizationCapabilities} never drift.
  */
 export function assertTeamOrganization(
   organization: { type: string },
