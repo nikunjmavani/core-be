@@ -120,13 +120,26 @@ export class MagicLinkService {
     const cooldownKey = `${MAGIC_LINK_SEND_COOLDOWN_KEY_PREFIX}${createHash('sha256')
       .update(parsed.email)
       .digest('hex')}`;
-    const cooldownClaimed = await this.redis.set(
-      cooldownKey,
-      '1',
-      'EX',
-      EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
-      'NX',
-    );
+    let cooldownClaimed: string | null;
+    try {
+      cooldownClaimed = await this.redis.set(
+        cooldownKey,
+        '1',
+        'EX',
+        EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
+        'NX',
+      );
+    } catch (error) {
+      // Redis unavailable — the shared client runs with enableOfflineQueue:false, so a blip
+      // (failover, maintenance, brief partition) rejects this SET immediately. Fail OPEN: a
+      // transient Redis outage must not turn passwordless login into a 500. The per-IP and
+      // per-email rate limits (whose store already degrades to an in-process counter) remain the
+      // mail-bomb backstop; losing only the finer per-email cooldown spacing is the availability
+      // trade-off. Treating the slot as claimed lets the code issue + the email enqueue proceed
+      // (the enqueue then degrades to the durable outbox sweeper if BullMQ/Redis is still down).
+      logger.warn({ err: error }, 'magic_link.send.cooldown_unavailable');
+      cooldownClaimed = 'OK';
+    }
     if (cooldownClaimed) {
       // Auto-signup: an unknown email creates a new passwordless user (mirrors OAuth find-or-create).
       // New and existing users then run the identical issue-code path, so the response body cannot
@@ -235,7 +248,25 @@ export class MagicLinkService {
     // means an attacker who burned the cap against the prior code cannot keep the legitimate owner
     // locked out — requesting a new code restores their attempts. Brute-force is unaffected (each new
     // code is an independent random target, and `send` is itself per-email + per-IP rate-limited).
-    await this.redis.del(`${MAGIC_LINK_OTP_VERIFY_ATTEMPT_KEY_PREFIX}${user.id}`);
+    await this.clearOtpVerifyAttemptCounter(user.id);
+  }
+
+  /**
+   * Best-effort reset of the per-user magic-link OTP verify-attempt counter.
+   *
+   * @remarks
+   * A Redis blip must never fail the surrounding request: the DB write (and, for `send`, the
+   * emitted email event) has already committed by the time this runs, and the counter key carries
+   * its own TTL — so it self-heals on expiry even if this delete is skipped. Swallows Redis errors
+   * with a warning rather than throwing (which, under enableOfflineQueue:false, would otherwise turn
+   * a successful issue/verify into a 500).
+   */
+  private async clearOtpVerifyAttemptCounter(userId: number): Promise<void> {
+    try {
+      await this.redis.del(`${MAGIC_LINK_OTP_VERIFY_ATTEMPT_KEY_PREFIX}${userId}`);
+    } catch (error) {
+      logger.warn({ err: error }, 'magic_link.otp_attempt_reset_unavailable');
+    }
   }
 
   /** Verify a magic-link sign-in code; returns an MFA challenge or an access token + session. */
@@ -314,7 +345,7 @@ export class MagicLinkService {
     );
 
     // Clear the attempt counter so a verified user's later legitimate flows are never pre-throttled.
-    await this.redis.del(attemptKey);
+    await this.clearOtpVerifyAttemptCounter(user.id);
 
     // On the first successful verification, ensure the personal organization exists — a bare invited
     // placeholder is created WITHOUT one, so a magic-link claimer would otherwise have no personal org

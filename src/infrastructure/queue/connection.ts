@@ -30,6 +30,7 @@ export function getBullMQConnectionOptions(): {
   db: number;
   family: number;
   maxRetriesPerRequest: null;
+  enableReadyCheck: boolean;
   prefix: string;
 } {
   const bullMqRedisUrl = resolveBullMqRedisUrl();
@@ -41,6 +42,14 @@ export function getBullMQConnectionOptions(): {
     db: parsed.databaseIndex,
     family: 0,
     maxRetriesPerRequest: null,
+    // #786: BullMQ Queue/Worker connections (same `core:<env>:` prefix as the cache client) default
+    // to ioredis `enableReadyCheck: true`. The test harness churns the producer-queue connections
+    // across createTestApp instances; a reconnect's INFO ready-check then rejects against a closing
+    // stream at Vitest worker teardown — a flaky unhandled rejection on an otherwise-green run.
+    // Disable the ready-check under test (local/CI Redis is ready immediately); production keeps it.
+    // Reads raw `process.env.NODE_ENV` (always current; the `env` const is frozen pre-`test`) so no
+    // env-config mock is required, matching the existing `process.env.RUN_REDIS_TESTS` test gate.
+    enableReadyCheck: process.env.NODE_ENV !== 'test',
     prefix: resolveRedisKeyPrefix(),
   });
 }
