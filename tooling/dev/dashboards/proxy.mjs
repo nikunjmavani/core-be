@@ -42,6 +42,9 @@ const TARGET_HOST = '127.0.0.1';
 const TARGET_PORT = Number(process.env.API_PORT || envVal('PORT') || 3000);
 const PROXY_PORT = Number(process.env.PROXY_PORT || process.env.PORT || 3010);
 const METRICS_TOKEN = envVal('METRICS_SCRAPE_TOKEN');
+// The super_admin this proxy logs in as to mint the Bull Board JWT. `dashboards:up` ensures
+// this user via `pnpm db:seed:demo-admin` — keep these defaults in sync with that script
+// (src/scripts/seed/ensure-demo-admin.ts) so the seeded password matches what we submit here.
 const DEMO_EMAIL = process.env.DEMO_EMAIL || 'demo@example.com';
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD || 'DemoPassword123!';
 const WORKER_PORT = 9090;
