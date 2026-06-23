@@ -26,6 +26,8 @@ import { dirname, join } from 'node:path';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const HUB_HTML_PATH = join(ROOT, 'tooling/dev/dashboards/hub.html');
 const TW_PATH = join(ROOT, 'tooling/dev/dashboards/tailwind.js');
+const GRIDSTACK_JS_PATH = join(ROOT, 'tooling/dev/dashboards/gridstack.js');
+const GRIDSTACK_CSS_PATH = join(ROOT, 'tooling/dev/dashboards/gridstack.css');
 
 function envVal(key) {
   try {
@@ -268,6 +270,25 @@ async function handleRequest(clientReq, res, reqBody) {
       res.writeHead(404, { 'content-type': 'text/plain' });
       res.end(
         'tailwind asset missing — curl https://cdn.tailwindcss.com -o tooling/dev/dashboards/tailwind.js',
+      );
+    }
+    return;
+  }
+  if (
+    clientReq.method === 'GET' &&
+    (path === '/_hub/gridstack.js' || path === '/_hub/gridstack.css')
+  ) {
+    const isCss = path.endsWith('.css');
+    try {
+      res.writeHead(200, {
+        'content-type': isCss ? 'text/css; charset=utf-8' : 'application/javascript; charset=utf-8',
+        'cache-control': 'public, max-age=86400',
+      });
+      res.end(readFileSync(isCss ? GRIDSTACK_CSS_PATH : GRIDSTACK_JS_PATH));
+    } catch {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end(
+        'gridstack asset missing — curl https://cdn.jsdelivr.net/npm/gridstack@11/dist/gridstack-all.min.js -o tooling/dev/dashboards/gridstack.js',
       );
     }
     return;

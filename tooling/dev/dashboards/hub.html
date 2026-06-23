@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>core·be — control room</title>
 <script src="/_hub/tw.js"></script>
+<link rel="stylesheet" href="/_hub/gridstack.css" />
+<script src="/_hub/gridstack.js"></script>
 <script>
   tailwind.config = {
     darkMode: 'class',
@@ -71,6 +73,34 @@
   .skel{ animation:shimmer 1.4s ease-in-out infinite }
   .stale{ opacity:.62; filter:saturate(.7) }
   @media (prefers-reduced-motion:reduce){ .pulse,.skel,.ping,.alertin,.spin{ animation:none } }
+  /* ── resizable / draggable panel grid (gridstack 11) ── */
+  .grid-stack{ margin:0 -6px }
+  .grid-stack > .grid-stack-item > .grid-stack-item-content{
+    display:flex; flex-direction:column; overflow:hidden;
+    border:1px solid hsl(var(--border)); border-radius:calc(var(--radius) + 4px);
+    background:hsl(var(--card)); box-shadow:0 1px 2px hsl(240 6% 10% / .05);
+  }
+  .panel-head{
+    flex:none; display:flex; align-items:center; gap:8px; padding:7px 11px;
+    border-bottom:1px solid hsl(var(--border)); background:hsl(var(--muted) / .45);
+    cursor:move; user-select:none; touch-action:none;
+  }
+  .panel-title{ font-size:10px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:hsl(var(--muted-foreground)); white-space:nowrap }
+  .panel-grip{ margin-left:auto; display:inline-flex; font-size:13px; line-height:1; color:hsl(var(--muted-foreground) / .4); transition:color .15s }
+  .panel-head:hover .panel-grip{ color:hsl(var(--muted-foreground)) }
+  .panel-body{ flex:1; min-height:0; overflow:auto; padding:11px 13px 13px }
+  .grid-stack-item > .ui-resizable-se{ width:20px; height:20px; right:0; bottom:0; background:none; transform:none }
+  .grid-stack-item > .ui-resizable-se::after{
+    content:''; position:absolute; right:4px; bottom:4px; width:9px; height:9px;
+    border-right:2px solid hsl(var(--muted-foreground) / .4); border-bottom:2px solid hsl(var(--muted-foreground) / .4);
+    border-bottom-right-radius:2px; transition:border-color .15s;
+  }
+  .grid-stack-item:hover > .ui-resizable-se::after{ border-color:hsl(var(--brand)) }
+  .grid-stack-item.ui-draggable-dragging > .grid-stack-item-content,
+  .grid-stack-item.ui-resizable-resizing > .grid-stack-item-content{ box-shadow:0 10px 30px hsl(240 10% 6% / .22); border-color:hsl(var(--brand) / .5) }
+  .grid-stack > .grid-stack-placeholder > .placeholder-content{ border:1.5px dashed hsl(var(--brand) / .5); border-radius:calc(var(--radius) + 4px); background:hsl(var(--brand) / .07); margin:0 }
+  /* graceful fallback if the gridstack asset fails to load — the bootstrap sets static inline layout; this only bounds the panels */
+  html.no-grid .panel-body{ max-height:70vh }
 </style>
 </head>
 <body class="min-h-full font-sans text-[14px] text-foreground antialiased">
@@ -109,11 +139,26 @@
       <div id="links" class="flex flex-wrap items-center gap-2"></div>
     </section>
 
-    <section class="min-w-0"><div id="vitals"></div></section>
-
-    <div class="grid min-w-0 grid-cols-1 items-start gap-5 lg:gap-6 xl:grid-cols-2">
-      <section class="min-w-0"><div id="requests"></div></section>
-      <section class="min-w-0"><div id="queues"></div></section>
+    <!-- draggable + resizable panels: drag by the header, resize from the bottom-right grip; layout persists per browser, double-click a header to reset -->
+    <div class="grid-stack">
+      <div class="grid-stack-item" gs-id="vitals" gs-x="0" gs-y="0" gs-w="12" gs-h="5">
+        <div class="grid-stack-item-content">
+          <div class="panel-head"><span class="panel-title">Vital signs</span><span class="panel-grip">⠿</span></div>
+          <div class="panel-body"><div id="vitals"></div></div>
+        </div>
+      </div>
+      <div class="grid-stack-item" gs-id="requests" gs-x="0" gs-y="5" gs-w="7" gs-h="9">
+        <div class="grid-stack-item-content">
+          <div class="panel-head"><span class="panel-title">Traffic · requests</span><span class="panel-grip">⠿</span></div>
+          <div class="panel-body"><div id="requests"></div></div>
+        </div>
+      </div>
+      <div class="grid-stack-item" gs-id="queues" gs-x="7" gs-y="5" gs-w="5" gs-h="9">
+        <div class="grid-stack-item-content">
+          <div class="panel-head"><span class="panel-title">Jobs &amp; queues</span><span class="panel-grip">⠿</span></div>
+          <div class="panel-body"><div id="queues"></div></div>
+        </div>
+      </div>
     </div>
 
     <footer class="border-t border-border pt-5 text-[12px] text-muted-foreground">
@@ -595,7 +640,7 @@ function renderQueues(queues, agg, sS, worker, opts) {
 
   if (!active.length) wrap.appendChild(el('div', `${CARD} px-4 py-10 text-center text-[13px] text-muted-foreground`, 'All queues idle — no pending, failed, or paused jobs.'));
   else {
-    const grid = el('div', 'grid grid-cols-1 gap-2 max-h-[44vh] overflow-y-auto pr-0.5');
+    const grid = el('div', 'grid grid-cols-1 gap-2 pr-0.5'); // height bounded by the resizable panel body, not a fixed vh
     active.forEach((q) => {
       const c = q.counts || {}; const isDlq = /-dlq$/.test(q.name);
       const total = QSTATES.reduce((s, [k]) => s + (c[k] || 0), 0);
@@ -665,7 +710,7 @@ function renderRequests(routes, opts) {
   head.appendChild(el('div', 'w-[60px] text-right text-[11px] font-semibold', 'avg'));
   head.appendChild(el('div', 'w-[52px] text-right text-[11px] font-semibold', reqFilter === 'client' ? '4xx' : '5xx'));
   card.appendChild(head);
-  const scroll = el('div', 'max-h-[58vh] overflow-y-auto');
+  const scroll = el('div'); // rows flow; the resizable panel body provides the scroll
   card.appendChild(scroll);
   if (!list.length) scroll.appendChild(el('div', 'px-4 py-6 text-center text-[13px] text-muted-foreground', reqFilter === 'failed' ? 'No 5xx failures — all clear.' : reqFilter === 'client' ? 'No 4xx responses.' : 'No application requests yet.'));
   list.forEach((r) => {
@@ -770,6 +815,23 @@ document.addEventListener('click', (e) => { if (alertPopOpen && !$('alert-pop').
 })();
 
 poll(); setInterval(poll, 10000);
+
+// ── resizable / draggable panel grid: drag a panel by its header, resize from the bottom-right
+// grip. Layout persists per browser; double-click any header to reset. Falls back to a plain
+// stacked layout if the gridstack asset didn't load.
+if (!window.GridStack) {
+  // gridstack asset didn't load — fall back to a plain stacked layout (inline styles win the cascade, no !important needed)
+  document.documentElement.classList.add('no-grid');
+  for (const item of document.querySelectorAll('.grid-stack-item')) item.style.cssText = 'position:static;width:auto;height:auto;transform:none;inset:auto;margin-bottom:14px';
+  for (const content of document.querySelectorAll('.grid-stack-item > .grid-stack-item-content')) { content.style.position = 'static'; content.style.inset = 'auto'; }
+} else {
+  const GRID_LAYOUT_KEY = 'hub-grid-layout';
+  const grid = GridStack.init({ column: 12, cellHeight: 46, margin: 8, float: true, handle: '.panel-head', resizable: { handles: 'e, s, se' } });
+  try { const saved = JSON.parse(localStorage.getItem(GRID_LAYOUT_KEY) || 'null'); if (Array.isArray(saved) && saved.length) grid.load(saved, false); } catch { /* ignore a corrupt saved layout */ }
+  let saveTimer;
+  grid.on('change', () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { try { localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(grid.save(false))); } catch { /* storage unavailable */ } }, 400); });
+  document.querySelectorAll('.panel-head').forEach((head) => head.addEventListener('dblclick', () => { localStorage.removeItem(GRID_LAYOUT_KEY); location.reload(); }));
+}
 tick(); setInterval(tick, 1000);
 setInterval(freshTick, 1000);
 </script>
