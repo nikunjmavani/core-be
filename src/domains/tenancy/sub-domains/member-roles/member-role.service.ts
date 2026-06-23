@@ -245,7 +245,7 @@ export class MemberRoleService {
    * "system role" message in the seeded-Admin case (which is the most common attempt).
    */
   async delete(organization_public_id: string, role_public_id: string): Promise<void> {
-    return withOrganizationDatabaseContext(organization_public_id, async () => {
+    await withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
@@ -268,7 +268,9 @@ export class MemberRoleService {
       if (!deleted) {
         throw new ConflictError('errors:roleHasActiveMembers');
       }
-      await invalidateOrganizationPermissions(organization_public_id);
     });
+    // sec-R11: invalidate AFTER the write transaction commits so a concurrent permission recompute
+    // cannot re-cache the stale (pre-delete) set for members holding the deleted role.
+    await invalidateOrganizationPermissions(organization_public_id);
   }
 }

@@ -6,6 +6,88 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.13](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.12...v4.10.0-dev.13) (2026-06-22)
+
+
+### Added
+
+* **auth:** passkey list + revoke management API (audit R5b / M3) ([8b7e491](https://github.com/nikunjmavani/core-be/commit/8b7e491d8961bf02f7ffb9b8f8a155488cd07fc9))
+* **auth:** passkey list + revoke management API (audit R5b / M3) ([effa387](https://github.com/nikunjmavani/core-be/commit/effa387671e352bfe64bb02f8beeb7d5c9d1bc0b))
+* membership management overhaul, billing seat model & API contract docs (REQ-1–7) ([#740](https://github.com/nikunjmavani/core-be/issues/740)) ([d6b3435](https://github.com/nikunjmavani/core-be/commit/d6b34355b46487a9776977a396b6cf664926dd29))
+
+
+### Fixed
+
+* **audit:** emit audit rows under the matching RLS context so they aren't dropped (audit R10) ([1ff2f1f](https://github.com/nikunjmavani/core-be/commit/1ff2f1fde5d86cf271b33d5fc10a32ab47b8b7d4))
+* **audit:** emit audit rows under the matching RLS context so they aren't dropped (audit R10) ([08de0d6](https://github.com/nikunjmavani/core-be/commit/08de0d649df35e7efad1d9c7f3cd2af34ffd7c61))
+* **audit:** isolate audit-outbox poison rows with a per-row savepoint (audit R7 / M2) ([bc46135](https://github.com/nikunjmavani/core-be/commit/bc46135458eec93fbecf419d0d9d0fa2fe5f362b))
+* **audit:** isolate audit-outbox poison rows with a per-row savepoint (audit R7 / M2) ([6600ebc](https://github.com/nikunjmavani/core-be/commit/6600ebc21367ac15e2f619acc4d974da8fdaaca9))
+* **auth:** hardening — turnstile hostname, dead-code removal, list caps (audit PR-8) ([324ced2](https://github.com/nikunjmavani/core-be/commit/324ced2c4fee7ad8433786f79575f8414564a763))
+* **auth:** hardening — turnstile hostname, dead-code removal, list caps (audit PR-8) ([6554050](https://github.com/nikunjmavani/core-be/commit/65540507c81dc542f0bdac3b5744698307834335))
+* **auth:** scope token consume by type + grant-guard reads fresh perms (audit R5a / L2+L3) ([63b78cb](https://github.com/nikunjmavani/core-be/commit/63b78cbc0c7282c7d55f0c6e3882e568a2c87174))
+* **auth:** type-scoped token consume + grant-guard reads fresh perms (audit R5a / L2+L3) ([d41da79](https://github.com/nikunjmavani/core-be/commit/d41da791969108c848d1b16fc92dacc6eab4bb76))
+* **billing:** enforce seats on member reactivation + over-cap downgrade (audit F1/F2) ([f32bd7d](https://github.com/nikunjmavani/core-be/commit/f32bd7d8567c6d155727d73bde8b3233158b5684))
+* **billing:** enforce seats on member reactivation + over-cap downgrade (audit F1/F2) ([71225aa](https://github.com/nikunjmavani/core-be/commit/71225aae241c4f2d54959a6c2d1fe76f28557d59))
+* **billing:** fail-closed changePlan + offboarding cancel idempotency key (audit R1) ([ab34935](https://github.com/nikunjmavani/core-be/commit/ab349355b223f2fe5c9fb8dbdd3cff8d70d8e0e1))
+* **billing:** fail-closed changePlan + offboarding cancel idempotency key (audit R1) ([509a1e9](https://github.com/nikunjmavani/core-be/commit/509a1e9038289222526a114349b70ada706245f0))
+* **billing:** stripe idempotency & subscription correctness (audit PR-2) ([5d32961](https://github.com/nikunjmavani/core-be/commit/5d3296110ea41cddca4ef505486f077eca5141e7))
+* **billing:** stripe idempotency & subscription correctness (audit PR-2) ([5578273](https://github.com/nikunjmavani/core-be/commit/5578273313a42e4531e477e6477c8a611559535f))
+* **billing:** webhook tenant-scope & subscription RLS hardening (audit PR-3) ([cd4fff3](https://github.com/nikunjmavani/core-be/commit/cd4fff3d6e71d367cc7a6872c8fe4d2f8fad78f0))
+* **billing:** webhook tenant-scope & subscription RLS hardening (audit PR-3) ([3a96e66](https://github.com/nikunjmavani/core-be/commit/3a96e6663a4f26470c8afb1d6d0f577d09701f75))
+* **db:** hash advisory-lock objid so bigint scope ids don't overflow int4 (audit B-1) ([256015b](https://github.com/nikunjmavani/core-be/commit/256015b2495637cf0c3e65aa9350f6b41ff1223a))
+* **db:** hash advisory-lock objid so bigint scope ids don't overflow int4 (audit B-1) ([e00bc68](https://github.com/nikunjmavani/core-be/commit/e00bc6836e7bd956e5157261930d1e5f49f09e03))
+* **infra:** production env-guard for Bull-Board dashboard + 403 read-only status (re-audit A1) ([7f856e0](https://github.com/nikunjmavani/core-be/commit/7f856e0a8778225f281c6dfb379d88d4ce1669cf))
+* **infra:** production env-guard for Bull-Board dashboard + 403 read-only status (re-audit A1) ([ebfd821](https://github.com/nikunjmavani/core-be/commit/ebfd8214299749d3d83743351335efb9b3be598f))
+* **mcp:** make call_api read-only by default + mask errors, add route allowlist (audit R14) ([cbb9dee](https://github.com/nikunjmavani/core-be/commit/cbb9dee32d05ffca545586f230a934306f376ec3))
+* **mcp:** make call_api read-only by default + mask errors; route allowlist (audit R14) ([1ae019e](https://github.com/nikunjmavani/core-be/commit/1ae019e1e9d3ead0560d1fe0eaed3ffd1837d2d0))
+* **notify:** delivery reliability — idempotent enqueue, bounded mark-all, honest outcomes (audit PR-5) ([10269fb](https://github.com/nikunjmavani/core-be/commit/10269fb0ced73422677bbb5c0276368d43e305c3))
+* **notify:** delivery reliability — idempotent enqueue, bounded mark-all, honest outcomes (audit PR-5) ([f5649a2](https://github.com/nikunjmavani/core-be/commit/f5649a201c42f732fc0f933b35b27a411b9cdedb))
+* **notify:** webhook SSRF egress hardening (audit PR-4) ([8239e08](https://github.com/nikunjmavani/core-be/commit/8239e08da0f91885be1041ce5fb42c32f13b8084))
+* **notify:** webhook SSRF egress hardening (audit PR-4) ([646c697](https://github.com/nikunjmavani/core-be/commit/646c69739012ccb1fefc5e97dfaca70e13a34424))
+* **observability:** initialize OpenTelemetry at runtime (audit R4 / M5) ([9f15ac9](https://github.com/nikunjmavani/core-be/commit/9f15ac9cccca77eaa32518dd7f8daefc28b8aec2))
+* **observability:** initialize OpenTelemetry at runtime (audit R4 / M5) ([991414e](https://github.com/nikunjmavani/core-be/commit/991414ebd2c90255b3fddf1a4c81fabb3dbde7e7))
+* **overload:** shed new requests on DB-pool saturation, not just event-loop stall (prod-readiness) ([60452e6](https://github.com/nikunjmavani/core-be/commit/60452e6d24c50fd8db40c43670d392bcbb8fb543))
+* **overload:** shed new requests on DB-pool saturation, not just event-loop stall (prod-readiness) ([3b362f5](https://github.com/nikunjmavani/core-be/commit/3b362f5ece7313b42029816fbdfb06cee7933048))
+* **platform:** harden middleware & boot config (audit PR-1) ([375eff8](https://github.com/nikunjmavani/core-be/commit/375eff8e43986eb37e8b7e9e5e324843244027b7))
+* **platform:** harden middleware & boot config (audit PR-1) ([a1f11e3](https://github.com/nikunjmavani/core-be/commit/a1f11e34006c2dfe85ba39ccb4d6a37f3634808d))
+* **rls:** propagate explicit WITH CHECK to all org-scoped policies (audit R2) ([01ef1cf](https://github.com/nikunjmavani/core-be/commit/01ef1cf717e22fd6aba4f39acb8665e8bd10eac7))
+* **rls:** propagate explicit WITH CHECK to all org-scoped policies (audit R2) ([d72a187](https://github.com/nikunjmavani/core-be/commit/d72a187c877d6a12c5bdf21a6e64038bf9a90740))
+* **tenancy:** concurrency & isolation hygiene (audit PR-6) ([c7dc4dc](https://github.com/nikunjmavani/core-be/commit/c7dc4dcda1155c12b613102940141a9ae587316e))
+* **tenancy:** concurrency & isolation hygiene (audit PR-6) ([8a2cd9b](https://github.com/nikunjmavani/core-be/commit/8a2cd9bd1f2ef6b4655632fc50e012ca81810b61))
+* **tenancy:** invalidate the permission cache after commit, not inside the write txn (audit R11) ([97f6086](https://github.com/nikunjmavani/core-be/commit/97f60868165954cd27ee85db193327649268ae89))
+* **tenancy:** invalidate the permission cache after commit, not inside the write txn (audit R11) ([d6598e2](https://github.com/nikunjmavani/core-be/commit/d6598e2538b89855b3c3c114a4bdc1035d864a84))
+* **tenancy:** make organizations.slug unique index partial on deleted_at (audit R9) ([2d847be](https://github.com/nikunjmavani/core-be/commit/2d847be65855d92a61cc1a2c5a132708dedff8e3))
+* **tenancy:** make organizations.slug unique index partial on deleted_at (audit R9) ([4b392d5](https://github.com/nikunjmavani/core-be/commit/4b392d5d74183a56d1a5bb4061f88a8a9400f4e4))
+* **upload:** reserve org-scoped upload slots under organization RLS context (R8 / M4) ([50c82b0](https://github.com/nikunjmavani/core-be/commit/50c82b00b4de3fd854be9981cbb96a0ccd84bf6a))
+* **upload:** reserve org-scoped upload slots under organization RLS context (R8 / M4) ([6b7ea5a](https://github.com/nikunjmavani/core-be/commit/6b7ea5a012ddcb266f7c037cc050e20b1df6fb21))
+* **user:** data-access concurrency & query hardening (audit PR-7) ([d2988a8](https://github.com/nikunjmavani/core-be/commit/d2988a8140c546d444bd9749fc591b4826a8f93b))
+* **user:** data-access concurrency & query hardening (audit PR-7) ([b569c9c](https://github.com/nikunjmavani/core-be/commit/b569c9c6a94a430a14c76d4169e48549f917bb1b))
+* **validation:** reject webhook-URL userinfo and traversal in storage-key DTOs (audit R13) ([a06c5d8](https://github.com/nikunjmavani/core-be/commit/a06c5d882f7709851cb4ab6b7fed2c250e8527a7))
+* **validation:** reject webhook-URL userinfo and traversal in storage-key DTOs (audit R13) ([fd6e43f](https://github.com/nikunjmavani/core-be/commit/fd6e43fa26b5b0d260d22940f9b663208acafd11))
+
+
+### Performance
+
+* **tenancy:** let the keyset index drive organization discovery (audit perf-[#1](https://github.com/nikunjmavani/core-be/issues/1)) ([8837329](https://github.com/nikunjmavani/core-be/commit/8837329ada641d95ae776a1ff6376a97d786eeea))
+* **tenancy:** let the keyset index drive organization discovery (audit perf-[#1](https://github.com/nikunjmavani/core-be/issues/1)) ([2a05df0](https://github.com/nikunjmavani/core-be/commit/2a05df00bc2cdeb3c5664adc81e2d4511a1b1748))
+
+
+### Changed
+
+* ponytail-audit dead-code cleanup, add ponytail skill, fix test captcha env ([#739](https://github.com/nikunjmavani/core-be/issues/739)) ([904d170](https://github.com/nikunjmavani/core-be/commit/904d1709682f6d7ad02a2c97b1472ec5943acb5c))
+* **tenancy:** drop redundant org-create advisory lock, delete dead cap-lock module (audit R12) ([0d82149](https://github.com/nikunjmavani/core-be/commit/0d821495855f6b44d70c34b3a8931b30bbfa2cef))
+* **tenancy:** drop redundant org-create advisory lock, delete dead cap-lock module (audit R12) ([21479a9](https://github.com/nikunjmavani/core-be/commit/21479a993d9dc4701587b759449e1a2744fecdb3))
+
+
+### Documentation
+
+* correct OVERVIEW content drift vs schema/services (audit R3) ([d1f5765](https://github.com/nikunjmavani/core-be/commit/d1f576538f31ff73d494991a7470635e1292e2d2))
+* correct OVERVIEW content drift vs schema/services (audit R3) ([98f16fd](https://github.com/nikunjmavani/core-be/commit/98f16fd7eaae24d13d50f948c49148e599149f95))
+* record production-audit decisions + seat-entitlement policy ([6794fef](https://github.com/nikunjmavani/core-be/commit/6794fef9258ba3bf72499589a390925348143aad))
+* record production-audit decisions + seat-entitlement policy ([b12a3b3](https://github.com/nikunjmavani/core-be/commit/b12a3b3f2fa3c8276b06e4995d6bfe38e617948d))
+* rename per-folder OVERVIEW.md → &lt;folder&gt;.overview.md ([94e0f05](https://github.com/nikunjmavani/core-be/commit/94e0f05b18801d22cb5688b495efb7763b0a3edc))
+* rename per-folder OVERVIEW.md → &lt;folder&gt;.overview.md ([f5aa247](https://github.com/nikunjmavani/core-be/commit/f5aa247e979c77dc1eaa995681315f6576de2f00))
+
 ## [4.10.0-dev.12](https://github.com/nikunjmavani/core-be/compare/v4.9.1-dev.12...v4.10.0-dev.12) (2026-06-20)
 
 

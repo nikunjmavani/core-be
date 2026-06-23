@@ -37,4 +37,4 @@ Tenant isolation still relies on application query boundaries; these policies pr
 - Tenant RLS overview: [domains-and-public-api-design.md](../architecture/domains-and-public-api-design.md)
 - Production audit: [production-audit-2026-05-18.md](../../reviews/production-audit-2026-05-18.md) (system tables section)
 - [`src/PATTERNS.md`](../../../src/PATTERNS.md) § Tenant Isolation, § RLS Context — how the `app.current_organization_id` GUC is set and the four RLS context wrappers
-- [`src/infrastructure/database/OVERVIEW.md`](../../../src/infrastructure/database/OVERVIEW.md) — context family, force-RLS table list, connection budget
+- [`src/infrastructure/database/database.overview.md`](../../../src/infrastructure/database/database.overview.md) — context family, force-RLS table list, connection budget

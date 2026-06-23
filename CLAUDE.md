@@ -154,7 +154,7 @@ src/infrastructure/
     connection.ts             # Exports: database, sql, closeDatabase
     base-repository.ts        # Abstract BaseRepository with paginate()
     transaction.ts            # withTransaction() helper
-    resource-cap-lock.ts      # Advisory-lock guard for resource caps (+ resource-quota-lock.util.ts)
+    resource-quota-lock.util.ts # Advisory-lock guard for resource caps (per-scope count+insert serialization)
     pg-schemas.ts             # Shared pgSchema definitions (auth, tenancy, billing, notify, audit, upload)
     migration/migrate.ts      # Migration runner (+ migration-version.ts, migration-execution-mode.ts)
     contexts/                 # DB context wrappers (request / organization / user / retention / worker / system-audit) that set the RLS GUC
@@ -317,7 +317,7 @@ See **[import-paths.mdc](.cursor/rules/import-paths.mdc)** — `@/` in `src/`, `
 - **Orchestrator** (`src/scripts/seed/bulk.ts` + `bulk-config.ts`): Registers one `DomainSeedModule` per domain (`MODULES`), topologically orders them by `dependsOn` (`orderModules`), runs every `seedReference` first, then every `seedBulk`. Behind a production guard (`production-guard.ts`, `assertBulkSeedAllowed`); reproducible via `SEED`; idempotent (count-and-resume or `onConflictDoNothing`).
 - **Three tiers** (all share the contract/seeders): `pnpm db:seed` (minimal/reference only), `pnpm db:seed:full` (fixed demo data), `pnpm db:seed:bulk` (scaled volume via profiles). Profiles `demo` / `edge` / `load` set base counts; `SCALE` multiplies volume-bearing counts (bounded by `HARD_CAP`); per-knob env overrides `BULK_ORGS`, `BULK_USERS_PER_ORG`, `BULK_AUDIT_MONTHS`, `BULK_AUDIT_PER_ORG_PER_MONTH`. Example: `BULK_PROFILE=load SCALE=5 pnpm db:seed:bulk`.
 - **Route alignment**: Seed data should support what the API exposes. When routes are added, removed, or updated, run **route-catalog** skill (`pnpm routes:catalog`) and **seed-maintainer** so seeds stay aligned with routes.
-- **Conventions and detail**: scoped rule `.cursor/rules/seed-conventions.mdc` (auto-attaches under `src/domains/**` and `src/scripts/seed/**`); skill `.cursor/skills/seed-maintainer/SKILL.md`; overview `src/scripts/seed/OVERVIEW.md`. The domain-structure validator allows `seed/` at domain root.
+- **Conventions and detail**: scoped rule `.cursor/rules/seed-conventions.mdc` (auto-attaches under `src/domains/**` and `src/scripts/seed/**`); skill `.cursor/skills/seed-maintainer/SKILL.md`; overview `src/scripts/seed/seed.overview.md`. The domain-structure validator allows `seed/` at domain root.
 
 ## Context7 (version-wise backend docs)
 
@@ -355,7 +355,7 @@ Every directory under `src/` participates in the in-source documentation system.
 | Layer | File | Owner skill |
 | --- | --- | --- |
 | System narratives | `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` | **system-narrative-maintainer** |
-| Per-folder overviews (hand-written) | `src/<folder>/OVERVIEW.md` at meaningful boundaries | **overview-doc-maintainer** |
+| Per-folder overviews (hand-written) | `src/<folder>/<folder>.overview.md` at meaningful boundaries | **overview-doc-maintainer** |
 | TSDoc on exports (canonical) | every `*.ts` file's `export <kind> <name>` declaration | **tsdoc-export-guard** |
 | Route schema (drives OpenAPI) | `schema: { summary, description, tags }` on Fastify route registrations | **route-schema-doc-guard** |
 

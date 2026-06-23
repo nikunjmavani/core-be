@@ -281,6 +281,84 @@ export class UserService {
     });
   }
 
+  /**
+   * Find-or-create the user an organization invite is addressed to (REQ-1: add member by email).
+   *
+   * @remarks
+   * - **Algorithm:** resolve by email via the SECURITY DEFINER resolver ({@link UserService.findByEmail});
+   *   return an existing live (non-deleted) user; otherwise mint a bare ACTIVE user with
+   *   `is_email_verified=false` and no password/auth method by reusing {@link UserService.createFromOAuth}.
+   * - **Failure modes:** propagates a Postgres email-unique violation on a rare create race; never throws
+   *   `NotFoundError` (find-or-create always resolves to a user).
+   * - **Side effects:** may INSERT one `auth.users` row (its own transaction via `createFromOAuth`).
+   * - **Notes:** the invitee *claims* the account on first OAuth/magic-link login — both already
+   *   find-or-create by email, so they reuse this row and attach the auth method, then accept the
+   *   invitation. Call this OUTSIDE any organization context so the public-id retry can open its own
+   *   transaction (a pinned org transaction would abort on the rare public-id collision).
+   */
+  async findOrCreateInvitedByEmail(data: { email: string }): Promise<UserAuthRecord> {
+    const existing = await this.findByEmail(data.email);
+    if (existing && !existing.deleted_at) return existing;
+    return this.createFromOAuth({ email: data.email, is_email_verified: false });
+  }
+
+  /**
+   * Inserts an email/password signup user with `is_email_verified=false` and a generated `public_id`.
+   *
+   * @remarks
+   * Mirrors {@link UserService.createFromOAuth}: generates the `public_id`, enters that user's
+   * `withUserDatabaseContext` (so the FORCE-RLS owner WITH CHECK passes), and retries on the rare
+   * public-id collision. The caller supplies the pre-computed argon2 `password_hash` so hashing
+   * never holds a pooled connection open inside the insert transaction.
+   */
+  async createWithPassword(data: {
+    email: string;
+    password_hash: string;
+    first_name?: string;
+    last_name?: string;
+  }): Promise<UserAuthRecord> {
+    return runInsertWithPublicIdentifierRetry(async () => {
+      const publicId = generatePublicId('user');
+      return withUserDatabaseContext(publicId, () =>
+        this.repository.insertWithPassword(publicId, data),
+      );
+    });
+  }
+
+  /**
+   * Creates a passwordless user for magic-link auto-signup with `is_email_verified=false`.
+   *
+   * @remarks
+   * Delegates to {@link UserService.createFromOAuth} (the shared passwordless-insert path: generate
+   * `public_id`, enter the owner `withUserDatabaseContext` so the FORCE-RLS owner WITH CHECK passes,
+   * retry on the rare public-id collision). Used when `POST /auth/magic-link/send` receives an
+   * unknown email — the account is created on the spot (no password) and the magic-link OTP it then
+   * receives is the proof-of-email-control that flips `is_email_verified` on verify.
+   */
+  async createForMagicLink(data: { email: string }): Promise<UserAuthRecord> {
+    return this.createFromOAuth({ email: data.email, is_email_verified: false });
+  }
+
+  /**
+   * Claims a pre-provisioned passwordless account by setting its first password (signup-claim of an
+   * invite / add-member-by-email user whose bare row otherwise blocks `POST /auth/signup` with a 409).
+   *
+   * @remarks
+   * Pins the owner `withUserDatabaseContext` for the FORCE-RLS owner WITH CHECK; the repository UPDATE
+   * is guarded by `password_hash IS NULL`, so a concurrent claim that already set a password makes
+   * this return `null` (the caller surfaces a 409). The claimed account stays `is_email_verified=false`
+   * — signup still emails a verification code, and invitation-accept requires a verified email — so a
+   * claim does not, by itself, grant any email-control-gated capability.
+   */
+  async claimWithPassword(
+    public_id: string,
+    data: { passwordHash: string; firstName?: string | undefined; lastName?: string | undefined },
+  ): Promise<UserAuthRecord | null> {
+    return withUserDatabaseContext(public_id, () =>
+      this.repository.claimWithPassword(public_id, data),
+    );
+  }
+
   async updatePassword(public_id: string, password_hash: string): Promise<UserAuthRecord | null> {
     return withUserDatabaseContext(public_id, () =>
       this.repository.updatePassword(public_id, password_hash),

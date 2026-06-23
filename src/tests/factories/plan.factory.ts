@@ -7,6 +7,10 @@ export interface CreatePlanOptions {
   priceMonthly?: string;
   priceYearly?: string;
   currency?: string;
+  /** REQ-4: seat allowance baked into the plan (null/undefined = unlimited). */
+  includedSeats?: number | null;
+  /** REQ-4: plan capability map surfaced verbatim in the public response. */
+  features?: Record<string, boolean | number | string>;
 }
 
 /**
@@ -23,7 +27,9 @@ export async function createTestPlan(options: CreatePlanOptions = {}) {
       price_monthly: options.priceMonthly ?? '9.99',
       price_yearly: options.priceYearly ?? '99.99',
       currency: options.currency ?? 'USD',
-      features: {},
+      features: options.features ?? {},
+      // REQ-4: defaults to null (unlimited) so existing callers keep the no-seat-limit behaviour.
+      included_seats: options.includedSeats ?? null,
     })
     .returning();
 

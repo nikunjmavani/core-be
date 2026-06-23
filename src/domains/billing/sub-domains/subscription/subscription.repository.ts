@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { plans } from '@/domains/billing/sub-domains/plan/plan.schema.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
@@ -41,6 +41,8 @@ const subscriptionRowWithPlanPublicId = {
   plan_id: subscriptions.plan_id,
   status: subscriptions.status,
   billing_cycle: subscriptions.billing_cycle,
+  // REQ-4: purchased seat quantity (synced from Stripe; NULL until first sync).
+  seats: subscriptions.seats,
   current_period_start: subscriptions.current_period_start,
   current_period_end: subscriptions.current_period_end,
   trial_end: subscriptions.trial_end,
@@ -55,6 +57,9 @@ const subscriptionRowWithPlanPublicId = {
   updated_by_user_id: subscriptions.updated_by_user_id,
   last_stripe_event_created_at: subscriptions.last_stripe_event_created_at,
   plan_public_id: plans.public_id,
+  // REQ-4: the joined plan's seat allowance — the fallback for seats_total when the
+  // subscription has no Stripe-synced `seats` yet.
+  plan_included_seats: plans.included_seats,
 } as const;
 
 /**
@@ -103,6 +108,9 @@ export class SubscriptionRepository {
       .from(subscriptions)
       .leftJoin(plans, eq(subscriptions.plan_id, plans.id))
       .where(eq(subscriptions.organization_id, organization_id))
+      // audit #37: deterministic order so the cap truncates the OLDEST rows, not an arbitrary set,
+      // if an org ever exceeds the cap (churned CANCELED history).
+      .orderBy(desc(subscriptions.created_at), desc(subscriptions.id))
       .limit(limit + 1);
     return capListWithWarning({
       rows,
@@ -130,6 +138,62 @@ export class SubscriptionRepository {
       )
       .limit(1);
     return rows[0] ?? null;
+  }
+
+  /**
+   * Resolves the org's active subscription seat allowance while holding a row lock (REQ-4).
+   *
+   * @remarks
+   * - **Algorithm:** two queries in the caller's transaction: (1) `SELECT ... FOR UPDATE` on the
+   *   active (non-terminal) `subscriptions` row alone — NO join, because Postgres rejects
+   *   `FOR UPDATE` against the nullable side of an outer join (`42601`) — so a concurrent member-add
+   *   blocks on this row until the caller's seat check + membership insert commit, closing the
+   *   two-concurrent-adds-exceed-the-limit race. (2) a plain (unlocked) lookup of the plan's
+   *   `included_seats` (a global catalog row that must NOT be locked). Returns the per-subscription
+   *   `seats` (purchased from Stripe) and `plan_included_seats` so the caller computes
+   *   `seats_total = seats ?? included_seats ?? null` (null = unlimited).
+   * - **Failure modes:** returns `null` when the org has no active subscription (the seat check is
+   *   then a no-op — the billing-free flow still works).
+   * - **Side effects:** acquires a row-level `FOR UPDATE` lock released at the enclosing
+   *   transaction's COMMIT/ROLLBACK; the caller MUST run inside a transaction for the lock to span
+   *   the subsequent insert.
+   */
+  async findActiveSeatStateByOrganizationForUpdate(organization_id: number): Promise<{
+    seats: number | null;
+    plan_included_seats: number | null;
+    status: string;
+    current_period_end: Date;
+  } | null> {
+    const lockedRows = await this.db()
+      .select({
+        seats: subscriptions.seats,
+        plan_id: subscriptions.plan_id,
+        status: subscriptions.status,
+        current_period_end: subscriptions.current_period_end,
+      })
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.organization_id, organization_id),
+          notInArray(subscriptions.status, [...INACTIVE_SUBSCRIPTION_STATUSES]),
+        ),
+      )
+      .limit(1)
+      .for('update');
+    const locked = lockedRows[0];
+    if (!locked) return null;
+    // Plan is a global catalog row — read its seat allowance WITHOUT a lock.
+    const planRows = await this.db()
+      .select({ included_seats: plans.included_seats })
+      .from(plans)
+      .where(eq(plans.id, locked.plan_id))
+      .limit(1);
+    return {
+      seats: locked.seats,
+      plan_included_seats: planRows[0]?.included_seats ?? null,
+      status: locked.status,
+      current_period_end: locked.current_period_end,
+    };
   }
 
   async findByPublicId(public_id: string, organization_id: number) {

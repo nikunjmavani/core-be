@@ -4,6 +4,11 @@ import {
   captureException,
   flushSentry,
 } from '@/infrastructure/observability/sentry/sentry.js';
+import {
+  initOpenTelemetry,
+  shutdownOpenTelemetry,
+} from '@/infrastructure/observability/tracing/otel.js';
+import { OTEL_SERVICE_NAME_WORKER } from '@/shared/constants/project-identity.constants.js';
 import { createUnhandledRejectionHandler } from '@/infrastructure/observability/unhandled-rejection.handler.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { closeRedis, connectRedis } from '@/infrastructure/cache/redis.client.js';
@@ -34,6 +39,7 @@ import {
 } from '@/infrastructure/queue/worker-runtime/worker-health.server.js';
 import { getShutdownWatchdogMs } from '@/infrastructure/queue/worker-runtime/shutdown-timing.util.js';
 import { closeStripeWebhookQueue } from '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.queue.js';
+import { closeSubscriptionSeatSyncQueue } from '@/domains/billing/sub-domains/subscription/queues/subscription-seat-sync.queue.js';
 import { closeMailQueue } from '@/infrastructure/mail/queues/mail.queue.js';
 import { closeNotificationQueue } from '@/domains/notify/sub-domains/notification/queues/notification.queue.js';
 import { closeWebhookDeliveryQueue } from '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js';
@@ -41,6 +47,9 @@ import { closeUserDataExportQueue } from '@/domains/user/sub-domains/user-data-e
 
 // Initialize Sentry before anything else
 initSentry();
+// audit M5: start OpenTelemetry for the worker process (no-op unless
+// OTEL_EXPORTER_OTLP_ENDPOINT is set).
+initOpenTelemetry(OTEL_SERVICE_NAME_WORKER);
 
 process.on('uncaughtException', (error) => {
   captureException(error, { tags: { source: 'worker_uncaughtException' } });
@@ -108,12 +117,16 @@ async function main() {
       await Promise.allSettled([
         closeDeadLetterQueues(),
         closeStripeWebhookQueue(),
+        closeSubscriptionSeatSyncQueue(), // REQ-4: seat-quantity sync producer queue
         closeMailQueue(),
         closeNotificationQueue(),
         closeWebhookDeliveryQueue(),
         closeUserDataExportQueue(), // sec-r4-R1: was missing from shutdown sequence
       ]);
       await Promise.allSettled([closeRedis(), closeBullMqRedis(), closeDatabase()]);
+      // audit M5: tear down the OpenTelemetry SDK (no-op when never started)
+      // before the Sentry flush so pending OTLP spans flush on shutdown.
+      await shutdownOpenTelemetry();
       await flushSentry();
       clearTimeout(watchdogTimer);
       process.exit(0);

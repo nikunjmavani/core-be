@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NotFoundError, UnauthorizedError } from '@/shared/errors/index.js';
+import { MAX_ACTIVE_SESSIONS_PER_USER } from '@/shared/constants/security.constants.js';
 import { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthSessionRepository } from '@/domains/auth/sub-domains/auth-session/auth-session.repository.js';
@@ -44,6 +45,8 @@ describe('AuthSessionService', () => {
     revoke: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
     revokeAllByUserId: vi.fn().mockResolvedValue([]),
     revokeAllByUserIdExcept: vi.fn().mockResolvedValue([]),
+    acquireCreationQuotaLock: vi.fn().mockResolvedValue(undefined),
+    revokeOldestActiveBeyond: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockResolvedValue({ public_id: 'session_new' }),
     revokeByTokenHash: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
     findByPublicId: vi
@@ -148,6 +151,36 @@ describe('AuthSessionService', () => {
     });
     expect(result.public_id).toBe('session_new');
     expect(sessionRepository.create).toHaveBeenCalled();
+  });
+
+  it('createSessionForUser evicts oldest sessions beyond the cap and purges their token caches', async () => {
+    vi.mocked(sessionRepository.revokeOldestActiveBeyond).mockResolvedValue([
+      { token_hash: 'evicted-a' },
+      { token_hash: 'evicted-b' },
+      { token_hash: null },
+    ] as never);
+    const { invalidateCachedSessionToken } = await import(
+      '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
+    );
+
+    await service.createSessionForUser('user_public', {
+      token_hash: 'hash',
+      ip_address: '127.0.0.1',
+      user_agent: 'vitest',
+      expires_at: new Date('2026-12-31T00:00:00.000Z'),
+    });
+
+    // Cap enforced under the advisory lock, keeping room (cap - 1) for the new session.
+    expect(sessionRepository.acquireCreationQuotaLock).toHaveBeenCalledWith(user.id);
+    expect(sessionRepository.revokeOldestActiveBeyond).toHaveBeenCalledWith(
+      user.id,
+      MAX_ACTIVE_SESSIONS_PER_USER - 1,
+    );
+    expect(sessionRepository.create).toHaveBeenCalled();
+    // Each evicted session's token cache is tombstoned so its access token stops authenticating.
+    expect(invalidateCachedSessionToken).toHaveBeenCalledWith('evicted-a');
+    expect(invalidateCachedSessionToken).toHaveBeenCalledWith('evicted-b');
+    expect(invalidateCachedSessionToken).toHaveBeenCalledTimes(2);
   });
 
   it('createSessionForUser throws when user is missing', async () => {

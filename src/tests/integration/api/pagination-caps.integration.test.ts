@@ -28,7 +28,7 @@ describe('Pagination caps — integration', () => {
 
   beforeEach(async () => {
     await cleanupDatabase();
-    await seedPermissions([TENANCY_PERMISSIONS.INVITATION_MANAGE]);
+    await seedPermissions([TENANCY_PERMISSIONS.MEMBERSHIP_READ]);
   });
 
   it('GET /notifications rejects limit above 100', async () => {
@@ -43,12 +43,15 @@ describe('Pagination caps — integration', () => {
     expect(response.statusCode).toBe(400);
   });
 
-  it('GET /organization/invitations rejects limit above 100', async () => {
+  // The admin invitations list route was removed in REQ-1 (adding a member now issues the invitation
+  // via POST /organization/memberships). Retargeted to the remaining org-scoped cursor-paginated list
+  // route so the org-scoped pagination cap stays covered.
+  it('GET /organization/memberships rejects limit above 100', async () => {
     const user = await createTestUser();
     const organization = await createTestOrganization({ ownerUserId: user.id });
     const role = await createRoleWithPermissions({
       organizationId: organization.id,
-      permissionCodes: [TENANCY_PERMISSIONS.INVITATION_MANAGE],
+      permissionCodes: [TENANCY_PERMISSIONS.MEMBERSHIP_READ],
     });
     await createMembership({
       userId: user.id,
@@ -61,7 +64,7 @@ describe('Pagination caps — integration', () => {
     });
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath('/tenancy/organization/invitations'),
+      url: testApiPath('/tenancy/organization/memberships'),
       token,
       organizationPublicId: organization.public_id,
       query: { limit: '101' },

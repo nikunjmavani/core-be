@@ -1179,32 +1179,6 @@
       }
     }
   },
-  "GET /api/v1/tenancy/invitations/pending": {
-    "responses": {
-      "200": {
-        "data": [],
-        "meta": {
-          "request_id": "68d6888b-9934-4dc3-9b0e-2cda59fc9932",
-          "pagination": {
-            "per_page": 25,
-            "next": null,
-            "has_more": false
-          }
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "7b642e75-38ab-4285-9b59-4f5de6bbefa6"
-        }
-      }
-    }
-  },
   "GET /api/v1/tenancy/organization": {
     "responses": {
       "200": {
@@ -1387,60 +1361,6 @@
         },
         "meta": {
           "request_id": "82a913d8-0aa3-41f9-990f-2a24aab9c1ff"
-        }
-      }
-    }
-  },
-  "GET /api/v1/tenancy/organization/invitations": {
-    "responses": {
-      "200": {
-        "data": [],
-        "meta": {
-          "request_id": "36803b40-4bdf-4f2a-99c1-915100730028",
-          "pagination": {
-            "per_page": 25,
-            "next": null,
-            "has_more": false
-          }
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid values for fields in request",
-          "documentation_url": "https://example.com/resource",
-          "errors": [
-            {
-              "field": "querystring.limit",
-              "message": "Too big: expected number to be <=100"
-            }
-          ]
-        },
-        "meta": {
-          "request_id": "5d084f6d-0593-47b7-90c1-fecadbf5242c"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "7ab86994-378a-4ba0-9501-9dbb33b09e7c"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "2573e556-830c-41fc-9df5-8dacb3d903c6"
         }
       }
     }
@@ -4664,43 +4584,6 @@
       }
     }
   },
-  "POST /api/v1/tenancy/invitations/:invitation_id/decline": {
-    "responses": {
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Missing Authorization header",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "80f278f1-8c85-40ee-9f7d-3904d4540a2c"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "You can only decline invitations sent to your email",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "bcc843bd-b3d7-446e-97ff-569101d2d877"
-        }
-      },
-      "404": {
-        "error": {
-          "type": "request_error",
-          "code": "not_found",
-          "detail": "{{resource}} not found",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "005c432c-507c-4f3f-914c-cd13970b2eba"
-        }
-      }
-    }
-  },
   "POST /api/v1/tenancy/organization/api-keys": {
     "request_body": {
       "name": "Listing Test Key",
@@ -4835,84 +4718,6 @@
         },
         "meta": {
           "request_id": "39354e47-6256-4d6a-9ad1-7bf7970e873d"
-        }
-      }
-    }
-  },
-  "POST /api/v1/tenancy/organization/invitations": {
-    "request_body": {
-      "membership_id": "rol_example00000000000000",
-      "expires_in_days": 7
-    },
-    "responses": {
-      "201": {
-        "data": {
-          "invitation": {
-            "id": "inv_example00000000000000",
-            "membership_id": "rol_example00000000000000",
-            "email": "user@example.com",
-            "expires_at": "2026-01-01T00:00:00.000Z",
-            "accepted_at": null,
-            "revoked_at": null,
-            "created_at": "2026-01-01T00:00:00.000Z"
-          }
-        },
-        "meta": {
-          "request_id": "7d0d1483-4c10-4cc2-9fdd-9474575b8198"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid values for fields in request",
-          "documentation_url": "https://example.com/resource",
-          "errors": [
-            {
-              "field": "body.membership_id",
-              "message": "Invalid input: expected string, received undefined"
-            },
-            {
-              "field": "body",
-              "message": "Unrecognized keys: \"__fuzz\", \"unexpected\""
-            }
-          ]
-        },
-        "meta": {
-          "request_id": "037ccc37-98c8-4a82-9f34-bfab34f15c99"
-        }
-      },
-      "403": {
-        "error": {
-          "type": "request_error",
-          "code": "forbidden",
-          "detail": "Insufficient organization permissions",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "ddfac5b2-05ca-4389-948c-b0d21d9bac4a"
-        }
-      },
-      "404": {
-        "error": {
-          "type": "request_error",
-          "code": "not_found",
-          "detail": "{{resource}} not found",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "5f8f350d-b3f3-4be3-91b3-ceb7721d6a2d"
-        }
-      },
-      "422": {
-        "error": {
-          "type": "request_error",
-          "code": "unprocessable_entity",
-          "detail": "Idempotency-Key header is required for this operation",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "27696155-20e5-446f-9557-12e9ed2b9732"
         }
       }
     }

@@ -16,7 +16,6 @@ export const ROUTES_WITHOUT_JSON_BODY = new Set([
   'POST /api/v1/users/{user_id}/unsuspend',
   'POST /api/v1/uploads/{upload_id}/confirm',
   'POST /api/v1/tenancy/organization/leave',
-  'POST /api/v1/tenancy/invitations/{invitation_id}/decline',
   'POST /api/v1/billing/subscriptions/{subscription_id}/cancel',
   'POST /api/v1/billing/subscriptions/{subscription_id}/resume',
   'POST /api/v1/tenancy/organization/api-keys/{api_key_id}/rotate',

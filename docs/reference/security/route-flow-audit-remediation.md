@@ -119,10 +119,12 @@ rationale and a concrete plan for each.
 
 - **Fix:** owned-organization, API-key, notification-policy, and custom-role
   creates take a transaction-scoped `pg_advisory_xact_lock` for their scope
-  (`infrastructure/database/resource-cap-lock.ts`) before the count, mirroring the
-  per-user upload-quota lock — two parallel creates can no longer both pass at N-1.
-- **Tests:** cap service unit tests mock the lock helper; `organization.service`
-  asserts the lock is taken before counting (TEN-02).
+  (`infrastructure/database/resource-quota-lock.util.ts`) before the count, mirroring
+  the per-user upload-quota lock — two parallel creates can no longer both pass at N-1.
+  (audit R12: a redundant second lock module, `resource-cap-lock.ts`, was removed —
+  org-create now uses the single canonical quota lock like every other capped resource.)
+- **Tests:** cap service unit tests exercise the quota lock; `organization.service`
+  asserts the owned-organization quota lock is taken before counting (TEN-02 / R12).
 
 ### R4 — route-local mutation rate limits on the remaining mutations
 

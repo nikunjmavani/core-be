@@ -76,7 +76,14 @@ export class OrganizationSettingsRepository {
           ...(data.is_email_notifications_enabled !== undefined && {
             is_email_notifications_enabled: data.is_email_notifications_enabled,
           }),
-          ...(data.security_policy !== undefined && { security_policy: data.security_policy }),
+          // audit #11: MERGE the incoming security_policy keys into the existing JSONB instead of a
+          // whole-object replace. A wholesale replace made two concurrent PATCHes last-writer-wins,
+          // so one admin enabling org-mandated MFA could be silently reverted by another admin
+          // editing an unrelated key. `||` composes: incoming keys win on overlap, untouched keys
+          // are preserved. To remove a key, set it explicitly (e.g. `{mfa_required: false}`).
+          ...(data.security_policy !== undefined && {
+            security_policy: sql`coalesce(${organization_settings.security_policy}, '{}'::jsonb) || excluded.security_policy`,
+          }),
           ...(data.default_locale !== undefined && { default_locale: data.default_locale }),
           updated_at: databaseNowTimestamp,
           updated_by_user_id: data.updated_by_user_id ?? undefined,

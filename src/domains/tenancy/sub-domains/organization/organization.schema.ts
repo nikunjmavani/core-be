@@ -52,7 +52,12 @@ export const organizations = tenancySchema
     },
     (table) => [
       uniqueIndex('idx_organizations_public_id').on(table.public_id),
-      uniqueIndex('idx_organizations_slug').on(table.slug),
+      // Partial: only LIVE rows constrain the team-slug namespace. A full index would keep a
+      // soft-deleted team's slug indexed, so `findBySlug` (which filters `deleted_at IS NULL`)
+      // reports the slug free while the INSERT collides with the tombstone — burning the slug
+      // for everyone until tombstone-retention hard-deletes the row. Mirrors `idx_users_email_unique`
+      // and `idx_memberships_user_org_unique`. (Personal orgs have NULL slug → never indexed here.)
+      uniqueIndex('idx_organizations_slug').on(table.slug).where(sql`${table.deleted_at} IS NULL`),
       // At most one PERSONAL organization per owner (personal slug is NULL, so the slug
       // unique index does not constrain them — this partial index does).
       uniqueIndex('idx_org_one_personal_per_owner')
@@ -85,6 +90,7 @@ export const organizations = tenancySchema
         to: 'public',
         using: sql`${table.public_id} = current_setting('app.current_organization_id', true)
           OR current_setting('app.global_retention_cleanup', true) = 'true'`,
+        withCheck: sql`${table.public_id} = current_setting('app.current_organization_id', true)`,
       }),
     ],
   )

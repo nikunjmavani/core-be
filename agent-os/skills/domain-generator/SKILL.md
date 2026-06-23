@@ -166,7 +166,7 @@ export function <domain>Routes(deps: <Domain>RoutesDeps): FastifyPluginAsync {
 9. **Author in-source docs** (required, gated by `pnpm tsdoc:check`):
    - **TSDoc** on every public export — invoke **tsdoc-export-guard**.
    - **`schema: { summary, description, tags }`** on every Fastify route — invoke **route-schema-doc-guard**.
-   - **`OVERVIEW.md`** at the new domain folder (Template A.1) and at the new sub-domain folder (Template A.2) — invoke **overview-doc-maintainer**.
+   - **`<folder>.overview.md`** at the new domain folder (Template A.1) and at the new sub-domain folder (Template A.2) — invoke **overview-doc-maintainer**.
    - For a **new domain**, also update `src/OVERVIEW.md` Domains table — invoke **system-narrative-maintainer**.
 10. **Verify coverage** — run `pnpm tsdoc:check` and confirm the budget did not regress.
 

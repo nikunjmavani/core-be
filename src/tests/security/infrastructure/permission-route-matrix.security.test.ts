@@ -70,20 +70,16 @@ function payloadForPermissionRoute(
   if (route.path.includes('/webhooks/:webhook_id')) {
     return { is_enabled: false };
   }
-  if (route.path.endsWith('/invitations')) {
-    return { membership_id: publicIdPlaceholderFor('plan') };
-  }
   if (route.path.includes('/invitations/:invitation_id/resend')) {
     return { expires_in_days: 7 };
   }
   if (route.path.endsWith('/memberships')) {
-    // Create must use `INVITED`: an `ACTIVE` create is rejected with 403 by the
-    // activation guard even when the caller holds the permission, which would break
-    // the "does not return 403 with <permission>" half of the matrix.
+    // REQ-1: "Add member" is invite-by-email — a valid `{ email, role_id }` body so validation
+    // passes and the request reaches the permission preHandler this matrix asserts on (the route
+    // always creates an INVITED membership; status is no longer an input).
     return {
-      user_id: publicIdPlaceholderFor('plan'),
+      email: 'matrix-member@example.test',
       role_id: publicIdPlaceholderFor('plan'),
-      status: 'INVITED',
     };
   }
   if (route.path.includes('/memberships/:membership_id')) {

@@ -10,9 +10,35 @@
  * When you add a new env key that's conditionally required, mark it OPTIONAL in
  * `.env.example` and pair it with a corresponding `.optional()` / refinement here.
  */
+import { createPrivateKey, createPublicKey } from 'node:crypto';
 import { validateProductionRedisTopology } from '@/infrastructure/cache/redis-url.parse.util.js';
 import { PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { z } from 'zod';
+
+/** Minimum accepted RSA modulus (bits) for the RS256 signing keys (audit #8). */
+const MIN_JWT_RSA_MODULUS_BITS = 2048;
+
+/** True for deployed runtimes (production/staging) where placeholder/ephemeral keys are unacceptable. */
+const isDeployedRuntime = (nodeEnv: string): boolean =>
+  nodeEnv === 'production' || nodeEnv === 'staging';
+
+/**
+ * Returns true when `pem` parses as an RSA key (of `kind`) whose modulus is at
+ * least {@link MIN_JWT_RSA_MODULUS_BITS} bits. Used by the boot-time refine so a
+ * truncated PEM or an accidental sub-2048-bit / non-RSA key fails fast instead of
+ * issuing forgeable tokens or failing opaquely at first sign/verify (audit #8).
+ */
+const isStrongRsaPem = (pem: string, kind: 'private' | 'public'): boolean => {
+  try {
+    const key = kind === 'private' ? createPrivateKey(pem) : createPublicKey(pem);
+    return (
+      key.asymmetricKeyType === 'rsa' &&
+      (key.asymmetricKeyDetails?.modulusLength ?? 0) >= MIN_JWT_RSA_MODULUS_BITS
+    );
+  } catch {
+    return false;
+  }
+};
 
 const nodeEnvSchema = z
   .enum(['local', 'development', 'staging', 'production', 'test'])
@@ -105,6 +131,16 @@ const envSchemaBase = z.object({
    * stalls (a long sync op / GC pause). Lower it to shed sooner; raise it to tolerate longer stalls.
    */
   OVERLOAD_MAX_EVENT_LOOP_DELAY_MS: z.coerce.number().int().min(1).max(60_000).default(250),
+  /**
+   * Fraction of `DATABASE_POOL_MAX` in-flight org-RLS checkouts at which the overload guard sheds
+   * new (non-health) requests with a fast 503 + Retry-After. DB-pool exhaustion manifests as
+   * awaiting-promise time (the event loop stays idle), so the event-loop valve alone never trips on
+   * it — requests instead queue behind postgres.js with no acquire deadline up to the request
+   * timeout. Shedding at saturation bounds that tail. Decoupled from the alerter's
+   * `DATABASE_POOL_ACTIVE_CRITICAL_RATIO` so shedding can be tuned independently; set to `0` to
+   * disable pool-saturation shedding (event-loop shedding stays active).
+   */
+  OVERLOAD_DB_POOL_SHED_RATIO: z.coerce.number().min(0).max(1).default(0.9),
 
   // Database (managed service)
   DATABASE_URL: isLocalRuntime ? z.string().min(1).default(LOCAL_DATABASE_URL) : z.string().min(1),
@@ -226,10 +262,32 @@ const envSchemaBase = z.object({
   API_DOCS_BASE_URL: z.url().optional(),
 
   // Rate limiting
-  RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(100),
+  // Upper bound (audit #34) catches a fat-fingered value that would silently disable global
+  // throttling. NOTE: during a Redis failover the fallback store counts PER PROCESS, so the
+  // effective cluster-wide ceiling while degraded is RATE_LIMIT_MAX × instance count.
+  RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(100_000).default(100),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1).default(60_000),
   /** Comma-separated hostnames allowed for outbound webhooks (optional; empty = no extra restriction). */
-  WEBHOOK_URL_ALLOWLIST: z.string().optional(),
+  WEBHOOK_URL_ALLOWLIST: z
+    .string()
+    .optional()
+    .refine(
+      (value) => {
+        if (value === undefined) return true;
+        // audit #32: reject an over-broad wildcard (`*.com`, `*.io`) that whitelists nearly the
+        // entire internet and silently neutralizes the production allowlist. Require at least a
+        // registrable domain (>= 2 labels) after `*.`.
+        return value
+          .split(',')
+          .map((entry) => entry.trim().toLowerCase())
+          .filter(Boolean)
+          .every((entry) => !entry.startsWith('*.') || entry.slice(2).split('.').length >= 2);
+      },
+      {
+        message:
+          'WEBHOOK_URL_ALLOWLIST wildcard entries must target at least a registrable domain (e.g. `*.example.com`, not `*.com`).',
+      },
+    ),
   /**
    * Per-organization cap on active webhook subscribers (sec-N4). The service
    * rejects further creates beyond this number with a 409. The fan-out loop
@@ -309,8 +367,19 @@ const envSchemaBase = z.object({
    * Tolerance (seconds) for the Stripe webhook signature timestamp check. A wider window lets
    * Stripe's retries — which carry the original event timestamp — still verify after a short API
    * outage instead of being rejected as stale. Stripe's SDK default is 300s; bounded to [150, 600].
+   * audit #22: default to 150 (half the Stripe default) to halve the signature-replay window — the
+   * `stripe_webhook_events` ledger dedup is the primary replay defense, this is defense-in-depth and
+   * now matches the documented posture in `constructStripeWebhookEvent`.
    */
-  STRIPE_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().min(150).max(600).default(300),
+  STRIPE_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().min(150).max(600).default(150),
+  /**
+   * Grace window (days) after a subscription enters a dunning status (PAST_DUE / UNPAID /
+   * INCOMPLETE) during which it retains its full plan seat ceiling. Anchored at
+   * `current_period_end`; once `now > current_period_end + this`, the org's entitlement lapses to
+   * the Free-tier ceiling (F4). Keeps the standard dunning UX (a failed payment does not instantly
+   * revoke collaborators) while preventing indefinite premium headcount on an unpaid subscription.
+   */
+  BILLING_DUNNING_GRACE_DAYS: z.coerce.number().int().min(0).max(120).default(14),
 
   // Sentry
   SENTRY_DSN: z.url().optional(),
@@ -386,6 +455,13 @@ const envSchemaBase = z.object({
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   /** AWS SDK maxAttempts for S3 (each attempt bounded by service/client timeouts). */
   S3_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+  /**
+   * Per-attempt socket-inactivity timeout (ms) for S3 requests, so a stalled S3 call can't hang a
+   * worker or request indefinitely. Bounds each of the `S3_MAX_ATTEMPTS` attempts.
+   */
+  S3_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(15000),
+  /** TCP connection-establishment timeout (ms) for S3 requests. */
+  S3_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(500).max(60000).default(5000),
   /**
    * audit-#13: public base URL (e.g. a CloudFront distribution) for PUBLIC media only
    * (avatars, organization logos). When set, `getObjectUrl` builds links from this base instead
@@ -684,11 +760,47 @@ const envSchemaBase = z.object({
     .optional()
     .default('false')
     .transform((v) => v === 'true' || v === '1'),
+  // R14: the `call_api` MCP tool is an admin-authority in-process API proxy. It defaults to
+  // READ-ONLY (GET); set this to allow mutating methods (POST/PATCH/PUT/DELETE). Off by default
+  // so enabling MCP cannot, on its own, expose destructive admin mutations through the tool.
+  MCP_CALL_API_ALLOW_MUTATIONS: z
+    .string()
+    .optional()
+    .default('false')
+    .transform((v) => v === 'true' || v === '1'),
+  // R14: optional operator allowlist of path prefixes the `call_api` tool may target (CSV). When
+  // unset/empty the existing `/api/v1/` (+ /livez, /readyz) gate applies; when set, the path must
+  // ALSO match one of these prefixes — a defense-in-depth narrowing of the admin proxy's reach.
+  MCP_CALL_API_ALLOWED_PATH_PREFIXES: z
+    .string()
+    .optional()
+    .transform((v) =>
+      v
+        ? v
+            .split(',')
+            .map((entry) => entry.trim())
+            .filter((entry) => entry.length > 0)
+        : [],
+    ),
   ENABLE_API_REFERENCE: z
     .string()
     .optional()
     .default('false')
     .transform((v) => v === 'true' || v === '1'),
+  /**
+   * Deliberate override (audit #7) allowing the unauthenticated `/reference` UI in production.
+   * Off by default; the cross-field refine on {@link envSchema} rejects
+   * `ENABLE_API_REFERENCE=true` in production unless this is also set.
+   */
+  API_REFERENCE_ALLOW_PRODUCTION: booleanString('false'),
+  /**
+   * Deliberate override (re-audit A1) allowing the Bull-Board queue dashboard (`/admin/queues`)
+   * in production. Off by default; the cross-field refine on {@link envSchema} rejects
+   * `ENABLE_QUEUE_DASHBOARD=true` in production unless this is also set. The dashboard is still
+   * SUPER_ADMIN-gated at runtime — this is a boot-time safety net so the protection does not rest
+   * solely on a single preHandler wiring.
+   */
+  QUEUE_DASHBOARD_ALLOW_PRODUCTION: booleanString('false'),
   OPENAPI_SPEC_PATH: z.string().min(1).optional(),
 
   // Organization capability flags — toggle the two organization kinds independently so one
@@ -1181,6 +1293,59 @@ export const envSchema = envSchemaBase
       message:
         'In production, STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET must both be set or both unset (see sec-B5).',
       path: ['STRIPE_SECRET_KEY'],
+    },
+  )
+  // audit #8: the RS256 signing keys were validated only by `min(1)`. A truncated PEM, a
+  // non-RSA key, or an accidental sub-2048-bit key passed boot and either failed opaquely at
+  // first sign/verify or (weak-but-valid) issued practically-forgeable tokens. Assert real RSA
+  // PEMs of adequate modulus in DEPLOYED runtimes (production/staging) — mirroring the entropy
+  // floor already gated on SECRETS_ENCRYPTION_KEY. local/development/test use ephemeral keys.
+  .refine(
+    (data) => !isDeployedRuntime(data.NODE_ENV) || isStrongRsaPem(data.JWT_PRIVATE_KEY, 'private'),
+    {
+      message: `JWT_PRIVATE_KEY must be a valid RSA private-key PEM of at least ${MIN_JWT_RSA_MODULUS_BITS} bits.`,
+      path: ['JWT_PRIVATE_KEY'],
+    },
+  )
+  .refine(
+    (data) => !isDeployedRuntime(data.NODE_ENV) || isStrongRsaPem(data.JWT_PUBLIC_KEY, 'public'),
+    {
+      message: `JWT_PUBLIC_KEY must be a valid RSA public-key PEM of at least ${MIN_JWT_RSA_MODULUS_BITS} bits.`,
+      path: ['JWT_PUBLIC_KEY'],
+    },
+  )
+  // audit #7: the Scalar API reference UI (GET /reference) mounts with no auth pre-handler and
+  // no environment restriction. Exposing the full internal API contract unauthenticated in
+  // production is a recon aid (and relaxes CSP on that subtree). Refuse to enable it in
+  // production unless an operator explicitly opts in via API_REFERENCE_ALLOW_PRODUCTION=true.
+  .refine(
+    (data) =>
+      !(
+        data.NODE_ENV === 'production' &&
+        data.ENABLE_API_REFERENCE &&
+        !data.API_REFERENCE_ALLOW_PRODUCTION
+      ),
+    {
+      message:
+        'ENABLE_API_REFERENCE=true is not permitted in production (the /reference UI is unauthenticated and exposes the full API contract). Set API_REFERENCE_ALLOW_PRODUCTION=true to override deliberately.',
+      path: ['ENABLE_API_REFERENCE'],
+    },
+  )
+  // re-audit A1: the Bull-Board queue dashboard (/admin/queues) is SUPER_ADMIN-gated at runtime,
+  // but unlike /reference it had no boot-time guard — so its protection rested entirely on a single
+  // preHandler wiring. Refuse to enable it in production unless an operator explicitly opts in via
+  // QUEUE_DASHBOARD_ALLOW_PRODUCTION=true (defense-in-depth safety net, mirroring ENABLE_API_REFERENCE).
+  .refine(
+    (data) =>
+      !(
+        data.NODE_ENV === 'production' &&
+        data.ENABLE_QUEUE_DASHBOARD &&
+        !data.QUEUE_DASHBOARD_ALLOW_PRODUCTION
+      ),
+    {
+      message:
+        'ENABLE_QUEUE_DASHBOARD=true is not permitted in production (the Bull-Board dashboard exposes job payloads and destructive job operations). Set QUEUE_DASHBOARD_ALLOW_PRODUCTION=true to override deliberately.',
+      path: ['ENABLE_QUEUE_DASHBOARD'],
     },
   );
 

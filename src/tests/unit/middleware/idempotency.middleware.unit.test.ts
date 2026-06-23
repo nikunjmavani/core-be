@@ -217,6 +217,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     const { claimPreHandler } = await registerIdempotencyHooks();
 
     const request = {
+      id: 'req-test',
       method: 'POST',
       headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
       auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
@@ -238,6 +239,8 @@ describe('idempotency middleware happy paths and conflicts', () => {
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
         error: expect.objectContaining({ code: 'idempotency_key_reuse' }),
+        // audit api-contract-#1: idempotency errors carry the standard meta.request_id envelope.
+        meta: expect.objectContaining({ request_id: expect.any(String) }),
       }),
     );
     expect(mockRedisSet).not.toHaveBeenCalled();

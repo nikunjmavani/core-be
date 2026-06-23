@@ -30,8 +30,8 @@ export class VerificationTokenService {
     return this.repository.create(token_type, user_id, email, token_hash, expires_at);
   }
 
-  async consumeIfValid(token_hash: string) {
-    return this.repository.consumeIfValid(token_hash);
+  async consumeIfValid(token_hash: string, expected_type: VerificationTokenType) {
+    return this.repository.consumeIfValid(token_hash, expected_type);
   }
 
   async invalidateAllForUser(user_id: number, token_type: VerificationTokenType) {

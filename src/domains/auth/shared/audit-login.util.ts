@@ -12,7 +12,13 @@ import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
  * `oauth_google`, `oauth_github` — to preserve that information without
  * adding a separate column.
  */
-export type LoginAuditSource = 'password' | 'magic_link' | 'webauthn' | `oauth_${string}`;
+export type LoginAuditSource =
+  | 'password'
+  | 'magic_link'
+  | 'webauthn'
+  | 'mfa_totp'
+  | 'mfa_recovery_code'
+  | `oauth_${string}`;
 
 /**
  * Subset of the first-factor auth result that carries enough to identify the
@@ -28,7 +34,7 @@ export interface LoginAuditEventInput {
  * Records the audit row(s) for a successful login (sec-A8).
  *
  * @remarks
- * OVERVIEW.md promises "every login (success or failure) records a row". Before
+ * auth.overview.md promises "every login (success or failure) records a row". Before
  * this helper the promise held only for password login — OAuth, magic-link,
  * and WebAuthn callbacks succeeded silently. Brute-force / credential-stuffing
  * detection requires a single source of truth for `auth.login` events; this
@@ -94,7 +100,7 @@ function extractLoginFailureErrorCode(error: unknown): unknown {
  * login surface (sec-A8 follow-up).
  *
  * @remarks
- * OVERVIEW.md promises "every login (success or failure) records a row".
+ * auth.overview.md promises "every login (success or failure) records a row".
  * {@link recordLoginAuditEvent} covered success; this helper closes the
  * failure side so a brute-force / credential-stuffing attempt is visible
  * in `audit.events` as `auth.login_failure` with the originating `source`

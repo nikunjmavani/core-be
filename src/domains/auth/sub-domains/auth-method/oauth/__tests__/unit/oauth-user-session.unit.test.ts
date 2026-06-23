@@ -37,10 +37,12 @@ describe('completeOAuthUserSession', () => {
       status: 'ACTIVE',
       is_email_verified: true,
     }),
+    updateEmailVerified: vi.fn().mockResolvedValue(null),
   };
   const authMethodService = {
     linkOAuthProviderIfMissing: vi.fn().mockResolvedValue(undefined),
     findByProviderUserId: vi.fn().mockResolvedValue(null),
+    hasActiveLoginCredential: vi.fn().mockResolvedValue(false),
   };
   const authSessionService = {
     createSessionForUser: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
@@ -72,7 +74,9 @@ describe('completeOAuthUserSession', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     userService.findByEmail.mockResolvedValue(null);
+    userService.updateEmailVerified.mockResolvedValue(null);
     authMethodService.findByProviderUserId.mockResolvedValue(null);
+    authMethodService.hasActiveLoginCredential.mockResolvedValue(false);
   });
 
   it('blocks OAuth signup when disposable email is not allowed', async () => {
@@ -98,13 +102,16 @@ describe('completeOAuthUserSession', () => {
     expect(userService.createFromOAuth).not.toHaveBeenCalled();
   });
 
-  it('blocks find-or-link into a pre-existing account whose email is unverified', async () => {
+  it('blocks find-or-link into a pre-existing password account whose email is unverified', async () => {
+    // Credential-bearing (has a password) but unverified: a squatter who registered with the
+    // victim's email must not be silently merged into via an OAuth find-or-link.
     userService.findByEmail.mockResolvedValue({
       id: 42,
       public_id: 'victim_public',
       email: 'victim@example.com',
       status: 'ACTIVE',
       is_email_verified: false,
+      password_hash: 'hashed-password',
     });
 
     const error = await callCompleteOAuthUserSession().catch((caught: unknown) => caught);
@@ -113,6 +120,60 @@ describe('completeOAuthUserSession', () => {
     expect(error).toMatchObject({ messageKey: 'errors:oauthLinkRequiresVerifiedAccount' });
     expect(authMethodService.linkOAuthProviderIfMissing).not.toHaveBeenCalled();
     expect(authSessionService.createSessionForUser).not.toHaveBeenCalled();
+    // The account already has a credential, so the bare-claim path is never even probed.
+    expect(authMethodService.hasActiveLoginCredential).not.toHaveBeenCalled();
+    expect(userService.updateEmailVerified).not.toHaveBeenCalled();
+  });
+
+  it('blocks find-or-link into an unverified passkey-only account (passkey counts as a credential)', async () => {
+    // No password, but a real credential exists — here a WebAuthn passkey, which hasActiveLoginCredential
+    // counts (hasLoginCapableMethod would NOT). This is NOT a bare placeholder, so the guard must still
+    // block the silent merge even though the email is unverified. Regression guard for the latent
+    // takeover gap where account-claim safety relied on the "passkey ⇒ verified" invariant.
+    userService.findByEmail.mockResolvedValue({
+      id: 42,
+      public_id: 'passkey_public',
+      email: 'victim@example.com',
+      status: 'ACTIVE',
+      is_email_verified: false,
+      password_hash: null,
+    });
+    authMethodService.hasActiveLoginCredential.mockResolvedValue(true);
+
+    const error = await callCompleteOAuthUserSession().catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ForbiddenError);
+    expect(error).toMatchObject({ messageKey: 'errors:oauthLinkRequiresVerifiedAccount' });
+    expect(authMethodService.linkOAuthProviderIfMissing).not.toHaveBeenCalled();
+    expect(userService.updateEmailVerified).not.toHaveBeenCalled();
+  });
+
+  it('claims a bare unverified invited placeholder: verifies the email, links the provider, issues a session', async () => {
+    // A pre-provisioned invited placeholder — no password, no login-capable method, unverified. The
+    // provider proves control of the email, so the OAuth callback claims it instead of throwing.
+    userService.findByEmail.mockResolvedValue({
+      id: 42,
+      public_id: 'invited_public',
+      email: 'victim@example.com',
+      status: 'ACTIVE',
+      is_email_verified: false,
+      password_hash: null,
+    });
+    authMethodService.hasActiveLoginCredential.mockResolvedValue(false);
+    userService.updateEmailVerified.mockResolvedValue({
+      id: 42,
+      public_id: 'invited_public',
+      email: 'victim@example.com',
+      status: 'ACTIVE',
+      is_email_verified: true,
+    });
+
+    const result = await callCompleteOAuthUserSession();
+
+    expect(userService.updateEmailVerified).toHaveBeenCalledWith('invited_public');
+    expect(authMethodService.linkOAuthProviderIfMissing).toHaveBeenCalledTimes(1);
+    expect(userService.createFromOAuth).not.toHaveBeenCalled();
+    expect('session_public_id' in result && result.session_public_id).toBe('session_public');
   });
 
   it('auto-links into a pre-existing account whose email is already verified', async () => {
@@ -138,7 +199,11 @@ describe('completeOAuthUserSession', () => {
       email: 'victim@example.com',
       status: 'ACTIVE',
       is_email_verified: false,
+      password_hash: null,
     });
+    // A returning OAuth user already has a linked (login-capable) OAuth method, so this is the
+    // already-linked path — not a bare-placeholder claim.
+    authMethodService.hasActiveLoginCredential.mockResolvedValue(true);
     authMethodService.findByProviderUserId.mockResolvedValue({
       id: 7,
       user_id: 42,
@@ -149,6 +214,8 @@ describe('completeOAuthUserSession', () => {
     const result = await callCompleteOAuthUserSession();
 
     expect('session_public_id' in result && result.session_public_id).toBe('session_public');
+    // The identity is already linked, so the unverified-email is left untouched (no silent claim).
+    expect(userService.updateEmailVerified).not.toHaveBeenCalled();
   });
 
   it('creates a new user on first-time OAuth signup', async () => {

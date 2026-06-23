@@ -49,6 +49,6 @@ How **API-initiated** subscription changes relate to **Stripe webhooks** and loc
 - [data-lifecycle-deletion.md](../../reference/data/data-lifecycle-deletion.md) — subscriptions are an immutable ledger (no `deleted_at`)
 - [observability.md](observability.md) — Sentry + logs for `stripe.subscription.*` failures
 - [cicd-and-deployment.md](../ci-cd/cicd-and-deployment.md) — `STRIPE_*` deploy secrets
-- [`src/domains/billing/sub-domains/subscription/OVERVIEW.md`](../../../src/domains/billing/sub-domains/subscription/OVERVIEW.md) — subscription state machine, network-I/O-outside-RLS rule, stale-event rejection
-- [`src/domains/billing/sub-domains/stripe-webhook/OVERVIEW.md`](../../../src/domains/billing/sub-domains/stripe-webhook/OVERVIEW.md) — webhook receiver, reclaim window, per-source DLQ
+- [`src/domains/billing/sub-domains/subscription/subscription.overview.md`](../../../src/domains/billing/sub-domains/subscription/subscription.overview.md) — subscription state machine, network-I/O-outside-RLS rule, stale-event rejection
+- [`src/domains/billing/sub-domains/stripe-webhook/stripe-webhook.overview.md`](../../../src/domains/billing/sub-domains/stripe-webhook/stripe-webhook.overview.md) — webhook receiver, reclaim window, per-source DLQ
 - [`src/FLOWS.md`](../../../src/FLOWS.md) § Stripe webhook ingest, § Subscription change — end-to-end flow diagrams

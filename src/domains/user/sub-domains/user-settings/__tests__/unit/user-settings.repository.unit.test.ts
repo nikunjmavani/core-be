@@ -1,21 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UserSettingsRepository } from '@/domains/user/sub-domains/user-settings/user-settings.repository.js';
 
+// audit #12: upsert is now a single atomic INSERT ... ON CONFLICT DO UPDATE (no read-branch-write),
+// so the mock chain is select (getByUserId) + insert().values().onConflictDoUpdate().returning().
 const mockReturning = vi.fn().mockResolvedValue([]);
+const mockOnConflictDoUpdate = vi.fn((_config: { set: Record<string, unknown> }) => ({
+  returning: mockReturning,
+}));
+const mockValues = vi.fn((_row: Record<string, unknown>) => ({
+  onConflictDoUpdate: mockOnConflictDoUpdate,
+}));
+const mockInsert = vi.fn(() => ({ values: mockValues }));
 const mockLimit = vi.fn().mockResolvedValue([]);
-const mockWhere = vi.fn(() => ({ limit: mockLimit, returning: mockReturning }));
+const mockWhere = vi.fn(() => ({ limit: mockLimit }));
 const mockFrom = vi.fn(() => ({ where: mockWhere }));
 const mockSelect = vi.fn(() => ({ from: mockFrom }));
-const mockValues = vi.fn(() => ({ returning: mockReturning }));
-const mockInsert = vi.fn(() => ({ values: mockValues }));
-const mockSet = vi.fn(() => ({ where: mockWhere }));
-const mockUpdate = vi.fn(() => ({ set: mockSet }));
 
 vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => ({
   getRequestDatabase: () => ({
     select: mockSelect,
     insert: mockInsert,
-    update: mockUpdate,
   }),
 }));
 
@@ -24,17 +28,14 @@ describe('UserSettingsRepository', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockLimit.mockReset();
-    mockReturning.mockReset();
+    mockLimit.mockResolvedValue([]);
+    mockReturning.mockResolvedValue([]);
   });
 
   it('getByUserId returns settings row', async () => {
     const settings = { user_id: 1, language: 'en' };
     mockLimit.mockResolvedValue([settings]);
-
-    const result = await repository.getByUserId(1);
-
-    expect(result).toEqual(settings);
+    expect(await repository.getByUserId(1)).toEqual(settings);
   });
 
   it('getByUserId returns null when no row exists', async () => {
@@ -42,89 +43,48 @@ describe('UserSettingsRepository', () => {
     expect(await repository.getByUserId(999)).toBeNull();
   });
 
-  it('upsert inserts when no existing row', async () => {
-    mockLimit.mockResolvedValue([]);
+  it('upsert is a single atomic INSERT ... ON CONFLICT DO UPDATE — never a read-branch-write (audit #12)', async () => {
     const created = { user_id: 1, language: 'es' };
     mockReturning.mockResolvedValue([created]);
 
     const result = await repository.upsert(1, { language: 'es' });
 
-    expect(mockInsert).toHaveBeenCalled();
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    expect(mockOnConflictDoUpdate).toHaveBeenCalledTimes(1);
+    // getByUserId (select) is NOT used by upsert anymore — no pre-read to race.
+    expect(mockSelect).not.toHaveBeenCalled();
     expect(result).toEqual(created);
   });
 
-  it('upsert updates when row exists', async () => {
-    const existing = {
-      user_id: 1,
-      language: 'en',
-      is_dark_mode_enabled: false,
-      is_notifications_enabled: true,
-      preferred_locales: ['en'],
-    };
-    mockLimit.mockResolvedValue([existing]);
-    const updated = { ...existing, language: 'fr' };
-    mockReturning.mockResolvedValue([updated]);
+  it('the conflict SET touches ONLY the supplied fields (no clobber of omitted ones)', async () => {
+    await repository.upsert(1, { language: 'fr' });
 
-    const result = await repository.upsert(1, { language: 'fr' });
-
-    expect(mockUpdate).toHaveBeenCalled();
-    expect(result.language).toBe('fr');
+    const setArg = mockOnConflictDoUpdate.mock.calls[0]![0]!.set as Record<string, unknown>;
+    expect(setArg).toHaveProperty('language', 'fr');
+    expect(setArg).toHaveProperty('updated_at');
+    // Fields not in this PATCH must NOT appear in the SET (so they keep their stored value).
+    expect(setArg).not.toHaveProperty('is_dark_mode_enabled');
+    expect(setArg).not.toHaveProperty('is_notifications_enabled');
+    expect(setArg).not.toHaveProperty('preferred_locales');
   });
 
-  it('upsert applies defaults on insert when optional fields are omitted', async () => {
-    mockLimit.mockResolvedValue([]);
-    const created = {
-      user_id: 2,
-      language: 'en',
-      is_dark_mode_enabled: false,
-      is_notifications_enabled: true,
-      preferred_locales: ['en'],
-    };
-    mockReturning.mockResolvedValue([created]);
+  it('an empty PATCH only bumps updated_at in the conflict SET', async () => {
+    await repository.upsert(2, {});
 
-    const result = await repository.upsert(2, {});
-
-    expect(mockInsert).toHaveBeenCalled();
-    expect(result.is_dark_mode_enabled).toBe(false);
-    expect(result.is_notifications_enabled).toBe(true);
-    expect(result.preferred_locales).toEqual(['en']);
+    const setArg = mockOnConflictDoUpdate.mock.calls[0]![0]!.set as Record<string, unknown>;
+    expect(Object.keys(setArg)).toEqual(['updated_at']);
   });
 
-  it('upsert uses defaults when existing row omits optional locale fields', async () => {
-    const existing = {
-      user_id: 4,
-      language: 'en',
-      is_dark_mode_enabled: false,
-      is_notifications_enabled: true,
-      preferred_locales: undefined,
-    };
-    mockLimit.mockResolvedValue([existing]);
-    mockReturning.mockResolvedValue([
-      { ...existing, preferred_locales: ['en'], is_dark_mode_enabled: false },
-    ]);
+  it('the INSERT row carries factory defaults for a brand-new row', async () => {
+    await repository.upsert(3, { is_dark_mode_enabled: true });
 
-    const result = await repository.upsert(4, { language: 'en' });
-
-    expect(mockUpdate).toHaveBeenCalled();
-    expect(result.preferred_locales).toEqual(['en']);
-  });
-
-  it('upsert preserves existing toggles when partial update omits them', async () => {
-    const existing = {
+    const insertedRow = mockValues.mock.calls[0]![0] as Record<string, unknown>;
+    expect(insertedRow).toMatchObject({
       user_id: 3,
-      language: 'de',
       is_dark_mode_enabled: true,
-      is_notifications_enabled: false,
-      preferred_locales: ['de', 'en'],
-    };
-    mockLimit.mockResolvedValue([existing]);
-    mockReturning.mockResolvedValue([{ ...existing, preferred_locales: ['de'] }]);
-
-    const result = await repository.upsert(3, { preferred_locales: ['de'] });
-
-    expect(mockUpdate).toHaveBeenCalled();
-    expect(result.is_dark_mode_enabled).toBe(true);
-    expect(result.is_notifications_enabled).toBe(false);
-    expect(result.preferred_locales).toEqual(['de']);
+      is_notifications_enabled: true,
+      language: 'en',
+      preferred_locales: ['en'],
+    });
   });
 });

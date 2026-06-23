@@ -7,7 +7,9 @@ import { closeRedis } from '@/infrastructure/cache/redis.client.js';
 import { closeMailQueue } from '@/infrastructure/mail/queues/mail.queue.js';
 import { closeNotificationQueue } from '@/domains/notify/sub-domains/notification/queues/notification.queue.js';
 import { closeWebhookDeliveryQueue } from '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js';
+import { closeSubscriptionSeatSyncQueue } from '@/domains/billing/sub-domains/subscription/queues/subscription-seat-sync.queue.js';
 import { flushSentry } from '@/infrastructure/observability/sentry/sentry.js';
+import { shutdownOpenTelemetry } from '@/infrastructure/observability/tracing/otel.js';
 import { THREE_SECONDS_MS } from '@/shared/constants/index.js';
 import { setApplicationDraining } from '@/shared/utils/infrastructure/application-lifecycle.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -53,8 +55,13 @@ const shutdownMiddleware: FastifyPluginAsync = async (app) => {
       closeMailQueue(),
       closeNotificationQueue(),
       closeWebhookDeliveryQueue(),
+      // REQ-4: producer queue used by change-plan + member add/remove on the request path.
+      closeSubscriptionSeatSyncQueue(),
     ]);
     await Promise.allSettled([closeRedis(), closeBullMqRedis(), closeDatabase()]);
+    // audit M5: flush + tear down the OpenTelemetry SDK (no-op when never started)
+    // before the Sentry flush so pending OTLP spans are not dropped on shutdown.
+    await shutdownOpenTelemetry();
     await flushSentry();
   });
 

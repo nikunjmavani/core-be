@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// REQ-4: stub the seat-sync producer queue so changePlan's best-effort enqueue never opens Redis.
+vi.mock(
+  '@/domains/billing/sub-domains/subscription/queues/subscription-seat-sync.queue.js',
+  () => ({
+    enqueueSubscriptionSeatSyncBestEffort: vi.fn(),
+  }),
+);
+
 vi.mock('@/infrastructure/database/contexts/organization-database.context.js', () => ({
   withOrganizationDatabaseContext: vi.fn(
     async (_organizationPublicId: string, callback: () => Promise<unknown>) => callback(),
@@ -10,6 +18,7 @@ import {
   ConflictError,
   NotFoundError,
   ServiceUnavailableError,
+  UnprocessableEntityError,
   ValidationError,
 } from '@/shared/errors/index.js';
 import { SubscriptionService } from '@/domains/billing/sub-domains/subscription/subscription.service.js';
@@ -98,7 +107,9 @@ describe('SubscriptionService', () => {
 
   it('list returns subscriptions for organization', async () => {
     const result = await service.list('org_public');
-    expect(result).toEqual([subscriptionRow]);
+    // REQ-4: each row is decorated with seats_total / seats_used (superset of the repo row).
+    expect(result).toMatchObject([subscriptionRow]);
+    expect(result[0]).toHaveProperty('seats_total');
   });
 
   it('get returns subscription when found', async () => {
@@ -120,7 +131,10 @@ describe('SubscriptionService', () => {
     );
     expect(repository.findActiveByOrganization).toHaveBeenCalledWith(organization.id);
     expect(repository.create).toHaveBeenCalled();
-    expect(result).toEqual(subscriptionRow);
+    // REQ-4: the row is now decorated with seats_total / seats_used, so it is a superset of the
+    // repository row — assert the original fields survived rather than exact equality.
+    expect(result).toMatchObject(subscriptionRow);
+    expect(result).toHaveProperty('seats_used');
   });
 
   it('create rejects with ConflictError before Stripe when an active subscription exists', async () => {
@@ -166,7 +180,10 @@ describe('SubscriptionService', () => {
       'user_public',
     );
     expect(repository.create).toHaveBeenCalled();
-    expect(result).toEqual(subscriptionRow);
+    // REQ-4: the row is now decorated with seats_total / seats_used, so it is a superset of the
+    // repository row — assert the original fields survived rather than exact equality.
+    expect(result).toMatchObject(subscriptionRow);
+    expect(result).toHaveProperty('seats_used');
     // audit-#2: a local-only subscription (no Stripe) leaves status unset so the
     // repository default (TRIALING) applies — there is no payment to be pending on.
     const createPayload = vi.mocked(repository.create).mock.calls[0]![0] as unknown as Record<
@@ -208,7 +225,10 @@ describe('SubscriptionService', () => {
 
   it('update with empty body returns the existing subscription (no-op)', async () => {
     const result = await service.update('org_public', 'sub_public', {});
-    expect(result).toEqual(subscriptionRow);
+    // REQ-4: the row is now decorated with seats_total / seats_used, so it is a superset of the
+    // repository row — assert the original fields survived rather than exact equality.
+    expect(result).toMatchObject(subscriptionRow);
+    expect(result).toHaveProperty('seats_used');
     expect(repository.update).not.toHaveBeenCalled();
   });
 
@@ -275,8 +295,10 @@ describe('SubscriptionService', () => {
       'idem-create-key',
     );
 
+    // audit #3: the client key is namespaced by operation + org before reaching Stripe's
+    // account-global idempotency space (no cross-tenant key collision).
     expect(stripeMocks.createStripeSubscription).toHaveBeenCalledWith(
-      expect.objectContaining({ idempotencyKey: 'idem-create-key' }),
+      expect.objectContaining({ idempotencyKey: 'sub-create:org_public:idem-create-key' }),
     );
     // The customer-create uses a deterministic per-org key (`customer-create:<org>`) so a
     // retried create after a crash returns the same Stripe customer instead of minting a
@@ -307,9 +329,10 @@ describe('SubscriptionService', () => {
       'idem-change-key',
     );
 
+    // audit #3: namespaced by operation + org before reaching Stripe's account-global key space.
     expect(stripeMocks.updateStripeSubscription).toHaveBeenCalledWith(
       'sub_stripe',
-      expect.objectContaining({ idempotencyKey: 'idem-change-key' }),
+      expect.objectContaining({ idempotencyKey: 'sub-change-plan:org_public:idem-change-key' }),
     );
   });
 
@@ -583,11 +606,37 @@ describe('SubscriptionService', () => {
     expect(createPayload).not.toHaveProperty('created_by_user_id');
   });
 
-  it('changePlan proceeds local-only when target plan has no Stripe price id', async () => {
+  // audit H2: a Stripe-backed subscription changing to a plan with no Stripe price id
+  // for its cycle must FAIL CLOSED — otherwise the local plan_id is updated while
+  // Stripe keeps billing the old price (un-self-healing divergence). The old test
+  // enshrined the buggy "proceeds local-only" behavior; flipped to assert the throw.
+  it('changePlan fails closed when a Stripe-backed subscription targets a plan with no Stripe price id (audit H2)', async () => {
     stripeMocks.isStripeConfigured.mockReturnValue(true);
     vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...subscriptionRow,
       provider_subscription_id: 'sub_stripe',
+    } as never);
+    vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
+      ...plan,
+      stripe_price_monthly_id: null,
+      stripe_price_yearly_id: null,
+    } as never);
+
+    await expect(
+      service.changePlan('org_public', 'sub_public', { plan_id: 'plan_public' }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityError);
+    expect(stripeMocks.updateStripeSubscription).not.toHaveBeenCalled();
+    // Local entitlement must NOT diverge from Stripe.
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  // The genuinely local-only path (no provider_subscription_id) may still change to a
+  // plan without a Stripe price — there is no Stripe state to diverge from.
+  it('changePlan proceeds local-only for a subscription with no provider_subscription_id', async () => {
+    stripeMocks.isStripeConfigured.mockReturnValue(true);
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...subscriptionRow,
+      provider_subscription_id: null,
     } as never);
     vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
       ...plan,

@@ -25,7 +25,7 @@ export function planRoutes(service: PlanService): FastifyPluginAsync {
       },
       controller.listPlans,
     );
-    zodApplication.get<{ Params: { organization_id: string } }>(
+    zodApplication.get<{ Params: { plan_id: string } }>(
       '/plans/:plan_id',
       {
         schema: {

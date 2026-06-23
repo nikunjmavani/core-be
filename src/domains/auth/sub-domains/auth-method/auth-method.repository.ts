@@ -1,28 +1,48 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
+import { capListWithWarning } from '@/shared/utils/infrastructure/list-cap.util.js';
 import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method.schema.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { AuthMethodCreateData, AuthMethodProviderLookup } from './auth-method.types.js';
 
 /**
  * Postgres advisory-lock namespace (`classid`, ASCII `ACRD`) serializing per-user credential
- * mutations. Combined with the user's internal id as `objid` in the two-key
+ * mutations. Combined with a positive int4 hash of the user's internal id as `objid` in the two-key
  * `pg_advisory_xact_lock(classid, objid)` form so it occupies a distinct lock space from other
- * advisory locks (e.g. the upload-quota namespace). Only its stability matters.
+ * advisory locks (e.g. the upload-quota namespace). The hash keeps `bigserial` ids beyond int4's
+ * 2.1B max from overflowing the int4 `objid` (B-1). Only its stability matters.
  */
 const CREDENTIAL_MUTATION_ADVISORY_LOCK_NAMESPACE = 0x41_43_52_44;
 
 /** Drizzle repository for the {@link auth_methods} table; reads and writes use the request-scoped database handle so Postgres RLS enforces organization isolation. Soft-deletes via `revoked_at` rather than physical deletion. */
 export class AuthMethodRepository {
   async listByUserId(userId: number) {
-    return getRequestDatabase()
+    // audit #36: bound this user-self-scoped read (limit+1 + capListWithWarning).
+    const rows = await getRequestDatabase()
       .select()
       .from(auth_methods)
+      .where(and(eq(auth_methods.user_id, userId), isNull(auth_methods.revoked_at)))
+      .limit(DEFAULT_REPOSITORY_LIST_LIMIT + 1);
+    return capListWithWarning({
+      rows,
+      limit: DEFAULT_REPOSITORY_LIST_LIMIT,
+      resource: 'auth.auth_methods',
+      context: { userId },
+    });
+  }
+
+  async countActiveByUserId(userId: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ value: sql<number>`count(*)::int` })
+      .from(auth_methods)
       .where(and(eq(auth_methods.user_id, userId), isNull(auth_methods.revoked_at)));
+    return rows[0]?.value ?? 0;
   }
 
   async listMfaByUserId(userId: number) {
-    return getRequestDatabase()
+    // audit #36: bound this user-self-scoped read (limit+1 + capListWithWarning).
+    const rows = await getRequestDatabase()
       .select()
       .from(auth_methods)
       .where(
@@ -31,7 +51,14 @@ export class AuthMethodRepository {
           eq(auth_methods.method_type, 'MFA_TOTP'),
           isNull(auth_methods.revoked_at),
         ),
-      );
+      )
+      .limit(DEFAULT_REPOSITORY_LIST_LIMIT + 1);
+    return capListWithWarning({
+      rows,
+      limit: DEFAULT_REPOSITORY_LIST_LIMIT,
+      resource: 'auth.auth_methods.mfa',
+      context: { userId },
+    });
   }
 
   async findTotpByUserId(userId: number) {
@@ -172,7 +199,7 @@ export class AuthMethodRepository {
    */
   async acquireCredentialMutationLock(userId: number): Promise<void> {
     await getRequestDatabase().execute(
-      sql`SELECT pg_advisory_xact_lock(${CREDENTIAL_MUTATION_ADVISORY_LOCK_NAMESPACE}::int, ${userId}::int)`,
+      sql`SELECT pg_advisory_xact_lock(${CREDENTIAL_MUTATION_ADVISORY_LOCK_NAMESPACE}::int, (hashtextextended(${userId}::text, 0) & 2147483647::bigint)::int)`,
     );
   }
 

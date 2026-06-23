@@ -105,6 +105,14 @@ export function createAuthSessionHandlers({
         userPublicId: auth.userId,
         sessionPublicId: auth.sessionPublicId,
       });
+      // A switch re-mints the access token with a different `org` claim (tenant-context change), so
+      // lateral movement between tenants on one session is traceable.
+      await recordScopedAuditEvent(request, {
+        actorUserPublicId: auth.userId,
+        action: 'auth.organization.switch',
+        resource_type: 'session',
+        metadata: { session_public_id: auth.sessionPublicId, target: 'personal' },
+      });
       return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
     },
     switchToOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
@@ -118,6 +126,17 @@ export function createAuthSessionHandlers({
         userPublicId: auth.userId,
         sessionPublicId: auth.sessionPublicId,
         organizationPublicId: organizationId,
+      });
+      // A switch re-mints the access token with a different `org` claim (tenant-context change), so
+      // lateral movement between tenants on one session is traceable.
+      await recordScopedAuditEvent(request, {
+        actorUserPublicId: auth.userId,
+        action: 'auth.organization.switch',
+        resource_type: 'session',
+        metadata: {
+          session_public_id: auth.sessionPublicId,
+          target_organization_id: organizationId,
+        },
       });
       return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
     },

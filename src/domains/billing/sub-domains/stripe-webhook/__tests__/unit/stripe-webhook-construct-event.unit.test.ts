@@ -143,9 +143,9 @@ describe('constructStripeWebhookEvent — key rotation (sec-new-B3)', () => {
 
 /**
  * EX-01 (was P0-03): the signature timestamp tolerance is configurable via
- * STRIPE_WEBHOOK_TOLERANCE_SECONDS (default 300s, up from a hardcoded 150s) so Stripe's retries —
- * which carry the original event timestamp — still verify after a short API outage. These tests mint
- * a real HMAC over an old timestamp and assert the same event is accepted at 300s but rejected at 150s,
+ * STRIPE_WEBHOOK_TOLERANCE_SECONDS (default 150s — audit #22 halved it back from the Stripe SDK
+ * default of 300s to halve the replay window; the ledger dedup is the primary defense). These tests
+ * mock the tolerance directly, so they assert the same event is accepted at 300s but rejected at 150s,
  * proving the env knob actually drives the tolerance.
  */
 describe('constructStripeWebhookEvent — timestamp tolerance (EX-01: STRIPE_WEBHOOK_TOLERANCE_SECONDS)', () => {

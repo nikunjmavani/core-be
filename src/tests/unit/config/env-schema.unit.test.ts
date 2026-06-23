@@ -1,8 +1,18 @@
+import { generateKeyPairSync } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { envSchema, envSchemaKeys } from '@/shared/config/env-schema.js';
 
 const DATABASE_URL_FIXTURE = 'postgres://localhost:5432/core';
 const REDIS_URL_FIXTURE = 'redis://localhost:6379';
+
+// audit #8: deployed runtimes (production/staging) now require real RSA PEMs ≥2048-bit, so the
+// production/staging fixtures need a genuine key pair. local/development/test still accept the
+// short placeholders below (the refine is gated to deployed runtimes).
+const REAL_RSA_KEY_PAIR = generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+});
 
 const productionRedisTopology = {
   REDIS_URL: 'redis://shared.example.railway.internal:6379',
@@ -11,8 +21,8 @@ const productionRedisTopology = {
 const commonRequiredBase = {
   DATABASE_URL: DATABASE_URL_FIXTURE,
   REDIS_URL: REDIS_URL_FIXTURE,
-  JWT_PRIVATE_KEY: 'private',
-  JWT_PUBLIC_KEY: 'public',
+  JWT_PRIVATE_KEY: REAL_RSA_KEY_PAIR.privateKey,
+  JWT_PUBLIC_KEY: REAL_RSA_KEY_PAIR.publicKey,
   ALLOWED_ORIGINS: 'http://localhost:3000',
   METRICS_SCRAPE_TOKEN: 'b'.repeat(32),
   // High-entropy 32-byte hex key — production rejects low-entropy placeholders (e.g. all-zeros).
@@ -843,6 +853,165 @@ describe('env-schema', () => {
         TOMBSTONE_RETENTION_DAYS: '730',
         STRIPE_WEBHOOK_EVENT_RETENTION_DAYS: '730',
         WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS: '180',
+      });
+      expect(parsed.success).toBe(true);
+    });
+  });
+
+  describe('JWT signing key strength (audit #8)', () => {
+    it('rejects a non-PEM JWT_PRIVATE_KEY in production', () => {
+      const parsed = envSchema.safeParse({
+        ...productionRequiredBase,
+        JWT_PRIVATE_KEY: 'not-a-pem',
+      });
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues.some((i) => i.path[0] === 'JWT_PRIVATE_KEY')).toBe(true);
+      }
+    });
+
+    it('rejects a sub-2048-bit RSA key in production', () => {
+      const weakPair = generateKeyPairSync('rsa', {
+        modulusLength: 1024,
+        publicKeyEncoding: { type: 'spki', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      });
+      const parsed = envSchema.safeParse({
+        ...productionRequiredBase,
+        JWT_PRIVATE_KEY: weakPair.privateKey,
+        JWT_PUBLIC_KEY: weakPair.publicKey,
+      });
+      expect(parsed.success).toBe(false);
+    });
+
+    it('accepts a valid ≥2048-bit RSA pair in production', () => {
+      const parsed = envSchema.safeParse(productionRequiredBase);
+      expect(parsed.success).toBe(true);
+    });
+
+    it('still accepts short placeholder keys outside deployed runtimes (local/test/dev)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NODE_ENV: 'test',
+        JWT_PRIVATE_KEY: 'private',
+        JWT_PUBLIC_KEY: 'public',
+      });
+      expect(parsed.success).toBe(true);
+    });
+  });
+
+  describe('global rate-limit ceiling (audit #34)', () => {
+    it('rejects RATE_LIMIT_MAX above the 100_000 ceiling (fat-finger guard)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NODE_ENV: 'test',
+        RATE_LIMIT_MAX: '1000000',
+      });
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues.some((i) => i.path[0] === 'RATE_LIMIT_MAX')).toBe(true);
+      }
+    });
+
+    it('accepts a sane RATE_LIMIT_MAX', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NODE_ENV: 'test',
+        RATE_LIMIT_MAX: '500',
+      });
+      expect(parsed.success && parsed.data.RATE_LIMIT_MAX).toBe(500);
+    });
+  });
+
+  describe('unauthenticated /reference production guard (audit #7)', () => {
+    it('rejects ENABLE_API_REFERENCE=true in production without the explicit override', () => {
+      const parsed = envSchema.safeParse({
+        ...productionRequiredBase,
+        ENABLE_API_REFERENCE: 'true',
+      });
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues.some((i) => i.path[0] === 'ENABLE_API_REFERENCE')).toBe(true);
+      }
+    });
+
+    it('allows ENABLE_API_REFERENCE=true in production with API_REFERENCE_ALLOW_PRODUCTION=true', () => {
+      const parsed = envSchema.safeParse({
+        ...productionRequiredBase,
+        ENABLE_API_REFERENCE: 'true',
+        API_REFERENCE_ALLOW_PRODUCTION: 'true',
+      });
+      expect(parsed.success).toBe(true);
+    });
+
+    it('allows ENABLE_API_REFERENCE=true outside production (dev/local)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NODE_ENV: 'development',
+        ENABLE_API_REFERENCE: 'true',
+      });
+      expect(parsed.success).toBe(true);
+    });
+  });
+
+  describe('Bull-Board queue dashboard production guard (re-audit A1)', () => {
+    it('rejects ENABLE_QUEUE_DASHBOARD=true in production without the explicit override', () => {
+      const parsed = envSchema.safeParse({
+        ...productionRequiredBase,
+        ENABLE_QUEUE_DASHBOARD: 'true',
+      });
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues.some((i) => i.path[0] === 'ENABLE_QUEUE_DASHBOARD')).toBe(true);
+      }
+    });
+
+    it('allows ENABLE_QUEUE_DASHBOARD=true in production with QUEUE_DASHBOARD_ALLOW_PRODUCTION=true', () => {
+      const parsed = envSchema.safeParse({
+        ...productionRequiredBase,
+        ENABLE_QUEUE_DASHBOARD: 'true',
+        QUEUE_DASHBOARD_ALLOW_PRODUCTION: 'true',
+      });
+      expect(parsed.success).toBe(true);
+    });
+
+    it('allows ENABLE_QUEUE_DASHBOARD=true outside production (dev/local)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NODE_ENV: 'development',
+        ENABLE_QUEUE_DASHBOARD: 'true',
+      });
+      expect(parsed.success).toBe(true);
+    });
+  });
+
+  describe('WEBHOOK_URL_ALLOWLIST wildcard guard (audit #32)', () => {
+    it('rejects an over-broad single-label wildcard (`*.com`)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NODE_ENV: 'test',
+        WEBHOOK_URL_ALLOWLIST: '*.com',
+      });
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues.some((i) => i.path[0] === 'WEBHOOK_URL_ALLOWLIST')).toBe(true);
+      }
+    });
+
+    it('rejects an over-broad wildcard mixed with valid entries', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NODE_ENV: 'test',
+        WEBHOOK_URL_ALLOWLIST: 'hooks.example.com, *.io',
+      });
+      expect(parsed.success).toBe(false);
+    });
+
+    it('accepts a registrable-domain wildcard and exact hosts', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NODE_ENV: 'test',
+        WEBHOOK_URL_ALLOWLIST: '*.example.com, hooks.partner.io',
       });
       expect(parsed.success).toBe(true);
     });

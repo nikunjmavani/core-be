@@ -21,7 +21,7 @@ Hand-written guides live in **topic subfolders**; generated API artifacts stay a
 **In-source documentation (lives under `src/`, not `docs/`):**
 
 - System narratives — `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` (hand-authored).
-- Per-folder overviews — `src/<folder>/OVERVIEW.md` at meaningful boundaries (hand-authored).
+- Per-folder overviews — `src/<folder>/<folder>.overview.md` at meaningful boundaries (hand-authored).
 - TSDoc on every public export, plus `@remarks` on services/workers/processors/policy files (canonical; gated by `pnpm tsdoc:check`).
 - Route documentation lives in inline Fastify `schema.summary` / `schema.description` and drives [openapi/openapi.json](openapi/openapi.json).
 
@@ -137,9 +137,10 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [reference/architecture/domains-and-public-api-design.md](reference/architecture/domains-and-public-api-design.md) | Domain layout and Paddle-style API responses.                                          |
 | [reference/architecture/sub-domains-layout.md](reference/architecture/sub-domains-layout.md) | Sub-domain and nested sub-domain folder layout rules. |
 | [reference/architecture/documentation-system.md](reference/architecture/documentation-system.md) | In-source doc system (narratives, OVERVIEWs, TSDoc, route schema); `tsdoc:check` ratchet. |
-| [reference/architecture/personal-team-organizations.md](reference/architecture/personal-team-organizations.md) | Personal vs team organization model and the single route surface. |
+| [reference/architecture/personal-vs-team-organizations.md](reference/architecture/personal-vs-team-organizations.md) | Personal vs team organization model and the single route surface. |
 | [reference/architecture/typescript-strictness.md](reference/architecture/typescript-strictness.md) | TypeScript strictness settings and rationale. |
 | [reference/architecture/scripts-layout.md](reference/architecture/scripts-layout.md) | `src/scripts/` layout and script conventions. |
+| [reference/architecture/production-audit-decisions.md](reference/architecture/production-audit-decisions.md) | Audit decisions: seat-entitlement policy, `updated_at` triggers, ops-polish, scale milestones. |
 | [reference/api/api-versioning.md](reference/api/api-versioning.md)                                                 | `/api/v1`, deprecation, `Sunset` / `Deprecation` headers.                              |
 | [reference/api/response-codes.md](reference/api/response-codes.md)                                                 | Method→status policy, when to use each error code, error envelope.                     |
 | [reference/api/route-consistency-and-org-model.md](reference/api/route-consistency-and-org-model.md)               | One route surface for personal/team orgs, the `capabilities` object + 422 backstop, route-catalog S/I/O columns, `/auth/me/*` vs login flow. |
@@ -166,6 +167,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [reference/reliability/process-error-handling.md](reference/reliability/process-error-handling.md)                 | `uncaughtException` vs burst-tolerant `unhandledRejection` policy (audit #14).         |
 | [reference/reliability/idempotency.md](reference/reliability/idempotency.md) | Idempotency keys, `X-Idempotency-Key`, replay, and the required-write set. |
 | [reference/reliability/degraded-mode-runbook.md](reference/reliability/degraded-mode-runbook.md) | Degraded-mode behavior when Redis/DB dependencies are impaired. |
+| [reference/reliability/scalability-and-capacity.md](reference/reliability/scalability-and-capacity.md) | Measured single-instance throughput ceiling (~1k req/s), the DB-pool bottleneck, and how to scale past it. |
 | [reference/testing/testing-conventions.md](reference/testing/testing-conventions.md) | Test layers, naming, and `fastify.inject` conventions. |
 | [reference/testing/mutation-testing.md](reference/testing/mutation-testing.md) | Mutation testing setup and budgets. |
 | [reference/quality/sonarqube-local.md](reference/quality/sonarqube-local.md) | Local SonarQube quality gate (`pnpm sonar:*`) used in pre-commit. |

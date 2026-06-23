@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
-import { and, asc, eq, isNotNull, isNull, like, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, ilike, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { countWithCap } from '@/infrastructure/database/utils/capped-count.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { users } from '@/domains/user/user.schema.js';
@@ -198,6 +198,64 @@ export class UserRepository {
     return rows[0]!;
   }
 
+  /**
+   * Inserts an email/password signup user with a caller-supplied `public_id`. The password is
+   * pre-hashed by the caller (argon2 is CPU-bound and must not run inside a transaction) and
+   * `is_email_verified` is always false — signup never trusts the address until the verification
+   * code is confirmed. Mirrors {@link UserRepository.insertOAuthUser}; the public-id generation,
+   * collision retry, and `withUserDatabaseContext` wrapper live in {@link UserService.createWithPassword}.
+   */
+  async insertWithPassword(
+    publicId: string,
+    data: { email: string; password_hash: string; first_name?: string; last_name?: string },
+  ) {
+    const emailHash = createHash('sha256').update(data.email.toLowerCase()).digest('hex');
+    const rows = await getRequestDatabase()
+      .insert(users)
+      .values({
+        public_id: publicId,
+        email: data.email,
+        email_hash: emailHash,
+        password_hash: data.password_hash,
+        first_name: data.first_name ?? null,
+        last_name: data.last_name ?? null,
+        is_email_verified: false,
+        status: 'ACTIVE',
+      })
+      .returning();
+    return rows[0]!;
+  }
+
+  /**
+   * Claims a pre-provisioned passwordless account (created by an org invite / add-member-by-email)
+   * by setting its first password.
+   *
+   * @remarks
+   * Guarded by `password_hash IS NULL` so two concurrent signup-claims for the same invited email
+   * cannot both win — the loser's UPDATE matches no row and returns `null`, which the caller maps to
+   * a 409. Also sets the optional display name supplied at signup. Caller MUST be inside
+   * `withUserDatabaseContext` so the FORCE-RLS owner WITH CHECK is satisfied.
+   */
+  async claimWithPassword(
+    publicId: string,
+    data: { passwordHash: string; firstName?: string | undefined; lastName?: string | undefined },
+  ) {
+    const rows = await getRequestDatabase()
+      .update(users)
+      .set({
+        password_hash: data.passwordHash,
+        ...(data.firstName !== undefined ? { first_name: data.firstName } : {}),
+        ...(data.lastName !== undefined ? { last_name: data.lastName } : {}),
+        last_password_change_at: new Date(),
+        updated_at: databaseNowTimestamp,
+      })
+      .where(
+        and(eq(users.public_id, publicId), isNull(users.deleted_at), isNull(users.password_hash)),
+      )
+      .returning();
+    return rows[0] ?? null;
+  }
+
   // ── Admin methods ──────────────────────────────────────────
 
   async findMany(pagination: UserListPagination) {
@@ -208,14 +266,13 @@ export class UserRepository {
       filterConditions.push(eq(users.status, status));
     }
     if (search) {
+      // audit #13: case-INSENSITIVE search (was `like` — "john" missed "John") targeting the
+      // trigram-indexed shapes so the GIN indexes are actually used instead of a full seq scan:
+      // `email` engages idx_users_email_trgm; the concatenated display-name expression must match
+      // idx_users_display_name_trgm verbatim. `escapeLikePattern` neutralises %/_ (injection-safe).
       const pattern = `%${escapeLikePattern(search)}%`;
-      filterConditions.push(
-        or(
-          like(users.email, pattern),
-          like(users.first_name, pattern),
-          like(users.last_name, pattern),
-        )!,
-      );
+      const displayName = sql`(coalesce(${users.first_name}, '') || ' ' || coalesce(${users.last_name}, ''))`;
+      filterConditions.push(or(ilike(users.email, pattern), sql`${displayName} ILIKE ${pattern}`)!);
     }
     const countWhere = and(...filterConditions);
     const cursorCondition = buildAscendingCreatedAtIdCursorCondition(

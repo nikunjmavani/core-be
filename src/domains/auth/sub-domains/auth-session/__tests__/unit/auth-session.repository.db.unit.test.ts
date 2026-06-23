@@ -45,6 +45,49 @@ describe('AuthSessionRepository (database)', () => {
     expect(afterRevoke).toBeNull();
   });
 
+  it('revokeOldestActiveBeyond keeps the newest sessions and revokes the oldest beyond keepCount', async () => {
+    const user = await createTestUser({ email: 'session-cap@example.com' });
+    const expiresAt = new Date(Date.now() + 86_400_000);
+    for (let index = 0; index < 5; index++) {
+      await repository.create({
+        user_id: user.id,
+        token_hash: `cap-hash-${index}`,
+        refresh_token_hash: 'refresh-hash',
+        ip_address: '127.0.0.1',
+        user_agent: 'vitest',
+        expires_at: expiresAt,
+      });
+    }
+
+    // Keep the 2 most-recently-created, revoke the oldest 3 (by created_at then id).
+    const evicted = await repository.revokeOldestActiveBeyond(user.id, 2);
+    expect(evicted).toHaveLength(3);
+    expect(evicted.map((row) => row.token_hash).sort()).toEqual([
+      'cap-hash-0',
+      'cap-hash-1',
+      'cap-hash-2',
+    ]);
+
+    const remaining = await repository.listByUserId(user.id);
+    expect(remaining.map((row) => row.token_hash).sort()).toEqual(['cap-hash-3', 'cap-hash-4']);
+  });
+
+  it('revokeOldestActiveBeyond is a no-op when the user is at or under keepCount', async () => {
+    const user = await createTestUser({ email: 'session-undercap@example.com' });
+    await repository.create({
+      user_id: user.id,
+      token_hash: 'under-cap-1',
+      refresh_token_hash: 'refresh-hash',
+      ip_address: '127.0.0.1',
+      user_agent: 'vitest',
+      expires_at: new Date(Date.now() + 86_400_000),
+    });
+
+    const evicted = await repository.revokeOldestActiveBeyond(user.id, 5);
+    expect(evicted).toHaveLength(0);
+    expect(await repository.listByUserId(user.id)).toHaveLength(1);
+  });
+
   it('revokes by token hash and revokes all sessions for user', async () => {
     const user = await createTestUser({ email: 'sessions@example.com' });
     const expiresAt = new Date(Date.now() + 86_400_000);

@@ -1,6 +1,7 @@
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { api_keys } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.schema.js';
 import { BaseRepository } from '@/infrastructure/database/base-repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
@@ -39,6 +40,13 @@ function parseScopesColumn(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((entry): entry is string => typeof entry === 'string');
 }
+
+/**
+ * Upper bound on active API-key candidates examined per authentication for one key prefix
+ * (audit #40). CSPRNG-derived 10-char prefixes make a collision beyond this astronomically
+ * unlikely; the cap bounds the constant-time compare loop regardless.
+ */
+const API_KEY_PREFIX_RESOLVER_CAP = 16;
 
 /**
  * Drizzle data-access for `tenancy.api_keys`. Stores hashed keys (never raw
@@ -242,7 +250,17 @@ export class OrganizationApiKeyRepository extends BaseRepository {
     const resolverRows = (
       Array.isArray(rows) ? rows : ((rows as { rows?: unknown[] }).rows ?? [])
     ) as ApiKeyAuthenticationResolverRow[];
-    return resolverRows.map((row) => ({
+    // audit #40: bound the per-request constant-time compare loop. CSPRNG-derived 10-char prefixes
+    // make >16 active keys sharing a prefix astronomically unlikely; if it ever happens, only the
+    // first 16 are checked and we alert (count only — the prefix is part of the secret).
+    const cappedRows = resolverRows.slice(0, API_KEY_PREFIX_RESOLVER_CAP);
+    if (resolverRows.length > API_KEY_PREFIX_RESOLVER_CAP) {
+      logger.warn(
+        { candidateCount: resolverRows.length, cap: API_KEY_PREFIX_RESOLVER_CAP },
+        'organization-api-key.prefix_resolver_overflow',
+      );
+    }
+    return cappedRows.map((row) => ({
       public_id: row.public_id,
       organization_id: Number(row.organization_id),
       organization_public_id: row.organization_public_id,

@@ -33,6 +33,14 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   ),
 }));
 
+vi.mock('@/infrastructure/database/contexts/organization-database.context.js', () => ({
+  // sec-r7/M4: org-scoped uploads now reserve their PENDING slot under organization RLS
+  // context. The unit test just runs the callback (RLS is exercised in the security suite).
+  withOrganizationDatabaseContext: vi.fn(
+    (_organizationPublicId: string, callback: () => Promise<unknown>) => callback(),
+  ),
+}));
+
 const userPublicId = generatePublicId('user');
 const uploadPublicId = generatePublicId('upload');
 const user = { id: 1, public_id: userPublicId };

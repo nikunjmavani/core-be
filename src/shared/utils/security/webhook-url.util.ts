@@ -22,6 +22,14 @@ const BLOCKED_IP_RANGES = new Set<string>([
   'reserved',
   'broadcast',
   'carrierGradeNat',
+  // audit #10: `rfc6052` is the NAT64 well-known prefix `64:ff9b::/96` — in a NAT64 environment a
+  // hostname resolving to e.g. `64:ff9b::a9fe:a9fe` reaches the cloud metadata IPv4 `169.254.169.254`.
+  'rfc6052',
+  // audit #10: `ipv4Mapped` covers the IPv4-compatible form `::a.b.c.d` (deprecated, never legit
+  // traffic), which `isIPv4MappedAddress()` does NOT normalize — so `::127.0.0.1` would otherwise
+  // pass the range check. A genuinely-routable `::ffff:<public-v4>` is normalized to IPv4 *before*
+  // the range check (see `normalizeParsedAddress`), so blocking this range does not reject it.
+  'ipv4Mapped',
 ]);
 
 /**
@@ -72,8 +80,35 @@ function assertWebhookScheme(parsed: URL): void {
   }
 }
 
+/**
+ * audit #9: webhook delivery is HTTPS-only, so 443 is the only legitimate destination port.
+ * Rejecting any other explicit port stops the platform being abused as an outbound port-prober
+ * against arbitrary public services (e.g. `:9200` Elasticsearch, `:2375` Docker, `:6379` Redis).
+ */
+function assertWebhookPort(parsed: URL): void {
+  if (parsed.port !== '' && parsed.port !== '443') {
+    throw new ValidationError(WEBHOOK_URL_NOT_ALLOWED_KEY, undefined, undefined, [
+      { field: 'url', messageKey: WEBHOOK_URL_NOT_ALLOWED_KEY },
+    ]);
+  }
+}
+
 function assertWebhookHostnameNotBlocked(hostname: string): void {
   if (BLOCKED_HOSTNAMES.includes(hostname.toLowerCase())) {
+    throw new ValidationError(WEBHOOK_URL_NOT_ALLOWED_KEY, undefined, undefined, [
+      { field: 'url', messageKey: WEBHOOK_URL_NOT_ALLOWED_KEY },
+    ]);
+  }
+}
+
+/**
+ * audit R13: reject embedded credentials (`https://user:pass@host`). They are inert in the pinned
+ * `node:http` transport today (never translated to an `Authorization` header) and are stripped from
+ * logs via `parsed.origin`, but an unvalidated userinfo component is a footgun if the transport ever
+ * changes — reject it so the no-credentials property is enforced, not incidental.
+ */
+function assertWebhookNoUserinfo(parsed: URL): void {
+  if (parsed.username !== '' || parsed.password !== '') {
     throw new ValidationError(WEBHOOK_URL_NOT_ALLOWED_KEY, undefined, undefined, [
       { field: 'url', messageKey: WEBHOOK_URL_NOT_ALLOWED_KEY },
     ]);
@@ -143,6 +178,8 @@ export async function assertWebhookUrlSafe(urlString: string): Promise<WebhookRe
   }
 
   assertWebhookScheme(parsed);
+  assertWebhookNoUserinfo(parsed);
+  assertWebhookPort(parsed);
   assertWebhookHostnameNotBlocked(parsed.hostname);
   const addresses = await resolveWebhookUrlAddresses(parsed.hostname);
   assertResolvedAddressesNotPrivate(addresses);

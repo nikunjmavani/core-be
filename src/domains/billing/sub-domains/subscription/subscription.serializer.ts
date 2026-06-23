@@ -16,6 +16,19 @@ interface SubscriptionRow {
   provider: string | null;
   /** Joined `billing.plans.public_id` — surfaced as `plan_id` in the response (sec-re-07). */
   plan_public_id: string | null;
+  /**
+   * REQ-4: total seats available on the subscription — `subscription.seats ?? plan.included_seats`,
+   * or `null` when the plan grants unlimited seats. Computed by {@link SubscriptionService} and
+   * attached to the row before serialization (the repository row carries the raw `seats` +
+   * `plan_included_seats` that feed it).
+   */
+  seats_total: number | null;
+  /**
+   * REQ-4: seats currently consumed — the count of ACTIVE + INVITED memberships in the org,
+   * resolved cross-domain via the tenancy membership service. Computed by
+   * {@link SubscriptionService}.
+   */
+  seats_used: number;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -54,6 +67,10 @@ function serializeOne<T extends SubscriptionRow>(row: T) {
     // Defensive `?? null` keeps the contract stable when an unexpectedly
     // joined row carries `undefined`.
     plan_id: row.plan_public_id ?? null,
+    // REQ-4: seat counters. `seats_total` is null for an unlimited plan; `seats_used` counts
+    // ACTIVE + INVITED memberships so the FE can render "N of M seats used".
+    seats_total: row.seats_total ?? null,
+    seats_used: row.seats_used,
     created_at: toIsoString(row.created_at),
     updated_at: toIsoString(row.updated_at),
   };

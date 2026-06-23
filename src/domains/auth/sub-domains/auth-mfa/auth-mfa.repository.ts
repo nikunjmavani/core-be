@@ -1,5 +1,7 @@
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
+import { capListWithWarning } from '@/shared/utils/infrastructure/list-cap.util.js';
 import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method.schema.js';
 
 /**
@@ -28,7 +30,8 @@ export class MfaRepository {
   }
 
   async listMfaByUserId(userId: number) {
-    return getRequestDatabase()
+    // audit #36: bound this user-self-scoped read (limit+1 + capListWithWarning).
+    const rows = await getRequestDatabase()
       .select({
         id: auth_methods.id,
         method_type: auth_methods.method_type,
@@ -36,7 +39,14 @@ export class MfaRepository {
         created_at: auth_methods.created_at,
       })
       .from(auth_methods)
-      .where(and(eq(auth_methods.user_id, userId), isNull(auth_methods.revoked_at)));
+      .where(and(eq(auth_methods.user_id, userId), isNull(auth_methods.revoked_at)))
+      .limit(DEFAULT_REPOSITORY_LIST_LIMIT + 1);
+    return capListWithWarning({
+      rows,
+      limit: DEFAULT_REPOSITORY_LIST_LIMIT,
+      resource: 'auth.mfa_methods',
+      context: { userId },
+    });
   }
 
   async findByIdForUser(methodId: number, userId: number) {

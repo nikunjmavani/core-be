@@ -26,6 +26,7 @@ import {
   OauthCallbackQueryDto,
   oauthProviderParamsDto,
   ResetPasswordDto,
+  SignupDto,
   sessionIdParamsDto,
   StepUpVerifyDto,
   VerifyEmailDto,
@@ -33,6 +34,7 @@ import {
 import {
   webauthnAuthenticateOptionsDto,
   webauthnAuthenticateVerifyDto,
+  webauthnCredentialIdParamsDto,
   webauthnRegisterVerifyDto,
 } from './sub-domains/auth-webauthn/webauthn.dto.js';
 
@@ -58,6 +60,18 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       body: LoginDto,
     },
     handler: controller.login,
+  });
+  zodApplication.post('/signup', {
+    ...STRICT_PUBLIC_RATE_LIMIT,
+    preHandler: [perEmailRateLimit, captchaPreHandler],
+    schema: {
+      summary: 'Sign up with email and password',
+      description:
+        'Creates a new account with email and password and logs the user in immediately (returns an access token and sets the session cookie). The email starts unverified and a verification code is emailed; login is allowed before verification. Returns 409 if an account with the email already exists.',
+      tags: ['Auth'],
+      body: SignupDto,
+    },
+    handler: controller.signup,
   });
   zodApplication.post(
     '/logout',
@@ -149,7 +163,8 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     preHandler: [captchaPreHandler],
     schema: {
       summary: 'Reset password with token',
-      description: 'Resets the user password using a valid reset token received via email.',
+      description:
+        'Resets the user password using a valid reset token received via email, revokes all prior sessions, marks the email verified (the token proves email control), clears any failed-login lockout, and logs the user in immediately (returns an access token and sets the session cookie). MFA-enabled users receive an mfa_required challenge instead of a session.',
       tags: ['Password'],
       body: ResetPasswordDto,
     },
@@ -363,6 +378,36 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       },
     },
     controller.webauthnRegisterVerify,
+  );
+  zodApplication.get(
+    '/me/webauthn/credentials',
+    {
+      onRequest: [app.authenticate],
+      ...STRICT_AUTHED_RATE_LIMIT,
+      schema: {
+        summary: 'List registered passkeys',
+        description:
+          'Returns the authenticated user’s active WebAuthn passkeys (opaque id, device type, transports, created/last-used timestamps). Never returns credential material or the raw WebAuthn credential blob.',
+        tags: ['WebAuthn'],
+      },
+    },
+    controller.webauthnListCredentials,
+  );
+  zodApplication.delete<{ Params: { credential_id: string } }>(
+    '/me/webauthn/credentials/:credential_id',
+    {
+      onRequest: [app.authenticate],
+      preHandler: [requireRecentStepUpPreHandler],
+      ...STRICT_AUTHED_RATE_LIMIT,
+      schema: {
+        summary: 'Revoke a passkey',
+        description:
+          'Revokes one of the authenticated user’s passkeys by its opaque id. Requires recent step-up authentication. Refused with 409 if it would remove a passkey-only user’s last remaining login credential.',
+        tags: ['WebAuthn'],
+        params: webauthnCredentialIdParamsDto,
+      },
+    },
+    controller.webauthnRevokeCredential,
   );
   zodApplication.get(
     '/me/mfa',

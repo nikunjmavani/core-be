@@ -11,6 +11,9 @@ describe('plan.serializer shape (regression-guard)', () => {
     price_yearly: '290.00',
     currency: 'USD',
     is_active: true,
+    // REQ-4: features map + typed seat limit are part of the public shape.
+    features: { priority_support: true, audit_log: true },
+    limits: { seats: 25 },
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-02T00:00:00.000Z',
   };
@@ -22,14 +25,22 @@ describe('plan.serializer shape (regression-guard)', () => {
         'created_at',
         'currency',
         'description',
+        'features',
         'id',
         'is_active',
+        'limits',
         'name',
         'price_monthly',
         'price_yearly',
         'updated_at',
       ].sort(),
     );
+  });
+
+  it('REQ-4: PlanSerializer.one surfaces features verbatim and the typed seat limit', () => {
+    const result = PlanSerializer.one(samplePlan);
+    expect(result.features).toEqual({ priority_support: true, audit_log: true });
+    expect(result.limits).toEqual({ seats: 25 });
   });
 
   it('PlanSerializer.one preserves a null description without coercion', () => {

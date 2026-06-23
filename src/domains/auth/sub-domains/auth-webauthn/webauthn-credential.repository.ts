@@ -1,6 +1,13 @@
-import { and, eq, isNull, lt } from 'drizzle-orm';
+import { and, eq, isNull, lt, sql } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import {
+  RESOURCE_QUOTA_LOCK_NAMESPACE,
+  acquireResourceQuotaLock,
+} from '@/infrastructure/database/resource-quota-lock.util.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
+import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
+import { capListWithWarning } from '@/shared/utils/infrastructure/list-cap.util.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { webauthn_credentials } from './webauthn-credential.schema.js';
 
 /** Drizzle row type inferred from {@link webauthn_credentials}; used by the WebAuthn service when reading stored passkeys. */
@@ -16,12 +23,18 @@ export type WebauthnCredentialRow = typeof webauthn_credentials.$inferSelect;
  */
 export class WebauthnCredentialRepository {
   async listActiveByUserId(userId: number): Promise<WebauthnCredentialRow[]> {
-    return getRequestDatabase()
+    // audit #36: bound this user-self-scoped read (limit+1 + capListWithWarning).
+    const rows = await getRequestDatabase()
       .select()
       .from(webauthn_credentials)
-      .where(
-        and(eq(webauthn_credentials.user_id, userId), isNull(webauthn_credentials.revoked_at)),
-      );
+      .where(and(eq(webauthn_credentials.user_id, userId), isNull(webauthn_credentials.revoked_at)))
+      .limit(DEFAULT_REPOSITORY_LIST_LIMIT + 1);
+    return capListWithWarning({
+      rows,
+      limit: DEFAULT_REPOSITORY_LIST_LIMIT,
+      resource: 'auth.webauthn_credentials',
+      context: { userId },
+    });
   }
 
   async findActiveByCredentialId(credentialId: string): Promise<WebauthnCredentialRow | null> {
@@ -38,6 +51,27 @@ export class WebauthnCredentialRepository {
     return rows[0] ?? null;
   }
 
+  async countActiveByUserId(userId: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ value: sql<number>`count(*)::int` })
+      .from(webauthn_credentials)
+      .where(
+        and(eq(webauthn_credentials.user_id, userId), isNull(webauthn_credentials.revoked_at)),
+      );
+    return rows[0]?.value ?? 0;
+  }
+
+  /**
+   * Takes the per-user WebAuthn-credential creation-quota advisory lock (auto-releases at commit).
+   *
+   * @remarks
+   * Must run inside the same transaction as the subsequent `countActiveByUserId` + `createCredential`
+   * so concurrent registrations cannot both pass the cap check and overshoot the per-user passkey cap.
+   */
+  async acquireCreationQuotaLock(userId: number): Promise<void> {
+    await acquireResourceQuotaLock(RESOURCE_QUOTA_LOCK_NAMESPACE.WEBAUTHN_CREDENTIAL, userId);
+  }
+
   async createCredential(data: {
     user_id: number;
     credential_id: string;
@@ -50,6 +84,7 @@ export class WebauthnCredentialRepository {
     const rows = await getRequestDatabase()
       .insert(webauthn_credentials)
       .values({
+        public_id: generatePublicId('webauthnCredential'),
         user_id: data.user_id,
         credential_id: data.credential_id,
         public_key: data.public_key,

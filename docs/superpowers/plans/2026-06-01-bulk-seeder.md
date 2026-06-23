@@ -132,7 +132,7 @@ Each task: implement → `BULK_PROFILE=demo pnpm db:seed:bulk` runs clean agains
 ## Task 12: Docs
 
 - [ ] `CLAUDE.md`: Domain Structure canonical layout (add `seed/`), Seeding section (orchestrator + contract + profiles), Commands (`db:seed:bulk`).
-- [ ] `src/scripts/seed/OVERVIEW.md` (new) describing the tiers + contract; one-line `OVERVIEW.md` is not required per dir but add where a `seed/` dir is non-obvious.
+- [ ] `src/scripts/seed/seed.overview.md` (new) describing the tiers + contract; one-line `OVERVIEW.md` is not required per dir but add where a `seed/` dir is non-obvious.
 - [ ] Commit: `docs(seed): document bulk seeder + per-domain seed/ convention`.
 
 ## Task 13: Rule

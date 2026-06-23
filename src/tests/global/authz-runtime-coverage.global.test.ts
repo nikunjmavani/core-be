@@ -22,6 +22,8 @@ const RUNTIME_COVERAGE: Readonly<Record<string, string>> = {
     'object-ownership: auth methods (step-up gated)',
   'DELETE /api/v1/auth/me/sessions/:session_id': 'object-ownership: sessions (step-up gated)',
   'DELETE /api/v1/auth/me/mfa/:mfa_method_id': 'object-ownership: MFA methods (step-up gated)',
+  'DELETE /api/v1/auth/me/webauthn/credentials/:credential_id':
+    'object-ownership: WebAuthn passkeys (step-up gated)',
   'DELETE /api/v1/notify/notifications/:notification_id': 'object-ownership: notifications',
   'GET /api/v1/notify/notifications/:notification_id': 'object-ownership: notifications',
   'PATCH /api/v1/notify/notifications/:notification_id/read': 'object-ownership: notifications',
@@ -89,8 +91,6 @@ const RUNTIME_COVERAGE: Readonly<Record<string, string>> = {
   // ── model: email (invitation-email.security.test.ts) ───────────────────────
   'POST /api/v1/tenancy/invitations/:invitation_id/accept':
     'invitation-email: email-mismatch accept → 403',
-  'POST /api/v1/tenancy/invitations/:invitation_id/decline':
-    'invitation-email: email-mismatch decline → 403',
 
   // ── model: global-role (admin-only.security.test.ts) ───────────────────────
   'GET /api/v1/users/:user_id': 'admin-only: regular user denied',

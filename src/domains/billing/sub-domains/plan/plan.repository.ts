@@ -1,4 +1,4 @@
-import { and, eq, or } from 'drizzle-orm';
+import { and, asc, eq, or } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { plans } from '@/domains/billing/sub-domains/plan/plan.schema.js';
 
@@ -38,6 +38,28 @@ export class PlanRepository {
   async findById(id: number) {
     const rows = await getRequestDatabase().select().from(plans).where(eq(plans.id, id)).limit(1);
     return rows[0] ?? null;
+  }
+
+  /**
+   * Returns the `included_seats` of the cheapest active plan — the "Free tier" seat ceiling.
+   *
+   * @remarks
+   * - **Algorithm:** orders active plans by `price_monthly` ascending (served by
+   *   `idx_plans_active_price`) and takes the first row's `included_seats`.
+   * - **Failure modes:** returns `null` when no active plan exists OR the cheapest plan grants
+   *   unlimited seats (`included_seats IS NULL`) — both mean "no Free-tier ceiling to enforce".
+   * - **Notes:** the entitlement floor for an organization with no active subscription (and for a
+   *   dunning subscription past its grace window) is derived from this, so the Free-tier allowance
+   *   tracks whatever the catalog's entry tier is rather than a hard-coded constant.
+   */
+  async findFreePlanSeatCeiling(): Promise<number | null> {
+    const rows = await getRequestDatabase()
+      .select({ included_seats: plans.included_seats })
+      .from(plans)
+      .where(eq(plans.is_active, true))
+      .orderBy(asc(plans.price_monthly))
+      .limit(1);
+    return rows[0]?.included_seats ?? null;
   }
 
   /**

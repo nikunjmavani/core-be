@@ -18,6 +18,9 @@ function makeRow(overrides: Record<string, unknown> = {}) {
     canceled_at: null,
     provider: 'stripe',
     plan_public_id: 'pln_publicpublicpublic',
+    // REQ-4: seat counters attached by the service before serialization.
+    seats_total: 25,
+    seats_used: 3,
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
     ...overrides,
@@ -51,11 +54,25 @@ describe('subscription.serializer shape (sec-T #17 strip-only regression-guard)'
         'id',
         'plan_id',
         'provider',
+        'seats_total',
+        'seats_used',
         'status',
         'trial_end',
         'updated_at',
       ].sort(),
     );
+  });
+
+  it('REQ-4: surfaces seats_total / seats_used from the decorated row', () => {
+    const result = SubscriptionSerializer.one(makeRow({ seats_total: 25, seats_used: 7 }));
+    expect(result).toHaveProperty('seats_total', 25);
+    expect(result).toHaveProperty('seats_used', 7);
+  });
+
+  it('REQ-4: seats_total is null for an unlimited plan', () => {
+    const result = SubscriptionSerializer.one(makeRow({ seats_total: null, seats_used: 2 }));
+    expect(result).toHaveProperty('seats_total', null);
+    expect(result).toHaveProperty('seats_used', 2);
   });
 
   it('sec-re-07: emits plan_id as the joined plan public id (not the internal bigserial)', () => {

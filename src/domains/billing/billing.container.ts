@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
+import type { MembershipSeatUsagePort } from './sub-domains/subscription/subscription.service.js';
 import { PlanRepository } from './sub-domains/plan/plan.repository.js';
 import { SubscriptionRepository } from './sub-domains/subscription/subscription.repository.js';
 import { PlanService } from './sub-domains/plan/plan.service.js';
@@ -22,8 +23,17 @@ export type BillingContainer = {
  * Wires plan / subscription / stripe-webhook repositories and services together,
  * injecting the tenancy {@link OrganizationService} required for cross-domain
  * organization lookups during checkout and webhook processing.
+ *
+ * @remarks
+ * REQ-4: `membershipSeatUsage` (tenancy's membership service) is passed in so the subscription
+ * service can compute `seats_used`. It is optional because the dedicated stripe-webhook worker
+ * container builds its own `SubscriptionService` without it (the webhook path never returns the
+ * public seat-counted shape). The HTTP / worker composition roots always supply it.
  */
-export function createBillingContainer(organizationService: OrganizationService): BillingContainer {
+export function createBillingContainer(
+  organizationService: OrganizationService,
+  membershipSeatUsage?: MembershipSeatUsagePort,
+): BillingContainer {
   const planRepository = new PlanRepository();
   const subscriptionRepository = new SubscriptionRepository();
 
@@ -34,6 +44,7 @@ export function createBillingContainer(organizationService: OrganizationService)
     planService,
     subscriptionRepository,
     paymentProvider,
+    membershipSeatUsage,
   );
   const stripeWebhookEventRepository = new StripeWebhookEventRepository();
   const stripeWebhookService = new StripeWebhookService(
@@ -56,6 +67,10 @@ export function createBillingContainer(organizationService: OrganizationService)
 export function registerBillingContainer(application: FastifyInstance): void {
   application.decorate(
     'billingDomain',
-    createBillingContainer(application.tenancyDomain.organizationService),
+    createBillingContainer(
+      application.tenancyDomain.organizationService,
+      // REQ-4: tenancy membership service supplies seats_used.
+      application.tenancyDomain.membershipService,
+    ),
   );
 }

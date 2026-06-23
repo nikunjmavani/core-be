@@ -175,6 +175,46 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     example: null,
   },
 
+  // ── Auth: Active-org switch + me context (REQ-5) ──
+  'POST /api/v1/auth/switch-to-organization': {
+    // Re-issues an access token bound to the newly active organization (AuthSerializer.accessToken).
+    statusCode: 201,
+    schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
+    example: null,
+  },
+  'GET /api/v1/auth/me/context': {
+    statusCode: 200,
+    schema: wrapSuccess(
+      {
+        type: 'object',
+        properties: {
+          user: schemas.userSchema,
+          active_organization: { ...schemas.organizationSchema, nullable: true },
+          my_permissions: { type: 'array', items: { type: 'string' } },
+          global_role: { type: 'string', nullable: true },
+          organizations: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                ...schemas.organizationSchema.properties,
+                is_active: { type: 'boolean' },
+              },
+            },
+          },
+        },
+      },
+      {
+        user: schemas.userExample,
+        active_organization: schemas.organizationExample,
+        my_permissions: ['organization:read', 'membership:read'],
+        global_role: null,
+        organizations: [{ ...schemas.organizationExample, is_active: true }],
+      },
+    ),
+    example: null,
+  },
+
   // ── Auth: Sessions ──
   'GET /api/v1/auth/me/sessions': {
     statusCode: 200,

@@ -358,6 +358,51 @@ export async function updateStripeSubscription(
   );
 }
 
+/**
+ * Updates the seat quantity on a Stripe subscription's primary line item (REQ-4). Retrieves the
+ * subscription first so the quantity is applied to the existing item (no second line item), then
+ * patches `items: [{ id, quantity }]`. Forwards a Stripe-native idempotency key when provided so
+ * a retried sync is safe.
+ *
+ * @remarks
+ * - **Algorithm:** `subscriptions.retrieve` → take `items.data[0].id` → `subscriptions.update`
+ *   with `[{ id, quantity }]` + `proration_behavior: 'create_prorations'` so a mid-cycle seat
+ *   change prorates. No-op (returns the retrieved subscription) when the subscription has no item.
+ * - **Failure modes:** Stripe errors propagate unwrapped through {@link outboundCall} (the caller —
+ *   a BullMQ worker — relies on retry/backoff).
+ * - **Side effects:** two outbound Stripe API calls (retrieve + update).
+ */
+export async function updateStripeSubscriptionQuantity(
+  subscriptionId: string,
+  quantity: number,
+  options?: { requestId?: string; idempotencyKey?: string },
+): Promise<Stripe.Subscription> {
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: 'stripe',
+      requestId: options?.requestId,
+      enforceAbortTimeout: false,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        const itemId = subscription.items.data[0]?.id;
+        if (!itemId) {
+          return subscription;
+        }
+        return stripe.subscriptions.update(
+          subscriptionId,
+          {
+            items: [{ id: itemId, quantity }],
+            proration_behavior: 'create_prorations',
+          },
+          options?.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
+        );
+      },
+    }),
+  );
+}
+
 // ── Webhook verification ──────────────────────────────────────
 
 /**

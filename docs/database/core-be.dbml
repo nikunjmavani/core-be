@@ -318,6 +318,7 @@ Table auth.webauthn_credentials {
   device_type varchar(32) [not null]
   id bigint [pk, increment, not null]
   last_used_at timestamptz
+  public_id varchar(28)
   public_key text [not null]
   revoked_at timestamptz
   transports jsonb [not null]
@@ -335,6 +336,7 @@ Table billing.plans {
   description text
   features jsonb [not null]
   id bigint [pk, increment, not null]
+  included_seats int
   is_active boolean [not null]
   name varchar(100) [not null]
   price_monthly numeric(10, 2) [not null]
@@ -395,6 +397,7 @@ Table billing.subscriptions {
   provider_customer_id varchar(255)
   provider_subscription_id varchar(255)
   public_id varchar(28) [not null]
+  seats int
   status varchar(20) [not null]
   trial_end timestamptz
   updated_at timestamptz [not null]

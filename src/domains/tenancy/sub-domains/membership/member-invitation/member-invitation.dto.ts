@@ -1,56 +1,14 @@
 import { z } from 'zod';
-import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 /**
- * Zod schema for the `GET /organization/invitations` query string —
- * cursor pagination plus an `include_total=true|false` opt-in for the
- * expensive `COUNT(*)` total.
- */
-export const listMemberInvitationsQueryDto = cursorPaginationSchema
-  .extend({
-    include_total: z.enum(['true', 'false']).optional().default('false'),
-  })
-  .strict();
-
-/**
- * Zod schema for the `GET /invitations/pending` query string — cursor
- * pagination (`limit` + opaque `after`) over the caller's cross-organization
- * pending invitations. Strict so unknown query keys are rejected.
- */
-export const listPendingMemberInvitationsQueryDto = cursorPaginationSchema.strict();
-
-/**
- * Zod schema for routes whose only path param is `invitationId` (accept and
- * decline, which are not scoped to an organization in the URL).
- */
-export const memberInvitationIdParamsDto = z
-  .object({
-    invitation_id: trimmedStringMinMax(1, 28),
-  })
-  .strict();
-
-/**
- * Zod schema for routes that carry the `invitationId` path param
- * (cancel / resend under `/organization/invitations/:invitation_id`).
+ * Zod schema for routes that carry the `invitation_id` path param — the org-scoped
+ * revoke / resend under `/organization/invitations/:invitation_id` and the
+ * invitee-facing `/invitations/:invitation_id/accept`.
  */
 export const invitationIdParamsDto = z
   .object({
     invitation_id: trimmedStringMinMax(1, 28),
-  })
-  .strict();
-
-/**
- * Zod schema for the `POST /organization/invitations` request body.
- * Carries only `membership_id` and `expires_in_days`; the invitee email is
- * derived server-side from the membership's actual user record and is never
- * accepted from the client. `expires_in_days` clamps to 1–365 with a 7-day
- * default.
- */
-export const createMemberInvitationDto = z
-  .object({
-    membership_id: trimmedStringMinMax(1, 28),
-    expires_in_days: z.number().int().min(1).max(365).optional().default(7),
   })
   .strict();
 
@@ -76,14 +34,6 @@ export const resendMemberInvitationDto = z
   })
   .strict();
 
-/** Validated body inferred from {@link createMemberInvitationDto}. */
-export type CreateMemberInvitationInput = z.infer<typeof createMemberInvitationDto>;
-/** Validated query inferred from {@link listMemberInvitationsQueryDto}. */
-export type ListMemberInvitationsQueryInput = z.infer<typeof listMemberInvitationsQueryDto>;
-/** Validated query inferred from {@link listPendingMemberInvitationsQueryDto}. */
-export type ListPendingMemberInvitationsQueryInput = z.infer<
-  typeof listPendingMemberInvitationsQueryDto
->;
 /** Validated body inferred from {@link acceptMemberInvitationDto}. */
 export type AcceptMemberInvitationInput = z.infer<typeof acceptMemberInvitationDto>;
 /** Validated body inferred from {@link resendMemberInvitationDto}. */

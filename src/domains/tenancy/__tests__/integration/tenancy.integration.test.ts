@@ -108,6 +108,65 @@ describe('Tenancy Domain — Integration', () => {
       expect((response.json() as { data: Record<string, unknown> }).data).toBeDefined();
       expect((response.json() as { data: Record<string, unknown> }).data.name).toBe('Test Org');
     });
+
+    it('R9: reclaims a team slug after the owning org is soft-deleted', async () => {
+      // Regression for the full-vs-partial slug unique index. Before the fix, a soft-deleted team
+      // kept its slug indexed, so re-creating the same slug hit the tombstone and returned 409 for a
+      // slug no visible org owned. With the partial index (WHERE deleted_at IS NULL) the slug frees
+      // immediately on soft-delete.
+      const user = await createTestUser();
+      const userToken = await generateTestToken({ userId: user.public_id });
+
+      const createResponse = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/tenancy/organizations'),
+        token: userToken,
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
+        payload: { name: 'Reclaim Co', slug: 'reclaim-me' },
+      });
+      expect(createResponse.statusCode).toBe(201);
+      const createdId = (createResponse.json() as { data: { id: string } }).data.id;
+
+      // The creator is bootstrapped as owner with full permissions — soft-delete the org.
+      const ownerOrgToken = await generateTestToken({
+        userId: user.public_id,
+        organizationPublicId: createdId,
+      });
+      const deleteResponse = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'DELETE',
+        url: testApiPath('/tenancy/organization'),
+        token: ownerOrgToken,
+      });
+      expect(deleteResponse.statusCode).toBe(204);
+
+      // The same slug must be reusable now (was 409 before the partial index).
+      const recreateResponse = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/tenancy/organizations'),
+        token: userToken,
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
+        payload: { name: 'Reclaim Co 2', slug: 'reclaim-me' },
+      });
+      expect(recreateResponse.statusCode).toBe(201);
+    });
+
+    it('R9: still rejects a slug already held by a LIVE organization (constraint not over-loosened)', async () => {
+      const user = await createTestUser();
+      const userToken = await generateTestToken({ userId: user.public_id });
+      const payload = (name: string) => ({
+        method: 'POST' as const,
+        url: testApiPath('/tenancy/organizations'),
+        token: userToken,
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
+        payload: { name, slug: 'taken-slug' },
+      });
+
+      const first = await injectAuthenticated(app, payload('First Co'));
+      expect(first.statusCode).toBe(201);
+
+      const second = await injectAuthenticated(app, payload('Second Co'));
+      expect(second.statusCode).toBe(409);
+    });
   });
 
   describe('GET /api/v1/tenancy/organization', () => {

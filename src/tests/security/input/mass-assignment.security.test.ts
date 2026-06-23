@@ -283,4 +283,56 @@ describe('Security: mass-assignment / over-posting', () => {
       expectRejected(response.statusCode);
     });
   });
+
+  // ─── Signup (POST /auth/signup) — public account creation ───────────────────
+  // The highest-value over-post target: a body that lands a pre-verified or privileged account
+  // would bypass the entire email-verification trust model. The strict Signup DTO must reject it.
+
+  describe('POST /api/v1/auth/signup', () => {
+    const VALID_PASSWORD = 'Str0ngP@ssphrase!';
+    function signupEmail(): string {
+      return `signup-${generatePublicId('user').slice(4)}@example.com`;
+    }
+
+    it('baseline: a valid body creates the account (201)', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: testApiPath('/auth/signup'),
+        payload: { email: signupEmail(), password: VALID_PASSWORD },
+      });
+      expect(response.statusCode).toBe(201);
+    });
+
+    it('rejects an injected is_email_verified (verification is server-controlled, never self-claimable)', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: testApiPath('/auth/signup'),
+        payload: { email: signupEmail(), password: VALID_PASSWORD, is_email_verified: true },
+      });
+      expectRejected(response.statusCode);
+    });
+
+    it('rejects an injected status / role (privilege fields are never accepted from the body)', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: testApiPath('/auth/signup'),
+        payload: {
+          email: signupEmail(),
+          password: VALID_PASSWORD,
+          status: 'ACTIVE',
+          role: 'super_admin',
+        },
+      });
+      expectRejected(response.statusCode);
+    });
+
+    it('rejects injected identity columns (public_id, id)', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: testApiPath('/auth/signup'),
+        payload: { email: signupEmail(), password: VALID_PASSWORD, public_id: 'attacker', id: 1 },
+      });
+      expectRejected(response.statusCode);
+    });
+  });
 });

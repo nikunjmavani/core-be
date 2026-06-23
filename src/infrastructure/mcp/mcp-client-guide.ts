@@ -7,7 +7,7 @@
  *
  * @remarks
  * Keep this in sync with the auth routes (`auth.routes.ts`), the active-org token
- * model (`docs/reference/architecture/personal-team-organizations.md`), and the
+ * model (`docs/reference/architecture/personal-vs-team-organizations.md`), and the
  * API-contract rule. It is intentionally a hand-written narrative — the machine-
  * readable surface lives in the `core-be://openapi` and `core-be://routes`
  * resources, which clients should read alongside this guide.

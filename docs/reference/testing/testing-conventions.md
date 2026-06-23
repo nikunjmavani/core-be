@@ -261,5 +261,5 @@ describe('example.validator', () => {
 - [sub-domains-layout.md](../architecture/sub-domains-layout.md) — test placement vs with/without routes
 - [api-testing.md](../../getting-started/api-testing.md) — manual smoke checklist
 - [documentation-system.md](../architecture/documentation-system.md) — layered docs ownership map
-- `src/tests/<suite>/OVERVIEW.md` — per-suite scope (unit, integration, e2e, global, chaos, contract, performance, security, smoke, load, bench)
+- `src/tests/<suite>/<suite>.overview.md` — per-suite scope (unit, integration, e2e, global, chaos, contract, performance, security, smoke, load, bench)
 - `.cursor/skills/test-generator/SKILL.md` — orchestration checklist
