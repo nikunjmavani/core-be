@@ -24,7 +24,10 @@ export const organizationSchema = {
   properties: {
     id: { type: 'string' },
     name: { type: 'string' },
-    slug: { type: 'string', nullable: true },
+    // Kept non-nullable to match the published contract (origin/dev); a personal org's null
+    // slug is discoverable from `type === 'PERSONAL'`. Flipping this to nullable is a breaking
+    // response change (oasdiff response-property-became-nullable) and out of scope here.
+    slug: { type: 'string' },
     type: {
       type: 'string',
       enum: ['PERSONAL', 'TEAM'],
