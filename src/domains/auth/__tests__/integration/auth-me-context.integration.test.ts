@@ -85,6 +85,7 @@ describe('GET /api/v1/auth/me/context — Integration', () => {
     expect(body.data.active_organization?.id).toBe(organization.public_id);
     expect(body.data.active_organization?.type).toBe('TEAM');
     expect(body.data.active_organization?.capabilities.can_invite_members).toBe(true);
+    expect(body.data.active_organization?.capabilities.can_manage_billing).toBe(true);
     expect(body.data.my_permissions).toContain('organization:read');
     expect(Array.isArray(body.data.organizations)).toBe(true);
     expect(body.data.organizations.find((o) => o.id === organization.public_id)?.is_active).toBe(

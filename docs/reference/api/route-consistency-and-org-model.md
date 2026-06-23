@@ -13,7 +13,7 @@ An organization has an **immutable** `type`:
 
 There is **one** set of routes for both. The API never forks into personal-only or team-only URLs, and there is no per-organization path segment — the active organization rides the signed `org` token claim, and org-scoped sub-resources hang off the singular `/api/v1/tenancy/organization` resource. Switch the active org with `POST /api/v1/auth/switch-to-personal` or `POST /api/v1/auth/switch-to-organization { organization_id }` (both re-mint the access token).
 
-Five capabilities are structurally unavailable to a personal organization. They are handled two ways at once: **advertised** on every organization response (so clients hide or disable the action) and **backstopped** by a centralized guard (so a request that ignores the advertisement is rejected consistently).
+Six capabilities are structurally unavailable to a personal organization. They are handled two ways at once: **advertised** on every organization response (so clients hide or disable the action) and **backstopped** by a centralized guard (so a request that ignores the advertisement is rejected consistently).
 
 ### 1.1 The `capabilities` object (discoverable)
 
@@ -29,7 +29,8 @@ Every serialized organization response — get, list, create, patch — carries 
       "can_manage_members": false,
       "can_manage_roles": false,
       "can_transfer_ownership": false,
-      "can_delete": false
+      "can_delete": false,
+      "can_manage_billing": false
     }
   },
   "meta": { "request_id": "913dee78-d496-4d13-a93e-09d834c208dd" }
@@ -40,7 +41,7 @@ Every serialized organization response — get, list, create, patch — carries 
 - Derived by `organizationCapabilities(type)` in [`src/domains/tenancy/sub-domains/organization/organization-capability.ts`](../../../src/domains/tenancy/sub-domains/organization/organization-capability.ts).
 - A client should read `capabilities` after switching orgs and enable/disable team-only actions accordingly — never probe for a 422 to find out.
 
-### 1.2 The 5 team-only routes and the `assertTeamOrganization` backstop
+### 1.2 The 9 team-only routes and the `assertTeamOrganization` backstop
 
 | Capability | Route | Guard capability |
 | ---------- | ----- | ---------------- |
@@ -49,8 +50,12 @@ Every serialized organization response — get, list, create, patch — carries 
 | Add members | `POST /api/v1/tenancy/organization/memberships` | `MEMBERS` |
 | Transfer ownership | `POST /api/v1/tenancy/organization/transfer-ownership` | `MUTATION` |
 | Manage roles | `POST /api/v1/tenancy/organization/roles` | `ROLES` |
+| Create subscription | `POST /api/v1/billing/subscriptions` | `BILLING` |
+| Change plan | `POST /api/v1/billing/subscriptions/{subscription_id}/change-plan` | `BILLING` |
+| Cancel subscription | `POST /api/v1/billing/subscriptions/{subscription_id}/cancel` | `BILLING` |
+| Resume subscription | `POST /api/v1/billing/subscriptions/{subscription_id}/resume` | `BILLING` |
 
-The single point of enforcement is `assertTeamOrganization(organization, capability)` in the same module (capabilities `MEMBERS | ROLES | MUTATION`). On a personal organization it throws `UnprocessableEntityError` → **HTTP 422** `unprocessable_entity`. The discoverable flags (`organizationCapabilities`) and the enforced rejection (`assertTeamOrganization`) live in one module so they cannot drift.
+The single point of enforcement is `assertTeamOrganization(organization, capability)` in the same module (capabilities `MEMBERS | ROLES | MUTATION | BILLING`). On a personal organization it throws `UnprocessableEntityError` → **HTTP 422** `unprocessable_entity`. The discoverable flags (`organizationCapabilities`) and the enforced rejection (`assertTeamOrganization`) live in one module so they cannot drift.
 
 ---
 

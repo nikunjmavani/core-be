@@ -139,7 +139,7 @@ sequenceDiagram
   Tenancy->>Org: get active organization (from org claim)
   Org->>DB: SELECT organization
   Org->>Cap: organizationCapabilities(type)
-  Cap-->>Org: {can_invite_members, can_manage_members, can_manage_roles, can_transfer_ownership, can_delete}
+  Cap-->>Org: {can_invite_members, can_manage_members, can_manage_roles, can_transfer_ownership, can_delete, can_manage_billing}
   Org-->>Tenancy: organization + capabilities
   Tenancy-->>Client: 200 {data: {..., capabilities}}
   Note over Client: client reads capabilities to enable/disable team-only actions — no 422 probing
@@ -153,7 +153,7 @@ sequenceDiagram
 ### Failure modes
 
 - **Not a member of the target organization** → switch is rejected (the token is not re-minted); the active org is unchanged.
-- **Client ignores `capabilities` and calls a team-only route on a personal org** → the centralized guard `assertTeamOrganization` rejects with **422** (`unprocessable_entity`), not 409, because the org `type` is immutable and retrying is futile. The `capabilities` object exists precisely so clients hide/disable those actions up front instead of probing for the 422. The four team-only routes: `DELETE /api/v1/tenancy/organization`, `POST .../organization/memberships`, `POST .../organization/transfer-ownership`, `POST .../organization/roles`.
+- **Client ignores `capabilities` and calls a team-only route on a personal org** → the centralized guard `assertTeamOrganization` rejects with **422** (`unprocessable_entity`), not 409, because the org `type` is immutable and retrying is futile. The `capabilities` object exists precisely so clients hide/disable those actions up front instead of probing for the 422. The team-only routes: `DELETE /api/v1/tenancy/organization`, `POST .../organization/invitations`, `POST .../organization/memberships`, `POST .../organization/transfer-ownership`, `POST .../organization/roles`, and the four subscription mutations `POST /api/v1/billing/subscriptions` (+ `/{subscription_id}/change-plan`, `/cancel`, `/resume`).
 
 ## organization-invitation-flow
 

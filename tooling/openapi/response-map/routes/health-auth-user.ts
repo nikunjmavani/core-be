@@ -96,6 +96,12 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
     example: null,
   },
+  'POST /api/v1/auth/signup': {
+    // Creates the account and logs the user in immediately — same access-token envelope as login.
+    statusCode: 201,
+    schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
+    example: null,
+  },
   'POST /api/v1/auth/logout': { statusCode: 201, schema: null, example: null },
   'POST /api/v1/auth/magic-link/send': {
     statusCode: 201,

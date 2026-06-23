@@ -42,7 +42,7 @@ The policy is enforced centrally in `method-status-policy.middleware.ts`; declar
 - **406** MCP only (Accept negotiation).
 - **409** mutating only — state conflict: duplicate resource, bad state transition, in-flight duplicate X-Idempotency-Key.
 - **413 / 415** POST/PATCH/PUT only — body too large / wrong Content-Type.
-- **422** mutating only — business-rule rejection (incl. a capability unavailable for an **immutable resource type**, e.g. a personal organization that cannot gain members/roles/ownership-transfer/deletion — enforced by the shared `assertTeamOrganization(...)` guard, **not** 409), or X-Idempotency-Key reused with a different payload.
+- **422** mutating only — business-rule rejection (incl. a capability unavailable for an **immutable resource type**, e.g. a personal organization that cannot gain members/roles/ownership-transfer/deletion/billing — enforced by the shared `assertTeamOrganization(...)` guard, **not** 409), or X-Idempotency-Key reused with a different payload.
 - **429** every route — with `Retry-After` + `X-RateLimit-*` headers.
 - **500** never intentional — the never-5xx fuzz gate fails CI on any 5xx from malformed input.
 - Rules of thumb: 400 = malformed shape, 422 = valid shape wrong meaning; 409 = conflicts with current state, 422 = payload logic always wrong (incl. a capability blocked by an immutable resource type — personal vs team org). Never invent a status outside this list.
@@ -50,8 +50,8 @@ The policy is enforced centrally in `method-status-policy.middleware.ts`; declar
 ## Personal vs team organizations (one route surface, discoverable capabilities)
 
 - The route surface is identical for personal and team organizations — there are **no** personal-only or team-only paths.
-- Team-only capabilities (invite/manage members, manage roles, transfer ownership, delete the org) reject a **personal** organization with **422** via `assertTeamOrganization(organization, capability)` (`src/domains/tenancy/sub-domains/organization/organization-capability.ts`).
-- Every serialized organization carries a `capabilities` object (`can_invite_members`, `can_manage_members`, `can_manage_roles`, `can_transfer_ownership`, `can_delete`) describing the **org type's** capability (not the caller's permission), so clients discover this without probing for a 422.
+- Team-only capabilities (invite/manage members, manage roles, transfer ownership, delete the org, manage billing) reject a **personal** organization with **422** via `assertTeamOrganization(organization, capability)` (`src/domains/tenancy/sub-domains/organization/organization-capability.ts`).
+- Every serialized organization carries a `capabilities` object (`can_invite_members`, `can_manage_members`, `can_manage_roles`, `can_transfer_ownership`, `can_delete`, `can_manage_billing`) describing the **org type's** capability (not the caller's permission), so clients discover this without probing for a 422.
 - The route catalog encodes this as the `O` column (`both` | `team`), kept in sync with `tooling/openapi/route-catalog/route-org-scope.json` by `pnpm validate:route-org-scope`.
 
 ## Header matrix (client-sent)
