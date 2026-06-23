@@ -68,3 +68,40 @@ describe('AuthMeContextService.getContext', () => {
     expect(authorizationService.resolveUserOrganizationPermissions).not.toHaveBeenCalled();
   });
 });
+
+describe('AuthMeContextService.getActiveOrganizationContext', () => {
+  it('resolves only the active-org slice (org + permissions) without the user / org-list reads', async () => {
+    const activeOrganization = { id: 'org_active', type: 'TEAM' };
+    const userService = { getMe: vi.fn() };
+    const organizationService = {
+      list: vi.fn(),
+      getByPublicId: vi.fn().mockResolvedValue(activeOrganization),
+    };
+    const authorizationService = {
+      resolveUserOrganizationPermissions: vi
+        .fn()
+        .mockResolvedValue(['organization:read', 'membership:manage']),
+    };
+    const service = new AuthMeContextService(
+      userService as never,
+      organizationService as never,
+      authorizationService as never,
+    );
+
+    const data = await service.getActiveOrganizationContext({
+      userPublicId: 'usr_1',
+      organizationPublicId: 'org_active',
+      globalRole: undefined,
+    });
+
+    expect(data).toEqual({
+      active_organization: activeOrganization,
+      my_permissions: ['organization:read', 'membership:manage'],
+      global_role: null,
+    });
+    // The lean delta must NOT pull the heavier user / organizations[] payload (those are stable
+    // across a switch and reused from the client's initial /me/context).
+    expect(userService.getMe).not.toHaveBeenCalled();
+    expect(organizationService.list).not.toHaveBeenCalled();
+  });
+});

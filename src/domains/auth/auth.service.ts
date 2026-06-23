@@ -394,7 +394,7 @@ export class AuthService {
     userPublicId: string;
     sessionPublicId: string;
     organizationPublicId: string;
-  }): Promise<{ access_token: string }> {
+  }): Promise<{ access_token: string; organization_public_id: string }> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (user.status !== 'ACTIVE') throw new UnauthorizedError('errors:accountNotActive');
     const resolved = await findUserActiveOrganizationByPublicId(user.id, organizationPublicId);
@@ -413,7 +413,7 @@ export class AuthService {
   }: {
     userPublicId: string;
     sessionPublicId: string;
-  }): Promise<{ access_token: string }> {
+  }): Promise<{ access_token: string; organization_public_id: string }> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (user.status !== 'ACTIVE') throw new UnauthorizedError('errors:accountNotActive');
     const personal = await resolvePersonalOrganization(user.id);
@@ -430,7 +430,7 @@ export class AuthService {
     user: UserAuthRecord,
     sessionPublicId: string,
     organization: { id: number; public_id: string },
-  ): Promise<{ access_token: string }> {
+  ): Promise<{ access_token: string; organization_public_id: string }> {
     const jsonWebToken = await signAccessToken({
       userId: user.public_id,
       role: resolveAccessTokenRoleForUser({
@@ -445,6 +445,6 @@ export class AuthService {
       nextAccessToken: jsonWebToken,
       activeOrganizationId: organization.id,
     });
-    return { access_token: jsonWebToken };
+    return { access_token: jsonWebToken, organization_public_id: organization.public_id };
   }
 }

@@ -183,9 +183,50 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
 
   // ── Auth: Active-org switch + me context (REQ-5) ──
   'POST /api/v1/auth/switch-to-organization': {
-    // Re-issues an access token bound to the newly active organization (AuthSerializer.accessToken).
+    // Re-mints the access token bound to the newly active org AND returns the active-org delta
+    // (active_organization + my_permissions + global_role) so the client repaints the dashboard
+    // without a follow-up GET /auth/me/context.
     statusCode: 201,
-    schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
+    schema: wrapSuccess(
+      {
+        type: 'object',
+        properties: {
+          ...schemas.accessTokenSchema.properties,
+          active_organization: schemas.organizationSchema,
+          my_permissions: { type: 'array', items: { type: 'string' } },
+          global_role: { type: 'string', nullable: true },
+        },
+      },
+      {
+        access_token: schemas.accessTokenExample.access_token,
+        active_organization: schemas.organizationExample,
+        my_permissions: ['organization:read', 'membership:manage'],
+        global_role: null,
+      },
+    ),
+    example: null,
+  },
+  'POST /api/v1/auth/switch-to-personal': {
+    // Same active-org delta envelope as switch-to-organization; active_organization is the caller's
+    // own personal organization (type PERSONAL, all capabilities false).
+    statusCode: 201,
+    schema: wrapSuccess(
+      {
+        type: 'object',
+        properties: {
+          ...schemas.accessTokenSchema.properties,
+          active_organization: schemas.organizationSchema,
+          my_permissions: { type: 'array', items: { type: 'string' } },
+          global_role: { type: 'string', nullable: true },
+        },
+      },
+      {
+        access_token: schemas.accessTokenExample.access_token,
+        active_organization: schemas.organizationExample,
+        my_permissions: ['organization:read'],
+        global_role: null,
+      },
+    ),
     example: null,
   },
   'GET /api/v1/auth/me/context': {
