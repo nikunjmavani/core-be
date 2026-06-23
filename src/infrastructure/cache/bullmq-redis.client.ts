@@ -17,7 +17,14 @@ const bullMqRedisUrl = resolveBullMqRedisUrl();
 export const bullmqRedisConnection = new Redis(bullMqRedisUrl, {
   maxRetriesPerRequest: null,
   lazyConnect: true,
-  enableReadyCheck: true,
+  /**
+   * Disabled under `test` (#786): like the shared cache client, this per-worker singleton is churned
+   * across createTestApp instances and its reconnect INFO ready-check rejects against a closing
+   * stream at Vitest worker teardown (an unhandled rejection that flakily fails a green run). Test
+   * Redis is always ready immediately. Reads raw `process.env.NODE_ENV` (always current; the `env`
+   * const is frozen before the harness sets `NODE_ENV=test`) so no env-config mock is required.
+   */
+  enableReadyCheck: process.env.NODE_ENV !== 'test',
   enableOfflineQueue: false,
   /**
    * Dual-stack DNS lookup (IPv4 + IPv6). Required for Railway private networking
