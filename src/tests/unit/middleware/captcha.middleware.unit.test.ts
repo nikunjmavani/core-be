@@ -39,6 +39,17 @@ describe('captchaPreHandler', () => {
     expect(verifyTurnstileTokenMock).not.toHaveBeenCalled();
   });
 
+  it('fails open when CAPTCHA is disabled and NODE_ENV is local', async () => {
+    // Regression: NODE_ENV=local is the default local runtime (and the value scaffolded into
+    // .env.local). It must fail open like development/test — otherwise every public auth route
+    // 401s with captchaProviderUnavailable when CAPTCHA_PROVIDER=disabled.
+    process.env.NODE_ENV = 'local';
+    resetEnvCacheForTests();
+
+    await expect(captchaPreHandler(buildRequest(), {} as FastifyReply)).resolves.toBeUndefined();
+    expect(verifyTurnstileTokenMock).not.toHaveBeenCalled();
+  });
+
   it('throws captchaRequired when token missing and provider enabled', async () => {
     process.env.CAPTCHA_PROVIDER = 'turnstile';
     process.env.CAPTCHA_SECRET = 'secret';
