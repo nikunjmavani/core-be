@@ -204,8 +204,12 @@ const toSec = (s) => (s != null ? `${Math.round(s)}s` : '—');
 const staleTag = () => el('span', 'rounded border border-warning/40 px-1 text-[9px] font-semibold uppercase tracking-wide text-warning', 'stale');
 
 /* ── sparkline ── */
-const HISTORY = 30; const series = {}; const prevCpu = {};
-function pushSeries(name, v) { if (v == null) return; const a = series[name] || (series[name] = []); a.push(v); if (a.length > HISTORY) a.shift(); }
+const HISTORY = 30; const series = {}; const seriesT = {}; const prevCpu = {}; const procStart = {};
+// A buffered event-loop "peak" older than this self-expires, so a one-off reload/host-freeze spike can't linger as a fake sustained reading.
+const PEAK_TTL_MS = 60000;
+function pushSeries(name, v) { if (v == null) return; if (!series[name]) { series[name] = []; seriesT[name] = []; } series[name].push(v); seriesT[name].push(performance.now()); if (series[name].length > HISTORY) { series[name].shift(); seriesT[name].shift(); } }
+// A tsx-watch reload's multi-second boot lag is not a runtime stall — when a process restarts (its start time changes) drop that process's vitals history so the boot spike cannot resurface as a peak.
+function forgetSeriesOnRestart(parsed, prefix) { const start = parsed && parsed.process_start_time_seconds; if (start == null) return; if (procStart[prefix] != null && start !== procStart[prefix]) { for (const k of Object.keys(series)) { if (k.startsWith(prefix)) { series[k] = []; seriesT[k] = []; } } } procStart[prefix] = start; }
 function pushRate(name, raw) { if (raw == null) return; const p = prevCpu[name]; prevCpu[name] = raw; if (p != null) pushSeries(name, Math.max(0, raw - p)); }
 function spark(values, color, hArg) {
   const w = 100, h = hArg || 24;
@@ -409,11 +413,11 @@ function runtimeCell(key, procSums, m, proc) {
   if (raw == null) v.innerHTML = '<span class="text-[12px] font-normal text-muted-foreground">—</span>';
   else v.innerHTML = num + (unit ? ` <span class="text-[10px] font-normal text-muted-foreground">${unit}</span>` : '');
   line.appendChild(v); cell.appendChild(line);
-  if (m.peak && raw != null) { // sustained-only event-loop peak (lone spikes are scrape/boot noise)
-    const buf = series[key] || [];
+  if (m.peak && raw != null) { // sustained + recent only — lone/old spikes are scrape/reload/host-freeze noise
+    const buf = series[key] || [], bufT = seriesT[key] || [], now = performance.now();
     const thresh = Math.max(raw * 1.5, m.warnAbove || 0);
     let peak = null;
-    for (let i = 1; i < buf.length; i++) { if (buf[i] > thresh && buf[i - 1] > thresh) peak = Math.max(peak ?? 0, buf[i], buf[i - 1]); }
+    for (let i = 1; i < buf.length; i++) { if (now - bufT[i] > PEAK_TTL_MS || now - bufT[i - 1] > PEAK_TTL_MS) continue; if (buf[i] > thresh && buf[i - 1] > thresh) peak = Math.max(peak ?? 0, buf[i], buf[i - 1]); }
     if (peak != null) {
       const [peakNum, peakUnit] = fmtNum(peak, m.fmt);
       const peakBad = m.warnAbove != null && peak > m.warnAbove;
@@ -730,6 +734,7 @@ async function poll() {
   if (mServer) lastGood.sS = sS;
   const sW = mWorker ? parseMetrics(mWorker) : lastGood.sW;
   if (mWorker) lastGood.sW = sW;
+  forgetSeriesOnRestart(sS, 's_'); forgetSeriesOnRestart(sW, 'w_'); // drop boot-spike history when a process has restarted, before bufferVitals re-samples
   const routes = mServer ? parseHttpRoutes(mServer) : lastGood.routes;
   if (mServer) lastGood.routes = routes;
   if (qOk || mServer || mWorker) bufferVitals(agg, sS, sW, qOk, !!mServer, !!mWorker);
