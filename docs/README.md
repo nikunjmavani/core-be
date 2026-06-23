@@ -167,6 +167,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [reference/reliability/process-error-handling.md](reference/reliability/process-error-handling.md)                 | `uncaughtException` vs burst-tolerant `unhandledRejection` policy (audit #14).         |
 | [reference/reliability/idempotency.md](reference/reliability/idempotency.md) | Idempotency keys, `X-Idempotency-Key`, replay, and the required-write set. |
 | [reference/reliability/degraded-mode-runbook.md](reference/reliability/degraded-mode-runbook.md) | Degraded-mode behavior when Redis/DB dependencies are impaired. |
+| [reference/reliability/scalability-and-capacity.md](reference/reliability/scalability-and-capacity.md) | Measured single-instance throughput ceiling (~1k req/s), the DB-pool bottleneck, and how to scale past it. |
 | [reference/testing/testing-conventions.md](reference/testing/testing-conventions.md) | Test layers, naming, and `fastify.inject` conventions. |
 | [reference/testing/mutation-testing.md](reference/testing/mutation-testing.md) | Mutation testing setup and budgets. |
 | [reference/quality/sonarqube-local.md](reference/quality/sonarqube-local.md) | Local SonarQube quality gate (`pnpm sonar:*`) used in pre-commit. |

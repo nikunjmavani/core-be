@@ -3,6 +3,7 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
 import { database } from '@/infrastructure/database/connection.js';
+import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import { user_notification_preferences } from '@/domains/user/sub-domains/user-notification-preferences/user-notification-preferences.schema.js';
 import { UserNotificationPreferencesRepository } from '@/domains/user/sub-domains/user-notification-preferences/user-notification-preferences.repository.js';
 
@@ -111,5 +112,46 @@ describe('UserNotificationPreferencesRepository (database)', () => {
     ).rejects.toMatchObject({
       cause: expect.objectContaining({ constraint_name: 'chk_user_notif_prefs_no_org' }),
     });
+  });
+
+  // load-test regression: PUT /users/me/notification-preferences returned HTTP 500 under
+  // concurrency — Postgres 23505 on idx_user_notif_prefs_user_type_channel_unique (plus the
+  // odd 40001) because replaceAll's delete-then-insert raced when the same user was written by
+  // two requests at once (surfaced at 150 VU > the 120-user load pool). The per-user advisory
+  // lock serializes them: concurrent replaces must all succeed and converge to one full set.
+  it('serializes concurrent replaceAll for one user — no 23505/500 under the unique index', async () => {
+    const user = await createTestUser();
+    const payload = (enabled: boolean) => [
+      {
+        notification_type: 'SUBSCRIPTION_UPDATED',
+        channel: 'EMAIL',
+        organization_id: null,
+        is_enabled: enabled,
+      },
+      {
+        notification_type: 'INVITATION',
+        channel: 'IN_APP',
+        organization_id: null,
+        is_enabled: enabled,
+      },
+    ];
+
+    // Fire many simultaneous full-replaces for the SAME user, each in its own request
+    // transaction (mirrors concurrent PUTs). Before the advisory lock these raced the unique
+    // index and at least one rejected with 23505; the lock makes them all resolve.
+    const CONCURRENT_REPLACES = 8;
+    const settled = await Promise.allSettled(
+      Array.from({ length: CONCURRENT_REPLACES }, (_, index) =>
+        withUserDatabaseContext(user.public_id, () =>
+          repository.replaceAll(user.id, payload(index % 2 === 0), user.id),
+        ),
+      ),
+    );
+
+    expect(settled.filter((result) => result.status === 'rejected')).toHaveLength(0);
+
+    // Exactly one full replace won — deterministic end state, no duplicate tuples.
+    const listed = await repository.listByUserId(user.id);
+    expect(listed).toHaveLength(2);
   });
 });
