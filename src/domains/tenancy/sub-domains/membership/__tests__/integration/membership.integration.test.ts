@@ -428,7 +428,8 @@ describe('Membership Sub-Domain — Integration', () => {
     }
 
     it('atomically activates the linked membership when the invitation is accepted', async () => {
-      const { invitation, invitee, inviteeMembership, rawToken } = await createPendingInvitation();
+      const { organization, invitation, invitee, inviteeMembership, rawToken } =
+        await createPendingInvitation();
       const inviteeToken = await generateTestToken({ userId: invitee.public_id });
 
       const acceptResponse = await injectAuthenticated(app, {
@@ -438,6 +439,11 @@ describe('Membership Sub-Domain — Integration', () => {
         payload: { token: rawToken },
       });
       expect(acceptResponse.statusCode).toBe(201);
+      // The accept response carries the joined org's public id so the client can
+      // POST /auth/switch-to-organization into it without a separate lookup (gate reduction).
+      expect(
+        (acceptResponse.json() as { data: { organization_id: string } }).data.organization_id,
+      ).toBe(organization.public_id);
 
       const [updated] = await database
         .select()

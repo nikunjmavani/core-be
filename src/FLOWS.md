@@ -148,6 +148,7 @@ sequenceDiagram
 ### Side effects
 
 - A new access token is minted with the target organization in the `org` claim (the prior token's org is replaced). No DB write to the organization itself.
+- Both switch endpoints (`switch-to-organization` / `switch-to-personal`) return the **active-org delta inline** — `{ access_token, active_organization, my_permissions, global_role }` (`AuthMeContextService.getActiveOrganizationContext` post-gate read) — so the client repaints the dashboard for the new org **without** a follow-up `GET /auth/me/context`. The omitted `user` / `organizations[]` are stable across a switch and reused from the client's initial context.
 - Every serialized organization response (this `GET`, list, create, patch) carries a `capabilities` object derived from the org `type` (`organizationCapabilities(type)` in `src/domains/tenancy/sub-domains/organization/organization-capability.ts`). `TEAM` → all flags `true`; `PERSONAL` → all `false`.
 
 ### Failure modes

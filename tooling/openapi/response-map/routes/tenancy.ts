@@ -184,8 +184,27 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
 
   // ── Invitations ── (add-member issues invitations via POST /organization/memberships, REQ-1)
   'POST /api/v1/tenancy/invitations/{invitation_id}/accept': {
+    // Returns the accepted invitation plus `organization_id` (the org just joined) so the client
+    // can POST /auth/switch-to-organization into it without a separate lookup.
     statusCode: 201,
-    schema: wrapSuccess(schemas.membershipSchema, schemas.membershipExample),
+    schema: wrapSuccess(
+      {
+        type: 'object',
+        properties: {
+          ...schemas.invitationSchema.properties,
+          organization_id: {
+            type: 'string',
+            description:
+              'Public id of the joined organization — pass to POST /auth/switch-to-organization.',
+          },
+        },
+      },
+      {
+        ...schemas.invitationExample,
+        accepted_at: '2026-02-14T11:00:00.000Z',
+        organization_id: 'org_k7x9m2pqr4w8n1v3a1b2c',
+      },
+    ),
     example: null,
   },
   'DELETE /api/v1/tenancy/organization/invitations/{invitation_id}': {

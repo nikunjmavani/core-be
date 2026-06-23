@@ -4,7 +4,11 @@ import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organ
 import type { MembershipRepository } from '@/domains/tenancy/sub-domains/membership/membership.repository.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { MemberInvitationRepository } from './member-invitation.repository.js';
-import type { MemberInvitationOutput, MemberInvitationRow } from './member-invitation.types.js';
+import type {
+  AcceptMemberInvitationOutput,
+  MemberInvitationOutput,
+  MemberInvitationRow,
+} from './member-invitation.types.js';
 import {
   validateAcceptMemberInvitation,
   validateResendMemberInvitation,
@@ -168,7 +172,7 @@ export class MemberInvitationService {
     invitation_public_id: string,
     body: unknown,
     actingUserPublicId: string,
-  ): Promise<MemberInvitationOutput> {
+  ): Promise<AcceptMemberInvitationOutput> {
     const parsed = validateAcceptMemberInvitation(body);
     // sec-T4: previously accept was unauthenticated, so anyone with the
     // invitation URL could flip the victim's pending membership to ACTIVE.
@@ -243,7 +247,9 @@ export class MemberInvitationService {
     if (acceptedMemberPublicId) {
       await invalidatePermissions(acceptedMemberPublicId, lookup.organization_public_id);
     }
-    return result;
+    // Return the joined org's public id alongside the invitation so the client can
+    // POST /auth/switch-to-organization into it without a separate lookup (gate reduction).
+    return { ...result, organization_id: lookup.organization_public_id };
   }
 
   async revoke(organization_public_id: string, invitation_public_id: string): Promise<void> {
