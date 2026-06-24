@@ -53,7 +53,6 @@ describe('Auth e2e: organization switch', () => {
         active_organization: {
           id: string;
           type: string;
-          capabilities: { can_manage_billing: boolean };
         };
         my_permissions: string[];
         global_role: string | null;
@@ -63,7 +62,6 @@ describe('Auth e2e: organization switch', () => {
     expect(body.data.access_token).toBeDefined();
     expect(body.data.active_organization.id).toBe(organization.public_id);
     expect(body.data.active_organization.type).toBe('PERSONAL');
-    expect(body.data.active_organization.capabilities.can_manage_billing).toBe(false);
     expect(Array.isArray(body.data.my_permissions)).toBe(true);
     expect(body.data).toHaveProperty('global_role');
   });

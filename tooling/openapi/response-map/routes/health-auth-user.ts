@@ -140,7 +140,11 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     }),
     example: null,
   },
-  'POST /api/v1/auth/password/reset': { statusCode: 201, schema: null, example: null },
+  'POST /api/v1/auth/password/reset': {
+    statusCode: 201,
+    schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
+    example: null,
+  },
   'POST /api/v1/auth/password/change': { statusCode: 201, schema: null, example: null },
   'POST /api/v1/auth/email/verify': {
     statusCode: 201,
@@ -300,6 +304,61 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
   'DELETE /api/v1/auth/me/auth-methods/{auth_method_id}': {
     statusCode: 204,
     schema: null,
+    example: null,
+  },
+
+  // ── WebAuthn (passkeys) ──
+  'POST /api/v1/auth/me/webauthn/register/options': {
+    statusCode: 201,
+    schema: wrapSuccess(
+      schemas.webauthnCeremonyOptionsSchema,
+      schemas.webauthnRegistrationOptionsExample,
+    ),
+    example: null,
+  },
+  'POST /api/v1/auth/me/webauthn/register/verify': {
+    statusCode: 201,
+    schema: wrapSuccess(
+      schemas.webauthnRegisterVerifySchema,
+      schemas.webauthnRegisterVerifyExample,
+    ),
+    example: null,
+  },
+  'GET /api/v1/auth/me/webauthn/credentials': {
+    statusCode: 200,
+    schema: wrapSuccess({ type: 'array', items: schemas.webauthnCredentialSchema }, [
+      schemas.webauthnCredentialExample,
+    ]),
+    example: null,
+  },
+  'DELETE /api/v1/auth/me/webauthn/credentials/{credential_id}': {
+    statusCode: 204,
+    schema: null,
+    example: null,
+  },
+  'POST /api/v1/auth/webauthn/authenticate/options': {
+    statusCode: 201,
+    schema: wrapSuccess(
+      schemas.webauthnCeremonyOptionsSchema,
+      schemas.webauthnAuthenticationOptionsExample,
+    ),
+    example: null,
+  },
+  'POST /api/v1/auth/webauthn/authenticate/verify': {
+    statusCode: 201,
+    schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
+    example: null,
+  },
+
+  // ── Step-up + MFA enrollment confirm ──
+  'POST /api/v1/auth/step-up': {
+    statusCode: 201,
+    schema: wrapSuccess(schemas.stepUpSchema, schemas.stepUpExample),
+    example: null,
+  },
+  'POST /api/v1/auth/me/mfa/enroll/confirm': {
+    statusCode: 201,
+    schema: wrapSuccess(schemas.mfaEnrollConfirmSchema, schemas.mfaEnrollConfirmExample),
     example: null,
   },
 

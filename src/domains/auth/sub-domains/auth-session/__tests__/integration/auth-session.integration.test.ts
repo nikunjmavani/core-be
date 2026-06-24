@@ -47,6 +47,32 @@ describe('Auth Session Sub-Domain — Integration', () => {
       });
       expect(response.statusCode).toBe(200);
     });
+
+    it('flags the calling session is_current and exposes the derived device/browser fields', async () => {
+      const user = await createTestUser();
+      const { token, sessionPublicId } = await generateTestTokenAndSession({
+        userId: user.public_id,
+      });
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/auth/me/sessions'),
+        token,
+      });
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { data: Array<Record<string, unknown>> };
+      const current = body.data.find((session) => session.id === sessionPublicId);
+      expect(current).toBeDefined();
+      expect(current?.is_current).toBe(true);
+      // The derived display fields are always part of the contract (value may be null).
+      expect(current).toHaveProperty('device');
+      expect(current).toHaveProperty('browser');
+      // Only the calling session is flagged current.
+      for (const session of body.data) {
+        if (session.id !== sessionPublicId) {
+          expect(session.is_current).toBe(false);
+        }
+      }
+    });
   });
 
   describe('DELETE /api/v1/auth/me/sessions/:id', () => {

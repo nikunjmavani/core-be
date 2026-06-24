@@ -496,7 +496,7 @@ export class UserService {
     return {
       ...(await this.toUserOutput(user)),
       capabilities: {
-        personal_organizations: env.PERSONAL_ORGANIZATION_ENABLED,
+        personal_organization: env.PERSONAL_ORGANIZATION_ENABLED,
         team_organizations: env.TEAM_ORGANIZATION_ENABLED,
       },
       personal_organization_id: personalOrganizationId,

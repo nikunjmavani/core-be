@@ -144,6 +144,34 @@ export const uploadExample = {
   expires_at: '2026-02-14T11:30:00.000Z',
 };
 
+// ── Upload object (get / confirm) ──
+export const uploadObjectSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', pattern: '^upl_[a-z0-9]{21}$' },
+    file_name: { type: 'string' },
+    mime_type: { type: 'string' },
+    file_size: { type: 'integer' },
+    status: { type: 'string', example: 'UPLOADED' },
+    storage_provider: { type: 'string' },
+    organization_id: { type: 'string', nullable: true },
+    created_at: { type: 'string', format: 'date-time' },
+    updated_at: { type: 'string', format: 'date-time' },
+  },
+};
+
+export const uploadObjectExample = {
+  id: 'upl_k7x9m2pqr4w8n1v3a1b2c',
+  file_name: 'avatar.png',
+  mime_type: 'image/png',
+  file_size: 1024,
+  status: 'UPLOADED',
+  storage_provider: 's3',
+  organization_id: null,
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
+};
+
 // ── Test webhook response ──
 export const webhookTestSchema = {
   type: 'object',

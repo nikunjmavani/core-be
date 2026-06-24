@@ -13,33 +13,25 @@ An organization has an **immutable** `type`:
 
 There is **one** set of routes for both. The API never forks into personal-only or team-only URLs, and there is no per-organization path segment — the active organization rides the signed `org` token claim, and org-scoped sub-resources hang off the singular `/api/v1/tenancy/organization` resource. Switch the active org with `POST /api/v1/auth/switch-to-personal` or `POST /api/v1/auth/switch-to-organization { organization_id }` (both re-mint the access token).
 
-Six capabilities are structurally unavailable to a personal organization. They are handled two ways at once: **advertised** on every organization response (so clients hide or disable the action) and **backstopped** by a centralized guard (so a request that ignores the advertisement is rejected consistently).
+Six actions are structurally unavailable to a personal organization. The API does **not** advertise them as a per-response object; clients derive availability from the organization `type`, and a centralized guard backstops every team-only route so a mis-targeted request is rejected consistently.
 
-### 1.1 The `capabilities` object (discoverable)
+### 1.1 Deriving team-only availability from `type`
 
-Every serialized organization response — get, list, create, patch — carries a `capabilities` object:
+Every serialized organization response — get, list, create, patch — carries the org `type`:
 
 ```json
 {
   "data": {
     "id": "org_01hv6y1jedq4p1n0yqn5ba3ky4",
-    "type": "PERSONAL",
-    "capabilities": {
-      "can_invite_members": false,
-      "can_manage_members": false,
-      "can_manage_roles": false,
-      "can_transfer_ownership": false,
-      "can_delete": false,
-      "can_manage_billing": false
-    }
+    "type": "PERSONAL"
   },
   "meta": { "request_id": "913dee78-d496-4d13-a93e-09d834c208dd" }
 }
 ```
 
-- These flags describe the **org type's** capability, **not** the caller's permission. `TEAM` → every flag `true`; `PERSONAL` → every flag `false`. Permissions and roles govern what the caller may do, separately.
-- Derived by `organizationCapabilities(type)` in [`src/domains/tenancy/sub-domains/organization/organization-capability.ts`](../../../src/domains/tenancy/sub-domains/organization/organization-capability.ts).
-- A client should read `capabilities` after switching orgs and enable/disable team-only actions accordingly — never probe for a 422 to find out.
+- `type === 'TEAM'` ⇒ the six team-only actions are available for the org; `type === 'PERSONAL'` ⇒ none are. This is a property of the org **type**, not the caller's permission — permissions and roles govern what the caller may do, separately.
+- A client gates a team-only action on **both**: `type === 'TEAM'` (the action exists for this org) **and** the caller holding the relevant permission (e.g. `subscription:manage`). Never probe for a 422 to discover availability.
+- There is no `capabilities` object on the response — it was a redundant projection of `type` and was removed. The personal-vs-team rule lives only in the server-side guard (§1.2).
 
 ### 1.2 The 9 team-only routes and the `assertTeamOrganization` backstop
 
@@ -55,7 +47,7 @@ Every serialized organization response — get, list, create, patch — carries 
 | Cancel subscription | `POST /api/v1/billing/subscriptions/{subscription_id}/cancel` | `BILLING` |
 | Resume subscription | `POST /api/v1/billing/subscriptions/{subscription_id}/resume` | `BILLING` |
 
-The single point of enforcement is `assertTeamOrganization(organization, capability)` in the same module (capabilities `MEMBERS | ROLES | MUTATION | BILLING`). On a personal organization it throws `UnprocessableEntityError` → **HTTP 422** `unprocessable_entity`. The discoverable flags (`organizationCapabilities`) and the enforced rejection (`assertTeamOrganization`) live in one module so they cannot drift.
+The single point of enforcement is `assertTeamOrganization(organization, capability)` (capability buckets `MEMBERS | ROLES | MUTATION | BILLING`). On a personal organization it throws `UnprocessableEntityError` → **HTTP 422** `unprocessable_entity`. Clients hide or disable these actions up front from the org `type` + the caller's permissions, so a well-behaved client never triggers the 422.
 
 ---
 
@@ -139,6 +131,6 @@ The old `/auth/mfa*` (non-login) paths now return **404** — there are no depre
 ## Related
 
 - Method→status policy and the `409 vs 422` rule: [response-codes.md](response-codes.md)
-- Domain layout, the `capabilities` object, and the active-org model: [domains-and-public-api-design.md](../architecture/domains-and-public-api-design.md)
+- Domain layout, the org-type model, and the active-org model: [domains-and-public-api-design.md](../architecture/domains-and-public-api-design.md)
 - Route catalog generator: `agent-os/skills/route-catalog/SKILL.md`
 - Header matrix and id conventions: `agent-os/skills/api-contract-guard/SKILL.md`

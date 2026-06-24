@@ -26,6 +26,11 @@ const EXEMPT_FILES = new Set<string>([
 const EXEMPT_KEYS_BY_FILE: Record<string, ReadonlySet<string>> = {
   // Internal internal-id → public-id resolution maps consumed by the serializer; never emitted.
   'src/domains/audit/audit.serializer.ts': new Set(['userPublicIds', 'organizationPublicIds']),
+  // Internal serializer input identifying the caller's current session; used only to derive the
+  // snake_case `is_current` response flag — never emitted as a response key.
+  'src/domains/auth/sub-domains/auth-session/auth-session.serializer.ts': new Set([
+    'currentSessionPublicId',
+  ]),
 };
 
 /** A line-leading `<identifier>:` declares an object/schema property or a type field. */

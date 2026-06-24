@@ -22,7 +22,7 @@ const PERMISSIONS = [TENANCY_PERMISSIONS.ORGANIZATION_READ, TENANCY_PERMISSIONS.
 interface AuthMeContextBody {
   data: {
     user: { id: string };
-    active_organization: { id: string; type: string; capabilities: Record<string, boolean> } | null;
+    active_organization: { id: string; type: string } | null;
     my_permissions: string[];
     global_role: string | null;
     organizations: Array<{ id: string; is_active: boolean }>;
@@ -69,7 +69,7 @@ describe('GET /api/v1/auth/me/context — Integration', () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it('returns the caller context: identity, active org (+capabilities), permissions, and switcher list', async () => {
+  it('returns the caller context: identity, active org, permissions, and switcher list', async () => {
     const { user, organization, token } = await setupAuthorizedUser();
 
     const response = await injectAuthenticated(app, {
@@ -84,8 +84,6 @@ describe('GET /api/v1/auth/me/context — Integration', () => {
     expect(body.data.user.id).toBe(user.public_id);
     expect(body.data.active_organization?.id).toBe(organization.public_id);
     expect(body.data.active_organization?.type).toBe('TEAM');
-    expect(body.data.active_organization?.capabilities.can_invite_members).toBe(true);
-    expect(body.data.active_organization?.capabilities.can_manage_billing).toBe(true);
     expect(body.data.my_permissions).toContain('organization:read');
     expect(Array.isArray(body.data.organizations)).toBe(true);
     expect(body.data.organizations.find((o) => o.id === organization.public_id)?.is_active).toBe(

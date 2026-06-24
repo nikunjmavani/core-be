@@ -1,24 +1,5 @@
 /** Tenancy resource schemas. */
 // ── Organization ──
-/**
- * Type-derived capability flags embedded on every serialized organization
- * (`organizationCapabilities(type)`). They describe what the organization
- * **type** permits — `TEAM` ⇒ all `true`, `PERSONAL` ⇒ all `false` — not what the
- * caller is authorized to do (permissions/roles govern that separately), so
- * clients can hide or disable type-unavailable actions instead of probing for a 422.
- */
-export const organizationCapabilitiesSchema = {
-  type: 'object',
-  properties: {
-    can_invite_members: { type: 'boolean' },
-    can_manage_members: { type: 'boolean' },
-    can_manage_roles: { type: 'boolean' },
-    can_transfer_ownership: { type: 'boolean' },
-    can_delete: { type: 'boolean' },
-    can_manage_billing: { type: 'boolean' },
-  },
-};
-
 export const organizationSchema = {
   type: 'object',
   properties: {
@@ -41,7 +22,6 @@ export const organizationSchema = {
       example: 'ACTIVE',
     },
     logo_url: { type: 'string', nullable: true },
-    capabilities: organizationCapabilitiesSchema,
     created_at: { type: 'string', format: 'date-time' },
     updated_at: { type: 'string', format: 'date-time' },
   },
@@ -54,14 +34,6 @@ export const organizationExample = {
   type: 'TEAM',
   status: 'ACTIVE',
   logo_url: 'https://cdn.example.com/logos/acme-corp.png',
-  capabilities: {
-    can_invite_members: true,
-    can_manage_members: true,
-    can_manage_roles: true,
-    can_transfer_ownership: true,
-    can_delete: true,
-    can_manage_billing: true,
-  },
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-02-10T12:00:00.000Z',
 };

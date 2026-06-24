@@ -1,34 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   assertTeamOrganization,
-  organizationCapabilities,
   type OrganizationCapability,
 } from '@/domains/tenancy/sub-domains/organization/organization-capability.js';
 import { UnprocessableEntityError } from '@/shared/errors/index.js';
-
-describe('organizationCapabilities', () => {
-  it('returns all-true flags for a TEAM organization', () => {
-    expect(organizationCapabilities('TEAM')).toEqual({
-      can_invite_members: true,
-      can_manage_members: true,
-      can_manage_roles: true,
-      can_transfer_ownership: true,
-      can_delete: true,
-      can_manage_billing: true,
-    });
-  });
-
-  it('returns all-false flags for a PERSONAL organization', () => {
-    expect(organizationCapabilities('PERSONAL')).toEqual({
-      can_invite_members: false,
-      can_manage_members: false,
-      can_manage_roles: false,
-      can_transfer_ownership: false,
-      can_delete: false,
-      can_manage_billing: false,
-    });
-  });
-});
 
 describe('assertTeamOrganization', () => {
   it('is a no-op for a TEAM organization across every capability', () => {

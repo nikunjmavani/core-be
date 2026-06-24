@@ -1502,7 +1502,8 @@ src/
     │   │   ├── pagination.util.ts
     │   │   ├── request.util.ts
     │   │   ├── response.util.ts
-    │   │   └── trust-proxy.util.ts
+    │   │   ├── trust-proxy.util.ts
+    │   │   └── user-agent.util.ts
     │   ├── i18n/
     │   │   ├── i18n-response.util.ts
     │   │   └── translate-request.util.ts

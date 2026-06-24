@@ -49,6 +49,7 @@ export interface UserOutput {
 
 /** Which organization kinds this deployment enables — mirrors the env capability flags. */
 export interface OrganizationCapabilities {
-  personal_organizations: boolean;
+  /** A user has at most one personal organization, so this flag is singular. */
+  personal_organization: boolean;
   team_organizations: boolean;
 }
