@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.15](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.14...v4.10.0-dev.15) (2026-06-24)
+
+
+### Documentation
+
+* **api:** frontend auth entry flows — call-count matrix + typed landOnDashboard client ([#793](https://github.com/nikunjmavani/core-be/issues/793)) ([63b0010](https://github.com/nikunjmavani/core-be/commit/63b00100533c3fc44a7d80b04275949a44640d11))
+
 ## [4.10.0-dev.14](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.13...v4.10.0-dev.14) (2026-06-23)
 
 
