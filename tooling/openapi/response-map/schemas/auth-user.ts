@@ -265,3 +265,109 @@ export const mfaMethodExample = {
   is_verified: true,
   created_at: '2026-01-20T09:00:00.000Z',
 };
+
+// ── MFA enrollment confirmation (recovery codes returned once) ──
+export const mfaEnrollConfirmSchema = {
+  type: 'object',
+  properties: {
+    recovery_codes: { type: 'array', items: { type: 'string' } },
+    mfa_method_id: { type: 'string', pattern: '^am_[a-z0-9]{21}$' },
+  },
+};
+
+export const mfaEnrollConfirmExample = {
+  recovery_codes: ['ABCD-EFGH-IJKL', 'MNOP-QRST-UVWX'],
+  mfa_method_id: 'am_t6m3n7p2q8w5k1r4a1b2c',
+};
+
+// ── Step-up authentication ──
+export const stepUpSchema = {
+  type: 'object',
+  properties: { stepped_up: { type: 'boolean' } },
+};
+
+export const stepUpExample = { stepped_up: true };
+
+// ── WebAuthn (passkeys) ──
+/**
+ * WebAuthn ceremony options + opaque challenge token. `options` is the W3C
+ * `PublicKeyCredentialCreationOptionsJSON` (registration) or `RequestOptionsJSON`
+ * (authentication), passed verbatim to `navigator.credentials`; it is intentionally
+ * an opaque object (`additionalProperties: true`) rather than re-typed field-by-field.
+ */
+export const webauthnCeremonyOptionsSchema = {
+  type: 'object',
+  properties: {
+    options: {
+      type: 'object',
+      additionalProperties: true,
+      description: 'W3C WebAuthn options JSON, passed verbatim to navigator.credentials.',
+    },
+    challenge_token: {
+      type: 'string',
+      description: 'Opaque challenge token echoed back on the matching verify call.',
+    },
+  },
+};
+
+export const webauthnRegistrationOptionsExample = {
+  options: {
+    challenge: 'Ik4oIon-oq81WEaTanMl-okW-pDuD02n34lm70GVO_E',
+    rp: { name: 'YourApp', id: 'localhost' },
+    user: { id: 'dXNyX2V4YW1wbGU', name: 'user@example.com', displayName: 'user@example.com' },
+    pubKeyCredParams: [
+      { alg: -8, type: 'public-key' },
+      { alg: -7, type: 'public-key' },
+    ],
+    timeout: 60000,
+    attestation: 'none',
+    authenticatorSelection: {
+      residentKey: 'preferred',
+      userVerification: 'required',
+      requireResidentKey: false,
+    },
+  },
+  challenge_token: 'opaque-registration-challenge-token',
+};
+
+export const webauthnAuthenticationOptionsExample = {
+  options: {
+    rpId: 'localhost',
+    challenge: 'R1i538VsjTay-HR5E7BnBTncygO1KRomuA_mVat31KI',
+    allowCredentials: [{ id: 'credential-id', transports: ['internal'], type: 'public-key' }],
+    timeout: 60000,
+    userVerification: 'required',
+  },
+  challenge_token: 'opaque-authentication-challenge-token',
+};
+
+export const webauthnRegisterVerifySchema = {
+  type: 'object',
+  properties: {
+    verified: { type: 'boolean' },
+    credential_id: { type: 'string' },
+  },
+};
+
+export const webauthnRegisterVerifyExample = { verified: true, credential_id: 'credential-id' };
+
+export const webauthnCredentialSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', pattern: '^wac_[a-z0-9]{21}$' },
+    device_type: { type: 'string', nullable: true },
+    backed_up: { type: 'boolean' },
+    transports: { type: 'array', items: { type: 'string' } },
+    created_at: { type: 'string', format: 'date-time' },
+    last_used_at: { type: 'string', format: 'date-time', nullable: true },
+  },
+};
+
+export const webauthnCredentialExample = {
+  id: 'wac_t6m3n7p2q8w5k1r4a1b2c',
+  device_type: 'singleDevice',
+  backed_up: false,
+  transports: ['internal'],
+  created_at: '2026-01-20T09:00:00.000Z',
+  last_used_at: '2026-02-14T08:30:00.000Z',
+};
