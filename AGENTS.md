@@ -66,3 +66,44 @@ Executable guardrails enforce the repo's safety rules per platform
 Policy (all agents): never write secrets to source (`.env*` except `.env.example`);
 no `rm -rf` / `git push --force`; treat `migrations/*.sql` and billing ledgers as
 immutable (add-only); cross-domain access goes through services, not repositories/schemas.
+
+## Cursor Cloud specific instructions
+
+This environment is provisioned **without Docker** — Postgres and Redis run as
+**native services** (not `docker compose`), so ignore the `pnpm compose:*` /
+`Dockerfile.agent` path from [docs/integrations/cursor-cloud-agent-environment.md](docs/integrations/cursor-cloud-agent-environment.md)
+here. The update script (run on every VM start) only refreshes deps
+(`install-node.sh` no-op + `pnpm install`); it does **not** start services.
+
+- **Node 24 / pnpm**: Node `24.13.0` lives at `/opt/node24` (the repo requires
+  `>=24`; the base image's default `node` is v22). `/opt/node24/bin` is on PATH
+  via `~/.bashrc`; `pnpm` is the corepack shim there. If a shell shows `node v22`,
+  prefix commands with `PATH=/opt/node24/bin:$PATH`.
+- **Start services each session** (init is `tini`, no systemd, so they do not
+  auto-start; data persists in the snapshot — do not re-migrate/re-seed):
+
+  ```bash
+  sudo pg_ctlcluster 17 main start   # Postgres 17 on :5432
+  sudo redis-server /etc/redis/redis.conf --daemonize yes   # Redis on :6379
+  ```
+
+  Postgres is **17** (PGDG) — the migration runner refuses <17. The `core`
+  role/`core` db (password `core`, matches `.env.local`) and the `pg_trgm`
+  extension already exist. `core` is a **superuser** locally (same as the
+  docker `postgres` image), so the boot guard logs `database.rls_safety.unsafe_role_local`
+  — that warning is expected and harmless in non-hosted runs.
+- **Run the app** (see `package.json`): `pnpm dev` (API on :3000) and
+  `pnpm dev:worker` (worker + health on :9090). Verify with `curl :3000/readyz`
+  and `curl :9090/livez`.
+- **Worker connection-budget gotcha**: `pnpm dev:worker` fails fast with the
+  default `.env.local` ("Worker Postgres pool demand exceeds DATABASE_POOL_MAX")
+  because the scaffolded `.env.local` pins `POSTGRES_MAX_CONNECTIONS=100` while
+  the monolithic worker needs ~47 connections. `.env.local` is gitignored and
+  blocked by a guardrail, so pass overrides on the command line (the actual
+  cluster is configured with `max_connections=500`):
+
+  ```bash
+  POSTGRES_MAX_CONNECTIONS=500 DATABASE_POOL_MAX=50 pnpm dev:worker
+  ```
+
+  The API (`pnpm dev`) runs fine with the defaults.
