@@ -202,6 +202,28 @@ export const sessionSchema = {
     id: { type: 'string', pattern: '^ses_[a-z0-9]{21}$' },
     ip_address: { type: 'string' },
     user_agent: { type: 'string', nullable: true },
+    device: {
+      type: 'string',
+      nullable: true,
+      description:
+        'Device/OS family parsed from user_agent (e.g. "Mac", "iPhone"); null if unknown.',
+    },
+    browser: {
+      type: 'string',
+      nullable: true,
+      description:
+        'Browser family parsed from user_agent (e.g. "Chrome", "Safari"); null if unknown.',
+    },
+    location: {
+      type: 'string',
+      nullable: true,
+      description:
+        'Approximate location resolved from ip_address (e.g. "US"); null for private or unknown IPs.',
+    },
+    is_current: {
+      type: 'boolean',
+      description: 'True for the session the request is authenticated with.',
+    },
     last_active_at: { type: 'string', format: 'date-time' },
     expires_at: { type: 'string', format: 'date-time' },
     created_at: { type: 'string', format: 'date-time' },
@@ -212,6 +234,10 @@ export const sessionExample = {
   id: 'ses_m7n2p5q8w1r4x9k3a1b2c',
   ip_address: '203.0.113.42',
   user_agent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+  device: 'Mac',
+  browser: 'Chrome',
+  location: 'US',
+  is_current: true,
   last_active_at: '2026-02-14T08:30:00.000Z',
   expires_at: '2026-02-21T08:30:00.000Z',
   created_at: '2026-02-10T10:00:00.000Z',

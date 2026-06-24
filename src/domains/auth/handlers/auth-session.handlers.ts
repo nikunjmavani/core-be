@@ -60,7 +60,10 @@ export function createAuthSessionHandlers({
     listSessions: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
       const data = await authSessionService.list(auth.userId);
-      return successResponse(serializeAuthSessions(data), getRequestIdentifier(request));
+      return successResponse(
+        serializeAuthSessions(data, { currentSessionPublicId: auth.sessionPublicId ?? null }),
+        getRequestIdentifier(request),
+      );
     },
     revokeSession: async (
       request: FastifyRequest<{ Params: { session_id: string } }>,

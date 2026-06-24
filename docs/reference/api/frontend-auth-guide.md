@@ -9,6 +9,9 @@ frontend exactly what to do.
 > [authentication.md](../security/authentication.md); cookie/CSRF posture in
 > [csrf-and-session-cookies.md](../security/csrf-and-session-cookies.md); the organization model in
 > [personal-vs-team-organizations.md](../architecture/personal-vs-team-organizations.md).
+>
+> Realigning FE calls (passkeys, notifications, preferences, webhooks, MFA, sessions, org logo,
+> billing gating) to the real routes: [frontend-endpoint-mapping.md](frontend-endpoint-mapping.md).
 
 ---
 
