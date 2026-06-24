@@ -7,8 +7,6 @@ tools:
   - mcp__dashboards__local_worker_health
   - mcp__dashboards__local_queue_stats
   - mcp__dashboards__local_metrics
-  - Bash
-  - Read
 readonly: true
 ---
 
