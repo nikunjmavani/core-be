@@ -44,15 +44,13 @@ describe('auth-session.serializer', () => {
 
   it('exposes only the safe display fields as ISO strings', () => {
     const output = serializeAuthSession(buildRow(), NO_CURRENT_SESSION);
-    // 203.0.113.10 is RFC 5737 documentation space (not in the geo DB) and the bare
-    // 'Mozilla/5.0' carries no device/browser token, so all derived fields are null.
+    // The bare 'Mozilla/5.0' carries no device/browser token, so the derived fields are null.
     expect(output).toEqual({
       id: 'sess-public-id',
       ip_address: '203.0.113.10',
       user_agent: 'Mozilla/5.0',
       device: null,
       browser: null,
-      location: null,
       is_current: false,
       last_active_at: '2026-01-02T03:04:05.000Z',
       expires_at: '2026-01-09T03:04:05.000Z',
@@ -88,17 +86,6 @@ describe('auth-session.serializer', () => {
     );
     expect(output.device).toBe('Mac');
     expect(output.browser).toBe('Chrome');
-  });
-
-  it('resolves a location for a public IP and null for a private IP', () => {
-    const publicIp = serializeAuthSession(buildRow({ ip_address: '8.8.8.8' }), NO_CURRENT_SESSION);
-    const privateIp = serializeAuthSession(
-      buildRow({ ip_address: '10.0.0.1' }),
-      NO_CURRENT_SESSION,
-    );
-    expect(typeof publicIp.location).toBe('string');
-    expect(publicIp.location).toContain('US');
-    expect(privateIp.location).toBeNull();
   });
 
   it('serializes a list', () => {

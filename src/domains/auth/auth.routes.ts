@@ -540,7 +540,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'List my active sessions',
         description:
-          'Returns all active sessions for the authenticated user, including device and location info.',
+          'Returns all active sessions for the authenticated user, including the source IP and parsed device/browser info.',
         tags: ['Session'],
       },
     },

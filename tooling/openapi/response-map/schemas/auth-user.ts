@@ -214,12 +214,6 @@ export const sessionSchema = {
       description:
         'Browser family parsed from user_agent (e.g. "Chrome", "Safari"); null if unknown.',
     },
-    location: {
-      type: 'string',
-      nullable: true,
-      description:
-        'Approximate location resolved from ip_address (e.g. "US"); null for private or unknown IPs.',
-    },
     is_current: {
       type: 'boolean',
       description: 'True for the session the request is authenticated with.',
@@ -236,7 +230,6 @@ export const sessionExample = {
   user_agent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
   device: 'Mac',
   browser: 'Chrome',
-  location: 'US',
   is_current: true,
   last_active_at: '2026-02-14T08:30:00.000Z',
   expires_at: '2026-02-21T08:30:00.000Z',

@@ -30,7 +30,7 @@ All paths below are under the `/api/v1` prefix. External ids are always the fiel
 | MFA confirm | `POST /auth/me/mfa/confirm` | `POST /auth/me/mfa/enroll/confirm` | Exists — re-path |
 | MFA status | expects `{ enabled }` | `GET /auth/me/mfa` → factor array | Derive `enabled = factors.length > 0` |
 | MFA enroll body | `400 Invalid values` | body must be `{ "method_type": "MFA_TOTP" }` | Fix request body |
-| Sessions | expects `device/browser/location/is_current` | `GET /auth/me/sessions` — **now enriched** | Backend updated |
+| Sessions | expects `device/browser/location/is_current` | `GET /auth/me/sessions` — **now enriched** | Provides `device`, `browser`, `is_current`, raw `ip_address`; no server `location` (geo-locate the IP client-side) |
 | Org logo | `PATCH /tenancy/organization { logo_url }` → 400 | upload flow → `PUT /tenancy/organization/logo { key }` | Exists — different flow |
 | Billing gate | `capabilities.canManageBilling` (object removed) | gate on `type === 'TEAM'` + `my_permissions` incl. `subscription:manage` | No capability object; use type + permission |
 
@@ -59,7 +59,7 @@ single POST — the browser must run `navigator.credentials.create()` between th
 All under `/notify/notifications` (the user is identified by the bearer token — there is no `/me` segment):
 
 - `GET /notify/notifications` — list
-- `GET /notify/notifications/unread-count` — `{ unread_count }`
+- `GET /notify/notifications/unread-count` — `{ count }`
 - `PATCH /notify/notifications/:notification_id/read` — mark one read
 - `POST /notify/notifications/mark-all-read` — mark all read (note: `mark-all-read`, not `read-all`)
 - `GET /notify/notifications/:notification_id`, `DELETE /notify/notifications/:notification_id`
@@ -120,14 +120,13 @@ raw source fields:
   "user_agent": "Mozilla/5.0 (Macintosh …) Chrome/124.0 …",
   "device": "Mac",            // parsed from user_agent; null if unknown
   "browser": "Chrome",        // parsed from user_agent; null if unknown
-  "location": "US",           // approximate, from ip_address; null for private/unknown IPs
   "is_current": true,         // the session this request is authenticated with
   "last_active_at": "…", "expires_at": "…", "created_at": "…"
 }
 ```
 
 - `device` / `browser` are best-effort heuristics from the UA string; `null` when unrecognised.
-- `location` is approximate (offline GeoLite, often country-level only) and `null` for private/loopback IPs.
+- `ip_address` is the raw source IP; there is **no** server-derived `location` field — geo-locate the IP client-side if you need an approximate region.
 - Use `is_current` to badge the active session and to avoid offering "revoke" on it
   (`DELETE /auth/me/sessions/:session_id` refuses the current session with `409` — use logout instead).
 

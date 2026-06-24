@@ -1,4 +1,3 @@
-import { resolveSessionLocation } from '@/shared/utils/http/geo-ip.util.js';
 import { parseUserAgent } from '@/shared/utils/http/user-agent.util.js';
 
 /**
@@ -6,8 +5,9 @@ import { parseUserAgent } from '@/shared/utils/http/user-agent.util.js';
  * internal identifiers — `token_hash`, `refresh_token_hash`, the numeric `id`,
  * `user_id`, `organization_id` — so the "list my sessions" response never leaks
  * session-validation secrets or internal FKs. The raw `ip_address` / `user_agent`
- * are retained alongside the derived `device` / `browser` / `location` display
- * fields so clients can choose either the parsed hint or the source value.
+ * are retained alongside the derived `device` / `browser` display fields so a
+ * client can use the parsed hint or the source value (and geo-locate the IP
+ * itself if it wants an approximate location).
  */
 export interface AuthSessionOutput {
   id: string;
@@ -17,8 +17,6 @@ export interface AuthSessionOutput {
   device: string | null;
   /** Browser family parsed from `user_agent` (e.g. `"Chrome"`, `"Safari"`), or null. */
   browser: string | null;
-  /** Approximate location resolved from `ip_address` (e.g. `"US"`), or null for private/unknown IPs. */
-  location: string | null;
   /** True when this row is the session the request is authenticated with. */
   is_current: boolean;
   last_active_at: string;
@@ -42,7 +40,7 @@ interface SerializeAuthSessionOptions {
   currentSessionPublicId: string | null;
 }
 
-/** Maps a raw session row to its safe public shape, deriving device/browser/location and the current-session flag. */
+/** Maps a raw session row to its safe public shape, deriving device/browser and the current-session flag. */
 export function serializeAuthSession(
   row: AuthSessionRowLike,
   options: SerializeAuthSessionOptions,
@@ -54,7 +52,6 @@ export function serializeAuthSession(
     user_agent: row.user_agent ?? null,
     device,
     browser,
-    location: resolveSessionLocation(row.ip_address),
     is_current: row.public_id === options.currentSessionPublicId,
     last_active_at: row.last_active_at.toISOString(),
     expires_at: row.expires_at.toISOString(),

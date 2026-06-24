@@ -48,7 +48,7 @@ describe('Auth Session Sub-Domain — Integration', () => {
       expect(response.statusCode).toBe(200);
     });
 
-    it('flags the calling session is_current and exposes the derived device/browser/location fields', async () => {
+    it('flags the calling session is_current and exposes the derived device/browser fields', async () => {
       const user = await createTestUser();
       const { token, sessionPublicId } = await generateTestTokenAndSession({
         userId: user.public_id,
@@ -66,7 +66,6 @@ describe('Auth Session Sub-Domain — Integration', () => {
       // The derived display fields are always part of the contract (value may be null).
       expect(current).toHaveProperty('device');
       expect(current).toHaveProperty('browser');
-      expect(current).toHaveProperty('location');
       // Only the calling session is flagged current.
       for (const session of body.data) {
         if (session.id !== sessionPublicId) {

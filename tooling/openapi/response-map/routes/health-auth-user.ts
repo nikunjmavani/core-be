@@ -140,7 +140,11 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     }),
     example: null,
   },
-  'POST /api/v1/auth/password/reset': { statusCode: 201, schema: null, example: null },
+  'POST /api/v1/auth/password/reset': {
+    statusCode: 201,
+    schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
+    example: null,
+  },
   'POST /api/v1/auth/password/change': { statusCode: 201, schema: null, example: null },
   'POST /api/v1/auth/email/verify': {
     statusCode: 201,
