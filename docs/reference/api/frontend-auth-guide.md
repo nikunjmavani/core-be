@@ -133,21 +133,21 @@ is issued — the same `session_id` keeps working, and a later refresh re-mints 
 {
   "data": {
     "user": { "id": "usr_…", "email": "…", "is_mfa_enabled": false },
-    "active_organization": { "id": "org_…", "type": "TEAM", "capabilities": { "can_invite_members": true, "…": "…" } },
+    "active_organization": { "id": "org_…", "type": "TEAM" },
     "my_permissions": ["organization:read", "membership:manage"],
     "global_role": null,
-    "organizations": [{ "id": "org_…", "type": "TEAM", "capabilities": { "…": "…" }, "is_active": true }]
+    "organizations": [{ "id": "org_…", "type": "TEAM", "is_active": true }]
   }
 }
 ```
 
-- **`capabilities` vs `my_permissions` — render on the intersection.** `capabilities` describes what the org **type** allows (a personal org can never invite members → `can_invite_members: false`); `my_permissions` is what **this caller** may do in the active org (resolved permission codes). Show an action only when the capability is available **and** the caller holds the permission.
+- **`type` vs `my_permissions` — render on the intersection.** The org `type` says what the org **kind** allows (only a `TEAM` org can invite members); `my_permissions` is what **this caller** may do in the active org (resolved permission codes). Show a team-only action only when `type === 'TEAM'` **and** the caller holds the permission.
 - **`organizations`** is the org-switcher list, each flagged `is_active` — render it directly.
 - **Switch flow (one call):** `POST /auth/switch-to-organization` (or `…-personal`) re-mints the token **and returns the active-org delta** — `{ access_token, active_organization, my_permissions, global_role }`. Swap your in-memory Bearer for the new `access_token`, repaint from `active_organization` + `my_permissions`, and flip `is_active` in your cached `organizations[]`. The `user` and org-switcher list are stable across a switch, so **no follow-up `GET /auth/me/context` is needed** — re-fetch the full context only on a cold reload.
 - **Join flow:** `POST /tenancy/invitations/{invitation_id}/accept` returns the joined `organization_id`; pass it straight to `POST /auth/switch-to-organization` (above) to land on the new team's dashboard — no lookup in between.
   - **Invited user with no account (first time):** the invite already created a passwordless, unverified **placeholder** for that email, and `accept` requires a **verified** email (else `403 errors:invitationRequiresVerifiedEmail` — a forwarded invite must not be claimable by the wrong person). So the new user first authenticates in a way that proves email control: **magic-link** (`/auth/magic-link/send` → `/auth/magic-link/verify`) or **OAuth** both claim the placeholder, verify the email, and provision their personal org in one step; **email/password signup** also claims it but leaves the email unverified, so it needs one extra `POST /auth/email/verify { code }` first. After that, the same `accept` → (`organization_id`) → `switch-to-organization` tail applies. Don't hard-block the UI when `is_email_verified` is false — route the user through verification, then call `accept`.
 
-This works **identically for personal and team organizations** — there is one route surface, and the `capabilities` flags (not different URLs) tell the UI what to show. See [route-consistency-and-org-model.md](route-consistency-and-org-model.md).
+This works **identically for personal and team organizations** — there is one route surface, and the org `type` (not different URLs) tells the UI what to show. See [route-consistency-and-org-model.md](route-consistency-and-org-model.md).
 
 `GET /users/me` (profile + deployment `capabilities`) and `GET /tenancy/organizations` (paginated org list) remain available if you need them individually.
 
@@ -369,7 +369,7 @@ The auth/tenancy flow was reshaped across mid-2026 — if you integrated against
 - **`/auth/mfa/login` now accepts `X-Captcha-Token`** (bot-protection at the MFA step).
 
 See [personal-vs-team-organizations.md](../architecture/personal-vs-team-organizations.md) for the full
-organization model and capability flags.
+organization model and deployment modes.
 
 ---
 

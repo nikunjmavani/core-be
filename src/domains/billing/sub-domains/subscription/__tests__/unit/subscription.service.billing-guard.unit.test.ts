@@ -19,9 +19,9 @@ import type { PlanService } from '@/domains/billing/sub-domains/plan/plan.servic
 import type { SubscriptionRepository } from '@/domains/billing/sub-domains/subscription/subscription.repository.js';
 import type { PaymentProvider } from '@/domains/billing/sub-domains/subscription/payment-provider.port.js';
 
-// A PERSONAL organization has `can_manage_billing: false`; the subscription mutations must reject it
+// A PERSONAL organization cannot manage billing; the subscription mutations must reject it
 // with 422 via `assertTeamOrganization(organization, 'BILLING')` BEFORE any plan lookup, subscription
-// lookup, or Stripe call (defense-in-depth for what the frontend already hides).
+// lookup, or Stripe call (defense-in-depth for what the frontend already hides via the org `type`).
 const personalOrganization = {
   id: 1,
   public_id: 'org_personal',
@@ -67,7 +67,7 @@ const BILLING_REJECTION = {
   messageKey: 'errors:personalOrganizationNoBilling',
 };
 
-describe('SubscriptionService — personal-org billing guard (can_manage_billing)', () => {
+describe('SubscriptionService — personal-org billing guard', () => {
   it('create rejects a PERSONAL organization with 422 before any plan lookup or Stripe call', async () => {
     const { service, planService, paymentProvider, repository } = buildService();
     await expect(

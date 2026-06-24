@@ -5,7 +5,7 @@ exposes. **Almost every reported "404 / missing feature" already exists — at a
 This doc is the client-integration checklist to realign the FE; it does not restate server internals.
 
 > Companions: [frontend-auth-guide.md](frontend-auth-guide.md) (Bearer/refresh/headers),
-> [route-consistency-and-org-model.md](route-consistency-and-org-model.md) (the `capabilities` object
+> [route-consistency-and-org-model.md](route-consistency-and-org-model.md) (the org-type model
 > and the 422 backstop), and the generated [route catalog](../../routes.txt) (every route, S/I/O columns).
 > All success bodies are wrapped in a `{ "data": … }` envelope.
 
@@ -32,7 +32,7 @@ All paths below are under the `/api/v1` prefix. External ids are always the fiel
 | MFA enroll body | `400 Invalid values` | body must be `{ "method_type": "MFA_TOTP" }` | Fix request body |
 | Sessions | expects `device/browser/location/is_current` | `GET /auth/me/sessions` — **now enriched** | Backend updated |
 | Org logo | `PATCH /tenancy/organization { logo_url }` → 400 | upload flow → `PUT /tenancy/organization/logo { key }` | Exists — different flow |
-| Billing gate | `capabilities.canManageBilling` always false | gate on `my_permissions` incl. `subscription:manage` | Use permissions, not only capability |
+| Billing gate | `capabilities.canManageBilling` (object removed) | gate on `type === 'TEAM'` + `my_permissions` incl. `subscription:manage` | No capability object; use type + permission |
 
 ---
 
@@ -146,18 +146,15 @@ rejected (`400`). The logo is an uploaded object, attached by key (same pattern 
 4. **`PUT /tenancy/organization/logo`** with `{ key }` (the `organization-logos/…` key) — requires `organization:update`
 5. `DELETE /tenancy/organization/logo` clears it
 
-### Billing — gate on the permission, not only the capability
+### Billing — gate on org `type` + the permission (there is no capability object)
 
-`active_organization.capabilities.can_manage_billing` **does** exist (it is one of six type-derived
-flags). But capabilities describe the **org type**, not the **caller** — `TEAM` ⇒ all `true`,
-`PERSONAL` ⇒ all `false`. They do not reflect whether *this* member holds `subscription:manage`.
+There is **no** `capabilities` object on the API. The org `type` says whether billing exists for the
+org kind at all (`TEAM` only — a `PERSONAL` org has no subscription); `my_permissions` says whether
+*this* member may act. Gate the billing UI in two layers (mirrors backend enforcement — `422` for
+personal, `403` for missing perm):
 
-Gate the billing UI in two layers (mirrors backend enforcement — `422` for personal, `403` for missing perm):
-
-- **Show billing at all?** `active_organization.capabilities.can_manage_billing` (hide entirely for personal orgs).
+- **Show billing at all?** `active_organization.type === "TEAM"` (hide entirely for personal orgs).
 - **Enable manage actions?** `my_permissions.includes("subscription:manage")` (read-only with `subscription:read`).
 
-Both `capabilities` and `my_permissions` are already on `GET /auth/me/context` and the switch-org responses.
-
-> If the deployed API returns only five capability keys (no `can_manage_billing`), it predates the flag —
-> redeploy `dev`. The current code returns all six.
+Both `active_organization.type` and `my_permissions` are already on `GET /auth/me/context` and the
+switch-org responses.

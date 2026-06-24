@@ -1,5 +1,3 @@
-import type { OrganizationCapabilities } from './organization-capability.js';
-
 /** Internal domain row mirroring `tenancy.organizations` — includes audit columns and soft-delete. */
 export interface Organization {
   id: number;
@@ -28,8 +26,6 @@ export interface OrganizationOutput {
   type: string;
   status: string;
   logo_url: string | null;
-  /** Type-derived capability flags (TEAM vs PERSONAL); see {@link OrganizationCapabilities}. */
-  capabilities: OrganizationCapabilities;
   created_at: string;
   updated_at: string;
 }

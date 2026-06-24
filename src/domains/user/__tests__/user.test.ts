@@ -92,13 +92,13 @@ describe('User Domain — Integration', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json() as {
         data: {
-          capabilities: { personal_organizations: boolean; team_organizations: boolean };
+          capabilities: { personal_organization: boolean; team_organizations: boolean };
           personal_organization_id: string | null;
         };
       };
       // Defaults: both organization kinds enabled.
       expect(body.data.capabilities).toEqual({
-        personal_organizations: true,
+        personal_organization: true,
         team_organizations: true,
       });
       // A bare createTestUser has no personal organization provisioned → null.

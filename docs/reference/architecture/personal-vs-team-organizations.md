@@ -30,7 +30,7 @@ TEAM_ORGANIZATION_ENABLED       (default true)   — at least one must be true
 | B2C | on | off | personal org auto-provisioned | personal org |
 | B2B | off | on | nothing provisioned | most-recent team, else **none** → frontend redirects to "create your own" |
 
-`GET /users/me` returns `capabilities { personal_organizations, team_organizations }` and
+`GET /users/me` returns `capabilities { personal_organization, team_organizations }` and
 `personal_organization_id` so the frontend can render the switcher and hide the disabled kind.
 
 ## Configuring the mode

@@ -131,7 +131,7 @@ function assertProviderPriceForStripeBackedPlanChange(
  *   plan, or subscription cannot be loaded. The mutating operations (`create` /
  *   `changePlan` / `cancel` / `resume`) first reject a PERSONAL organization with
  *   422 via `assertTeamOrganization(organization, 'BILLING')` — billing is a
- *   team-only capability (`can_manage_billing: false` for PERSONAL). On `create`, throws
+ *   team-only action (a PERSONAL organization cannot manage billing). On `create`, throws
  *   {@link ConflictError} (`errors:subscriptionAlreadyExists`) when the
  *   organization already has a non-terminal subscription (checked before the
  *   Stripe call) or when a concurrent create loses the partial-unique-index
@@ -526,7 +526,7 @@ export class SubscriptionService {
       async () => {
         const organization =
           await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-        // Personal organizations cannot manage billing (capability `can_manage_billing: false`).
+        // Personal organizations cannot manage billing (assertTeamOrganization → 422).
         // Reject before the Stripe call so a personal org gets 422, not a churned provider call.
         assertTeamOrganization(organization, 'BILLING');
         // Reject before the Stripe call when a non-terminal subscription already
