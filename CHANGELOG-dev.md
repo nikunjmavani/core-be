@@ -6,6 +6,18 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.16](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.15...v4.10.0-dev.16) (2026-06-24)
+
+
+### Added
+
+* enrich sessions (device/browser/is_current), remove org capabilities object, add FE endpoint mapping doc ([c85015f](https://github.com/nikunjmavani/core-be/commit/c85015f983bdd1842767009a929260d7a725bdb8))
+
+
+### Changed
+
+* **auth:** drop session location enrichment; fix FE mapping + reset schema ([f4b7e27](https://github.com/nikunjmavani/core-be/commit/f4b7e2783b8d0f6004adf3863593133b63735814))
+
 ## [4.10.0-dev.15](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.14...v4.10.0-dev.15) (2026-06-24)
 
 
