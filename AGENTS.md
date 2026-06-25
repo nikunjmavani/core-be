@@ -24,7 +24,8 @@ On **Cursor Cloud Agents** or **Claude Code on the web**, read
 **[agent-os/cloud-environment/agents-cloud.md](agent-os/cloud-environment/agents-cloud.md)**
 before DB/e2e/app work. Cached install + Cursor `environment.json` live in
 **[agent-os/cloud-environment/](agent-os/cloud-environment/)** (symlinked at
-[`.cursor/environment.json`](.cursor/environment.json)).
+[`.cursor/environment.json`](.cursor/environment.json)). **MCPs, skills, and subagents**
+for cloud sessions: **[agent-os/cloud-environment/skills-and-mcps.md](agent-os/cloud-environment/skills-and-mcps.md)**.
 
 ## Additional resources
 

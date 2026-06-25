@@ -13,8 +13,9 @@ operators copy into each platform's environment config.
 | File | Purpose |
 | ---- | ------- |
 | [`environment.json`](environment.json) | Cursor Cloud Agents — `install`, `start`, optional `terminals` |
-| [`install.sh`](install.sh) | Idempotent cached install (tools + deps; **no** full stack bring-up) |
+| [`install.sh`](install.sh) | Idempotent cached install (tools + deps + MCP default pair; **no** full stack bring-up) |
 | [`agents-cloud.md`](agents-cloud.md) | On-demand stack instructions every agent reads via `AGENTS.md` |
+| [`skills-and-mcps.md`](skills-and-mcps.md) | Which MCPs, skills, and subagents cloud sessions use |
 
 ## How each platform picks it up
 
@@ -41,14 +42,19 @@ For Docker image pulls without the GCR mirror script, also add
 [`install-docker-images.sh`](../../tooling/setup/agent/install-docker-images.sh) in
 `install.sh` (already included).
 
-## MCP (default pair)
+## MCP, skills, and subagents
 
-Configure in the platform MCP settings (and/or repo [`.mcp.json`](../../.mcp.json)):
+**Full reference:** [`skills-and-mcps.md`](skills-and-mcps.md)
 
-| Server | Command | Notes |
-| ------ | ------- | ----- |
-| `codegraph` | `codegraph serve --mcp` | CLI from `install-codegraph.sh`; PATH must include `~/.local/bin` |
-| `headroom` | `headroom mcp serve` | CLI from `install-headroom.sh` |
+`install.sh` installs the **default MCP pair** and scaffolds [`.mcp.json`](../../.mcp.json):
+
+| Server | Command | Installed by |
+| ------ | ------- | ------------ |
+| `codegraph` | `codegraph serve --mcp` | `install-codegraph.sh` |
+| `headroom` | `headroom mcp serve` | `install-headroom.sh` + `pnpm mcp:setup:default` |
+
+On-demand MCPs (`dashboards`, `core-be:api`, hosted integrations): `pnpm mcp:setup <name>`.
+Project skills (42): start at [`skill-index`](../../agent-os/skills/skill-index/SKILL.md).
 
 ## Related
 
