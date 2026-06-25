@@ -1,0 +1,14 @@
+{
+  "install": "bash agent-os/cloud-environment/install.sh",
+  "start": "sudo service docker start 2>/dev/null || sudo dockerd --iptables=false --ip-masq=false --ip-forward=false --bridge=none >/tmp/dockerd-agent.log 2>&1 &",
+  "terminals": [
+    {
+      "name": "api",
+      "command": "export PATH=\"/opt/node24/bin:$HOME/.local/bin:$PATH\" && pnpm dev"
+    },
+    {
+      "name": "worker",
+      "command": "export PATH=\"/opt/node24/bin:$HOME/.local/bin:$PATH\" && pnpm dev:worker"
+    }
+  ]
+}

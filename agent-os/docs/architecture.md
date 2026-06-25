@@ -13,6 +13,7 @@ agent-os/rules/      *.mdc     ├──▶  targets.json    ──▶ .cursor/ 
 agent-os/hooks/      hooks.json│   (one row per agent)   AGENTS.md / Codex
 agent-os/commands/   *.md      │
 agent-os/mcp/        *.json    ┘   tooling/agent-os/generate.ts  (--check = drift gate)
+agent-os/cloud-environment/  install.sh, environment.json, agents-cloud.md  ──▶ .cursor/environment.json (symlink)
 ```
 
 - **Common** dirs are authored once, in open formats (`SKILL.md`, `*.md`, `*.mdc`, JSON). Their locations never move — every tool reads them where they are today.
