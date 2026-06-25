@@ -7,7 +7,7 @@
 #
 # Rules (deliberately conservative — only unambiguous, mechanically-checkable
 # violations, so a normal edit is never blocked):
-#   R1  request-database.context / getRequestDatabase() inside *.worker.ts | *.processor.ts
+#   R1  getRequestDatabase() inside *.worker.ts | *.processor.ts
 #   R2  a `../` relative import/require added under src/
 #   R3  hand-editing a generated / do-not-edit file
 #
@@ -39,11 +39,14 @@ case "$FILE" in
     deny "'$base' is generated — do not hand-edit it. Change the source and run the generator (see agent-os/docs/skill-triggers.md / CLAUDE.md)." ;;
 esac
 
-# R1 — workers/processors must not touch the request-scoped DB context (RLS safety).
+# R1 — workers/processors must not call getRequestDatabase() (it returns the GUC-less pool and
+# throws in worker runtime). Importing DB-handle types / setLocalDatabaseConfig from
+# request-database.context is allowed — workers bind their handle via a context wrapper, matching
+# no-direct-db-in-services.global.test.ts (which only forbids getRequestDatabase / database / sql).
 case "$FILE" in
   *.worker.ts | *.processor.ts)
-    if printf '%s' "$CONTENT" | grep -Eq 'request-database\.context|getRequestDatabase'; then
-      deny "Workers/processors must not use getRequestDatabase() or import request-database.context (RLS). Use a context wrapper — withOrganizationContext / runTenantScopedWorkerJob (CLAUDE.md → Organization context / RLS; enforced by global tests)."
+    if printf '%s' "$CONTENT" | grep -Eq 'getRequestDatabase'; then
+      deny "Workers/processors must not call getRequestDatabase() (RLS — it returns the GUC-less pool). Bind a handle via a context wrapper — withOrganizationContext / runTenantScopedWorkerJob (CLAUDE.md → Organization context / RLS; enforced by global tests)."
     fi ;;
 esac
 

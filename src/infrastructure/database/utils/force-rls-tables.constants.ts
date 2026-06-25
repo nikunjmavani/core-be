@@ -19,6 +19,7 @@ export type ForceRlsTableRef = {
 export const EXPECTED_FORCE_RLS_TABLES: ForceRlsTableRef[] = [
   { schemaName: 'audit', tableName: 'dead_letter_jobs' },
   { schemaName: 'audit', tableName: 'logs' },
+  { schemaName: 'audit', tableName: 'outbox' },
   { schemaName: 'auth', tableName: 'auth_methods' },
   { schemaName: 'auth', tableName: 'mail_outbox' },
   { schemaName: 'auth', tableName: 'mfa_methods' },
