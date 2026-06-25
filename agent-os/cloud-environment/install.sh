@@ -17,12 +17,24 @@ readonly node_bin="/opt/node24/bin"
 
 log() { printf 'cloud-install: %s\n' "$*" >&2; }
 
-# Node 24 (engines gate) — may need sudo when install runs as root in Setup script.
-if [ "$(id -u)" -eq 0 ]; then
-  NODE_INSTALL_PREFIX=/opt bash "${agent_dir}/install-node.sh" || true
-else
-  bash "${agent_dir}/install-node.sh" || true
-fi
+# Node 24 (engines gate). It must land in /opt/node<major> — where node_bin above,
+# environment.json, the session-start hook, bootstrap.sh, and the cloud terminals all
+# expect it. Writing under /opt needs root, but Cursor Cloud runs this update script as
+# a non-root user, so use passwordless sudo when available and then hand /opt/node<major>
+# to the invoking user so corepack/pnpm can manage shims without sudo. Best-effort: fall
+# back to the session Node so static/unit-only tasks still proceed if every path fails.
+install_pinned_node() {
+  if [ "$(id -u)" -eq 0 ]; then
+    NODE_INSTALL_PREFIX=/opt bash "${agent_dir}/install-node.sh"
+  elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+    sudo -n env NODE_INSTALL_PREFIX=/opt bash "${agent_dir}/install-node.sh"
+    sudo -n chown -R "$(id -u):$(id -g)" "${node_bin%/bin}" 2>/dev/null || true
+  else
+    log "cannot write /opt without root and passwordless sudo is unavailable — using session Node"
+    return 1
+  fi
+}
+install_pinned_node || log "install-node best-effort failed (continuing on session Node)"
 
 export PATH="${node_bin}:${HOME}/.local/bin:${PATH}"
 corepack enable --install-directory "${node_bin}" 2>/dev/null || corepack enable || true
