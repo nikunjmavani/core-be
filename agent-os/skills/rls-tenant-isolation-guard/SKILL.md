@@ -1,6 +1,6 @@
 ---
 name: rls-tenant-isolation-guard
-description: Enforces Postgres Row-Level Security and tenant-isolation correctness in core-be — every tenant-owned table ENABLE + FORCE RLS with an org-scoped policy carrying both USING and WITH CHECK, the app.current_organization_id GUC set on every query path, workers using context wrappers (never getRequestDatabase / request-database.context), and tenant jobs carrying organizationPublicId. Use when adding or changing a *.schema.ts table, a migration touching RLS, a database context wrapper, tenant middleware, or any worker/processor that reads tenant data.
+description: Enforces Postgres Row-Level Security and tenant-isolation correctness in core-be — every tenant-owned table ENABLE + FORCE RLS with an org-scoped policy carrying both USING and WITH CHECK, the app.current_organization_id GUC set on every query path, workers using context wrappers (never calling getRequestDatabase), and tenant jobs carrying organizationPublicId. Use when adding or changing a *.schema.ts table, a migration touching RLS, a database context wrapper, tenant middleware, or any worker/processor that reads tenant data.
 ---
 
 # RLS / tenant-isolation guard
@@ -37,7 +37,7 @@ When you add a **new table in a tenant-owned schema** (`tenancy`, `billing`, `no
 
 For **worker / processor** code touching tenant data:
 
-- [ ] Never import `request-database.context` or call `getRequestDatabase()` (throws in worker runtime). Use a context wrapper or a `run*WorkerJob` runner.
+- [ ] Never call `getRequestDatabase()` (returns the GUC-less pool; throws in worker runtime). Importing DB-handle types / `setLocalDatabaseConfig` from `request-database.context` is fine — bind the handle via a context wrapper or a `run*WorkerJob` runner.
 - [ ] Tenant-scoped jobs carry `organizationPublicId` in the payload (typed `TenantScopedJobData`); user-scoped jobs carry `userPublicId`.
 - [ ] Worker repositories accept an explicit `databaseHandle` (`createWorker*Repository(databaseHandle)`) — the nominal brand prevents passing the pool at compile time.
 - [ ] **No external I/O (fetch / Stripe / S3 / Resend) inside a `with*DatabaseContext` callback** — it holds a pool checkout across the network round-trip (`rls-context-network-isolation.global.test.ts`).

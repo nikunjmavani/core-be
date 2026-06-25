@@ -10,7 +10,7 @@ When you change any matched file, read `agent-os/skills/rls-tenant-isolation-gua
 
 - **New tenant-owned table** → `ENABLE` **and** `FORCE ROW LEVEL SECURITY`, plus a `FOR ALL` policy whose predicate is org-scoped on the `public_id` (`organization_id = (SELECT id FROM tenancy.organizations WHERE public_id = current_setting('app.current_organization_id', true)) OR current_setting('app.global_retention_cleanup', true) = 'true'`). Writable tables carry **both `USING` and `WITH CHECK`**. Add the table to `EXPECTED_FORCE_RLS_TABLES`.
 - The `app.current_organization_id` GUC is set on every query path via a context wrapper (`withOrganizationDatabaseContext` / `withOrganizationContext`) — never a raw pool query.
-- Workers/processors never import `request-database.context` or call `getRequestDatabase()`; tenant-scoped jobs carry `organizationPublicId`, user-scoped jobs `userPublicId`; worker repos take an explicit `databaseHandle`.
+- Workers/processors never call `getRequestDatabase()` (the GUC-less pool); importing DB-handle types / `setLocalDatabaseConfig` from `request-database.context` is allowed. Tenant-scoped jobs carry `organizationPublicId`, user-scoped jobs `userPublicId`; worker repos take an explicit `databaseHandle`.
 - No external I/O (fetch / Stripe / S3 / Resend) inside a `with*DatabaseContext` callback.
 - New `SECURITY DEFINER` functions pin `SET search_path` and `GRANT EXECUTE` only to `core_be_app`.
 
