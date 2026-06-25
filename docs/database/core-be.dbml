@@ -121,7 +121,7 @@ Table audit.outbox {
 }
 
 Note audit.outbox {
-  'RLS: enabled\nPolicies: audit_outbox_tenant_isolation_insert, audit_outbox_drain_select, audit_outbox_drain_update, audit_outbox_drain_delete'
+  'RLS: enabled\nPolicies: audit_outbox_tenant_isolation_insert, audit_outbox_drain_select, audit_outbox_drain_update, audit_outbox_drain_delete\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.auth_methods {
