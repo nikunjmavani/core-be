@@ -2,7 +2,7 @@
 
 Use this when you run **Cursor cloud agents** (or similar automation) against this repository and need a Linux environment with **full dependencies** (including devDependencies), **Git**, and **SSH client** for typical agent workflows.
 
-**Canonical cloud config (all platforms):** [`agent-os/cloud-environment/`](../../agent-os/cloud-environment/) — `install.sh`, `environment.json`, and [`agents-cloud.md`](../../agent-os/cloud-environment/agents-cloud.md) (linked from [`AGENTS.md`](../../AGENTS.md)). Cursor reads [`.cursor/environment.json`](../../.cursor/environment.json) (symlink).
+**Canonical cloud config (all platforms):** [`agent-os/cloud-environment/`](../../agent-os/cloud-environment/) — `install.sh`, `environment.json`, [`agents-cloud.md`](../../agent-os/cloud-environment/agents-cloud.md), and **[`skills-and-mcps.md`](../../agent-os/cloud-environment/skills-and-mcps.md)** (MCPs + skills catalog for cloud sessions). Cursor reads [`.cursor/environment.json`](../../.cursor/environment.json) (symlink).
 
 ---
 

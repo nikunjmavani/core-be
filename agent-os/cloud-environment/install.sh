@@ -38,6 +38,12 @@ bash "${agent_dir}/install-codegraph.sh" || true
 bash "${agent_dir}/install-headroom.sh" || true
 bash "${agent_dir}/install-gitleaks.sh" || true
 
+# Default MCP pair (codegraph + headroom) — same as bootstrap / pnpm setup:local.
+# install-headroom.sh also merges .mcp.default.json via jq; this is the canonical
+# TypeScript path and keeps Cursor / local clients in sync with the committed template.
+log "scaffold MCP default pair (.mcp.json)"
+PATH="${node_bin}:${PATH}" pnpm mcp:setup:default || true
+
 # Scaffold .env.local for later bootstrap (no compose/migrate here).
 log "scaffold .env.local"
 PATH="${node_bin}:${PATH}" pnpm setup:local --only-env
