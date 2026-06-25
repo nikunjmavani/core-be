@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.19](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.18...v4.10.0-dev.19) (2026-06-25)
+
+
+### Fixed
+
+* **cloud:** make startup update script work unprivileged + document bring-up caveats ([#804](https://github.com/nikunjmavani/core-be/issues/804)) ([93d7691](https://github.com/nikunjmavani/core-be/commit/93d76912a03b1d07665f2013a40ed0507bee835d))
+
 ## [4.10.0-dev.18](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.17...v4.10.0-dev.18) (2026-06-25)
 
 
