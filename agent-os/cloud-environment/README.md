@@ -26,9 +26,9 @@ operators copy into each platform's environment config.
 | **All agents** | [`AGENTS.md`](../../AGENTS.md) → [`agents-cloud.md`](agents-cloud.md) | On-demand `bootstrap.sh` when DB/API/workers are needed |
 
 > **Do not** put full [`bootstrap.sh`](../../tooling/setup/agent/bootstrap.sh) in the
-> cached `install` step until restricted-Docker fallbacks are reliable on every VM.
-> A failed install exits non-zero and Cursor shows an environment warning for the
-> whole session. Run bootstrap **on demand** (see `agents-cloud.md`) instead.
+> cached `install` step — a Docker failure there marks the whole environment as failed.
+> Run bootstrap **on demand** (see `agents-cloud.md`). `bootstrap.sh` now auto-retries
+> with restricted VFS + the cloud-agent compose override when standard compose fails.
 
 ## Network allowlist (cloud)
 
