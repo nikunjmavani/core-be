@@ -6,6 +6,34 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.19](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.18...v4.10.0-dev.19) (2026-06-25)
+
+
+### Fixed
+
+* **cloud:** make startup update script work unprivileged + document bring-up caveats ([#804](https://github.com/nikunjmavani/core-be/issues/804)) ([93d7691](https://github.com/nikunjmavani/core-be/commit/93d76912a03b1d07665f2013a40ed0507bee835d))
+
+## [4.10.0-dev.18](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.17...v4.10.0-dev.18) (2026-06-25)
+
+
+### Fixed
+
+* **agent-os:** harden cloud Docker bootstrap fallbacks ([#801](https://github.com/nikunjmavani/core-be/issues/801)) ([43b32b0](https://github.com/nikunjmavani/core-be/commit/43b32b0809a973935b87cfc11566954063e3ea15))
+* **agent-os:** restrict stack monitor tools ([#798](https://github.com/nikunjmavani/core-be/issues/798)) ([7ed9ad4](https://github.com/nikunjmavani/core-be/commit/7ed9ad40c9c0e6b0bfbdc4a895549cd54057d63f))
+
+
+### Documentation
+
+* **cloud:** scaffold default MCP pair in install and document skills/MCPs ([#803](https://github.com/nikunjmavani/core-be/issues/803)) ([405a29e](https://github.com/nikunjmavani/core-be/commit/405a29e4cf9723fae10b582ca27c3375cf6462e9))
+
+## [4.10.0-dev.17](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.16...v4.10.0-dev.17) (2026-06-25)
+
+
+### Added
+
+* **agent-os:** centralize cloud agent environment config ([d78c20f](https://github.com/nikunjmavani/core-be/commit/d78c20fa4f45560e8c114a58f918fe6592ee6c85))
+* **agent-os:** centralize cloud agent environment config ([9126a9b](https://github.com/nikunjmavani/core-be/commit/9126a9bdd3fb262657f60c54c11b2fe97a96f1d5))
+
 ## [4.10.0-dev.16](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.15...v4.10.0-dev.16) (2026-06-24)
 
 

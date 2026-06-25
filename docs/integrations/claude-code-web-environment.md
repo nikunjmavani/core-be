@@ -61,7 +61,15 @@ Add the rest via **Custom** (tick "Also include default list of common package m
 
 ## Setup script
 
-Paste into the **Setup script** field (runs as root, cached):
+**Canonical (shared with Cursor):** paste the contents of
+[`agent-os/cloud-environment/install.sh`](../../agent-os/cloud-environment/install.sh),
+or run:
+
+```bash
+bash agent-os/cloud-environment/install.sh
+```
+
+That script wraps the same helpers below. For a hand-maintained list:
 
 ```bash
 bash tooling/setup/agent/install-node.sh
