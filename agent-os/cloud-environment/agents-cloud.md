@@ -1,0 +1,65 @@
+# Cloud agent instructions (core-be)
+
+Read this on **remote / cloud** sessions (Cursor Cloud Agents, Claude Code on the web)
+before tasks that need Postgres, Redis, migrations, seeds, or a live API.
+
+Canonical config: [`agent-os/cloud-environment/`](./) (`install.sh`, `environment.json`).
+
+## When to run bring-up
+
+| Task needs | Run bring-up? |
+| ---------- | ------------- |
+| Lint, typecheck, unit tests, `pnpm agent-os:check` | No |
+| E2E, integration, `pnpm test`, migrations | Yes |
+| `pnpm dev`, `pnpm dev:worker`, `/readyz`, API smoke | Yes |
+
+## One-command bring-up
+
+```bash
+export PATH="/opt/node24/bin:$HOME/.local/bin:$PATH"
+bash tooling/setup/agent/bootstrap.sh
+```
+
+Leaves Postgres + Redis up; starts the app only for the healthcheck, then stops it.
+To keep the API running:
+
+```bash
+KEEP_APP=1 bash tooling/setup/agent/bootstrap.sh
+```
+
+Or start manually after bootstrap:
+
+```bash
+pnpm dev          # API (tmux / background)
+pnpm dev:worker   # BullMQ workers
+bash tooling/setup/agent/healthcheck.sh
+```
+
+## Step-by-step (same as local)
+
+```bash
+export PATH="/opt/node24/bin:$HOME/.local/bin:$PATH"
+SONAR=0 pnpm compose:up && pnpm compose:wait
+pnpm db:migrate && pnpm db:seed
+pnpm dev &
+bash tooling/setup/agent/healthcheck.sh
+```
+
+## Restricted Docker VMs
+
+If `compose:up` fails with **overlay mount** or **cgroup** errors:
+
+1. `bash tooling/setup/agent/ensure-docker-daemon.sh` (VFS / restricted mode)
+2. `docker compose -f docker-compose.yml -f tooling/setup/agent/docker-compose.cloud-agent.yml up -d postgres redis`
+3. If Postgres still fails, recreate with `--cgroupns=host` (see session notes in
+   [README.md](./README.md))
+
+## Health endpoints
+
+- `GET /livez` — process up (200)
+- `GET /readyz` — Postgres + Redis + BullMQ (200 or 503)
+
+## MCP default pair
+
+Ensure `codegraph` and `headroom` are configured in the platform MCP settings.
+Binaries install to `~/.local/bin` via the cached install script.

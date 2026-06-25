@@ -18,6 +18,14 @@ Before changing this repository:
 
    Optional local integration gate (Docker Postgres + Redis running): `pnpm verify:base` — migrate → seed (minimal + full) → live API smoke → validate. Local stack: `pnpm compose:up` then `pnpm compose:wait`.
 
+## Cloud agent sessions
+
+On **Cursor Cloud Agents** or **Claude Code on the web**, read
+**[agent-os/cloud-environment/agents-cloud.md](agent-os/cloud-environment/agents-cloud.md)**
+before DB/e2e/app work. Cached install + Cursor `environment.json` live in
+**[agent-os/cloud-environment/](agent-os/cloud-environment/)** (symlinked at
+[`.cursor/environment.json`](.cursor/environment.json)).
+
 ## Additional resources
 
 - **Cursor cloud agent** — Linux environments with full dev dependencies (separate from production image): **[docs/integrations/cursor-cloud-agent-environment.md](docs/integrations/cursor-cloud-agent-environment.md)**
