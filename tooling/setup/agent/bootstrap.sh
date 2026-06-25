@@ -119,17 +119,30 @@ ok "[7/${TOTAL}] .env.local ready"
 # 8) Postgres + Redis (docker compose) --------------------------------------
 step "[8/${TOTAL}] Postgres + Redis (docker compose)"
 bash "${AGENT_DIR}/ensure-docker-daemon.sh" >&2 || die "Docker daemon is not reachable (see ensure-docker-daemon diagnostics above)"
+
+compose_cloud_stack() {
+  docker compose -f docker-compose.yml -f "${AGENT_DIR}/docker-compose.cloud-agent.yml" up -d postgres redis
+}
+
 docker_mode="$(cat "${DOCKERD_AGENT_MODE_FILE}" 2>/dev/null || true)"
+compose_ok=0
 case "${docker_mode}" in
   restricted*)
     echo "bootstrap: Docker daemon is in ${docker_mode} mode; using cloud-agent host-network compose override." >&2
-    docker compose -f docker-compose.yml -f "${AGENT_DIR}/docker-compose.cloud-agent.yml" up -d postgres redis >&2 \
-      || die "compose:up failed with cloud-agent restricted Docker override"
+    compose_cloud_stack >&2 && compose_ok=1
     ;;
   *)
-    SONAR=0 pnpm compose:up >&2 || die "compose:up failed (Docker daemon was reachable before compose; inspect docker compose output above)"
+    SONAR=0 pnpm compose:up >&2 && compose_ok=1
     ;;
 esac
+
+if [ "${compose_ok}" -eq 0 ]; then
+  echo "bootstrap: standard compose failed — retrying with restricted VFS + cloud-agent override." >&2
+  FORCE_RESTRICTED_VFS=1 bash "${AGENT_DIR}/ensure-docker-daemon.sh" >&2 \
+    || die "restricted Docker fallback failed (see ensure-docker-daemon diagnostics above)"
+  compose_cloud_stack >&2 || die "compose:up failed with cloud-agent restricted Docker override"
+fi
+
 pnpm compose:wait >&2 || die "Postgres did not become ready"
 ok "[8/${TOTAL}] Postgres + Redis healthy"
 

@@ -47,12 +47,17 @@ bash tooling/setup/agent/healthcheck.sh
 
 ## Restricted Docker VMs
 
-If `compose:up` fails with **overlay mount** or **cgroup** errors:
+`bootstrap.sh` retries automatically: if standard `compose:up` fails (overlay mount or
+cgroup errors), it switches Docker to **restricted VFS** mode and uses the
+[`docker-compose.cloud-agent.yml`](../../tooling/setup/agent/docker-compose.cloud-agent.yml)
+override (host network + `cgroupns_mode: host` for Postgres).
 
-1. `bash tooling/setup/agent/ensure-docker-daemon.sh` (VFS / restricted mode)
-2. `docker compose -f docker-compose.yml -f tooling/setup/agent/docker-compose.cloud-agent.yml up -d postgres redis`
-3. If Postgres still fails, recreate with `--cgroupns=host` (see session notes in
-   [README.md](./README.md))
+Manual fallback:
+
+```bash
+FORCE_RESTRICTED_VFS=1 bash tooling/setup/agent/ensure-docker-daemon.sh
+docker compose -f docker-compose.yml -f tooling/setup/agent/docker-compose.cloud-agent.yml up -d postgres redis
+```
 
 ## Health endpoints
 
