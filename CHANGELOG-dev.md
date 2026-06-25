@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.20](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.19...v4.10.0-dev.20) (2026-06-25)
+
+
+### Fixed
+
+* **rls:** FORCE RLS on audit.outbox + correct worker request-database import rule ([68082c4](https://github.com/nikunjmavani/core-be/commit/68082c48fe463390c3e669caadba72a0a5bfb6a5))
+
 ## [4.10.0-dev.19](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.18...v4.10.0-dev.19) (2026-06-25)
 
 
