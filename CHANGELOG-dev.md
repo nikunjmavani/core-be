@@ -6,6 +6,19 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.18](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.17...v4.10.0-dev.18) (2026-06-25)
+
+
+### Fixed
+
+* **agent-os:** harden cloud Docker bootstrap fallbacks ([#801](https://github.com/nikunjmavani/core-be/issues/801)) ([43b32b0](https://github.com/nikunjmavani/core-be/commit/43b32b0809a973935b87cfc11566954063e3ea15))
+* **agent-os:** restrict stack monitor tools ([#798](https://github.com/nikunjmavani/core-be/issues/798)) ([7ed9ad4](https://github.com/nikunjmavani/core-be/commit/7ed9ad40c9c0e6b0bfbdc4a895549cd54057d63f))
+
+
+### Documentation
+
+* **cloud:** scaffold default MCP pair in install and document skills/MCPs ([#803](https://github.com/nikunjmavani/core-be/issues/803)) ([405a29e](https://github.com/nikunjmavani/core-be/commit/405a29e4cf9723fae10b582ca27c3375cf6462e9))
+
 ## [4.10.0-dev.17](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.16...v4.10.0-dev.17) (2026-06-25)
 
 

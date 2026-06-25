@@ -1,6 +1,6 @@
 {
   "name": "core-be",
-  "version": "4.10.0-dev.17",
+  "version": "4.10.0-dev.18",
   "description": "Node.js API with Fastify, Drizzle ORM, and BullMQ",
   "license": "MIT",
   "private": true,
