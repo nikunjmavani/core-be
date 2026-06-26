@@ -6,6 +6,15 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.22](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.21...v4.10.0-dev.22) (2026-06-26)
+
+
+### Fixed
+
+* **http:** return 400 (not 500) for a malformed JSON request body ([c44be98](https://github.com/nikunjmavani/core-be/commit/c44be9888f29b4e93354a0d87e8869c25591d3da))
+* **http:** return 400 (not 500) for a malformed JSON request body ([5e06579](https://github.com/nikunjmavani/core-be/commit/5e06579d6e70bd4903c7c62a23b98ebf064943ac))
+* tag the parser's error with statusCode 400 + FST_ERR_CTP_INVALID_JSON_SYNTAX so the error handler's existing 4xx-framework-error path returns a clean 400 (logged at warn, not captured to Sentry). Adds 3 regression cases to the JSON content-type parser integration suite. Verified: typecheck + biome clean; regression 6/6; live-verified on the running server. ([5e06579](https://github.com/nikunjmavani/core-be/commit/5e06579d6e70bd4903c7c62a23b98ebf064943ac))
+
 ## [4.10.0-dev.21](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.20...v4.10.0-dev.21) (2026-06-26)
 
 
