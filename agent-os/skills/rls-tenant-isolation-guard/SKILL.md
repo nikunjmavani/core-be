@@ -42,7 +42,7 @@ For **worker / processor** code touching tenant data:
 - [ ] Worker repositories accept an explicit `databaseHandle` (`createWorker*Repository(databaseHandle)`) — the nominal brand prevents passing the pool at compile time.
 - [ ] **No external I/O (fetch / Stripe / S3 / Resend) inside a `with*DatabaseContext` callback** — it holds a pool checkout across the network round-trip (`rls-context-network-isolation.global.test.ts`).
 
-For **`SECURITY DEFINER`**: only `billing.resolve_organization_public_id_for_stripe_subscription` exists today; any new one must pin `SET search_path` and `GRANT EXECUTE` only to `core_be_app`.
+For **`SECURITY DEFINER`** functions — the RLS-bypass resolvers across `auth` / `tenancy` / `billing` / `notify` (`grep -rl 'SECURITY DEFINER' migrations/` lists the current set; it grows over time): each one MUST pin `SET search_path` and `GRANT EXECUTE` only to `core_be_app`. Because the function bypasses RLS, **its body is the sole tenant/ownership boundary** — scope every query by the resolved id and return only the caller's rows.
 
 ## Top failure modes
 
