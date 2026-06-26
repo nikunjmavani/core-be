@@ -6,6 +6,14 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.21](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.20...v4.10.0-dev.21) (2026-06-26)
+
+
+### Documentation
+
+* **rls:** correct the SECURITY DEFINER inventory in the rls-tenant-isolation skill ([83c4f7a](https://github.com/nikunjmavani/core-be/commit/83c4f7aaed3705d963c4fec1f812894e2bc86a8c))
+* **rls:** correct the SECURITY DEFINER inventory in the rls-tenant-isolation skill ([65ee120](https://github.com/nikunjmavani/core-be/commit/65ee12090ae73c5df6f4e56375f6ffded55e7544))
+
 ## [4.10.0-dev.20](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.19...v4.10.0-dev.20) (2026-06-25)
 
 
