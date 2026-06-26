@@ -22,8 +22,13 @@ import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
  * The fix in `src/app.ts` short-circuits empty buffers to `done(null,
  * undefined)` so the route validator (Zod) sees no body and either accepts
  * or rejects per its declared schema.
+ *
+ * A later pentest finding extended this suite: a MALFORMED (unparseable) body
+ * must surface as a clean 400, not a 500 — the parser tags its error with
+ * `statusCode: 400` (mirroring Fastify's `FST_ERR_CTP_INVALID_JSON_SYNTAX`) so
+ * the error handler returns a client error instead of masking it as a 5xx.
  */
-describe('Integration: empty-body JSON parser (sec-r5-runtime)', () => {
+describe('Integration: JSON content-type parser (empty + malformed bodies)', () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
@@ -84,5 +89,28 @@ describe('Integration: empty-body JSON parser (sec-r5-runtime)', () => {
     // Wrong password → 401 from the auth service, which means the parser
     // correctly parsed the body and routed to the controller.
     expect([400, 401, 403]).toContain(response.statusCode);
+  });
+
+  // Pentest regression: a malformed (unparseable) JSON body is a CLIENT error. The custom parser
+  // used to pass the raw `SyntaxError` (which carries no statusCode) to the error handler, which
+  // masked it as a 500 — the wrong status (the contract is 400 on bad input) and a needless
+  // Sentry-captured 5xx on attacker-controllable input. It must now be a clean 400.
+  it.each([
+    ['truncated JSON', '{"email":'],
+    ['non-JSON text', 'not-json-at-all'],
+    ['trailing comma', '{"email":"a@b.com",}'],
+  ])('POST /auth/login with %s body returns 400 (not 500)', async (_label, body) => {
+    const response = await app.inject({
+      method: 'POST',
+      url: testApiPath('/auth/login'),
+      headers: { 'content-type': 'application/json' },
+      payload: body,
+    });
+
+    expect(response.statusCode).toBe(400);
+    const responseBody = response.json() as { error: { type: string; code: string } };
+    expect(responseBody.error.type).toBe('request_error');
+    // Never the masked 5xx envelope.
+    expect(responseBody.error.code).not.toBe('internal_error');
   });
 });

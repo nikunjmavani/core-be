@@ -157,8 +157,21 @@ export async function buildApp(options?: BuildAppOptions) {
     try {
       const json = JSON.parse(text) as unknown;
       done(null, json);
-    } catch (error) {
-      done(error as Error, undefined);
+    } catch {
+      // A malformed JSON body is a CLIENT error. Fastify's built-in JSON parser raises
+      // FST_ERR_CTP_INVALID_JSON_SYNTAX (statusCode 400); this custom parser (added for raw-body
+      // capture) must mirror that. Passing the raw SyntaxError — which carries no `statusCode` —
+      // let the error handler mask it as a 500: the wrong status (the contract is 400 on bad
+      // input) and a needless 5xx that captures to Sentry and burns the error budget on
+      // attacker-controllable input. The 400-tagged error routes through the error handler's
+      // `getFastifyClientErrorStatus` path (logged at warn, not captured).
+      done(
+        Object.assign(new SyntaxError('Invalid JSON body'), {
+          statusCode: 400,
+          code: 'FST_ERR_CTP_INVALID_JSON_SYNTAX',
+        }),
+        undefined,
+      );
     }
   });
 
