@@ -115,6 +115,7 @@
   "githubUserMissingEmailOrId": "Falta email o id en la información de usuario de GitHub",
   "githubUserMissingVerifiedEmail": "Se requiere un correo principal y verificado de GitHub. Verifica tu correo con GitHub e inténtalo de nuevo.",
   "oauthLinkRequiresVerifiedAccount": "Ya existe una cuenta para este correo. Inicia sesión con tu método existente y vincula este proveedor desde la configuración de tu cuenta.",
+  "emailVerificationRequiredForCredential": "Verifica tu dirección de correo electrónico antes de agregar la autenticación de dos factores o una clave de acceso.",
   "mfaUserNotFound": "Usuario no encontrado",
   "mfaNotEnabled": "MFA no está habilitado para esta cuenta",
   "mfaInvalidOrExpiredCode": "Código no válido o caducado",

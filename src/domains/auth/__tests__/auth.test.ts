@@ -625,7 +625,9 @@ describe('Auth Domain — Integration', () => {
     });
 
     it('grants a step-up window for a gated route after correct password', async () => {
-      const { user, password } = await createTestUserWithPassword();
+      // Verified so the post-step-up enroll exercises the step-up window, not the separate
+      // email-verification gate on credential enrollment (pre-hijacking guard).
+      const { user, password } = await createTestUserWithPassword({ isEmailVerified: true });
       const token = await generateTestToken({ userId: user.public_id });
 
       // Fresh login / token must NOT carry a step-up window: a gated mutation is rejected.
