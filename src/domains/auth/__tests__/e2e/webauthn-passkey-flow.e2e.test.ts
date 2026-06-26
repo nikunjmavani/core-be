@@ -43,7 +43,10 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
   });
 
   it('registers a passkey while authenticated, then signs in with WebAuthn', async () => {
-    const user = await createTestUser({ email: 'webauthn-passkey-flow@example.com' });
+    const user = await createTestUser({
+      email: 'webauthn-passkey-flow@example.com',
+      isEmailVerified: true,
+    });
     const { token, sessionPublicId } = await generateTestTokenWithActiveSession(
       app,
       user.public_id,
@@ -155,7 +158,10 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
   });
 
   it('rejects re-registering an already-enrolled passkey with 409 (not a 500)', async () => {
-    const user = await createTestUser({ email: 'webauthn-duplicate-credential@example.com' });
+    const user = await createTestUser({
+      email: 'webauthn-duplicate-credential@example.com',
+      isEmailVerified: true,
+    });
     const { token, sessionPublicId } = await generateTestTokenWithActiveSession(
       app,
       user.public_id,

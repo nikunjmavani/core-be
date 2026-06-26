@@ -21,7 +21,10 @@ import {
 } from '@/shared/errors/index.js';
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
-import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
+import {
+  assertEmailVerifiedForCredentialEnrollment,
+  assertUserAccountActive,
+} from '@/shared/utils/auth/account-status.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
@@ -119,6 +122,10 @@ export class WebauthnService {
     if (!user) {
       throw new UnauthorizedError('errors:userNotFound');
     }
+    // Pre-hijacking guard: an unverified (e.g. attacker-pre-registered) account must not seed a
+    // passkey that would survive the real owner's password-reset recovery (sec — account
+    // pre-hijacking, Trojan-credential variant).
+    assertEmailVerifiedForCredentialEnrollment(user);
 
     const existingCredentials = await withUserDatabaseContext(user.public_id, () =>
       this.credentialRepository.listActiveByUserId(user.id),
