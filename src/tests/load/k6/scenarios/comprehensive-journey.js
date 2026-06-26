@@ -14,7 +14,7 @@
  * Coverage every iteration: profile + org reads, self-service updates, and full
  *   create->read->update->delete lifecycles for roles, api-keys, notification-policies, webhooks.
  * Coverage once per VU (first iteration): the idempotent/heavy flows — create org,
- *   member invite chain (create membership -> invite -> revoke -> suspend -> remove), data-export.
+ *   member invite chain (add member by email -> revoke invitation -> suspend -> remove), data-export.
  *
  * Excludes destructive/external: DELETE /users/me, org delete, Stripe, MFA/WebAuthn, logout.
  *
@@ -134,7 +134,6 @@ const OP_NAMES = [
   'list-roles',
   'list-api-keys',
   'list-notif-policies',
-  'list-invitations',
   'list-permissions',
   'list-notifications',
   'unread-count',
@@ -164,7 +163,6 @@ const OP_NAMES = [
   'create-org',
   'data-export',
   'create-membership',
-  'create-invitation',
   'delete-invitation',
   'patch-membership',
   'delete-membership',
@@ -293,7 +291,6 @@ function phaseExplore() {
   req('list-roles', 'GET', '/tenancy/organization/roles');
   req('list-api-keys', 'GET', '/tenancy/organization/api-keys');
   req('list-notif-policies', 'GET', '/tenancy/organization/notification-policies');
-  req('list-invitations', 'GET', '/tenancy/organization/invitations');
   req('list-permissions', 'GET', '/tenancy/permissions');
   req('list-notifications', 'GET', '/notify/notifications?limit=20');
   req('unread-count', 'GET', '/notify/notifications/unread-count');
@@ -315,10 +312,16 @@ function phaseSelfService(_uniq) {
 }
 
 function phaseRole(uniq) {
-  const r = req('create-role', 'POST', '/tenancy/organization/roles', {
-    name: `Role ${uniq}`,
-    description: 'k6',
-  });
+  const r = req(
+    'create-role',
+    'POST',
+    '/tenancy/organization/roles',
+    {
+      name: `Role ${uniq}`,
+      description: 'k6',
+    },
+    true,
+  );
   const roleId = r.json('data.id');
   if (roleId) {
     req('get-role', 'GET', `/tenancy/organization/roles/${roleId}`);
@@ -335,22 +338,34 @@ function phaseRole(uniq) {
 }
 
 function phaseApiKey(uniq) {
-  const r = req('create-api-key', 'POST', '/tenancy/organization/api-keys', {
-    name: `Key ${uniq}`,
-    scopes: ['api-key:read'],
-    expires_in_days: 30,
-  });
+  const r = req(
+    'create-api-key',
+    'POST',
+    '/tenancy/organization/api-keys',
+    {
+      name: `Key ${uniq}`,
+      scopes: ['api-key:read'],
+      expires_in_days: 30,
+    },
+    true,
+  );
   const keyId = r.json('data.api_key.id') || r.json('data.id');
   if (keyId) req('delete-api-key', 'DELETE', `/tenancy/organization/api-keys/${keyId}`);
   think();
 }
 
 function phasePolicy(uniq) {
-  const r = req('create-notif-policy', 'POST', '/tenancy/organization/notification-policies', {
-    notification_type: `k6_${uniq}`.slice(0, 50),
-    channel: 'PUSH',
-    default_enabled: true,
-  });
+  const r = req(
+    'create-notif-policy',
+    'POST',
+    '/tenancy/organization/notification-policies',
+    {
+      notification_type: `k6_${uniq}`.slice(0, 50),
+      channel: 'PUSH',
+      default_enabled: true,
+    },
+    true,
+  );
   const polId = r.json('data.id');
   if (polId) {
     req('patch-notif-policy', 'PATCH', `/tenancy/organization/notification-policies/${polId}`, {
@@ -362,10 +377,16 @@ function phasePolicy(uniq) {
 }
 
 function phaseWebhook(uniq) {
-  const r = req('create-webhook', 'POST', '/notify/webhooks', {
-    url: `https://example.com/webhook?k6=${uniq}`,
-    events: ['subscription.created'],
-  });
+  const r = req(
+    'create-webhook',
+    'POST',
+    '/notify/webhooks',
+    {
+      url: `https://example.com/webhook?k6=${uniq}`,
+      events: ['subscription.created'],
+    },
+    true,
+  );
   const whId = r.json('data.id');
   if (whId) {
     req('get-webhook', 'GET', `/notify/webhooks/${whId}`);
@@ -390,13 +411,19 @@ function phaseRareOnce(uniq) {
   req('data-export', 'POST', '/users/me/data-export', {});
 
   // avatar upload presign — then delete the pending upload so it never fills the per-user quota.
-  const up = req('request-upload', 'POST', '/uploads', {
-    purpose: 'avatar',
-    for: 'user',
-    content_type: 'image/png',
-    file_name: `avatar-${uniq}.png`,
-    file_size: 1024,
-  });
+  const up = req(
+    'request-upload',
+    'POST',
+    '/uploads',
+    {
+      purpose: 'avatar',
+      for: 'user',
+      content_type: 'image/png',
+      file_name: `avatar-${uniq}.png`,
+      file_size: 1024,
+    },
+    true,
+  );
   const upId = up.json('data.id');
   if (upId) req('delete-upload', 'DELETE', `/uploads/${upId}`);
 
@@ -405,15 +432,21 @@ function phaseRareOnce(uniq) {
 
   // member invite chain: invite a user from ANOTHER org into this org, then tear it down.
   const invitee = pool[(__VU - 1 + 60) % pool.length];
-  const roleForMember = req('create-role', 'POST', '/tenancy/organization/roles', {
-    name: `Member Role ${uniq}`,
-  }).json('data.id');
-  if (invitee && roleForMember && invitee.userPublicId !== cred.userPublicId) {
-    // pre-clean: drop any leftover membership for this invitee so the invite never conflicts (409)
+  const roleForMember = req(
+    'create-role',
+    'POST',
+    '/tenancy/organization/roles',
+    { name: `Member Role ${uniq}` },
+    true,
+  ).json('data.id');
+  if (invitee && roleForMember && invitee.email !== cred.email) {
+    // pre-clean: drop any leftover membership for this invitee so add-by-email never conflicts (409)
     const existing = req('list-members', 'GET', '/tenancy/organization/memberships?limit=100');
     const members = existing.json('data.items') || existing.json('data') || [];
     const prior = Array.isArray(members)
-      ? members.find((mm) => mm.user_id === invitee.userPublicId)
+      ? members.find(
+          (mm) => mm.user?.email === invitee.email || mm.user_id === invitee.userPublicId,
+        )
       : null;
     if (prior?.id) {
       req('delete-membership', 'DELETE', `/tenancy/organization/memberships/${prior.id}`);
@@ -422,19 +455,12 @@ function phaseRareOnce(uniq) {
       'create-membership',
       'POST',
       '/tenancy/organization/memberships',
-      { user_id: invitee.userPublicId, role_id: roleForMember, status: 'INVITED' },
+      { email: invitee.email, role_id: roleForMember, expires_in_days: 7 },
       true,
     );
     const membershipId = m.json('data.id');
+    const invitationId = m.json('data.invitation.id');
     if (membershipId) {
-      const inv = req(
-        'create-invitation',
-        'POST',
-        '/tenancy/organization/invitations',
-        { membership_id: membershipId, expires_in_days: 7 },
-        true,
-      );
-      const invitationId = inv.json('data.id');
       if (invitationId)
         req('delete-invitation', 'DELETE', `/tenancy/organization/invitations/${invitationId}`);
       req('patch-membership', 'PATCH', `/tenancy/organization/memberships/${membershipId}`, {
