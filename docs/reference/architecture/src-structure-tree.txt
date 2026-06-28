@@ -1151,6 +1151,7 @@ src/
     │   ├── __tests__/
     │   │   ├── unit/
     │   │   │   ├── bullmq-trace-propagation.unit.test.ts
+    │   │   │   ├── posthog.unit.test.ts
     │   │   │   ├── trace-context.util.unit.test.ts
     │   │   │   └── unhandled-rejection.handler.unit.test.ts
     │   │   ├── opentelemetry.unit.test.ts
@@ -1176,6 +1177,8 @@ src/
     │   │   ├── metrics-registry.ts
     │   │   ├── metrics.ts
     │   │   └── prometheus-metrics.ts
+    │   ├── posthog/
+    │   │   └── posthog.ts
     │   ├── redis-saturation/
     │   │   └── redis-saturation.service.ts
     │   ├── sentry/

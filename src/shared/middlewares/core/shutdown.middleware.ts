@@ -11,6 +11,7 @@ import { closeSubscriptionSeatSyncQueue } from '@/domains/billing/sub-domains/su
 import { closeStripeWebhookQueue } from '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.queue.js';
 import { closeUserDataExportQueue } from '@/domains/user/sub-domains/user-data-export/queues/user-data-export.queue.js';
 import { flushSentry } from '@/infrastructure/observability/sentry/sentry.js';
+import { shutdownPostHog } from '@/infrastructure/observability/posthog/posthog.js';
 import { shutdownOpenTelemetry } from '@/infrastructure/observability/tracing/otel.js';
 import { THREE_SECONDS_MS } from '@/shared/constants/index.js';
 import { setApplicationDraining } from '@/shared/utils/infrastructure/application-lifecycle.util.js';
@@ -81,6 +82,8 @@ const shutdownMiddleware: FastifyPluginAsync = async (app) => {
     // audit M5: flush + tear down the OpenTelemetry SDK (no-op when never started)
     // before the Sentry flush so pending OTLP spans are not dropped on shutdown.
     await shutdownOpenTelemetry();
+    // Flush pending product-analytics events (no-op when PostHog is disabled).
+    await shutdownPostHog();
     await flushSentry();
   });
 
