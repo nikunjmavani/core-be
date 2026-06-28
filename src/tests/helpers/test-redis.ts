@@ -11,10 +11,10 @@ const TEST_REDIS_PREFIXES = [
   // Auth OTP/send cooldowns + verify-attempt counters. `TRUNCATE ... RESTART IDENTITY` resets the
   // user-id sequence, so user-keyed cooldowns/counters (and email-keyed send cooldowns when a test
   // reuses an address) would otherwise leak across cases and nondeterministically skip a send.
-  'auth:magic_link_send_cooldown:',
+  'auth:email_code_send_cooldown:',
   'auth:password_reset_cooldown:',
   'auth:email_verify_resend_cooldown:',
-  'auth:magic_link_otp_verify_attempts:',
+  'auth:email_code_verify_attempts:',
   'auth:email_otp_verify_attempts:',
 ] as const;
 

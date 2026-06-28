@@ -25,7 +25,7 @@ Enforce production-readiness checks across the codebase. Verifies security heade
 - [ ] Account lockout after 10 failed attempts (30 min)
 - [ ] Helmet middleware configured with strict CSP
 - [ ] CORS restricted to `ALLOWED_ORIGINS` (mandatory in production)
-- [ ] Rate limiting on all sensitive endpoints (login, magic-link, password reset)
+- [ ] Rate limiting on all sensitive endpoints (login, email verification-code, password reset)
 - [ ] X-Idempotency-Key support for write operations
 - [ ] X-Organization-Id header validated against PUBLIC_ID_REGEX
 

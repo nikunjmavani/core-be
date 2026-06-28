@@ -45,7 +45,7 @@ This domain implements the contracts documented in [src/PATTERNS.md](src/PATTERN
 
 ## Cross-domain flows
 
-- `signup-flow` — magic-link verify creates the `users` row (via `UserService.findOrCreate`).
+- `signup-flow` — email verification-code verify creates the `users` row (via `UserService.findOrCreate`).
 - `organization-invitation-flow` — accepting an invitation requires an existing user; if none, signup-flow runs first.
 - `user-data-export` is itself a flow but is single-domain (runs end-to-end inside this domain plus mail + S3 infra).
 

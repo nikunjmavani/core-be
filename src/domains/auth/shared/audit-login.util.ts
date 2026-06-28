@@ -14,7 +14,7 @@ import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
  */
 export type LoginAuditSource =
   | 'password'
-  | 'magic_link'
+  | 'email_code'
   | 'webauthn'
   | 'mfa_totp'
   | 'mfa_recovery_code'
@@ -35,7 +35,7 @@ export interface LoginAuditEventInput {
  *
  * @remarks
  * auth.overview.md promises "every login (success or failure) records a row". Before
- * this helper the promise held only for password login — OAuth, magic-link,
+ * this helper the promise held only for password login — OAuth, email-code,
  * and WebAuthn callbacks succeeded silently. Brute-force / credential-stuffing
  * detection requires a single source of truth for `auth.login` events; this
  * helper centralizes the row plus the high-severity `auth.super_admin.token_issued`

@@ -6,11 +6,11 @@ Every value here is a deliberate business, UX, or security trade-off. Each entry
 
 The canonical exports live under [src/shared/constants/](src/shared/constants/) (`ttl.constants.ts`, `limits.constants.ts`, `security.constants.ts`, `pagination.constants.ts`, `billing.constants.ts`). When a new policy constant is added there, the `tsdoc-export-guard` skill cross-pings `system-narrative-maintainer` to add a row here.
 
-## MAGIC_LINK_EXPIRES_IN_MINUTES
+## VERIFICATION_CODE_TTL_MINUTES
 
 - **Value**: 15 minutes
 - **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
-- **Rationale**: Balances security (limited replay window) and UX (a user must have time to switch from the signup form → email client → click the link).
+- **Rationale**: Balances security (limited replay window) and UX (a user must have time to switch from the login form → email client → read and type the code).
 - **Consequences of change**:
   - Decreasing → tighter replay window; users on slow devices or pulling email through corporate spam filtering may miss the window and have to retry.
   - Increasing → larger token replay window; review with security if pushing past 30 minutes.
@@ -20,20 +20,10 @@ The canonical exports live under [src/shared/constants/](src/shared/constants/) 
 
 - **Value**: 60 minutes
 - **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
-- **Rationale**: Password resets are deliberately less time-pressured than magic-link sign-ins — users may be locked out of their inbox temporarily, may need to switch devices, and the recovery flow is a 1× operation rather than a sign-in primitive.
+- **Rationale**: Password resets are deliberately less time-pressured than email verification-code sign-ins — users may be locked out of their inbox temporarily, may need to switch devices, and the recovery flow is a 1× operation rather than a sign-in primitive.
 - **Consequences of change**:
   - Decreasing → support tickets from users who couldn't reach a working device in time.
   - Increasing → larger reset-token replay window; pair with stricter throttle if pushing past 24 hours.
-- **Last reviewed**: 2026-05-28
-
-## EMAIL_VERIFICATION_EXPIRES_IN_HOURS
-
-- **Value**: 24 hours
-- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
-- **Rationale**: Email verification is a 1× lifecycle step; the user may take a day or more to come back to it.
-- **Consequences of change**:
-  - Decreasing → users who don't verify the same day must re-trigger the verification email.
-  - Increasing → larger replay window; not recommended past 7 days because the verification token grants access to a sensitive lifecycle action.
 - **Last reviewed**: 2026-05-28
 
 ## ACCESS_TOKEN_EXPIRY_SECONDS

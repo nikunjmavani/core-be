@@ -16,7 +16,7 @@ import { users } from '@/domains/user/user.schema.js';
 import { AUTH_METHOD_TYPES } from './auth-method.constants.js';
 
 /**
- * Drizzle table for `auth.auth_methods` — one row per linked credential (PASSWORD, MAGIC_LINK,
+ * Drizzle table for `auth.auth_methods` — one row per linked credential (PASSWORD, EMAIL_CODE,
  * OAUTH, MFA_TOTP, MFA_SMS, MFA_EMAIL); soft-deleted via `revoked_at`. FORCE RLS-gated (audit #7):
  * ownership is derived through `auth.users` (`user_id` of the row whose `public_id` matches
  * `app.current_user_id`) or the `app.global_admin` admin escape hatch; the pre-session OAuth lookup

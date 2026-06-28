@@ -13,7 +13,7 @@ const tokenRow = {
   user_id: 10,
   email: 'test@example.com',
   token_hash: 'hashed-token-abc',
-  token_type: 'MAGIC_LINK' as VerificationTokenType,
+  token_type: 'EMAIL_CODE' as VerificationTokenType,
   used_at: null,
   expires_at: expiresAt,
   created_at: now,
@@ -31,14 +31,14 @@ describe('VerificationTokenService', () => {
   describe('create', () => {
     it('delegates to repository and returns created token row', async () => {
       const result = await service.create(
-        'MAGIC_LINK',
+        'EMAIL_CODE',
         10,
         'test@example.com',
         'hashed-token-abc',
         expiresAt,
       );
       expect(repository.create).toHaveBeenCalledWith(
-        'MAGIC_LINK',
+        'EMAIL_CODE',
         10,
         'test@example.com',
         'hashed-token-abc',
@@ -50,15 +50,15 @@ describe('VerificationTokenService', () => {
     it('propagates repository errors', async () => {
       vi.mocked(repository.create).mockRejectedValueOnce(new Error('DB constraint violation'));
       await expect(
-        service.create('MAGIC_LINK', 10, 'test@example.com', 'hashed-token-abc', expiresAt),
+        service.create('EMAIL_CODE', 10, 'test@example.com', 'hashed-token-abc', expiresAt),
       ).rejects.toThrow('DB constraint violation');
     });
   });
 
   describe('consumeIfValid', () => {
     it('delegates to repository with the expected token type and returns the row', async () => {
-      const result = await service.consumeIfValid('hashed-token-abc', 'MAGIC_LINK');
-      expect(repository.consumeIfValid).toHaveBeenCalledWith('hashed-token-abc', 'MAGIC_LINK');
+      const result = await service.consumeIfValid('hashed-token-abc', 'EMAIL_CODE');
+      expect(repository.consumeIfValid).toHaveBeenCalledWith('hashed-token-abc', 'EMAIL_CODE');
       expect(result).toEqual(tokenRow);
     });
 
@@ -70,7 +70,7 @@ describe('VerificationTokenService', () => {
 
     it('propagates repository errors', async () => {
       vi.mocked(repository.consumeIfValid).mockRejectedValueOnce(new Error('Connection timeout'));
-      await expect(service.consumeIfValid('token-hash', 'MAGIC_LINK')).rejects.toThrow(
+      await expect(service.consumeIfValid('token-hash', 'EMAIL_CODE')).rejects.toThrow(
         'Connection timeout',
       );
     });
@@ -78,18 +78,18 @@ describe('VerificationTokenService', () => {
 
   describe('invalidateAllForUser', () => {
     it('delegates to repository with user id and token type', async () => {
-      await service.invalidateAllForUser(10, 'MAGIC_LINK');
-      expect(repository.invalidateAllForUser).toHaveBeenCalledWith(10, 'MAGIC_LINK');
+      await service.invalidateAllForUser(10, 'EMAIL_CODE');
+      expect(repository.invalidateAllForUser).toHaveBeenCalledWith(10, 'EMAIL_CODE');
     });
 
     it('handles different token types', async () => {
-      await service.invalidateAllForUser(10, 'EMAIL_VERIFICATION');
-      expect(repository.invalidateAllForUser).toHaveBeenCalledWith(10, 'EMAIL_VERIFICATION');
+      await service.invalidateAllForUser(10, 'EMAIL_CHANGE');
+      expect(repository.invalidateAllForUser).toHaveBeenCalledWith(10, 'EMAIL_CHANGE');
     });
 
     it('propagates repository errors', async () => {
       vi.mocked(repository.invalidateAllForUser).mockRejectedValueOnce(new Error('DB timeout'));
-      await expect(service.invalidateAllForUser(10, 'MAGIC_LINK')).rejects.toThrow('DB timeout');
+      await expect(service.invalidateAllForUser(10, 'EMAIL_CODE')).rejects.toThrow('DB timeout');
     });
   });
 });

@@ -72,10 +72,10 @@ tenancy/sub-domains/membership/member-invitation/events/*.ts  →  recordOutboxE
 tenancy/events/index.ts  →  registerTenancyEventHandlers()
 ```
 
-**Auth — transactional email** (magic link, password reset, email verification)
+**Auth — transactional email** (email verification-code, password reset)
 
 ```text
-magic-link.service.ts / auth-method.service.ts  →  eventBus.emit(auth.*.requested)
+email-login.service.ts / auth-method.service.ts  →  eventBus.emit(auth.*.requested)
 auth/sub-domains/auth-method/events/*.ts  →  recordOutboxEmail() + onCommit(dispatchOutboxEmail)
 auth/events/index.ts  →  registerAuthEventHandlers()
 ```

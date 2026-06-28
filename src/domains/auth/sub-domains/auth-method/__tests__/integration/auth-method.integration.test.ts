@@ -65,12 +65,12 @@ describe('Auth Method Sub-Domain — Integration', () => {
     });
   });
 
-  describe('POST /api/v1/auth/magic-link/send', () => {
+  describe('POST /api/v1/auth/email/send-code', () => {
     it('should accept magic link send request', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/magic-link/send'),
-        payload: { email: 'magic-link-integration@test.com' },
+        url: testApiPath('/auth/email/send-code'),
+        payload: { email: 'email-code-integration@test.com' },
       });
       expect(response.statusCode).toBe(201);
     });
@@ -91,7 +91,7 @@ describe('Auth Method Sub-Domain — Integration', () => {
   });
 
   describe('self-service auth-method management — happy paths', () => {
-    it('POST then DELETE /auth/me/auth-methods round-trips a MAGIC_LINK method', async () => {
+    it('POST then DELETE /auth/me/auth-methods round-trips a EMAIL_CODE method', async () => {
       const { user, password } = await createTestUserWithPassword();
       const token = await generateTestToken({ userId: user.public_id });
 
@@ -105,7 +105,7 @@ describe('Auth Method Sub-Domain — Integration', () => {
       expect(stepUp.statusCode, stepUp.body).toBe(201);
 
       // The last-login-capable guard counts auth_methods rows; give the user a
-      // PASSWORD method row so removing the magic-link is not removing the last one.
+      // PASSWORD method row so removing the email-code is not removing the last one.
       await database.insert(auth_methods).values({
         public_id: generatePublicId('authMethod'),
         user_id: user.id,
@@ -114,12 +114,12 @@ describe('Auth Method Sub-Domain — Integration', () => {
         verified_at: new Date(),
       });
 
-      // MAGIC_LINK is the only type this endpoint may create (route-#3).
+      // EMAIL_CODE is the only type this endpoint may create (route-#3).
       const create = await injectAuthenticated(app, {
         method: 'POST',
         url: testApiPath('/auth/me/auth-methods'),
         token,
-        payload: { method_type: 'MAGIC_LINK' },
+        payload: { method_type: 'EMAIL_CODE' },
       });
       expect(create.statusCode, create.body).toBe(201);
       const created = (create.json() as { data: { id?: string; public_id?: string } }).data;

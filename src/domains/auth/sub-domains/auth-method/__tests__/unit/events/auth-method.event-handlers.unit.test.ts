@@ -49,12 +49,12 @@ describe('auth event handlers', () => {
     await eventBus.flushOnCommit();
   }
 
-  it('records outbox and dispatches after commit on auth.magic_link.requested', async () => {
+  it('records outbox and dispatches after commit on auth.email_verification_code.requested', async () => {
     await emitAndFlushOnCommit({
-      type: AUTH_EVENT.MAGIC_LINK_REQUESTED,
+      type: AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED,
       payload: {
         email: 'user@example.com',
-        otp_code: '123456',
+        verification_code: 'AB2CD3',
         expires_in_minutes: 15,
       },
       timestamp: new Date(),
@@ -65,7 +65,7 @@ describe('auth event handlers', () => {
       expect.objectContaining({
         to: 'user@example.com',
         subject: 'Sign in to your account',
-        tags: [{ name: 'category', value: 'magic-link' }],
+        tags: [{ name: 'category', value: 'verification-code' }],
       }),
     );
     expect(dispatchOutboxEmailMock).toHaveBeenCalledOnce();
@@ -94,35 +94,13 @@ describe('auth event handlers', () => {
     expect(dispatchOutboxEmailMock).toHaveBeenCalledOnce();
   });
 
-  it('records outbox and dispatches after commit on auth.email_verification.requested', async () => {
-    await emitAndFlushOnCommit({
-      type: AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED,
-      payload: {
-        email: 'user@example.com',
-        otp_code: '123456',
-        expires_in_minutes: 15,
-      },
-      timestamp: new Date(),
-    });
-
-    expect(recordOutboxEmailMock).toHaveBeenCalledOnce();
-    expect(recordOutboxEmailMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: 'user@example.com',
-        subject: 'Verify your email address',
-        tags: [{ name: 'category', value: 'email-verification' }],
-      }),
-    );
-    expect(dispatchOutboxEmailMock).toHaveBeenCalledOnce();
-  });
-
   it('does not dispatch BullMQ job until flushOnCommit runs', async () => {
     enterOnCommitScope();
     await eventBus.emit({
-      type: AUTH_EVENT.MAGIC_LINK_REQUESTED,
+      type: AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED,
       payload: {
         email: 'user@example.com',
-        otp_code: '123456',
+        verification_code: 'AB2CD3',
         expires_in_minutes: 15,
       },
       timestamp: new Date(),
@@ -137,20 +115,12 @@ describe('auth event handlers', () => {
 
   it.each([
     [
-      AUTH_EVENT.MAGIC_LINK_REQUESTED,
-      { email: 'user@example.com', otp_code: '123456', expires_in_minutes: 15 },
+      AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED,
+      { email: 'user@example.com', verification_code: 'AB2CD3', expires_in_minutes: 15 },
     ],
     [
       AUTH_EVENT.PASSWORD_RESET_REQUESTED,
       { email: 'user@example.com', reset_token: 'reset', expires_in_minutes: 60 },
-    ],
-    [
-      AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED,
-      {
-        email: 'user@example.com',
-        otp_code: '123456',
-        expires_in_minutes: 15,
-      },
     ],
   ])('throws when mail is not configured for %s', async (eventType, payload) => {
     vi.mocked(isMailConfigured).mockReturnValue(false);
@@ -172,10 +142,10 @@ describe('auth event handlers', () => {
 
     it.each([
       [
-        AUTH_EVENT.MAGIC_LINK_REQUESTED,
+        AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED,
         {
           email: 'user@example.com',
-          otp_code: '123456',
+          verification_code: 'AB2CD3',
           expires_in_minutes: 15,
         },
       ],
@@ -185,14 +155,6 @@ describe('auth event handlers', () => {
           email: 'user@example.com',
           reset_token: 'reset-token',
           expires_in_minutes: 60,
-        },
-      ],
-      [
-        AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED,
-        {
-          email: 'user@example.com',
-          otp_code: '123456',
-          expires_in_minutes: 15,
         },
       ],
     ])('re-throws so the event bus surfaces the failure for %s', async (eventType, payload) => {

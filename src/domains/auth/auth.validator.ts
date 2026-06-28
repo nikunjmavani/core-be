@@ -3,16 +3,14 @@ import { ValidationError } from '@/shared/errors/index.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type {
   LoginInput,
-  MagicLinkSendInput,
-  MagicLinkVerifyInput,
+  EmailSendCodeInput,
+  EmailLoginInput,
   MfaVerifyInput,
   CreateAuthMethodInput,
   ForgotPasswordInput,
   ResetPasswordInput,
-  SignupInput,
   ChangePasswordInput,
   StepUpVerifyInput,
-  VerifyEmailInput,
   MfaEnrollInput,
   MfaEnrollConfirmInput,
   MfaLoginVerifyInput,
@@ -20,16 +18,14 @@ import type {
 } from './auth.dto.js';
 import {
   LoginDto,
-  MagicLinkSendDto,
-  MagicLinkVerifyDto,
+  EmailSendCodeDto,
+  EmailLoginDto,
   MfaVerifyDto,
   CreateAuthMethodDto,
   ForgotPasswordDto,
   ResetPasswordDto,
-  SignupDto,
   ChangePasswordDto,
   StepUpVerifyDto,
-  VerifyEmailDto,
   MfaEnrollDto,
   MfaEnrollConfirmDto,
   MfaLoginVerifyDto,
@@ -41,14 +37,14 @@ export function validateLogin(body: unknown): LoginInput {
   return parseWithSchema(LoginDto, body);
 }
 
-/** Validates the `POST /api/v1/auth/magic-link/send` request body against {@link MagicLinkSendDto}. */
-export function validateMagicLinkSend(body: unknown): MagicLinkSendInput {
-  return parseWithSchema(MagicLinkSendDto, body);
+/** Validates the `POST /api/v1/auth/email/send-code` request body against {@link EmailSendCodeDto}. */
+export function validateEmailSendCode(body: unknown): EmailSendCodeInput {
+  return parseWithSchema(EmailSendCodeDto, body);
 }
 
-/** Validates the `POST /api/v1/auth/magic-link/verify` request body against {@link MagicLinkVerifyDto}. */
-export function validateMagicLinkVerify(body: unknown): MagicLinkVerifyInput {
-  return parseWithSchema(MagicLinkVerifyDto, body);
+/** Validates the `POST /api/v1/auth/email/login` request body against {@link EmailLoginDto}. */
+export function validateEmailLogin(body: unknown): EmailLoginInput {
+  return parseWithSchema(EmailLoginDto, body);
 }
 
 /** Validates the `POST /api/v1/auth/me/mfa/verify` request body against {@link MfaVerifyDto}. */
@@ -71,11 +67,6 @@ export function validateResetPassword(body: unknown): ResetPasswordInput {
   return parseWithSchema(ResetPasswordDto, body);
 }
 
-/** Validates the `POST /api/v1/auth/signup` request body against {@link SignupDto}; throws {@link ValidationError} with field errors on failure. */
-export function validateSignup(body: unknown): SignupInput {
-  return parseWithSchema(SignupDto, body);
-}
-
 /** Validates the authenticated `POST /api/v1/auth/password/change` request body against {@link ChangePasswordDto}. */
 export function validateChangePassword(body: unknown): ChangePasswordInput {
   return parseWithSchema(ChangePasswordDto, body);
@@ -84,11 +75,6 @@ export function validateChangePassword(body: unknown): ChangePasswordInput {
 /** Validates the authenticated `POST /api/v1/auth/step-up` request body against {@link StepUpVerifyDto}. */
 export function validateStepUpVerify(body: unknown): StepUpVerifyInput {
   return parseWithSchema(StepUpVerifyDto, body);
-}
-
-/** Validates the `POST /api/v1/auth/email/verify` request body against {@link VerifyEmailDto}. */
-export function validateVerifyEmail(body: unknown): VerifyEmailInput {
-  return parseWithSchema(VerifyEmailDto, body);
 }
 
 /** Validates the authenticated `POST /api/v1/auth/me/mfa/enroll` request body against {@link MfaEnrollDto}. */

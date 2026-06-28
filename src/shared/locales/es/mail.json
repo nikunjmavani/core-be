@@ -1,7 +1,5 @@
 {
-  "magicLinkSubject": "Inicia sesión en tu cuenta",
+  "verificationCodeSubject": "Inicia sesión en tu cuenta",
   "passwordResetSubject": "Restablece tu contraseña",
-  "passwordResetHtml": "Haz clic <a href=\"{{resetUrl}}\">aquí</a> para restablecer tu contraseña. Este enlace caduca en {{expiresInMinutes}} minutos.",
-  "emailVerificationSubject": "Verifica tu dirección de correo",
-  "emailVerificationHtml": "Tu código de verificación de correo es <strong>{{code}}</strong>. Caduca en {{expiresInMinutes}} minutos."
+  "passwordResetHtml": "Haz clic <a href=\"{{resetUrl}}\">aquí</a> para restablecer tu contraseña. Este enlace caduca en {{expiresInMinutes}} minutos."
 }

@@ -30,11 +30,11 @@ describe('VerificationTokenRepository', () => {
   });
 
   it('create inserts verification token', async () => {
-    const created = { id: 1, token_type: 'MAGIC_LINK' };
+    const created = { id: 1, token_type: 'EMAIL_CODE' };
     mockReturning.mockResolvedValueOnce([created]);
 
     const result = await repository.create(
-      'MAGIC_LINK',
+      'EMAIL_CODE',
       10,
       'user@example.com',
       'hash',
@@ -67,7 +67,7 @@ describe('VerificationTokenRepository', () => {
 
   it('invalidateAllForUser marks unused tokens used', async () => {
     mockWhereForUpdate.mockReturnValueOnce({ returning: vi.fn().mockResolvedValue([]) });
-    await repository.invalidateAllForUser(10, 'EMAIL_VERIFICATION');
+    await repository.invalidateAllForUser(10, 'EMAIL_CHANGE');
     expect(mockUpdate).toHaveBeenCalled();
   });
 });

@@ -54,10 +54,10 @@ describe('Security: Disposable email on auth signup paths (BLOCK_DISPOSABLE_EMAI
     expectDisposableEmailRejected(response);
   });
 
-  it('POST /auth/magic-link/send rejects disposable email with errors:disposableEmail', async () => {
+  it('POST /auth/email/send-code rejects disposable email with errors:disposableEmail', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'POST',
-      url: testApiPath('/auth/magic-link/send'),
+      url: testApiPath('/auth/email/send-code'),
       payload: { email: DISPOSABLE_EMAIL },
     });
     expectDisposableEmailRejected(response);

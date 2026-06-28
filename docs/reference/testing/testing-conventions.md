@@ -98,7 +98,7 @@ src/domains/<domain>/sub-domains/<resource>/__tests__/
 | ------ | ------- |
 | `*.unit.test.ts` | `subscription.validator.unit.test.ts` |
 | `*.integration.test.ts` | `auth.integration.test.ts` |
-| `*.e2e.test.ts` | `magic-link-flow.e2e.test.ts` |
+| `*.e2e.test.ts` | `email-login-flow.e2e.test.ts` |
 | `*.smoke.test.ts` | `health.smoke.test.ts` |
 
 ---

@@ -1591,3 +1591,20 @@ api post /api/v1/auth/email/verify added the new required request property `code
 api post /api/v1/auth/email/verify added the new required request property `email`
 api post /api/v1/auth/magic-link/verify added the new required request property `code`
 api post /api/v1/auth/magic-link/verify added the new required request property `email`
+
+# 33. Email verification-code login replaces magic-link (this PR). The passwordless flow
+#     moved from emailed magic-links plus a separate signup + email-verify to a two-step
+#     email verification code (POST /auth/email/send-code + POST /auth/email/login), so the
+#     legacy magic-link, signup, and email-verify/resend routes were removed and the
+#     MAGIC_LINK value was dropped from the `method_type` auth-method enum. Intentional and
+#     documented; pinned by email-login.service.unit.test.ts, verification-code.unit.test.ts,
+#     auth-method.service.unit.test.ts (method_type rejects MAGIC_LINK) and
+#     email-login-flow.e2e.test.ts. Removed paths are held out of docs/routes.txt by
+#     routes:catalog:check. Supersedes the email/verify + magic-link/verify lines in #32
+#     (those paths now produce "path removed" findings, matched below).
+api post /api/v1/auth/email/resend-verification api path removed without deprecation
+api post /api/v1/auth/email/verify api path removed without deprecation
+api post /api/v1/auth/magic-link/send api path removed without deprecation
+api post /api/v1/auth/magic-link/verify api path removed without deprecation
+api post /api/v1/auth/signup api path removed without deprecation
+api post /api/v1/auth/me/auth-methods removed the enum value `magic_link` of the request property `method_type`

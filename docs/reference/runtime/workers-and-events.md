@@ -39,7 +39,7 @@ flowchart LR
 
 | Registrar                               | Example event types                                                   | Side effect             |
 | --------------------------------------- | --------------------------------------------------------------------- | ----------------------- |
-| `registerAuthMethodEventHandlers`       | `AUTH_EVENT.MAGIC_LINK_REQUESTED`, password reset, email verification | Mail queue              |
+| `registerAuthMethodEventHandlers`       | `AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED`, password reset, email verification | Mail queue              |
 | `registerMemberInvitationEventHandlers` | `MEMBER_INVITATION_EVENT.CREATED`, `RESENT`                           | Mail queue              |
 | `registerNotifyEventHandlers`           | `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED`                             | BullMQ webhook delivery |
 
@@ -215,7 +215,7 @@ tenancy/events/index.ts  →  registerTenancyEventHandlers()
 **Auth — transactional email**
 
 ```text
-magic-link.service.ts / auth-method.service.ts  →  eventBus.emit(auth.*.requested)
+email-login.service.ts / auth-method.service.ts  →  eventBus.emit(auth.*.requested)
 auth/sub-domains/auth-method/events/*.ts  →  recordOutboxEmail() + onCommit(dispatchOutboxEmail)
 auth/events/index.ts  →  registerAuthEventHandlers()
 ```

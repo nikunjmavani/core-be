@@ -13,12 +13,12 @@
  *   {@link AUTH_METHOD_TYPE} rather than a string literal at insert sites.
  * - **Side effects:** none — compile-time constants only.
  * - **Notes:** values are intentionally UPPERCASE to match the persisted column
- *   contract; `MAGIC_LINK` here is the auth-method credential type, distinct from
- *   the `verification_tokens.token_type` of the same name.
+ *   contract; `EMAIL_CODE` here is the auth-method credential type (passwordless email
+ *   verification-code login), distinct from the `verification_tokens.token_type` of the same name.
  */
 export const AUTH_METHOD_TYPE = {
   PASSWORD: 'PASSWORD',
-  MAGIC_LINK: 'MAGIC_LINK',
+  EMAIL_CODE: 'EMAIL_CODE',
   OAUTH: 'OAUTH',
   MFA_TOTP: 'MFA_TOTP',
   MFA_SMS: 'MFA_SMS',

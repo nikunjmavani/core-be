@@ -7,7 +7,7 @@
     "src/domains/auth/auth.service.ts",
     "src/domains/auth/sub-domains/auth-session/auth-session.service.ts",
     "src/domains/auth/sub-domains/auth-method/auth-method.service.ts",
-    "src/domains/auth/sub-domains/auth-method/magic-link.service.ts",
+    "src/domains/auth/sub-domains/auth-method/email-login.service.ts",
     "src/domains/auth/sub-domains/auth-method/oauth/oauth.service.ts",
     "src/domains/auth/sub-domains/auth-mfa/auth-mfa.service.ts",
     "src/domains/billing/**/*.service.ts",

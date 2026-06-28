@@ -26,9 +26,8 @@ import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/
 import type { AuthSessionService } from './sub-domains/auth-session/auth-session.service.js';
 import type { MfaService } from './sub-domains/auth-mfa/auth-mfa.service.js';
 import type { AuthMethodService } from './sub-domains/auth-method/auth-method.service.js';
-import { validateLogin, validateSignup } from './auth.validator.js';
+import { validateLogin } from './auth.validator.js';
 import { completeFirstFactorAuth } from './shared/complete-first-factor-auth.js';
-import { completeEmailPasswordSignup } from './sub-domains/auth-method/email-password-signup.js';
 import {
   resolveDefaultActiveOrganizationPublicId,
   findUserActiveOrganizationByPublicId,
@@ -233,46 +232,6 @@ export class AuthService {
       mfaService: this.mfaService,
       authSessionService: this.authSessionService,
     });
-  }
-
-  /**
-   * Email/password signup: creates the account (email starts unverified), provisions the personal
-   * organization, and logs the caller in immediately, then best-effort issues the verification email.
-   *
-   * @remarks
-   * - **Algorithm:** validate the body, delegate create + auto-login to {@link completeEmailPasswordSignup}
-   *   (one pinned transaction), then trigger email-verification issuance out-of-band.
-   * - **Failure modes:** `ValidationError` (weak/invalid body or disposable email);
-   *   `ConflictError('errors:emailAlreadyRegistered')` when the email already has an account.
-   * - **Side effects:** inserts a user + PASSWORD auth-method, best-effort personal org, a session, and
-   *   an email-verification token (mail enqueue). A mail failure is swallowed — the account is already
-   *   created and logged in.
-   * - **Notes:** returns the same {@link LoginResult} shape as {@link AuthService.login}; a brand-new
-   *   user never has MFA enabled, so the access-token arm is returned in practice.
-   */
-  async signup(body: unknown, ipAddress: string, userAgent?: string): Promise<LoginResult> {
-    const parsed = validateSignup(body);
-    const { user, ...authResult } = await completeEmailPasswordSignup({
-      userService: this.userService,
-      authMethodService: this.authMethodService,
-      authSessionService: this.authSessionService,
-      organizationSettingsService: this.organizationSettingsService,
-      mfaService: this.mfaService,
-      email: parsed.email,
-      password: parsed.password,
-      firstName: parsed.first_name,
-      lastName: parsed.last_name,
-      ipAddress,
-      userAgent,
-    });
-    // Issue email verification out-of-band. Best-effort: the account is already created and logged
-    // in, so a mail hiccup must never fail the signup response.
-    try {
-      await this.authMethodService.resendEmailVerification(user.public_id);
-    } catch (error) {
-      logger.warn({ error, userId: user.public_id }, 'signup.verification_email.enqueue_failed');
-    }
-    return authResult;
   }
 
   /**
