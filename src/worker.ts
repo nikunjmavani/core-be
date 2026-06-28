@@ -8,6 +8,7 @@ import {
   initOpenTelemetry,
   shutdownOpenTelemetry,
 } from '@/infrastructure/observability/tracing/otel.js';
+import { initPostHog, shutdownPostHog } from '@/infrastructure/observability/posthog/posthog.js';
 import { OTEL_SERVICE_NAME_WORKER } from '@/shared/constants/project-identity.constants.js';
 import { createUnhandledRejectionHandler } from '@/infrastructure/observability/unhandled-rejection.handler.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -50,6 +51,8 @@ initSentry();
 // audit M5: start OpenTelemetry for the worker process (no-op unless
 // OTEL_EXPORTER_OTLP_ENDPOINT is set).
 initOpenTelemetry(OTEL_SERVICE_NAME_WORKER);
+// Product analytics (no-op unless POSTHOG_KEY is set).
+initPostHog();
 
 process.on('uncaughtException', (error) => {
   captureException(error, { tags: { source: 'worker_uncaughtException' } });
@@ -127,6 +130,8 @@ async function main() {
       // audit M5: tear down the OpenTelemetry SDK (no-op when never started)
       // before the Sentry flush so pending OTLP spans flush on shutdown.
       await shutdownOpenTelemetry();
+      // Flush pending product-analytics events (no-op when PostHog is disabled).
+      await shutdownPostHog();
       await flushSentry();
       clearTimeout(watchdogTimer);
       process.exit(0);

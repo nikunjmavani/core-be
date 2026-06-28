@@ -390,6 +390,15 @@ const envSchemaBase = z.object({
   SENTRY_SLOW_TRANSACTION_MS: z.coerce.number().int().min(100).max(300_000).default(3000),
   RAILWAY_GIT_COMMIT_SHA: z.string().min(1).optional(),
 
+  // PostHog (product analytics)
+  /** PostHog project API key (`phc_…`). When unset, server-side PostHog capture is disabled (no-op). */
+  POSTHOG_KEY: z.string().min(1).optional(),
+  /**
+   * PostHog ingestion host (e.g. https://us.i.posthog.com — or https://eu.i.posthog.com for EU).
+   * Defaults to US cloud when POSTHOG_KEY is set but this is omitted.
+   */
+  POSTHOG_HOST: z.url().optional(),
+
   /**
    * When true, exposes GET /metrics (Prometheus text format).
    * NODE_ENV is metadata only; disable explicitly with METRICS_ENABLED=false.
@@ -882,6 +891,16 @@ const envSchemaBase = z.object({
   // Release automation (GitHub Actions only — consumed by .github/workflows/post-merge-ci.yml)
   /** PAT (classic `repo` + `workflow` scopes) release-please uses to create the dev/main GitHub Releases; the default GITHUB_TOKEN cannot — the create-a-release API path requires the `workflow` scope. GitHub Environment secret via `pnpm github:sync`. */
   RELEASE_PLEASE_TOKEN: z.string().min(1).optional(),
+
+  // Local code-quality gate (SonarQube) — local tooling only, never read by the API/worker
+  // runtime. Consumed solely by the `pnpm sonar:*` scripts that drive the local SonarQube
+  // container for the pre-commit / pre-push quality gate. Declared here (always `.optional()`)
+  // so the schema ↔ `.env.example` invariant holds and these keys validate as known config
+  // rather than tripping the "extra key" check; they carry no per-environment requirement.
+  /** Local SonarQube user token for `pnpm sonar:scan`. Local tooling only — leave empty in hosted environments. */
+  SONAR_TOKEN: z.string().min(1).optional(),
+  /** Local SonarQube container admin password for `pnpm sonar:*`. Local tooling only — leave empty in hosted environments. */
+  SONAR_ADMIN_PASSWORD: z.string().min(1).optional(),
 });
 
 /**
