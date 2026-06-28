@@ -109,7 +109,7 @@ Flat domains (`audit`, `upload`) keep layers at domain root (no `sub-domains/`).
 | Domain (folder) | Sub-domains (folders)                                                                                                                                                           |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **audit**       | (single domain, no sub-domains)                                                                                                                                                 |
-| **auth**        | auth-method (magic-link, oauth as services in auth-method/), auth-session, auth-mfa, auth-mfa-session (Redis MFA challenge-ticket store shared by auth-mfa/auth-webauthn), auth-webauthn |
+| **auth**        | auth-method (email verification-code, oauth as services in auth-method/), auth-session, auth-mfa, auth-mfa-session (Redis MFA challenge-ticket store shared by auth-mfa/auth-webauthn), auth-webauthn |
 | **user**        | user-settings, user-notification-preferences, user-data-export                                                                                                                  |
 | **tenancy**     | organization (organization-settings, organization-notification-policy, organization-api-key), membership (member-invitation), member-roles (member-role-permission), permission |
 | **billing**     | plan, subscription, stripe-webhook                                                                                                                                              |
@@ -139,7 +139,7 @@ A **top-level sub-domain** is a direct child of `sub-domains/<name>/`. A **neste
 | **Organization children** nest under `organization/`                                      | `sub-domains/organization/organization-api-key/`, `organization-settings/`          |
 | **Membership / member-roles children** nest under parent                                  | `sub-domains/membership/member-invitation/`, `member-roles/member-role-permission/` |
 | **Prefix** multi-word names with domain/resource name                                     | `organization-settings`, `member-invitation`, `webhook-event`                       |
-| **Implementation modules** (not separate API resources) stay as services in parent folder | `auth-method/magic-link.service.ts`, `oauth/` under `auth-method/`                  |
+| **Implementation modules** (not separate API resources) stay as services in parent folder | `auth-method/email-login.service.ts`, `oauth/` under `auth-method/`                  |
 | Prefer depth ≤ 4 under `domains/<domain>/` for new work                                   | Flatten if a nested folder has no distinct routes or tests                          |
 
 Nested resources use the **same layer files** (controller, service, repository, validator, serializer, dto, types, schema) and the **same optional** `events/`, `queues/`, `workers/`, `__tests__/` as top-level sub-domains.
@@ -178,7 +178,7 @@ src/infrastructure/
     mail.service.ts           # Resend email service
     mail-outbox.schema.ts     # Transactional outbox table (shared infrastructure pattern)
     mail-outbox.repository.ts # Outbox persistence (not domain-owned)
-    templates/                # HTML email templates (base, magic-link, invitation)
+    templates/                # HTML email templates (base, verification-code, invitation)
     queues/
       mail.queue.ts           # BullMQ queue + recordOutboxEmail / dispatchOutboxEmail
     workers/
@@ -264,7 +264,7 @@ Typical flow: `service` → `eventBus.emit` → handler → `recordOutboxEmail()
 
 | Registrar                               | Event types (examples)                                                    | Side effect                            |
 | --------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------- |
-| `registerAuthMethodEventHandlers`       | `AUTH_EVENT.MAGIC_LINK_REQUESTED`, password reset, email verification     | Mail queue                             |
+| `registerAuthMethodEventHandlers`       | `AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED`, `AUTH_EVENT.PASSWORD_RESET_REQUESTED`  | Mail queue                             |
 | `registerMemberInvitationEventHandlers` | `MEMBER_INVITATION_EVENT.CREATED`, `RESENT`                               | Mail queue                             |
 | `registerNotifyEventHandlers`           | `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED`, `BILLING_EVENT.SUBSCRIPTION_*` | BullMQ notification / webhook delivery |
 

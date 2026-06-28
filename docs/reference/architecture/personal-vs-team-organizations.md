@@ -120,7 +120,7 @@ The active organization is a signed JWT claim (`org`), not a header or path para
 
 | Endpoint | Effect |
 |----------|--------|
-| `POST /auth/login` (and magic-link / OAuth / WebAuthn) | mints the token with the default-organization `org` claim |
+| `POST /auth/login` (and email verification-code / OAuth / WebAuthn) | mints the token with the default-organization `org` claim |
 | `POST /auth/refresh` | re-mints with the resolved `org` claim |
 | `POST /auth/switch-to-personal` | no body; re-mints + re-binds the session to the caller's personal org |
 | `POST /auth/switch-to-organization { organization_id }` | membership-validated (403 if not a member, 400 missing id); re-mints + re-binds |

@@ -46,13 +46,13 @@ rationale and a concrete plan for each.
 - **Tests:** service unit test — paginated page shape, cursor + limit forwarded to
   the repo; controller forwards `request.query` and emits pagination meta.
 
-### AUTH-04 — magic-link verify is atomic (token consume + session/MFA)
+### AUTH-04 — email verification-code verify is atomic (token consume + session/MFA)
 
-- **Fix:** `magic-link.service.ts` wraps consume + `completeFirstFactorAuth` in
+- **Fix:** `email-login.service.ts` wraps consume + `completeFirstFactorAuth` in
   `withTransaction` + `runWithPinnedDatabaseHandle`; session creation reuses the
   pinned handle, so any downstream failure (session insert / Redis MFA handoff)
   rolls the consume back, leaving the link usable.
-- **Tests:** `magic-link.service.unit.test.ts` — AUTH-04 rollback regression
+- **Tests:** `email-login.service.unit.test.ts` — AUTH-04 rollback regression
   (downstream failure propagates; consume was attempted inside the tx).
 
 ### AUTH-10 — email verify is atomic (token consume + verified flag)
@@ -178,7 +178,7 @@ reconciler adds the missing *automatic* retry of a stuck offboarding.
 
 ### AUTH-03 / AUTH-08 (public send-email atomicity) — intentionally swallowing
 
-`magic-link/send` and `password/forgot` deliberately use the swallowing `eventBus.emit`
+`email/send-code` and `password/forgot` deliberately use the swallowing `eventBus.emit`
 for the email side effect: these are anti-enumeration endpoints that must return a
 constant response regardless of whether the account exists. Switching to
 `emitStrict` would surface an outbox failure as a 503 for a *known* email while an

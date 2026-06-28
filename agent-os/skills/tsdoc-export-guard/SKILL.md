@@ -67,34 +67,35 @@ A structured block with the following sub-sections (use plain text headings, not
  */
 ```
 
-Real example from [`src/domains/auth/sub-domains/auth-method/magic-link.service.ts`](../../../src/domains/auth/sub-domains/auth-method/magic-link.service.ts):
+Real example from [`src/domains/auth/sub-domains/auth-method/email-login.service.ts`](../../../src/domains/auth/sub-domains/auth-method/email-login.service.ts):
 
 ```ts
 /**
- * Issues and verifies one-shot magic-link tokens used by the signup and
- * password-less login flows.
+ * Issues and verifies email verification codes for the unified passwordless login + auto-signup flow.
  *
  * @remarks
  * Algorithm:
- * - {@link MagicLinkService.send} validates the email, blocks disposable
- *   domains, looks up the user. If the user does not exist the response is
- *   a silent success (anti-enumeration). Otherwise it generates a 32-byte
- *   random token, persists `sha256(token)` with a 15-min expiry, and emits
- *   `AUTH_EVENT.MAGIC_LINK_REQUESTED` with the raw token in the payload.
- * - {@link MagicLinkService.verify} hashes the incoming token, atomically
- *   consumes the verification row, signs a short-lived JWT, and inserts a
- *   session row.
+ * - {@link EmailLoginService.sendCode} validates the email, blocks disposable domains, then
+ *   find-or-creates the user (unknown email → auto-signup of a passwordless user + `EMAIL_CODE`
+ *   auth-method). It issues a fresh alphanumeric code under the concurrent-code cap, persists only a
+ *   keyed user-scoped HMAC of it, and emits `AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED` with the
+ *   raw code in the payload. The response is a uniform 201 for known and unknown emails.
+ * - {@link EmailLoginService.login} resolves the user, applies a per-user attempt cap, atomically
+ *   consumes a matching code scoped to `(user_id, EMAIL_CODE)`, invalidates the user's remaining live
+ *   codes (single-use across the set), flips `is_email_verified`, and mints a JWT + session (or an
+ *   MFA challenge).
  *
  * Failure modes:
- * - Disposable email → 400 errors:disposableEmail from `send`.
- * - Unknown email → silent success from `send`.
- * - Token expired or already consumed → 401 errors:invalidOrExpiredMagicLink.
+ * - Disposable email → 400 errors:disposableEmail from `sendCode`.
+ * - Unknown email on `login`, wrong/expired/used code, or attempt cap exceeded → 401
+ *   errors:invalidOrExpiredVerificationCode.
  *
  * Side effects:
- * - `send` emits a domain event whose handler enqueues an outbound email.
- * - `verify` writes a single auth_sessions row.
+ * - `sendCode` may auto-create a user + `EMAIL_CODE` auth-method and emits a domain event whose
+ *   handler enqueues an outbound email.
+ * - `login` writes a single auth_sessions row and invalidates the user's other live codes.
  *
- * Notes: raw tokens never flow back to HTTP callers.
+ * Notes: raw codes never flow back to HTTP callers — only via the email handler.
  */
 ```
 
@@ -115,7 +116,7 @@ Required structure (mirrors `src/POLICIES.md` rows):
  *
  * Last reviewed: YYYY-MM-DD.
  */
-export const MAGIC_LINK_EXPIRES_IN_MINUTES = 15;
+export const VERIFICATION_CODE_TTL_MINUTES = 15;
 ```
 
 Cross-link from `src/POLICIES.md`. The skill **system-narrative-maintainer** owns the `src/POLICIES.md` row and cross-pings this skill when a constant is added.

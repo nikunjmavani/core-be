@@ -15,7 +15,7 @@
  * What is excluded from the required set:
  *   - ROLE: super_admin / admin — requires elevated JWT not in the pool
  *   - TOKEN routes (internal/ops)
- *   - PUBLIC infrastructure routes (OAuth, magic-link, WebAuthn, Stripe webhook,
+ *   - PUBLIC infrastructure routes (OAuth, email-login, WebAuthn, Stripe webhook,
  *     health, email verify, password reset) that are not realistic load targets
  *
  * Usage:
@@ -64,8 +64,8 @@ function isExcluded({ auth, path }) {
   // PUBLIC routes that are infrastructure / device-flow and not realistic load targets
   const publicSkip = [
     '/auth/oauth',
-    '/auth/magic-link',
-    '/auth/email/verify',
+    '/auth/email/send-code',
+    '/auth/email/login',
     '/auth/mfa/login',
     '/auth/password/forgot',
     '/auth/password/reset',

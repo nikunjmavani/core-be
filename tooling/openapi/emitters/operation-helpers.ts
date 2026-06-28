@@ -38,7 +38,7 @@ export function getRequestBodySchema(
  *
  * @remarks
  * These carry no `app.authenticate` onRequest hook (route-catalog access `PUBLIC`): the public auth
- * forms (login/refresh/magic-link/oauth/webauthn-authenticate/password/email/mfa-login) and
+ * forms (login/refresh/email-login/oauth/webauthn-authenticate/password/mfa-login) and
  * the Stripe-signed webhooks (verified via `Stripe-Signature`, not a JWT). The `Health` and
  * `Plan` tags are excluded separately above. Keyed by `"<METHOD> <openapi-path>"`. Kept in
  * sync with `docs/routes.txt` PUBLIC routes by `mcp-openapi`/route-security guard tests.
@@ -47,14 +47,12 @@ const PUBLIC_ROUTE_KEYS = new Set<string>([
   'GET /livez',
   'GET /readyz',
   'POST /api/v1/auth/login',
-  'POST /api/v1/auth/signup',
   'POST /api/v1/auth/refresh',
   'POST /api/v1/auth/mfa/login',
-  'POST /api/v1/auth/magic-link/send',
-  'POST /api/v1/auth/magic-link/verify',
+  'POST /api/v1/auth/email/send-code',
+  'POST /api/v1/auth/email/login',
   'POST /api/v1/auth/password/forgot',
   'POST /api/v1/auth/password/reset',
-  'POST /api/v1/auth/email/verify',
   'POST /api/v1/auth/webauthn/authenticate/options',
   'POST /api/v1/auth/webauthn/authenticate/verify',
   'GET /api/v1/auth/oauth/{provider}',

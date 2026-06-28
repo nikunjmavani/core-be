@@ -4,7 +4,6 @@ import {
   validateChangePassword,
   validateCreateAuthMethod,
   validateLogin,
-  validateVerifyEmail,
 } from '@/domains/auth/auth.validator.js';
 
 describe('auth.validator', () => {
@@ -32,8 +31,8 @@ describe('auth.validator', () => {
   });
 
   it('validateCreateAuthMethod accepts a canonical method_type', () => {
-    expect(validateCreateAuthMethod({ method_type: 'MAGIC_LINK' })).toMatchObject({
-      method_type: 'MAGIC_LINK',
+    expect(validateCreateAuthMethod({ method_type: 'EMAIL_CODE' })).toMatchObject({
+      method_type: 'EMAIL_CODE',
       is_primary: false,
     });
   });
@@ -52,7 +51,7 @@ describe('auth.validator', () => {
     ).toThrow(ValidationError);
   });
 
-  // route-#3: only MAGIC_LINK is a functional credential-less row; PASSWORD/MFA_*/OAUTH would be
+  // route-#3: only EMAIL_CODE is a functional credential-less row; PASSWORD/MFA_*/OAUTH would be
   // non-functional phantom rows that defeat the last-login-capable-credential guard.
   it.each([
     'PASSWORD',
@@ -64,9 +63,9 @@ describe('auth.validator', () => {
     expect(() => validateCreateAuthMethod({ method_type: methodType })).toThrow(ValidationError);
   });
 
-  it('validateCreateAuthMethod accepts MAGIC_LINK (the only valid bare-row type)', () => {
-    expect(validateCreateAuthMethod({ method_type: 'MAGIC_LINK' })).toMatchObject({
-      method_type: 'MAGIC_LINK',
+  it('validateCreateAuthMethod accepts EMAIL_CODE (the only valid bare-row type)', () => {
+    expect(validateCreateAuthMethod({ method_type: 'EMAIL_CODE' })).toMatchObject({
+      method_type: 'EMAIL_CODE',
     });
   });
 
@@ -111,13 +110,6 @@ describe('auth.validator', () => {
     ).toEqual({
       current_password: 'OldPassword12!',
       new_password: 'lowerUPPER12',
-    });
-  });
-
-  it('validateVerifyEmail accepts email + 6-digit code', () => {
-    expect(validateVerifyEmail({ email: 'user@example.com', code: '123456' })).toEqual({
-      email: 'user@example.com',
-      code: '123456',
     });
   });
 });

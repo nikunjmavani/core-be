@@ -9,22 +9,22 @@ describe('AuthSerializer', () => {
     });
   });
 
-  it('magicLinkSent shapes response with message and expiry (token never returned)', () => {
+  it('verificationCodeSent shapes response with message and expiry (code never returned)', () => {
     const payload = { message: 'sent', expires_in_minutes: 15 };
-    expect(AuthSerializer.magicLinkSent(payload)).toStrictEqual({
+    expect(AuthSerializer.verificationCodeSent(payload)).toStrictEqual({
       message: 'sent',
       expires_in_minutes: 15,
     });
     /**
-     * Defense-in-depth: even if a `token` slips through the typed boundary,
+     * Defense-in-depth: even if a `code` slips through the typed boundary,
      * the serializer must not forward it. Verifies the leak removal.
      */
-    const stray = AuthSerializer.magicLinkSent({
+    const stray = AuthSerializer.verificationCodeSent({
       message: 'sent',
       expires_in_minutes: 15,
-      ...({ token: 'should-not-leak' } as Record<string, unknown>),
+      ...({ code: 'should-not-leak' } as Record<string, unknown>),
     });
-    expect(stray).not.toHaveProperty('token');
+    expect(stray).not.toHaveProperty('code');
   });
 
   it('mfaVerified returns verified flag', () => {

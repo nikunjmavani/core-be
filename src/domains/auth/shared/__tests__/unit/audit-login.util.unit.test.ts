@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *
  * auth.overview.md promises "every login (success or failure) records a row" in
  * audit.events, but before this helper only the password-login success path
- * called `recordScopedAuditEvent`. OAuth, magic-link, and WebAuthn success
+ * called `recordScopedAuditEvent`. OAuth, email-code, and WebAuthn success
  * paths emitted nothing — making credential-stuffing / brute-force detection
  * harder than the documentation implied and leaving each non-password login
  * surface invisible in incident-response queries against `audit.events`.
@@ -59,7 +59,7 @@ describe('recordLoginAuditEvent (sec-A8)', () => {
       role: 'USER',
     });
 
-    await recordLoginAuditEvent(request, sessionResult, 'magic_link');
+    await recordLoginAuditEvent(request, sessionResult, 'email_code');
 
     expect(recordScopedAuditEventSpy).toHaveBeenCalledWith(
       request,
@@ -69,7 +69,7 @@ describe('recordLoginAuditEvent (sec-A8)', () => {
         resource_type: 'session',
         metadata: expect.objectContaining({
           session_public_id: 'sess_public_test',
-          source: 'magic_link',
+          source: 'email_code',
         }),
       }),
     );
@@ -201,7 +201,7 @@ describe('recordLoginAuditEvent (sec-A8)', () => {
       recordScopedAuditEventSpy.mockRejectedValueOnce(new Error('audit pipeline down'));
 
       await expect(
-        recordLoginFailureAuditEvent(request, 'magic_link', new Error('boom')),
+        recordLoginFailureAuditEvent(request, 'email_code', new Error('boom')),
       ).resolves.not.toThrow();
       expect(loggerWarnSpy).toHaveBeenCalledWith(
         expect.objectContaining({ error: expect.any(Error) }),

@@ -8,11 +8,12 @@ When a domain `<folder>.overview.md` says **Cross-domain flows: signup-flow, sub
 
 > **Client-facing companion:** the sequences below show the **server internals** (services, DB, event bus, mail). For the **frontend** view of the auth journeys — the HTTP-only call sequence, the response body at each step, and how many calls each entry flow takes to land on the dashboard — see [docs/reference/api/frontend-auth-guide.md](docs/reference/api/frontend-auth-guide.md) (kept in step with `signup-flow`, `login-flow`, and the organization-switch flow below).
 
-## signup-flow
+## signup-flow (unified email verification-code login)
 
 ### Trigger
 
-Anonymous user submits an email at the signup form: `POST /api/v1/auth/magic-link`.
+Anonymous user submits an email at the unified login/sign-up form: `POST /api/v1/auth/email/send-code`.
+There is no separate sign-up — an unknown email is auto-signed-up on first successful login.
 
 ### Sequence
 
@@ -20,54 +21,56 @@ Anonymous user submits an email at the signup form: `POST /api/v1/auth/magic-lin
 sequenceDiagram
   participant Client
   participant Auth as auth.controller
-  participant ML as MagicLinkService
+  participant EL as EmailLoginService
   participant US as UserService
   participant DB as Postgres
   participant Bus as event-bus
   participant Mail as mail.processor
   participant Resend
-  Client->>Auth: POST /auth/magic-link/send {email}
-  Auth->>ML: send({email})
-  ML->>US: findByEmail(email)
-  US-->>ML: user | null
+  Client->>Auth: POST /auth/email/send-code {email}
+  Auth->>EL: sendCode({email})
+  EL->>US: findByEmail(email)
+  US-->>EL: user | null
   alt user does not exist (auto-signup)
-    ML->>DB: insert users (passwordless, is_email_verified=false) + auth_methods (MAGIC_LINK), atomic
-    Note over ML: post-commit best-effort provisionPersonalOrganization (when enabled)
+    EL->>DB: insert users (passwordless, is_email_verified=false) + auth_methods (EMAIL_CODE), atomic
+    Note over EL: post-commit best-effort provisionPersonalOrganization (when enabled)
   end
-  Note over ML: new and existing users converge on the same issue-code path
-  ML->>DB: invalidate prior MAGIC_LINK + insert verification_tokens (MAGIC_LINK, sha256(code), expires_at = now + 15m)
-  ML->>Bus: emit AUTH_EVENT.MAGIC_LINK_REQUESTED {email, otp_code, expires_in_minutes}
+  Note over EL: new and existing users converge on the same issue-code path
+  EL->>DB: invalidateAllForUser (prior EMAIL_CODE codes) + insert verification_tokens (EMAIL_CODE, HMAC(pepper, type:user:code), expires_at = now + 15m)
+  EL->>Bus: emit AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED {email, verification_code, expires_in_minutes}
   Bus->>Mail: recordOutboxEmail (via event handler)
-  ML-->>Auth: {messageKey: success:magicLinkEmailSent, expires_in_minutes: 15}
-  Auth-->>Client: 201
-  Mail->>Resend: POST /emails (signed, 6-digit code)
+  EL-->>Auth: {messageKey: success:verificationCodeSent, expires_in_minutes: 15}
+  Auth-->>Client: 201 (uniform — no account enumeration)
+  Mail->>Resend: POST /emails (signed, alphanumeric code)
   Resend-->>Mail: 200
-  Client->>Auth: POST /auth/magic-link/verify {email, code}
-  Auth->>ML: verify({email, code})
-  ML->>US: findByEmail(email) + per-user attempt cap (Redis)
-  ML->>DB: UPDATE verification_tokens SET used_at=NOW() WHERE user_id=$1 AND token_type='MAGIC_LINK' AND token_hash=$2 AND used_at IS NULL RETURNING *
-  ML->>DB: UPDATE users SET is_email_verified=true (when not already)
-  ML->>DB: INSERT auth_sessions
-  Note over ML: post-commit best-effort provisionPersonalOrganization on FIRST verification (claims a bare invited placeholder created without one; idempotent no-op for a brand-new user already provisioned at send)
-  ML-->>Auth: {access_token, session_public_id}
+  Client->>Auth: POST /auth/email/login {email, code}
+  Auth->>EL: login({email, code})
+  EL->>US: findByEmail(email) + per-user attempt cap (Redis)
+  EL->>DB: UPDATE verification_tokens SET used_at=NOW() WHERE user_id=$1 AND token_type='EMAIL_CODE' AND token_hash=$2 AND used_at IS NULL RETURNING *
+  EL->>DB: invalidateAllForUser (single-use: redeeming one code kills the rest of the live set)
+  EL->>DB: UPDATE users SET is_email_verified=true (when not already)
+  EL->>DB: INSERT auth_sessions (or, when MFA enrolled, mint mfa_session_token instead — see /auth/mfa/login)
+  Note over EL: post-commit best-effort provisionPersonalOrganization on FIRST login (claims a bare invited placeholder created without one; idempotent no-op for a brand-new user already provisioned at send)
+  EL-->>Auth: {access_token, session_public_id} | {mfa_required, mfa_session_token}
   Auth-->>Client: 201 + Set-Cookie session_id
 ```
 
 ### Side effects
 
-- `verification_tokens` row inserted with 15-min TTL (only when the email maps to a real user — anti-enumeration).
-- `AUTH_EVENT.MAGIC_LINK_REQUESTED` event emitted on the in-process event bus.
+- `verification_tokens`: a single live code per user — each send invalidates the prior unused codes. Codes are stored only as a keyed, user-scoped HMAC (never plaintext, never bare SHA-256).
+- `AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED` event emitted on the in-process event bus.
 - `mail_outbox` row inserted by the event handler (transactional outbox).
 - Mail worker delivers via Resend (best-effort; retries via DLQ).
-- On verify: `auth_sessions` row + JWT issued (RS256, 15-minute access-token TTL).
+- On login: `auth_sessions` row + JWT issued (RS256, 15-minute access-token TTL); the user's other live codes are invalidated.
 
 ### Failure modes
 
-- **Throttle exceeded** → silent success returned to the client (no token created, no email sent). Anti-enumeration: response is identical to the user-not-found case.
+- **Throttle / send cooldown** → uniform success returned to the client (no new code issued, no email). Anti-enumeration: response is identical for known and unknown emails.
 - **Disposable email domain** → 400 `errors:disposableEmail`. Not silent because the user can fix it.
 - **Mail enqueue failure** → does not fail the HTTP request; mail outbox sweeper retries.
-- **Token replay** → atomic `UPDATE ... RETURNING` consumes the token on the first verify. A race between two concurrent `/verify` requests results in exactly one session.
-- **Token expired** → 401 `errors:invalidOrExpiredMagicLink`.
+- **Code replay** → atomic `UPDATE ... RETURNING` consumes the code on the first login; the post-consume `invalidateAllForUser` invalidates any other live code, keeping login single-use. Two concurrent `/email/login` requests yield exactly one session.
+- **Wrong / expired code, or attempt cap exceeded** → 401 `errors:invalidOrExpiredVerificationCode`.
+- **MFA enrolled** → login returns `mfa_required` + `mfa_session_token`; the client completes via `POST /auth/mfa/login`.
 
 ## login-flow
 
@@ -173,7 +176,7 @@ sequenceDiagram
   participant Bus as event-bus
   participant Mail as mail.processor
   participant Invitee as Invitee Client
-  participant Auth as auth (OAuth / magic-link)
+  participant Auth as auth (OAuth / email-code)
   Admin->>Mem: POST /organization/memberships {email, role_id}
   Mem->>Usr: findOrCreateInvitedByEmail(email)
   Usr->>DB: resolve by email (SECURITY DEFINER) — else INSERT auth.users (ACTIVE, is_email_verified=false, no auth method)
@@ -186,7 +189,7 @@ sequenceDiagram
   Bus->>Mail: recordOutboxEmail (via event handler)
   Mail-->>Invitee: invitation email (raw_token in URL)
 
-  Note over Invitee,Auth: invitee onboards (claims the pre-created user) via password signup, magic-link, or OAuth — find-by-email reuses the row; magic-link/OAuth set is_email_verified, a password-claim verifies via the emailed code
+  Note over Invitee,Auth: invitee onboards (claims the pre-created user) via email verification-code login or OAuth — find-by-email reuses the row and email-code/OAuth set is_email_verified
   Invitee->>Inv: POST /tenancy/invitations/:invitation_id/accept {token} (authenticated)
   Inv->>Usr: requireUserRecordByPublicId(actingUser) — 403 if email unverified, 403 if email ≠ invitee
   Inv->>DB: BEGIN; SET LOCAL app.current_organization_id
@@ -198,8 +201,8 @@ sequenceDiagram
 
 ### Side effects
 
-- New invitee → a bare ACTIVE `auth.users` row (`is_email_verified=false`, no auth method), claimed on first onboarding — **password signup** (`POST /auth/signup` sets the first password instead of returning 409), **magic-link**, or **OAuth**; an existing address resolves to that account.
-- `INVITED` `memberships` row + `member_invitations` row (hashed token; the raw token leaves the platform only via the email payload, parallel to `magic-link`).
+- New invitee → a bare ACTIVE `auth.users` row (`is_email_verified=false`, no auth method), claimed on first onboarding — **email verification-code login** or **OAuth**; an existing address resolves to that account.
+- `INVITED` `memberships` row + `member_invitations` row (hashed token; the raw token leaves the platform only via the email payload, parallel to the email verification code).
 - `MEMBER_INVITATION_EVENT.CREATED` (emitStrict — a failed outbox write rolls back the whole org transaction) → mail outbox → invitation email.
 - Accept requires authentication, a **verified** email, and an email matching the invitee (sec-T4 + follow-up) — so a forwarded invite token alone, or a password-claim that has not yet verified, cannot join the org. On accept the membership is activated (`status=ACTIVE`, `joined_at`) and the member's permission cache invalidated.
 - On revoke (`DELETE /organization/invitations/:id`): the invitation is revoked AND the auto-created `INVITED` membership is soft-deleted (no ghost invitee in the members table).

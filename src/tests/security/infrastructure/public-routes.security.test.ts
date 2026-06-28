@@ -7,7 +7,7 @@ const publicRoutes: Array<{ method: 'GET' | 'POST'; path: string }> = [
   { method: 'GET', path: '/livez' },
   { method: 'GET', path: '/readyz' },
   { method: 'GET', path: '/api/v1/auth/oauth/providers' },
-  { method: 'POST', path: '/api/v1/auth/magic-link/send' },
+  { method: 'POST', path: '/api/v1/auth/email/send-code' },
 ];
 
 /**
@@ -32,7 +32,7 @@ describe('Security: Public Routes', () => {
         url: route.path,
         payload:
           route.method === 'POST'
-            ? route.path.includes('magic-link')
+            ? route.path.includes('email-code')
               ? { email: 'public-route@example.com' }
               : {}
             : undefined,

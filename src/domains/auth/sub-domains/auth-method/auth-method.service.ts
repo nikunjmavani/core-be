@@ -10,22 +10,14 @@ import { MAX_LINKED_AUTH_METHODS_PER_USER } from '@/shared/constants/security.co
 import type { Redis } from 'ioredis';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { enforceMinimumDuration } from '@/shared/utils/security/anti-enumeration.util.js';
-import { incrementWithExpiryOnFirst } from '@/shared/utils/infrastructure/redis-counter.util.js';
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
 import { WebauthnCredentialRepository } from '@/domains/auth/sub-domains/auth-webauthn/webauthn-credential.repository.js';
-import {
-  EMAIL_OTP_MAX_VERIFY_ATTEMPTS,
-  EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
-  EMAIL_OTP_TTL_MINUTES,
-  generateEmailOtp,
-  hashEmailOtp,
-} from '@/domains/auth/sub-domains/auth-method/email-otp.js';
+import { VERIFICATION_CODE_RESEND_COOLDOWN_SECONDS } from '@/domains/auth/sub-domains/auth-method/verification-code.js';
 import { hashPassword, verifyPassword } from '@/shared/utils/security/password.util.js';
 import { eventBus } from '@/core/events/event-bus.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import {
   AUTH_EVENT,
-  type EmailVerificationEmailPayload,
   type PasswordResetEmailPayload,
 } from '@/domains/auth/sub-domains/auth-method/events/auth.events.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
@@ -46,18 +38,12 @@ import {
   validateForgotPassword,
   validateResetPassword,
   validateChangePassword,
-  validateVerifyEmail,
 } from '@/domains/auth/auth.validator.js';
 
 const PASSWORD_RESET_EXPIRES_IN_MINUTES = 60;
-/** Redis key prefix for the per-user email-verification OTP attempt counter (brute-force cap). */
-const EMAIL_OTP_VERIFY_ATTEMPT_KEY_PREFIX = 'auth:email_otp_verify_attempts:';
 
 /** Redis key prefix for the per-email password-reset send cooldown (anti-mail-bomb spacing). */
 const PASSWORD_RESET_COOLDOWN_KEY_PREFIX = 'auth:password_reset_cooldown:';
-
-/** Redis key prefix for the per-user email-verification resend cooldown (anti-mail-bomb spacing). */
-const EMAIL_VERIFY_RESEND_COOLDOWN_KEY_PREFIX = 'auth:email_verify_resend_cooldown:';
 
 /**
  * Auth-method types that can mint a session on their own (sec-A5). Used by
@@ -68,7 +54,7 @@ const EMAIL_VERIFY_RESEND_COOLDOWN_KEY_PREFIX = 'auth:email_verify_resend_cooldo
 const LOGIN_CAPABLE_METHOD_TYPES = new Set<string>([
   AUTH_METHOD_TYPE.PASSWORD,
   AUTH_METHOD_TYPE.OAUTH,
-  AUTH_METHOD_TYPE.MAGIC_LINK,
+  AUTH_METHOD_TYPE.EMAIL_CODE,
 ]);
 
 /**
@@ -77,17 +63,16 @@ const LOGIN_CAPABLE_METHOD_TYPES = new Set<string>([
  *
  * @remarks
  * - **Algorithm:** authenticated callers manage their linked auth methods
- *   (PASSWORD / OAUTH / MAGIC_LINK / MFA_TOTP) via `list` / `create` / `delete`.
- *   Password reset and email verification mint a random 32-byte token, persist
- *   its SHA-256 hash with a TTL ({@link PASSWORD_RESET_EXPIRES_IN_MINUTES} or
- *   {@link EMAIL_VERIFICATION_EXPIRES_IN_HOURS}), and atomically consume it via
+ *   (PASSWORD / OAUTH / EMAIL_CODE / MFA_TOTP) via `list` / `create` / `delete`.
+ *   Password reset mints a random 32-byte token, persists its SHA-256 hash with a TTL
+ *   ({@link PASSWORD_RESET_EXPIRES_IN_MINUTES}), and atomically consumes it via
  *   {@link VerificationTokenRepository.consumeIfValid} to guard against replay.
  * - **Failure modes:** disposable-email submissions throw `ValidationError`;
  *   unknown users surface `NotFoundError`; bad/expired tokens or wrong current
  *   password throw `UnauthorizedError` with i18n keys.
  * - **Side effects:** invalidates outstanding tokens before issuing new ones;
- *   emits `AUTH_EVENT.PASSWORD_RESET_REQUESTED` and `AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED`
- *   (mail enqueue happens in the auth-method event handlers); rehashes user
+ *   emits `AUTH_EVENT.PASSWORD_RESET_REQUESTED` (mail enqueue happens in the
+ *   auth-method event handlers); rehashes user
  *   passwords via {@link UserService.updatePassword}. A password reset revokes
  *   all of the user's sessions, marks the email verified (the reset token proves email control), and
  *   clears any failed-login lockout, then returns the user so the caller can auto-login; an
@@ -119,7 +104,7 @@ export class AuthMethodService {
 
   /**
    * Whether the user retains at least one active login-capable auth method
-   * (`PASSWORD` / `OAUTH` / `MAGIC_LINK`) — i.e. a way to authenticate that does NOT depend on a
+   * (`PASSWORD` / `OAUTH` / `EMAIL_CODE`) — i.e. a way to authenticate that does NOT depend on a
    * passkey.
    *
    * @remarks
@@ -130,7 +115,7 @@ export class AuthMethodService {
    * - **Side effects:** transient owner-scoped DB context only.
    * - **Notes:** sec-r5-M3 — consulted by {@link WebauthnService.revokeCredential} so a passkey-only
    *   user cannot delete their last passkey and lock themselves out, while a user with a password /
-   *   OAuth / magic-link method may remove every passkey.
+   *   OAuth / email-code method may remove every passkey.
    */
   async hasLoginCapableMethod(userPublicId: string): Promise<boolean> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
@@ -143,7 +128,7 @@ export class AuthMethodService {
 
   /**
    * Whether the user holds ANY active authentication credential — a login-capable `auth_methods`
-   * row (`PASSWORD` / `OAUTH` / `MAGIC_LINK`) **or** an active WebAuthn passkey. Used to decide
+   * row (`PASSWORD` / `OAUTH` / `EMAIL_CODE`) **or** an active WebAuthn passkey. Used to decide
    * whether a pre-existing account is a still-unclaimed bare invited placeholder (and therefore
    * safe to claim via OAuth / signup) vs. a real account that must never be silently merged into.
    *
@@ -172,7 +157,7 @@ export class AuthMethodService {
   }
 
   async create(userPublicId: string, body: unknown) {
-    // route-#3: the DTO restricts method_type to MAGIC_LINK — the only type that is a functional
+    // route-#3: the DTO restricts method_type to EMAIL_CODE — the only type that is a functional
     // credential-less row. PASSWORD/MFA_* (need a stored secret) and OAUTH (proves an external
     // identity, written only by the verified callback) are rejected at validation, so none can be
     // inserted here as non-functional phantom rows that the last-credential guard would miscount.
@@ -206,7 +191,7 @@ export class AuthMethodService {
    *
    * @remarks
    * sec-A5: refuses to revoke the user's LAST login-capable credential. Login-capable
-   * types are `PASSWORD`, `OAUTH`, and `MAGIC_LINK` (server-issued auth methods of those
+   * types are `PASSWORD`, `OAUTH`, and `EMAIL_CODE` (server-issued auth methods of those
    * kinds) — MFA factors (`MFA_TOTP`, `MFA_SMS`, `MFA_EMAIL`) are second factors and
    * never grant a session on their own, so revoking the last MFA method is permitted
    * here (the org-policy guard on `MfaService.deleteMfa` covers the MFA-required-by-org
@@ -259,7 +244,7 @@ export class AuthMethodService {
   }
 
   /**
-   * Invalidate every outstanding verification token (magic-link, password-reset, email-
+   * Invalidate every outstanding verification token (email-code, password-reset, email-
    * verify, email-change) for a user. Called by the user-offboarding sequence (sec-U1)
    * so a token issued seconds before soft-delete cannot be redeemed to mint a session
    * for the deleted user.
@@ -312,49 +297,24 @@ export class AuthMethodService {
   }
 
   /**
-   * Creates the user's `PASSWORD` auth_method row during email/password signup.
+   * Creates the user's `EMAIL_CODE` auth_method row during email verification-code auto-signup.
    *
    * @remarks
-   * - **Algorithm:** inserts one `method_type=PASSWORD` row owned by the user, pinning the owner
-   *   `withUserDatabaseContext` so the FORCE-RLS owner WITH CHECK authorizes the write. Intended to
-   *   run inside the signup pinned transaction so it commits atomically with the user row.
-   * - **Failure modes:** propagates the insert error (e.g. a CHECK/constraint violation) to roll the
-   *   signup transaction back.
-   * - **Side effects:** one `auth.auth_methods` insert.
-   * - **Notes:** login authenticates against `users.password_hash`; this row exists so the credential
-   *   appears in `GET /auth/me/auth-methods` and is counted by the last-login-capable-credential guard
-   *   (a password user cannot then delete their only login surface).
-   */
-  async createPasswordMethod(userId: number, userPublicId: string): Promise<void> {
-    await withUserDatabaseContext(userPublicId, () =>
-      this.authMethodRepository.create({
-        user_id: userId,
-        method_type: AUTH_METHOD_TYPE.PASSWORD,
-        is_primary: true,
-        created_by_user_id: userId,
-      }),
-    );
-  }
-
-  /**
-   * Creates the user's `MAGIC_LINK` auth_method row during magic-link auto-signup.
-   *
-   * @remarks
-   * - **Algorithm:** inserts one `method_type=MAGIC_LINK` row owned by the user, pinning the owner
+   * - **Algorithm:** inserts one `method_type=EMAIL_CODE` row owned by the user, pinning the owner
    *   `withUserDatabaseContext` so the FORCE-RLS owner WITH CHECK authorizes the write. Intended to
    *   run inside the auto-signup pinned transaction so it commits atomically with the user row.
    * - **Failure modes:** propagates the insert error (e.g. a CHECK/constraint violation) to roll the
    *   auto-signup transaction back.
    * - **Side effects:** one `auth.auth_methods` insert.
-   * - **Notes:** `MAGIC_LINK` is a functional credential-less row (no stored secret), so a
-   *   magic-link-only user has a real login-capable method that appears in
+   * - **Notes:** `EMAIL_CODE` is a functional credential-less row (no stored secret), so an
+   *   email-code-only user has a real login-capable method that appears in
    *   `GET /auth/me/auth-methods` and is counted by the last-login-capable-credential guard.
    */
-  async createMagicLinkMethod(userId: number, userPublicId: string): Promise<void> {
+  async createEmailCodeMethod(userId: number, userPublicId: string): Promise<void> {
     await withUserDatabaseContext(userPublicId, () =>
       this.authMethodRepository.create({
         user_id: userId,
-        method_type: AUTH_METHOD_TYPE.MAGIC_LINK,
+        method_type: AUTH_METHOD_TYPE.EMAIL_CODE,
         is_primary: true,
         created_by_user_id: userId,
       }),
@@ -407,7 +367,7 @@ export class AuthMethodService {
     }
 
     // Anti-mail-bomb spacing: atomically claim a per-email cooldown slot. If one is already held
-    // (a reset was requested within EMAIL_OTP_RESEND_COOLDOWN_SECONDS), skip issuing/sending entirely
+    // (a reset was requested within VERIFICATION_CODE_RESEND_COOLDOWN_SECONDS), skip issuing/sending entirely
     // and fall through to the SAME uniform success — the cooldown is keyed on the requested email
     // regardless of whether an account exists, so it never becomes an existence oracle.
     const cooldownKey = `${PASSWORD_RESET_COOLDOWN_KEY_PREFIX}${createHash('sha256')
@@ -417,7 +377,7 @@ export class AuthMethodService {
       cooldownKey,
       '1',
       'EX',
-      EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
+      VERIFICATION_CODE_RESEND_COOLDOWN_SECONDS,
       'NX',
     );
     if (cooldownClaimed) {
@@ -498,7 +458,7 @@ export class AuthMethodService {
 
         await this.userService.updatePassword(user.public_id, passwordHash);
         // Completing a reset proves control of the email (the token was delivered there), so verify
-        // it — parity with magic-link / OAuth, and it unblocks an invited user from accepting their
+        // it — parity with email-code / OAuth, and it unblocks an invited user from accepting their
         // org invitation after recovering access.
         await this.userService.updateEmailVerified(user.public_id);
         // The password just changed, so any prior failed-login lockout is moot — clear the counter +
@@ -589,117 +549,5 @@ export class AuthMethodService {
     if (!user.password_hash) throw new UnauthorizedError('errors:passwordAuthNotEnabled');
     const { valid } = await verifyPassword(password, user.password_hash);
     if (!valid) throw new UnauthorizedError('errors:currentPasswordIncorrect');
-  }
-
-  // ── Email Verification ────────────────────────────────────────
-
-  async verifyEmail(
-    body: unknown,
-  ): Promise<{ messageKey: string; messageParams?: Record<string, string | number> }> {
-    const parsed = validateVerifyEmail(body);
-    const normalizedEmail = parsed.email.trim().toLowerCase();
-
-    // The 6-digit code is low-entropy, so resolve the owner first and gate guessing with a per-user
-    // attempt cap (mirrors MFA) BEFORE any DB work. An unknown email is treated like a wrong code so
-    // the response is not an account-existence oracle (the route also rate-limits per email + IP).
-    const user = await this.userService.findByEmail(normalizedEmail);
-    if (!user) throw new UnauthorizedError('errors:invalidOrExpiredVerificationToken');
-
-    const attemptKey = `${EMAIL_OTP_VERIFY_ATTEMPT_KEY_PREFIX}${user.id}`;
-    const attempts = await incrementWithExpiryOnFirst(
-      this.redis,
-      attemptKey,
-      EMAIL_OTP_TTL_MINUTES * 60,
-    );
-    if (attempts > EMAIL_OTP_MAX_VERIFY_ATTEMPTS) {
-      throw new UnauthorizedError('errors:invalidOrExpiredVerificationToken');
-    }
-
-    // audit-#12: consume the code and flip the verified flag in ONE atomic transaction, so a failure
-    // after consumption rolls the consume back and the code stays redeemable. consumeOtpForUser is
-    // scoped to (user_id, EMAIL_VERIFICATION) — see the repository note on why OTP lookups must be
-    // user-scoped rather than by code-hash alone, and its atomic UPDATE blocks concurrent verifies.
-    await withTransaction((transaction) =>
-      runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
-        // sec-r5-L2 + OTP scoping: consumeOtpForUser is bound to (user.id, EMAIL_VERIFICATION) so a
-        // wrong-flow or another user's code never matches/burns, and its atomic UPDATE blocks
-        // concurrent verifies.
-        const record = await this.verificationTokenRepository.consumeOtpForUser(
-          user.id,
-          'EMAIL_VERIFICATION',
-          hashEmailOtp(parsed.code),
-        );
-        if (!record) throw new UnauthorizedError('errors:invalidOrExpiredVerificationToken');
-        await this.userService.updateEmailVerified(user.public_id);
-      }),
-    );
-
-    // Clear the attempt counter so a verified user's later legitimate flows are never pre-throttled.
-    await this.redis.del(attemptKey);
-
-    return { messageKey: 'success:emailVerified' };
-  }
-
-  async resendEmailVerification(
-    userPublicId: string,
-    _context?: { requestId?: string },
-  ): Promise<{ messageKey: string; messageParams?: Record<string, string | number> }> {
-    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
-    if (!user) throw new NotFoundError('User');
-    if (user.is_email_verified) {
-      return { messageKey: 'success:emailAlreadyVerified' };
-    }
-
-    // Anti-mail-bomb spacing: atomically claim a per-user cooldown slot. If one is already held
-    // (a code was sent within EMAIL_OTP_RESEND_COOLDOWN_SECONDS), the prior code is still valid, so
-    // return the same success without re-issuing/re-sending.
-    const cooldownKey = `${EMAIL_VERIFY_RESEND_COOLDOWN_KEY_PREFIX}${user.id}`;
-    const cooldownClaimed = await this.redis.set(
-      cooldownKey,
-      '1',
-      'EX',
-      EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
-      'NX',
-    );
-    if (!cooldownClaimed) {
-      return { messageKey: 'success:verificationEmailSent' };
-    }
-
-    const code = generateEmailOtp();
-    const expiresAt = new Date(Date.now() + EMAIL_OTP_TTL_MINUTES * 60_000);
-
-    // audit-#11: invalidate prior codes, persist the new one (hashed), and record the outbound email
-    // as ONE atomic unit so a handler/Redis/process failure cannot invalidate the old code and leave a
-    // new valid code that was never delivered. Queue dispatch stays post-commit (handler schedules it).
-    await withTransaction((transaction) =>
-      runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
-        await this.verificationTokenRepository.invalidateAllForUser(user.id, 'EMAIL_VERIFICATION');
-        await this.verificationTokenRepository.create(
-          'EMAIL_VERIFICATION',
-          user.id,
-          user.email,
-          hashEmailOtp(code),
-          expiresAt,
-        );
-        await eventBus.emitStrict({
-          type: AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED,
-          payload: {
-            email: user.email,
-            otp_code: code,
-            expires_in_minutes: EMAIL_OTP_TTL_MINUTES,
-          } satisfies EmailVerificationEmailPayload,
-          timestamp: new Date(),
-        });
-      }),
-    );
-
-    // Reset the per-user verify-attempt cap on each fresh code issuance. The prior code was just
-    // invalidated, so its accumulated attempts are meaningless against the new code — and without this
-    // an attacker who burned the cap against the old code would lock the legitimate owner out of
-    // verifying the new one. Brute force is not weakened: each new code is an independent random
-    // target and issuance itself is rate-limited per email + IP.
-    await this.redis.del(`${EMAIL_OTP_VERIFY_ATTEMPT_KEY_PREFIX}${user.id}`);
-
-    return { messageKey: 'success:verificationEmailSent' };
   }
 }

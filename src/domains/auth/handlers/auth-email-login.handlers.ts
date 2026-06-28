@@ -10,35 +10,35 @@ import {
 } from '@/domains/auth/shared/audit-login.util.js';
 import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
-type AuthMagicLinkHandlersDependencies = Pick<AuthContainer, 'magicLinkService'>;
+type AuthEmailLoginHandlersDependencies = Pick<AuthContainer, 'emailLoginService'>;
 
-/** Builds the magic-link Fastify handlers: `sendMagicLink` (enqueues the `AUTH_EVENT.MAGIC_LINK_REQUESTED` email) and `verifyMagicLink` (consumes the token, mints a session, sets the cookie). */
-export function createAuthMagicLinkHandlers({
-  magicLinkService,
-}: AuthMagicLinkHandlersDependencies) {
+/** Builds the email verification-code Fastify handlers: `sendEmailCode` (enqueues the `AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED` email) and `emailLogin` (consumes the code, mints a session, sets the cookie). */
+export function createAuthEmailLoginHandlers({
+  emailLoginService,
+}: AuthEmailLoginHandlersDependencies) {
   return {
-    sendMagicLink: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const data = await magicLinkService.send(request.body, {
+    sendEmailCode: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const data = await emailLoginService.sendCode(request.body, {
         requestId: getRequestIdentifier(request),
       });
       const translated = translateMessageKeyPayload(request, data);
       return successResponse(
-        AuthSerializer.magicLinkSent({
+        AuthSerializer.verificationCodeSent({
           message: translated.message,
           expires_in_minutes: data.expires_in_minutes,
         }),
         getRequestIdentifier(request),
       );
     },
-    verifyMagicLink: async (request: FastifyRequest, reply: FastifyReply) => {
+    emailLogin: async (request: FastifyRequest, reply: FastifyReply) => {
       const ipAddress = getIpAddress(request);
       const userAgent = getUserAgent(request) ?? undefined;
-      let data: Awaited<ReturnType<typeof magicLinkService.verify>>;
+      let data: Awaited<ReturnType<typeof emailLoginService.login>>;
       try {
-        data = await magicLinkService.verify(request.body, ipAddress, userAgent);
+        data = await emailLoginService.login(request.body, ipAddress, userAgent);
       } catch (error) {
         // sec-A8 follow-up: record the failure side of the auth.overview.md invariant.
-        await recordLoginFailureAuditEvent(request, 'magic_link', error);
+        await recordLoginFailureAuditEvent(request, 'email_code', error);
         throw error;
       }
 
@@ -58,7 +58,7 @@ export function createAuthMagicLinkHandlers({
           await recordLoginAuditEvent(
             request,
             { access_token: data.access_token, session_public_id: data.session_public_id },
-            'magic_link',
+            'email_code',
           );
         }
       }

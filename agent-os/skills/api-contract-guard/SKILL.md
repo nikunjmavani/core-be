@@ -60,7 +60,7 @@ The policy is enforced centrally in `method-status-policy.middleware.ts`; declar
 - `Content-Type: application/json` — any body.
 - `X-Organization-Id` — legacy header read directly by a few consumers (e.g. the upload domain); org-scoped routes resolve the active organization from the signed `org` JWT claim, NOT this header. Switch the active org via `/auth/switch-to-personal` / `/auth/switch-to-organization` (which re-mint the access token).
 - `X-Idempotency-Key` — all mutating routes (optional, auto-generate in clients); REQUIRED on the 13 writes registered with `config.idempotencyRequired: true` (org create, memberships, transfer-ownership, invitations, subscription create/change-plan/cancel/resume, webhooks, api-keys, notification-policies, roles, uploads). Live list = the `I` (`req`) column in `docs/routes.txt`.
-- `X-Captcha-Token` — public auth forms only (login, magic-link send, password forgot/reset, email verify, webauthn authenticate options, oauth authorize).
+- `X-Captcha-Token` — public auth forms only (login, email verification-code send + login, password forgot/reset, mfa/login, webauthn authenticate options, oauth authorize).
 - `X-CSRF-Token` — POST /auth/refresh only (double-submit of the csrf_token cookie). Keeps the X- form (frontend-framework default).
 - `Stripe-Signature` — sent BY Stripe to the webhook routes; the app never sends it.
 
@@ -76,4 +76,4 @@ The policy is enforced centrally in `method-status-policy.middleware.ts`; declar
 4. `pnpm docs:generate:multilang && pnpm docs:postman` then `pnpm docs:check`.
 5. Gates: `validate:route-success-statuses`, `validate:route-success-coverage`, unit suites for the response map and examples fixture.
 6. Breaking changes: `pnpm docs:breaking` (local mirror of the CI oasdiff gate); intentional breaks get narrow entries in `.github/oasdiff/breaking-changes-ignore.txt`.
-7. Frontend client contract: when an auth **entry-flow** route or its response body changes (login, signup, magic-link, oauth, webauthn, mfa/login, refresh, switch-to-organization/personal, or `GET /auth/me/context`), or a **client-sent header** requirement (the header matrix above) changes, update `docs/reference/api/frontend-auth-guide.md` — its entry-flow → calls-to-dashboard matrix and the typed `landOnDashboard()` client mirror those shapes. Server-internal sequences for the same journeys live in `src/FLOWS.md`.
+7. Frontend client contract: when an auth **entry-flow** route or its response body changes (login, email verification-code send/login, oauth, webauthn, mfa/login, refresh, switch-to-organization/personal, or `GET /auth/me/context`), or a **client-sent header** requirement (the header matrix above) changes, update `docs/reference/api/frontend-auth-guide.md` — its entry-flow → calls-to-dashboard matrix and the typed `landOnDashboard()` client mirror those shapes. Server-internal sequences for the same journeys live in `src/FLOWS.md`.

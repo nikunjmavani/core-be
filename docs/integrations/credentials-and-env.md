@@ -76,9 +76,9 @@ below show where the value comes from; the runbook above shows the workflow.
 
 ---
 
-## 2. Resend — email (magic link, invitations, password reset)
+## 2. Resend — email (email verification-code, invitations, password reset)
 
-**Used for:** Magic link login, invitations, password reset emails.
+**Used for:** Email verification-code login, invitations, password reset emails.
 
 | .env variable        | Where to get it                            |
 | -------------------- | ------------------------------------------ |

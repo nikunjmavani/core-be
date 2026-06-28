@@ -36,7 +36,6 @@ describe('auth routes rate-limit policy (sec-r5-followup-tc-3)', () => {
   const STRICT_AUTHED_ROUTES: Array<{ method: string; url: string; description: string }> = [
     { method: 'post', url: '/password/change', description: 'authenticated password change' },
     { method: 'post', url: '/step-up', description: 'recent-step-up re-auth' },
-    { method: 'post', url: '/email/resend-verification', description: 'resend email verification' },
     { method: 'post', url: '/me/mfa/enroll', description: 'MFA enrollment phase 1' },
     {
       method: 'post',
@@ -107,11 +106,10 @@ describe('auth public-route rate-limit + captcha policy (public go-live surface)
   // outbound-email / OAuth route so brute-force and enumeration cannot run unbounded.
   const STRICT_PUBLIC_ROUTES: Array<{ method: string; url: string }> = [
     { method: 'post', url: '/login' },
-    { method: 'post', url: '/magic-link/send' },
-    { method: 'post', url: '/magic-link/verify' },
+    { method: 'post', url: '/email/send-code' },
+    { method: 'post', url: '/email/login' },
     { method: 'post', url: '/password/forgot' },
     { method: 'post', url: '/password/reset' },
-    { method: 'post', url: '/email/verify' },
     { method: 'post', url: '/mfa/login' },
     { method: 'post', url: '/webauthn/authenticate/options' },
     { method: 'post', url: '/webauthn/authenticate/verify' },
@@ -130,10 +128,10 @@ describe('auth public-route rate-limit + captcha policy (public go-live surface)
   // CAPTCHA (Turnstile) on the public credential / outbound-email / OAuth-initiation forms.
   const CAPTCHA_PROTECTED_ROUTES: Array<{ method: string; url: string }> = [
     { method: 'post', url: '/login' },
-    { method: 'post', url: '/magic-link/send' },
+    { method: 'post', url: '/email/send-code' },
+    { method: 'post', url: '/email/login' },
     { method: 'post', url: '/password/forgot' },
     { method: 'post', url: '/password/reset' },
-    { method: 'post', url: '/email/verify' },
     { method: 'post', url: '/mfa/login' },
     { method: 'post', url: '/webauthn/authenticate/options' },
     { method: 'get', url: '/oauth/:provider' },
@@ -148,7 +146,7 @@ describe('auth public-route rate-limit + captcha policy (public go-live surface)
   // the public limit on the highest-value credential / email-sending endpoints.
   const PER_EMAIL_THROTTLED_ROUTES: Array<{ method: string; url: string }> = [
     { method: 'post', url: '/login' },
-    { method: 'post', url: '/magic-link/send' },
+    { method: 'post', url: '/email/send-code' },
     { method: 'post', url: '/password/forgot' },
     { method: 'post', url: '/webauthn/authenticate/options' },
   ];
