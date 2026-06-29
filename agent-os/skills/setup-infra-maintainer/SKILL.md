@@ -33,7 +33,7 @@ Alias maps (`dev→development`) only normalize input; the canonical value is st
 
 - **Never print a secret value.** Providers log status only (`valid`, `resolved`) — never a key/token/password/connection-string, including in error messages. A `logger.*` that interpolates a secret is a violation.
 - **Secrets go to `.env.<environment>` only** (`build-env-vars.ts` → provisioning). `pnpm setup:infra:output` shows a masked inventory; `--copy <KEY>` puts one value on the **clipboard** (never stdout, auto-cleared, audit-logged). `infra/output.ts` masks by key pattern and by value (embedded-credential URLs like `DATABASE_URL`); `common/clipboard.ts` shells out to pbcopy/wl-copy/xclip/xsel/clip.
-- **`.setup/.setup-state.json` is gitignored plaintext** (no encryption layer). **Agent deny-read:** `agent-os/hooks/guardrails.mjs` blocks the agent from Read/Bash-reading `.env.<env>` / `.setup/.setup-credentials` / `.setup/.setup-state.json` (matcher includes `Read` in `.claude/settings.json`).
+- **State is ephemeral (in-memory only)** — `common/state.ts` never writes a file; there is no `.setup-state.json`. Provisioned values flow provider → in-memory state → `.env.<environment>` within one run; standalone commands hydrate from live remote (`hydrateStateFromRemote`). **Agent deny-read:** `agent-os/hooks/guardrails.mjs` blocks the agent from Read/Bash-reading `.env.<env>` / `.setup/.setup-credentials` / any `.setup-state.*` file (matcher includes `Read` in `.claude/settings.json`).
 - **Every provider starts with the common header** — name · description · NAMING (config only) · SECRETS rule. See the skeleton in `SETUP_INFRA_PROVIDER_TEMPLATE.md`.
 - **Idempotent (present? update or skip · absent? create)** — resource-creating providers implement `alreadyDone()`/`alreadyDoneEnvironments()`; `runInteractiveStep` then prompts `(u)pdate / (s)kip` when present (default skip; auto-skip in `--yes`/CI) and creates when absent. Validate-only providers omit it.
 - **Enforcement:** `.env*` (except `*.example`) + `.setup-state.*` gitignored; pre-commit runs gitleaks `protect --staged` + the "No secret/state files staged" guard (`src/scripts/tooling/run-pre-commit-guard.ts`); both run in CI. Never weaken these.
@@ -70,7 +70,7 @@ implementing hooks on your `InfraProvider` (step 6), not by editing the orchestr
 - **`detectExisting(context)`** → optional pre-existence detection.
 - **`buildStep(context)`** → the interactive provision step (calls `provision`, then `context.applyStateUpdates(result.stateUpdates ?? {})` for state-backed providers).
 - **`check(context)`** → health check for `setup:infra:check`.
-- **`deleteInstructions(context)`** → for any provider that writes to `.setup/.setup-state.json`, return `{ provider, dashboardUrl, steps?, resources: [{ label, identifier }] }` (rendered by `pnpm setup:infra --delete`). Never add `destroy`/`destroyEnvironment` — `setup:infra` does not delete resources or roll back; failures stop the run and the user cleans up via the printed guide.
+- **`deleteInstructions(context)`** → for any provider that provisions tracked resources (records `stateUpdates` on the in-memory run state), return `{ provider, dashboardUrl, steps?, resources: [{ label, identifier }] }` (rendered by `pnpm setup:infra --delete`). Never add `destroy`/`destroyEnvironment` — `setup:infra` does not delete resources or roll back; failures stop the run and the user cleans up via the printed guide.
 
 ### 4. Guide (browser + instructions)
 
@@ -91,7 +91,7 @@ implementing hooks on your `InfraProvider` (step 6), not by editing the orchestr
 - **`tooling/setup/infra/providers/setup-<name>/setup-<name>.provider.ts`** — Create (or update) the provider module. Use `@tooling/setup/...` imports (no parent-relative `../`). Export at least:
   - `provision(config, secrets, state, environments): Promise<ProviderResult>`.
   - `check(state, secrets?, ...): Promise<boolean>` if the provider is health-checked.
-  - On the exported `InfraProvider`: implement `deleteInstructions(context)` whenever the provider writes to `.setup/.setup-state.json`, returning the dashboard URL plus the identifiers the user must delete by hand. Never add `destroy` / `destroyEnvironment` — `setup:infra` does not delete resources.
+  - On the exported `InfraProvider`: implement `deleteInstructions(context)` whenever the provider provisions tracked resources (records `stateUpdates`), returning the dashboard URL plus the identifiers the user must delete by hand. Never add `destroy` / `destroyEnvironment` — `setup:infra` does not delete resources.
 - **`tooling/setup/infra/providers/index.ts`** — Add the new provider to `INFRA_PROVIDERS` (order matters).
 
 ### 7. State shape (for resources that persist)

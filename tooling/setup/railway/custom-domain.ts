@@ -701,7 +701,7 @@ async function resolveEnvironmentSelection(
       const match = byName.get(requested);
       if (!match) {
         throw new Error(
-          `Environment "${requested}" not found in .setup/.setup-state.json. Available: ${available
+          `Environment "${requested}" not found remotely for this Railway project. Available: ${available
             .map((entry) => entry.name)
             .join(', ')}`,
         );

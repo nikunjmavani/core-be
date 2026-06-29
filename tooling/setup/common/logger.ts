@@ -284,7 +284,7 @@ export interface DeleteInstructionsBlock {
 /**
  * Renders the manual-delete guide for `pnpm setup:infra --delete`.
  * setup:infra does not delete anything — this only prints dashboard URLs and
- * the identifiers from `.setup-state.json` so the user can clean up by hand.
+ * the identifiers from the run state so the user can clean up by hand.
  */
 export function deleteInstructionsReview(blocks: DeleteInstructionsBlock[]): void {
   const line = '─'.repeat(60);

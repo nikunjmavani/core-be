@@ -4,10 +4,10 @@ import { z } from 'zod';
 import type { SetupConfig, SetupSecrets } from './types.js';
 
 const PROJECT_ROOT = resolve(import.meta.dirname, '../../..');
-// Setup-tooling input credentials live in the gitignored `.setup/` directory (alongside
-// `.setup/.setup-state.json`), deliberately kept OUT of the app's `.env.<environment>`
-// namespace so the two are never confused. The committed template lives at the repo root
-// as `.setup-credentials.example` (next to `.env.example`) for discoverability.
+// Setup-tooling input credentials live in the gitignored `.setup/` directory, deliberately
+// kept OUT of the app's `.env.<environment>` namespace so the two are never confused. The
+// committed template lives at the repo root as `.setup-credentials.example` (next to
+// `.env.example`) for discoverability. (State is ephemeral/in-memory — no file lives here.)
 const SETUP_DIR = resolve(PROJECT_ROOT, '.setup');
 const ENV_SETUP_PATH = resolve(SETUP_DIR, '.setup-credentials');
 

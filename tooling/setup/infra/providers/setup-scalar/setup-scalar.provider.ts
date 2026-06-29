@@ -10,7 +10,7 @@
  * `config.project.*` (registry slug defaults to `config.project.name`), environment names
  * from `config.environments[].name` — never hardcoded.
  * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
- * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
+ * console; setup secret files are gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
  */
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';

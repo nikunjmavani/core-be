@@ -8,7 +8,7 @@ import {
   envSetupFileExists,
 } from '@tooling/setup/common/secrets.js';
 import { hasAnyEnvSecret } from '@tooling/setup/common/secrets.js';
-import { loadState, saveState, stateFileExists } from '@tooling/setup/common/state.js';
+import { loadState, saveState } from '@tooling/setup/common/state.js';
 import { checkPrerequisites } from './prerequisites.js';
 import { runGuide } from './guide.js';
 import { exportEnvFiles } from '@tooling/setup/envs/export-env-files.js';
@@ -219,16 +219,6 @@ async function checkForExistingResources(
     if (!provider.detectExisting) continue;
     const found = await provider.detectExisting(context);
     existing.push(...found);
-  }
-
-  if (stateFileExists()) {
-    const state = loadState();
-    if (state.neon || state.redis || state.aws || state.sentry || state.railway) {
-      existing.push({
-        provider: 'State file',
-        detail: '.setup/.setup-state.json contains previous provisioning data',
-      });
-    }
   }
 
   return existing;

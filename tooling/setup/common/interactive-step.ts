@@ -10,7 +10,7 @@
  *   4. Print instructions (so the user understands what's about to happen).
  *   5. Prompt: continue / skip / abort.
  *   6. Execute; on throw, ask retry / skip / abort.
- *   7. Verify state (read .setup-state.json); fail prompt if missing.
+ *   7. Verify state (read the in-memory run state); fail prompt if missing.
  *   8. Verify live (call provider check API); fail prompt if unhealthy.
  *
  * Used by orchestrator.runProvision so every provisioning step is interactive.
@@ -78,7 +78,7 @@ export interface StepDescriptor<T> {
    */
   execute: () => Promise<T>;
   /**
-   * Optional state-only post-check (read .setup-state.json). Fast.
+   * Optional state-only post-check (read the in-memory run state). Fast.
    */
   verifyState?: () => StateVerification;
   /**

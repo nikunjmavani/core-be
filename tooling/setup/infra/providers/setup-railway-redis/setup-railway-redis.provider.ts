@@ -6,7 +6,7 @@
  * NAMING (single source of truth = setup.config.json): organization/project names from
  * `config.project.*`, environment names from `config.environments[].name` — never hardcoded.
  * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
- * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
+ * console; setup secret files are gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
  */
 import * as logger from '@tooling/setup/common/logger.js';
 import { isSecretFilled } from '@tooling/setup/common/secrets.js';
@@ -783,7 +783,7 @@ export const setupRailwayRedisProvider: InfraProvider = {
     enabledReason: setupRailwayRedisProvider.disabledReason(context),
     instructions: [
       `For each environment (${context.environments.join(', ')}): adopt the existing redis-named service if one already exists in Railway, otherwise deploy Railway's "${REDIS_TEMPLATE_CODE}" database template (templateDeployV2).`,
-      'Will read REDIS_PASSWORD from the adopted/created service and record a concrete REDIS_URL in .setup-state.json after each environment (incremental persistence so an interruption does not leave Railway services without a state entry).',
+      'Will read REDIS_PASSWORD from the adopted/created service and record a concrete REDIS_URL on the in-memory run state after each environment (so the env-file writer picks it up before the process exits).',
       context.config.providers.railwayRedis.region
         ? `Will apply replica region "${context.config.providers.railwayRedis.region}" to newly-created Redis services via serviceInstanceUpdate.`
         : 'Will use Railway default region for newly-created Redis services (no region override configured).',

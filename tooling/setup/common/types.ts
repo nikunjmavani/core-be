@@ -134,7 +134,7 @@ export interface InfraProviderDeleteInstruction {
   /** Optional list of step-by-step actions (rendered as bullets). */
   steps?: string[];
   /**
-   * Resources currently recorded in `.setup-state.json` that the user must
+   * Resources currently recorded in the run state that the user must
    * delete in the dashboard. Empty array is allowed (we still print the URL
    * so the user can audit). Identifier is whatever the dashboard shows
    * (project ID, bucket name, etc.).

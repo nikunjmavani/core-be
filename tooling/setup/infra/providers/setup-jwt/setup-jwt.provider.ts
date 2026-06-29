@@ -7,7 +7,7 @@
  * NAMING (single source of truth = setup.config.json): organization/project names from
  * `config.project.*`, environment names from `config.environments[].name` — never hardcoded.
  * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
- * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
+ * console; setup secret files are gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
  */
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import * as logger from '@tooling/setup/common/logger.js';
@@ -141,7 +141,7 @@ export const setupJwtProvider: InfraProvider = {
     enabled: true,
     instructions: [
       `Will generate JWT signing secrets per environment: ${context.environments.join(', ')}.`,
-      'Local-only — no third-party API calls. Secrets are stored in .setup-state.json.',
+      'Local-only — no third-party API calls. Generated in-memory and written to .env.<environment>.',
     ],
     detectStatus: () =>
       resourceStatus(
@@ -166,15 +166,15 @@ export const setupJwtProvider: InfraProvider = {
     return [
       {
         provider: 'JWT secrets',
-        dashboardUrl: '.setup/.setup-state.json (local file)',
+        dashboardUrl: 'local — generated each run, not persisted to a file',
         steps: [
           'JWT secrets are local-only — no third-party resource to delete.',
-          'Edit .setup/.setup-state.json and remove the "jwt" entries (or delete the whole file) to force fresh generation on the next run.',
+          'To rotate, remove the JWT_* / SECRETS_ENCRYPTION_KEY lines from each .env.<environment> and re-run `pnpm setup:infra` to regenerate (state is ephemeral — there is no file to edit).',
           'After rotating, re-deploy services so they pick up the new JWT_SECRET.',
         ],
         resources: Object.keys(jwt).map((environmentName) => ({
           label: `Secret (${environmentName})`,
-          identifier: '<redacted, see .setup-state.json>',
+          identifier: '<redacted — generated locally>',
         })),
       },
     ];

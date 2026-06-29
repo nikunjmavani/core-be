@@ -27,13 +27,13 @@ script that references org/project/env names.
 
 - **Never print a secret value.** Providers/scripts log status only (`valid`, `resolved`) — never a key/token/password/connection-string, in logs or error messages. Adding a `logger.*` that interpolates a secret is a violation.
 - **Secrets go to `.env.<environment>` only** (via `build-env-vars.ts` → provisioning / `setup:infra:export-env`). `setup:infra:output` shows a masked inventory; `--copy <KEY>` puts one value on the **clipboard** (never stdout, auto-cleared, audit-logged to `.setup/.setup-state.audit.log`). Never print a value.
-- **`.setup/.setup-state.json` is gitignored plaintext** (no self-managed encryption key). Don't write secrets anywhere else; don't reintroduce an encryption layer unless asked.
-- **Agent deny-read:** `agent-os/hooks/guardrails.mjs` denies the agent Read/Bash access to `.env.<env>`, `.setup/.setup-credentials`, `.setup/.setup-state.json` (templates `*.example` stay readable). Keep the `Read` matcher in `.claude/settings.json`.
+- **State is ephemeral (in-memory only)** — `common/state.ts` never writes a file; there is no `.setup-state.json`. Provisioned values live in the in-memory run state (provider → env-file writer) and durably in `.env.<environment>`; standalone commands hydrate from live remote (`hydrateStateFromRemote` / each provider's `detectRemote`). Don't reintroduce a persisted state file or an encryption layer unless asked.
+- **Agent deny-read:** `agent-os/hooks/guardrails.mjs` denies the agent Read/Bash access to `.env.<env>`, `.setup/.setup-credentials`, and any `.setup-state.*` file (e.g. the clipboard-reveal audit log; templates `*.example` stay readable). Keep the `Read` matcher in `.claude/settings.json`.
 - **Enforcement:** `.env*` (except `*.example`) + `.setup-state.*` are gitignored; pre-commit runs gitleaks `protect --staged` **and** the "No secret/state files staged" guard (blocks `git add -f`). Both run in CI too. Never weaken these.
 
 ### Idempotency — present? update or skip; absent? create
 
-Every resource-creating provider implements `alreadyDone()` (or `alreadyDoneEnvironments()`) so `runInteractiveStep` can: **absent → create**; **present → print "Already present" and prompt `(u)pdate / (s)kip`** (default skip; auto-skip under `--yes`/CI — never mutate existing infra unprompted). Detection is state-based (`.setup/.setup-state.json`); remote existence is surfaced via `detectExisting()` in preview. Validate-only providers (oauth, resend, stripe, turnstile) omit it and re-validate each run. Don't reintroduce silent auto-skip or unconditional create.
+Every resource-creating provider implements `alreadyDone()` (or `alreadyDoneEnvironments()`) so `runInteractiveStep` can: **absent → create**; **present → print "Already present" and prompt `(u)pdate / (s)kip`** (default skip; auto-skip under `--yes`/CI — never mutate existing infra unprompted). Detection uses the in-memory run state (hydrated from live remote via `detectRemote`); remote existence is also surfaced via `detectExisting()` in preview. Validate-only providers (oauth, resend, stripe, turnstile) omit it and re-validate each run. Don't reintroduce silent auto-skip or unconditional create.
 
 ### Common provider header
 
