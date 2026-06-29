@@ -1,54 +1,49 @@
+/**
+ * Stripe provider for `pnpm setup:infra`.
+ *
+ * Validates Stripe API keys per environment (test vs live mode); no resource is created.
+ *
+ * NAMING (single source of truth = setup.config.json): organization/project names from
+ * `config.project.*`, environment names from `config.environments[].name` — never hardcoded.
+ * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
+ * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
+ */
 import * as logger from '@tooling/setup/common/logger.js';
-import type {
-  SetupSecrets,
-  ProviderResult,
-  InfraProvider,
-  InfraProviderContext,
-} from '@tooling/setup/common/types.js';
+import { setupFetch } from '@tooling/setup/common/setup-fetch.js';
+import type { InfraProviderContext, ProviderResult } from '@tooling/setup/common/types.js';
+import { createValidationProvider } from '../create-validation-provider.js';
 
 async function validateStripeKey(secretKey: string, environmentName: string): Promise<boolean> {
   try {
-    const response = await fetch('https://api.stripe.com/v1/balance', {
-      headers: { Authorization: `Bearer ${secretKey}` },
+    await setupFetch({
+      name: 'Stripe',
+      url: 'https://api.stripe.com/v1/balance',
+      init: { headers: { Authorization: `Bearer ${secretKey}` } },
+      expectedStatus: 200,
     });
-
-    if (!response.ok) {
-      logger.error(`  Stripe key for "${environmentName}" — invalid (${response.status})`);
-      return false;
-    }
-
-    const isTestKey = secretKey.startsWith('sk_test_');
-    const keyType = isTestKey ? 'test' : 'live';
+    const keyType = secretKey.startsWith('sk_test_') ? 'test' : 'live';
     logger.success(`  Stripe key for "${environmentName}" — valid (${keyType} mode)`);
     return true;
   } catch {
-    logger.error(`  Stripe key for "${environmentName}" — unreachable`);
+    logger.error(`  Stripe key for "${environmentName}" — invalid or unreachable`);
     return false;
   }
 }
 
-export async function provision(
-  secrets: SetupSecrets,
-  environments: string[],
-): Promise<ProviderResult> {
-  if (!secrets.stripe || Object.keys(secrets.stripe).length === 0) {
+async function validateStripe(context: InfraProviderContext): Promise<ProviderResult> {
+  const stripe = context.secrets.stripe;
+  if (!stripe || Object.keys(stripe).length === 0) {
     return { success: true, message: 'Stripe: skipped (no keys configured)' };
   }
 
-  const spinner = logger.startSpinner('Validating Stripe API keys...');
-  logger.stopSpinner(spinner, 'Validating Stripe API keys...');
-
   let allValid = true;
-
-  for (const environmentName of environments) {
-    const stripeEnvironmentSecrets = secrets.stripe[environmentName];
-    if (!stripeEnvironmentSecrets?.secretKey) {
+  for (const environmentName of context.environments) {
+    const secretKey = stripe[environmentName]?.secretKey;
+    if (!secretKey) {
       logger.warn(`  Stripe key for "${environmentName}" — not configured`);
       continue;
     }
-
-    const valid = await validateStripeKey(stripeEnvironmentSecrets.secretKey, environmentName);
-    if (!valid) allValid = false;
+    if (!(await validateStripeKey(secretKey, environmentName))) allValid = false;
   }
 
   return {
@@ -57,35 +52,21 @@ export async function provision(
   };
 }
 
-export const setupStripeProvider: InfraProvider = {
+export const setupStripeProvider = createValidationProvider({
   key: 'stripe',
   name: 'Stripe',
   isEnabled: ({ config }) => config.providers.stripe.enabled,
   disabledReason: () => 'disabled in setup.config.json',
-  preview: ({ config }) =>
-    config.providers.stripe.enabled
-      ? {
-          detail: 'Secret key per env (development/production)',
-          url: 'https://dashboard.stripe.com/test/apikeys',
-          configKey: 'stripe.<env>.secretKey',
-        }
-      : null,
-  settingsReview: ({ config, environments }) =>
-    config.providers.stripe.enabled
-      ? [{ bucket: 'extra', provider: 'Stripe', detail: `validate ${environments.length} keys` }]
-      : [],
-  buildStep: (context: InfraProviderContext) => ({
-    name: 'Stripe',
-    enabled: setupStripeProvider.isEnabled(context),
-    enabledReason: setupStripeProvider.disabledReason(context),
-    instructions: [
-      `Will validate Stripe secret keys for ${context.environments.join(', ')} via Stripe API.`,
-      'No resource is created — keys come from Stripe Dashboard.',
-    ],
-    execute: async () => {
-      const result = await provision(context.secrets, context.environments);
-      if (!result.success) throw new Error(result.message);
-      return result;
-    },
-  }),
-};
+  preview: {
+    detail: 'Secret key per env (development/production)',
+    url: 'https://dashboard.stripe.com/test/apikeys',
+    configKey: 'stripe.<env>.secretKey',
+  },
+  settingsDetail: 'validate per-env keys',
+  instructions: [
+    'Will validate Stripe secret keys per environment via the Stripe API.',
+    'No resource is created — keys come from the Stripe Dashboard.',
+  ],
+  describe: ({ environments }) => ({ environments }),
+  validate: validateStripe,
+});

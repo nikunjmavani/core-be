@@ -26,16 +26,32 @@ const GITHUB_ENV_MAP: Record<string, string> = {
   production: 'production',
 };
 
-const ALL_GITHUB_ENVIRONMENTS = ['development', 'production'] as const;
+/**
+ * NAMING — single source of truth = `tooling/setup/setup.config.json`.
+ * The set of ENVIRONMENT NAMES is read from `environments[].name`; the
+ * ORGANIZATION + PROJECT NAMES come from `project.organization` / `project.name`
+ * (and `providers.github.repository`). Never hardcode these — the config is the
+ * one place that must be correct.
+ */
+function loadConfigJson(): {
+  project?: { name?: string; organization?: string };
+  environments?: Array<{ name?: string }>;
+  providers?: { github?: { repository?: string } };
+} | null {
+  if (!existsSync(CONFIG_PATH)) return null;
+  return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
+}
+
+function loadEnvironmentNames(): string[] {
+  const names = loadConfigJson()
+    ?.environments?.map((environment) => environment.name)
+    .filter((name): name is string => Boolean(name));
+  return names && names.length > 0 ? names : ['development', 'production'];
+}
 
 function loadRepository(): string {
-  if (existsSync(CONFIG_PATH)) {
-    const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')) as {
-      providers?: { github?: { repository?: string } };
-    };
-    const repository = config.providers?.github?.repository;
-    if (repository) return repository;
-  }
+  const repository = loadConfigJson()?.providers?.github?.repository;
+  if (repository) return repository;
 
   return execSync('gh repo view --json nameWithOwner -q .nameWithOwner', {
     encoding: 'utf-8',
@@ -89,7 +105,7 @@ function main(): void {
 
   const environments: string[] = configFilter
     ? [GITHUB_ENV_MAP[configFilter] ?? configFilter]
-    : [...ALL_GITHUB_ENVIRONMENTS];
+    : loadEnvironmentNames();
 
   const secrets = [
     { name: 'AUDIT_RETENTION_DAYS', value: auditRetentionDays },

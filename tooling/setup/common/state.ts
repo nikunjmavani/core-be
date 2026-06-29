@@ -1,7 +1,17 @@
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import {
+  closeSync,
+  copyFileSync,
+  existsSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 import * as logger from './logger.js';
+import { SetupError } from './setup-error.js';
 
 const neonBranchStateSchema = z.object({
   branchId: z.string(),
@@ -97,6 +107,14 @@ export const setupStateSchema = z.object({
       dsn: z.string(),
     })
     .optional(),
+  posthog: z
+    .object({
+      /** Resolved project API key (`phc_…`) — public by design, emitted as POSTHOG_KEY. */
+      projectApiKey: z.string(),
+      /** Ingestion host emitted as POSTHOG_HOST (US or EU cloud). */
+      host: z.string(),
+    })
+    .optional(),
   jwt: z.record(z.string(), jwtSecretStateSchema).optional(),
   railway: z
     .object({
@@ -171,9 +189,41 @@ export function loadState(): z.infer<typeof setupStateSchema> {
   return result.data;
 }
 
+const STATE_BAK_PATH = `${STATE_PATH}.bak`;
+const STATE_TMP_PATH = `${STATE_PATH}.tmp`;
+const STATE_LOCK_PATH = `${STATE_PATH}.lock`;
+
 export function saveState(state: z.infer<typeof setupStateSchema>): void {
   state.updatedAt = new Date().toISOString();
-  writeFileSync(STATE_PATH, `${JSON.stringify(state, null, 2)}\n`, 'utf-8');
+  // Atomic write: backup the prior file, write to a temp path, then rename over the
+  // target so a crash mid-write can never leave a half-written state file.
+  // `.setup-state.json` is gitignored, blocked by the pre-commit secret-file guard, and
+  // unreadable by the agent (deny-read guard); values flow only into `.env.<environment>`.
+  if (existsSync(STATE_PATH)) copyFileSync(STATE_PATH, STATE_BAK_PATH);
+  writeFileSync(STATE_TMP_PATH, `${JSON.stringify(state, null, 2)}\n`, 'utf-8');
+  renameSync(STATE_TMP_PATH, STATE_PATH);
+}
+
+/**
+ * Acquire an advisory lock for an apply run so two concurrent `setup:infra` runs can't
+ * clobber the state. Human-only tooling, so a stale lock is surfaced for manual removal
+ * rather than auto-broken. Returns a `release()` to call in a `finally`.
+ */
+export function acquireStateLock(): () => void {
+  try {
+    closeSync(openSync(STATE_LOCK_PATH, 'wx')); // O_EXCL — fails if it already exists
+  } catch {
+    throw new SetupError(`Another setup run holds the lock (${STATE_LOCK_PATH}).`, {
+      hint: `If no other run is active, delete it: rm ${STATE_LOCK_PATH}`,
+    });
+  }
+  return () => {
+    try {
+      if (existsSync(STATE_LOCK_PATH)) unlinkSync(STATE_LOCK_PATH);
+    } catch {
+      // best-effort release
+    }
+  };
 }
 
 export function stateFileExists(): boolean {

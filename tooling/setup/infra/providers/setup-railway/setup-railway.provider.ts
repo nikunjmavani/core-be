@@ -1,5 +1,18 @@
+/**
+ * Railway provider for `pnpm setup:infra`.
+ *
+ * Provisions the Railway project + API/worker services and mints per-environment project
+ * tokens; records ids/tokens to state.
+ *
+ * NAMING (single source of truth = setup.config.json): organization/project names from
+ * `config.project.*`, environment names from `config.environments[].name` — never hardcoded.
+ * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
+ * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
+ */
 import * as logger from '@tooling/setup/common/logger.js';
 import { isSecretFilled } from '@tooling/setup/common/secrets.js';
+import { setupFetch } from '@tooling/setup/common/setup-fetch.js';
+import { resourceStatus } from '@tooling/setup/common/interactive-step.js';
 import type {
   SetupConfig,
   SetupState,
@@ -28,15 +41,19 @@ async function railwayGraphQL<T>(
   variables?: Record<string, unknown>,
   authMode: RailwayAuthMode = 'bearer',
 ): Promise<T> {
-  const response = await fetch(RAILWAY_API_URL, {
-    method: 'POST',
-    headers: {
-      ...(authMode === 'project'
-        ? { 'Project-Access-Token': token }
-        : { Authorization: `Bearer ${token}` }),
-      'Content-Type': 'application/json',
+  const response = await setupFetch({
+    name: 'Railway',
+    url: RAILWAY_API_URL,
+    init: {
+      method: 'POST',
+      headers: {
+        ...(authMode === 'project'
+          ? { 'Project-Access-Token': token }
+          : { Authorization: `Bearer ${token}` }),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query, variables }),
     },
-    body: JSON.stringify({ query, variables }),
   });
 
   if (!response.ok) {
@@ -646,6 +663,11 @@ export const setupRailwayProvider: InfraProvider = {
           },
         ]
       : [],
+  describe: ({ config, environments }) => ({
+    project: config.project.name,
+    environments,
+    services: ['api', 'worker'],
+  }),
   buildStep: (context: InfraProviderContext) => ({
     name: 'Railway',
     enabled: setupRailwayProvider.isEnabled(context),
@@ -656,9 +678,11 @@ export const setupRailwayProvider: InfraProvider = {
       'Will create or adopt project-level services: api, worker (redis is provisioned separately via the Railway Redis template).',
       'Will attach api + worker to every Railway environment via staged-changes.',
     ],
-    alreadyDone: () => railwayAlreadyProvisioned(context.state, context.environments),
-    alreadyDoneMessage:
-      'project + environments + api/worker attachments + per-env tokens already in state',
+    detectStatus: () =>
+      resourceStatus(
+        railwayAlreadyProvisioned(context.state, context.environments),
+        'project + environments + api/worker attachments + per-env tokens in state',
+      ),
     execute: async () => {
       const result = await provision(
         context.config,

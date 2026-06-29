@@ -1,159 +1,82 @@
+/**
+ * OAuth (Google + GitHub) provider for `pnpm setup:infra`.
+ *
+ * Validates Google + GitHub OAuth credentials per environment (no resource is created —
+ * credentials come from each provider console).
+ *
+ * NAMING (single source of truth = setup.config.json): organization/project names from
+ * `config.project.*`, environment names from `config.environments[].name` — never hardcoded.
+ * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
+ * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
+ */
 import * as logger from '@tooling/setup/common/logger.js';
-import type {
-  SetupConfig,
-  SetupSecrets,
-  ProviderResult,
-  InfraProvider,
-  InfraProviderContext,
-  InfraProviderPreview,
-} from '@tooling/setup/common/types.js';
+import type { InfraProviderContext, ProviderResult } from '@tooling/setup/common/types.js';
+import { createValidationProvider } from '../create-validation-provider.js';
 
-async function validateGoogleOAuth(clientId: string, environmentName: string): Promise<boolean> {
+function validateClientId(
+  label: string,
+  clientId: string | undefined,
+  environmentName: string,
+  looksValid: (id: string) => boolean,
+): boolean {
   if (!clientId) {
-    logger.warn(`  Google OAuth for "${environmentName}" — not configured`);
+    logger.warn(`  ${label} OAuth for "${environmentName}" — not configured`);
     return true;
   }
-
-  // Basic format validation (Google client IDs end with .apps.googleusercontent.com)
-  if (clientId.includes('.apps.googleusercontent.com')) {
-    logger.success(`  Google OAuth for "${environmentName}" — format valid`);
-    return true;
+  if (looksValid(clientId)) {
+    logger.success(`  ${label} OAuth for "${environmentName}" — format valid`);
+  } else {
+    logger.warn(`  ${label} OAuth for "${environmentName}" — unusual client ID format`);
   }
-
-  logger.warn(`  Google OAuth for "${environmentName}" — unusual client ID format`);
   return true;
 }
 
-async function validateGithubOAuth(
-  clientId: string,
-  clientSecret: string,
-  environmentName: string,
-): Promise<boolean> {
-  if (!clientId) {
-    logger.warn(`  GitHub OAuth for "${environmentName}" — not configured`);
-    return true;
-  }
-
-  try {
-    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-    const response = await fetch(`https://api.github.com/applications/${clientId}`, {
-      headers: {
-        Authorization: `Basic ${credentials}`,
-        Accept: 'application/vnd.github+json',
-      },
-    });
-
-    if (response.ok) {
-      logger.success(`  GitHub OAuth for "${environmentName}" — valid`);
-      return true;
-    }
-
-    // 404 might mean the app exists but auth check works differently
-    if (response.status === 404 || response.status === 401) {
-      logger.success(
-        `  GitHub OAuth for "${environmentName}" — credentials set (cannot verify remotely)`,
-      );
-      return true;
-    }
-
-    logger.warn(`  GitHub OAuth for "${environmentName}" — validation returned ${response.status}`);
-    return true;
-  } catch {
-    logger.warn(`  GitHub OAuth for "${environmentName}" — could not validate (network issue)`);
-    return true;
-  }
-}
-
-export async function provision(
-  config: SetupConfig,
-  secrets: SetupSecrets,
-  environments: string[],
-): Promise<ProviderResult> {
+function validateOauth(context: InfraProviderContext): Promise<ProviderResult> {
+  const { config, secrets, environments } = context;
   const googleEnabled = config.providers.oauth.google.enabled;
   const githubEnabled = config.providers.oauth.github.enabled;
-
   if (!(googleEnabled || githubEnabled)) {
-    return { success: true, message: 'OAuth: skipped (disabled)' };
+    return Promise.resolve({ success: true, message: 'OAuth: skipped (disabled)' });
   }
 
   logger.info('Validating OAuth credentials...');
-
-  let allValid = true;
-
-  if (googleEnabled && secrets.oauth?.google) {
-    for (const environmentName of environments) {
-      const googleSecrets = secrets.oauth.google[environmentName];
-      if (googleSecrets) {
-        const valid = await validateGoogleOAuth(googleSecrets.clientId, environmentName);
-        if (!valid) allValid = false;
-      }
+  for (const environmentName of environments) {
+    if (googleEnabled) {
+      validateClientId(
+        'Google',
+        secrets.oauth?.google?.[environmentName]?.clientId,
+        environmentName,
+        (id) => id.includes('.apps.googleusercontent.com'),
+      );
+    }
+    if (githubEnabled) {
+      validateClientId(
+        'GitHub',
+        secrets.oauth?.github?.[environmentName]?.clientId,
+        environmentName,
+        (id) => id.length >= 10,
+      );
     }
   }
-
-  if (githubEnabled && secrets.oauth?.github) {
-    for (const environmentName of environments) {
-      const githubSecrets = secrets.oauth.github[environmentName];
-      if (githubSecrets) {
-        const valid = await validateGithubOAuth(
-          githubSecrets.clientId,
-          githubSecrets.clientSecret,
-          environmentName,
-        );
-        if (!valid) allValid = false;
-      }
-    }
-  }
-
-  return {
-    success: allValid,
-    message: allValid ? 'OAuth: credentials validated' : 'OAuth: some credentials invalid',
-  };
+  return Promise.resolve({ success: true, message: 'OAuth: credentials validated' });
 }
 
-function googlePreview(): InfraProviderPreview {
-  return {
-    detail: 'Client ID + Secret per env',
-    url: 'https://console.cloud.google.com/apis/credentials',
-    configKey: 'oauth.google.<env>.clientId, clientSecret, redirectUri',
-  };
-}
-
-function githubPreview(): InfraProviderPreview {
-  return {
-    detail: 'Client ID + Secret per env',
-    url: 'https://github.com/settings/developers',
-    configKey: 'oauth.github.<env>.clientId, clientSecret, redirectUri',
-  };
-}
-
-export const setupOauthProvider: InfraProvider = {
+export const setupOauthProvider = createValidationProvider({
   key: 'oauth',
   name: 'OAuth (Google + GitHub)',
   isEnabled: ({ config }) =>
     config.providers.oauth.google.enabled || config.providers.oauth.github.enabled,
   disabledReason: () => 'OAuth providers disabled in setup.config.json',
-  // OAuth has two sub-providers — preview() returns the first enabled (Google preferred).
-  preview: ({ config }) => {
-    if (config.providers.oauth.google.enabled) return googlePreview();
-    if (config.providers.oauth.github.enabled) return githubPreview();
-    return null;
+  preview: {
+    detail: 'Client ID + Secret per env (Google / GitHub)',
+    url: 'https://console.cloud.google.com/apis/credentials  +  https://github.com/settings/developers',
+    configKey: 'OAUTH_<PROVIDER>_<ENV>_CLIENT_ID / _CLIENT_SECRET / _REDIRECT_URI',
   },
-  settingsReview: ({ config }) =>
-    config.providers.oauth.google.enabled || config.providers.oauth.github.enabled
-      ? [{ bucket: 'extra', provider: 'OAuth', detail: 'validate Google + GitHub per env' }]
-      : [],
-  buildStep: (context: InfraProviderContext) => ({
-    name: 'OAuth (Google + GitHub)',
-    enabled: setupOauthProvider.isEnabled(context),
-    enabledReason: setupOauthProvider.disabledReason(context),
-    instructions: [
-      'Will validate OAuth credentials for each enabled provider per environment.',
-      'No resource is created — credentials come from each provider console.',
-    ],
-    execute: async () => {
-      const result = await provision(context.config, context.secrets, context.environments);
-      if (!result.success) throw new Error(result.message);
-      return result;
-    },
-  }),
-};
+  settingsDetail: 'validate Google + GitHub per env',
+  instructions: [
+    'Will validate OAuth credentials for each enabled provider per environment.',
+    'No resource is created — credentials come from each provider console.',
+  ],
+  describe: ({ environments }) => ({ environments }),
+  validate: validateOauth,
+});

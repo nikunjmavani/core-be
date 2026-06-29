@@ -216,8 +216,8 @@ After completing any task, scan the changes and invoke matching skills:
 
 ### Setup infra (third-party providers)
 
-- **Trigger**: added, removed, or changed a third-party provider in the setup:infra flow (e.g. new provider in `tooling/setup/setup.config.json`, new `tooling/setup/infra/providers/<name>/<name>.provider.ts`, or changes to PREVIEW_PROVIDERS, guide steps, or token instructions)
-- **Action**: read and follow `setup-infra-maintainer` — run the full checklist so config schema, init defaults, secrets/env-secrets, orchestrator (preview, provision, check, status, rollback), guide, prerequisites, provider module, state, build-env-vars, and `docs/deployment/setup/setup-token-instructions.md` all stay in sync. Then run `pnpm typecheck` and `pnpm setup:infra:preview` to verify.
+- **Trigger**: added, removed, or changed a third-party provider in the setup:infra flow (e.g. new provider in `tooling/setup/setup.config.json`, new `tooling/setup/infra/providers/<name>/<name>.provider.ts`, guide steps, or token instructions)
+- **Action**: read and follow `setup-infra-maintainer` (and the template `tooling/setup/SETUP_INFRA_PROVIDER_TEMPLATE.md`) — keep names read from `setup.config.json` only, implement the registry-driven `InfraProvider` hooks, and keep config schema, init defaults, secrets/`.env.setup` template, provider module + `providers/index.ts`, state, build-env-vars, guide, prerequisites, and `docs/deployment/setup/setup-token-instructions.md` in sync. Then run `pnpm typecheck` and `pnpm setup:infra:preview` to verify.
 - **Follow-up**: if `docs/deployment/setup/setup-token-instructions.md` or other deployment docs were updated, invoke **docs-maintainer** to keep the docs index and cross-links correct.
 
 ### In-source docs (TSDoc, <folder>.overview.md, system narratives, route schema)

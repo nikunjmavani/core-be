@@ -105,6 +105,10 @@ reports/
 # Setup automation (secrets + provisioned state)
 tooling/setup.secrets.json
 .setup-state.json
+.setup-state.json.bak
+.setup-state.json.tmp
+.setup-state.lock
+.setup-state.audit.log
 
 # Understand Anything — fully regenerable analysis output
 .understand-anything/

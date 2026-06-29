@@ -5,11 +5,18 @@
  * the configured team namespace, mirroring the Postman provider. Reuses the
  * `pnpm docs:generate` and `pnpm docs:upload:scalar` scripts so the registry
  * publish logic lives in one place (src/scripts/codegen/upload-scalar-registry.ts).
+ *
+ * NAMING (single source of truth = setup.config.json): organization/project names from
+ * `config.project.*` (registry slug defaults to `config.project.name`), environment names
+ * from `config.environments[].name` — never hardcoded.
+ * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
+ * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
  */
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import * as logger from '@tooling/setup/common/logger.js';
+import { resourceStatus } from '@tooling/setup/common/interactive-step.js';
 import { isSecretFilled } from '@tooling/setup/common/secrets.js';
 import { buildEnvironmentVariables } from '@tooling/setup/envs/build-env-vars.js';
 import { refreshEnvFiles } from '@tooling/setup/envs/export-env-files.js';
@@ -27,7 +34,9 @@ import type {
 const PROJECT_ROOT = resolve(import.meta.dirname, '../../../../../');
 const OPENAPI_SPEC_PATH = resolve(PROJECT_ROOT, 'docs', 'openapi', 'openapi.json');
 const SCALAR_REGISTRY_BASE_URL = 'https://registry.scalar.com';
-const DEFAULT_SCALAR_SLUG = 'core-be';
+// NAMING (single source of truth = setup.config.json): the Scalar registry slug
+// defaults to the PROJECT NAME (`config.project.name`) — never hardcode it here.
+// SCALAR_SLUG in .env.setup is only an explicit override.
 
 function toProcessEnvironment(
   variables: ReturnType<typeof buildEnvironmentVariables>,
@@ -97,7 +106,7 @@ export async function provision(
       env: environment,
     });
 
-    const slug = secrets.scalar.slug || DEFAULT_SCALAR_SLUG;
+    const slug = secrets.scalar.slug || config.project.name;
     const registryUrl = buildRegistryUrl(secrets.scalar.namespace, slug);
 
     logger.stopSpinner(uploadSpinner, `Scalar Registry published: ${registryUrl}`);
@@ -138,6 +147,7 @@ export const setupScalarProvider: InfraProvider = {
     config.providers.scalar.enabled
       ? [{ bucket: 'extra', provider: 'Scalar', detail: 'publish OpenAPI to registry' }]
       : [],
+  describe: ({ config }) => ({ project: config.project.name }),
   buildStep: (context: InfraProviderContext) => ({
     name: 'Scalar',
     enabled: setupScalarProvider.isEnabled(context),
@@ -146,8 +156,8 @@ export const setupScalarProvider: InfraProvider = {
       'Will generate the OpenAPI document and publish it to your Scalar Registry namespace.',
       'Idempotent: re-publishing overrides the existing version (scalar registry publish --force).',
     ],
-    alreadyDone: () => Boolean(context.state.scalar?.registryUrl),
-    alreadyDoneMessage: 'Scalar Registry already published',
+    detectStatus: () =>
+      resourceStatus(Boolean(context.state.scalar?.registryUrl), 'Scalar Registry published'),
     execute: async () => {
       const result = await provision(context.config, context.secrets, context.state);
       context.applyStateUpdates(result.stateUpdates ?? {});

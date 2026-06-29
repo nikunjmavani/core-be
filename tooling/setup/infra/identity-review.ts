@@ -13,6 +13,7 @@
  *   5. Persist back to setup.config.json.
  */
 import * as logger from '@tooling/setup/common/logger.js';
+import { SetupAbort, SetupError } from '@tooling/setup/common/setup-error.js';
 import { loadConfigIfExists, saveConfig } from '@tooling/setup/common/config.js';
 import { createReadline, questionWithDefault } from '@tooling/setup/common/prompts.js';
 import {
@@ -43,10 +44,6 @@ export function formatSetupServiceName(serviceName: string): string {
 
 export function formatSetupServiceNames(serviceNames: readonly string[]): string {
   return serviceNames.map(formatSetupServiceName).join(', ');
-}
-
-export interface IdentityReviewOptions {
-  assumeYes?: boolean;
 }
 
 type ReviewAction = 'keep' | 'edit' | 'abort';
@@ -135,8 +132,7 @@ async function editIdentity(config: SetupConfig): Promise<SetupConfig> {
   const environmentNames = parseEnvironmentNames(environmentNamesInput);
   if (environmentNames.length === 0) {
     readline.close();
-    logger.error('At least one environment is required.');
-    process.exit(1);
+    throw new SetupError('At least one environment is required.');
   }
 
   const branchByName = new Map<string, string>();
@@ -221,9 +217,7 @@ async function editIdentity(config: SetupConfig): Promise<SetupConfig> {
   return updated;
 }
 
-export async function reviewProjectIdentity(
-  options: IdentityReviewOptions = {},
-): Promise<SetupConfig> {
+export async function reviewProjectIdentity(): Promise<SetupConfig> {
   let config = loadConfigIfExists();
   let needsSave = false;
 
@@ -237,14 +231,6 @@ export async function reviewProjectIdentity(
 
   printIdentitySummary(config);
 
-  if (options.assumeYes) {
-    if (needsSave) {
-      saveConfig(config);
-      logger.success('Saved default project identity to tooling/setup/setup.config.json');
-    }
-    return config;
-  }
-
   const readline = createReadline();
   let action: ReviewAction;
   try {
@@ -254,8 +240,7 @@ export async function reviewProjectIdentity(
   }
 
   if (action === 'abort') {
-    logger.info('Aborted. No resources were created.');
-    process.exit(0);
+    throw new SetupAbort('Aborted. No resources were created.');
   }
 
   if (action === 'edit') {

@@ -1,12 +1,12 @@
-import { createHash } from 'node:crypto';
-import type { FastifyRequest } from 'fastify';
-import type { RateLimitOptions } from '@fastify/rate-limit';
-import { env } from '@/shared/config/env.config.js';
-import { getAuthenticatedActorId } from '@/shared/utils/http/request.util.js';
-import { Sentry } from '@/infrastructure/observability/sentry/sentry.js';
-import { logger } from '@/shared/utils/infrastructure/logger.util.js';
-import { MILLISECONDS_PER_MINUTE } from '@/shared/constants/ttl.constants.js';
-import { shouldEmitRateLimitTelemetry } from '@/shared/middlewares/rate-limit/rate-limit-telemetry-throttle.js';
+import { createHash } from "node:crypto";
+import type { FastifyRequest } from "fastify";
+import type { RateLimitOptions } from "@fastify/rate-limit";
+import { env } from "@/shared/config/env.config.js";
+import { getAuthenticatedActorId } from "@/shared/utils/http/request.util.js";
+import { Sentry } from "@/infrastructure/observability/sentry/sentry.js";
+import { logger } from "@/shared/utils/infrastructure/logger.util.js";
+import { MILLISECONDS_PER_MINUTE } from "@/shared/constants/ttl.constants.js";
+import { shouldEmitRateLimitTelemetry } from "@/shared/middlewares/rate-limit/rate-limit-telemetry-throttle.js";
 
 /**
  * Per-route rate limit presets for high-risk endpoints.
@@ -23,7 +23,10 @@ function buildRateLimitKeyFromIpAddress(request: FastifyRequest): string {
  * as the global limiter plus a warning-level Sentry breadcrumb for trace context. Observe-only — it
  * never changes throttling behavior. Matches the `onExceeding` signature `(request, key)`.
  */
-function recordRouteRateLimitExceeded(request: FastifyRequest, key: string): void {
+function recordRouteRateLimitExceeded(
+  request: FastifyRequest,
+  key: string,
+): void {
   // Throttle the WARN + Sentry breadcrumb per key (see rate-limit-telemetry-throttle.ts) so a
   // hot per-user / per-org bucket cannot flood logs and Sentry under load.
   if (!shouldEmitRateLimitTelemetry(key)) {
@@ -31,16 +34,16 @@ function recordRouteRateLimitExceeded(request: FastifyRequest, key: string): voi
   }
   const url = request.routeOptions?.url ?? request.url;
   logger.warn({
-    event: 'rate_limit.exceeded',
+    event: "rate_limit.exceeded",
     ip: request.ip,
     method: request.method,
     url,
     key,
   });
   Sentry.addBreadcrumb({
-    category: 'rate_limit',
+    category: "rate_limit",
     message: `Rate limit exceeded: ${key}`,
-    level: 'warning',
+    level: "warning",
     data: {
       method: request.method,
       url,
@@ -72,15 +75,17 @@ const RATE_LIMIT_EMAIL_HASH_PREFIX_LENGTH = 16;
  * `sendDefaultPii: false` Sentry posture. Hashing the email keeps the bucket stable (deterministic
  * per address) while making the log/breadcrumb value an opaque identifier.
  */
-function buildRateLimitKeyFromRequestBodyEmail(request: FastifyRequest): string {
+function buildRateLimitKeyFromRequestBodyEmail(
+  request: FastifyRequest,
+): string {
   const body = request.body as { email?: unknown } | undefined;
   const rawEmail = body?.email;
-  if (typeof rawEmail === 'string') {
+  if (typeof rawEmail === "string") {
     const normalizedEmail = rawEmail.trim().toLowerCase();
     if (normalizedEmail.length > 0) {
-      const emailHashPrefix = createHash('sha256')
+      const emailHashPrefix = createHash("sha256")
         .update(normalizedEmail)
-        .digest('hex')
+        .digest("hex")
         .slice(0, RATE_LIMIT_EMAIL_HASH_PREFIX_LENGTH);
       return `email:${emailHashPrefix}`;
     }
@@ -88,9 +93,11 @@ function buildRateLimitKeyFromRequestBodyEmail(request: FastifyRequest): string 
   return `ip:${request.ip}`;
 }
 
-function buildRateLimitKeyFromAuthenticatedUserOrIpAddress(request: FastifyRequest): string {
+function buildRateLimitKeyFromAuthenticatedUserOrIpAddress(
+  request: FastifyRequest,
+): string {
   const auth = request.auth;
-  const userId = auth && auth.kind === 'user' ? auth.userId : undefined;
+  const userId = auth && auth.kind === "user" ? auth.userId : undefined;
   return userId ? `user:${userId}` : `ip:${request.ip}`;
 }
 
@@ -105,18 +112,25 @@ function buildRateLimitKeyFromAuthenticatedUserOrIpAddress(request: FastifyReque
  * the quota of other members in the same organization. Falls back to the actor alone (no
  * verified org context yet) and finally to the caller IP for unauthenticated edge cases.
  */
-function buildRateLimitKeyFromOrganizationActorOrIpAddress(request: FastifyRequest): string {
+function buildRateLimitKeyFromOrganizationActorOrIpAddress(
+  request: FastifyRequest,
+): string {
   // Resolve the actor via the principal union so an API-key caller keys on its key public id
   // (`actor:<apiKeyPublicId>`) instead of collapsing to `ip:` — the old `userId ?? apiKeyPublicId`
   // returned the empty-string user sentinel for API keys, defeating per-actor isolation.
-  const actorId = request.auth ? getAuthenticatedActorId(request.auth) : undefined;
+  const actorId = request.auth
+    ? getAuthenticatedActorId(request.auth)
+    : undefined;
   // Prefer the signed `org` token claim (the active org for both user and API-key principals) over
   // the legacy `X-Organization-Id` header, which flat-route clients no longer send. Without this the
   // per-(organization, actor) bucket would collapse to per-actor post-flatten, so one actor's spend
   // in one org would throttle them everywhere instead of isolating quota by active organization.
-  const requestWithOrganization = request as FastifyRequest & { organizationId?: string | null };
+  const requestWithOrganization = request as FastifyRequest & {
+    organizationId?: string | null;
+  };
   const organizationPublicId =
-    request.auth?.organizationPublicId ?? requestWithOrganization.organizationId;
+    request.auth?.organizationPublicId ??
+    requestWithOrganization.organizationId;
   if (
     organizationPublicId !== undefined &&
     organizationPublicId !== null &&
@@ -136,12 +150,20 @@ function buildRateLimitKeyFromOrganizationActorOrIpAddress(request: FastifyReque
 const NODE_ENV_FOR_RATE_LIMIT_CAPS = env.NODE_ENV;
 
 /**
+ * Non-hosted runtimes where strict public-auth caps (5/min) cause flaky local E2E and dev UX.
+ * Production and staging keep the tight cap — credential stuffing protection stays on there.
+ */
+function isRelaxedPublicAuthRateLimitEnv(nodeEnv: string): boolean {
+  return nodeEnv === "test" || nodeEnv === "development" || nodeEnv === "local";
+}
+
+/**
  * Sensitive public endpoints use a tight cap in production/staging so credentials cannot be brute-forced
- * from a single IPv4 rapidly. Integration tests hammer these routes from loopback in one Vitest file, so lift
- * the ceiling only under NODE_ENV=test to avoid flaky Redis-backed rate-limit waits/timeouts.
+ * from a single IPv4 rapidly. Lift the ceiling in test/development/local so Playwright E2E and
+ * loopback integration suites do not trip Redis-backed 429s from parallel workers.
  */
 const STRICT_PUBLIC_ROUTE_MAX_REQUESTS_PER_WINDOW =
-  NODE_ENV_FOR_RATE_LIMIT_CAPS === 'test' ? 5000 : 5;
+  isRelaxedPublicAuthRateLimitEnv(NODE_ENV_FOR_RATE_LIMIT_CAPS) ? 5000 : 5;
 
 /** Sensitive public auth-style endpoints — strict cap keyed by IP. */
 export const STRICT_PUBLIC_RATE_LIMIT = {
@@ -160,11 +182,11 @@ export const STRICT_PUBLIC_RATE_LIMIT = {
  * credential and outbound-email endpoints (login, magic-link request, password-reset request).
  * The IP-only {@link STRICT_PUBLIC_RATE_LIMIT} is spoofable, so this complements it by binding the
  * limit to the targeted account/email — blunting credential stuffing, account enumeration, and
- * mailbomb abuse on public auth routes. Lifted under
- * NODE_ENV=test so loopback suites that loop these routes do not produce flaky 429s.
+ * mailbomb abuse on public auth routes. Lifted under test/development/local so loopback
+ * suites that loop these routes do not produce flaky 429s.
  */
 const STRICT_PUBLIC_PER_EMAIL_MAX_REQUESTS_PER_WINDOW =
-  NODE_ENV_FOR_RATE_LIMIT_CAPS === 'test' ? 5000 : 5;
+  isRelaxedPublicAuthRateLimitEnv(NODE_ENV_FOR_RATE_LIMIT_CAPS) ? 5000 : 5;
 const STRICT_PUBLIC_PER_EMAIL_WINDOW_MS = 15 * MILLISECONDS_PER_MINUTE;
 
 /**
@@ -175,13 +197,15 @@ const STRICT_PUBLIC_PER_EMAIL_WINDOW_MS = 15 * MILLISECONDS_PER_MINUTE;
 export const STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS: RateLimitOptions = {
   max: STRICT_PUBLIC_PER_EMAIL_MAX_REQUESTS_PER_WINDOW,
   timeWindow: STRICT_PUBLIC_PER_EMAIL_WINDOW_MS,
-  hook: 'preHandler',
+  hook: "preHandler",
   keyGenerator: buildRateLimitKeyFromRequestBodyEmail,
   onExceeding: recordRouteRateLimitExceeded,
 };
 
-const STRICT_AUTHED_MAX_REQUESTS_PER_WINDOW = NODE_ENV_FOR_RATE_LIMIT_CAPS === 'test' ? 5000 : 10;
-const MODERATE_AUTHED_MAX_REQUESTS_PER_WINDOW = NODE_ENV_FOR_RATE_LIMIT_CAPS === 'test' ? 5000 : 30;
+const STRICT_AUTHED_MAX_REQUESTS_PER_WINDOW =
+  NODE_ENV_FOR_RATE_LIMIT_CAPS === "test" ? 5000 : 10;
+const MODERATE_AUTHED_MAX_REQUESTS_PER_WINDOW =
+  NODE_ENV_FOR_RATE_LIMIT_CAPS === "test" ? 5000 : 30;
 
 /**
  * Authenticated credential / abuse-sensitive mutations (10 req / 60s in production), keyed by
@@ -193,7 +217,7 @@ export const STRICT_AUTHED_RATE_LIMIT = {
     rateLimit: {
       max: STRICT_AUTHED_MAX_REQUESTS_PER_WINDOW,
       timeWindow: MILLISECONDS_PER_MINUTE,
-      hook: 'preHandler' as const,
+      hook: "preHandler" as const,
       keyGenerator: buildRateLimitKeyFromAuthenticatedUserOrIpAddress,
       onExceeding: recordRouteRateLimitExceeded,
     },
@@ -206,7 +230,7 @@ export const MODERATE_AUTHED_RATE_LIMIT = {
     rateLimit: {
       max: MODERATE_AUTHED_MAX_REQUESTS_PER_WINDOW,
       timeWindow: MILLISECONDS_PER_MINUTE,
-      hook: 'preHandler' as const,
+      hook: "preHandler" as const,
       keyGenerator: buildRateLimitKeyFromAuthenticatedUserOrIpAddress,
       onExceeding: recordRouteRateLimitExceeded,
     },
@@ -229,7 +253,7 @@ export const REFRESH_RATE_LIMIT = {
 export const WEBHOOK_RATE_LIMIT = {
   config: {
     rateLimit: {
-      max: NODE_ENV_FOR_RATE_LIMIT_CAPS === 'test' ? 5000 : 60,
+      max: NODE_ENV_FOR_RATE_LIMIT_CAPS === "test" ? 5000 : 60,
       timeWindow: MILLISECONDS_PER_MINUTE,
       keyGenerator: buildRateLimitKeyFromIpAddress,
       onExceeding: recordRouteRateLimitExceeded,
@@ -250,7 +274,7 @@ export const ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT = {
     rateLimit: {
       max: 100,
       timeWindow: MILLISECONDS_PER_MINUTE,
-      hook: 'preHandler' as const,
+      hook: "preHandler" as const,
       keyGenerator: buildRateLimitKeyFromOrganizationActorOrIpAddress,
       onExceeding: recordRouteRateLimitExceeded,
     },
@@ -263,7 +287,7 @@ export const EXPENSIVE_AUTHED_RATE_LIMIT = {
     rateLimit: {
       max: 5,
       timeWindow: 5 * MILLISECONDS_PER_MINUTE,
-      hook: 'preHandler' as const,
+      hook: "preHandler" as const,
       keyGenerator: buildRateLimitKeyFromAuthenticatedUserOrIpAddress,
       onExceeding: recordRouteRateLimitExceeded,
     },

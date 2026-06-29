@@ -30,6 +30,20 @@ const content = [input.content, input.new_string].filter(Boolean).join("\n");
 
 const warnings = [];
 
+// A real secrets file the agent must not read: any `.env.<env>` / `.env.setup` /
+// `.setup-state.json` — but NOT the committed templates (`*.example`).
+function isReadableSecretPath(p) {
+  if (!p) return false;
+  if (/(^|\/)\.setup-state\.json$/.test(p)) return true;
+  if (/(^|\/)\.env\.example$/.test(p) || /(^|\/)\.env\.setup\.example$/.test(p)) return false;
+  return /(^|\/)\.env(\.[\w.-]+)?$/.test(p);
+}
+
+const SECRET_READ_DENIAL =
+  "Blocked by core-be guardrail: reading secrets files (.env.<env> / .env.setup / .setup-state.json) " +
+  "is not allowed for the agent — they hold provisioned secrets. Values flow only into " +
+  ".env.<environment> and are never shown. If a human needs one: `pnpm setup:infra:output --copy <KEY>`.";
+
 function deny(reason) {
   process.stdout.write(
     JSON.stringify({
@@ -41,6 +55,18 @@ function deny(reason) {
     }),
   );
   process.exit(0);
+}
+
+// --- BLOCK: agent reading secrets files --------------------------------------
+if (tool === "Read" && isReadableSecretPath(filePath)) {
+  deny(SECRET_READ_DENIAL);
+}
+if (tool === "Bash" && command) {
+  // Any token that resolves to a secrets file (cat/grep/cp/source/< redirection, …).
+  const touchesSecret = command
+    .split(/[\s;|&><()'"`]+/)
+    .some((token) => isReadableSecretPath(token.replace(/^['"]|['"]$/g, "")));
+  if (touchesSecret) deny(SECRET_READ_DENIAL);
 }
 
 // --- BLOCK: destructive shell ------------------------------------------------

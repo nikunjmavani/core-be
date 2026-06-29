@@ -65,6 +65,11 @@ export interface EnvironmentVariables {
   OAUTH_GITHUB_CLIENT_ID?: string;
   OAUTH_GITHUB_CLIENT_SECRET?: string;
   OAUTH_GITHUB_REDIRECT_URI?: string;
+  POSTHOG_KEY?: string;
+  POSTHOG_HOST?: string;
+  CAPTCHA_PROVIDER?: string;
+  CAPTCHA_SITE_KEY?: string;
+  CAPTCHA_SECRET?: string;
   SENTRY_DSN?: string;
   SENTRY_ENVIRONMENT?: string;
   SENTRY_TRACES_SAMPLE_RATE?: string;
@@ -142,6 +147,22 @@ export interface InfraProviderExistingResource {
   detail: string;
 }
 
+/**
+ * The organization / project / environment names a provider operates on — exactly as the
+ * provider's own code derives them (all from `setup.config.json`, never hardcoded).
+ * Surfaced as columns by `setup:infra:plan`. `—` (omitted field) = not applicable.
+ */
+export interface InfraProviderDescription {
+  /** Org / owner / workspace name (e.g. Sentry org, GitHub owner). */
+  organization?: string;
+  /** Project / repo / bucket-prefix / slug name. */
+  project?: string;
+  /** Per-environment resource names (or the env names when 1:1). */
+  environments?: string[];
+  /** Service names this provider deploys (e.g. Railway api/worker, Railway Redis redis). */
+  services?: string[];
+}
+
 export interface InfraProvider {
   /** Stable kebab-case key matching the folder name (e.g. 'neon'). */
   key: string;
@@ -159,6 +180,8 @@ export interface InfraProvider {
   detectExisting?(context: InfraProviderContext): Promise<InfraProviderExistingResource[]>;
   /** Remote resource detection for state reconstruction (used by --reconstruct). */
   detectRemote?(context: InfraProviderContext): Promise<Record<string, unknown>>;
+  /** Org / project / environment names this provider operates on (for `setup:infra:plan`). */
+  describe?(context: InfraProviderContext): InfraProviderDescription;
   /** Build the interactive step descriptor for the provision loop. */
   buildStep(context: InfraProviderContext): StepDescriptor<unknown>;
   /** Health check used by `runCheck`. Return true when not applicable. */

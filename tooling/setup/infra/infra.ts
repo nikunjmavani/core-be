@@ -14,6 +14,7 @@
  *   SETUP_INFRA_PROVIDERS=neon,jwt pnpm setup:infra --yes
  */
 import { loadEnvSetupIntoProcess } from '@tooling/setup/common/secrets.js';
+import { reportSetupError } from '@tooling/setup/common/setup-error.js';
 import * as logger from '@tooling/setup/common/logger.js';
 import {
   runProvision,
@@ -26,7 +27,6 @@ import {
 import type { ProviderSelectionInput } from './orchestrator.js';
 
 const args = process.argv.slice(2);
-const assumeYes = args.includes('--yes') || args.includes('-y');
 
 loadEnvSetupIntoProcess();
 
@@ -116,7 +116,7 @@ async function main(): Promise<void> {
         runDeleteInstructions({ providerSelection });
         break;
       case 'provision':
-        await runProvision({ assumeYes, providerSelection });
+        await runProvision({ providerSelection });
         break;
       default:
         logger.error(`Unknown command: ${command}`);
@@ -125,8 +125,7 @@ async function main(): Promise<void> {
     }
   } catch (error) {
     logger.blank();
-    logger.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    process.exit(reportSetupError(error, logger));
   }
 }
 

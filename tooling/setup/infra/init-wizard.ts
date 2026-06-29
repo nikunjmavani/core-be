@@ -9,6 +9,8 @@ import {
   setEnvSetupVariable,
 } from '@tooling/setup/common/secrets.js';
 import { loadConfigIfExists } from '@tooling/setup/common/config.js';
+import { SetupError } from '@tooling/setup/common/setup-error.js';
+import { assertInteractive } from '@tooling/setup/common/interactive-step.js';
 import * as logger from '@tooling/setup/common/logger.js';
 import { buildDefaultArtifacts } from '@tooling/setup/codegen/project-identity.util.js';
 import type { SetupConfig } from '@tooling/setup/common/types.js';
@@ -152,6 +154,8 @@ export function buildConfig(
         google: { enabled: true },
         github: { enabled: true },
       },
+      posthog: { enabled: true, region: 'us' },
+      turnstile: { enabled: true },
       railway: { enabled: true },
       github: {
         enabled: true,
@@ -172,6 +176,7 @@ export function buildConfig(
 }
 
 export async function runInitWizard(): Promise<void> {
+  assertInteractive();
   logger.info(
     'Setup init — we will ask for organization, project, and environments, then generate setup.config.json.',
   );
@@ -222,10 +227,9 @@ export async function runInitWizard(): Promise<void> {
     .filter((name) => name.length > 0);
 
   if (environmentNames.length === 0) {
-    logger.error(
+    throw new SetupError(
       'At least one environment is required (full names — e.g. development or development,production).',
     );
-    process.exit(1);
   }
 
   const config = buildConfig(organization, projectName, displayName, environmentNames);

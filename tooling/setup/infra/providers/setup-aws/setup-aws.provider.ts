@@ -1,3 +1,13 @@
+/**
+ * AWS S3 provider for `pnpm setup:infra`.
+ *
+ * Provisions an S3 bucket + scoped IAM user per environment and records the keys to state.
+ *
+ * NAMING (single source of truth = setup.config.json): organization/project names from
+ * `config.project.*`, environment names from `config.environments[].name` — never hardcoded.
+ * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
+ * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
+ */
 import {
   S3Client,
   CreateBucketCommand,
@@ -16,6 +26,7 @@ import {
 } from '@aws-sdk/client-iam';
 import * as logger from '@tooling/setup/common/logger.js';
 import { isSecretFilled } from '@tooling/setup/common/secrets.js';
+import { resourceStatus } from '@tooling/setup/common/interactive-step.js';
 import type {
   SetupConfig,
   SetupSecrets,
@@ -376,6 +387,10 @@ export const setupAwsProvider: InfraProvider = {
     s3Client.destroy();
     return existing;
   },
+  describe: ({ config, environments }) => ({
+    project: config.providers.aws.s3BucketPrefix,
+    environments,
+  }),
   buildStep: (context: InfraProviderContext) => ({
     name: 'AWS S3',
     enabled: setupAwsProvider.isEnabled(context),
@@ -390,10 +405,12 @@ export const setupAwsProvider: InfraProvider = {
         .join(', ')}.`,
       `Will create or adopt one IAM user per environment for restricted bucket access.`,
     ],
-    alreadyDone: () =>
-      allEnvironmentsHaveBucket(context.environments, context.state) &&
-      allEnvironmentsHaveIamUser(context.environments, context.state),
-    alreadyDoneMessage: 'all buckets + IAM users already in state',
+    detectStatus: () =>
+      resourceStatus(
+        allEnvironmentsHaveBucket(context.environments, context.state) &&
+          allEnvironmentsHaveIamUser(context.environments, context.state),
+        'all buckets + IAM users in state',
+      ),
     execute: async () => {
       const result = await provision(
         context.config,

@@ -55,7 +55,7 @@
       "iamUserPrefix": "core-be-s3"
     },
     "sentry": {
-      "enabled": false,
+      "enabled": true,
       "organization": "albetrios",
       "project": "core-be",
       "platform": "node",
@@ -76,15 +76,22 @@
       "fromName": "core-be"
     },
     "stripe": {
-      "enabled": false
+      "enabled": true
     },
     "oauth": {
       "google": {
-        "enabled": false
+        "enabled": true
       },
       "github": {
-        "enabled": false
+        "enabled": true
       }
+    },
+    "posthog": {
+      "enabled": true,
+      "region": "us"
+    },
+    "turnstile": {
+      "enabled": true
     },
     "railway": {
       "enabled": true

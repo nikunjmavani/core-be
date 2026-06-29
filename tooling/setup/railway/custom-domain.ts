@@ -46,6 +46,7 @@
 import { promises as dns } from 'node:dns';
 import { createInterface } from 'node:readline';
 import * as logger from '@tooling/setup/common/logger.js';
+import { setupFetch } from '@tooling/setup/common/setup-fetch.js';
 import { loadConfig } from '@tooling/setup/common/config.js';
 import { loadEnvSetupIntoProcess } from '@tooling/setup/common/secrets.js';
 import { loadState, saveState } from '@tooling/setup/common/state.js';
@@ -72,10 +73,14 @@ async function railwayGraphQL<T>(
   query: string,
   variables?: Record<string, unknown>,
 ): Promise<T> {
-  const response = await fetch(RAILWAY_API_URL, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables }),
+  const response = await setupFetch({
+    name: 'Railway',
+    url: RAILWAY_API_URL,
+    init: {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, variables }),
+    },
   });
 
   if (!response.ok) {

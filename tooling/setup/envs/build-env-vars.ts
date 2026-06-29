@@ -142,6 +142,23 @@ export function buildEnvironmentVariables(
     variables.OAUTH_GITHUB_REDIRECT_URI = githubOAuth.redirectUri;
   }
 
+  if (config.providers.posthog.enabled) {
+    // Per-env override wins; otherwise the org-wide project key resolved into state.
+    const posthogKey =
+      secrets.posthog?.environmentApiKeys?.[environmentName] ?? state.posthog?.projectApiKey;
+    if (posthogKey) {
+      variables.POSTHOG_KEY = posthogKey;
+      if (state.posthog?.host) variables.POSTHOG_HOST = state.posthog.host;
+    }
+  }
+
+  const turnstileEnvironment = secrets.turnstile?.[environmentName];
+  if (config.providers.turnstile.enabled && turnstileEnvironment?.secretKey) {
+    variables.CAPTCHA_PROVIDER = 'turnstile';
+    variables.CAPTCHA_SITE_KEY = turnstileEnvironment.siteKey;
+    variables.CAPTCHA_SECRET = turnstileEnvironment.secretKey;
+  }
+
   if (sentryConfig.enabled && state.sentry?.dsn) {
     variables.SENTRY_DSN = state.sentry.dsn;
     variables.SENTRY_ENVIRONMENT = environmentName;

@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
-import * as logger from './logger.js';
+import { SetupError } from './setup-error.js';
 
 const sampleRatesSchema = z.object({
   traces: z.number().min(0).max(1),
@@ -38,6 +38,15 @@ const projectGitSchema = z.object({
 });
 
 export const setupConfigSchema = z.object({
+  // ─── NAMING — SINGLE SOURCE OF TRUTH ────────────────────────────────────────
+  // setup.config.json is the ONE place these names are defined. Every setup script
+  // and provider MUST read them from the loaded config — never hardcode a literal:
+  //   • project.name         — PROJECT NAME (e.g. slugs, image tags, Scalar slug)
+  //   • project.displayName   — human-readable PROJECT NAME (logs, email "from name")
+  //   • project.organization  — ORGANIZATION NAME (Sentry org, GitHub owner, etc.)
+  //   • environments[].name   — ENVIRONMENT NAMES (the only valid env identifiers;
+  //                             alias maps like dev→development only NORMALIZE input)
+  // Change a name here and re-run `pnpm setup:infra:init` / `pnpm tool:generate-project-identity`.
   project: z.object({
     name: z.string().min(1),
     displayName: z.string().min(1),
@@ -94,6 +103,11 @@ export const setupConfigSchema = z.object({
       google: z.object({ enabled: z.boolean() }),
       github: z.object({ enabled: z.boolean() }),
     }),
+    posthog: z.object({
+      enabled: z.boolean(),
+      region: z.enum(['us', 'eu']).default('us'),
+    }),
+    turnstile: z.object({ enabled: z.boolean() }),
     railway: z.object({ enabled: z.boolean() }),
     github: z.object({
       enabled: z.boolean(),
@@ -181,9 +195,9 @@ export function loadConfigIfExists(): z.infer<typeof setupConfigSchema> | null {
 export function loadConfig(): z.infer<typeof setupConfigSchema> {
   const config = loadConfigIfExists();
   if (!config) {
-    logger.error(`Config file not found or invalid: ${CONFIG_PATH}`);
-    logger.info('Run pnpm setup --init to create tooling/setup/setup.config.json.');
-    process.exit(1);
+    throw new SetupError(`Config file not found or invalid: ${CONFIG_PATH}`, {
+      hint: 'Run pnpm setup --init to create tooling/setup/setup.config.json.',
+    });
   }
   return config;
 }

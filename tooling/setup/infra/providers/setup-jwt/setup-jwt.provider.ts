@@ -1,5 +1,17 @@
+/**
+ * JWT / app-secrets provider for `pnpm setup:infra`.
+ *
+ * Generates the JWT RS256 keypair and the app `SECRETS_ENCRYPTION_KEY` per environment
+ * into state (consumed by build-env-vars → `.env.<environment>`).
+ *
+ * NAMING (single source of truth = setup.config.json): organization/project names from
+ * `config.project.*`, environment names from `config.environments[].name` — never hardcoded.
+ * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
+ * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
+ */
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import * as logger from '@tooling/setup/common/logger.js';
+import { resourceStatus } from '@tooling/setup/common/interactive-step.js';
 import type {
   SetupState,
   ProviderResult,
@@ -117,6 +129,7 @@ export const setupJwtProvider: InfraProvider = {
       detail: `${environments.length} secrets (auto-generated)`,
     },
   ],
+  describe: ({ environments }) => ({ environments }),
   buildStep: (context: InfraProviderContext) => ({
     name: 'JWT secrets',
     enabled: true,
@@ -124,8 +137,11 @@ export const setupJwtProvider: InfraProvider = {
       `Will generate JWT signing secrets per environment: ${context.environments.join(', ')}.`,
       'Local-only — no third-party API calls. Secrets are stored in .setup-state.json.',
     ],
-    alreadyDone: () => allEnvironmentsHaveJwt(context.environments, context.state),
-    alreadyDoneMessage: 'JWT secrets already generated for all environments',
+    detectStatus: () =>
+      resourceStatus(
+        allEnvironmentsHaveJwt(context.environments, context.state),
+        'JWT secrets generated for all environments',
+      ),
     execute: async () => {
       const result = provision(context.state, context.environments);
       context.applyStateUpdates(result.stateUpdates ?? {});

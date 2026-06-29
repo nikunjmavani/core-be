@@ -1,5 +1,18 @@
+/**
+ * Sentry provider for `pnpm setup:infra`.
+ *
+ * Creates or adopts the Sentry project and records the DSN to state so build-env-vars
+ * wires SENTRY_DSN per environment.
+ *
+ * NAMING (single source of truth = setup.config.json): organization/project names from
+ * `config.project.*`, environment names from `config.environments[].name` — never hardcoded.
+ * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
+ * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
+ */
 import * as logger from '@tooling/setup/common/logger.js';
 import { isSecretFilled } from '@tooling/setup/common/secrets.js';
+import { setupFetch } from '@tooling/setup/common/setup-fetch.js';
+import { resourceStatus } from '@tooling/setup/common/interactive-step.js';
 import type {
   SetupConfig,
   SetupSecrets,
@@ -25,10 +38,14 @@ async function sentryRequest<T>(
   path: string,
   body?: unknown,
 ): Promise<T> {
-  const response = await fetch(`${SENTRY_API_BASE}${path}`, {
-    method,
-    headers: sentryHeaders(authToken),
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  const response = await setupFetch({
+    name: 'Sentry',
+    url: `${SENTRY_API_BASE}${path}`,
+    init: {
+      method,
+      headers: sentryHeaders(authToken),
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    },
   });
 
   if (!response.ok) {
@@ -187,15 +204,16 @@ export const setupSentryProvider: InfraProvider = {
   detectExisting: async ({ config, secrets }) => {
     if (!(config.providers.sentry.enabled && isSecretFilled(secrets.sentry.authToken))) return [];
     try {
-      const response = await fetch(
-        `https://sentry.io/api/0/projects/${config.providers.sentry.organization}/${config.project.name}/`,
-        {
+      const response = await setupFetch({
+        name: 'Sentry',
+        url: `https://sentry.io/api/0/projects/${config.providers.sentry.organization}/${config.project.name}/`,
+        init: {
           headers: {
             Authorization: `Bearer ${secrets.sentry.authToken}`,
             Accept: 'application/json',
           },
         },
-      );
+      });
       if (response.ok) {
         return [
           {
@@ -209,6 +227,11 @@ export const setupSentryProvider: InfraProvider = {
     }
     return [];
   },
+  describe: ({ config, environments }) => ({
+    organization: config.providers.sentry.organization,
+    project: config.providers.sentry.project ?? config.project.name,
+    environments,
+  }),
   buildStep: (context: InfraProviderContext) => ({
     name: 'Sentry',
     enabled: setupSentryProvider.isEnabled(context),
@@ -219,8 +242,7 @@ export const setupSentryProvider: InfraProvider = {
       }.`,
       'Saves the DSN to state so build-env-vars can wire SENTRY_DSN per environment.',
     ],
-    alreadyDone: () => Boolean(context.state.sentry?.dsn),
-    alreadyDoneMessage: 'Sentry DSN already in state',
+    detectStatus: () => resourceStatus(Boolean(context.state.sentry?.dsn), 'Sentry DSN in state'),
     execute: async () => {
       const result = await provision(context.config, context.secrets, context.state);
       if (!result.success) throw new Error(result.message);

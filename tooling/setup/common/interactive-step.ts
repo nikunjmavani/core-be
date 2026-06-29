@@ -17,6 +17,7 @@
  */
 import { createInterface } from 'node:readline';
 import * as logger from './logger.js';
+import { SetupError } from './setup-error.js';
 
 export type StepDecision = 'continue' | 'skip' | 'abort';
 export type FailureDecision = 'retry' | 'skip' | 'abort';
@@ -38,6 +39,23 @@ export interface LiveVerification {
   message: string;
 }
 
+/** Result of a resource existence/drift check (state-based). */
+export interface ResourceStatus {
+  /** `absent` → will create · `present` → up-to-date · `drift` → exists but config changed. */
+  state: 'absent' | 'present' | 'drift';
+  /** One-line human description shown in the plan and the step header. */
+  detail: string;
+  /** For `drift`: the specific config-vs-state differences. */
+  changes?: string[];
+}
+
+/** Shorthand for a state-based existence check: present → `present`, else `absent`. */
+export function resourceStatus(present: boolean, presentDetail: string): ResourceStatus {
+  return present
+    ? { state: 'present', detail: presentDetail }
+    : { state: 'absent', detail: 'will create' };
+}
+
 export interface StepDescriptor<T> {
   name: string;
   enabled: boolean;
@@ -50,18 +68,11 @@ export interface StepDescriptor<T> {
    */
   instructions: string[];
   /**
-   * Optional: if true, the step is already complete — skip prompt entirely.
-   * For per-environment checks, use alreadyDoneForEnvironment instead.
+   * Optional resource existence/drift check (state-based). `absent` → create silently;
+   * `present`/`drift` → prompt update/skip. Also consumed by `setup:infra:plan`. Omit for
+   * validate-only or always-run steps.
    */
-  alreadyDone?: () => boolean | Promise<boolean>;
-  alreadyDoneMessage?: string;
-  /**
-   * Optional: per-environment already-done check.
-   * Returns which environments are already done (should be skipped).
-   * Environments NOT in the returned set will be created.
-   */
-  alreadyDoneEnvironments?: (environments: string[]) => Promise<Set<string>>;
-  alreadyDoneEnvironmentMessage?: (env: string) => string;
+  detectStatus?: () => ResourceStatus | Promise<ResourceStatus>;
   /**
    * Run the actual provisioning. Should throw on failure or return the provider's result.
    */
@@ -84,8 +95,14 @@ export interface StepOutcome<T> {
   detail?: string;
 }
 
-export interface RunInteractiveStepOptions {
-  assumeYes?: boolean;
+/**
+ * Guard: setup-infra is interactive and human-only (no CI / unattended runs). Throws
+ * when stdin/stdout isn't a TTY so a piped/automated invocation fails fast and clearly.
+ */
+export function assertInteractive(): void {
+  if (!(process.stdin.isTTY && process.stdout.isTTY)) {
+    throw new SetupError('setup:infra is interactive and human-only — run it in a terminal.');
+  }
 }
 
 async function ask(question: string, defaultValue: string): Promise<string> {
@@ -109,6 +126,20 @@ async function promptStepDecision(): Promise<StepDecision> {
   }
 }
 
+/**
+ * Decision when a resource already exists (org/project/environment present): update it
+ * (re-run the step) or skip and keep what's there. Defaults to skip — never mutate
+ * existing infrastructure without an explicit choice.
+ */
+async function promptExistingDecision(): Promise<'update' | 'skip'> {
+  while (true) {
+    const answer = await ask('Already present — (u)pdate / (s)kip', 's');
+    if (['u', 'update', 'y', 'yes'].includes(answer)) return 'update';
+    if (['s', 'skip', 'n', 'no'].includes(answer)) return 'skip';
+    logger.warn('  Please answer with u (update) or s (skip).');
+  }
+}
+
 async function promptOnFailure(): Promise<FailureDecision> {
   while (true) {
     const answer = await ask('What now? (r)etry / (s)kip / (a)bort', 'r');
@@ -127,7 +158,6 @@ export async function runInteractiveStep<T>(
   stepNumber: number,
   totalSteps: number,
   descriptor: StepDescriptor<T>,
-  options: RunInteractiveStepOptions = {},
 ): Promise<StepOutcome<T>> {
   logger.stepHeader(stepNumber, totalSteps, descriptor.name);
 
@@ -137,33 +167,21 @@ export async function runInteractiveStep<T>(
     return { name: descriptor.name, status: 'disabled', detail: reason };
   }
 
-  if (descriptor.alreadyDone) {
-    const done = await descriptor.alreadyDone();
-    if (done) {
-      const message = descriptor.alreadyDoneMessage ?? 'already provisioned (state matches)';
-      logger.success(`Already complete — ${message}`);
-      return { name: descriptor.name, status: 'already-done', detail: message };
-    }
-  }
+  // Tracks an explicit "update existing" choice so we skip the redundant
+  // continue/skip/abort prompt below and go straight to execute.
+  let updatingExisting = false;
 
-  // Per-environment already-done check: shows which envs are done vs will-create
-  let doneEnvs: Set<string> = new Set();
-  if (descriptor.alreadyDoneEnvironments) {
-    doneEnvs = await descriptor.alreadyDoneEnvironments(
-      (descriptor as StepDescriptor<T> & { _environments: string[] })._environments ?? [],
-    );
-    if (doneEnvs.size > 0) {
-      const doneList = [...doneEnvs].join(', ');
-      logger.success(`Already done: ${doneList}`);
-    }
-    const todoList = (
-      (descriptor as StepDescriptor<T> & { _environments: string[] })._environments ?? []
-    ).filter((e) => !doneEnvs.has(e));
-    if (todoList.length > 0) {
-      logger.info(`Will create: ${todoList.join(', ')}`);
-    }
-    if (doneEnvs.size > 0 && todoList.length === 0) {
-      return { name: descriptor.name, status: 'already-done', detail: 'all environments complete' };
+  // Existence/drift check: absent → create; present/drift → prompt update or skip.
+  if (descriptor.detectStatus) {
+    const status = await descriptor.detectStatus();
+    if (status.state !== 'absent') {
+      const label = status.state === 'drift' ? 'Drift detected' : 'Already present';
+      logger.success(`${label} — ${status.detail}`);
+      for (const change of status.changes ?? []) logger.info(`  • ${change}`);
+      if ((await promptExistingDecision()) === 'skip') {
+        return { name: descriptor.name, status: 'already-done', detail: status.detail };
+      }
+      updatingExisting = true;
     }
   }
 
@@ -171,7 +189,8 @@ export async function runInteractiveStep<T>(
     logger.instruction(descriptor.instructions);
   }
 
-  const decision = options.assumeYes ? 'continue' : await promptStepDecision();
+  // "update existing" already confirmed intent → go straight to execute.
+  const decision = updatingExisting ? 'continue' : await promptStepDecision();
   if (decision === 'abort') {
     logger.warn('Aborted by user.');
     return { name: descriptor.name, status: 'aborted' };
@@ -192,9 +211,6 @@ export async function runInteractiveStep<T>(
     } catch (executionError) {
       const message = toError(executionError).message;
       logger.error(`Failed: ${message}`);
-      if (options.assumeYes) {
-        return { name: descriptor.name, status: 'failed', errorMessage: message };
-      }
       const recovery = await promptOnFailure();
       if (recovery === 'retry') continue;
       if (recovery === 'skip') {
@@ -207,13 +223,6 @@ export async function runInteractiveStep<T>(
       const stateCheck = descriptor.verifyState();
       if (!stateCheck.ok) {
         logger.error(`State verification failed: ${stateCheck.message}`);
-        if (options.assumeYes) {
-          return {
-            name: descriptor.name,
-            status: 'failed',
-            errorMessage: `state: ${stateCheck.message}`,
-          };
-        }
         const recovery = await promptOnFailure();
         if (recovery === 'retry') continue;
         if (recovery === 'skip') {
@@ -244,14 +253,6 @@ export async function runInteractiveStep<T>(
         logger.stopSpinner(liveSpinner, `Live verified — ${liveCheck.message}`);
       } else {
         logger.stopSpinner(liveSpinner, `Live verification failed — ${liveCheck.message}`, 'fail');
-        if (options.assumeYes) {
-          return {
-            name: descriptor.name,
-            status: 'failed',
-            errorMessage: `live: ${liveCheck.message}`,
-            result,
-          };
-        }
         const recovery = await promptOnFailure();
         if (recovery === 'retry') continue;
         if (recovery === 'skip') {

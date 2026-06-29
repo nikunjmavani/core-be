@@ -1,8 +1,20 @@
+/**
+ * Postman provider for `pnpm setup:infra`.
+ *
+ * Generates the OpenAPI spec and publishes the Postman collection to the configured workspace.
+ *
+ * NAMING (single source of truth = setup.config.json): organization/project names from
+ * `config.project.*`, environment names from `config.environments[].name` — never hardcoded.
+ * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
+ * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
+ */
 import { execSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import * as logger from '@tooling/setup/common/logger.js';
 import { isSecretFilled } from '@tooling/setup/common/secrets.js';
+import { setupFetch } from '@tooling/setup/common/setup-fetch.js';
+import { resourceStatus } from '@tooling/setup/common/interactive-step.js';
 import { buildEnvironmentVariables } from '@tooling/setup/envs/build-env-vars.js';
 import { refreshEnvFiles } from '@tooling/setup/envs/export-env-files.js';
 import type {
@@ -93,13 +105,17 @@ export async function provision(
       url = `${POSTMAN_API_BASE}/collections?workspace=${secrets.postman.workspaceId}`;
     }
 
-    const response = await fetch(url, {
-      method,
-      headers: {
-        'X-Api-Key': secrets.postman.apiKey,
-        'Content-Type': 'application/json',
+    const response = await setupFetch({
+      name: 'Postman',
+      url,
+      init: {
+        method,
+        headers: {
+          'X-Api-Key': secrets.postman.apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ collection: collectionData }),
       },
-      body: JSON.stringify({ collection: collectionData }),
     });
 
     if (!response.ok) {
@@ -155,6 +171,7 @@ export const setupPostmanProvider: InfraProvider = {
     config.providers.postman.enabled
       ? [{ bucket: 'extra', provider: 'Postman', detail: 'upload collection' }]
       : [],
+  describe: ({ config }) => ({ project: config.project.name }),
   buildStep: (context: InfraProviderContext) => ({
     name: 'Postman',
     enabled: setupPostmanProvider.isEnabled(context),
@@ -163,8 +180,8 @@ export const setupPostmanProvider: InfraProvider = {
       'Will generate the OpenAPI spec, convert to Postman Collection, and upload to your workspace.',
       'Idempotent: an existing collection is updated; otherwise a new one is created.',
     ],
-    alreadyDone: () => Boolean(context.state.postman?.collectionId),
-    alreadyDoneMessage: 'Postman collection already uploaded',
+    detectStatus: () =>
+      resourceStatus(Boolean(context.state.postman?.collectionId), 'Postman collection uploaded'),
     execute: async () => {
       const result = await provision(context.config, context.secrets, context.state);
       context.applyStateUpdates(result.stateUpdates ?? {});

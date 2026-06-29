@@ -1,10 +1,13 @@
-import Stripe from 'stripe';
-import { env } from '@/shared/config/env.config.js';
-import { buildOutboundCallOptions, outboundCall } from '@/infrastructure/outbound/index.js';
-import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import Stripe from "stripe";
+import { env } from "@/shared/config/env.config.js";
+import {
+  buildOutboundCallOptions,
+  outboundCall,
+} from "@/infrastructure/outbound/index.js";
+import { omitUndefined } from "@/shared/utils/validation/omit-undefined.util.js";
 
 /** Pinned Stripe API version — bump deliberately and verify against Stripe's changelog. */
-const STRIPE_API_VERSION = '2026-05-27.dahlia';
+const STRIPE_API_VERSION = "2026-05-27.dahlia";
 /** SDK-level network retries for Stripe calls (mutations additionally pass an idempotency key). */
 const STRIPE_MAX_NETWORK_RETRIES = 2;
 
@@ -17,7 +20,10 @@ let stripeInstance: Stripe | null = null;
  * there so production keeps the Node HTTP stack.
  */
 function shouldUseStripeFetchHttpClientForContractOutboundTests(): boolean {
-  return process.env.NODE_ENV === 'test' && process.env.CONTRACT_TESTS_ONLY === 'true';
+  return (
+    process.env.NODE_ENV === "test" &&
+    process.env.CONTRACT_TESTS_ONLY === "true"
+  );
 }
 
 /**
@@ -29,14 +35,14 @@ export function getStripeClient(): Stripe {
 
   const secretKey = env.STRIPE_SECRET_KEY;
   if (!secretKey) {
-    throw new Error('STRIPE_SECRET_KEY is not configured');
+    throw new Error("STRIPE_SECRET_KEY is not configured");
   }
 
   const optionalOutboundHttpClientForContractTests =
     shouldUseStripeFetchHttpClientForContractOutboundTests()
       ? {
-          httpClient: Stripe.createFetchHttpClient((...arguments_: Parameters<typeof fetch>) =>
-            fetch(...arguments_),
+          httpClient: Stripe.createFetchHttpClient(
+            (...arguments_: Parameters<typeof fetch>) => fetch(...arguments_),
           ),
         }
       : {};
@@ -80,7 +86,7 @@ export async function createStripeCustomer(options: {
 }): Promise<Stripe.Customer> {
   return outboundCall(
     buildOutboundCallOptions({
-      name: 'stripe',
+      name: "stripe",
       requestId: options.requestId,
       enforceAbortTimeout: false,
       rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
@@ -95,7 +101,9 @@ export async function createStripeCustomer(options: {
             name: options.name,
             metadata: options.metadata,
           }),
-          options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
+          options.idempotencyKey
+            ? { idempotencyKey: options.idempotencyKey }
+            : undefined,
         );
       },
     }),
@@ -115,7 +123,7 @@ export async function getStripeCustomer(
   try {
     return await outboundCall(
       buildOutboundCallOptions({
-        name: 'stripe',
+        name: "stripe",
         requestId,
         enforceAbortTimeout: false,
         rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
@@ -129,7 +137,7 @@ export async function getStripeCustomer(
   } catch (error) {
     if (
       error instanceof Stripe.errors.StripeInvalidRequestError &&
-      error.code === 'resource_missing'
+      error.code === "resource_missing"
     ) {
       return null;
     }
@@ -147,7 +155,7 @@ export async function retrieveStripeEvent(
 ): Promise<Stripe.Event> {
   return outboundCall(
     buildOutboundCallOptions({
-      name: 'stripe',
+      name: "stripe",
       requestId,
       // sec-Q5 + sec-re-15: the BullMQ webhook worker calls this per attempt.
       // Under Stripe latency or a regional outage, every retry of every queued
@@ -193,7 +201,7 @@ export async function listRecentStripeEvents(options: {
   const { createdGteSeconds, limit, requestId } = options;
   return outboundCall(
     buildOutboundCallOptions({
-      name: 'stripe',
+      name: "stripe",
       requestId,
       enforceAbortTimeout: true,
       rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
@@ -226,7 +234,7 @@ export async function createStripeSubscription(options: {
 }): Promise<Stripe.Subscription> {
   return outboundCall(
     buildOutboundCallOptions({
-      name: 'stripe',
+      name: "stripe",
       requestId: options.requestId,
       enforceAbortTimeout: false,
       rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
@@ -238,9 +246,11 @@ export async function createStripeSubscription(options: {
             items: [{ price: options.priceId }],
             trial_end: options.trialEnd,
             metadata: options.metadata,
-            payment_behavior: 'default_incomplete' as const,
+            payment_behavior: "default_incomplete" as const,
           }),
-          options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
+          options.idempotencyKey
+            ? { idempotencyKey: options.idempotencyKey }
+            : undefined,
         );
       },
     }),
@@ -259,7 +269,7 @@ export async function cancelStripeSubscription(
 ): Promise<Stripe.Subscription> {
   return outboundCall(
     buildOutboundCallOptions({
-      name: 'stripe',
+      name: "stripe",
       requestId: options?.requestId,
       enforceAbortTimeout: false,
       rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
@@ -271,13 +281,17 @@ export async function cancelStripeSubscription(
             {
               cancel_at_period_end: true,
             },
-            options?.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
+            options?.idempotencyKey
+              ? { idempotencyKey: options.idempotencyKey }
+              : undefined,
           );
         }
         return stripe.subscriptions.cancel(
           subscriptionId,
           {},
-          options?.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
+          options?.idempotencyKey
+            ? { idempotencyKey: options.idempotencyKey }
+            : undefined,
         );
       },
     }),
@@ -294,7 +308,7 @@ export async function resumeStripeSubscription(
 ): Promise<Stripe.Subscription> {
   return outboundCall(
     buildOutboundCallOptions({
-      name: 'stripe',
+      name: "stripe",
       requestId: options?.requestId,
       enforceAbortTimeout: false,
       rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
@@ -305,7 +319,9 @@ export async function resumeStripeSubscription(
           {
             cancel_at_period_end: false,
           },
-          options?.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
+          options?.idempotencyKey
+            ? { idempotencyKey: options.idempotencyKey }
+            : undefined,
         );
       },
     }),
@@ -328,7 +344,7 @@ export async function updateStripeSubscription(
 ): Promise<Stripe.Subscription> {
   return outboundCall(
     buildOutboundCallOptions({
-      name: 'stripe',
+      name: "stripe",
       requestId: options.requestId,
       enforceAbortTimeout: false,
       rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
@@ -337,7 +353,8 @@ export async function updateStripeSubscription(
         const params: Stripe.SubscriptionUpdateParams = {};
 
         if (options.priceId) {
-          const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+          const subscription =
+            await stripe.subscriptions.retrieve(subscriptionId);
           const itemId = subscription.items.data[0]?.id;
           if (itemId) {
             params.items = [{ id: itemId, price: options.priceId }];
@@ -351,7 +368,9 @@ export async function updateStripeSubscription(
         return stripe.subscriptions.update(
           subscriptionId,
           params,
-          options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
+          options.idempotencyKey
+            ? { idempotencyKey: options.idempotencyKey }
+            : undefined,
         );
       },
     }),
@@ -379,13 +398,14 @@ export async function updateStripeSubscriptionQuantity(
 ): Promise<Stripe.Subscription> {
   return outboundCall(
     buildOutboundCallOptions({
-      name: 'stripe',
+      name: "stripe",
       requestId: options?.requestId,
       enforceAbortTimeout: false,
       rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
       operation: async () => {
         const stripe = getStripeClient();
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        const subscription =
+          await stripe.subscriptions.retrieve(subscriptionId);
         const itemId = subscription.items.data[0]?.id;
         if (!itemId) {
           return subscription;
@@ -394,16 +414,164 @@ export async function updateStripeSubscriptionQuantity(
           subscriptionId,
           {
             items: [{ id: itemId, quantity }],
-            proration_behavior: 'create_prorations',
+            proration_behavior: "create_prorations",
           },
-          options?.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
+          options?.idempotencyKey
+            ? { idempotencyKey: options.idempotencyKey }
+            : undefined,
         );
       },
     }),
   );
 }
 
+// ── Invoices & payment methods (Stripe proxy) ─────────────────
+
+/**
+ * Lists Stripe invoices for a billing customer (newest first).
+ */
+export async function listStripeInvoices(
+  customerId: string,
+  options?: { limit?: number; requestId?: string },
+): Promise<Stripe.Invoice[]> {
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: "stripe",
+      requestId: options?.requestId,
+      enforceAbortTimeout: false,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        const page = await stripe.invoices.list(
+          {
+            customer: customerId,
+            limit: options?.limit ?? 24,
+          },
+          { timeout: env.STRIPE_HTTP_TIMEOUT_MS, maxNetworkRetries: 0 },
+        );
+        return page.data;
+      },
+    }),
+  );
+}
+
+/**
+ * Lists card payment methods saved on a Stripe customer.
+ */
+export async function listStripePaymentMethods(
+  customerId: string,
+  options?: { requestId?: string },
+): Promise<Stripe.PaymentMethod[]> {
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: "stripe",
+      requestId: options?.requestId,
+      enforceAbortTimeout: false,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        const page = await stripe.paymentMethods.list(
+          {
+            customer: customerId,
+            type: "card",
+          },
+          { timeout: env.STRIPE_HTTP_TIMEOUT_MS, maxNetworkRetries: 0 },
+        );
+        return page.data;
+      },
+    }),
+  );
+}
+
+/**
+ * Retrieves the customer's default payment method id when set on invoice settings.
+ */
+export async function retrieveStripeCustomerDefaultPaymentMethodId(
+  customerId: string,
+  requestId?: string,
+): Promise<string | null> {
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: "stripe",
+      requestId,
+      enforceAbortTimeout: false,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        const customer = await stripe.customers.retrieve(customerId);
+        if (customer.deleted) return null;
+        const defaultPm = customer.invoice_settings?.default_payment_method;
+        if (!defaultPm) return null;
+        return typeof defaultPm === "string" ? defaultPm : defaultPm.id;
+      },
+    }),
+  );
+}
+
+/**
+ * Creates a SetupIntent so the frontend can collect a card and attach it to the customer.
+ */
+export async function createStripeSetupIntent(
+  customerId: string,
+  options?: { requestId?: string; idempotencyKey?: string },
+): Promise<string | null> {
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: "stripe",
+      requestId: options?.requestId,
+      enforceAbortTimeout: false,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        const intent = await stripe.setupIntents.create(
+          {
+            customer: customerId,
+            payment_method_types: ["card"],
+            usage: "off_session",
+          },
+          options?.idempotencyKey
+            ? { idempotencyKey: options.idempotencyKey }
+            : undefined,
+        );
+        return intent.client_secret ?? null;
+      },
+    }),
+  );
+}
+
 // ── Webhook verification ──────────────────────────────────────
+
+/**
+ * Retrieves the PaymentIntent `client_secret` for an incomplete Stripe subscription so
+ * the frontend can confirm the first payment via Stripe.js (`default_incomplete` flow).
+ */
+export async function retrieveStripeSubscriptionPaymentClientSecret(
+  subscriptionId: string,
+  requestId?: string,
+): Promise<string | null> {
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: "stripe",
+      requestId,
+      enforceAbortTimeout: false,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        const subscription = await stripe.subscriptions.retrieve(
+          subscriptionId,
+          {
+            expand: ["latest_invoice.payment_intent"],
+          },
+        );
+        const latestInvoice = subscription.latest_invoice;
+        if (!latestInvoice || typeof latestInvoice === "string") return null;
+        const paymentIntent = latestInvoice.payment_intent;
+        if (!paymentIntent || typeof paymentIntent === "string") return null;
+        return paymentIntent.client_secret ?? null;
+      },
+    }),
+  );
+}
 
 /**
  * Verifies the `Stripe-Signature` header against the raw body and returns the parsed
@@ -428,12 +596,12 @@ export function constructStripeWebhookEvent(
   const stripe = getStripeClient();
   const webhookSecret = env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) {
-    throw new Error('STRIPE_WEBHOOK_SECRET is not configured');
+    throw new Error("STRIPE_WEBHOOK_SECRET is not configured");
   }
   // sec-new-B3: split on comma so operators can list old + new secret during a
   // rolling key rotation without dropping in-flight deliveries.
   const secrets = webhookSecret
-    .split(',')
+    .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
   let lastError: unknown;

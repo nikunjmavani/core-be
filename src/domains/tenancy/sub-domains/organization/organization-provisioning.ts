@@ -1,24 +1,42 @@
-import { withGlobalAdminDatabaseContext } from '@/infrastructure/database/contexts/global-admin-database.context.js';
-import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
-import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
-import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
-import { role_permissions } from '@/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.schema.js';
-import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
-import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
-import type { Organization } from '@/domains/tenancy/sub-domains/organization/organization.types.js';
+import { withGlobalAdminDatabaseContext } from "@/infrastructure/database/contexts/global-admin-database.context.js";
+import { generatePublicId } from "@/shared/utils/identity/public-id.util.js";
+import { BILLING_PERMISSIONS } from "@/domains/billing/billing.permissions.js";
+import { TENANCY_PERMISSIONS } from "@/domains/tenancy/tenancy.permissions.js";
+import { roles } from "@/domains/tenancy/sub-domains/member-roles/member-role.schema.js";
+import { role_permissions } from "@/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.schema.js";
+import { memberships } from "@/domains/tenancy/sub-domains/membership/membership.schema.js";
+import { organizations } from "@/domains/tenancy/sub-domains/organization/organization.schema.js";
+import type { Organization } from "@/domains/tenancy/sub-domains/organization/organization.types.js";
 
 /** Name of the auto-provisioned, undeletable owner role created with every organization. */
-export const OWNER_ROLE_NAME = 'Owner';
+export const OWNER_ROLE_NAME = "Owner";
 
 /** Every tenancy permission code — the owner role is granted the full set. */
-const ALL_TENANCY_PERMISSION_CODES: readonly string[] = Object.values(TENANCY_PERMISSIONS);
+const ALL_TENANCY_PERMISSION_CODES: readonly string[] =
+  Object.values(TENANCY_PERMISSIONS);
+
+const ALL_BILLING_PERMISSION_CODES: readonly string[] =
+  Object.values(BILLING_PERMISSIONS);
+
+/**
+ * Permission codes granted to the auto-provisioned Owner role.
+ * TEAM organizations also receive billing read/manage so the creator can use `/billing/*`.
+ */
+export function ownerPermissionCodesForOrganizationType(
+  type: ProvisionOrganizationInput["type"],
+): readonly string[] {
+  if (type === "TEAM") {
+    return [...ALL_TENANCY_PERMISSION_CODES, ...ALL_BILLING_PERMISSION_CODES];
+  }
+  return ALL_TENANCY_PERMISSION_CODES;
+}
 
 /** Input for {@link provisionOrganizationWithOwner}. */
 export interface ProvisionOrganizationInput {
   name: string;
   /** Null for a PERSONAL organization; kebab string for a TEAM. */
   slug: string | null;
-  type: 'PERSONAL' | 'TEAM';
+  type: "PERSONAL" | "TEAM";
   ownerUserId: number;
 }
 
@@ -31,9 +49,10 @@ export interface ProvisionOrganizationResult {
 
 /**
  * Atomically bootstrap an organization with full owner access: organization row →
- * system `Owner` role → every tenancy permission granted to it → the owner's ACTIVE
- * membership. Without this, a freshly created organization's owner resolves zero
- * permissions (the permission path is a strict role→membership join with no owner shortcut).
+ * system `Owner` role → every tenancy permission granted to it (plus billing read/manage
+ * for TEAM orgs) → the owner's ACTIVE membership. Without this, a freshly created
+ * organization's owner resolves zero permissions (the permission path is a strict
+ * role→membership join with no owner shortcut).
  *
  * @remarks
  * - **Algorithm:** runs all four inserts inside a single `withGlobalAdminDatabaseContext`
@@ -58,7 +77,7 @@ export async function provisionOrganizationWithOwner(
 }
 
 /** Default display name for an auto-provisioned personal organization. */
-export const PERSONAL_ORGANIZATION_NAME = 'Personal';
+export const PERSONAL_ORGANIZATION_NAME = "Personal";
 
 /**
  * Provision the single PERSONAL organization for a user at signup: a `type=PERSONAL`,
@@ -69,7 +88,12 @@ export async function provisionPersonalOrganization(
   ownerUserId: number,
   name: string = PERSONAL_ORGANIZATION_NAME,
 ): Promise<ProvisionOrganizationResult> {
-  return provisionOrganization({ name, slug: null, type: 'PERSONAL', ownerUserId });
+  return provisionOrganization({
+    name,
+    slug: null,
+    type: "PERSONAL",
+    ownerUserId,
+  });
 }
 
 async function provisionOrganization(
@@ -79,7 +103,7 @@ async function provisionOrganization(
     const [organization] = await databaseHandle
       .insert(organizations)
       .values({
-        public_id: generatePublicId('organization'),
+        public_id: generatePublicId("organization"),
         name: input.name,
         slug: input.slug,
         type: input.type,
@@ -92,7 +116,7 @@ async function provisionOrganization(
     const [role] = await databaseHandle
       .insert(roles)
       .values({
-        public_id: generatePublicId('memberRole'),
+        public_id: generatePublicId("memberRole"),
         organization_id: organization!.id,
         name: OWNER_ROLE_NAME,
         is_system: true,
@@ -101,21 +125,23 @@ async function provisionOrganization(
       .returning();
 
     await databaseHandle.insert(role_permissions).values(
-      ALL_TENANCY_PERMISSION_CODES.map((permission_code) => ({
-        role_id: role!.id,
-        permission_code,
-        created_by_user_id: input.ownerUserId,
-      })),
+      ownerPermissionCodesForOrganizationType(input.type).map(
+        (permission_code) => ({
+          role_id: role!.id,
+          permission_code,
+          created_by_user_id: input.ownerUserId,
+        }),
+      ),
     );
 
     const [membership] = await databaseHandle
       .insert(memberships)
       .values({
-        public_id: generatePublicId('membership'),
+        public_id: generatePublicId("membership"),
         user_id: input.ownerUserId,
         organization_id: organization!.id,
         role_id: role!.id,
-        status: 'ACTIVE',
+        status: "ACTIVE",
         joined_at: new Date(),
       })
       .returning();

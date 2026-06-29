@@ -9,13 +9,16 @@ import {
   getAvailableProviderKeys,
 } from './infra/orchestrator.js';
 import { runInitWizard } from './infra/init-wizard.js';
+import { runPlan } from './infra/plan.js';
+import { runOutput } from './infra/output.js';
 import { runExportEnv } from './envs/export-env-files.js';
 import { loadEnvSetupIntoProcess } from './common/secrets.js';
+import { omitUndefined } from './common/object.js';
+import { reportSetupError } from './common/setup-error.js';
 import * as logger from './common/logger.js';
 import type { ProviderSelectionInput } from './infra/orchestrator.js';
 
 const args = process.argv.slice(2);
-const assumeYes = args.includes('--yes') || args.includes('-y');
 
 loadEnvSetupIntoProcess();
 
@@ -36,8 +39,18 @@ function getCommand(): string {
   ) {
     return 'delete';
   }
+  if (args.includes('--plan')) return 'plan';
+  if (args.includes('--output')) return 'output';
   if (args.includes('--export-env')) return 'export-env';
   return 'provision';
+}
+
+function parseStringFlag(flagName: string): string | undefined {
+  const inline = args.find((arg) => arg.startsWith(`${flagName}=`));
+  if (inline) return inline.slice(flagName.length + 1);
+  const flagIndex = args.indexOf(flagName);
+  const value = flagIndex >= 0 ? args[flagIndex + 1] : undefined;
+  return value && !value.startsWith('--') ? value : undefined;
 }
 
 function parseProviderList(flagName: string): string[] | undefined {
@@ -67,8 +80,14 @@ function printHelp(): void {
   logger.info('  pnpm setup --init                    Generate setup.config.json + .env.setup');
   logger.info('  pnpm setup                           Full interactive provisioning');
   logger.info('  pnpm setup --preview                 Show providers + token URLs (no API calls)');
+  logger.info(
+    '  pnpm setup --plan                    Diff: what exists vs will be created/updated (read-only)',
+  );
   logger.info('  pnpm setup --dry-run                 Full dry-run of selected steps');
   logger.info('  pnpm setup --status                  All-environments dashboard');
+  logger.info(
+    '  pnpm setup --output                  Masked env inventory (secrets never printed; --copy <KEY> to clipboard)',
+  );
   logger.info('  pnpm setup --reconstruct             Rebuild state from remote APIs');
   logger.info('  pnpm setup --check                   Health check selected providers');
   logger.info(
@@ -101,6 +120,9 @@ async function main(): Promise<void> {
       case 'preview':
         runPreview({ providerSelection });
         break;
+      case 'plan':
+        await runPlan({ providerSelection });
+        break;
       case 'dry-run':
         logger.info('Dry-run: full provisioning preview');
         runPreview({ providerSelection });
@@ -109,7 +131,7 @@ async function main(): Promise<void> {
         await runReconstruct({ providerSelection });
         break;
       case 'provision':
-        await runProvision({ assumeYes, providerSelection });
+        await runProvision({ providerSelection });
         break;
       case 'check':
         await runCheck({ providerSelection });
@@ -128,6 +150,14 @@ async function main(): Promise<void> {
         }
         runDeleteInstructions({ providerSelection });
         break;
+      case 'output':
+        await runOutput(
+          omitUndefined({
+            environment: parseStringFlag('--environment'),
+            copy: parseStringFlag('--copy'),
+          }),
+        );
+        break;
       case 'export-env':
         runExportEnv();
         break;
@@ -138,8 +168,9 @@ async function main(): Promise<void> {
     }
   } catch (error) {
     logger.blank();
-    logger.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    // Single exit point: providers/orchestrator throw SetupError/SetupAbort instead of
+    // calling process.exit, so the whole module stays importable and testable.
+    process.exit(reportSetupError(error, logger));
   }
 }
 

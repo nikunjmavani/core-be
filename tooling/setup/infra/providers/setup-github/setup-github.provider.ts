@@ -1,3 +1,15 @@
+/**
+ * GitHub provider for `pnpm setup:infra`.
+ *
+ * Scaffolds the repo, branches, and rulesets, and pushes each `.env.<environment>` to the
+ * matching GitHub Environment secrets.
+ *
+ * NAMING (single source of truth = setup.config.json): organization/project names from
+ * `config.project.*` (+ `providers.github.repository`), environment names from
+ * `config.environments[].name` — never hardcoded.
+ * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
+ * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
+ */
 import { execSync } from 'node:child_process';
 import * as logger from '@tooling/setup/common/logger.js';
 import { runGithubInit } from '@tooling/setup/github/init.js';
@@ -139,6 +151,10 @@ export const setupGithubProvider: InfraProvider = {
           },
         ]
       : [],
+  describe: ({ config, environments }) => {
+    const [owner = '', repository = ''] = config.providers.github.repository.split('/');
+    return { organization: owner, project: repository, environments };
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'GitHub (branches, rulesets, environments, secrets)',
     enabled: setupGithubProvider.isEnabled(context),

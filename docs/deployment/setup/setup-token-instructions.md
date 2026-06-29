@@ -52,6 +52,8 @@ Only after both confirms will provisioning run. You can abort at any time.
 | **Stripe**                        | [Stripe Dashboard → API Keys](https://dashboard.stripe.com/apikeys)                                                                                                                                                             | `STRIPE_<ENV>_SECRET_KEY`, `STRIPE_<ENV>_WEBHOOK_SECRET` |
 | **Google OAuth**                  | [Google Cloud → Credentials](https://console.cloud.google.com/apis/credentials)                                                                                                                                                 | `OAUTH_GOOGLE_<ENV>_CLIENT_ID`, etc.                     |
 | **GitHub OAuth**                  | [GitHub → OAuth Apps](https://github.com/settings/developers)                                                                                                                                                                   | `OAUTH_GITHUB_<ENV>_CLIENT_ID`, etc.                     |
+| **PostHog**                       | [PostHog → Personal API keys](https://us.posthog.com/settings/user-api-keys)                                                                                                                                                    | `POSTHOG_PERSONAL_API_KEY` (resolves `POSTHOG_KEY`)     |
+| **Cloudflare Turnstile**          | [Cloudflare → Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile)                                                                                                                                                   | `TURNSTILE_<ENV>_SITE_KEY`, `TURNSTILE_<ENV>_SECRET_KEY` |
 | **Railway**                       | [railway.app → Tokens](https://railway.app/account/tokens)                                                                                                                                                                      | `RAILWAY_TOKEN`                                          |
 | **Postman**                       | [Postman → API Keys](https://go.postman.co/settings/me/api-keys), [Workspaces](https://go.postman.co/workspaces)                                                                                                                | `POSTMAN_API_KEY`, `POSTMAN_WORKSPACE_ID`                |
 | **Scalar**                        | [Scalar Dashboard → API Keys](https://dashboard.scalar.com)                                                                                                                                                                     | `SCALAR_API_KEY`, `SCALAR_NAMESPACE`, optional `SCALAR_SLUG` |
@@ -90,7 +92,9 @@ If you use `.env.setup` or export env vars, use these names (script maps them in
 | `SCALAR_API_KEY`, `SCALAR_NAMESPACE`, `SCALAR_SLUG`              | Scalar Registry (OpenAPI publish; slug defaults to `core-be`)               |
 | `STRIPE_<ENV>_SECRET_KEY`, `STRIPE_<ENV>_WEBHOOK_SECRET`          | Stripe per env (e.g. `STRIPE_DEV_SECRET_KEY`)                                |
 | `OAUTH_GOOGLE_<ENV>_CLIENT_ID`, `_CLIENT_SECRET`, `_REDIRECT_URI` | Google OAuth per env                                                         |
-| `OAUTH_GITHUB_<ENV>_CLIENT_ID`, etc.                              | GitHub OAuth per env                                                         |
+| `OAUTH_GITHUB_<ENV>_CLIENT_ID`, `_CLIENT_SECRET`, `_REDIRECT_URI` | GitHub OAuth per env                                                         |
+| `POSTHOG_PERSONAL_API_KEY` (optional `POSTHOG_PROJECT_ID` / `_API_KEY`) | PostHog (resolves `POSTHOG_KEY` / `POSTHOG_HOST`; region in `setup.config.json`) |
+| `TURNSTILE_<ENV>_SITE_KEY`, `TURNSTILE_<ENV>_SECRET_KEY`          | Cloudflare Turnstile per env (wires `CAPTCHA_*`)                             |
 
 ---
 

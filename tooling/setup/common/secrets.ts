@@ -20,6 +20,10 @@ const TOKEN_URLS: Record<string, string> = {
   SCALAR_API_KEY: 'https://dashboard.scalar.com (Settings → API keys)',
   SCALAR_NAMESPACE: 'https://dashboard.scalar.com (your team namespace)',
   SCALAR_SLUG: 'https://dashboard.scalar.com (registry slug; defaults to core-be)',
+  POSTHOG_PERSONAL_API_KEY:
+    'https://us.posthog.com/settings/user-api-keys (Create personal API key → All access)',
+  POSTHOG_PROJECT_API_KEY: 'https://us.posthog.com/settings/project (Project API Key, phc_…)',
+  POSTHOG_PROJECT_ID: 'https://us.posthog.com/settings/project (Project ID)',
 };
 
 const SIMPLE_VARS: Array<[string, string]> = [
@@ -36,6 +40,9 @@ const SIMPLE_VARS: Array<[string, string]> = [
   ['SCALAR_API_KEY', TOKEN_URLS.SCALAR_API_KEY ?? ''],
   ['SCALAR_NAMESPACE', TOKEN_URLS.SCALAR_NAMESPACE ?? ''],
   ['SCALAR_SLUG', TOKEN_URLS.SCALAR_SLUG ?? ''],
+  ['POSTHOG_PERSONAL_API_KEY', TOKEN_URLS.POSTHOG_PERSONAL_API_KEY ?? ''],
+  ['POSTHOG_PROJECT_API_KEY', TOKEN_URLS.POSTHOG_PROJECT_API_KEY ?? ''],
+  ['POSTHOG_PROJECT_ID', TOKEN_URLS.POSTHOG_PROJECT_ID ?? ''],
 ];
 
 // ─── Zod schemas ────────────────────────────────────────────────────────────
@@ -49,6 +56,11 @@ const oauthEnvironmentSchema = z.object({
 const stripeEnvironmentSchema = z.object({
   secretKey: z.string(),
   webhookSecret: z.string(),
+});
+
+const turnstileEnvironmentSchema = z.object({
+  siteKey: z.string(),
+  secretKey: z.string(),
 });
 
 export const setupSecretsSchema = z.object({
@@ -74,6 +86,20 @@ export const setupSecretsSchema = z.object({
     })
     .optional()
     .default({ google: {}, github: {} }),
+  posthog: z
+    .object({
+      /** Setup-time personal key (`phx_…`) — resolves the project key via the PostHog API. */
+      personalApiKey: z.string(),
+      /** Verbatim project key (`phc_…`) override — when set, the API lookup is skipped. */
+      projectApiKey: z.string().optional(),
+      /** Resolve the project key from this project id (GET /api/projects/<id>/). */
+      projectId: z.string().optional(),
+      /** Per-environment project-key overrides (mapped from `POSTHOG_<ENV>_PROJECT_API_KEY`). */
+      environmentApiKeys: z.record(z.string(), z.string()).optional().default({}),
+    })
+    .optional()
+    .default({ personalApiKey: '', environmentApiKeys: {} }),
+  turnstile: z.record(z.string(), turnstileEnvironmentSchema).optional().default({}),
   railway: z.object({
     /**
      * Account / project-wide token (Bearer auth). Required at setup time when the Railway
@@ -164,23 +190,33 @@ export function loadSecretsFromEnv(environmentNames: string[]): SetupSecrets {
     string,
     { clientId: string; clientSecret: string; redirectUri: string }
   > = {};
+  const turnstile: SetupSecrets['turnstile'] = {};
+  const posthogEnvironmentApiKeys: Record<string, string> = {};
 
   for (const env of environmentNames) {
-    const sk = get(source, `STRIPE_${env.toUpperCase()}_SECRET_KEY`);
-    const ws = get(source, `STRIPE_${env.toUpperCase()}_WEBHOOK_SECRET`);
+    const upper = env.toUpperCase();
+    const sk = get(source, `STRIPE_${upper}_SECRET_KEY`);
+    const ws = get(source, `STRIPE_${upper}_WEBHOOK_SECRET`);
     if (sk || ws) stripe[env] = { secretKey: sk, webhookSecret: ws };
 
-    const gClient = get(source, `OAUTH_GOOGLE_${env.toUpperCase()}_CLIENT_ID`);
-    const gSecret = get(source, `OAUTH_GOOGLE_${env.toUpperCase()}_CLIENT_SECRET`);
-    const gRedirect = get(source, `OAUTH_GOOGLE_${env.toUpperCase()}_REDIRECT_URI`);
+    const gClient = get(source, `OAUTH_GOOGLE_${upper}_CLIENT_ID`);
+    const gSecret = get(source, `OAUTH_GOOGLE_${upper}_CLIENT_SECRET`);
+    const gRedirect = get(source, `OAUTH_GOOGLE_${upper}_REDIRECT_URI`);
     if (gClient || gSecret || gRedirect)
       oauthGoogle[env] = { clientId: gClient, clientSecret: gSecret, redirectUri: gRedirect };
 
-    const ghClient = get(source, `OAUTH_GITHUB_${env.toUpperCase()}_CLIENT_ID`);
-    const ghSecret = get(source, `OAUTH_GITHUB_${env.toUpperCase()}_CLIENT_SECRET`);
-    const ghRedirect = get(source, `OAUTH_GITHUB_${env.toUpperCase()}_REDIRECT_URI`);
+    const ghClient = get(source, `OAUTH_GITHUB_${upper}_CLIENT_ID`);
+    const ghSecret = get(source, `OAUTH_GITHUB_${upper}_CLIENT_SECRET`);
+    const ghRedirect = get(source, `OAUTH_GITHUB_${upper}_REDIRECT_URI`);
     if (ghClient || ghSecret || ghRedirect)
       oauthGithub[env] = { clientId: ghClient, clientSecret: ghSecret, redirectUri: ghRedirect };
+
+    const tSite = get(source, `TURNSTILE_${upper}_SITE_KEY`);
+    const tSecret = get(source, `TURNSTILE_${upper}_SECRET_KEY`);
+    if (tSite || tSecret) turnstile[env] = { siteKey: tSite, secretKey: tSecret };
+
+    const phKey = get(source, `POSTHOG_${upper}_PROJECT_API_KEY`);
+    if (phKey) posthogEnvironmentApiKeys[env] = phKey;
   }
 
   return {
@@ -196,6 +232,13 @@ export function loadSecretsFromEnv(environmentNames: string[]): SetupSecrets {
       google: oauthGoogle,
       github: oauthGithub,
     },
+    posthog: {
+      personalApiKey: get(source, 'POSTHOG_PERSONAL_API_KEY'),
+      projectApiKey: get(source, 'POSTHOG_PROJECT_API_KEY') || undefined,
+      projectId: get(source, 'POSTHOG_PROJECT_ID') || undefined,
+      environmentApiKeys: posthogEnvironmentApiKeys,
+    },
+    turnstile: Object.keys(turnstile).length > 0 ? turnstile : {},
     railway: {
       apiToken: get(source, 'RAILWAY_API_TOKEN') || undefined,
     },
@@ -323,6 +366,12 @@ export function buildEnvSetupTemplateContent(config: SetupConfig): string {
     lines.push(`STRIPE_${u}_SECRET_KEY=`);
     lines.push(`STRIPE_${u}_WEBHOOK_SECRET=`);
     lines.push('');
+    lines.push(
+      `# Cloudflare Turnstile / CAPTCHA (${env}) — https://dash.cloudflare.com/?to=/:account/turnstile`,
+    );
+    lines.push(`TURNSTILE_${u}_SITE_KEY=`);
+    lines.push(`TURNSTILE_${u}_SECRET_KEY=`);
+    lines.push('');
   }
 
   lines.push('# Optional OAuth per env:');
@@ -330,10 +379,11 @@ export function buildEnvSetupTemplateContent(config: SetupConfig): string {
   lines.push(
     '#   OAUTH_GOOGLE_<ENV>_CLIENT_ID=  OAUTH_GOOGLE_<ENV>_CLIENT_SECRET=  OAUTH_GOOGLE_<ENV>_REDIRECT_URI=',
   );
-  lines.push('# GitHub OAuth: https://github.com/settings/developers');
+  lines.push('# GitHub: https://github.com/settings/developers');
   lines.push(
     '#   OAUTH_GITHUB_<ENV>_CLIENT_ID=  OAUTH_GITHUB_<ENV>_CLIENT_SECRET=  OAUTH_GITHUB_<ENV>_REDIRECT_URI=',
   );
+  lines.push('# PostHog per-env project-key override (optional): POSTHOG_<ENV>_PROJECT_API_KEY=');
   return lines.join('\n');
 }
 
@@ -370,6 +420,18 @@ export function appendMissingEnvSetupVariables(config: SetupConfig): string[] {
       );
       if (needSecret) appended.push(secretKey);
       if (needWebhook) appended.push(webhookSecret);
+    }
+
+    const turnstileSiteKey = `TURNSTILE_${u}_SITE_KEY`;
+    const turnstileSecretKey = `TURNSTILE_${u}_SECRET_KEY`;
+    const needTurnstileSite = !existingKeys.has(turnstileSiteKey);
+    const needTurnstileSecret = !existingKeys.has(turnstileSecretKey);
+    if (needTurnstileSite || needTurnstileSecret) {
+      blocks.push(
+        `# Cloudflare Turnstile / CAPTCHA (${env}) — https://dash.cloudflare.com/?to=/:account/turnstile\n${turnstileSiteKey}=\n${turnstileSecretKey}=`,
+      );
+      if (needTurnstileSite) appended.push(turnstileSiteKey);
+      if (needTurnstileSecret) appended.push(turnstileSecretKey);
     }
   }
 

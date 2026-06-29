@@ -17,11 +17,14 @@ import {
   provision as githubProvision,
 } from './providers/setup-github/setup-github.provider.js';
 import {
+  assertInteractive,
   runInteractiveStep,
   summarizeOutcomes,
   type StepDescriptor,
   type StepOutcome,
 } from '@tooling/setup/common/interactive-step.js';
+import { SetupAbort, SetupError } from '@tooling/setup/common/setup-error.js';
+import { renderPlan } from './plan.js';
 import {
   formatSetupServiceName,
   formatSetupServiceNames,
@@ -37,7 +40,6 @@ import type {
 } from '@tooling/setup/common/types.js';
 
 export interface ProvisionOptions {
-  assumeYes?: boolean;
   providerSelection?: ProviderSelectionInput;
 }
 
@@ -46,7 +48,7 @@ export interface ProviderSelectionInput {
   skipKeys?: string[];
 }
 
-function buildProviderContext(
+export function buildProviderContext(
   config: SetupConfig,
   secrets: SetupSecrets,
   state: SetupState,
@@ -93,7 +95,7 @@ function assertKnownProviderKeys(keys: string[]): void {
   );
 }
 
-function selectProviders(input?: ProviderSelectionInput): readonly InfraProvider[] {
+export function selectProviders(input?: ProviderSelectionInput): readonly InfraProvider[] {
   const includeKeys =
     input?.includeKeys && input.includeKeys.length > 0
       ? input.includeKeys
@@ -171,10 +173,6 @@ async function doubleConfirm(): Promise<boolean> {
   return second;
 }
 
-function isAssumeYes(options: ProvisionOptions | undefined): boolean {
-  return options?.assumeYes === true;
-}
-
 // ─── SETTINGS REVIEW ────────────────────────────────────────────────────────
 
 function displaySettingsReview(
@@ -237,16 +235,7 @@ async function checkForExistingResources(
 
 // ─── POST-PROVISION ENV OUTPUT PROMPT ────────────────────────────────────────
 
-async function promptEnvOutput(
-  environments: string[],
-  options: ProvisionOptions = {},
-): Promise<void> {
-  if (isAssumeYes(options)) {
-    logger.blank();
-    logger.info('.env files were exported and synced to GitHub as part of the provisioning steps.');
-    return;
-  }
-
+function promptEnvOutput(environments: string[]): void {
   logger.blank();
   logger.divider();
   console.log('');
@@ -305,7 +294,8 @@ export function runPreview(options: { providerSelection?: ProviderSelectionInput
 // ─── PROVISION ──────────────────────────────────────────────────────────────
 
 export async function runProvision(options: ProvisionOptions = {}): Promise<void> {
-  const config = await reviewProjectIdentity({ assumeYes: isAssumeYes(options) });
+  assertInteractive();
+  const config = await reviewProjectIdentity();
   const environments = getEnvironmentNames(config);
   const selectedProviders = selectProviders(options.providerSelection);
 
@@ -313,26 +303,19 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
   showProviderSelection(selectedProviders);
   logger.blank();
 
-  if (!isAssumeYes(options)) {
-    const branchOk = await confirmBranchProceed(config);
-    if (!branchOk) {
-      logger.blank();
-      logger.info('Aborted. No resources were created.');
-      process.exit(0);
-    }
-    logger.blank();
+  if (!(await confirmBranchProceed(config))) {
+    throw new SetupAbort('Aborted. No resources were created.');
   }
+  logger.blank();
 
-  const prerequisitesOk = checkPrerequisites(config);
-  if (!prerequisitesOk) {
-    process.exit(1);
+  if (!checkPrerequisites(config)) {
+    throw new SetupError('Prerequisites not met.');
   }
 
   if (ensureEnvSetupTemplate(config)) {
-    logger.info(
+    throw new SetupAbort(
       'Generated .env.setup template. Fill the values (see URLs in the file) and run pnpm setup:infra again.',
     );
-    process.exit(0);
   }
 
   await runGuide(config);
@@ -342,20 +325,21 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
   const context = buildProviderContext(config, secrets, state, environments);
 
   if (!hasAnyEnvSecret(environments)) {
-    logger.error(
+    throw new SetupError(
       'No secrets found. Fill .env.setup with your API keys (each variable has a comment with the URL to get it).',
+      { hint: 'Then run pnpm setup:infra again.' },
     );
-    logger.info('Then run pnpm setup:infra again.');
-    process.exit(1);
   }
 
   displaySettingsReview(config, context, selectedProviders);
 
-  const confirmed = isAssumeYes(options) ? true : await doubleConfirm();
-  if (!confirmed) {
-    logger.blank();
-    logger.info('Aborted. No resources were created.');
-    process.exit(0);
+  // Show the plan (what will be created/updated) before asking to apply.
+  logger.blank();
+  await renderPlan(selectedProviders, context);
+  logger.blank();
+
+  if (!(await doubleConfirm())) {
+    throw new SetupAbort('Aborted. No resources were created.');
   }
 
   logger.blank();
@@ -414,18 +398,14 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
   for (let index = 0; index < steps.length; index += 1) {
     const step = steps[index];
     if (step === undefined) continue;
-    const outcome = await runInteractiveStep(index + 1, totalSteps, step, {
-      assumeYes: isAssumeYes(options),
-    });
+    const outcome = await runInteractiveStep(index + 1, totalSteps, step);
     outcomes.push(outcome);
     if (outcome.status === 'aborted') {
       logger.blank();
-      logger.warn('Aborting setup at user request. State so far is saved.');
-      logger.info(
-        'No rollback is performed. Run "pnpm setup:infra --delete" to see dashboard URLs for any partial resources you want to remove manually.',
-      );
       printOutcomeSummary(outcomes);
-      process.exit(1);
+      throw new SetupAbort(
+        'Aborting setup at user request. State so far is saved. No rollback is performed — run "pnpm setup:infra --delete" for manual cleanup URLs.',
+      );
     }
   }
 
@@ -490,7 +470,7 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
   }
 
   // Post-provision: ask what to do with env files
-  await promptEnvOutput(environments, options);
+  promptEnvOutput(environments);
 }
 
 // ─── CROSS-CUTTING STEPS (env-file export, GitHub sync) ─────────────────────

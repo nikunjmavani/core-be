@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import * as logger from '@tooling/setup/common/logger.js';
+import { SetupAbort } from '@tooling/setup/common/setup-error.js';
 import {
   ensureEnvSetupTemplate,
   reloadSecrets,
@@ -198,6 +199,45 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
       ],
     },
     {
+      providerName: 'PostHog',
+      enabledCheck: (configuration) => configuration.providers.posthog.enabled,
+      secretsCheck: (secrets) =>
+        isSecretFilled(secrets.posthog?.personalApiKey) ||
+        isSecretFilled(secrets.posthog?.projectApiKey),
+      browserUrls: ['https://us.posthog.com/settings/user-api-keys'],
+      instructions: [
+        '1. Log in to PostHog',
+        '2. Go to Settings → Personal API keys → "Create personal API key"',
+        '3. Scopes: "All access" → Create → copy it (starts with phx_...)',
+        `4. In ${secretsPath} set: POSTHOG_PERSONAL_API_KEY=phx_...`,
+        '   (setup resolves the project key POSTHOG_KEY via the PostHog API)',
+        '   Optional override: POSTHOG_PROJECT_API_KEY=phc_... (skips the API lookup)',
+        '',
+        '5. Save the file',
+      ],
+    },
+    {
+      providerName: 'Cloudflare Turnstile',
+      enabledCheck: (configuration) => configuration.providers.turnstile.enabled,
+      secretsCheck: (secrets) => {
+        if (!secrets.turnstile) return false;
+        return environmentNames.every((environmentName) =>
+          isSecretFilled(secrets.turnstile?.[environmentName]?.secretKey),
+        );
+      },
+      browserUrls: ['https://dash.cloudflare.com/?to=/:account/turnstile'],
+      instructions: [
+        '1. Log in to the Cloudflare dashboard',
+        '2. Go to Turnstile → "Add widget"',
+        `3. Create one widget per environment (${environmentNames.join(', ')})`,
+        '4. Copy the Site Key (public) and Secret Key (server-side) for each',
+        `5. In ${secretsPath} set per env: TURNSTILE_<ENV>_SITE_KEY=0x... TURNSTILE_<ENV>_SECRET_KEY=0x...`,
+        '   (setup wires CAPTCHA_PROVIDER / CAPTCHA_SITE_KEY / CAPTCHA_SECRET)',
+        '',
+        '6. Save the file',
+      ],
+    },
+    {
       providerName: 'Railway',
       enabledCheck: (configuration) => configuration.providers.railway.enabled,
       secretsCheck: (secrets) => isSecretFilled(secrets.railway.apiToken),
@@ -271,10 +311,9 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
 
 export async function runGuide(config: SetupConfig): Promise<void> {
   if (ensureEnvSetupTemplate(config)) {
-    logger.info(
+    throw new SetupAbort(
       'Generated .env.setup template. Fill the values (see URLs in the file), then run pnpm setup:infra again.',
     );
-    process.exit(0);
   }
 
   const steps = buildGuideSteps(config);

@@ -17,7 +17,26 @@ When you **add or remove a third-party provider** in the setup:infra flow (`pnpm
 
 ## Source of truth (provider list)
 
-Current providers: **Neon**, **Railway Redis**, **AWS**, **Sentry**, **Resend**, **Stripe**, **OAuth (Google, GitHub)**, **Railway**, **GitHub** (repo/env secrets), **Postman**. Each appears in multiple places below; keep them in sync.
+Registered in `tooling/setup/infra/providers/index.ts` (`INFRA_PROVIDERS`): **Neon**, **AWS**, **Sentry**, **JWT**, **Resend**, **Stripe**, **OAuth (Google + GitHub)**, **PostHog**, **Turnstile**, **Railway**, **Railway Redis**, **GitHub** (repo/env secrets), **Postman**, **Scalar**. Each appears in multiple places below; keep them in sync.
+
+> **Quickest path to add one:** follow [`tooling/setup/SETUP_INFRA_PROVIDER_TEMPLATE.md`](../../../tooling/setup/SETUP_INFRA_PROVIDER_TEMPLATE.md) (10-step checklist + copy-paste `InfraProvider` skeleton). This skill is the exhaustive reference behind that template. Overview of the whole flow + all scripts: [`tooling/setup/SETUP_INFRA_README.md`](../../../tooling/setup/SETUP_INFRA_README.md).
+
+## Naming — SINGLE SOURCE OF TRUTH (strict)
+
+`tooling/setup/setup.config.json` is the **one** place these names are defined. Every script and provider MUST read them from the loaded config — **never hardcode a literal**:
+
+- `project.name` — PROJECT NAME · `project.displayName` — human-readable name · `project.organization` — ORGANIZATION NAME · `environments[].name` — ENVIRONMENT NAMES.
+
+Alias maps (`dev→development`) only normalize input; the canonical value is still config. A default that duplicates a name (e.g. a hardcoded slug `'core-be'`) is a violation — derive from `config.project.*` / `config.environments[]`. Only `init-wizard.ts` may hold seed defaults, because it *writes* the config. Add a `// NAMING (single source of truth = setup.config.json): …` comment in each script that touches org/project/env names.
+
+## Secrets never leak (strict, enforced)
+
+- **Never print a secret value.** Providers log status only (`valid`, `resolved`) — never a key/token/password/connection-string, including in error messages. A `logger.*` that interpolates a secret is a violation.
+- **Secrets go to `.env.<environment>` only** (`build-env-vars.ts` → provisioning). `pnpm setup:infra:output` shows a masked inventory; `--copy <KEY>` puts one value on the **clipboard** (never stdout, auto-cleared, audit-logged). `infra/output.ts` masks by key pattern and by value (embedded-credential URLs like `DATABASE_URL`); `common/clipboard.ts` shells out to pbcopy/wl-copy/xclip/xsel/clip.
+- **`.setup-state.json` is gitignored plaintext** (no encryption layer). **Agent deny-read:** `agent-os/hooks/guardrails.mjs` blocks the agent from Read/Bash-reading `.env.<env>` / `.env.setup` / `.setup-state.json` (matcher includes `Read` in `.claude/settings.json`).
+- **Every provider starts with the common header** — name · description · NAMING (config only) · SECRETS rule. See the skeleton in `SETUP_INFRA_PROVIDER_TEMPLATE.md`.
+- **Idempotent (present? update or skip · absent? create)** — resource-creating providers implement `alreadyDone()`/`alreadyDoneEnvironments()`; `runInteractiveStep` then prompts `(u)pdate / (s)kip` when present (default skip; auto-skip in `--yes`/CI) and creates when absent. Validate-only providers omit it.
+- **Enforcement:** `.env*` (except `*.example`) + `.setup-state.*` gitignored; pre-commit runs gitleaks `protect --staged` + the "No secret/state files staged" guard (`src/scripts/tooling/run-pre-commit-guard.ts`); both run in CI. Never weaken these.
 
 ---
 
@@ -33,24 +52,25 @@ Work through each section. Do not skip; missing any item will break init, previe
 ### 2. Secrets (env-style .env.setup)
 
 - **`tooling/setup/common/secrets.ts`** — In `setupSecretsSchema`, add the new provider’s secret shape (e.g. `newProvider: z.object({ apiKey: z.string() })`). Also update `loadSecretsFromEnv` to read the new key(s) and include them in the returned `SetupSecrets` object; update `hasAnyEnvSecret` if the new secrets should count toward “any secret filled”.
-- **`tooling/setup/infra/init-wizard.ts`** (env-secrets logic):
+- **`tooling/setup/common/secrets.ts`** (env-secrets / `.env.setup` template logic):
   - **`TOKEN_URLS`** — Add `NEW_PROVIDER_API_KEY: ‘https://...’` (URL where user gets the key).
   - **`SIMPLE_VARS`** — If the provider uses a single env var (or a fixed set), add `[‘NEW_PROVIDER_API_KEY’, TOKEN_URLS.NEW_PROVIDER_API_KEY]` so the template and `appendMissingEnvSetupVariables` include it.
   - **`buildEnvSetupTemplateContent`** — If the provider uses more than the simple vars (e.g. per-env keys), add the corresponding blocks (comments + `KEY=` lines) after the existing loops.
   - **`appendMissingEnvSetupVariables`** — Already uses `SIMPLE_VARS`; if the new provider needs per-env vars, add a loop similar to Stripe (check existing keys, append missing blocks).
 
-### 3. Orchestrator (preview, provisioning, check, status, update, rollback)
+### 3. Orchestrator (registry-driven — DO NOT EDIT)
 
-- **`tooling/setup/infra/orchestrator.ts`**:
-  - **`PREVIEW_PROVIDERS`** — Add an entry: `enabledCheck`, `provider` (display name), `detail`, `url`, `configKey` (e.g. `NEW_PROVIDER_API_KEY`).
-  - **`displaySettingsReview`** — Add a block for the new provider (e.g. “NewProvider — 1 project” or “validate 1 key”).
-  - **`checkForExistingResources`** — If the provider creates resources that should be detected (e.g. project name), add the check and push to `existing` when found.
-  - **`runProvision`** — Add a provisioning step (load provider module, call `provision`, `applyStateUpdates`, push to `completedProviders` if it creates resources). Order: follow existing order (Neon, AWS, Sentry, JWT, Resend, Stripe, OAuth, Railway, Railway Redis, GitHub, …).
-  - **`runCheck`** — Add health check for the new provider (call provider’s `check` when enabled and state exists).
-  - **`runStatus`** — If the provider has per-env or shared state, add a line to the shared resources summary or env rows.
-  - **`runUpdate`** — Only if the provider participates in “update” (e.g. re-sync secrets); GitHub does; most others don’t.
-  - **No automated rollback / no script-side delete.** `setup:infra` never deletes resources and never rolls back on failure. Failures stop the run; the user removes any partial resources by hand using `pnpm setup:infra --delete`.
-  - **`deleteInstructions(context)`** — If the provider records anything in `.setup-state.json`, implement this hook on the `InfraProvider`. Return one or more blocks `{ provider, dashboardUrl, steps?, resources: [{ label, identifier }] }` derived from state — these are rendered by `pnpm setup:infra --delete`. Do **not** add `destroy`/`destroyEnvironment` methods.
+`tooling/setup/infra/orchestrator.ts` iterates `INFRA_PROVIDERS` and calls each provider's
+interface hooks uniformly — there are **no** hardcoded `PREVIEW_PROVIDERS` /
+`displaySettingsReview` lists, and **no** rollback/destroy. You add behaviour by
+implementing hooks on your `InfraProvider` (step 6), not by editing the orchestrator:
+
+- **`preview(context)`** → returns `{ detail, url, configKey }` (shown in `setup:infra:preview`).
+- **`settingsReview(context)`** → returns settings-review entries.
+- **`detectExisting(context)`** → optional pre-existence detection.
+- **`buildStep(context)`** → the interactive provision step (calls `provision`, then `context.applyStateUpdates(result.stateUpdates ?? {})` for state-backed providers).
+- **`check(context)`** → health check for `setup:infra:check`.
+- **`deleteInstructions(context)`** → for any provider that writes to `.setup-state.json`, return `{ provider, dashboardUrl, steps?, resources: [{ label, identifier }] }` (rendered by `pnpm setup:infra --delete`). Never add `destroy`/`destroyEnvironment` — `setup:infra` does not delete resources or roll back; failures stop the run and the user cleans up via the printed guide.
 
 ### 4. Guide (browser + instructions)
 
@@ -105,7 +125,7 @@ Work through each section. Do not skip; missing any item will break init, previe
 Reverse the steps above; remove or disable the provider everywhere.
 
 1. **`tooling/setup/common/config.ts`** — Remove (or deprecate) the provider from `setupConfigSchema.providers`. If you keep the key for backward compatibility, set a default `enabled: false` and document deprecation.
-2. **`tooling/setup/infra/init-wizard.ts`** — Remove or set `enabled: false` in `buildConfig()` for the provider. Also remove associated env-secrets entries (`TOKEN_URLS`, `SIMPLE_VARS`, `buildEnvSetupTemplateContent`, `appendMissingEnvSetupVariables`) from this file.
+2. **`tooling/setup/infra/init-wizard.ts`** — Remove or set `enabled: false` in `buildConfig()` for the provider. Remove the associated env-secrets entries (`TOKEN_URLS`, `SIMPLE_VARS`, `buildEnvSetupTemplateContent`, `appendMissingEnvSetupVariables`) from `tooling/setup/common/secrets.ts`.
 3. **`tooling/setup/common/secrets.ts`** — Remove from `setupSecretsSchema` (or make optional and stop using). Also remove from `loadSecretsFromEnv` and `hasAnyEnvSecret`.
 4. **`tooling/setup/infra/orchestrator.ts`** — Remove from any provider-specific summary lines in `runStatus`, env-state helpers, and the per-provider blocks in the post-provision summary. The provider’s `deleteInstructions` hook is removed automatically when its module is deleted.
 5. **`tooling/setup/infra/guide.ts`** — Remove the corresponding step from `buildGuideSteps()`.
@@ -123,7 +143,7 @@ Reverse the steps above; remove or disable the provider everywhere.
 | Area                 | Files                                                                                     |
 | -------------------- | ----------------------------------------------------------------------------------------- |
 | Config & init        | `tooling/setup/common/config.ts`, `tooling/setup/infra/init-wizard.ts`                   |
-| Secrets & .env.setup | `tooling/setup/common/secrets.ts` (schema + load + hasAny); env-secrets logic in `tooling/setup/infra/init-wizard.ts` |
+| Secrets & .env.setup | `tooling/setup/common/secrets.ts` (schema + load + hasAny + TOKEN_URLS/SIMPLE_VARS + template) |
 | Orchestrator         | `tooling/setup/infra/orchestrator.ts`                                                     |
 | Guide                | `tooling/setup/infra/guide.ts`                                                            |
 | Prerequisites        | `tooling/setup/infra/prerequisites.ts`                                                    |

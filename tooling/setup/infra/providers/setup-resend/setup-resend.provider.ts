@@ -1,44 +1,30 @@
-import * as logger from '@tooling/setup/common/logger.js';
+/**
+ * Resend provider for `pnpm setup:infra`.
+ *
+ * Validates the Resend API key (no resource is created — Resend exposes a single org-level key).
+ *
+ * NAMING (single source of truth = setup.config.json): organization/project names from
+ * `config.project.*`, environment names from `config.environments[].name` — never hardcoded.
+ * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
+ * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
+ */
 import { isSecretFilled } from '@tooling/setup/common/secrets.js';
-import type {
-  SetupSecrets,
-  ProviderResult,
-  InfraProvider,
-  InfraProviderContext,
-} from '@tooling/setup/common/types.js';
+import { setupFetch } from '@tooling/setup/common/setup-fetch.js';
+import type { ProviderResult } from '@tooling/setup/common/types.js';
+import { createValidationProvider } from '../create-validation-provider.js';
 
-export async function provision(secrets: SetupSecrets): Promise<ProviderResult> {
-  const apiKey = secrets.resend.apiKey;
-
-  if (!apiKey) {
-    return { success: true, message: 'Resend: skipped (no API key)' };
-  }
-
-  const spinner = logger.startSpinner('Validating Resend API key...');
-
-  try {
-    const response = await fetch('https://api.resend.com/api-keys', {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Resend API returned ${response.status}`);
-    }
-
-    logger.stopSpinner(spinner, 'Resend API key — valid');
-    return { success: true, message: 'Resend: API key validated' };
-  } catch (validationError) {
-    const message =
-      validationError instanceof Error ? validationError.message : String(validationError);
-    logger.stopSpinner(spinner, `Resend validation failed: ${message}`, 'fail');
-    return { success: false, message };
-  }
+async function validateResend(apiKey: string): Promise<ProviderResult> {
+  if (!apiKey) return { success: true, message: 'Resend: skipped (no API key)' };
+  await setupFetch({
+    name: 'Resend',
+    url: 'https://api.resend.com/api-keys',
+    init: { headers: { Authorization: `Bearer ${apiKey}` } },
+    expectedStatus: 200,
+  });
+  return { success: true, message: 'Resend: API key validated' };
 }
 
-export const setupResendProvider: InfraProvider = {
+export const setupResendProvider = createValidationProvider({
   key: 'resend',
   name: 'Resend',
   isEnabled: ({ config, secrets }) =>
@@ -47,30 +33,11 @@ export const setupResendProvider: InfraProvider = {
     !config.providers.resend.enabled
       ? 'disabled in setup.config.json'
       : 'RESEND_API_KEY missing in .env.setup',
-  preview: ({ config }) =>
-    config.providers.resend.enabled
-      ? {
-          detail: 'API key',
-          url: 'https://resend.com/api-keys',
-          configKey: 'resend.apiKey',
-        }
-      : null,
-  settingsReview: ({ config }) =>
-    config.providers.resend.enabled
-      ? [{ bucket: 'extra', provider: 'Resend', detail: 'validate 1 key' }]
-      : [],
-  buildStep: (context: InfraProviderContext) => ({
-    name: 'Resend',
-    enabled: setupResendProvider.isEnabled(context),
-    enabledReason: setupResendProvider.disabledReason(context),
-    instructions: [
-      'Will validate RESEND_API_KEY by calling https://api.resend.com/domains.',
-      'No resource is created — Resend exposes a single org-level key.',
-    ],
-    execute: async () => {
-      const result = await provision(context.secrets);
-      if (!result.success) throw new Error(result.message);
-      return result;
-    },
-  }),
-};
+  preview: { detail: 'API key', url: 'https://resend.com/api-keys', configKey: 'resend.apiKey' },
+  settingsDetail: 'validate 1 key',
+  instructions: [
+    'Will validate RESEND_API_KEY by calling https://api.resend.com/api-keys.',
+    'No resource is created — Resend exposes a single org-level key.',
+  ],
+  validate: ({ secrets }) => validateResend(secrets.resend.apiKey),
+});

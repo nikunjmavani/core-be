@@ -1,5 +1,17 @@
+/**
+ * Railway Redis provider for `pnpm setup:infra`.
+ *
+ * Deploys the Railway "redis" database template and records its connection URL to state.
+ *
+ * NAMING (single source of truth = setup.config.json): organization/project names from
+ * `config.project.*`, environment names from `config.environments[].name` — never hardcoded.
+ * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
+ * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
+ */
 import * as logger from '@tooling/setup/common/logger.js';
 import { isSecretFilled } from '@tooling/setup/common/secrets.js';
+import { setupFetch } from '@tooling/setup/common/setup-fetch.js';
+import { resourceStatus } from '@tooling/setup/common/interactive-step.js';
 import type {
   InfraProvider,
   InfraProviderContext,
@@ -36,13 +48,17 @@ async function railwayGraphQL<T>(
   query: string,
   variables?: Record<string, unknown>,
 ): Promise<T> {
-  const response = await fetch(RAILWAY_API_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
+  const response = await setupFetch({
+    name: 'Railway Redis',
+    url: RAILWAY_API_URL,
+    init: {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query, variables }),
     },
-    body: JSON.stringify({ query, variables }),
   });
 
   if (!response.ok) {
@@ -681,6 +697,11 @@ export const setupRailwayRedisProvider: InfraProvider = {
           },
         ]
       : [],
+  describe: ({ config, environments }) => ({
+    project: config.project.name,
+    environments,
+    services: ['redis (database template)'],
+  }),
   buildStep: (context: InfraProviderContext) => ({
     name: 'Railway Redis',
     enabled: setupRailwayRedisProvider.isEnabled(context),
@@ -692,9 +713,11 @@ export const setupRailwayRedisProvider: InfraProvider = {
         ? `Will apply replica region "${context.config.providers.railwayRedis.region}" to newly-created Redis services via serviceInstanceUpdate.`
         : 'Will use Railway default region for newly-created Redis services (no region override configured).',
     ],
-    alreadyDone: () => allEnvironmentsHaveRedis(context.environments, context.state),
-    alreadyDoneMessage:
-      'all environments already have Railway Redis database services and concrete Redis URLs in state',
+    detectStatus: () =>
+      resourceStatus(
+        allEnvironmentsHaveRedis(context.environments, context.state),
+        'all environments have Railway Redis services + URLs in state',
+      ),
     execute: async () => {
       const result = await provision(
         context.config,

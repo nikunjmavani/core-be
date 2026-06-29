@@ -1,6 +1,19 @@
+/**
+ * Neon Postgres provider for `pnpm setup:infra`.
+ *
+ * Provisions the Neon project + per-environment branches and runtime roles; records
+ * connection URLs to state.
+ *
+ * NAMING (single source of truth = setup.config.json): organization/project names from
+ * `config.project.*`, environment names from `config.environments[].name` — never hardcoded.
+ * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
+ * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
+ */
 import { randomBytes } from 'node:crypto';
 import postgres from 'postgres';
 import * as logger from '@tooling/setup/common/logger.js';
+import { setupFetch } from '@tooling/setup/common/setup-fetch.js';
+import { resourceStatus } from '@tooling/setup/common/interactive-step.js';
 import { isSecretFilled } from '@tooling/setup/common/secrets.js';
 import type {
   SetupConfig,
@@ -140,10 +153,14 @@ async function neonRequest<T>(
       url.searchParams.set(key, value);
     }
   }
-  const response = await fetch(url.toString(), {
-    method,
-    headers: neonHeaders(apiKey),
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  const response = await setupFetch({
+    name: 'Neon',
+    url: url.toString(),
+    init: {
+      method,
+      headers: neonHeaders(apiKey),
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    },
   });
 
   if (!response.ok) {
@@ -673,10 +690,14 @@ export async function provision(
         `Neon create project request: POST ${createProjectUrl} (body includes org_id and project)`,
       );
 
-      const createResponse = await fetch(createProjectUrl, {
-        method: 'POST',
-        headers: neonHeaders(apiKey, orgId),
-        body: JSON.stringify({ ...projectBody, org_id: orgId }),
+      const createResponse = await setupFetch({
+        name: 'Neon',
+        url: createProjectUrl,
+        init: {
+          method: 'POST',
+          headers: neonHeaders(apiKey, orgId),
+          body: JSON.stringify({ ...projectBody, org_id: orgId }),
+        },
       });
 
       const responseText = await createResponse.text();
@@ -911,10 +932,14 @@ export const setupNeonProvider: InfraProvider = {
   detectExisting: async ({ config, secrets }) => {
     if (!(config.providers.neon.enabled && isSecretFilled(secrets.neon.apiKey))) return [];
     try {
-      const response = await fetch('https://console.neon.tech/api/v2/projects', {
-        headers: {
-          Authorization: `Bearer ${secrets.neon.apiKey}`,
-          Accept: 'application/json',
+      const response = await setupFetch({
+        name: 'Neon',
+        url: 'https://console.neon.tech/api/v2/projects',
+        init: {
+          headers: {
+            Authorization: `Bearer ${secrets.neon.apiKey}`,
+            Accept: 'application/json',
+          },
         },
       });
       if (response.ok) {
@@ -936,6 +961,7 @@ export const setupNeonProvider: InfraProvider = {
     }
     return [];
   },
+  describe: ({ config, environments }) => ({ project: config.project.name, environments }),
   buildStep: (context: InfraProviderContext) => ({
     name: 'Neon Postgres',
     enabled: setupNeonProvider.isEnabled(context),
@@ -945,11 +971,12 @@ export const setupNeonProvider: InfraProvider = {
       `Will create or adopt branches for: ${context.environments.join(', ')}.`,
       'Idempotent: existing projects/branches are adopted, not recreated.',
     ],
-    alreadyDone: () =>
-      Boolean(context.state.neon?.projectId) &&
-      allEnvironmentsHaveBranch(context.environments, context.state),
-    alreadyDoneMessage:
-      'project + all environment branches (with runtime role + migration URL) already in state',
+    detectStatus: () =>
+      resourceStatus(
+        Boolean(context.state.neon?.projectId) &&
+          allEnvironmentsHaveBranch(context.environments, context.state),
+        'project + all environment branches (with runtime role + migration URL) in state',
+      ),
     execute: async () => {
       const result = await provision(
         context.config,
