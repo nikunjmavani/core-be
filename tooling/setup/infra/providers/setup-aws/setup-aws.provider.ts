@@ -391,6 +391,62 @@ export const setupAwsProvider: InfraProvider = {
     project: config.providers.aws.s3BucketPrefix,
     environments,
   }),
+  inspectRemote: async ({ config, secrets, environments }) => {
+    const awsConfig = config.providers.aws;
+    if (!awsConfig.enabled)
+      return { present: false, fields: [], error: 'disabled in setup.config.json' };
+    if (!isSecretFilled(secrets.aws.accessKeyId)) {
+      return { present: false, fields: [], error: 'AWS_ACCESS_KEY_ID missing in .env.setup' };
+    }
+    const isAuthError = (error: unknown): boolean => {
+      const text = error instanceof Error ? `${error.name} ${error.message}` : String(error);
+      return /Credential|AccessDenied|InvalidAccessKeyId|SignatureDoesNotMatch|UnrecognizedClient|Network|Timeout|ECONN/i.test(
+        text,
+      );
+    };
+    const s3Client = createS3Client(secrets, awsConfig.region);
+    const iamClient = createIamClient(secrets);
+    const fields = [];
+    const authErrors: string[] = [];
+    let anyPresent = false;
+    for (const environmentName of environments) {
+      const bucketName = `${awsConfig.s3BucketPrefix}-${environmentName}-uploads`;
+      let bucketPresent = false;
+      try {
+        await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
+        bucketPresent = true;
+      } catch (error) {
+        if (isAuthError(error))
+          authErrors.push(error instanceof Error ? error.message : String(error));
+      }
+      fields.push({
+        label: `bucket (${environmentName})`,
+        expected: bucketName,
+        remote: bucketPresent ? bucketName : '—',
+        matches: bucketPresent,
+      });
+      const iamUsername = `${awsConfig.iamUserPrefix}-${environmentName}`;
+      let userPresent = false;
+      try {
+        await iamClient.send(new GetUserCommand({ UserName: iamUsername }));
+        userPresent = true;
+      } catch (error) {
+        if (isAuthError(error))
+          authErrors.push(error instanceof Error ? error.message : String(error));
+      }
+      fields.push({
+        label: `IAM user (${environmentName})`,
+        expected: iamUsername,
+        remote: userPresent ? iamUsername : '—',
+        matches: userPresent,
+      });
+      anyPresent = anyPresent || bucketPresent || userPresent;
+    }
+    if (!anyPresent && authErrors.length > 0) {
+      return { present: false, fields: [], error: authErrors[0] ?? 'AWS credentials error' };
+    }
+    return { present: anyPresent, fields };
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'AWS S3',
     enabled: setupAwsProvider.isEnabled(context),

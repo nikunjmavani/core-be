@@ -703,6 +703,76 @@ export const setupRailwayRedisProvider: InfraProvider = {
     services: ['redis (database template)'],
     planGroup: 'Railway',
   }),
+  inspectRemote: async ({ config, secrets, environments }) => {
+    if (!config.providers.railwayRedis.enabled) {
+      return { present: false, fields: [], error: 'disabled in setup.config.json' };
+    }
+    const token = secrets.railway.apiToken ?? '';
+    if (!token)
+      return { present: false, fields: [], error: 'RAILWAY_API_TOKEN missing in .env.setup' };
+    const projectName = config.project.name;
+    try {
+      // Find the project by name (independent of local state), then read services per env.
+      const projectList = await railwayGraphQL<{
+        projects?: { edges?: Array<{ node?: { id: string; name: string } }> };
+      }>(token, 'query { projects { edges { node { id name } } } }');
+      const projectId = projectList.projects?.edges
+        ?.map((edge) => edge.node)
+        .find((project) => project?.name === projectName)?.id;
+      if (!projectId) {
+        return {
+          present: false,
+          fields: [{ label: 'project', expected: projectName, remote: '—', matches: false }],
+        };
+      }
+      const detail = await railwayGraphQL<{
+        project?: {
+          environments?: {
+            edges?: Array<{
+              node?: {
+                name: string;
+                serviceInstances?: { edges?: Array<{ node?: { serviceName: string } }> };
+              };
+            }>;
+          };
+        };
+      }>(
+        token,
+        `query($id: String!) { project(id: $id) { environments { edges { node { name serviceInstances { edges { node { serviceName } } } } } } } }`,
+        { id: projectId },
+      );
+      const servicesByEnvironment = new Map<string, string[]>();
+      for (const edge of detail.project?.environments?.edges ?? []) {
+        const node = edge.node;
+        if (!node) continue;
+        servicesByEnvironment.set(
+          node.name,
+          (node.serviceInstances?.edges ?? []).map((service) => service.node?.serviceName ?? ''),
+        );
+      }
+      const fields = [];
+      let anyPresent = false;
+      for (const environmentName of environments) {
+        const present = (servicesByEnvironment.get(environmentName) ?? []).some((name) =>
+          name.toLowerCase().includes('redis'),
+        );
+        fields.push({
+          label: `redis service (${environmentName})`,
+          expected: REDIS_SERVICE_NAME_DEFAULT,
+          remote: present ? REDIS_SERVICE_NAME_DEFAULT : '—',
+          matches: present,
+        });
+        anyPresent = anyPresent || present;
+      }
+      return { present: anyPresent, fields };
+    } catch (error) {
+      return {
+        present: false,
+        fields: [],
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'Railway Redis',
     enabled: setupRailwayRedisProvider.isEnabled(context),
