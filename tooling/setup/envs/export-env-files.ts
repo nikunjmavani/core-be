@@ -103,11 +103,25 @@ function buildEnvContent(
         continue;
       }
 
-      // Provisioned keys always get fresh values from state.
+      // Provisioned keys get fresh values from state — but state is now EPHEMERAL
+      // (in-memory). When it is empty (e.g. standalone `setup:envs` without a fresh
+      // provision run in the same process), a provisioned key comes back empty. Never
+      // blank an existing value: preserve what is already in the env file so write-once
+      // secrets (DATABASE_URL, REDIS_URL, S3 secret, JWT, RAILWAY_TOKEN, …) survive.
       if (key in provisioned) {
         const value = provisioned[key as keyof EnvironmentVariables];
         const raw = typeof value === 'string' ? value : String(value ?? '');
-        result.push(`${key}=${escapeEnvValue(raw)}`);
+        if (raw !== '') {
+          result.push(`${key}=${escapeEnvValue(raw)}`);
+          continue;
+        }
+        const existingForProvisioned = existingValues?.get(key);
+        if (existingForProvisioned !== undefined) {
+          result.push(`${key}=${escapeEnvValue(existingForProvisioned)}`);
+          continue;
+        }
+        // No fresh value and nothing to preserve → keep the template default line.
+        result.push(line);
         continue;
       }
 

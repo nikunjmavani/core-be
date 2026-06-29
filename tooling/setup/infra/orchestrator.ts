@@ -780,11 +780,31 @@ export async function runReconstruct(
   }
 }
 
+/**
+ * Best-effort hydration of the ephemeral in-memory state from live remote, for standalone
+ * commands that need provisioned resource ids/urls (there is no persisted state file). Runs
+ * each selected provider's `detectRemote` into the shared in-memory state and returns it.
+ * Silent on missing tokens / unreachable providers — the caller proceeds with whatever was
+ * found. Quiet (no spinners) so it can run ahead of another command's output.
+ */
+export async function hydrateStateFromRemote(
+  options: { providerSelection?: ProviderSelectionInput } = {},
+): Promise<SetupState> {
+  const config = loadConfig();
+  const secrets = loadSecrets(config);
+  const environments = getEnvironmentNames(config);
+  const state = loadState();
+  const providers = selectProviders(options.providerSelection);
+  await reconstructStateFromRemote({ config, secrets, state, environments, providers });
+  return state;
+}
+
 // ─── DELETE INSTRUCTIONS ────────────────────────────────────────────────────
 //
 // `pnpm setup:infra --delete` is read-only: it never deletes resources. It
-// loads `.setup-state.json` and prints, per provider, the dashboard URL and
-// the identifiers the user must delete manually.
+// prints, per provider, the dashboard URL and the identifiers the user must
+// delete manually. State is ephemeral, so identifiers come from whatever the
+// in-memory run state holds (run after a provision/reconstruct for specifics).
 
 export function runDeleteInstructions(
   options: { providerSelection?: ProviderSelectionInput } = {},

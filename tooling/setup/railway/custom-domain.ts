@@ -8,7 +8,7 @@
  *   4. Print the DNS records Railway expects at the user's DNS provider.
  *   5. Poll local DNS resolution and Railway's `customDomains.status` until both DNS is verified
  *      and Railway has issued the Let's Encrypt certificate (or the timeout elapses).
- *   6. Persist `customDomain` into `.setup-state.json` for downstream tooling.
+ *   6. Record `customDomain` on the in-memory run state (state is ephemeral — not persisted).
  *   7. Print the env-var follow-ups the user almost always needs (`ALLOWED_ORIGINS`,
  *      `FRONTEND_URL`, `OAUTH_*_REDIRECT_URI`) with copy-pasteable `gh secret set` commands.
  *
@@ -20,10 +20,10 @@
  *   - `--check`: read-only re-poll of an already-attached custom domain. Safe to run on a cron.
  *
  * Flags:
- *   --environment <name>          Repeatable. Limits the run to specific envs from
- *                                 `.setup-state.json`. When omitted, behavior depends on
+ *   --environment <name>          Repeatable. Limits the run to specific envs (resolved from
+ *                                 live remote). When omitted, behavior depends on
  *                                 `--all-environments` and whether prompts are usable.
- *   --all-environments            Loop every environment recorded in `.setup-state.json`.
+ *   --all-environments            Loop every environment found remotely for the project.
  *   --service <name>              Defaults to `api`. `worker` is rejected.
  *   --domain <fqdn>               Required (per env) when running non-interactively. Mutually
  *                                 exclusive with `--domain-template`.
@@ -49,7 +49,8 @@ import * as logger from '@tooling/setup/common/logger.js';
 import { setupFetch } from '@tooling/setup/common/setup-fetch.js';
 import { loadConfig } from '@tooling/setup/common/config.js';
 import { loadEnvSetupIntoProcess } from '@tooling/setup/common/secrets.js';
-import { loadState, saveState } from '@tooling/setup/common/state.js';
+import { saveState } from '@tooling/setup/common/state.js';
+import { hydrateStateFromRemote } from '@tooling/setup/infra/orchestrator.js';
 import type { SetupState } from '@tooling/setup/common/types.js';
 
 const RAILWAY_API_URL = 'https://backboard.railway.com/graphql/v2';
@@ -648,7 +649,7 @@ function printHelp(): void {
     '',
     'Flags:',
     '  --environment <name>          Repeatable. Limit run to specific envs.',
-    '  --all-environments            Loop every env in .setup/.setup-state.json.',
+    '  --all-environments            Loop every env found remotely for the project.',
     '  --service <name>              Defaults to "api". "worker" is rejected.',
     '  --domain <fqdn>               Required per env when running non-interactively.',
     '  --domain-template <pattern>   Use with --all-environments. {env} placeholder.',
@@ -995,11 +996,15 @@ async function main(): Promise<void> {
   }
 
   const config = loadConfig();
-  const state = loadState();
+  // State is ephemeral (no persisted file): hydrate the Railway project/environments from
+  // live remote before reading them.
+  const state = await hydrateStateFromRemote({
+    providerSelection: { includeKeys: ['railway', 'railway-redis'] },
+  });
 
   if (!state.railway?.projectId) {
     logger.error(
-      '.setup/.setup-state.json has no railway.projectId. Run pnpm setup:infra first to provision Railway.',
+      'No Railway project found remotely for this config. Run pnpm setup:infra first to provision Railway.',
     );
     process.exit(1);
   }
@@ -1007,9 +1012,7 @@ async function main(): Promise<void> {
   const projectId = state.railway.projectId;
   const available = listEnvironments(state);
   if (available.length === 0) {
-    logger.error(
-      'No Railway environments recorded in .setup/.setup-state.json. Run pnpm setup:infra to populate them.',
-    );
+    logger.error('No Railway environments found remotely. Run pnpm setup:infra to provision them.');
     process.exit(1);
   }
 

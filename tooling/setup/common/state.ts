@@ -1,18 +1,4 @@
-import {
-  closeSync,
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
-import { resolve } from 'node:path';
 import { z } from 'zod';
-import * as logger from './logger.js';
-import { SetupError } from './setup-error.js';
 
 const neonBranchStateSchema = z.object({
   branchId: z.string(),
@@ -156,13 +142,14 @@ export const setupStateSchema = z.object({
     .optional(),
 });
 
-const PROJECT_ROOT = resolve(import.meta.dirname, '../../..');
-// State lives in the gitignored `.setup/` directory (alongside `.setup/.setup-credentials`),
-// out of the app's `.env.<environment>` namespace.
-const SETUP_DIR = resolve(PROJECT_ROOT, '.setup');
-const STATE_PATH = resolve(SETUP_DIR, '.setup-state.json');
+// State is EPHEMERAL: held in memory for the lifetime of a single setup process and never
+// persisted to disk — there is no `.setup-state.json`. Within one `pnpm setup:infra` run the
+// in-memory object carries provider outputs (resource ids, urls, write-once secrets) to the
+// env-file writer; standalone commands hydrate it from live remote via the reconstruct path
+// (each provider's `detectRemote`). The durable record of provisioned values is the
+// `.env.<environment>` files plus the providers' own dashboards — not a local state file.
 
-export function createEmptyState(): z.infer<typeof setupStateSchema> {
+function buildEmptyState(): z.infer<typeof setupStateSchema> {
   const now = new Date().toISOString();
   return {
     version: 1,
@@ -171,74 +158,37 @@ export function createEmptyState(): z.infer<typeof setupStateSchema> {
   };
 }
 
-export function loadState(): z.infer<typeof setupStateSchema> {
-  if (!existsSync(STATE_PATH)) {
-    return createEmptyState();
-  }
+let inMemoryState: z.infer<typeof setupStateSchema> = buildEmptyState();
 
-  const raw = readFileSync(STATE_PATH, 'utf-8');
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    logger.warn('Corrupted .setup-state.json — starting fresh.');
-    return createEmptyState();
-  }
-
-  const result = setupStateSchema.safeParse(parsed);
-  if (!result.success) {
-    logger.warn('Invalid .setup-state.json schema — starting fresh.');
-    return createEmptyState();
-  }
-
-  return result.data;
+export function createEmptyState(): z.infer<typeof setupStateSchema> {
+  return buildEmptyState();
 }
 
-const STATE_BAK_PATH = `${STATE_PATH}.bak`;
-const STATE_TMP_PATH = `${STATE_PATH}.tmp`;
-const STATE_LOCK_PATH = `${STATE_PATH}.lock`;
+/** Returns the process-scoped in-memory state. Empty until a run or reconstruct populates it. */
+export function loadState(): z.infer<typeof setupStateSchema> {
+  return inMemoryState;
+}
 
+/** Replaces the in-memory state. No disk write — state is never persisted. */
 export function saveState(state: z.infer<typeof setupStateSchema>): void {
   state.updatedAt = new Date().toISOString();
-  // Atomic write: backup the prior file, write to a temp path, then rename over the
-  // target so a crash mid-write can never leave a half-written state file.
-  // `.setup-state.json` is gitignored, blocked by the pre-commit secret-file guard, and
-  // unreadable by the agent (deny-read guard); values flow only into `.env.<environment>`.
-  mkdirSync(SETUP_DIR, { recursive: true });
-  if (existsSync(STATE_PATH)) copyFileSync(STATE_PATH, STATE_BAK_PATH);
-  writeFileSync(STATE_TMP_PATH, `${JSON.stringify(state, null, 2)}\n`, 'utf-8');
-  renameSync(STATE_TMP_PATH, STATE_PATH);
+  inMemoryState = state;
 }
 
 /**
- * Acquire an advisory lock for an apply run so two concurrent `setup:infra` runs can't
- * clobber the state. Human-only tooling, so a stale lock is surfaced for manual removal
- * rather than auto-broken. Returns a `release()` to call in a `finally`.
+ * Advisory-lock no-op. The ephemeral model has no shared state file for concurrent runs to
+ * clobber, so there is nothing to lock. Returns a no-op `release()` for call-site symmetry.
  */
 export function acquireStateLock(): () => void {
-  mkdirSync(SETUP_DIR, { recursive: true });
-  try {
-    closeSync(openSync(STATE_LOCK_PATH, 'wx')); // O_EXCL — fails if it already exists
-  } catch {
-    throw new SetupError(`Another setup run holds the lock (${STATE_LOCK_PATH}).`, {
-      hint: `If no other run is active, delete it: rm ${STATE_LOCK_PATH}`,
-    });
-  }
-  return () => {
-    try {
-      if (existsSync(STATE_LOCK_PATH)) unlinkSync(STATE_LOCK_PATH);
-    } catch {
-      // best-effort release
-    }
-  };
+  return () => {};
 }
 
+/** Always false — there is no persisted state file in the ephemeral model. */
 export function stateFileExists(): boolean {
-  return existsSync(STATE_PATH);
+  return false;
 }
 
+/** Resets the in-memory state to empty. */
 export function clearState(): void {
-  if (existsSync(STATE_PATH)) {
-    writeFileSync(STATE_PATH, `${JSON.stringify(createEmptyState(), null, 2)}\n`, 'utf-8');
-  }
+  inMemoryState = buildEmptyState();
 }
