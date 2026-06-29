@@ -256,13 +256,13 @@ export function previewPlan(
     console.log(chalk.green(`    ${provider.provider}`));
     console.log(chalk.gray(`      → ${provider.detail}`));
     console.log(chalk.gray(`      → Get token: ${provider.url}`));
-    console.log(chalk.gray(`      → In .setup-credentials: ${provider.configKey}=<value>`));
+    console.log(chalk.gray(`      → In .setup/.setup-credentials: ${provider.configKey}=<value>`));
     console.log('');
   }
   console.log(chalk.gray(`  ${line}`));
   console.log(
     chalk.bold.white(
-      '  Token-only: No gh auth login or railway login required when GITHUB_TOKEN and RAILWAY_TOKEN are set in .setup-credentials.',
+      '  Token-only: No gh auth login or railway login required when GITHUB_TOKEN and RAILWAY_TOKEN are set in .setup/.setup-credentials.',
     ),
   );
   console.log(

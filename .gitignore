@@ -18,11 +18,9 @@ dist/
 !.env.example
 
 # Setup-tooling files live in the gitignored `.setup/` dir (credentials + state),
-# separate from app `.env.<environment>`. Only the `.setup-credentials.example` template is
-# committed, at the repo root next to `.env.example`. Legacy root `.setup-credentials` /
-# `.env.setup` are covered by the rules here and the `.env*` rule above.
+# separate from app `.env.<environment>`. The only committed setup file is the template
+# `.setup-credentials.example` at the repo root, next to `.env.example`.
 .setup/
-.setup-credentials
 !.setup-credentials.example
 
 # Docker Compose machine-local overrides (auto-merged by compose; never shared with team/CI)
@@ -109,7 +107,8 @@ reports/
 **/*.report.*
 *REPORT*.md
 
-# Setup automation (secrets + provisioned state)
+# Setup automation (secrets + provisioned state). Runtime files live in `.setup/`
+# (ignored above); these patterns also block any stray legacy file at the repo root.
 tooling/setup.secrets.json
 .setup-state.json
 .setup-state.json.bak

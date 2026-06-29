@@ -438,7 +438,7 @@ export async function provision(
   if (!isSecretFilled(secrets.railway.apiToken)) {
     return {
       success: false,
-      message: 'Railway Redis: RAILWAY_API_TOKEN must be set in .setup-credentials.',
+      message: 'Railway Redis: RAILWAY_API_TOKEN must be set in .setup/.setup-credentials.',
     };
   }
   if (!state.railway?.projectId) {
@@ -670,7 +670,7 @@ export const setupRailwayRedisProvider: InfraProvider = {
   disabledReason: ({ config }) =>
     !config.providers.railwayRedis.enabled
       ? 'disabled in setup.config.json'
-      : 'RAILWAY_API_TOKEN missing in .setup-credentials',
+      : 'RAILWAY_API_TOKEN missing in .setup/.setup-credentials',
   preview: ({ config }) =>
     config.providers.railwayRedis.enabled
       ? {
@@ -712,7 +712,7 @@ export const setupRailwayRedisProvider: InfraProvider = {
       return {
         present: false,
         fields: [],
-        error: 'RAILWAY_API_TOKEN missing in .setup-credentials',
+        error: 'RAILWAY_API_TOKEN missing in .setup/.setup-credentials',
       };
     const projectName = config.project.name;
     try {

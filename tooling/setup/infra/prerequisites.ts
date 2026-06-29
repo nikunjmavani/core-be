@@ -10,7 +10,7 @@ interface PrerequisiteCheck {
   enabledCheck?: (config: SetupConfig) => boolean;
   /** If set, run this to verify CLI login. Skipped when tokenEnvKey is set and present in env. */
   authCheck?: string;
-  /** When set and this env var is non-empty (e.g. from .setup-credentials), treat as authenticated (API/token-based; no login). */
+  /** When set and this env var is non-empty (e.g. from .setup/.setup-credentials), treat as authenticated (API/token-based; no login). */
   tokenEnvKey?: string;
 }
 
@@ -118,7 +118,7 @@ export function checkPrerequisites(config: SetupConfig): boolean {
         logger.success(`  └─ authenticated`);
       } else {
         const hint = prerequisite.tokenEnvKey
-          ? `set ${prerequisite.tokenEnvKey} in .setup-credentials or run: ${prerequisite.authCheck?.split(' ').slice(0, 2).join(' ') ?? ''} login`
+          ? `set ${prerequisite.tokenEnvKey} in .setup/.setup-credentials or run: ${prerequisite.authCheck?.split(' ').slice(0, 2).join(' ') ?? ''} login`
           : `run: ${prerequisite.authCheck?.split(' ').slice(0, 2).join(' ')} login`;
         logger.warn(`  └─ NOT authenticated — ${hint}`);
         allPassed = false;

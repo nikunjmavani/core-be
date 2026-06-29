@@ -80,7 +80,7 @@ function printHelp(): void {
   const providerKeys = getAvailableProviderKeys().join(', ');
   logger.info('Usage:');
   logger.info(
-    '  pnpm setup --init                    Generate setup.config.json + .setup-credentials',
+    '  pnpm setup --init                    Generate setup.config.json + .setup/.setup-credentials',
   );
   logger.info('  pnpm setup                           Full interactive provisioning');
   logger.info('  pnpm setup --preview                 Show providers + token URLs (no API calls)');

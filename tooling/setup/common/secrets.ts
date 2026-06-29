@@ -9,21 +9,7 @@ const PROJECT_ROOT = resolve(import.meta.dirname, '../../..');
 // namespace so the two are never confused. The committed template lives at the repo root
 // as `.setup-credentials.example` (next to `.env.example`) for discoverability.
 const SETUP_DIR = resolve(PROJECT_ROOT, '.setup');
-const SETUP_CREDENTIALS_PATH = resolve(SETUP_DIR, '.setup-credentials');
-// Legacy locations are still read (with a warning) until the operator migrates:
-//   1. root `.setup-credentials` (pre-`.setup/` layout)
-//   2. root `.env.setup`         (pre-rename)
-const LEGACY_ROOT_CREDENTIALS_PATH = resolve(PROJECT_ROOT, '.setup-credentials');
-const LEGACY_ENV_SETUP_PATH = resolve(PROJECT_ROOT, '.env.setup');
-function resolveCredentialsPath(): string {
-  if (existsSync(SETUP_CREDENTIALS_PATH)) return SETUP_CREDENTIALS_PATH;
-  if (existsSync(LEGACY_ROOT_CREDENTIALS_PATH)) return LEGACY_ROOT_CREDENTIALS_PATH;
-  if (existsSync(LEGACY_ENV_SETUP_PATH)) return LEGACY_ENV_SETUP_PATH;
-  // Nothing on disk yet → default to the canonical location so init writes there.
-  return SETUP_CREDENTIALS_PATH;
-}
-const ENV_SETUP_PATH = resolveCredentialsPath();
-const USING_LEGACY_CREDENTIALS_FILE = ENV_SETUP_PATH !== SETUP_CREDENTIALS_PATH;
+const ENV_SETUP_PATH = resolve(SETUP_DIR, '.setup-credentials');
 
 const TOKEN_URLS: Record<string, string> = {
   NEON_API_KEY: 'https://console.neon.tech/app/settings/api-keys',
@@ -343,13 +329,6 @@ export function hasAnyEnvSecret(environmentNames: string[]): boolean {
 
 export function loadEnvSetupIntoProcess(): void {
   if (!existsSync(ENV_SETUP_PATH)) return;
-  if (USING_LEGACY_CREDENTIALS_FILE) {
-    const legacyName =
-      ENV_SETUP_PATH === LEGACY_ENV_SETUP_PATH ? '.env.setup' : '.setup-credentials';
-    console.warn(
-      `⚠ Using legacy ${legacyName} at the repo root — move it to .setup/.setup-credentials (keeps setup creds in the gitignored .setup/ dir, out of the app .env.<environment> namespace).`,
-    );
-  }
   try {
     const content = readFileSync(ENV_SETUP_PATH, 'utf-8');
     const parsed = parseEnvFile(content);

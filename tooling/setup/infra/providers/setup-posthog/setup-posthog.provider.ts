@@ -123,7 +123,7 @@ export const setupPosthogProvider: InfraProvider = {
   disabledReason: ({ config }) =>
     !config.providers.posthog.enabled
       ? 'disabled in setup.config.json'
-      : 'POSTHOG_PERSONAL_API_KEY (or POSTHOG_PROJECT_API_KEY) missing in .setup-credentials',
+      : 'POSTHOG_PERSONAL_API_KEY (or POSTHOG_PROJECT_API_KEY) missing in .setup/.setup-credentials',
   preview: ({ config }) =>
     config.providers.posthog.enabled
       ? {
@@ -152,7 +152,7 @@ export const setupPosthogProvider: InfraProvider = {
       return {
         present: false,
         fields: [],
-        error: 'POSTHOG_PERSONAL_API_KEY missing in .setup-credentials',
+        error: 'POSTHOG_PERSONAL_API_KEY missing in .setup/.setup-credentials',
       };
     }
     const { apiHost } = resolveHosts(posthog.region);

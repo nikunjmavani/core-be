@@ -161,16 +161,6 @@ const PROJECT_ROOT = resolve(import.meta.dirname, '../../..');
 // out of the app's `.env.<environment>` namespace.
 const SETUP_DIR = resolve(PROJECT_ROOT, '.setup');
 const STATE_PATH = resolve(SETUP_DIR, '.setup-state.json');
-// Legacy: the pre-`.setup/` layout wrote state to the repo root. It is read when the
-// canonical file is absent so existing local state survives the move; the next
-// saveState() migrates it into `.setup/`.
-const LEGACY_STATE_PATH = resolve(PROJECT_ROOT, '.setup-state.json');
-
-function effectiveStatePath(): string {
-  if (existsSync(STATE_PATH)) return STATE_PATH;
-  if (existsSync(LEGACY_STATE_PATH)) return LEGACY_STATE_PATH;
-  return STATE_PATH;
-}
 
 export function createEmptyState(): z.infer<typeof setupStateSchema> {
   const now = new Date().toISOString();
@@ -182,12 +172,11 @@ export function createEmptyState(): z.infer<typeof setupStateSchema> {
 }
 
 export function loadState(): z.infer<typeof setupStateSchema> {
-  const statePath = effectiveStatePath();
-  if (!existsSync(statePath)) {
+  if (!existsSync(STATE_PATH)) {
     return createEmptyState();
   }
 
-  const raw = readFileSync(statePath, 'utf-8');
+  const raw = readFileSync(STATE_PATH, 'utf-8');
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -245,12 +234,11 @@ export function acquireStateLock(): () => void {
 }
 
 export function stateFileExists(): boolean {
-  return existsSync(STATE_PATH) || existsSync(LEGACY_STATE_PATH);
+  return existsSync(STATE_PATH);
 }
 
 export function clearState(): void {
-  const statePath = effectiveStatePath();
-  if (existsSync(statePath)) {
-    writeFileSync(statePath, `${JSON.stringify(createEmptyState(), null, 2)}\n`, 'utf-8');
+  if (existsSync(STATE_PATH)) {
+    writeFileSync(STATE_PATH, `${JSON.stringify(createEmptyState(), null, 2)}\n`, 'utf-8');
   }
 }

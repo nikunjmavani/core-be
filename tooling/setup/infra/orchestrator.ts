@@ -267,7 +267,7 @@ export function runPreview(options: { providerSelection?: ProviderSelectionInput
 
   if (ensureEnvSetupTemplate(config)) {
     logger.info(
-      'Generated .setup-credentials template — fill values and run pnpm setup --preview or setup:infra again.',
+      'Generated .setup/.setup-credentials template — fill values and run pnpm setup --preview or setup:infra again.',
     );
   }
 
@@ -314,7 +314,7 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
 
   if (ensureEnvSetupTemplate(config)) {
     throw new SetupAbort(
-      'Generated .setup-credentials template. Fill the values (see URLs in the file) and run pnpm setup:infra again.',
+      'Generated .setup/.setup-credentials template. Fill the values (see URLs in the file) and run pnpm setup:infra again.',
     );
   }
 
@@ -326,7 +326,7 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
 
   if (!hasAnyEnvSecret(environments)) {
     throw new SetupError(
-      'No secrets found. Fill .setup-credentials with your API keys (each variable has a comment with the URL to get it).',
+      'No secrets found. Fill .setup/.setup-credentials with your API keys (each variable has a comment with the URL to get it).',
       { hint: 'Then run pnpm setup:infra again.' },
     );
   }
@@ -511,7 +511,7 @@ function buildGitHubSyncStep(context: InfraProviderContext): StepDescriptor<unkn
     instructions: [
       `Will reconcile GitHub Environments against local .env files for: ${context.environments.join(', ')}.`,
       'Pushes all secrets and variables from each .env file. Deletes any item on GitHub that is NOT in the local file.',
-      'Uses GITHUB_TOKEN from .setup-credentials. Secrets are encrypted; variables are diffed.',
+      'Uses GITHUB_TOKEN from .setup/.setup-credentials. Secrets are encrypted; variables are diffed.',
     ],
     execute: async () => {
       const { syncEnvironmentToGitHub } = await import(

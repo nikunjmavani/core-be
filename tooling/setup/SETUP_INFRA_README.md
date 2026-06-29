@@ -19,8 +19,7 @@ provider registry. It follows a plan → apply pattern (human-only, interactive)
 > never confused. The only committed, root-level setup file is the template
 > `.setup-credentials.example` (next to `.env.example` for discoverability). Copy it to
 > `.setup/.setup-credentials` and fill it — or just run `pnpm setup:infra:init`, which creates
-> the directory and file for you. Legacy root `.setup-credentials` / `.env.setup` are still
-> read (with a warning) until you move them into `.setup/`.
+> the directory and file for you.
 
 To add a provider, see **[SETUP_INFRA_PROVIDER_TEMPLATE.md](./SETUP_INFRA_PROVIDER_TEMPLATE.md)**.
 

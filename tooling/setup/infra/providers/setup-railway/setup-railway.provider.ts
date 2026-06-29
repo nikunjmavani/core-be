@@ -314,7 +314,7 @@ export async function provision(
   if (!apiToken) {
     return {
       success: true,
-      message: 'Railway: skipped (set RAILWAY_API_TOKEN in .setup-credentials to enable)',
+      message: 'Railway: skipped (set RAILWAY_API_TOKEN in .setup/.setup-credentials to enable)',
     };
   }
   const setupToken = apiToken;
@@ -591,7 +591,7 @@ export async function check(
   }
   const apiToken = secrets.railway.apiToken?.trim();
   if (!apiToken) {
-    logger.error('Railway: RAILWAY_API_TOKEN not set in .setup-credentials');
+    logger.error('Railway: RAILWAY_API_TOKEN not set in .setup/.setup-credentials');
     return false;
   }
 
@@ -644,7 +644,7 @@ export const setupRailwayProvider: InfraProvider = {
   disabledReason: ({ config }) =>
     !config.providers.railway.enabled
       ? 'disabled in setup.config.json'
-      : 'RAILWAY_API_TOKEN missing in .setup-credentials',
+      : 'RAILWAY_API_TOKEN missing in .setup/.setup-credentials',
   preview: ({ config }) =>
     config.providers.railway.enabled
       ? {
@@ -678,7 +678,7 @@ export const setupRailwayProvider: InfraProvider = {
       return {
         present: false,
         fields: [],
-        error: 'RAILWAY_API_TOKEN missing in .setup-credentials',
+        error: 'RAILWAY_API_TOKEN missing in .setup/.setup-credentials',
       };
     }
     const projectName = config.project.name;

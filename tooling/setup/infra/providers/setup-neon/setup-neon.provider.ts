@@ -669,7 +669,7 @@ export async function provision(
       }
       if (!orgId) {
         throw new Error(
-          `Neon org_id is required. Set NEON_ORG_ID in .setup-credentials (e.g. NEON_ORG_ID=org-xxx). Get it at https://console.neon.tech/app/settings → Organization → General.`,
+          `Neon org_id is required. Set NEON_ORG_ID in .setup/.setup-credentials (e.g. NEON_ORG_ID=org-xxx). Get it at https://console.neon.tech/app/settings → Organization → General.`,
         );
       }
 
@@ -910,7 +910,7 @@ export const setupNeonProvider: InfraProvider = {
   disabledReason: ({ config }) =>
     !config.providers.neon.enabled
       ? 'disabled in setup.config.json'
-      : 'NEON_API_KEY missing in .setup-credentials',
+      : 'NEON_API_KEY missing in .setup/.setup-credentials',
   preview: ({ config }) =>
     config.providers.neon.enabled
       ? {
@@ -968,7 +968,11 @@ export const setupNeonProvider: InfraProvider = {
     }
     const apiKey = secrets.neon.apiKey;
     if (!isSecretFilled(apiKey)) {
-      return { present: false, fields: [], error: 'NEON_API_KEY missing in .setup-credentials' };
+      return {
+        present: false,
+        fields: [],
+        error: 'NEON_API_KEY missing in .setup/.setup-credentials',
+      };
     }
     const expectedName = config.project.name;
     try {

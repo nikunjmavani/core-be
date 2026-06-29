@@ -987,9 +987,9 @@ async function main(): Promise<void> {
   loadEnvSetupIntoProcess();
   const token = (process.env.RAILWAY_TOKEN ?? '').trim();
   if (!token) {
-    logger.error('RAILWAY_TOKEN is not set in .setup-credentials or process.env.');
+    logger.error('RAILWAY_TOKEN is not set in .setup/.setup-credentials or process.env.');
     logger.info(
-      'Get a token at https://railway.app/account/tokens and add it to .setup-credentials.',
+      'Get a token at https://railway.app/account/tokens and add it to .setup/.setup-credentials.',
     );
     process.exit(1);
   }
