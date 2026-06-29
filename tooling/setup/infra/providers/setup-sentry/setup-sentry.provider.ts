@@ -306,6 +306,21 @@ export const setupSentryProvider: InfraProvider = {
       };
     }
   },
+  toEnvironmentVariables: ({ config, state }, environmentName) => {
+    const sentryConfig = config.providers.sentry;
+    if (!(sentryConfig.enabled && state.sentry?.dsn)) return {};
+    const rates = sentryConfig.sampleRates[environmentName];
+    return {
+      SENTRY_DSN: state.sentry.dsn,
+      SENTRY_ENVIRONMENT: environmentName,
+      ...(rates
+        ? {
+            SENTRY_TRACES_SAMPLE_RATE: String(rates.traces),
+            SENTRY_PROFILE_SAMPLE_RATE: String(rates.profile),
+          }
+        : {}),
+    };
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'Sentry',
     enabled: setupSentryProvider.isEnabled(context),

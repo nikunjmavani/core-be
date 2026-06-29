@@ -451,6 +451,17 @@ export const setupAwsProvider: InfraProvider = {
     }
     return { present: anyPresent, fields };
   },
+  toEnvironmentVariables: ({ config, state }, environmentName) => {
+    const user = state.aws?.iamUsers?.[environmentName];
+    const bucket = state.aws?.buckets?.[environmentName];
+    if (!(config.providers.aws.enabled && bucket && user)) return {};
+    return {
+      S3_BUCKET: bucket.name,
+      S3_REGION: bucket.region,
+      S3_ACCESS_KEY_ID: user.accessKeyId,
+      S3_SECRET_ACCESS_KEY: user.secretAccessKey,
+    };
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'AWS S3',
     enabled: setupAwsProvider.isEnabled(context),

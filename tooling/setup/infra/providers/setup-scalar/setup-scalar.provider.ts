@@ -177,6 +177,14 @@ export const setupScalarProvider: InfraProvider = {
       };
     }
   },
+  toEnvironmentVariables: ({ config, secrets }) => {
+    if (!(config.providers.scalar.enabled && secrets.scalar?.apiKey)) return {};
+    return {
+      SCALAR_API_KEY: secrets.scalar.apiKey,
+      ...(secrets.scalar.namespace ? { SCALAR_NAMESPACE: secrets.scalar.namespace } : {}),
+      ...(secrets.scalar.slug ? { SCALAR_SLUG: secrets.scalar.slug } : {}),
+    };
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'Scalar',
     enabled: setupScalarProvider.isEnabled(context),

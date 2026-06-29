@@ -777,6 +777,10 @@ export const setupRailwayRedisProvider: InfraProvider = {
       };
     }
   },
+  toEnvironmentVariables: ({ state }, environmentName) => {
+    const url = state.redis?.databases?.[environmentName]?.redisUrl;
+    return url ? { REDIS_URL: url } : {};
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'Railway Redis',
     enabled: setupRailwayRedisProvider.isEnabled(context),

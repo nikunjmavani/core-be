@@ -1,10 +1,12 @@
 /** Shared logic to build deploy environment variables (used by GitHub provider). */
 import type {
+  EnvironmentVariables,
+  InfraProviderContext,
   SetupConfig,
   SetupSecrets,
   SetupState,
-  EnvironmentVariables,
 } from '@tooling/setup/common/types.js';
+import { INFRA_PROVIDERS } from '@tooling/setup/infra/providers/index.js';
 
 /** Defaults match .env.example (required at app runtime). */
 const DEFAULT_AUDIT_RETENTION_DAYS = '90';
@@ -23,6 +25,18 @@ function pickPerEnvironmentString(
   return '';
 }
 
+/**
+ * Build the `.env.<environment>` variable map for one environment.
+ *
+ * @remarks
+ * **Composition:** baseline keys (config-derived: ports, NODE_ENV, rate limits, retention,
+ * ALLOWED_ORIGINS/FRONTEND_URL) are set first, then each provider contributes its own slice
+ * via `provider.toEnvironmentVariables()` — so adding a provider never touches this file. The
+ * required-but-provisioned keys (`DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`) start as empty
+ * defaults and are overwritten by their owning provider (Neon / Railway Redis / JWT) when
+ * state is populated. **Side effects:** none (pure). App per-env secrets (Stripe / OAuth /
+ * Turnstile) are intentionally NOT produced here — they live directly in `.env.<environment>`.
+ */
 export function buildEnvironmentVariables(
   environmentName: string,
   config: SetupConfig,
@@ -32,12 +46,6 @@ export function buildEnvironmentVariables(
   const environment = config.environments.find((env) => env.name === environmentName);
   const defaultEnvironment =
     config.environments.find((env) => env.isDefault)?.name ?? config.environments[0]?.name;
-  const sentryConfig = config.providers.sentry;
-
-  const redisUrl = state.redis?.databases?.[environmentName]?.redisUrl ?? '';
-  const jwtState = state.jwt?.[environmentName];
-  const jwtSecret = typeof jwtState === 'string' ? jwtState : (jwtState?.jwtSecret ?? '');
-  const railwayEnvironment = state.railway?.environments?.[environmentName];
 
   const allowedOrigins = pickPerEnvironmentString(
     config.app.allowedOrigins,
@@ -50,18 +58,15 @@ export function buildEnvironmentVariables(
     defaultEnvironment,
   );
 
+  // Baseline: config-derived keys + required-key defaults (providers overwrite the provisioned ones).
   const variables: EnvironmentVariables = {
     PORT: String(config.app.port),
     HTTP_BIND_HOST: config.app.host,
     NODE_ENV: environment?.nodeEnvironment ?? 'development',
     LOG_LEVEL: environment?.nodeEnvironment === 'production' ? 'info' : 'debug',
-    DATABASE_URL: state.neon?.branches?.[environmentName]?.databaseUrl ?? '',
-    DATABASE_MIGRATION_URL:
-      state.neon?.branches?.[environmentName]?.databaseMigrationUrl ??
-      state.neon?.branches?.[environmentName]?.databaseUrl ??
-      '',
-    REDIS_URL: redisUrl,
-    JWT_SECRET: jwtSecret,
+    DATABASE_URL: '',
+    REDIS_URL: '',
+    JWT_SECRET: '',
     ALLOWED_ORIGINS: allowedOrigins,
     RATE_LIMIT_MAX: String(config.app.rateLimitMax[environmentName] ?? 100),
     RATE_LIMIT_WINDOW_MS: String(config.app.rateLimitWindowMs),
@@ -69,91 +74,20 @@ export function buildEnvironmentVariables(
     AUDIT_RETENTION_DAYS: DEFAULT_AUDIT_RETENTION_DAYS,
     AUTH_SESSION_RETENTION_DAYS: DEFAULT_SESSION_RETENTION_DAYS,
   };
-
-  if (config.providers.railway.enabled) {
-    // The per-environment project token is minted by the Railway provider via
-    // `projectTokenCreate` and persisted in `state.railway.environmentTokens`. There is no
-    // fallback: a missing entry means setup:infra hasn't yet run for this environment with
-    // RAILWAY_API_TOKEN set, so we leave RAILWAY_TOKEN blank rather than write a token
-    // scoped to the wrong environment.
-    const perEnvironmentToken = state.railway?.environmentTokens?.[environmentName];
-    if (perEnvironmentToken) {
-      variables.RAILWAY_TOKEN = perEnvironmentToken;
-    }
-    const apiServiceId = railwayEnvironment?.services.api?.serviceId;
-    const workerServiceId = railwayEnvironment?.services.worker?.serviceId;
-    if (apiServiceId) variables.RAILWAY_SERVICE_ID = apiServiceId;
-    if (workerServiceId) variables.RAILWAY_WORKER_SERVICE_ID = workerServiceId;
-  }
-
-  if (config.providers.postman.enabled && secrets.postman?.apiKey) {
-    variables.POSTMAN_API_KEY = secrets.postman.apiKey;
-    if (secrets.postman.workspaceId) {
-      variables.POSTMAN_WORKSPACE_ID = secrets.postman.workspaceId;
-    }
-  }
-
-  if (config.providers.scalar.enabled && secrets.scalar?.apiKey) {
-    variables.SCALAR_API_KEY = secrets.scalar.apiKey;
-    if (secrets.scalar.namespace) {
-      variables.SCALAR_NAMESPACE = secrets.scalar.namespace;
-    }
-    if (secrets.scalar.slug) {
-      variables.SCALAR_SLUG = secrets.scalar.slug;
-    }
-  }
-
   if (frontendUrl) {
     variables.FRONTEND_URL = frontendUrl;
   }
 
-  if (typeof jwtState !== 'string') {
-    if (jwtState?.jwtPrivateKey) variables.JWT_PRIVATE_KEY = jwtState.jwtPrivateKey;
-    if (jwtState?.jwtPublicKey) variables.JWT_PUBLIC_KEY = jwtState.jwtPublicKey;
-    if (jwtState?.jwtSigningKid) variables.JWT_SIGNING_KID = jwtState.jwtSigningKid;
-    if (jwtState?.secretsEncryptionKey) {
-      variables.SECRETS_ENCRYPTION_KEY = jwtState.secretsEncryptionKey;
-    }
-  }
-
-  if (config.providers.resend.enabled && secrets.resend.apiKey) {
-    variables.RESEND_API_KEY = secrets.resend.apiKey;
-    variables.EMAIL_FROM_ADDRESS = config.providers.resend.fromAddress;
-    variables.EMAIL_FROM_NAME = config.providers.resend.fromName;
-  }
-
-  // Stripe, OAuth (Google/GitHub) and Turnstile/CAPTCHA are app per-environment secrets entered
-  // directly in `.env.<environment>` (STRIPE_SECRET_KEY, OAUTH_*_CLIENT_ID/SECRET/REDIRECT_URI,
-  // CAPTCHA_*). They are NOT sourced from setup credentials and so are not emitted here —
-  // export-env preserves whatever already exists in the env file for these keys.
-
-  if (config.providers.posthog.enabled) {
-    // Per-env override wins; otherwise the org-wide project key resolved into state.
-    const posthogKey =
-      secrets.posthog?.environmentApiKeys?.[environmentName] ?? state.posthog?.projectApiKey;
-    if (posthogKey) {
-      variables.POSTHOG_KEY = posthogKey;
-      if (state.posthog?.host) variables.POSTHOG_HOST = state.posthog.host;
-    }
-  }
-
-  if (sentryConfig.enabled && state.sentry?.dsn) {
-    variables.SENTRY_DSN = state.sentry.dsn;
-    variables.SENTRY_ENVIRONMENT = environmentName;
-    const rates = sentryConfig.sampleRates[environmentName];
-    if (rates) {
-      variables.SENTRY_TRACES_SAMPLE_RATE = String(rates.traces);
-      variables.SENTRY_PROFILE_SAMPLE_RATE = String(rates.profile);
-    }
-  }
-
-  const awsUser = state.aws?.iamUsers?.[environmentName];
-  const awsBucket = state.aws?.buckets?.[environmentName];
-  if (config.providers.aws.enabled && awsBucket && awsUser) {
-    variables.S3_BUCKET = awsBucket.name;
-    variables.S3_REGION = awsBucket.region;
-    variables.S3_ACCESS_KEY_ID = awsUser.accessKeyId;
-    variables.S3_SECRET_ACCESS_KEY = awsUser.secretAccessKey;
+  // Each provider owns its own `.env.<environment>` slice (Neon → DATABASE_URL, AWS → S3_*, …).
+  const context: InfraProviderContext = {
+    config,
+    secrets,
+    state,
+    environments: config.environments.map((env) => env.name),
+    applyStateUpdates: () => {},
+  };
+  for (const provider of INFRA_PROVIDERS) {
+    Object.assign(variables, provider.toEnvironmentVariables?.(context, environmentName) ?? {});
   }
 
   return variables;

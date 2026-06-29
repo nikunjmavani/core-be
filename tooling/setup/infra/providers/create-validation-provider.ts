@@ -10,6 +10,7 @@
  * SECRETS: never printed; values flow to `.env.<environment>` via build-env-vars.
  */
 import type {
+  EnvironmentVariables,
   InfraProvider,
   InfraProviderContext,
   InfraProviderDescription,
@@ -31,6 +32,15 @@ export interface ValidationProviderSpec {
   instructions: string[];
   /** Org / project / environment names for `setup:infra:plan` columns. */
   describe?: (context: InfraProviderContext) => InfraProviderDescription;
+  /**
+   * Optional `.env.<environment>` slice this provider contributes. Most validate-only
+   * providers (Stripe/OAuth/Turnstile) emit nothing — their secrets are user-entered in the
+   * env file. Resend is the exception (it emits RESEND_API_KEY / EMAIL_FROM_*).
+   */
+  toEnvironmentVariables?: (
+    context: InfraProviderContext,
+    environmentName: string,
+  ) => Partial<EnvironmentVariables>;
   /** Provider-specific validation; returns success/message (no throw). */
   validate: (context: InfraProviderContext) => Promise<ProviderResult>;
 }
@@ -48,6 +58,7 @@ export function createValidationProvider(spec: ValidationProviderSpec): InfraPro
         ? [{ bucket: 'extra', provider: spec.name, detail: spec.settingsDetail }]
         : [],
     ...(spec.describe ? { describe: spec.describe } : {}),
+    ...(spec.toEnvironmentVariables ? { toEnvironmentVariables: spec.toEnvironmentVariables } : {}),
     // Validate-only providers have no remote resource to inspect — they probe a credential.
     // Report that explicitly instead of a fake present/absent.
     inspectRemote: async (context) => ({

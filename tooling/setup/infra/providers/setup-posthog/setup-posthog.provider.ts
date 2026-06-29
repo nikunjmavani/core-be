@@ -187,6 +187,16 @@ export const setupPosthogProvider: InfraProvider = {
       };
     }
   },
+  toEnvironmentVariables: ({ config, secrets, state }, environmentName) => {
+    if (!config.providers.posthog.enabled) return {};
+    const key =
+      secrets.posthog?.environmentApiKeys?.[environmentName] ?? state.posthog?.projectApiKey;
+    if (!key) return {};
+    return {
+      POSTHOG_KEY: key,
+      ...(state.posthog?.host ? { POSTHOG_HOST: state.posthog.host } : {}),
+    };
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'PostHog',
     enabled: setupPosthogProvider.isEnabled(context),

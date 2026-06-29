@@ -218,6 +218,13 @@ export const setupPostmanProvider: InfraProvider = {
       };
     }
   },
+  toEnvironmentVariables: ({ config, secrets }) => {
+    if (!(config.providers.postman.enabled && secrets.postman?.apiKey)) return {};
+    return {
+      POSTMAN_API_KEY: secrets.postman.apiKey,
+      ...(secrets.postman.workspaceId ? { POSTMAN_WORKSPACE_ID: secrets.postman.workspaceId } : {}),
+    };
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'Postman',
     enabled: setupPostmanProvider.isEnabled(context),

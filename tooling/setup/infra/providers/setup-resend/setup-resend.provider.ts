@@ -39,5 +39,13 @@ export const setupResendProvider = createValidationProvider({
     'Will validate RESEND_API_KEY by calling https://api.resend.com/api-keys.',
     'No resource is created — Resend exposes a single org-level key.',
   ],
+  toEnvironmentVariables: ({ config, secrets }) => {
+    if (!(config.providers.resend.enabled && secrets.resend.apiKey)) return {};
+    return {
+      RESEND_API_KEY: secrets.resend.apiKey,
+      EMAIL_FROM_ADDRESS: config.providers.resend.fromAddress,
+      EMAIL_FROM_NAME: config.providers.resend.fromName,
+    };
+  },
   validate: ({ secrets }) => validateResend(secrets.resend.apiKey),
 });

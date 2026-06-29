@@ -723,6 +723,18 @@ export const setupRailwayProvider: InfraProvider = {
       };
     }
   },
+  toEnvironmentVariables: ({ config, state }, environmentName) => {
+    if (!config.providers.railway.enabled) return {};
+    const railwayEnvironment = state.railway?.environments?.[environmentName];
+    const token = state.railway?.environmentTokens?.[environmentName];
+    const apiServiceId = railwayEnvironment?.services.api?.serviceId;
+    const workerServiceId = railwayEnvironment?.services.worker?.serviceId;
+    return {
+      ...(token ? { RAILWAY_TOKEN: token } : {}),
+      ...(apiServiceId ? { RAILWAY_SERVICE_ID: apiServiceId } : {}),
+      ...(workerServiceId ? { RAILWAY_WORKER_SERVICE_ID: workerServiceId } : {}),
+    };
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'Railway',
     enabled: setupRailwayProvider.isEnabled(context),

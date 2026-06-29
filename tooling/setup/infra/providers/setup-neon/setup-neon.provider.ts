@@ -1033,6 +1033,14 @@ export const setupNeonProvider: InfraProvider = {
       };
     }
   },
+  toEnvironmentVariables: ({ state }, environmentName) => {
+    const branch = state.neon?.branches?.[environmentName];
+    if (!branch) return {};
+    return {
+      DATABASE_URL: branch.databaseUrl,
+      DATABASE_MIGRATION_URL: branch.databaseMigrationUrl ?? branch.databaseUrl,
+    };
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'Neon Postgres',
     enabled: setupNeonProvider.isEnabled(context),

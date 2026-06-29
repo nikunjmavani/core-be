@@ -54,7 +54,8 @@ rollback/destroy. Adding a provider = implement the `InfraProvider` hooks + regi
 3. Touch every layer that applies: config schema + init default (`config.ts`,
    `init-wizard.ts`, `setup.config.json`) · secrets + `.setup/.setup-credentials` template (`secrets.ts`) ·
    state (`state.ts`, only if it resolves/creates a value) · runtime env emission
-   (`build-env-vars.ts`) · provider module + registry (`providers/setup-<key>/…`,
+   (`toEnvironmentVariables()` on the provider — never edit `build-env-vars.ts`, it composes
+   the registry) · provider module + registry (`providers/setup-<key>/…`,
    `providers/index.ts`) · guide (`guide.ts`) · prerequisites (`prerequisites.ts`, only if a
    CLI/token is required) · docs (`setup-token-instructions.md` both tables,
    `tooling/setup/SETUP_INFRA_README.md` provider list).

@@ -66,22 +66,30 @@ obvious at a glance:
 
 ## 3. State (`common/state.ts`) — only if the provider resolves/creates something
 
-If `provision` produces a value `build-env-vars` needs later (a DSN, a resolved key), add it
-to `setupStateSchema` (mirror `sentry` / `posthog`) and write it via `stateUpdates`.
-Validate-only providers (no remote resource) skip this.
+If `provision` produces a value your `toEnvironmentVariables()` needs later (a DSN, a resolved
+key), add it to `setupStateSchema` (mirror `sentry` / `posthog`) and write it via
+`stateUpdates`. Validate-only providers (no remote resource) skip this.
 
-## 4. Runtime env emission (`envs/build-env-vars.ts`)
+## 4. Runtime env emission — `toEnvironmentVariables()` on YOUR provider
 
-In `buildEnvironmentVariables`, emit the runtime vars the **app** consumes (must exist in
-`src/shared/config/env-schema.ts`), gated by `config.providers.<key>.enabled`:
+Each provider owns the `.env.<environment>` keys it contributes — **do not edit
+`build-env-vars.ts`** (it just composes every provider's slice via the registry). Implement
+`toEnvironmentVariables(context, environmentName)` on your `InfraProvider`, returning a
+`Partial<EnvironmentVariables>` (keys must exist in `src/shared/config/env-schema.ts`), gated
+by `config.providers.<key>.enabled`. Return `{}` when not applicable.
 
 ```ts
-const environment = secrets.<key>?.[environmentName]; // per-env
-if (config.providers.<key>.enabled && environment?.secretKey) {
-  variables.MY_RUNTIME_VAR = environment.secretKey;
-}
-// state-backed: read state.<key>?.value instead
+toEnvironmentVariables: ({ config, secrets, state }, environmentName) => {
+  if (!config.providers.<key>.enabled) return {};
+  const value = state.<key>?.value;            // state-backed (DSN, resolved key)
+  // …or read secrets.<key> for account-wide tokens
+  return value ? { MY_RUNTIME_VAR: value } : {};
+},
 ```
+
+Validate-only providers whose secret is user-entered in `.env.<environment>` (Stripe / OAuth /
+Turnstile) emit **nothing** — omit the hook. (Validation providers built with
+`createValidationProvider` pass `toEnvironmentVariables` through the spec — see Resend.)
 
 ## 5. Provider module (`infra/providers/setup-<key>/setup-<key>.provider.ts`)
 

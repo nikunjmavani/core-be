@@ -217,6 +217,16 @@ export interface InfraProvider {
   inspectRemote?(context: InfraProviderContext): Promise<RemoteInspection>;
   /** Org / project / environment names this provider operates on (for `setup:infra:plan`). */
   describe?(context: InfraProviderContext): InfraProviderDescription;
+  /**
+   * The `.env.<environment>` keys this provider contributes for one environment. Composed by
+   * `buildEnvironmentVariables()` — each provider owns its own slice (DATABASE_URL, S3_*, …)
+   * instead of a central switch. Return `{}` (or omit the hook) when the provider creates no
+   * runtime env vars (validate-only providers whose secrets are user-entered in the env file).
+   */
+  toEnvironmentVariables?(
+    context: InfraProviderContext,
+    environmentName: string,
+  ): Partial<EnvironmentVariables>;
   /** Build the interactive step descriptor for the provision loop. */
   buildStep(context: InfraProviderContext): StepDescriptor<unknown>;
   /** Health check used by `runCheck`. Return true when not applicable. */

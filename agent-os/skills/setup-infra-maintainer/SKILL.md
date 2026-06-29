@@ -99,9 +99,9 @@ implementing hooks on your `InfraProvider` (step 6), not by editing the orchestr
 - **`tooling/setup/common/state.ts`** — In `setupStateSchema`, add an optional key for the new provider (e.g. `newProvider: z.object({ projectId: z.string(), ... }).optional()`). Update `SetupState` type if needed (usually inferred from schema).
 - **`tooling/setup/common/types.ts`** — Only if you add new top-level types for the provider; usually state is enough.
 
-### 8. Build env vars (for GitHub environment secrets)
+### 8. Runtime env emission (`.env.<environment>` + GitHub env secrets)
 
-- **`tooling/setup/envs/build-env-vars.ts`** — If the new provider contributes variables to GitHub Actions environment secrets (e.g. `NEW_PROVIDER_API_KEY`), add the mapping in `buildEnvironmentVariables()` so those vars are passed to `githubProvider.provision`.
+- **On YOUR provider — implement `toEnvironmentVariables(context, environmentName)`** returning a `Partial<EnvironmentVariables>` (the keys your provider contributes; must exist in `src/shared/config/env-schema.ts`). **Do NOT edit `build-env-vars.ts`** — it composes every provider's slice by iterating `INFRA_PROVIDERS`. Validation providers (`createValidationProvider`) pass `toEnvironmentVariables` through the spec (see Resend); Stripe/OAuth/Turnstile emit nothing (user-entered in the env file).
 
 ### 9. Documentation
 
@@ -132,7 +132,7 @@ Reverse the steps above; remove or disable the provider everywhere.
 6. **`tooling/setup/infra/prerequisites.ts`** — Remove the prerequisite entry for that provider’s CLI/token.
 7. **`tooling/setup/infra/providers/<name>.provider.ts`** — Delete the file and remove its import/usages from the orchestrator.
 8. **`tooling/setup/common/state.ts`** — Remove the provider’s key from `setupStateSchema` (or leave optional and unused).
-9. **`tooling/setup/envs/build-env-vars.ts`** — Remove any mapping that injected the provider’s vars into GitHub env secrets.
+9. **`tooling/setup/envs/build-env-vars.ts`** — Nothing to do: the provider's `toEnvironmentVariables()` is deleted with its module, and the composer iterates the registry. (Do not add per-provider mappings here.)
 10. **`docs/deployment/setup/setup-token-instructions.md`** — Remove the provider from the per-provider table and env-style table; trim step-by-step section if it was the only one.
 11. Run **`pnpm typecheck`** and **`pnpm setup:infra:preview`** to confirm nothing references the removed provider.
 
@@ -149,7 +149,7 @@ Reverse the steps above; remove or disable the provider everywhere.
 | Prerequisites        | `tooling/setup/infra/prerequisites.ts`                                                    |
 | Providers            | `tooling/setup/infra/providers/*.provider.ts`                                             |
 | State & types        | `tooling/setup/common/state.ts`, `tooling/setup/common/types.ts`                         |
-| Env vars for GitHub  | `tooling/setup/envs/build-env-vars.ts`                                                    |
+| Env emission         | per provider: `toEnvironmentVariables()`; composed by `tooling/setup/envs/build-env-vars.ts` |
 | Docs                 | `docs/deployment/setup/setup-token-instructions.md`                                       |
 
 ---

@@ -136,6 +136,18 @@ export const setupJwtProvider: InfraProvider = {
       fields: [],
       error: 'local secrets — no remote resource',
     }),
+  toEnvironmentVariables: ({ state }, environmentName) => {
+    const jwt = state.jwt?.[environmentName];
+    if (!jwt) return {};
+    if (typeof jwt === 'string') return { JWT_SECRET: jwt };
+    return {
+      JWT_SECRET: jwt.jwtSecret,
+      ...(jwt.jwtPrivateKey ? { JWT_PRIVATE_KEY: jwt.jwtPrivateKey } : {}),
+      ...(jwt.jwtPublicKey ? { JWT_PUBLIC_KEY: jwt.jwtPublicKey } : {}),
+      ...(jwt.jwtSigningKid ? { JWT_SIGNING_KID: jwt.jwtSigningKid } : {}),
+      ...(jwt.secretsEncryptionKey ? { SECRETS_ENCRYPTION_KEY: jwt.secretsEncryptionKey } : {}),
+    };
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'JWT secrets',
     enabled: true,
