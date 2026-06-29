@@ -11,6 +11,7 @@
  */
 import * as logger from '@tooling/setup/common/logger.js';
 import type { InfraProviderContext, ProviderResult } from '@tooling/setup/common/types.js';
+import { readEnvFileValue } from '@tooling/setup/envs/read-env-file.js';
 import { createValidationProvider } from '../create-validation-provider.js';
 
 function validateClientId(
@@ -32,19 +33,22 @@ function validateClientId(
 }
 
 function validateOauth(context: InfraProviderContext): Promise<ProviderResult> {
-  const { config, secrets, environments } = context;
+  const { config, environments } = context;
   const googleEnabled = config.providers.oauth.google.enabled;
   const githubEnabled = config.providers.oauth.github.enabled;
   if (!(googleEnabled || githubEnabled)) {
     return Promise.resolve({ success: true, message: 'OAuth: skipped (disabled)' });
   }
 
+  // OAuth client credentials are app secrets entered directly per environment in
+  // `.env.<environment>` (OAUTH_<PROVIDER>_CLIENT_ID/SECRET/REDIRECT_URI) — not in setup
+  // credentials. Validate the client-id format from each env file.
   logger.info('Validating OAuth credentials...');
   for (const environmentName of environments) {
     if (googleEnabled) {
       validateClientId(
         'Google',
-        secrets.oauth?.google?.[environmentName]?.clientId,
+        readEnvFileValue(environmentName, 'OAUTH_GOOGLE_CLIENT_ID'),
         environmentName,
         (id) => id.includes('.apps.googleusercontent.com'),
       );
@@ -52,7 +56,7 @@ function validateOauth(context: InfraProviderContext): Promise<ProviderResult> {
     if (githubEnabled) {
       validateClientId(
         'GitHub',
-        secrets.oauth?.github?.[environmentName]?.clientId,
+        readEnvFileValue(environmentName, 'OAUTH_GITHUB_CLIENT_ID'),
         environmentName,
         (id) => id.length >= 10,
       );
@@ -68,14 +72,14 @@ export const setupOauthProvider = createValidationProvider({
     config.providers.oauth.google.enabled || config.providers.oauth.github.enabled,
   disabledReason: () => 'OAuth providers disabled in setup.config.json',
   preview: {
-    detail: 'Client ID + Secret per env (Google / GitHub)',
+    detail: 'Validates OAUTH_*_CLIENT_ID from each .env.<environment>',
     url: 'https://console.cloud.google.com/apis/credentials  +  https://github.com/settings/developers',
-    configKey: 'OAUTH_<PROVIDER>_<ENV>_CLIENT_ID / _CLIENT_SECRET / _REDIRECT_URI',
+    configKey: '.env.<environment> → OAUTH_<PROVIDER>_CLIENT_ID / _CLIENT_SECRET / _REDIRECT_URI',
   },
-  settingsDetail: 'validate Google + GitHub per env',
+  settingsDetail: 'validate Google + GitHub per env from .env.<environment>',
   instructions: [
-    'Will validate OAuth credentials for each enabled provider per environment.',
-    'No resource is created — credentials come from each provider console.',
+    'Will validate OAuth client-id format from each .env.<environment>.',
+    'No resource is created — enter the credentials directly in .env.<environment> (not setup credentials).',
   ],
   describe: ({ environments }) => ({ environments }),
   validate: validateOauth,

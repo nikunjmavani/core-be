@@ -9,6 +9,7 @@ import {
   getSecretsPath,
 } from '@tooling/setup/common/secrets.js';
 import { hasGithubToken } from '@tooling/setup/common/secrets.js';
+import { readEnvFileValue } from '@tooling/setup/envs/read-env-file.js';
 import type { SetupConfig } from '@tooling/setup/common/types.js';
 
 function openBrowser(url: string): void {
@@ -122,12 +123,10 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
     {
       providerName: 'Stripe',
       enabledCheck: (configuration) => configuration.providers.stripe.enabled,
-      secretsCheck: (secrets) => {
-        if (!secrets.stripe) return false;
-        return environmentNames.every((environmentName) =>
-          isSecretFilled(secrets.stripe?.[environmentName]?.secretKey),
-        );
-      },
+      secretsCheck: () =>
+        environmentNames.every((environmentName) =>
+          isSecretFilled(readEnvFileValue(environmentName, 'STRIPE_SECRET_KEY')),
+        ),
       browserUrls: [
         'https://dashboard.stripe.com/test/apikeys',
         'https://dashboard.stripe.com/apikeys',
@@ -140,7 +139,7 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
         '   Copy the Secret key (starts with sk_live_...)',
         '4. For webhooks: Go to Developers → Webhooks → Add endpoint',
         '   (Leave webhook secrets empty for now — they are created later)',
-        `5. In ${secretsPath} set for each env: STRIPE_<ENV>_SECRET_KEY=sk_... STRIPE_<ENV>_WEBHOOK_SECRET=`,
+        '5. In each .env.<environment> set: STRIPE_SECRET_KEY=sk_...  STRIPE_WEBHOOK_SECRET=',
         '',
         '6. Save the file',
       ],
@@ -148,12 +147,10 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
     {
       providerName: 'Google OAuth',
       enabledCheck: (configuration) => configuration.providers.oauth.google.enabled,
-      secretsCheck: (secrets) => {
-        if (!secrets.oauth?.google) return false;
-        return environmentNames.every((environmentName) =>
-          isSecretFilled(secrets.oauth?.google?.[environmentName]?.clientId),
-        );
-      },
+      secretsCheck: () =>
+        environmentNames.every((environmentName) =>
+          isSecretFilled(readEnvFileValue(environmentName, 'OAUTH_GOOGLE_CLIENT_ID')),
+        ),
       browserUrls: ['https://console.cloud.google.com/apis/credentials'],
       instructions: [
         '1. Log in to Google Cloud Console',
@@ -167,7 +164,7 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
           (environmentName) =>
             `   ${environmentName}: ${config.app.frontendUrl[environmentName] ?? 'http://localhost:3000'}/auth/oauth/google/callback`,
         ),
-        `8. In ${secretsPath} set per env: OAUTH_GOOGLE_<ENV>_CLIENT_ID=... OAUTH_GOOGLE_<ENV>_CLIENT_SECRET=... OAUTH_GOOGLE_<ENV>_REDIRECT_URI=...`,
+        '8. In each .env.<environment> set: OAUTH_GOOGLE_CLIENT_ID=...  OAUTH_GOOGLE_CLIENT_SECRET=...  OAUTH_GOOGLE_REDIRECT_URI=...',
         '',
         '9. Save the file',
       ],
@@ -175,12 +172,10 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
     {
       providerName: 'GitHub OAuth',
       enabledCheck: (configuration) => configuration.providers.oauth.github.enabled,
-      secretsCheck: (secrets) => {
-        if (!secrets.oauth?.github) return false;
-        return environmentNames.every((environmentName) =>
-          isSecretFilled(secrets.oauth?.github?.[environmentName]?.clientId),
-        );
-      },
+      secretsCheck: () =>
+        environmentNames.every((environmentName) =>
+          isSecretFilled(readEnvFileValue(environmentName, 'OAUTH_GITHUB_CLIENT_ID')),
+        ),
       browserUrls: ['https://github.com/settings/developers'],
       instructions: [
         '1. Log in to GitHub',
@@ -193,7 +188,7 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
             `   ${environmentName}: callback = ${config.app.frontendUrl[environmentName] ?? 'http://localhost:3000'}/auth/oauth/github/callback`,
         ),
         '6. After creating, copy Client ID and generate a Client Secret',
-        `7. In ${secretsPath} set per env: OAUTH_GITHUB_<ENV>_CLIENT_ID=... OAUTH_GITHUB_<ENV>_CLIENT_SECRET=... OAUTH_GITHUB_<ENV>_REDIRECT_URI=...`,
+        '7. In each .env.<environment> set: OAUTH_GITHUB_CLIENT_ID=...  OAUTH_GITHUB_CLIENT_SECRET=...  OAUTH_GITHUB_REDIRECT_URI=...',
         '',
         '8. Save the file',
       ],
@@ -219,20 +214,17 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
     {
       providerName: 'Cloudflare Turnstile',
       enabledCheck: (configuration) => configuration.providers.turnstile.enabled,
-      secretsCheck: (secrets) => {
-        if (!secrets.turnstile) return false;
-        return environmentNames.every((environmentName) =>
-          isSecretFilled(secrets.turnstile?.[environmentName]?.secretKey),
-        );
-      },
+      secretsCheck: () =>
+        environmentNames.every((environmentName) =>
+          isSecretFilled(readEnvFileValue(environmentName, 'CAPTCHA_SECRET')),
+        ),
       browserUrls: ['https://dash.cloudflare.com/?to=/:account/turnstile'],
       instructions: [
         '1. Log in to the Cloudflare dashboard',
         '2. Go to Turnstile → "Add widget"',
         `3. Create one widget per environment (${environmentNames.join(', ')})`,
         '4. Copy the Site Key (public) and Secret Key (server-side) for each',
-        `5. In ${secretsPath} set per env: TURNSTILE_<ENV>_SITE_KEY=0x... TURNSTILE_<ENV>_SECRET_KEY=0x...`,
-        '   (setup wires CAPTCHA_PROVIDER / CAPTCHA_SITE_KEY / CAPTCHA_SECRET)',
+        '5. In each .env.<environment> set: CAPTCHA_SITE_KEY=0x...  CAPTCHA_SECRET=0x...  (CAPTCHA_PROVIDER=turnstile)',
         '',
         '6. Save the file',
       ],

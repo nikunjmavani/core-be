@@ -122,25 +122,10 @@ export function buildEnvironmentVariables(
     variables.EMAIL_FROM_NAME = config.providers.resend.fromName;
   }
 
-  const stripeEnvironment = secrets.stripe?.[environmentName];
-  if (config.providers.stripe.enabled && stripeEnvironment?.secretKey) {
-    variables.STRIPE_SECRET_KEY = stripeEnvironment.secretKey;
-    variables.STRIPE_WEBHOOK_SECRET = stripeEnvironment.webhookSecret;
-  }
-
-  const googleOAuth = secrets.oauth?.google?.[environmentName];
-  if (config.providers.oauth.google.enabled && googleOAuth?.clientId) {
-    variables.OAUTH_GOOGLE_CLIENT_ID = googleOAuth.clientId;
-    variables.OAUTH_GOOGLE_CLIENT_SECRET = googleOAuth.clientSecret;
-    variables.OAUTH_GOOGLE_REDIRECT_URI = googleOAuth.redirectUri;
-  }
-
-  const githubOAuth = secrets.oauth?.github?.[environmentName];
-  if (config.providers.oauth.github.enabled && githubOAuth?.clientId) {
-    variables.OAUTH_GITHUB_CLIENT_ID = githubOAuth.clientId;
-    variables.OAUTH_GITHUB_CLIENT_SECRET = githubOAuth.clientSecret;
-    variables.OAUTH_GITHUB_REDIRECT_URI = githubOAuth.redirectUri;
-  }
+  // Stripe, OAuth (Google/GitHub) and Turnstile/CAPTCHA are app per-environment secrets entered
+  // directly in `.env.<environment>` (STRIPE_SECRET_KEY, OAUTH_*_CLIENT_ID/SECRET/REDIRECT_URI,
+  // CAPTCHA_*). They are NOT sourced from setup credentials and so are not emitted here —
+  // export-env preserves whatever already exists in the env file for these keys.
 
   if (config.providers.posthog.enabled) {
     // Per-env override wins; otherwise the org-wide project key resolved into state.
@@ -150,13 +135,6 @@ export function buildEnvironmentVariables(
       variables.POSTHOG_KEY = posthogKey;
       if (state.posthog?.host) variables.POSTHOG_HOST = state.posthog.host;
     }
-  }
-
-  const turnstileEnvironment = secrets.turnstile?.[environmentName];
-  if (config.providers.turnstile.enabled && turnstileEnvironment?.secretKey) {
-    variables.CAPTCHA_PROVIDER = 'turnstile';
-    variables.CAPTCHA_SITE_KEY = turnstileEnvironment.siteKey;
-    variables.CAPTCHA_SECRET = turnstileEnvironment.secretKey;
   }
 
   if (sentryConfig.enabled && state.sentry?.dsn) {

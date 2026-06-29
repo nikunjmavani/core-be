@@ -49,16 +49,20 @@ Only after both confirms will provisioning run. You can abort at any time.
 | **Sentry**                        | [sentry.io → Auth Tokens](https://sentry.io/settings/auth-tokens/new-token/)                                                                                                                                                    | `SENTRY_AUTH_TOKEN`                                      |
 | **Resend**                        | [resend.com → API Keys](https://resend.com/api-keys)                                                                                                                                                                            | `RESEND_API_KEY`                                         |
 | **GitHub (for repo/env secrets)** | [GitHub → Personal access tokens](https://github.com/settings/tokens)                                                                                                                                                           | `GITHUB_TOKEN`                                           |
-| **Stripe**                        | [Stripe Dashboard → API Keys](https://dashboard.stripe.com/apikeys)                                                                                                                                                             | `STRIPE_<ENV>_SECRET_KEY`, `STRIPE_<ENV>_WEBHOOK_SECRET` |
-| **Google OAuth**                  | [Google Cloud → Credentials](https://console.cloud.google.com/apis/credentials)                                                                                                                                                 | `OAUTH_GOOGLE_<ENV>_CLIENT_ID`, etc.                     |
-| **GitHub OAuth**                  | [GitHub → OAuth Apps](https://github.com/settings/developers)                                                                                                                                                                   | `OAUTH_GITHUB_<ENV>_CLIENT_ID`, etc.                     |
 | **PostHog**                       | [PostHog → Personal API keys](https://us.posthog.com/settings/user-api-keys)                                                                                                                                                    | `POSTHOG_PERSONAL_API_KEY` (resolves `POSTHOG_KEY`)     |
-| **Cloudflare Turnstile**          | [Cloudflare → Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile)                                                                                                                                                   | `TURNSTILE_<ENV>_SITE_KEY`, `TURNSTILE_<ENV>_SECRET_KEY` |
-| **Railway**                       | [railway.app → Tokens](https://railway.app/account/tokens)                                                                                                                                                                      | `RAILWAY_TOKEN`                                          |
+| **Railway**                       | [railway.app → Tokens](https://railway.app/account/tokens)                                                                                                                                                                      | `RAILWAY_API_TOKEN`                                          |
 | **Postman**                       | [Postman → API Keys](https://go.postman.co/settings/me/api-keys), [Workspaces](https://go.postman.co/workspaces)                                                                                                                | `POSTMAN_API_KEY`, `POSTMAN_WORKSPACE_ID`                |
 | **Scalar**                        | [Scalar Dashboard → API Keys](https://dashboard.scalar.com)                                                                                                                                                                     | `SCALAR_API_KEY`, `SCALAR_NAMESPACE`, optional `SCALAR_SLUG` |
 
-`<env>` = `development` or `production` (full names — short aliases `dev`/`prod` are also accepted by setup tooling).
+> **Stripe, OAuth (Google/GitHub), Cloudflare Turnstile** are app per-environment secrets —
+> they are **not** in `.setup/.setup-credentials`. Enter them directly in each
+> `.env.<environment>` (no `<ENV>` suffix): `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`,
+> `OAUTH_GOOGLE_CLIENT_ID`/`_SECRET`/`_REDIRECT_URI` (+ `OAUTH_GITHUB_*`),
+> `CAPTCHA_SITE_KEY` / `CAPTCHA_SECRET`. Their `setup:infra` providers validate them from the
+> env files. Get them at: [Stripe](https://dashboard.stripe.com/apikeys) ·
+> [Google](https://console.cloud.google.com/apis/credentials) ·
+> [GitHub OAuth](https://github.com/settings/developers) ·
+> [Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile).
 
 ---
 
@@ -87,14 +91,14 @@ If you use `.setup/.setup-credentials` or export env vars, use these names (scri
 | `SENTRY_AUTH_TOKEN`                                               | Sentry                                                                       |
 | `RESEND_API_KEY`                                                  | Resend                                                                       |
 | `GITHUB_TOKEN`                                                    | GitHub personal access token (repo/env secrets; no `gh auth login` when set) |
-| `RAILWAY_TOKEN`                                                   | Railway (no `railway login` when set; API-only)                              |
+| `RAILWAY_API_TOKEN`                                              | Railway (no `railway login` when set; API-only)                              |
 | `POSTMAN_API_KEY`, `POSTMAN_WORKSPACE_ID`                         | Postman                                                                      |
 | `SCALAR_API_KEY`, `SCALAR_NAMESPACE`, `SCALAR_SLUG`              | Scalar Registry (OpenAPI publish; slug defaults to `core-be`)               |
-| `STRIPE_<ENV>_SECRET_KEY`, `STRIPE_<ENV>_WEBHOOK_SECRET`          | Stripe per env (e.g. `STRIPE_DEV_SECRET_KEY`)                                |
-| `OAUTH_GOOGLE_<ENV>_CLIENT_ID`, `_CLIENT_SECRET`, `_REDIRECT_URI` | Google OAuth per env                                                         |
-| `OAUTH_GITHUB_<ENV>_CLIENT_ID`, `_CLIENT_SECRET`, `_REDIRECT_URI` | GitHub OAuth per env                                                         |
 | `POSTHOG_PERSONAL_API_KEY` (optional `POSTHOG_PROJECT_ID` / `_API_KEY`) | PostHog (resolves `POSTHOG_KEY` / `POSTHOG_HOST`; region in `setup.config.json`) |
-| `TURNSTILE_<ENV>_SITE_KEY`, `TURNSTILE_<ENV>_SECRET_KEY`          | Cloudflare Turnstile per env (wires `CAPTCHA_*`)                             |
+
+> Stripe / OAuth / Turnstile are **not** setup-credential variables — they live in
+> `.env.<environment>` as `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`,
+> `OAUTH_*_CLIENT_ID`/`_SECRET`/`_REDIRECT_URI`, `CAPTCHA_SITE_KEY`/`CAPTCHA_SECRET` (no `<ENV>` suffix).
 
 ---
 

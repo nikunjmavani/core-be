@@ -2,7 +2,8 @@
  * Cloudflare Turnstile provider for `pnpm setup:infra`.
  *
  * Validates each Turnstile secret per environment against Cloudflare siteverify (no
- * resource is created); build-env-vars wires CAPTCHA_PROVIDER/SITE_KEY/SECRET.
+ * resource is created). The secret is read from each `.env.<environment>` (CAPTCHA_SECRET) —
+ * Turnstile is an app secret entered directly per environment, not in setup credentials.
  *
  * NAMING (single source of truth = setup.config.json): organization/project names from
  * `config.project.*`, environment names from `config.environments[].name` — never hardcoded.
@@ -12,6 +13,7 @@
 import * as logger from '@tooling/setup/common/logger.js';
 import { setupFetch } from '@tooling/setup/common/setup-fetch.js';
 import type { InfraProviderContext, ProviderResult } from '@tooling/setup/common/types.js';
+import { readEnvFileValue } from '@tooling/setup/envs/read-env-file.js';
 import { createValidationProvider } from '../create-validation-provider.js';
 
 const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
@@ -48,11 +50,13 @@ async function validateTurnstile(context: InfraProviderContext): Promise<Provide
   logger.info('Validating Cloudflare Turnstile keys...');
   let allValid = true;
   for (const environmentName of context.environments) {
-    const secretKey = context.secrets.turnstile?.[environmentName]?.secretKey;
+    const secretKey = readEnvFileValue(environmentName, 'CAPTCHA_SECRET');
     if (secretKey) {
       allValid = (await validateSecret(secretKey, environmentName)) && allValid;
     } else {
-      logger.warn(`  Turnstile "${environmentName}" — not configured`);
+      logger.warn(
+        `  Turnstile "${environmentName}" — CAPTCHA_SECRET not set in .env.${environmentName}`,
+      );
     }
   }
   return {
@@ -67,15 +71,14 @@ export const setupTurnstileProvider = createValidationProvider({
   isEnabled: ({ config }) => config.providers.turnstile.enabled,
   disabledReason: () => 'disabled in setup.config.json',
   preview: {
-    detail: 'Site key + secret per env',
+    detail: 'Validates CAPTCHA_SECRET from each .env.<environment>',
     url: 'https://dash.cloudflare.com/?to=/:account/turnstile',
-    configKey: 'TURNSTILE_<ENV>_SITE_KEY / _SECRET_KEY → CAPTCHA_SITE_KEY / CAPTCHA_SECRET',
+    configKey: '.env.<environment> → CAPTCHA_SITE_KEY / CAPTCHA_SECRET',
   },
-  settingsDetail: 'validate secret per env',
+  settingsDetail: 'validate CAPTCHA_SECRET per env from .env.<environment>',
   instructions: [
-    'Validates each Turnstile secret against Cloudflare siteverify.',
-    'No resource is created — site key + secret come from the Cloudflare dashboard.',
-    'build-env-vars wires CAPTCHA_PROVIDER / CAPTCHA_SITE_KEY / CAPTCHA_SECRET per env.',
+    'Validates each .env.<environment> CAPTCHA_SECRET against Cloudflare siteverify.',
+    'No resource is created — enter CAPTCHA_SITE_KEY / CAPTCHA_SECRET directly in .env.<environment>.',
   ],
   describe: ({ environments }) => ({ environments }),
   validate: validateTurnstile,

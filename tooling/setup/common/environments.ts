@@ -6,7 +6,7 @@
  * `secrets.ts` / `build-env-vars.ts`.
  */
 
-/** Uppercased environment name used in scoped env-var keys (`STRIPE_<ENV>_SECRET_KEY`). */
+/** Uppercased environment name used in scoped env-var keys (`POSTHOG_<ENV>_PROJECT_API_KEY`). */
 export function upperEnvironment(name: string): string {
   return name.toUpperCase();
 }

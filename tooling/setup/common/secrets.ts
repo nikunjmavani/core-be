@@ -52,21 +52,11 @@ const SIMPLE_VARS: Array<[string, string]> = [
 
 // ─── Zod schemas ────────────────────────────────────────────────────────────
 
-const oauthEnvironmentSchema = z.object({
-  clientId: z.string(),
-  clientSecret: z.string(),
-  redirectUri: z.string(),
-});
-
-const stripeEnvironmentSchema = z.object({
-  secretKey: z.string(),
-  webhookSecret: z.string(),
-});
-
-const turnstileEnvironmentSchema = z.object({
-  siteKey: z.string(),
-  secretKey: z.string(),
-});
+// NOTE: Stripe, OAuth (Google + GitHub) and Cloudflare Turnstile are app-level per-environment
+// secrets. They are NOT held in `.setup/.setup-credentials` — the environment dimension belongs
+// to the `.env.<environment>` file, not a key suffix. They live directly in `.env.development` /
+// `.env.production` (STRIPE_SECRET_KEY, OAUTH_*_CLIENT_ID/SECRET, CAPTCHA_SITE_KEY/SECRET) and
+// their providers validate them by reading those env files (see `envs/read-env-file.ts`).
 
 export const setupSecretsSchema = z.object({
   neon: z.object({
@@ -83,14 +73,6 @@ export const setupSecretsSchema = z.object({
   resend: z.object({
     apiKey: z.string(),
   }),
-  stripe: z.record(z.string(), stripeEnvironmentSchema).optional().default({}),
-  oauth: z
-    .object({
-      google: z.record(z.string(), oauthEnvironmentSchema).optional().default({}),
-      github: z.record(z.string(), oauthEnvironmentSchema).optional().default({}),
-    })
-    .optional()
-    .default({ google: {}, github: {} }),
   posthog: z
     .object({
       /** Setup-time personal key (`phx_…`) — resolves the project key via the PostHog API. */
@@ -104,7 +86,6 @@ export const setupSecretsSchema = z.object({
     })
     .optional()
     .default({ personalApiKey: '', environmentApiKeys: {} }),
-  turnstile: z.record(z.string(), turnstileEnvironmentSchema).optional().default({}),
   railway: z.object({
     /**
      * Account / project-wide token (Bearer auth). Required at setup time when the Railway
@@ -186,40 +167,12 @@ function get(source: Record<string, string>, key: string): string {
 export function loadSecretsFromEnv(environmentNames: string[]): SetupSecrets {
   const source = getEnvSource();
 
-  const stripe: SetupSecrets['stripe'] = {};
-  const oauthGoogle: Record<
-    string,
-    { clientId: string; clientSecret: string; redirectUri: string }
-  > = {};
-  const oauthGithub: Record<
-    string,
-    { clientId: string; clientSecret: string; redirectUri: string }
-  > = {};
-  const turnstile: SetupSecrets['turnstile'] = {};
   const posthogEnvironmentApiKeys: Record<string, string> = {};
 
   for (const env of environmentNames) {
     const upper = env.toUpperCase();
-    const sk = get(source, `STRIPE_${upper}_SECRET_KEY`);
-    const ws = get(source, `STRIPE_${upper}_WEBHOOK_SECRET`);
-    if (sk || ws) stripe[env] = { secretKey: sk, webhookSecret: ws };
-
-    const gClient = get(source, `OAUTH_GOOGLE_${upper}_CLIENT_ID`);
-    const gSecret = get(source, `OAUTH_GOOGLE_${upper}_CLIENT_SECRET`);
-    const gRedirect = get(source, `OAUTH_GOOGLE_${upper}_REDIRECT_URI`);
-    if (gClient || gSecret || gRedirect)
-      oauthGoogle[env] = { clientId: gClient, clientSecret: gSecret, redirectUri: gRedirect };
-
-    const ghClient = get(source, `OAUTH_GITHUB_${upper}_CLIENT_ID`);
-    const ghSecret = get(source, `OAUTH_GITHUB_${upper}_CLIENT_SECRET`);
-    const ghRedirect = get(source, `OAUTH_GITHUB_${upper}_REDIRECT_URI`);
-    if (ghClient || ghSecret || ghRedirect)
-      oauthGithub[env] = { clientId: ghClient, clientSecret: ghSecret, redirectUri: ghRedirect };
-
-    const tSite = get(source, `TURNSTILE_${upper}_SITE_KEY`);
-    const tSecret = get(source, `TURNSTILE_${upper}_SECRET_KEY`);
-    if (tSite || tSecret) turnstile[env] = { siteKey: tSite, secretKey: tSecret };
-
+    // Stripe / OAuth / Turnstile are app secrets entered directly in `.env.<environment>`
+    // (no env-suffixed setup-credential keys) — not read here.
     const phKey = get(source, `POSTHOG_${upper}_PROJECT_API_KEY`);
     if (phKey) posthogEnvironmentApiKeys[env] = phKey;
   }
@@ -232,18 +185,12 @@ export function loadSecretsFromEnv(environmentNames: string[]): SetupSecrets {
     },
     sentry: { authToken: get(source, 'SENTRY_AUTH_TOKEN') },
     resend: { apiKey: get(source, 'RESEND_API_KEY') },
-    stripe: Object.keys(stripe).length > 0 ? stripe : {},
-    oauth: {
-      google: oauthGoogle,
-      github: oauthGithub,
-    },
     posthog: {
       personalApiKey: get(source, 'POSTHOG_PERSONAL_API_KEY'),
       projectApiKey: get(source, 'POSTHOG_PROJECT_API_KEY') || undefined,
       projectId: get(source, 'POSTHOG_PROJECT_ID') || undefined,
       environmentApiKeys: posthogEnvironmentApiKeys,
     },
-    turnstile: Object.keys(turnstile).length > 0 ? turnstile : {},
     railway: {
       apiToken: get(source, 'RAILWAY_API_TOKEN') || undefined,
     },
@@ -363,32 +310,19 @@ export function buildEnvSetupTemplateContent(config: SetupConfig): string {
     lines.push('');
   }
 
-  for (const env of environmentNames) {
-    const u = env.toUpperCase();
-    lines.push(
-      `# Stripe (${env}) — secret: https://dashboard.stripe.com/apikeys  webhook: https://dashboard.stripe.com/webhooks`,
-    );
-    lines.push(`STRIPE_${u}_SECRET_KEY=`);
-    lines.push(`STRIPE_${u}_WEBHOOK_SECRET=`);
-    lines.push('');
-    lines.push(
-      `# Cloudflare Turnstile / CAPTCHA (${env}) — https://dash.cloudflare.com/?to=/:account/turnstile`,
-    );
-    lines.push(`TURNSTILE_${u}_SITE_KEY=`);
-    lines.push(`TURNSTILE_${u}_SECRET_KEY=`);
-    lines.push('');
-  }
-
-  lines.push('# Optional OAuth per env:');
-  lines.push('# Google: https://console.cloud.google.com/apis/credentials');
+  // App-level per-environment secrets are NOT templated here — the environment is the
+  // `.env.<environment>` file, not a key suffix. Enter them directly in each env file:
   lines.push(
-    '#   OAUTH_GOOGLE_<ENV>_CLIENT_ID=  OAUTH_GOOGLE_<ENV>_CLIENT_SECRET=  OAUTH_GOOGLE_<ENV>_REDIRECT_URI=',
+    '# App per-environment secrets go in .env.<environment> (NOT here — the env is the file):',
   );
-  lines.push('# GitHub: https://github.com/settings/developers');
+  lines.push('#   Stripe:    STRIPE_SECRET_KEY=  STRIPE_WEBHOOK_SECRET=');
   lines.push(
-    '#   OAUTH_GITHUB_<ENV>_CLIENT_ID=  OAUTH_GITHUB_<ENV>_CLIENT_SECRET=  OAUTH_GITHUB_<ENV>_REDIRECT_URI=',
+    '#   OAuth:     OAUTH_GOOGLE_CLIENT_ID/_CLIENT_SECRET/_REDIRECT_URI  (+ OAUTH_GITHUB_*)',
   );
-  lines.push('# PostHog per-env project-key override (optional): POSTHOG_<ENV>_PROJECT_API_KEY=');
+  lines.push('#   Turnstile: CAPTCHA_SITE_KEY=  CAPTCHA_SECRET=');
+  lines.push(
+    '# (See SETUP_INFRA_PREREQUISITES.md.) Their providers validate these from .env.<environment>.',
+  );
   return lines.join('\n');
 }
 
@@ -399,45 +333,19 @@ export function writeEnvSetupTemplateIfMissing(config: SetupConfig): boolean {
   return true;
 }
 
-export function appendMissingEnvSetupVariables(config: SetupConfig): string[] {
+export function appendMissingEnvSetupVariables(_config: SetupConfig): string[] {
   if (!existsSync(ENV_SETUP_PATH)) return [];
   const content = readFileSync(ENV_SETUP_PATH, 'utf-8');
   const existingKeys = new Set(Object.keys(parseEnvFile(content)));
   const appended: string[] = [];
   const blocks: string[] = [];
 
+  // Only account-wide, env-agnostic credential keys are templated. App per-environment
+  // secrets (Stripe / OAuth / Turnstile) live in `.env.<environment>`, never here.
   for (const [key, url] of SIMPLE_VARS) {
     if (!existingKeys.has(key)) {
       blocks.push(`# ${url}\n${key}=`);
       appended.push(key);
-    }
-  }
-
-  const environmentNames = config.environments.map((environment) => environment.name);
-  for (const env of environmentNames) {
-    const u = env.toUpperCase();
-    const secretKey = `STRIPE_${u}_SECRET_KEY`;
-    const webhookSecret = `STRIPE_${u}_WEBHOOK_SECRET`;
-    const needSecret = !existingKeys.has(secretKey);
-    const needWebhook = !existingKeys.has(webhookSecret);
-    if (needSecret || needWebhook) {
-      blocks.push(
-        `# Stripe (${env}) — secret: https://dashboard.stripe.com/apikeys  webhook: https://dashboard.stripe.com/webhooks\n${secretKey}=\n${webhookSecret}=`,
-      );
-      if (needSecret) appended.push(secretKey);
-      if (needWebhook) appended.push(webhookSecret);
-    }
-
-    const turnstileSiteKey = `TURNSTILE_${u}_SITE_KEY`;
-    const turnstileSecretKey = `TURNSTILE_${u}_SECRET_KEY`;
-    const needTurnstileSite = !existingKeys.has(turnstileSiteKey);
-    const needTurnstileSecret = !existingKeys.has(turnstileSecretKey);
-    if (needTurnstileSite || needTurnstileSecret) {
-      blocks.push(
-        `# Cloudflare Turnstile / CAPTCHA (${env}) — https://dash.cloudflare.com/?to=/:account/turnstile\n${turnstileSiteKey}=\n${turnstileSecretKey}=`,
-      );
-      if (needTurnstileSite) appended.push(turnstileSiteKey);
-      if (needTurnstileSecret) appended.push(turnstileSecretKey);
     }
   }
 
