@@ -1,7 +1,7 @@
-import type Stripe from "stripe";
+import type Stripe from 'stripe';
 
 function moneyFromCents(cents: number | null | undefined): string {
-  if (cents === null || cents === undefined) return "0.00";
+  if (cents === null || cents === undefined) return '0.00';
   return (cents / 100).toFixed(2);
 }
 
@@ -20,7 +20,10 @@ export const BillingAccountSerializer = {
     return {
       id: row.id,
       invoice_number: row.number ?? null,
-      status: row.status ?? "draft",
+      // Widen to `string`: the public wire shape is a plain status string, and
+      // keeping Stripe's `Invoice.Status` union here leaks an unnameable type
+      // into callers' inferred return types (TS2883).
+      status: (row.status ?? 'draft') as string,
       amount_due: moneyFromCents(row.amount_due),
       amount_paid: moneyFromCents(row.amount_paid),
       currency: row.currency,
@@ -37,17 +40,14 @@ export const BillingAccountSerializer = {
     const card = row.card;
     return {
       id: row.id,
-      brand: card?.brand ?? "card",
-      last4: card?.last4 ?? "????",
+      brand: card?.brand ?? 'card',
+      last4: card?.last4 ?? '????',
       exp_month: card?.exp_month ?? 0,
       exp_year: card?.exp_year ?? 0,
       is_default: isDefault,
     };
   },
-  paymentMethods(
-    rows: readonly Stripe.PaymentMethod[],
-    defaultPaymentMethodId: string | null,
-  ) {
+  paymentMethods(rows: readonly Stripe.PaymentMethod[], defaultPaymentMethodId: string | null) {
     return rows.map((row) =>
       BillingAccountSerializer.paymentMethod(
         row,
