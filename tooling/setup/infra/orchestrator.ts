@@ -5,6 +5,7 @@ import {
   loadSecrets,
   getSecretsPath,
   ensureEnvSetupTemplate,
+  envSetupFileExists,
 } from '@tooling/setup/common/secrets.js';
 import { hasAnyEnvSecret } from '@tooling/setup/common/secrets.js';
 import { loadState, saveState, stateFileExists } from '@tooling/setup/common/state.js';
@@ -265,9 +266,12 @@ export function runPreview(options: { providerSelection?: ProviderSelectionInput
   const configPath = getConfigPath();
   const secretsPath = getSecretsPath();
 
-  if (ensureEnvSetupTemplate(config)) {
+  // Preview is READ-ONLY — it must never write the credentials template (doing so
+  // can scaffold an empty .setup/.setup-credentials that masks a real one). Only
+  // inform the user how to create it. The apply path (runProvision) scaffolds it.
+  if (!envSetupFileExists()) {
     logger.info(
-      'Generated .setup/.setup-credentials template — fill values and run pnpm setup --preview or setup:infra again.',
+      'No .setup/.setup-credentials yet — create it with `pnpm setup:infra:init`, or copy `.setup-credentials.example` to .setup/.setup-credentials, then fill the values.',
     );
   }
 
