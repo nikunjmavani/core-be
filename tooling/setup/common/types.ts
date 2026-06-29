@@ -161,6 +161,11 @@ export interface InfraProviderDescription {
   environments?: string[];
   /** Service names this provider deploys (e.g. Railway api/worker, Railway Redis redis). */
   services?: string[];
+  /**
+   * Optional grouping label. Providers sharing a `planGroup` are merged into one row in
+   * `setup:infra:plan` (e.g. Railway server + Railway Redis → a single "Railway" line).
+   */
+  planGroup?: string;
 }
 
 export interface InfraProvider {

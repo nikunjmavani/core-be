@@ -41,6 +41,35 @@ function actionFor(status: ResourceStatus): PlanAction {
   return 'UP-TO-DATE';
 }
 
+// When several providers share a planGroup, the row keeps the most "active" action.
+const ACTION_PRECEDENCE: PlanAction[] = ['CREATE', 'UPDATE', 'VALIDATE', 'UP-TO-DATE', 'DISABLED'];
+
+function mergeCell(a: string, b: string): string {
+  const parts = [...a.split(', '), ...b.split(', ')].filter((part) => part && part !== '—');
+  return parts.length > 0 ? [...new Set(parts)].join(', ') : '—';
+}
+
+/** Collapse rows that share a `group` into one (used for Railway server + Redis). */
+function mergeByGroup(rows: Array<PlanRow & { group: string }>): PlanRow[] {
+  const merged = new Map<string, PlanRow & { group: string }>();
+  for (const row of rows) {
+    const existing = merged.get(row.group);
+    if (!existing) {
+      merged.set(row.group, { ...row, provider: row.group });
+      continue;
+    }
+    existing.action =
+      ACTION_PRECEDENCE.find((a) => a === existing.action || a === row.action) ?? existing.action;
+    existing.organization =
+      existing.organization !== '—' ? existing.organization : row.organization;
+    existing.project = existing.project !== '—' ? existing.project : row.project;
+    existing.environments = mergeCell(existing.environments, row.environments);
+    existing.services = mergeCell(existing.services, row.services);
+    existing.changes = [...existing.changes, ...row.changes];
+  }
+  return [...merged.values()];
+}
+
 function planAction(provider: InfraProvider, context: InfraProviderContext): Promise<PlanAction> {
   const step = provider.buildStep(context);
   if (!step.enabled) return Promise.resolve('DISABLED');
@@ -67,13 +96,14 @@ export async function renderPlan(
   providers: readonly InfraProvider[],
   context: InfraProviderContext,
 ): Promise<void> {
-  const rows: PlanRow[] = [];
+  const rawRows: Array<PlanRow & { group: string }> = [];
   for (const provider of providers) {
     const description = provider.describe?.(context) ?? {};
     const step = provider.buildStep(context);
-    rows.push({
+    rawRows.push({
       action: await planAction(provider, context),
       provider: provider.name,
+      group: description.planGroup ?? provider.name,
       organization: description.organization ?? '—',
       project: description.project ?? '—',
       environments: description.environments?.join(', ') ?? '—',
@@ -81,6 +111,9 @@ export async function renderPlan(
       changes: (step.detectStatus ? (await step.detectStatus()).changes : undefined) ?? [],
     });
   }
+
+  // Collapse grouped providers (e.g. Railway server + Redis) into a single row.
+  const rows = mergeByGroup(rawRows);
 
   const cells = (row: PlanRow): string[] => [
     row.action,

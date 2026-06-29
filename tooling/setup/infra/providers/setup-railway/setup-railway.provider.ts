@@ -667,6 +667,7 @@ export const setupRailwayProvider: InfraProvider = {
     project: config.project.name,
     environments,
     services: ['api', 'worker'],
+    planGroup: 'Railway',
   }),
   buildStep: (context: InfraProviderContext) => ({
     name: 'Railway',

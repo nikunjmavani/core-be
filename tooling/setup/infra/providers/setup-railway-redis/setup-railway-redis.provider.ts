@@ -701,6 +701,7 @@ export const setupRailwayRedisProvider: InfraProvider = {
     project: config.project.name,
     environments,
     services: ['redis (database template)'],
+    planGroup: 'Railway',
   }),
   buildStep: (context: InfraProviderContext) => ({
     name: 'Railway Redis',
