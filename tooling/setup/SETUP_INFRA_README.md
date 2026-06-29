@@ -66,7 +66,9 @@ providers (oauth, resend, stripe, turnstile) create nothing, so they simply re-v
 | `setup:infra`                | Apply: show the plan, then provision step-wise (interactive, human-only) |
 | `setup:infra:init`           | Interactive wizard → writes config + `.env.setup` template      |
 | `setup:infra:preview`        | Token checklist: providers, token URLs, config keys (no writes) |
-| `setup:infra:plan`           | Diff: CREATE / UP-TO-DATE / UPDATE / VALIDATE per provider (read-only) |
+| `setup:infra:plan`           | Diff (local state): CREATE / UP-TO-DATE / UPDATE / VALIDATE per provider (read-only) |
+| `setup:infra:plan:remote`    | Plan using **live remote** state (`--remote`) — drift-aware via each provider's `inspectRemote()` |
+| `setup:infra:inspect`        | Remote inspection: per provider, present/absent + config-vs-remote field diff (project/env/branch/region/org) |
 | `setup:infra:output`         | Masked env inventory per environment — **secrets never printed** (`--copy <KEY>` copies one to the clipboard; `--environment <env>` to filter) |
 | `setup:infra:reconstruct`    | Rebuild `.setup-state.json` from live remote resources          |
 | `setup:infra:export-env`     | Regenerate `.env.<environment>` files from state + secrets       |

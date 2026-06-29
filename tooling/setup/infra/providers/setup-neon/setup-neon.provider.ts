@@ -962,6 +962,73 @@ export const setupNeonProvider: InfraProvider = {
     return [];
   },
   describe: ({ config, environments }) => ({ project: config.project.name, environments }),
+  inspectRemote: async ({ config, secrets, environments }) => {
+    if (!config.providers.neon.enabled) {
+      return { present: false, fields: [], error: 'disabled in setup.config.json' };
+    }
+    const apiKey = secrets.neon.apiKey;
+    if (!isSecretFilled(apiKey)) {
+      return { present: false, fields: [], error: 'NEON_API_KEY missing in .env.setup' };
+    }
+    const expectedName = config.project.name;
+    try {
+      // Mirror the provision path: org-scoped keys require org_id on /projects (else 400).
+      const orgId =
+        secrets.neon.orgId || (await resolveNeonOrgId(apiKey, config.project.organization));
+      const { projects } = await neonRequest<{
+        projects: Array<{ id: string; name: string; pg_version?: number; region_id?: string }>;
+      }>(apiKey, 'GET', '/projects', undefined, { org_id: orgId });
+      const project = projects.find((entry) => entry.name === expectedName);
+      if (!project) {
+        return {
+          present: false,
+          fields: [{ label: 'project', expected: expectedName, remote: '—', matches: false }],
+        };
+      }
+      const fields = [
+        { label: 'project', expected: expectedName, remote: project.name, matches: true },
+        {
+          label: 'pg version',
+          expected: String(config.providers.neon.pgVersion),
+          remote: String(project.pg_version ?? '—'),
+          matches: project.pg_version === config.providers.neon.pgVersion,
+        },
+        {
+          label: 'region',
+          expected: config.providers.neon.region,
+          remote: project.region_id ?? '—',
+          matches: project.region_id === config.providers.neon.region,
+        },
+      ];
+      const { branches } = await neonRequest<{ branches: Array<{ name: string }> }>(
+        apiKey,
+        'GET',
+        `/projects/${project.id}/branches`,
+      );
+      {
+        const remoteBranches = new Set(branches.map((branch) => branch.name));
+        for (const environmentName of environments) {
+          const expectedBranch =
+            config.environments.find((entry) => entry.name === environmentName)?.branch ??
+            environmentName;
+          const present = remoteBranches.has(expectedBranch);
+          fields.push({
+            label: `branch (${environmentName})`,
+            expected: expectedBranch,
+            remote: present ? expectedBranch : '—',
+            matches: present,
+          });
+        }
+      }
+      return { present: true, fields };
+    } catch (error) {
+      return {
+        present: false,
+        fields: [],
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'Neon Postgres',
     enabled: setupNeonProvider.isEnabled(context),

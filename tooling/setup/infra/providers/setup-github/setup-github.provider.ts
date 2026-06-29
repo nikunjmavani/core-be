@@ -11,6 +11,7 @@
  * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
  */
 import { execSync } from 'node:child_process';
+import { runCommand } from '@tooling/setup/common/exec.js';
 import * as logger from '@tooling/setup/common/logger.js';
 import { runGithubInit } from '@tooling/setup/github/init.js';
 import type {
@@ -154,6 +155,62 @@ export const setupGithubProvider: InfraProvider = {
   describe: ({ config, environments }) => {
     const [owner = '', repository = ''] = config.providers.github.repository.split('/');
     return { organization: owner, project: repository, environments };
+  },
+  inspectRemote: ({ config, environments }) => {
+    const repository = config.providers.github.repository;
+    const [owner = '', repo = ''] = repository.split('/');
+    const repoResult = runCommand('gh', {
+      args: ['api', `repos/${repository}`, '--jq', '.full_name'],
+      allowFailure: true,
+    });
+    if (repoResult.status !== 0) {
+      return Promise.resolve({
+        present: false,
+        fields: [
+          {
+            label: 'repository',
+            expected: repository,
+            remote: '—',
+            matches: false,
+            prerequisite: true,
+          },
+        ],
+        error: repoResult.stderr.trim() || 'repository not found / gh not authenticated',
+      });
+    }
+    const [remoteOwner = '', remoteRepo = ''] = repoResult.stdout.trim().split('/');
+    const fields = [
+      {
+        label: 'owner',
+        expected: owner,
+        remote: remoteOwner || '—',
+        matches: remoteOwner === owner,
+        prerequisite: true,
+      },
+      {
+        label: 'repository',
+        expected: repo,
+        remote: remoteRepo || '—',
+        matches: remoteRepo === repo,
+      },
+    ];
+    const envResult = runCommand('gh', {
+      args: ['api', `repos/${repository}/environments`, '--jq', '.environments[].name'],
+      allowFailure: true,
+    });
+    const remoteEnvironments = new Set(
+      envResult.status === 0 ? envResult.stdout.trim().split('\n').filter(Boolean) : [],
+    );
+    for (const environmentName of environments) {
+      const present = remoteEnvironments.has(environmentName);
+      fields.push({
+        label: `environment (${environmentName})`,
+        expected: environmentName,
+        remote: present ? environmentName : '—',
+        matches: present,
+      });
+    }
+    return Promise.resolve({ present: true, fields });
   },
   buildStep: (context: InfraProviderContext) => ({
     name: 'GitHub (branches, rulesets, environments, secrets)',

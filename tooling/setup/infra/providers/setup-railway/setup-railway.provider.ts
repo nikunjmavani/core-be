@@ -669,6 +669,56 @@ export const setupRailwayProvider: InfraProvider = {
     services: ['api', 'worker'],
     planGroup: 'Railway',
   }),
+  inspectRemote: async ({ config, secrets, environments }) => {
+    if (!config.providers.railway.enabled) {
+      return { present: false, fields: [], error: 'disabled in setup.config.json' };
+    }
+    const token = secrets.railway.apiToken ?? '';
+    if (!token) {
+      return { present: false, fields: [], error: 'RAILWAY_API_TOKEN missing in .env.setup' };
+    }
+    const projectName = config.project.name;
+    try {
+      const projectId = await findExistingProjectId(token, projectName, 'bearer');
+      if (!projectId) {
+        return {
+          present: false,
+          fields: [{ label: 'project', expected: projectName, remote: '—', matches: false }],
+        };
+      }
+      const details = await fetchProjectDetails(token, projectId, 'bearer');
+      const remoteEnvironments = new Set(details.environments.map((entry) => entry.name));
+      const remoteServices = new Set(details.services.map((entry) => entry.name));
+      const fields = [
+        { label: 'project', expected: projectName, remote: projectName, matches: true },
+      ];
+      for (const environmentName of environments) {
+        const present = remoteEnvironments.has(environmentName);
+        fields.push({
+          label: `environment (${environmentName})`,
+          expected: environmentName,
+          remote: present ? environmentName : '—',
+          matches: present,
+        });
+      }
+      for (const serviceName of RAILWAY_SERVICE_NAMES) {
+        const present = remoteServices.has(serviceName);
+        fields.push({
+          label: `service (${serviceName})`,
+          expected: serviceName,
+          remote: present ? serviceName : '—',
+          matches: present,
+        });
+      }
+      return { present: true, fields };
+    } catch (error) {
+      return {
+        present: false,
+        fields: [],
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'Railway',
     enabled: setupRailwayProvider.isEnabled(context),

@@ -146,7 +146,9 @@ export const setup<Name>Provider: InfraProvider = {
       return result;
     },
   }),
-  // optional: check, detectExisting, detectRemote, deleteInstructions
+  // optional: inspectRemote (powers `setup:infra:inspect` + `plan --remote` — return
+  //   { present, fields: [{ label, expected, remote, matches }] }, never throw),
+  //   check, detectExisting, detectRemote, deleteInstructions
 };
 ```
 

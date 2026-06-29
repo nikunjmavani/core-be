@@ -130,6 +130,12 @@ export const setupJwtProvider: InfraProvider = {
     },
   ],
   describe: ({ environments }) => ({ environments }),
+  inspectRemote: ({ environments, state }) =>
+    Promise.resolve({
+      present: allEnvironmentsHaveJwt(environments, state),
+      fields: [],
+      error: 'local secrets — no remote resource',
+    }),
   buildStep: (context: InfraProviderContext) => ({
     name: 'JWT secrets',
     enabled: true,

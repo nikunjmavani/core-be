@@ -48,6 +48,15 @@ export function createValidationProvider(spec: ValidationProviderSpec): InfraPro
         ? [{ bucket: 'extra', provider: spec.name, detail: spec.settingsDetail }]
         : [],
     ...(spec.describe ? { describe: spec.describe } : {}),
+    // Validate-only providers have no remote resource to inspect — they probe a credential.
+    // Report that explicitly instead of a fake present/absent.
+    inspectRemote: async (context) => ({
+      present: false,
+      fields: [],
+      error: spec.isEnabled(context)
+        ? 'validate-only — no remote resource (credential checked during apply)'
+        : 'disabled in setup.config.json',
+    }),
     buildStep: (context: InfraProviderContext) => ({
       name: spec.name,
       enabled: provider.isEnabled(context),

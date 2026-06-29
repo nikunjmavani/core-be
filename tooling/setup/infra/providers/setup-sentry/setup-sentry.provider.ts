@@ -232,6 +232,76 @@ export const setupSentryProvider: InfraProvider = {
     project: config.providers.sentry.project ?? config.project.name,
     environments,
   }),
+  inspectRemote: async ({ config, secrets }) => {
+    const sentry = config.providers.sentry;
+    if (!sentry.enabled)
+      return { present: false, fields: [], error: 'disabled in setup.config.json' };
+    if (!isSecretFilled(secrets.sentry.authToken)) {
+      return { present: false, fields: [], error: 'SENTRY_AUTH_TOKEN missing in .env.setup' };
+    }
+    const organization = sentry.organization;
+    const project = sentry.project ?? config.project.name;
+    try {
+      const response = await setupFetch({
+        name: 'Sentry',
+        url: `${SENTRY_API_BASE}/projects/${organization}/${project}/`,
+        init: {
+          headers: {
+            Authorization: `Bearer ${secrets.sentry.authToken}`,
+            Accept: 'application/json',
+          },
+        },
+      });
+      if (response.status === 404) {
+        return {
+          present: false,
+          fields: [
+            {
+              label: 'organization',
+              expected: organization,
+              remote: organization,
+              matches: true,
+              prerequisite: true,
+            },
+            { label: 'project', expected: project, remote: '—', matches: false },
+          ],
+        };
+      }
+      if (!response.ok)
+        return { present: false, fields: [], error: `Sentry API returned ${response.status}` };
+      const body = (await response.json()) as { slug?: string; platform?: string };
+      return {
+        present: true,
+        fields: [
+          {
+            label: 'organization',
+            expected: organization,
+            remote: organization,
+            matches: true,
+            prerequisite: true,
+          },
+          {
+            label: 'project',
+            expected: project,
+            remote: body.slug ?? '—',
+            matches: body.slug === project,
+          },
+          {
+            label: 'platform',
+            expected: sentry.platform,
+            remote: body.platform ?? '—',
+            matches: body.platform === sentry.platform,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        present: false,
+        fields: [],
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'Sentry',
     enabled: setupSentryProvider.isEnabled(context),

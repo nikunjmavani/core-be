@@ -10,6 +10,7 @@ import {
 } from './infra/orchestrator.js';
 import { runInitWizard } from './infra/init-wizard.js';
 import { runPlan } from './infra/plan.js';
+import { runInspect } from './infra/inspect.js';
 import { runOutput } from './infra/output.js';
 import { runExportEnv } from './envs/export-env-files.js';
 import { loadEnvSetupIntoProcess } from './common/secrets.js';
@@ -40,6 +41,7 @@ function getCommand(): string {
     return 'delete';
   }
   if (args.includes('--plan')) return 'plan';
+  if (args.includes('--inspect')) return 'inspect';
   if (args.includes('--output')) return 'output';
   if (args.includes('--export-env')) return 'export-env';
   return 'provision';
@@ -81,7 +83,10 @@ function printHelp(): void {
   logger.info('  pnpm setup                           Full interactive provisioning');
   logger.info('  pnpm setup --preview                 Show providers + token URLs (no API calls)');
   logger.info(
-    '  pnpm setup --plan                    Diff: what exists vs will be created/updated (read-only)',
+    '  pnpm setup --plan [--remote]         Diff: what exists vs will be created/updated (read-only; --remote = live)',
+  );
+  logger.info(
+    '  pnpm setup --inspect                 Remote inspection: present/absent + config-vs-remote drift',
   );
   logger.info('  pnpm setup --dry-run                 Full dry-run of selected steps');
   logger.info('  pnpm setup --status                  All-environments dashboard');
@@ -121,7 +126,10 @@ async function main(): Promise<void> {
         runPreview({ providerSelection });
         break;
       case 'plan':
-        await runPlan({ providerSelection });
+        await runPlan({ providerSelection, remote: args.includes('--remote') });
+        break;
+      case 'inspect':
+        await runInspect({ providerSelection });
         break;
       case 'dry-run':
         logger.info('Dry-run: full provisioning preview');

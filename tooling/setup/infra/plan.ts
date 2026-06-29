@@ -70,11 +70,40 @@ function mergeByGroup(rows: Array<PlanRow & { group: string }>): PlanRow[] {
   return [...merged.values()];
 }
 
-function planAction(provider: InfraProvider, context: InfraProviderContext): Promise<PlanAction> {
+/** State-based action + drift changes (the fast, default path). */
+async function stateResult(
+  provider: InfraProvider,
+  context: InfraProviderContext,
+): Promise<{ action: PlanAction; changes: string[] }> {
   const step = provider.buildStep(context);
-  if (!step.enabled) return Promise.resolve('DISABLED');
-  if (!step.detectStatus) return Promise.resolve('VALIDATE');
-  return Promise.resolve(step.detectStatus()).then(actionFor);
+  if (!step.enabled) return { action: 'DISABLED', changes: [] };
+  if (!step.detectStatus) return { action: 'VALIDATE', changes: [] };
+  const status = await step.detectStatus();
+  return { action: actionFor(status), changes: status.changes ?? [] };
+}
+
+/** Remote action + field-level drift via `inspectRemote`; degrades to state on error. */
+async function remoteResult(
+  provider: InfraProvider,
+  context: InfraProviderContext,
+): Promise<{ action: PlanAction; changes: string[] }> {
+  const step = provider.buildStep(context);
+  if (!step.enabled) return { action: 'DISABLED', changes: [] };
+  if (!provider.inspectRemote) return stateResult(provider, context);
+  const inspection = await provider.inspectRemote(context);
+  if (inspection.error) {
+    const fallback = await stateResult(provider, context);
+    return { action: fallback.action, changes: [`remote: ${inspection.error}`] };
+  }
+  if (!inspection.present) return { action: 'CREATE', changes: [] };
+  const drift = inspection.fields.filter((field) => !field.matches);
+  if (drift.length === 0) return { action: 'UP-TO-DATE', changes: [] };
+  return {
+    action: 'UPDATE',
+    changes: drift.map(
+      (field) => `${field.label}: ${field.expected || '—'} → ${field.remote || '—'}`,
+    ),
+  };
 }
 
 const COLUMNS = [
@@ -95,20 +124,23 @@ const COLUMNS = [
 export async function renderPlan(
   providers: readonly InfraProvider[],
   context: InfraProviderContext,
+  remote = false,
 ): Promise<void> {
   const rawRows: Array<PlanRow & { group: string }> = [];
   for (const provider of providers) {
     const description = provider.describe?.(context) ?? {};
-    const step = provider.buildStep(context);
+    const { action, changes } = remote
+      ? await remoteResult(provider, context)
+      : await stateResult(provider, context);
     rawRows.push({
-      action: await planAction(provider, context),
+      action,
       provider: provider.name,
       group: description.planGroup ?? provider.name,
       organization: description.organization ?? '—',
       project: description.project ?? '—',
       environments: description.environments?.join(', ') ?? '—',
       services: description.services?.join(', ') ?? '—',
-      changes: (step.detectStatus ? (await step.detectStatus()).changes : undefined) ?? [],
+      changes,
     });
   }
 
@@ -146,17 +178,18 @@ export async function renderPlan(
 
 /** `pnpm setup:infra:plan` entrypoint — build the context, render the plan, print footer. */
 export async function runPlan(
-  options: { providerSelection?: ProviderSelectionInput } = {},
+  options: { providerSelection?: ProviderSelectionInput; remote?: boolean } = {},
 ): Promise<void> {
   const config = loadConfig();
   const environments = getEnvironmentNames(config);
   const context = buildProviderContext(config, loadSecrets(config), loadState(), environments);
+  const source = options.remote ? 'live remote' : 'local state';
 
   logger.info(
-    `Plan — ${config.project.displayName} (${config.project.name}) · ${environments.join(', ')}`,
+    `Plan (${source}) — ${config.project.displayName} (${config.project.name}) · ${environments.join(', ')}`,
   );
   logger.blank();
-  await renderPlan(selectProviders(options.providerSelection), context);
+  await renderPlan(selectProviders(options.providerSelection), context, options.remote ?? false);
   logger.info(
     'Read-only — nothing was changed. Run `pnpm setup:infra` to apply (step-wise, guided).',
   );

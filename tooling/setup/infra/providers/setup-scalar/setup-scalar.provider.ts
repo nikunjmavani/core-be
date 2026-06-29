@@ -18,6 +18,7 @@ import { resolve } from 'node:path';
 import * as logger from '@tooling/setup/common/logger.js';
 import { resourceStatus } from '@tooling/setup/common/interactive-step.js';
 import { isSecretFilled } from '@tooling/setup/common/secrets.js';
+import { setupFetch } from '@tooling/setup/common/setup-fetch.js';
 import { buildEnvironmentVariables } from '@tooling/setup/envs/build-env-vars.js';
 import { refreshEnvFiles } from '@tooling/setup/envs/export-env-files.js';
 import type {
@@ -148,6 +149,30 @@ export const setupScalarProvider: InfraProvider = {
       ? [{ bucket: 'extra', provider: 'Scalar', detail: 'publish OpenAPI to registry' }]
       : [],
   describe: ({ config }) => ({ project: config.project.name }),
+  inspectRemote: async ({ config, secrets }) => {
+    if (!config.providers.scalar.enabled) {
+      return { present: false, fields: [], error: 'disabled in setup.config.json' };
+    }
+    const namespace = secrets.scalar?.namespace ?? '';
+    if (!namespace)
+      return { present: false, fields: [], error: 'SCALAR_NAMESPACE missing in .env.setup' };
+    const slug = secrets.scalar?.slug || config.project.name;
+    try {
+      const response = await setupFetch({ name: 'Scalar', url: buildRegistryUrl(namespace, slug) });
+      return {
+        present: response.ok,
+        fields: [
+          { label: 'slug', expected: slug, remote: response.ok ? slug : '—', matches: response.ok },
+        ],
+      };
+    } catch (error) {
+      return {
+        present: false,
+        fields: [],
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'Scalar',
     enabled: setupScalarProvider.isEnabled(context),

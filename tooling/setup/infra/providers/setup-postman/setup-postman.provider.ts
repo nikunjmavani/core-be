@@ -172,6 +172,48 @@ export const setupPostmanProvider: InfraProvider = {
       ? [{ bucket: 'extra', provider: 'Postman', detail: 'upload collection' }]
       : [],
   describe: ({ config }) => ({ project: config.project.name }),
+  inspectRemote: async ({ config, secrets }) => {
+    if (!config.providers.postman.enabled) {
+      return { present: false, fields: [], error: 'disabled in setup.config.json' };
+    }
+    const apiKey = secrets.postman?.apiKey ?? '';
+    if (!apiKey)
+      return { present: false, fields: [], error: 'POSTMAN_API_KEY missing in .env.setup' };
+    const workspaceId = secrets.postman?.workspaceId;
+    try {
+      const url = workspaceId
+        ? `${POSTMAN_API_BASE}/collections?workspace=${workspaceId}`
+        : `${POSTMAN_API_BASE}/collections`;
+      const response = await setupFetch({
+        name: 'Postman',
+        url,
+        init: { headers: { 'X-Api-Key': apiKey } },
+      });
+      if (!response.ok)
+        return { present: false, fields: [], error: `Postman API returned ${response.status}` };
+      const body = (await response.json()) as { collections?: Array<{ name?: string }> };
+      const expected = config.project.name;
+      const collection = body.collections?.find((entry) => entry.name === expected);
+      return {
+        present: Boolean(collection),
+        fields: [
+          {
+            label: 'collection',
+            expected,
+            remote:
+              collection?.name ?? (body.collections?.length ? '(other collections exist)' : '—'),
+            matches: Boolean(collection),
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        present: false,
+        fields: [],
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'Postman',
     enabled: setupPostmanProvider.isEnabled(context),

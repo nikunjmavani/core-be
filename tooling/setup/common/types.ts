@@ -168,6 +168,30 @@ export interface InfraProviderDescription {
   planGroup?: string;
 }
 
+/** One field compared between `setup.config.json` (expected) and the live provider (remote). */
+export interface RemoteField {
+  /** Field label, e.g. "project name", "branch (development)", "region", "organization". */
+  label: string;
+  /** Expected value from config (single source of truth). */
+  expected: string;
+  /** Value read from the provider API (`—` when absent). */
+  remote: string;
+  /** True when expected === remote. */
+  matches: boolean;
+  /** Marks a required prerequisite (e.g. organization) that setup will NOT create. */
+  prerequisite?: boolean;
+}
+
+/** Result of a live remote inspection for one provider (see `inspectRemote`). */
+export interface RemoteInspection {
+  /** True when the provider's resource(s) exist at the provider's end. */
+  present: boolean;
+  /** Deep, field-by-field comparison of config vs remote. */
+  fields: RemoteField[];
+  /** Set when the check could not run (no token / unreachable / API error). Never throws. */
+  error?: string;
+}
+
 export interface InfraProvider {
   /** Stable kebab-case key matching the folder name (e.g. 'neon'). */
   key: string;
@@ -185,6 +209,12 @@ export interface InfraProvider {
   detectExisting?(context: InfraProviderContext): Promise<InfraProviderExistingResource[]>;
   /** Remote resource detection for state reconstruction (used by --reconstruct). */
   detectRemote?(context: InfraProviderContext): Promise<Record<string, unknown>>;
+  /**
+   * Live remote inspection: does the resource exist at the provider, and does its config
+   * match `setup.config.json` (field-by-field)? Powers `setup:infra:inspect` and
+   * `setup:infra:plan --remote`. Must degrade gracefully (return `{ error }`, never throw).
+   */
+  inspectRemote?(context: InfraProviderContext): Promise<RemoteInspection>;
   /** Org / project / environment names this provider operates on (for `setup:infra:plan`). */
   describe?(context: InfraProviderContext): InfraProviderDescription;
   /** Build the interactive step descriptor for the provision loop. */

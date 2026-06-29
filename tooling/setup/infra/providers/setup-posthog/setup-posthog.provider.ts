@@ -143,6 +143,50 @@ export const setupPosthogProvider: InfraProvider = {
         ]
       : [],
   describe: ({ config }) => ({ project: config.project.name }),
+  inspectRemote: async ({ config, secrets }) => {
+    const posthog = config.providers.posthog;
+    if (!posthog.enabled)
+      return { present: false, fields: [], error: 'disabled in setup.config.json' };
+    const personalApiKey = secrets.posthog?.personalApiKey ?? '';
+    if (!personalApiKey) {
+      return {
+        present: false,
+        fields: [],
+        error: 'POSTHOG_PERSONAL_API_KEY missing in .env.setup',
+      };
+    }
+    const { apiHost } = resolveHosts(posthog.region);
+    try {
+      const response = await setupFetch({
+        name: 'PostHog',
+        url: `${apiHost}/api/projects/`,
+        init: { headers: { Authorization: `Bearer ${personalApiKey}` } },
+      });
+      if (!response.ok)
+        return { present: false, fields: [], error: `PostHog API returned ${response.status}` };
+      const body = (await response.json()) as { results?: Array<{ name?: string }> };
+      const project = body.results?.[0];
+      const expectedProject = config.project.name;
+      return {
+        present: Boolean(project),
+        fields: [
+          {
+            label: 'project',
+            expected: expectedProject,
+            remote: project?.name ?? '—',
+            matches: project?.name === expectedProject,
+          },
+          { label: 'region', expected: posthog.region, remote: posthog.region, matches: true },
+        ],
+      };
+    } catch (error) {
+      return {
+        present: false,
+        fields: [],
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'PostHog',
     enabled: setupPosthogProvider.isEnabled(context),
