@@ -1,181 +1,184 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mockEnv = vi.hoisted(() => ({
-  NODE_ENV: "test" as string,
+  NODE_ENV: 'test' as string,
 }));
 
-vi.mock("@/shared/config/env.config.js", () => ({
+vi.mock('@/shared/config/env.config.js', () => ({
   env: mockEnv,
 }));
 
-vi.mock("@/shared/utils/infrastructure/logger.util.js", () => ({
+vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("@/infrastructure/observability/sentry/sentry.js", () => ({
+vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
   Sentry: { addBreadcrumb: vi.fn() },
 }));
 
-describe("rate-limit-presets", () => {
+describe('rate-limit-presets', () => {
   afterEach(() => {
-    mockEnv.NODE_ENV = "test";
+    mockEnv.NODE_ENV = 'test';
     vi.resetModules();
   });
 
-  it.each(["test", "development", "local"] as const)(
-    "STRICT_PUBLIC_RATE_LIMIT allows 5000 req/min in %s NODE_ENV",
-    async (nodeEnv) => {
-      mockEnv.NODE_ENV = nodeEnv;
-      const { STRICT_PUBLIC_RATE_LIMIT } =
-        await import("@/shared/middlewares/rate-limit/rate-limit-presets.constants.js");
-      expect(STRICT_PUBLIC_RATE_LIMIT.config.rateLimit.max).toBe(5000);
-    },
-  );
+  it.each([
+    'test',
+    'development',
+    'local',
+  ] as const)('STRICT_PUBLIC_RATE_LIMIT allows 5000 req/min in %s NODE_ENV', async (nodeEnv) => {
+    mockEnv.NODE_ENV = nodeEnv;
+    const { STRICT_PUBLIC_RATE_LIMIT } = await import(
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
+    );
+    expect(STRICT_PUBLIC_RATE_LIMIT.config.rateLimit.max).toBe(5000);
+  });
 
-  it("STRICT_PUBLIC_RATE_LIMIT caps public auth routes at 5 req/min outside test", async () => {
-    mockEnv.NODE_ENV = "production";
-    const { STRICT_PUBLIC_RATE_LIMIT } =
-      await import("@/shared/middlewares/rate-limit/rate-limit-presets.constants.js");
+  it('STRICT_PUBLIC_RATE_LIMIT caps public auth routes at 5 req/min outside test', async () => {
+    mockEnv.NODE_ENV = 'production';
+    const { STRICT_PUBLIC_RATE_LIMIT } = await import(
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
+    );
     expect(STRICT_PUBLIC_RATE_LIMIT.config.rateLimit.max).toBe(5);
     expect(STRICT_PUBLIC_RATE_LIMIT.config.rateLimit.timeWindow).toBe(60_000);
   });
 
-  it("STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS caps per email at 5 / 15 min on preHandler outside test", async () => {
-    mockEnv.NODE_ENV = "production";
-    const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } =
-      await import("@/shared/middlewares/rate-limit/rate-limit-presets.constants.js");
-    expect(STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.max).toBe(5);
-    expect(STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.timeWindow).toBe(
-      15 * 60_000,
+  it('STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS caps per email at 5 / 15 min on preHandler outside test', async () => {
+    mockEnv.NODE_ENV = 'production';
+    const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
-    expect(STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.hook).toBe("preHandler");
+    expect(STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.max).toBe(5);
+    expect(STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.timeWindow).toBe(15 * 60_000);
+    expect(STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.hook).toBe('preHandler');
   });
 
-  it.each(["test", "development"] as const)(
-    "STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS lifts the cap under %s NODE_ENV",
-    async (nodeEnv) => {
-      mockEnv.NODE_ENV = nodeEnv;
-      const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } =
-        await import("@/shared/middlewares/rate-limit/rate-limit-presets.constants.js");
-      expect(STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.max).toBe(5000);
-    },
-  );
+  it.each([
+    'test',
+    'development',
+  ] as const)('STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS lifts the cap under %s NODE_ENV', async (nodeEnv) => {
+    mockEnv.NODE_ENV = nodeEnv;
+    const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
+    );
+    expect(STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.max).toBe(5000);
+  });
 
-  it("sec-re-11: per-email key generator hashes the normalized body email and never embeds the raw address", async () => {
+  it('sec-re-11: per-email key generator hashes the normalized body email and never embeds the raw address', async () => {
     // Prior to this fix the key was `email:user@example.com` verbatim — the
     // literal value Redis stored, the value the structured log carried, and
     // the value the Sentry breadcrumb message embedded. Hashing makes the
     // bucket stable (deterministic per address) while keeping the
     // log/breadcrumb value opaque so a credential-stuffing run no longer
     // ships the targeted addresses to observability.
-    const crypto = await import("node:crypto");
-    mockEnv.NODE_ENV = "production";
-    const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } =
-      await import("@/shared/middlewares/rate-limit/rate-limit-presets.constants.js");
-    const keyGenerator =
-      STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.keyGenerator;
+    const crypto = await import('node:crypto');
+    mockEnv.NODE_ENV = 'production';
+    const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
+    );
+    const keyGenerator = STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.keyGenerator;
     expect(keyGenerator).toBeDefined();
     const key = await keyGenerator?.({
-      ip: "203.0.113.7",
-      body: { email: "  USER@Example.COM " },
+      ip: '203.0.113.7',
+      body: { email: '  USER@Example.COM ' },
     } as never);
     // Normalization (trim + lowercase) THEN hash, then take the first 16 hex chars.
     const expectedHashPrefix = crypto
-      .createHash("sha256")
-      .update("user@example.com")
-      .digest("hex")
+      .createHash('sha256')
+      .update('user@example.com')
+      .digest('hex')
       .slice(0, 16);
     expect(key).toBe(`email:${expectedHashPrefix}`);
     // Belt-and-braces: the raw address must not appear anywhere.
-    expect(key).not.toContain("user@example.com");
-    expect(key).not.toContain("@");
+    expect(key).not.toContain('user@example.com');
+    expect(key).not.toContain('@');
   });
 
-  it("sec-re-11: per-email key generator yields stable buckets per address (same email → same key)", async () => {
-    mockEnv.NODE_ENV = "production";
-    const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } =
-      await import("@/shared/middlewares/rate-limit/rate-limit-presets.constants.js");
-    const keyGenerator =
-      STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.keyGenerator;
+  it('sec-re-11: per-email key generator yields stable buckets per address (same email → same key)', async () => {
+    mockEnv.NODE_ENV = 'production';
+    const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
+    );
+    const keyGenerator = STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.keyGenerator;
     const keyFromAttempt1 = await keyGenerator?.({
-      ip: "203.0.113.7",
-      body: { email: "victim@example.com" },
+      ip: '203.0.113.7',
+      body: { email: 'victim@example.com' },
     } as never);
     const keyFromAttempt2 = await keyGenerator?.({
-      ip: "198.51.100.4", // Different IP — bucket must still collapse on the same email.
-      body: { email: "victim@example.com" },
+      ip: '198.51.100.4', // Different IP — bucket must still collapse on the same email.
+      body: { email: 'victim@example.com' },
     } as never);
     expect(keyFromAttempt1).toBe(keyFromAttempt2);
 
     // And different emails yield different buckets.
     const otherKey = await keyGenerator?.({
-      ip: "203.0.113.7",
-      body: { email: "someone-else@example.com" },
+      ip: '203.0.113.7',
+      body: { email: 'someone-else@example.com' },
     } as never);
     expect(otherKey).not.toBe(keyFromAttempt1);
   });
 
-  it("per-email key generator falls back to IP when the body has no usable email", async () => {
-    mockEnv.NODE_ENV = "production";
-    const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } =
-      await import("@/shared/middlewares/rate-limit/rate-limit-presets.constants.js");
-    const keyGenerator =
-      STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.keyGenerator;
-    const key = await keyGenerator?.({ ip: "203.0.113.7", body: {} } as never);
-    expect(key).toBe("ip:203.0.113.7");
+  it('per-email key generator falls back to IP when the body has no usable email', async () => {
+    mockEnv.NODE_ENV = 'production';
+    const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
+    );
+    const keyGenerator = STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.keyGenerator;
+    const key = await keyGenerator?.({ ip: '203.0.113.7', body: {} } as never);
+    expect(key).toBe('ip:203.0.113.7');
   });
 
-  it("org-scoped key namespaces the organization by actor so victim buckets are isolated (audit #14)", async () => {
-    const { ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT } =
-      await import("@/shared/middlewares/rate-limit/rate-limit-presets.constants.js");
-    const keyGenerator =
-      ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config.rateLimit.keyGenerator;
+  it('org-scoped key namespaces the organization by actor so victim buckets are isolated (audit #14)', async () => {
+    const { ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT } = await import(
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
+    );
+    const keyGenerator = ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config.rateLimit.keyGenerator;
     expect(keyGenerator).toBeDefined();
 
     // An attacker and a real member hitting the SAME victim org resolve to DIFFERENT buckets,
     // so the attacker can never drain the member's quota.
     const attackerKey = await keyGenerator?.({
-      ip: "203.0.113.7",
-      organizationId: "victim-org",
-      auth: { kind: "user", userId: "attacker-user" },
+      ip: '203.0.113.7',
+      organizationId: 'victim-org',
+      auth: { kind: 'user', userId: 'attacker-user' },
     } as never);
     const memberKey = await keyGenerator?.({
-      ip: "198.51.100.4",
-      organizationId: "victim-org",
-      auth: { kind: "user", userId: "member-user" },
+      ip: '198.51.100.4',
+      organizationId: 'victim-org',
+      auth: { kind: 'user', userId: 'member-user' },
     } as never);
 
-    expect(attackerKey).toBe("organization:victim-org:actor:attacker-user");
-    expect(memberKey).toBe("organization:victim-org:actor:member-user");
+    expect(attackerKey).toBe('organization:victim-org:actor:attacker-user');
+    expect(memberKey).toBe('organization:victim-org:actor:member-user');
     expect(attackerKey).not.toBe(memberKey);
   });
 
-  it("org-scoped key namespaces API-key actors and falls back to actor, then IP", async () => {
-    const { ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT } =
-      await import("@/shared/middlewares/rate-limit/rate-limit-presets.constants.js");
-    const keyGenerator =
-      ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config.rateLimit.keyGenerator;
+  it('org-scoped key namespaces API-key actors and falls back to actor, then IP', async () => {
+    const { ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT } = await import(
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
+    );
+    const keyGenerator = ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config.rateLimit.keyGenerator;
 
     // Production shape: an API-key principal carries `kind: 'apiKey'` and no `userId`. The old
     // `userId ?? apiKeyPublicId` returned the empty-string user sentinel here, collapsing the
     // bucket to `ip:` (finding D); the actor helper now resolves the api-key public id.
     const apiKeyActor = await keyGenerator?.({
-      ip: "203.0.113.7",
-      organizationId: "org-1",
-      auth: { kind: "apiKey", apiKeyPublicId: "apikey-1" },
+      ip: '203.0.113.7',
+      organizationId: 'org-1',
+      auth: { kind: 'apiKey', apiKeyPublicId: 'apikey-1' },
     } as never);
-    expect(apiKeyActor).toBe("organization:org-1:actor:apikey-1");
+    expect(apiKeyActor).toBe('organization:org-1:actor:apikey-1');
 
     const noOrgContext = await keyGenerator?.({
-      ip: "203.0.113.7",
-      auth: { kind: "user", userId: "user-1" },
+      ip: '203.0.113.7',
+      auth: { kind: 'user', userId: 'user-1' },
     } as never);
-    expect(noOrgContext).toBe("actor:user-1");
+    expect(noOrgContext).toBe('actor:user-1');
 
     const unauthenticated = await keyGenerator?.({
-      ip: "203.0.113.7",
+      ip: '203.0.113.7',
       auth: undefined,
     } as never);
-    expect(unauthenticated).toBe("ip:203.0.113.7");
+    expect(unauthenticated).toBe('ip:203.0.113.7');
   });
 });

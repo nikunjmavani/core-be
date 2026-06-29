@@ -1,17 +1,17 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { randomUUID } from "node:crypto";
-import { testApiPath } from "@/tests/helpers/test-api-prefix.helper.js";
-import { createTestApp } from "@/tests/helpers/test-app.js";
-import { cleanupDatabase } from "@/tests/helpers/test-database.js";
-import { createTestUser } from "@/tests/factories/user.factory.js";
-import { seedPermissions } from "@/domains/tenancy/__tests__/factories/permission.factory.js";
-import { TENANCY_PERMISSIONS } from "@/domains/tenancy/tenancy.permissions.js";
-import { BILLING_PERMISSIONS } from "@/domains/billing/billing.permissions.js";
-import { generateTestToken } from "@/tests/helpers/test-auth.js";
-import { injectAuthenticated } from "@/tests/helpers/test-http-inject.helper.js";
-import type { FastifyInstance } from "fastify";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
+import { createTestApp } from '@/tests/helpers/test-app.js';
+import { cleanupDatabase } from '@/tests/helpers/test-database.js';
+import { createTestUser } from '@/tests/factories/user.factory.js';
+import { seedPermissions } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
+import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
+import { BILLING_PERMISSIONS } from '@/domains/billing/billing.permissions.js';
+import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import { injectAuthenticated } from '@/tests/helpers/test-http-inject.helper.js';
+import type { FastifyInstance } from 'fastify';
 
-describe("Cross-domain e2e: tenancy + billing organization", () => {
+describe('Cross-domain e2e: tenancy + billing organization', () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
@@ -38,16 +38,16 @@ describe("Cross-domain e2e: tenancy + billing organization", () => {
     ]);
   });
 
-  it("creates organization then reads billing plans and subscriptions", async () => {
+  it('creates organization then reads billing plans and subscriptions', async () => {
     const user = await createTestUser();
     const token = await generateTestToken({ userId: user.public_id });
 
     const createResponse = await injectAuthenticated(app, {
-      method: "POST",
-      url: testApiPath("/tenancy/organizations"),
+      method: 'POST',
+      url: testApiPath('/tenancy/organizations'),
       token,
-      headers: { "x-idempotency-key": `idem-${randomUUID()}` },
-      payload: { name: "Billing E2E Org", slug: `billing-e2e-${Date.now()}` },
+      headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
+      payload: { name: 'Billing E2E Org', slug: `billing-e2e-${Date.now()}` },
     });
     expect(createResponse.statusCode).toBe(201);
     const created = createResponse.json() as { data: { id: string } };
@@ -57,15 +57,15 @@ describe("Cross-domain e2e: tenancy + billing organization", () => {
     });
 
     const plansResponse = await injectAuthenticated(app, {
-      method: "GET",
-      url: testApiPath("/billing/plans"),
+      method: 'GET',
+      url: testApiPath('/billing/plans'),
       token: orgToken,
     });
     expect(plansResponse.statusCode).toBe(200);
 
     const subscriptionsResponse = await injectAuthenticated(app, {
-      method: "GET",
-      url: testApiPath("/billing/subscriptions"),
+      method: 'GET',
+      url: testApiPath('/billing/subscriptions'),
       token: orgToken,
     });
     expect(subscriptionsResponse.statusCode).toBe(200);

@@ -1,18 +1,18 @@
-import type { FastifyReply, FastifyRequest } from "fastify";
-import { successResponse } from "@/shared/utils/http/response.util.js";
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { successResponse } from '@/shared/utils/http/response.util.js';
 import {
   getActingUserPublicId,
   getRequestIdentifier,
   requirePrincipal,
   resolveActiveOrganizationId,
-} from "@/shared/utils/http/request.util.js";
-import { validatePublicIdParam } from "@/shared/utils/identity/public-id-param.util.js";
-import type { SubscriptionService } from "./subscription.service.js";
-import { SubscriptionSerializer } from "./subscription.serializer.js";
+} from '@/shared/utils/http/request.util.js';
+import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
+import type { SubscriptionService } from './subscription.service.js';
+import { SubscriptionSerializer } from './subscription.serializer.js';
 
 function readIdempotencyKey(request: FastifyRequest): string | undefined {
-  return typeof request.headers["x-idempotency-key"] === "string"
-    ? request.headers["x-idempotency-key"]
+  return typeof request.headers['x-idempotency-key'] === 'string'
+    ? request.headers['x-idempotency-key']
     : undefined;
 }
 
@@ -35,16 +35,10 @@ function readIdempotencyKey(request: FastifyRequest): string | undefined {
  */
 export function createSubscriptionController(service: SubscriptionService) {
   return {
-    listSubscriptions: async (
-      request: FastifyRequest,
-      _reply: FastifyReply,
-    ) => {
+    listSubscriptions: async (request: FastifyRequest, _reply: FastifyReply) => {
       requirePrincipal(request);
       const data = await service.list(resolveActiveOrganizationId(request));
-      return successResponse(
-        SubscriptionSerializer.many(data),
-        getRequestIdentifier(request),
-      );
+      return successResponse(SubscriptionSerializer.many(data), getRequestIdentifier(request));
     },
     getSubscription: async (
       request: FastifyRequest<{ Params: { subscription_id: string } }>,
@@ -53,20 +47,11 @@ export function createSubscriptionController(service: SubscriptionService) {
       requirePrincipal(request);
       const data = await service.get(
         resolveActiveOrganizationId(request),
-        validatePublicIdParam(
-          request.params.subscription_id,
-          "subscription_id",
-        ),
+        validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
       );
-      return successResponse(
-        SubscriptionSerializer.one(data),
-        getRequestIdentifier(request),
-      );
+      return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
-    createSubscription: async (
-      request: FastifyRequest,
-      reply: FastifyReply,
-    ) => {
+    createSubscription: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requirePrincipal(request);
       const idempotencyKey = readIdempotencyKey(request);
       const data = await service.create(
@@ -76,10 +61,7 @@ export function createSubscriptionController(service: SubscriptionService) {
         idempotencyKey,
       );
       reply.code(201);
-      return successResponse(
-        SubscriptionSerializer.one(data),
-        getRequestIdentifier(request),
-      );
+      return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
     updateSubscription: async (
       request: FastifyRequest<{ Params: { subscription_id: string } }>,
@@ -88,16 +70,10 @@ export function createSubscriptionController(service: SubscriptionService) {
       requirePrincipal(request);
       const data = await service.update(
         resolveActiveOrganizationId(request),
-        validatePublicIdParam(
-          request.params.subscription_id,
-          "subscription_id",
-        ),
+        validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
         request.body,
       );
-      return successResponse(
-        SubscriptionSerializer.one(data),
-        getRequestIdentifier(request),
-      );
+      return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
     changePlan: async (
       request: FastifyRequest<{ Params: { subscription_id: string } }>,
@@ -106,17 +82,11 @@ export function createSubscriptionController(service: SubscriptionService) {
       requirePrincipal(request);
       const data = await service.changePlan(
         resolveActiveOrganizationId(request),
-        validatePublicIdParam(
-          request.params.subscription_id,
-          "subscription_id",
-        ),
+        validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
         request.body,
         readIdempotencyKey(request),
       );
-      return successResponse(
-        SubscriptionSerializer.one(data),
-        getRequestIdentifier(request),
-      );
+      return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
     cancelSubscription: async (
       request: FastifyRequest<{ Params: { subscription_id: string } }>,
@@ -125,16 +95,10 @@ export function createSubscriptionController(service: SubscriptionService) {
       requirePrincipal(request);
       const data = await service.cancel(
         resolveActiveOrganizationId(request),
-        validatePublicIdParam(
-          request.params.subscription_id,
-          "subscription_id",
-        ),
+        validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
         readIdempotencyKey(request),
       );
-      return successResponse(
-        SubscriptionSerializer.one(data),
-        getRequestIdentifier(request),
-      );
+      return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
     resumeSubscription: async (
       request: FastifyRequest<{ Params: { subscription_id: string } }>,
@@ -143,16 +107,10 @@ export function createSubscriptionController(service: SubscriptionService) {
       requirePrincipal(request);
       const data = await service.resume(
         resolveActiveOrganizationId(request),
-        validatePublicIdParam(
-          request.params.subscription_id,
-          "subscription_id",
-        ),
+        validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
         readIdempotencyKey(request),
       );
-      return successResponse(
-        SubscriptionSerializer.one(data),
-        getRequestIdentifier(request),
-      );
+      return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
     getPaymentSetup: async (
       request: FastifyRequest<{ Params: { subscription_id: string } }>,
@@ -161,34 +119,21 @@ export function createSubscriptionController(service: SubscriptionService) {
       requirePrincipal(request);
       const data = await service.getPaymentSetup(
         resolveActiveOrganizationId(request),
-        validatePublicIdParam(
-          request.params.subscription_id,
-          "subscription_id",
-        ),
+        validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
       );
       return successResponse(data, getRequestIdentifier(request));
     },
     listInvoices: async (request: FastifyRequest, _reply: FastifyReply) => {
       requirePrincipal(request);
-      const data = await service.listInvoices(
-        resolveActiveOrganizationId(request),
-      );
+      const data = await service.listInvoices(resolveActiveOrganizationId(request));
       return successResponse(data, getRequestIdentifier(request));
     },
-    listPaymentMethods: async (
-      request: FastifyRequest,
-      _reply: FastifyReply,
-    ) => {
+    listPaymentMethods: async (request: FastifyRequest, _reply: FastifyReply) => {
       requirePrincipal(request);
-      const data = await service.listPaymentMethods(
-        resolveActiveOrganizationId(request),
-      );
+      const data = await service.listPaymentMethods(resolveActiveOrganizationId(request));
       return successResponse(data, getRequestIdentifier(request));
     },
-    createPaymentMethodSetup: async (
-      request: FastifyRequest,
-      _reply: FastifyReply,
-    ) => {
+    createPaymentMethodSetup: async (request: FastifyRequest, _reply: FastifyReply) => {
       requirePrincipal(request);
       const data = await service.createPaymentMethodSetup(
         resolveActiveOrganizationId(request),

@@ -1,16 +1,16 @@
-import type { FastifyPluginAsync } from "fastify";
-import type { ZodTypeProvider } from "fastify-type-provider-zod";
-import { requireOrganizationPermission } from "@/shared/utils/auth/authorization.util.js";
-import { ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT } from "@/shared/middlewares/rate-limit/rate-limit-presets.constants.js";
-import { BILLING_PERMISSIONS } from "@/domains/billing/billing.permissions.js";
-import type { SubscriptionService } from "./subscription.service.js";
-import { createSubscriptionController } from "./subscription.controller.js";
+import type { FastifyPluginAsync } from 'fastify';
+import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { requireOrganizationPermission } from '@/shared/utils/auth/authorization.util.js';
+import { ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
+import { BILLING_PERMISSIONS } from '@/domains/billing/billing.permissions.js';
+import type { SubscriptionService } from './subscription.service.js';
+import { createSubscriptionController } from './subscription.controller.js';
 import {
   ChangePlanDto,
   CreateSubscriptionDto,
   subscriptionIdParamsDto,
   UpdateSubscriptionDto,
-} from "./subscription.dto.js";
+} from './subscription.dto.js';
 
 /**
  * Fastify plugin factory that mounts the organization-scoped subscription
@@ -19,227 +19,191 @@ import {
  * the `X-Idempotency-Key` header (`idempotencyRequired: true`) on externally
  * mutating billing routes.
  */
-export function subscriptionRoutes(
-  service: SubscriptionService,
-): FastifyPluginAsync {
+export function subscriptionRoutes(service: SubscriptionService): FastifyPluginAsync {
   const controller = createSubscriptionController(service);
 
   return async (app) => {
     const zodApplication = app.withTypeProvider<ZodTypeProvider>();
     zodApplication.get(
-      "/subscriptions",
+      '/subscriptions',
       {
         onRequest: [app.authenticate],
-        preHandler: [
-          requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ),
-        ],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ)],
         schema: {
-          summary: "List subscriptions",
+          summary: 'List subscriptions',
           description:
-            "Returns all subscriptions for the organization. Requires SUBSCRIPTION_READ permission.",
-          tags: ["Subscription"],
+            'Returns all subscriptions for the organization. Requires SUBSCRIPTION_READ permission.',
+          tags: ['Subscription'],
         },
       },
       controller.listSubscriptions,
     );
     zodApplication.get<{ Params: { subscription_id: string } }>(
-      "/subscriptions/:subscription_id",
+      '/subscriptions/:subscription_id',
       {
         onRequest: [app.authenticate],
-        preHandler: [
-          requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ),
-        ],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ)],
         schema: {
-          summary: "Get subscription",
+          summary: 'Get subscription',
           description:
-            "Returns a single subscription with its current status. Requires SUBSCRIPTION_READ permission.",
-          tags: ["Subscription"],
+            'Returns a single subscription with its current status. Requires SUBSCRIPTION_READ permission.',
+          tags: ['Subscription'],
           params: subscriptionIdParamsDto,
         },
       },
       controller.getSubscription,
     );
     zodApplication.post(
-      "/subscriptions",
+      '/subscriptions',
       {
         config: {
           idempotencyRequired: true,
           ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config,
         },
         schema: {
-          summary: "Create subscription",
+          summary: 'Create subscription',
           description:
-            "Creates a new subscription for the organization. Only one active subscription is allowed. Requires SUBSCRIPTION_MANAGE permission. Send an `X-Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.",
-          tags: ["Subscription"],
+            'Creates a new subscription for the organization. Only one active subscription is allowed. Requires SUBSCRIPTION_MANAGE permission. Send an `X-Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
+          tags: ['Subscription'],
           body: CreateSubscriptionDto,
         },
         onRequest: [app.authenticate],
-        preHandler: [
-          requireOrganizationPermission(
-            BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE,
-          ),
-        ],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE)],
       },
       controller.createSubscription,
     );
     zodApplication.patch<{ Params: { subscription_id: string } }>(
-      "/subscriptions/:subscription_id",
+      '/subscriptions/:subscription_id',
       {
         config: { ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         schema: {
-          summary: "Update subscription",
+          summary: 'Update subscription',
           description:
-            "Updates subscription settings (e.g. cancel at period end). Requires SUBSCRIPTION_MANAGE permission.",
-          tags: ["Subscription"],
+            'Updates subscription settings (e.g. cancel at period end). Requires SUBSCRIPTION_MANAGE permission.',
+          tags: ['Subscription'],
           params: subscriptionIdParamsDto,
           body: UpdateSubscriptionDto,
         },
         onRequest: [app.authenticate],
-        preHandler: [
-          requireOrganizationPermission(
-            BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE,
-          ),
-        ],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE)],
       },
       controller.updateSubscription,
     );
     zodApplication.post<{ Params: { subscription_id: string } }>(
-      "/subscriptions/:subscription_id/change-plan",
+      '/subscriptions/:subscription_id/change-plan',
       {
         config: {
           idempotencyRequired: true,
           ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config,
         },
         schema: {
-          summary: "Change subscription plan",
+          summary: 'Change subscription plan',
           description:
-            "Upgrades or downgrades the subscription to a different plan. Proration is applied automatically. Requires SUBSCRIPTION_MANAGE permission. Send an `X-Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.",
-          tags: ["Subscription"],
+            'Upgrades or downgrades the subscription to a different plan. Proration is applied automatically. Requires SUBSCRIPTION_MANAGE permission. Send an `X-Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
+          tags: ['Subscription'],
           params: subscriptionIdParamsDto,
           body: ChangePlanDto,
         },
         onRequest: [app.authenticate],
-        preHandler: [
-          requireOrganizationPermission(
-            BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE,
-          ),
-        ],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE)],
       },
       controller.changePlan,
     );
     zodApplication.post<{ Params: { subscription_id: string } }>(
-      "/subscriptions/:subscription_id/cancel",
+      '/subscriptions/:subscription_id/cancel',
       {
         config: {
           idempotencyRequired: true,
           ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config,
         },
         onRequest: [app.authenticate],
-        preHandler: [
-          requireOrganizationPermission(
-            BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE,
-          ),
-        ],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE)],
         schema: {
-          summary: "Cancel subscription",
+          summary: 'Cancel subscription',
           description:
-            "Cancels the subscription. By default, access continues until the end of the current billing period. Requires SUBSCRIPTION_MANAGE permission. Send an `X-Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.",
-          tags: ["Subscription"],
+            'Cancels the subscription. By default, access continues until the end of the current billing period. Requires SUBSCRIPTION_MANAGE permission. Send an `X-Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
+          tags: ['Subscription'],
           params: subscriptionIdParamsDto,
         },
       },
       controller.cancelSubscription,
     );
     zodApplication.post<{ Params: { subscription_id: string } }>(
-      "/subscriptions/:subscription_id/resume",
+      '/subscriptions/:subscription_id/resume',
       {
         config: {
           idempotencyRequired: true,
           ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config,
         },
         onRequest: [app.authenticate],
-        preHandler: [
-          requireOrganizationPermission(
-            BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE,
-          ),
-        ],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE)],
         schema: {
-          summary: "Resume cancelled subscription",
+          summary: 'Resume cancelled subscription',
           description:
-            "Resumes a subscription that was previously cancelled but has not yet expired. Requires SUBSCRIPTION_MANAGE permission. Send an `X-Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.",
-          tags: ["Subscription"],
+            'Resumes a subscription that was previously cancelled but has not yet expired. Requires SUBSCRIPTION_MANAGE permission. Send an `X-Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
+          tags: ['Subscription'],
           params: subscriptionIdParamsDto,
         },
       },
       controller.resumeSubscription,
     );
     zodApplication.get<{ Params: { subscription_id: string } }>(
-      "/subscriptions/:subscription_id/payment-setup",
+      '/subscriptions/:subscription_id/payment-setup',
       {
         onRequest: [app.authenticate],
-        preHandler: [
-          requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ),
-        ],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ)],
         schema: {
-          summary: "Get payment setup for incomplete subscription",
+          summary: 'Get payment setup for incomplete subscription',
           description:
-            "Returns the Stripe PaymentIntent client_secret for an INCOMPLETE subscription so the frontend can confirm the first payment. Requires SUBSCRIPTION_READ permission.",
-          tags: ["Subscription"],
+            'Returns the Stripe PaymentIntent client_secret for an INCOMPLETE subscription so the frontend can confirm the first payment. Requires SUBSCRIPTION_READ permission.',
+          tags: ['Subscription'],
           params: subscriptionIdParamsDto,
         },
       },
       controller.getPaymentSetup,
     );
     zodApplication.get(
-      "/invoices",
+      '/invoices',
       {
         onRequest: [app.authenticate],
-        preHandler: [
-          requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ),
-        ],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ)],
         schema: {
-          summary: "List billing invoices",
+          summary: 'List billing invoices',
           description:
             "Returns Stripe invoices for the active organization's billing customer. Requires SUBSCRIPTION_READ.",
-          tags: ["Subscription"],
+          tags: ['Subscription'],
         },
       },
       controller.listInvoices,
     );
     zodApplication.get(
-      "/payment-methods",
+      '/payment-methods',
       {
         onRequest: [app.authenticate],
-        preHandler: [
-          requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ),
-        ],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ)],
         schema: {
-          summary: "List payment methods",
+          summary: 'List payment methods',
           description:
             "Returns card payment methods saved for the organization's Stripe customer. Requires SUBSCRIPTION_READ.",
-          tags: ["Subscription"],
+          tags: ['Subscription'],
         },
       },
       controller.listPaymentMethods,
     );
     zodApplication.post(
-      "/payment-methods/setup",
+      '/payment-methods/setup',
       {
         config: {
           idempotencyRequired: true,
           ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config,
         },
         onRequest: [app.authenticate],
-        preHandler: [
-          requireOrganizationPermission(
-            BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE,
-          ),
-        ],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE)],
         schema: {
-          summary: "Create payment method setup",
+          summary: 'Create payment method setup',
           description:
-            "Returns a SetupIntent client_secret so the frontend can collect a new card in-app. Requires SUBSCRIPTION_MANAGE and X-Idempotency-Key.",
-          tags: ["Subscription"],
+            'Returns a SetupIntent client_secret so the frontend can collect a new card in-app. Requires SUBSCRIPTION_MANAGE and X-Idempotency-Key.',
+          tags: ['Subscription'],
         },
       },
       controller.createPaymentMethodSetup,
