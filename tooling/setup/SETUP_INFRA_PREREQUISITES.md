@@ -1,20 +1,20 @@
 # Setup-infra prerequisites — credentials you must provide
 
-These are the **inputs you obtain from each provider and put in `.setup-credentials`** before
+These are the **inputs you obtain from each provider and put in `.setup/.setup-credentials`** before
 running `pnpm setup:infra`. Fill only the providers that are `enabled: true` in
 `tooling/setup/setup.config.json`.
 
 > This list is **only what you supply**. Everything setup *derives or generates* (DSNs,
 > connection strings, project keys, JWT keys, CAPTCHA runtime keys, per-env Railway tokens)
 > is written into `.env.<environment>` for you — see "What setup generates" below. Do **not**
-> put those in `.setup-credentials`.
+> put those in `.setup/.setup-credentials`.
 
 Authoritative source: each provider's `preview()` (run `pnpm setup:infra:preview`) and the
 secret schema in `tooling/setup/common/secrets.ts`.
 
-## What you put in `.setup-credentials`
+## What you put in `.setup/.setup-credentials`
 
-| Provider | What you provide | `.setup-credentials` variable(s) | Where to get it |
+| Provider | What you provide | `.setup/.setup-credentials` variable(s) | Where to get it |
 | --- | --- | --- | --- |
 | **Neon Postgres** | API key (+ org id only if "org_id required") | `NEON_API_KEY` · optional `NEON_ORG_ID` | https://console.neon.tech/app/settings/api-keys |
 | **AWS S3** | IAM access key pair | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | https://console.aws.amazon.com/iam/home#/users → Create access key |
@@ -35,7 +35,7 @@ secret schema in `tooling/setup/common/secrets.ts`.
 `STRIPE_PRODUCTION_SECRET_KEY`). Per-env inputs: **Stripe, OAuth, Turnstile**. Everything
 else is a single account-wide value.
 
-## What setup generates (do NOT put these in `.setup-credentials`)
+## What setup generates (do NOT put these in `.setup/.setup-credentials`)
 
 Setup creates/derives these and writes them into each `.env.<environment>` — they are
 **outputs**, not prerequisites:
@@ -53,7 +53,7 @@ Setup creates/derives these and writes them into each `.env.<environment>` — t
 
 ## Notes
 
-- All inputs live in **`.setup-credentials`** (gitignored). Each line has its get-it URL as a
+- All inputs live in **`.setup/.setup-credentials`** (gitignored). Each line has its get-it URL as a
   comment; `pnpm setup:infra:init` scaffolds the file.
 - **Railway server + Railway Redis share `RAILWAY_API_TOKEN`** — one token, no double entry.
 - **Token-only auth**: with `GITHUB_TOKEN` and `RAILWAY_API_TOKEN` set, no `gh auth login`

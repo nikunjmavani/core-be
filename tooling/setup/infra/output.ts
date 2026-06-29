@@ -13,8 +13,8 @@
  * NAMING (single source of truth = setup.config.json): organization/project names come
  * from `config.project.*` and environment names from `config.environments[].name`.
  */
-import { appendFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { appendFileSync, mkdirSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { loadConfig, getEnvironmentNames } from '@tooling/setup/common/config.js';
 import { loadSecrets } from '@tooling/setup/common/secrets.js';
 import { loadState } from '@tooling/setup/common/state.js';
@@ -27,7 +27,7 @@ import {
 } from '@tooling/setup/common/clipboard.js';
 import * as logger from '@tooling/setup/common/logger.js';
 
-const AUDIT_LOG_PATH = resolve(import.meta.dirname, '../../../.setup-state.audit.log');
+const AUDIT_LOG_PATH = resolve(import.meta.dirname, '../../../.setup/.setup-state.audit.log');
 const CLIPBOARD_CLEAR_SECONDS = 20;
 
 /** Keys whose VALUES are sensitive and must be masked / clipboard-only. */
@@ -67,6 +67,7 @@ function mask(value: string): string {
 
 function recordReveal(key: string, environment: string): void {
   try {
+    mkdirSync(dirname(AUDIT_LOG_PATH), { recursive: true });
     appendFileSync(
       AUDIT_LOG_PATH,
       `${new Date().toISOString()} copied ${key} for ${environment}\n`,

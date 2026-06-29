@@ -648,7 +648,7 @@ function printHelp(): void {
     '',
     'Flags:',
     '  --environment <name>          Repeatable. Limit run to specific envs.',
-    '  --all-environments            Loop every env in .setup-state.json.',
+    '  --all-environments            Loop every env in .setup/.setup-state.json.',
     '  --service <name>              Defaults to "api". "worker" is rejected.',
     '  --domain <fqdn>               Required per env when running non-interactively.',
     '  --domain-template <pattern>   Use with --all-environments. {env} placeholder.',
@@ -700,7 +700,7 @@ async function resolveEnvironmentSelection(
       const match = byName.get(requested);
       if (!match) {
         throw new Error(
-          `Environment "${requested}" not found in .setup-state.json. Available: ${available
+          `Environment "${requested}" not found in .setup/.setup-state.json. Available: ${available
             .map((entry) => entry.name)
             .join(', ')}`,
         );
@@ -999,7 +999,7 @@ async function main(): Promise<void> {
 
   if (!state.railway?.projectId) {
     logger.error(
-      '.setup-state.json has no railway.projectId. Run pnpm setup:infra first to provision Railway.',
+      '.setup/.setup-state.json has no railway.projectId. Run pnpm setup:infra first to provision Railway.',
     );
     process.exit(1);
   }
@@ -1008,7 +1008,7 @@ async function main(): Promise<void> {
   const available = listEnvironments(state);
   if (available.length === 0) {
     logger.error(
-      'No Railway environments recorded in .setup-state.json. Run pnpm setup:infra to populate them.',
+      'No Railway environments recorded in .setup/.setup-state.json. Run pnpm setup:infra to populate them.',
     );
     process.exit(1);
   }

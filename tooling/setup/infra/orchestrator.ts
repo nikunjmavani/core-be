@@ -225,7 +225,7 @@ async function checkForExistingResources(
     if (state.neon || state.redis || state.aws || state.sentry || state.railway) {
       existing.push({
         provider: 'State file',
-        detail: '.setup-state.json contains previous provisioning data',
+        detail: '.setup/.setup-state.json contains previous provisioning data',
       });
     }
   }

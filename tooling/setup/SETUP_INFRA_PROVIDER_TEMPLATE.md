@@ -54,14 +54,14 @@ obvious at a glance:
  * NAMING (single source of truth = setup.config.json): organization/project names from
  * `config.project.*`, environment names from `config.environments[].name` — never hardcoded.
  * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
- * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
+ * console; `.setup/.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
  */
 ```
 
 ## Security (mandatory — applies to every step)
 
 - **Never print a secret value.** Providers log status only (`valid`, `resolved`) — never the key/token/password/connection-string itself. Don't `logger.*` a secret, don't echo it, don't put it in an error message. Operators view a masked inventory with `pnpm setup:infra:output`, or `--copy <KEY>` to put one value on the clipboard (never stdout, auto-cleared, audit-logged).
-- **Secrets land in `.env.<environment>` only**, via `build-env-vars.ts` → provisioning. `.setup-state.json` is gitignored plaintext (no encryption key to manage). Both `.env.*` and `.setup-state.*` are blocked by the pre-commit secret guards (gitleaks + "No secret/state files staged") and unreadable by the agent (the `guardrails.mjs` deny-read hook).
+- **Secrets land in `.env.<environment>` only**, via `build-env-vars.ts` → provisioning. `.setup/.setup-state.json` is gitignored plaintext (no encryption key to manage). Both `.env.*` and `.setup-state.*` are blocked by the pre-commit secret guards (gitleaks + "No secret/state files staged") and unreadable by the agent (the `guardrails.mjs` deny-read hook).
 - **Connection strings** with embedded credentials are masked by `output.ts` automatically; no action needed, just don't log them.
 
 ## 3. State (`common/state.ts`) — only if the provider resolves/creates something
@@ -97,7 +97,7 @@ imports — never `../`. Minimal validate-only skeleton:
  * NAMING (single source of truth = setup.config.json): organization/project names from
  * `config.project.*`, environment names from `config.environments[].name` — never hardcoded.
  * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
- * console; `.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
+ * console; `.setup/.setup-state.json` is gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
  */
 import * as logger from '@tooling/setup/common/logger.js';
 import type {
@@ -157,7 +157,7 @@ export const setup<Name>Provider: InfraProvider = {
 > `runInteractiveStep` detects existence and prompts. Validate-only providers omit it and
 > simply re-validate each run.
 
-Implement `deleteInstructions(context)` whenever the provider writes to `.setup-state.json`
+Implement `deleteInstructions(context)` whenever the provider writes to `.setup/.setup-state.json`
 (returns dashboard URL + identifiers for the manual `--delete` guide). Never add a
 `destroy` method — `setup:infra` does not delete resources.
 

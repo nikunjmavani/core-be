@@ -26,14 +26,14 @@ script that references org/project/env names.
 ### Secrets never leak (strict, enforced pre-commit)
 
 - **Never print a secret value.** Providers/scripts log status only (`valid`, `resolved`) — never a key/token/password/connection-string, in logs or error messages. Adding a `logger.*` that interpolates a secret is a violation.
-- **Secrets go to `.env.<environment>` only** (via `build-env-vars.ts` → provisioning / `setup:infra:export-env`). `setup:infra:output` shows a masked inventory; `--copy <KEY>` puts one value on the **clipboard** (never stdout, auto-cleared, audit-logged to `.setup-state.audit.log`). Never print a value.
-- **`.setup-state.json` is gitignored plaintext** (no self-managed encryption key). Don't write secrets anywhere else; don't reintroduce an encryption layer unless asked.
-- **Agent deny-read:** `agent-os/hooks/guardrails.mjs` denies the agent Read/Bash access to `.env.<env>`, `.setup-credentials`, `.setup-state.json` (templates `*.example` stay readable). Keep the `Read` matcher in `.claude/settings.json`.
+- **Secrets go to `.env.<environment>` only** (via `build-env-vars.ts` → provisioning / `setup:infra:export-env`). `setup:infra:output` shows a masked inventory; `--copy <KEY>` puts one value on the **clipboard** (never stdout, auto-cleared, audit-logged to `.setup/.setup-state.audit.log`). Never print a value.
+- **`.setup/.setup-state.json` is gitignored plaintext** (no self-managed encryption key). Don't write secrets anywhere else; don't reintroduce an encryption layer unless asked.
+- **Agent deny-read:** `agent-os/hooks/guardrails.mjs` denies the agent Read/Bash access to `.env.<env>`, `.setup/.setup-credentials`, `.setup/.setup-state.json` (templates `*.example` stay readable). Keep the `Read` matcher in `.claude/settings.json`.
 - **Enforcement:** `.env*` (except `*.example`) + `.setup-state.*` are gitignored; pre-commit runs gitleaks `protect --staged` **and** the "No secret/state files staged" guard (blocks `git add -f`). Both run in CI too. Never weaken these.
 
 ### Idempotency — present? update or skip; absent? create
 
-Every resource-creating provider implements `alreadyDone()` (or `alreadyDoneEnvironments()`) so `runInteractiveStep` can: **absent → create**; **present → print "Already present" and prompt `(u)pdate / (s)kip`** (default skip; auto-skip under `--yes`/CI — never mutate existing infra unprompted). Detection is state-based (`.setup-state.json`); remote existence is surfaced via `detectExisting()` in preview. Validate-only providers (oauth, resend, stripe, turnstile) omit it and re-validate each run. Don't reintroduce silent auto-skip or unconditional create.
+Every resource-creating provider implements `alreadyDone()` (or `alreadyDoneEnvironments()`) so `runInteractiveStep` can: **absent → create**; **present → print "Already present" and prompt `(u)pdate / (s)kip`** (default skip; auto-skip under `--yes`/CI — never mutate existing infra unprompted). Detection is state-based (`.setup/.setup-state.json`); remote existence is surfaced via `detectExisting()` in preview. Validate-only providers (oauth, resend, stripe, turnstile) omit it and re-validate each run. Don't reintroduce silent auto-skip or unconditional create.
 
 ### Common provider header
 
@@ -52,7 +52,7 @@ rollback/destroy. Adding a provider = implement the `InfraProvider` hooks + regi
 1. **Follow** [`tooling/setup/SETUP_INFRA_PROVIDER_TEMPLATE.md`](../../tooling/setup/SETUP_INFRA_PROVIDER_TEMPLATE.md) (10-step checklist + skeleton).
 2. **Read** `agent-os/skills/setup-infra-maintainer/SKILL.md` for the full dependent-file list.
 3. Touch every layer that applies: config schema + init default (`config.ts`,
-   `init-wizard.ts`, `setup.config.json`) · secrets + `.setup-credentials` template (`secrets.ts`) ·
+   `init-wizard.ts`, `setup.config.json`) · secrets + `.setup/.setup-credentials` template (`secrets.ts`) ·
    state (`state.ts`, only if it resolves/creates a value) · runtime env emission
    (`build-env-vars.ts`) · provider module + registry (`providers/setup-<key>/…`,
    `providers/index.ts`) · guide (`guide.ts`) · prerequisites (`prerequisites.ts`, only if a

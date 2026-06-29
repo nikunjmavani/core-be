@@ -7,10 +7,20 @@ provider registry. It follows a plan → apply pattern (human-only, interactive)
 | Concept            | Where it lives                                                              |
 | ------------------ | -------------------------------------------------------------------------- |
 | Declarative config | `tooling/setup/setup.config.json` (which providers + environments)         |
-| State              | `.setup-state.json` (resource ids, keys, urls; gitignored)                |
-| Secret variables   | `.setup-credentials` (tokens; gitignored)                                         |
+| State              | `.setup/.setup-state.json` (resource ids, keys, urls; gitignored)          |
+| Secret variables   | `.setup/.setup-credentials` (tokens; gitignored)                           |
+| Secret template    | `.setup-credentials.example` (committed, at repo root next to `.env.example`) |
 | Plan / apply       | `pnpm setup:infra:plan` / `pnpm setup:infra`                              |
 | Providers          | `tooling/setup/infra/providers/setup-<key>/setup-<key>.provider.ts`        |
+
+> **Where setup files live.** All setup-tooling runtime files (`.setup-credentials`, the
+> `.setup-state.*` files) live in the gitignored **`.setup/`** directory at the repo root —
+> deliberately separate from the app's `.env.<environment>` runtime config so the two are
+> never confused. The only committed, root-level setup file is the template
+> `.setup-credentials.example` (next to `.env.example` for discoverability). Copy it to
+> `.setup/.setup-credentials` and fill it — or just run `pnpm setup:infra:init`, which creates
+> the directory and file for you. Legacy root `.setup-credentials` / `.env.setup` are still
+> read (with a warning) until you move them into `.setup/`.
 
 To add a provider, see **[SETUP_INFRA_PROVIDER_TEMPLATE.md](./SETUP_INFRA_PROVIDER_TEMPLATE.md)**.
 
@@ -24,13 +34,13 @@ detect-existing → interactive step → check → delete-instructions).
 `posthog` · `turnstile` · `railway` · `railway-redis` · `github` · `postman` · `scalar`
 
 Enable/disable each in `setup.config.json` (`providers.<key>.enabled`). Fill its tokens in
-`.setup-credentials` (run `pnpm setup:infra:preview` to see exactly which keys each needs).
+`.setup/.setup-credentials` (run `pnpm setup:infra:preview` to see exactly which keys each needs).
 
 ## Quick start
 
 ```bash
-pnpm setup:infra:init       # generate setup.config.json + .setup-credentials template (interactive)
-# → fill tokens in .setup-credentials  (which keys + where: SETUP_INFRA_PREREQUISITES.md)
+pnpm setup:infra:init       # generate setup.config.json + .setup/.setup-credentials template (interactive)
+# → fill tokens in .setup/.setup-credentials  (which keys + where: SETUP_INFRA_PREREQUISITES.md)
 pnpm setup:infra:preview    # token checklist: providers, where to get each key
 pnpm setup:infra:plan       # diff: what exists vs what will be created/updated (read-only)
 pnpm setup:infra            # apply — shows the plan, then walks step-wise (interactive, human-only)
@@ -53,7 +63,7 @@ resource) already exists before doing anything:
 - **Present** → setup prints `Already present — …` and **asks `(u)pdate / (s)kip`** (default **skip**). Skip keeps what's there; update re-runs the step.
 - **Non-interactive** (`--yes` / CI) → existing resources are **always skipped** — setup never mutates existing infrastructure unprompted.
 
-Detection is state-based (`.setup-state.json`, via each provider's `alreadyDone()`); remote
+Detection is state-based (`.setup/.setup-state.json`, via each provider's `alreadyDone()`); remote
 existence is surfaced separately in `setup:infra:preview` / `detectExisting()`. Validate-only
 providers (oauth, resend, stripe, turnstile) create nothing, so they simply re-validate each run.
 
@@ -64,13 +74,13 @@ providers (oauth, resend, stripe, turnstile) create nothing, so they simply re-v
 | Script                       | Action                                                            |
 | ---------------------------- | ---------------------------------------------------------------- |
 | `setup:infra`                | Apply: show the plan, then provision step-wise (interactive, human-only) |
-| `setup:infra:init`           | Interactive wizard → writes config + `.setup-credentials` template      |
+| `setup:infra:init`           | Interactive wizard → writes config + `.setup/.setup-credentials` template      |
 | `setup:infra:preview`        | Token checklist: providers, token URLs, config keys (no writes) |
 | `setup:infra:plan`           | Diff (local state): CREATE / UP-TO-DATE / UPDATE / VALIDATE per provider (read-only) |
 | `setup:infra:plan:remote`    | Plan using **live remote** state (`--remote`) — drift-aware via each provider's `inspectRemote()` |
 | `setup:infra:inspect`        | Remote inspection: per provider, present/absent + config-vs-remote field diff (project/env/branch/region/org) |
 | `setup:infra:output`         | Masked env inventory per environment — **secrets never printed** (`--copy <KEY>` copies one to the clipboard; `--environment <env>` to filter) |
-| `setup:infra:reconstruct`    | Rebuild `.setup-state.json` from live remote resources          |
+| `setup:infra:reconstruct`    | Rebuild `.setup/.setup-state.json` from live remote resources          |
 | `setup:infra:export-env`     | Regenerate `.env.<environment>` files from state + secrets       |
 
 > The bare non-infra aliases (`setup:all`, `setup:provision`, `setup:init`, `setup:preview`, `setup:dry-run`, `setup:status`, `setup:reconstruct`) were removed — use the `setup:infra*` forms above. Raw flags still work: `tsx tooling/setup/setup.ts --output|--status|--dry-run|…`.
@@ -116,11 +126,11 @@ Secrets are written to **`.env.<environment>` only** (via provisioning / `setup:
 
 - **One home for secrets.** Secret values are only ever written to `.env.<environment>` (by provisioning / `setup:infra:export-env`). For normal setup you never copy/paste — values land in the env file automatically.
 - **Never printed.** Providers log status only (`valid` / `resolved`), never a value. `setup:infra:output` shows a masked inventory (`••••`); no secret is ever written to stdout. Connection strings with embedded credentials (`DATABASE_URL`, `REDIS_URL`) are masked by value, not just key name.
-- **Clipboard, not terminal.** Need one value elsewhere (e.g. a third-party dashboard)? `setup:infra:output --copy <KEY>` puts it on the **system clipboard** (auto-cleared after ~20s) and prints only a confirmation — it never enters the terminal or an agent transcript. Each copy is recorded to the gitignored `.setup-state.audit.log` (key + env + timestamp, never the value). No clipboard tool → it refuses and points you at `.env.<environment>`.
-- **Unreadable by the agent.** The `guardrails.mjs` PreToolUse hook **denies the agent** Read/Bash access to `.env.<env>`, `.setup-credentials`, and `.setup-state.json` (templates `*.example` stay readable). So secrets are out of reach even though the files sit on disk.
+- **Clipboard, not terminal.** Need one value elsewhere (e.g. a third-party dashboard)? `setup:infra:output --copy <KEY>` puts it on the **system clipboard** (auto-cleared after ~20s) and prints only a confirmation — it never enters the terminal or an agent transcript. Each copy is recorded to the gitignored `.setup/.setup-state.audit.log` (key + env + timestamp, never the value). No clipboard tool → it refuses and points you at `.env.<environment>`.
+- **Unreadable by the agent.** The `guardrails.mjs` PreToolUse hook **denies the agent** Read/Bash access to `.env.<env>`, `.setup/.setup-credentials`, and `.setup/.setup-state.json` (templates `*.example` stay readable). So secrets are out of reach even though the files sit on disk.
 - **Can't be committed.** `.env*` (except `*.example`) and `.setup-state.*` are gitignored; pre-commit runs **gitleaks `protect --staged`** plus a **"No secret/state files staged"** guard that blocks even `git add -f`. Both also run in CI.
 
-> Note: `.setup-state.json` is stored as **plaintext** (gitignored) — the protections above (no-print, clipboard, deny-read, gitignore, pre-commit guards) cover the threats here without a self-managed encryption key.
+> Note: `.setup/.setup-state.json` is stored as **plaintext** (gitignored) — the protections above (no-print, clipboard, deny-read, gitignore, pre-commit guards) cover the threats here without a self-managed encryption key.
 
 Every provider starts with a standard header (name · description · NAMING source · SECRETS rule). When adding a provider, follow the same header + rules — see the template's security section.
 
@@ -129,8 +139,8 @@ Every provider starts with a standard header (name · description · NAMING sour
 | Area                 | Files                                                            |
 | -------------------- | --------------------------------------------------------------- |
 | Config & init        | `common/config.ts`, `infra/init-wizard.ts`, `setup.config.json` |
-| Secrets (`.setup-credentials`) | `common/secrets.ts`                                          |
-| State                | `common/state.ts` (`.setup-state.json`, gitignored plaintext) |
+| Secrets (`.setup/.setup-credentials`) | `common/secrets.ts`                                          |
+| State                | `common/state.ts` (`.setup/.setup-state.json`, gitignored plaintext) |
 | Secret output viewer | `infra/output.ts` + `common/clipboard.ts` (`setup:infra:output --copy`) |
 | Agent deny-read      | `agent-os/hooks/guardrails.mjs` (blocks Read/Bash of secret files) |
 | Orchestrator         | `infra/orchestrator.ts` (registry-driven)                      |
@@ -146,7 +156,7 @@ This module is config-driven and standalone — to reuse it in another product:
 
 1. Copy `tooling/setup/` into the new repo and add the `setup:infra*` scripts to its `package.json`.
 2. Run `pnpm setup:infra:init` to generate that product's `setup.config.json` (its own
-   organization / project / environment names — the single source of truth) and `.setup-credentials`.
+   organization / project / environment names — the single source of truth) and `.setup/.setup-credentials`.
 3. Trim `setup.config.json` providers to the ones the product uses.
 
 The provisioning **engine** (`common/`, `infra/`, `infra/providers/`) has no `@/` (app)

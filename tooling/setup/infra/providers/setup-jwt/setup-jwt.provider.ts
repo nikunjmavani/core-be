@@ -166,10 +166,10 @@ export const setupJwtProvider: InfraProvider = {
     return [
       {
         provider: 'JWT secrets',
-        dashboardUrl: 'tooling/setup/.setup-state.json (local file)',
+        dashboardUrl: '.setup/.setup-state.json (local file)',
         steps: [
           'JWT secrets are local-only — no third-party resource to delete.',
-          'Edit tooling/setup/.setup-state.json and remove the "jwt" entries (or delete the whole file) to force fresh generation on the next run.',
+          'Edit .setup/.setup-state.json and remove the "jwt" entries (or delete the whole file) to force fresh generation on the next run.',
           'After rotating, re-deploy services so they pick up the new JWT_SECRET.',
         ],
         resources: Object.keys(jwt).map((environmentName) => ({
