@@ -37,7 +37,7 @@ const OPENAPI_SPEC_PATH = resolve(PROJECT_ROOT, 'docs', 'openapi', 'openapi.json
 const SCALAR_REGISTRY_BASE_URL = 'https://registry.scalar.com';
 // NAMING (single source of truth = setup.config.json): the Scalar registry slug
 // defaults to the PROJECT NAME (`config.project.name`) — never hardcode it here.
-// SCALAR_SLUG in .env.setup is only an explicit override.
+// SCALAR_SLUG in .setup-credentials is only an explicit override.
 
 function toProcessEnvironment(
   variables: ReturnType<typeof buildEnvironmentVariables>,
@@ -135,7 +135,7 @@ export const setupScalarProvider: InfraProvider = {
   disabledReason: ({ config }) =>
     !config.providers.scalar.enabled
       ? 'disabled in setup.config.json'
-      : 'SCALAR_API_KEY missing in .env.setup',
+      : 'SCALAR_API_KEY missing in .setup-credentials',
   preview: ({ config }) =>
     config.providers.scalar.enabled
       ? {
@@ -155,7 +155,11 @@ export const setupScalarProvider: InfraProvider = {
     }
     const namespace = secrets.scalar?.namespace ?? '';
     if (!namespace)
-      return { present: false, fields: [], error: 'SCALAR_NAMESPACE missing in .env.setup' };
+      return {
+        present: false,
+        fields: [],
+        error: 'SCALAR_NAMESPACE missing in .setup-credentials',
+      };
     const slug = secrets.scalar?.slug || config.project.name;
     try {
       const response = await setupFetch({ name: 'Scalar', url: buildRegistryUrl(namespace, slug) });

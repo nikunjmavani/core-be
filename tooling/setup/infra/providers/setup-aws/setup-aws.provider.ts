@@ -346,7 +346,7 @@ export const setupAwsProvider: InfraProvider = {
   disabledReason: ({ config }) =>
     !config.providers.aws.enabled
       ? 'disabled in setup.config.json'
-      : 'AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY missing in .env.setup',
+      : 'AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY missing in .setup-credentials',
   preview: ({ config }) =>
     config.providers.aws.enabled
       ? {
@@ -396,7 +396,11 @@ export const setupAwsProvider: InfraProvider = {
     if (!awsConfig.enabled)
       return { present: false, fields: [], error: 'disabled in setup.config.json' };
     if (!isSecretFilled(secrets.aws.accessKeyId)) {
-      return { present: false, fields: [], error: 'AWS_ACCESS_KEY_ID missing in .env.setup' };
+      return {
+        present: false,
+        fields: [],
+        error: 'AWS_ACCESS_KEY_ID missing in .setup-credentials',
+      };
     }
     const isAuthError = (error: unknown): boolean => {
       const text = error instanceof Error ? `${error.name} ${error.message}` : String(error);

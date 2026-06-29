@@ -312,7 +312,7 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
 export async function runGuide(config: SetupConfig): Promise<void> {
   if (ensureEnvSetupTemplate(config)) {
     throw new SetupAbort(
-      'Generated .env.setup template. Fill the values (see URLs in the file), then run pnpm setup:infra again.',
+      'Generated .setup-credentials template. Fill the values (see URLs in the file), then run pnpm setup:infra again.',
     );
   }
 
@@ -353,14 +353,14 @@ export async function runGuide(config: SetupConfig): Promise<void> {
     }
   }
 
-  // GitHub auth: token in .env.setup is enough (no CLI login required)
+  // GitHub auth: token in .setup-credentials is enough (no CLI login required)
   currentStep = totalSteps;
   const needsGithubAuth = config.providers.github.enabled;
 
   if (needsGithubAuth) {
     if (hasGithubToken()) {
       logger.success(
-        `Step ${currentStep}/${totalSteps} — GitHub — using GITHUB_TOKEN from .env.setup (no login required)`,
+        `Step ${currentStep}/${totalSteps} — GitHub — using GITHUB_TOKEN from .setup-credentials (no login required)`,
       );
     } else {
       logger.stepHeader(currentStep, totalSteps, 'CLI Authentication (GitHub)');
@@ -375,7 +375,7 @@ export async function runGuide(config: SetupConfig): Promise<void> {
           logger.success('GitHub CLI — authenticated');
         } catch {
           logger.warn(
-            'GitHub login failed — you can set GITHUB_TOKEN in .env.setup or run "gh auth login" later',
+            'GitHub login failed — you can set GITHUB_TOKEN in .setup-credentials or run "gh auth login" later',
           );
         }
       }

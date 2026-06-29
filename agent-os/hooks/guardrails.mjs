@@ -30,19 +30,22 @@ const content = [input.content, input.new_string].filter(Boolean).join("\n");
 
 const warnings = [];
 
-// A real secrets file the agent must not read: any `.env.<env>` / `.env.setup` /
-// `.setup-state.json` — but NOT the committed templates (`*.example`).
+// A real secrets file the agent must not read or write: app `.env.<env>`, setup-tooling
+// credentials `.setup-credentials` (or legacy `.env.setup`), and `.setup-state.*` — but
+// NOT the committed templates (`*.example`).
 function isReadableSecretPath(p) {
   if (!p) return false;
-  if (/(^|\/)\.setup-state\.json$/.test(p)) return true;
+  if (/(^|\/)\.setup-credentials\.example$/.test(p)) return false; // committed template
+  if (/(^|\/)\.setup-credentials$/.test(p)) return true; // setup-tooling input credentials
+  if (/(^|\/)\.setup-state\.(json|lock|audit\.log)$/.test(p)) return true;
   if (/(^|\/)\.env\.example$/.test(p) || /(^|\/)\.env\.setup\.example$/.test(p)) return false;
   return /(^|\/)\.env(\.[\w.-]+)?$/.test(p);
 }
 
 const SECRET_READ_DENIAL =
-  "Blocked by core-be guardrail: reading secrets files (.env.<env> / .env.setup / .setup-state.json) " +
-  "is not allowed for the agent — they hold provisioned secrets. Values flow only into " +
-  ".env.<environment> and are never shown. If a human needs one: `pnpm setup:infra:output --copy <KEY>`.";
+  "Blocked by core-be guardrail: reading secrets files (.env.<env> / .setup-credentials / .setup-state.*) " +
+  "is not allowed for the agent — they hold provisioned secrets. App config goes in .env.<environment> " +
+  "(editable), setup creds in .setup-credentials (off-limits). If a human needs a value: `pnpm setup:infra:output --copy <KEY>`.";
 
 function deny(reason) {
   process.stdout.write(
@@ -101,10 +104,11 @@ if (tool === "Bash" && command) {
 }
 
 // --- BLOCK: secrets ----------------------------------------------------------
-const isEnvSecretFile = /(^|\/)\.env(\.[\w.-]+)?$/.test(filePath) && !/\.env\.example$/.test(filePath);
-if ((tool === "Write" || tool === "Edit") && isEnvSecretFile) {
+// Same path set as reads — app `.env.<env>`, `.setup-credentials`, `.setup-state.*`
+// (templates `*.example` excluded). Edit app config in `.env.<environment>`, never these.
+if ((tool === "Write" || tool === "Edit") && isReadableSecretPath(filePath)) {
   deny(
-    `Blocked by core-be guardrail: "${filePath}" is a gitignored secrets file. Put template keys in .env.example and provide real values via the environment, not source control.`,
+    `Blocked by core-be guardrail: "${filePath}" is a gitignored secrets file. App config templates go in .env.example; setup-tooling creds in .setup-credentials are written by the setup CLI, not by hand.`,
   );
 }
 const secretPatterns = [

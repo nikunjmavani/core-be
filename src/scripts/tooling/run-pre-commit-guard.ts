@@ -121,9 +121,9 @@ function gitleaksInstalled(): boolean {
  * provisioned secrets in `.env.<environment>` / `.setup-state.*` can never be committed.
  */
 function checkSecretFilesStaged(stagedFiles: string[]): number {
-  const allowed = /(^|\/)\.env\.example$|(^|\/)\.env\.setup\.example$/;
+  const allowed = /(^|\/)\.env\.example$|(^|\/)\.setup-credentials\.example$/;
   const secretFile =
-    /(^|\/)\.env(\.[^/]*)?$|(^|\/)\.setup-state\.(json|audit\.log)$|(^|\/)setup\.secrets\.json$/;
+    /(^|\/)\.env(\.[^/]*)?$|(^|\/)\.setup-credentials$|(^|\/)\.setup-state\.(json|lock|audit\.log)$|(^|\/)setup\.secrets\.json$/;
   const offenders = stagedFiles.filter((file) => secretFile.test(file) && !allowed.test(file));
   if (offenders.length > 0) {
     console.error(

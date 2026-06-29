@@ -438,7 +438,7 @@ export async function provision(
   if (!isSecretFilled(secrets.railway.apiToken)) {
     return {
       success: false,
-      message: 'Railway Redis: RAILWAY_API_TOKEN must be set in .env.setup.',
+      message: 'Railway Redis: RAILWAY_API_TOKEN must be set in .setup-credentials.',
     };
   }
   if (!state.railway?.projectId) {
@@ -670,7 +670,7 @@ export const setupRailwayRedisProvider: InfraProvider = {
   disabledReason: ({ config }) =>
     !config.providers.railwayRedis.enabled
       ? 'disabled in setup.config.json'
-      : 'RAILWAY_API_TOKEN missing in .env.setup',
+      : 'RAILWAY_API_TOKEN missing in .setup-credentials',
   preview: ({ config }) =>
     config.providers.railwayRedis.enabled
       ? {
@@ -709,7 +709,11 @@ export const setupRailwayRedisProvider: InfraProvider = {
     }
     const token = secrets.railway.apiToken ?? '';
     if (!token)
-      return { present: false, fields: [], error: 'RAILWAY_API_TOKEN missing in .env.setup' };
+      return {
+        present: false,
+        fields: [],
+        error: 'RAILWAY_API_TOKEN missing in .setup-credentials',
+      };
     const projectName = config.project.name;
     try {
       // Find the project by name (independent of local state), then read services per env.

@@ -158,7 +158,7 @@ export const setupPostmanProvider: InfraProvider = {
   disabledReason: ({ config }) =>
     !config.providers.postman.enabled
       ? 'disabled in setup.config.json'
-      : 'POSTMAN_API_KEY missing in .env.setup',
+      : 'POSTMAN_API_KEY missing in .setup-credentials',
   preview: ({ config }) =>
     config.providers.postman.enabled
       ? {
@@ -178,7 +178,7 @@ export const setupPostmanProvider: InfraProvider = {
     }
     const apiKey = secrets.postman?.apiKey ?? '';
     if (!apiKey)
-      return { present: false, fields: [], error: 'POSTMAN_API_KEY missing in .env.setup' };
+      return { present: false, fields: [], error: 'POSTMAN_API_KEY missing in .setup-credentials' };
     const workspaceId = secrets.postman?.workspaceId;
     try {
       const url = workspaceId

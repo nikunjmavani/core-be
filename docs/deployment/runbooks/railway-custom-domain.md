@@ -19,7 +19,7 @@ The command is implemented in [`tooling/setup/railway/custom-domain.ts`](../../.
 
 ## Prerequisites
 
-1. `RAILWAY_TOKEN` set in `.env.setup` (project token; see [setup-token-instructions.md](../setup/setup-token-instructions.md)).
+1. `RAILWAY_TOKEN` set in `.setup-credentials` (project token; see [setup-token-instructions.md](../setup/setup-token-instructions.md)).
 2. `pnpm setup:infra` has been run at least once so `.setup-state.json` contains the Railway project / environments / services.
 3. You can edit DNS for the parent zone of the domain you want to attach (`example.com` if attaching `api.example.com`).
 4. The service you are attaching to is HTTP-facing (the `api` service). `worker` services do not accept inbound HTTP and the script rejects them.
@@ -95,7 +95,7 @@ The script prints copy-pasteable `gh secret set ... --env <env>` commands. You c
 | Cert status `FAILED` / `VALIDATION_FAILED`       | CAA blocks Let's Encrypt, or wrong DNS value              | Add `CAA 0 issue "letsencrypt.org"`, or fix the record to match what Railway returned. |
 | Timeout (`--wait-timeout-seconds` elapsed)       | Slow DNS or Railway re-check                              | Re-run with `--check` — it is read-only and resumes polling.                            |
 | `Custom domain ... disappeared from Railway`     | Domain was deleted in the dashboard mid-poll              | Re-run without `--check` to re-attach.                                                  |
-| `RAILWAY_TOKEN is not set`                        | `.env.setup` missing the token                            | See [setup-token-instructions.md](../setup/setup-token-instructions.md).                |
+| `RAILWAY_TOKEN is not set`                        | `.setup-credentials` missing the token                            | See [setup-token-instructions.md](../setup/setup-token-instructions.md).                |
 | `worker` rejected                                | Workers don't accept inbound HTTP                         | Use `--service api` (or pick `api` interactively).                                       |
 
 ## See also

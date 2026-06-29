@@ -4,7 +4,17 @@ import { z } from 'zod';
 import type { SetupConfig, SetupSecrets } from './types.js';
 
 const PROJECT_ROOT = resolve(import.meta.dirname, '../../..');
-const ENV_SETUP_PATH = resolve(PROJECT_ROOT, '.env.setup');
+// Setup-tooling input credentials live in `.setup-credentials` (part of the `.setup-*`
+// family), deliberately kept OUT of the app's `.env.<environment>` namespace so the two
+// are never confused. A legacy `.env.setup` is still read (with a warning) until the
+// operator renames it; once `.setup-credentials` exists, the legacy file is ignored.
+const SETUP_CREDENTIALS_PATH = resolve(PROJECT_ROOT, '.setup-credentials');
+const LEGACY_CREDENTIALS_PATH = resolve(PROJECT_ROOT, '.env.setup');
+const ENV_SETUP_PATH =
+  existsSync(SETUP_CREDENTIALS_PATH) || !existsSync(LEGACY_CREDENTIALS_PATH)
+    ? SETUP_CREDENTIALS_PATH
+    : LEGACY_CREDENTIALS_PATH;
+const USING_LEGACY_CREDENTIALS_FILE = ENV_SETUP_PATH === LEGACY_CREDENTIALS_PATH;
 
 const TOKEN_URLS: Record<string, string> = {
   NEON_API_KEY: 'https://console.neon.tech/app/settings/api-keys',
@@ -105,8 +115,8 @@ export const setupSecretsSchema = z.object({
      * Account / project-wide token (Bearer auth). Required at setup time when the Railway
      * provider is enabled — gives full project lifecycle (create project, list user
      * projects, mint per-environment project tokens via `projectTokenCreate`, read/write
-     * variables across environments). Set via `RAILWAY_API_TOKEN` in `.env.setup`. Stays
-     * in `.env.setup` only; never pushed to GitHub Environments or Railway service
+     * variables across environments). Set via `RAILWAY_API_TOKEN` in `.setup-credentials`.
+     * Stays in `.setup-credentials` only; never pushed to GitHub Environments or Railway service
      * variables. Per-environment runtime tokens are minted from this and persisted into
      * `state.railway.environmentTokens`, then written into each `.env.<env>` as
      * `RAILWAY_TOKEN`.
@@ -176,7 +186,7 @@ function get(source: Record<string, string>, key: string): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-// ─── Load secrets from .env.setup ───────────────────────────────────────────
+// ─── Load secrets from .setup-credentials ────────────────────────────────────
 
 export function loadSecretsFromEnv(environmentNames: string[]): SetupSecrets {
   const source = getEnvSource();
@@ -324,6 +334,11 @@ export function hasAnyEnvSecret(environmentNames: string[]): boolean {
 
 export function loadEnvSetupIntoProcess(): void {
   if (!existsSync(ENV_SETUP_PATH)) return;
+  if (USING_LEGACY_CREDENTIALS_FILE) {
+    console.warn(
+      '⚠ Using legacy .env.setup — rename it to .setup-credentials (keeps setup creds out of the app .env.<environment> namespace).',
+    );
+  }
   try {
     const content = readFileSync(ENV_SETUP_PATH, 'utf-8');
     const parsed = parseEnvFile(content);

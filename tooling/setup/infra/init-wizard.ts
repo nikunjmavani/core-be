@@ -243,21 +243,21 @@ export async function runInitWizard(): Promise<void> {
 
   if (writeEnvSetupTemplateIfMissing(config)) {
     logger.success(
-      'Wrote .env.setup (template with URLs for each key). Fill values then run pnpm setup:infra.',
+      'Wrote .setup-credentials (template with URLs for each key). Fill values then run pnpm setup:infra.',
     );
   } else {
     updateEnvSetupHeader(config);
     const addedKeys = appendMissingEnvSetupVariables(config);
     if (addedKeys.length > 0) {
-      logger.success(`Added missing variable(s) to .env.setup: ${addedKeys.join(', ')}`);
+      logger.success(`Added missing variable(s) to .setup-credentials: ${addedKeys.join(', ')}`);
     }
     logger.info(
-      'Updated .env.setup header (Project/Organization/Environments). Edit secrets as needed, then run pnpm setup:infra.',
+      'Updated .setup-credentials header (Project/Organization/Environments). Edit secrets as needed, then run pnpm setup:infra.',
     );
   }
 
   if (neonOrgId.trim()) {
     setEnvSetupVariable('NEON_ORG_ID', neonOrgId.trim());
-    logger.success('Set NEON_ORG_ID in .env.setup');
+    logger.success('Set NEON_ORG_ID in .setup-credentials');
   }
 }

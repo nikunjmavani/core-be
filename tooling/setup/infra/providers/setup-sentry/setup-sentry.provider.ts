@@ -180,7 +180,7 @@ export const setupSentryProvider: InfraProvider = {
   disabledReason: ({ config }) =>
     !config.providers.sentry.enabled
       ? 'disabled in setup.config.json'
-      : 'SENTRY_AUTH_TOKEN missing in .env.setup',
+      : 'SENTRY_AUTH_TOKEN missing in .setup-credentials',
   preview: ({ config }) =>
     config.providers.sentry.enabled
       ? {
@@ -237,7 +237,11 @@ export const setupSentryProvider: InfraProvider = {
     if (!sentry.enabled)
       return { present: false, fields: [], error: 'disabled in setup.config.json' };
     if (!isSecretFilled(secrets.sentry.authToken)) {
-      return { present: false, fields: [], error: 'SENTRY_AUTH_TOKEN missing in .env.setup' };
+      return {
+        present: false,
+        fields: [],
+        error: 'SENTRY_AUTH_TOKEN missing in .setup-credentials',
+      };
     }
     const organization = sentry.organization;
     const project = sentry.project ?? config.project.name;

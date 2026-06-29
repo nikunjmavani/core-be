@@ -8,7 +8,7 @@ node_modules/
 # Build
 dist/
 
-# Environment: only `.env.example` and `.env.setup.example` are committed.
+# Environment: only `.env.example` is committed (app runtime config reference).
 # `.env.<environment>` files are gitignored copies created by `pnpm github:sync` and pushed
 # to GitHub Environments via `pnpm github:sync <environment>`.
 # `.env.local` (gitignored) is a machine-specific override that wins over `.env.<NODE_ENV>`
@@ -16,7 +16,12 @@ dist/
 # use `.env.example` as the schema reference for variable names.
 .env*
 !.env.example
-!.env.setup.example
+
+# Setup-tooling INPUT credentials (provider tokens) — separate from app `.env.<environment>`.
+# Only the `.setup-credentials.example` template is committed. Legacy `.env.setup` is
+# covered by the `.env*` rule above.
+.setup-credentials
+!.setup-credentials.example
 
 # Docker Compose machine-local overrides (auto-merged by compose; never shared with team/CI)
 docker-compose.override.yml

@@ -32,7 +32,7 @@ export const setupResendProvider = createValidationProvider({
   disabledReason: ({ config }) =>
     !config.providers.resend.enabled
       ? 'disabled in setup.config.json'
-      : 'RESEND_API_KEY missing in .env.setup',
+      : 'RESEND_API_KEY missing in .setup-credentials',
   preview: { detail: 'API key', url: 'https://resend.com/api-keys', configKey: 'resend.apiKey' },
   settingsDetail: 'validate 1 key',
   instructions: [

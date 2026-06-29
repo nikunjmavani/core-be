@@ -28,7 +28,7 @@ script that references org/project/env names.
 - **Never print a secret value.** Providers/scripts log status only (`valid`, `resolved`) — never a key/token/password/connection-string, in logs or error messages. Adding a `logger.*` that interpolates a secret is a violation.
 - **Secrets go to `.env.<environment>` only** (via `build-env-vars.ts` → provisioning / `setup:infra:export-env`). `setup:infra:output` shows a masked inventory; `--copy <KEY>` puts one value on the **clipboard** (never stdout, auto-cleared, audit-logged to `.setup-state.audit.log`). Never print a value.
 - **`.setup-state.json` is gitignored plaintext** (no self-managed encryption key). Don't write secrets anywhere else; don't reintroduce an encryption layer unless asked.
-- **Agent deny-read:** `agent-os/hooks/guardrails.mjs` denies the agent Read/Bash access to `.env.<env>`, `.env.setup`, `.setup-state.json` (templates `*.example` stay readable). Keep the `Read` matcher in `.claude/settings.json`.
+- **Agent deny-read:** `agent-os/hooks/guardrails.mjs` denies the agent Read/Bash access to `.env.<env>`, `.setup-credentials`, `.setup-state.json` (templates `*.example` stay readable). Keep the `Read` matcher in `.claude/settings.json`.
 - **Enforcement:** `.env*` (except `*.example`) + `.setup-state.*` are gitignored; pre-commit runs gitleaks `protect --staged` **and** the "No secret/state files staged" guard (blocks `git add -f`). Both run in CI too. Never weaken these.
 
 ### Idempotency — present? update or skip; absent? create
@@ -52,7 +52,7 @@ rollback/destroy. Adding a provider = implement the `InfraProvider` hooks + regi
 1. **Follow** [`tooling/setup/SETUP_INFRA_PROVIDER_TEMPLATE.md`](../../tooling/setup/SETUP_INFRA_PROVIDER_TEMPLATE.md) (10-step checklist + skeleton).
 2. **Read** `agent-os/skills/setup-infra-maintainer/SKILL.md` for the full dependent-file list.
 3. Touch every layer that applies: config schema + init default (`config.ts`,
-   `init-wizard.ts`, `setup.config.json`) · secrets + `.env.setup` template (`secrets.ts`) ·
+   `init-wizard.ts`, `setup.config.json`) · secrets + `.setup-credentials` template (`secrets.ts`) ·
    state (`state.ts`, only if it resolves/creates a value) · runtime env emission
    (`build-env-vars.ts`) · provider module + registry (`providers/setup-<key>/…`,
    `providers/index.ts`) · guide (`guide.ts`) · prerequisites (`prerequisites.ts`, only if a

@@ -2,7 +2,7 @@
  * Security checks for setup tooling.
  *
  * - Secret leak detection: scans files for API key patterns in wrong sections
- * - File permission check: warns if .env.setup or .env.<env> are world-readable
+ * - File permission check: warns if .setup-credentials or .env.<env> are world-readable
  */
 import { statSync } from 'node:fs';
 import * as logger from './logger.js';
@@ -74,11 +74,11 @@ export function checkFilePermissions(filePath: string): { safe: boolean; mode: s
 export function runSecurityChecks(envSetupPath: string, envFiles: string[]): boolean {
   let allSafe = true;
 
-  // Check .env.setup permissions
+  // Check .setup-credentials permissions
   const setupPerms = checkFilePermissions(envSetupPath);
   if (!setupPerms.safe) {
     logger.warn(
-      `.env.setup has permissions ${setupPerms.mode} (should be 600). Run: chmod 600 ${envSetupPath}`,
+      `.setup-credentials has permissions ${setupPerms.mode} (should be 600). Run: chmod 600 ${envSetupPath}`,
     );
     allSafe = false;
   }

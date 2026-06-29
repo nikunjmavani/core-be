@@ -79,7 +79,9 @@ function getProviderSelection(): ProviderSelectionInput {
 function printHelp(): void {
   const providerKeys = getAvailableProviderKeys().join(', ');
   logger.info('Usage:');
-  logger.info('  pnpm setup --init                    Generate setup.config.json + .env.setup');
+  logger.info(
+    '  pnpm setup --init                    Generate setup.config.json + .setup-credentials',
+  );
   logger.info('  pnpm setup                           Full interactive provisioning');
   logger.info('  pnpm setup --preview                 Show providers + token URLs (no API calls)');
   logger.info(

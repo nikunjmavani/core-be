@@ -6,14 +6,14 @@ Where to get each token and where to put it. Run `pnpm setup:infra:preview` to s
 
 ## Token-only automation (no CLI login)
 
-Setup uses **tokens from `.env.setup`** only — no `gh auth login` or `railway login` required. If `GITHUB_TOKEN` and/or `RAILWAY_TOKEN` are set in `.env.setup`, the prerequisite check treats you as authenticated and provisioning uses those tokens (GitHub via `gh` with the token, Railway via API). Fill all required keys in `.env.setup` and run `pnpm setup:infra`; the guide and provisioning run without interactive login.
+Setup uses **tokens from `.setup-credentials`** only — no `gh auth login` or `railway login` required. If `GITHUB_TOKEN` and/or `RAILWAY_TOKEN` are set in `.setup-credentials`, the prerequisite check treats you as authenticated and provisioning uses those tokens (GitHub via `gh` with the token, Railway via API). Fill all required keys in `.setup-credentials` and run `pnpm setup:infra`; the guide and provisioning run without interactive login.
 
 ---
 
 ## Init and GitHub token
 
-1. Run **`pnpm setup --init`** to generate `tooling/setup/setup.config.json` and `.env.setup` (template with URLs for each key). Init also asks for **Neon Organization ID** — get it from [Neon Console → Settings](https://console.neon.tech/app/settings) → select your **Organization** → **General** → **Organization ID** (e.g. `org-soft-block-10705736`). If you enter it, init writes it to `.env.setup` as `NEON_ORG_ID`. If either file already exists, init does not erase existing values; it only updates the header and prompt defaults from existing config.
-2. Fill **`.env.setup`** with your API keys. For automation (CI or headless), include at least:
+1. Run **`pnpm setup --init`** to generate `tooling/setup/setup.config.json` and `.setup-credentials` (template with URLs for each key). Init also asks for **Neon Organization ID** — get it from [Neon Console → Settings](https://console.neon.tech/app/settings) → select your **Organization** → **General** → **Organization ID** (e.g. `org-soft-block-10705736`). If you enter it, init writes it to `.setup-credentials` as `NEON_ORG_ID`. If either file already exists, init does not erase existing values; it only updates the header and prompt defaults from existing config.
+2. Fill **`.setup-credentials`** with your API keys. For automation (CI or headless), include at least:
    - **`GITHUB_TOKEN`** — [GitHub → Personal access tokens](https://github.com/settings/tokens) (scopes: `repo`, `admin:repo_hook`, or fine-grained with repo + secrets). Required if GitHub provider is enabled (repo/env secrets).
    - **`RAILWAY_TOKEN`** — [Railway → Tokens](https://railway.app/account/tokens). Required if Railway provider is enabled.
 3. Run **`pnpm setup:infra`** for full provisioning. No `gh auth login` or `railway login` needed when these tokens are set.
@@ -23,7 +23,7 @@ Setup uses **tokens from `.env.setup`** only — no `gh auth login` or `railway 
 ## Config and secrets
 
 - **Config:** `tooling/setup/setup.config.json` — which providers and environments. Generate with `pnpm setup --init` (asks org, project, envs, and Neon Organization ID).
-- **Secrets:** `.env.setup` at project root — one `KEY=value` per line. Each variable has a comment above it with the **URL where to get the key**. Gitignored. You can also `export NEON_API_KEY=...` etc. and run `pnpm setup:infra`; process.env is merged with `.env.setup`.
+- **Secrets:** `.setup-credentials` at project root — one `KEY=value` per line. Each variable has a comment above it with the **URL where to get the key**. Gitignored. You can also `export NEON_API_KEY=...` etc. and run `pnpm setup:infra`; process.env is merged with `.setup-credentials`.
 - **Per-environment files:** After provisioning, setup writes `.env.<environment>` (e.g. `.env.dev`, `.env.production`) with all app env vars for that environment. Use these to push values to GitHub Environment secrets (structure matches `.env.example`). Run `pnpm setup:infra:export-env` to regenerate anytime.
 
 ---
@@ -42,7 +42,7 @@ Only after both confirms will provisioning run. You can abort at any time.
 
 ## Per-provider token instructions
 
-| Provider                          | Where to get token                                                                                                                                                                                                              | Variable in .env.setup                                   |
+| Provider                          | Where to get token                                                                                                                                                                                                              | Variable in .setup-credentials                                   |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | **Neon Postgres**                 | [console.neon.tech → API Keys](https://console.neon.tech/app/settings/api-keys); optional: [Organization → General](https://console.neon.tech/app/settings) for `NEON_ORG_ID` if create project fails with "org_id is required" | `NEON_API_KEY`, optional `NEON_ORG_ID`                   |
 | **AWS IAM**                       | [AWS IAM → Users → Create access key](https://console.aws.amazon.com/iam/home#/users)                                                                                                                                           | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`             |
@@ -64,21 +64,21 @@ Only after both confirms will provisioning run. You can abort at any time.
 
 ## GITHUB_TOKEN — step-by-step
 
-Required for writing repository and environment secrets (GitHub provider). No `gh auth login` needed when set in `.env.setup`.
+Required for writing repository and environment secrets (GitHub provider). No `gh auth login` needed when set in `.setup-credentials`.
 
 1. Open **[GitHub → Personal access tokens](https://github.com/settings/tokens)** (Settings → Developer settings → Personal access tokens).
 2. Click **“Generate new token”** (classic) or create a **fine-grained** token.
 3. **Scopes:** For classic: enable `repo` and `admin:repo_hook`. For fine-grained: select the repository and **Actions: Secrets** (read + write).
 4. Generate the token and copy it.
-5. In **`.env.setup`** at project root, set:  
+5. In **`.setup-credentials`** at project root, set:  
    `GITHUB_TOKEN=<paste-your-token-here>`
 6. Save the file. Run `pnpm setup:infra`; the script will use this token to set repo and environment secrets.
 
 ---
 
-## Env-style (.env.setup) variable names
+## Env-style (.setup-credentials) variable names
 
-If you use `.env.setup` or export env vars, use these names (script maps them internally):
+If you use `.setup-credentials` or export env vars, use these names (script maps them internally):
 
 | Variable                                                          | Purpose                                                                      |
 | ----------------------------------------------------------------- | ---------------------------------------------------------------------------- |
