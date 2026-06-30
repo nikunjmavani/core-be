@@ -21,8 +21,10 @@ const TOKEN_URLS: Record<string, string> = {
   GITHUB_TOKEN: 'https://github.com/settings/tokens',
   RAILWAY_API_TOKEN: 'https://railway.com/account/tokens',
   POSTHOG_PERSONAL_API_KEY: 'https://us.posthog.com/settings/user-api-keys',
-  CAPTCHA_SITE_KEY: 'https://dash.cloudflare.com/?to=/:account/turnstile',
-  CAPTCHA_SECRET: 'https://dash.cloudflare.com/?to=/:account/turnstile',
+  CLOUDFLARE_API_TOKEN:
+    'https://dash.cloudflare.com/profile/api-tokens (token with Turnstile:Edit)',
+  CLOUDFLARE_ACCOUNT_ID:
+    'https://dash.cloudflare.com → any domain → Overview (Account ID in the right sidebar)',
 };
 
 const SIMPLE_VARS: Array<[string, string]> = [
@@ -34,52 +36,21 @@ const SIMPLE_VARS: Array<[string, string]> = [
   ['RESEND_API_KEY', TOKEN_URLS.RESEND_API_KEY ?? ''],
   ['GITHUB_TOKEN', TOKEN_URLS.GITHUB_TOKEN ?? ''],
   ['RAILWAY_API_TOKEN', TOKEN_URLS.RAILWAY_API_TOKEN ?? ''],
-  // Cloudflare Turnstile — single widget (hostnames can include localhost + your domain),
-  // so one Site/Secret pair here is written to every .env.<environment>.
-  ['CAPTCHA_SITE_KEY', TOKEN_URLS.CAPTCHA_SITE_KEY ?? ''],
-  ['CAPTCHA_SECRET', TOKEN_URLS.CAPTCHA_SECRET ?? ''],
+  // Cloudflare Turnstile is PROVISIONED by setup: with a Cloudflare API token + account id, the
+  // provider creates one widget per environment and writes CAPTCHA_SITE_KEY/CAPTCHA_SECRET into
+  // each .env.<environment>. So the inputs here are the Cloudflare credentials, not CAPTCHA_*.
+  ['CLOUDFLARE_API_TOKEN', TOKEN_URLS.CLOUDFLARE_API_TOKEN ?? ''],
+  ['CLOUDFLARE_ACCOUNT_ID', TOKEN_URLS.CLOUDFLARE_ACCOUNT_ID ?? ''],
 ];
 
 // ─── Zod schemas ────────────────────────────────────────────────────────────
 
-// NOTE: OAuth (Google + GitHub) are app-level per-environment secrets entered directly in
-// `.env.<environment>`; their providers validate them by reading those env files (see
-// `envs/read-env-file.ts`).
-//
-// Cloudflare Turnstile lives in `.setup/.setup-credentials` env-agnostically: a single widget can
-// list multiple hostnames, so one Site/Secret pair (CAPTCHA_SITE_KEY / CAPTCHA_SECRET) is written
-// to every `.env.<environment>`.
-//
-// Stripe (by project choice) is held HERE too, but PER-ENVIRONMENT, because dev needs a test key
-// and prod a live key. Since `.setup-credentials` is one flat file (not per-env), the environment
-// is encoded in the key name: `STRIPE_<ENV>_SECRET_KEY` / `STRIPE_<ENV>_WEBHOOK_SECRET` (e.g.
-// STRIPE_DEVELOPMENT_SECRET_KEY). The provider validates them and writes STRIPE_SECRET_KEY /
-// STRIPE_WEBHOOK_SECRET into each matching `.env.<environment>`.
-
-// Per-environment Stripe key prefix in `.setup-credentials` (env baked into the key name).
-function stripeEnvPrefix(environmentName: string): string {
-  return `STRIPE_${environmentName.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`;
-}
-
-// The `[key, url-comment]` pairs templated into `.setup-credentials` for Stripe, per environment.
-// development → test-mode dashboard + sk_test_; any other environment → live dashboard + sk_live_.
-function stripeSetupVars(environmentNames: string[]): Array<[string, string]> {
-  const out: Array<[string, string]> = [];
-  for (const environmentName of environmentNames) {
-    const prefix = stripeEnvPrefix(environmentName);
-    const isTest = environmentName === 'development';
-    const base = `https://dashboard.stripe.com/${isTest ? 'test/' : ''}`;
-    out.push([
-      `${prefix}_SECRET_KEY`,
-      `Stripe ${environmentName} secret key (${isTest ? 'sk_test_…' : 'sk_live_…'}): ${base}apikeys`,
-    ]);
-    out.push([
-      `${prefix}_WEBHOOK_SECRET`,
-      `Stripe ${environmentName} webhook signing secret (whsec_…): ${base}webhooks → endpoint → Signing secret`,
-    ]);
-  }
-  return out;
-}
+// NOTE: app-level per-environment secrets are entered directly in `.env.<environment>` (NOT in
+// `.setup/.setup-credentials` — no env-suffixed keys here):
+//   - OAuth (Google + GitHub): validated by reading the env files.
+//   - Stripe: prompted from stdin and written as STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET.
+// Cloudflare Turnstile is PROVISIONED: setup uses CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID to
+// create one widget per environment and writes CAPTCHA_SITE_KEY / CAPTCHA_SECRET into each env file.
 
 export const setupSecretsSchema = z.object({
   neon: z.object({
@@ -109,21 +80,17 @@ export const setupSecretsSchema = z.object({
      */
     apiToken: z.string().optional(),
   }),
-  turnstile: z.object({
-    /** Cloudflare Turnstile public site key (`CAPTCHA_SITE_KEY`, e.g. `0x4AAA…`). */
-    siteKey: z.string().optional(),
-    /** Cloudflare Turnstile server-side secret (`CAPTCHA_SECRET`). Validated via siteverify. */
-    secretKey: z.string().optional(),
-  }),
   /**
-   * Per-environment Stripe keys, keyed by environment name (e.g. `development`, `production`).
-   * Loaded from `.setup-credentials` as `STRIPE_<ENV>_SECRET_KEY` / `STRIPE_<ENV>_WEBHOOK_SECRET`.
-   * The provider emits `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` into each `.env.<environment>`.
+   * Cloudflare credentials used to PROVISION Turnstile. With these, the Turnstile provider
+   * creates one widget per environment and writes `CAPTCHA_SITE_KEY` / `CAPTCHA_SECRET` into each
+   * `.env.<environment>`. The widget API is account-scoped, so both token and account id are needed.
    */
-  stripe: z
-    .record(z.string(), z.object({ secretKey: z.string(), webhookSecret: z.string() }))
-    .optional()
-    .default({}),
+  cloudflare: z.object({
+    /** API token with Turnstile:Edit (`CLOUDFLARE_API_TOKEN`). */
+    apiToken: z.string().optional(),
+    /** Account id the widget is created under (`CLOUDFLARE_ACCOUNT_ID`). */
+    accountId: z.string().optional(),
+  }),
 });
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -174,17 +141,8 @@ function get(source: Record<string, string>, key: string): string {
 
 // ─── Load secrets from .setup-credentials ────────────────────────────────────
 
-export function loadSecretsFromEnv(environmentNames: string[]): SetupSecrets {
+export function loadSecretsFromEnv(_environmentNames: string[]): SetupSecrets {
   const source = getEnvSource();
-
-  // Per-environment Stripe keys, read as STRIPE_<ENV>_SECRET_KEY / STRIPE_<ENV>_WEBHOOK_SECRET.
-  const stripe: Record<string, { secretKey: string; webhookSecret: string }> = {};
-  for (const environmentName of environmentNames) {
-    const prefix = stripeEnvPrefix(environmentName);
-    const secretKey = get(source, `${prefix}_SECRET_KEY`);
-    const webhookSecret = get(source, `${prefix}_WEBHOOK_SECRET`);
-    if (secretKey || webhookSecret) stripe[environmentName] = { secretKey, webhookSecret };
-  }
 
   return {
     neon: { apiKey: get(source, 'NEON_API_KEY'), orgId: get(source, 'NEON_ORG_ID') || undefined },
@@ -197,11 +155,10 @@ export function loadSecretsFromEnv(environmentNames: string[]): SetupSecrets {
     railway: {
       apiToken: get(source, 'RAILWAY_API_TOKEN') || undefined,
     },
-    turnstile: {
-      siteKey: get(source, 'CAPTCHA_SITE_KEY') || undefined,
-      secretKey: get(source, 'CAPTCHA_SECRET') || undefined,
+    cloudflare: {
+      apiToken: get(source, 'CLOUDFLARE_API_TOKEN') || undefined,
+      accountId: get(source, 'CLOUDFLARE_ACCOUNT_ID') || undefined,
     },
-    stripe,
   };
 }
 
@@ -268,8 +225,7 @@ export function hasAnyEnvSecret(environmentNames: string[]): boolean {
     filled(secrets.sentry.authToken) ||
     filled(secrets.resend.apiKey) ||
     filled(secrets.railway.apiToken) ||
-    filled(secrets.turnstile.secretKey) ||
-    Object.values(secrets.stripe).some((entry) => filled(entry.secretKey))
+    filled(secrets.cloudflare.apiToken)
   );
 }
 
@@ -309,24 +265,24 @@ export function buildEnvSetupTemplateContent(config: SetupConfig): string {
     lines.push('');
   }
 
-  // Stripe is held here per environment (test keys for development, live for production).
-  lines.push('# --- Stripe (per environment) ---');
-  for (const [key, url] of stripeSetupVars(environmentNames)) {
-    lines.push(`# ${url}`);
-    lines.push(`${key}=`);
-    lines.push('');
-  }
-
-  // Remaining app-level per-environment secrets are NOT templated here — the environment is the
-  // `.env.<environment>` file, not a key suffix. Enter them directly in each env file:
+  // App-level per-environment secrets are NOT templated here — the environment is the
+  // `.env.<environment>` file, not a key suffix. Setup prompts for these from stdin at apply time
+  // (or you enter them directly in each env file):
   lines.push(
-    '# Other app per-environment secrets go in .env.<environment> (NOT here — the env is the file):',
+    '# App per-environment secrets are prompted at apply and written to .env.<environment>',
+  );
+  lines.push('#   (NOT here — the environment is the file, not a key suffix):');
+  lines.push(
+    '#   Stripe:    STRIPE_SECRET_KEY=  STRIPE_WEBHOOK_SECRET=  (test in dev, live in prod)',
   );
   lines.push(
     '#   OAuth:     OAUTH_GOOGLE_CLIENT_ID/_CLIENT_SECRET/_REDIRECT_URI  (+ OAUTH_GITHUB_*)',
   );
   lines.push('#   Postman:   POSTMAN_API_KEY=  POSTMAN_WORKSPACE_ID=');
   lines.push('#   Scalar:    SCALAR_API_KEY=  SCALAR_NAMESPACE=  (optional SCALAR_SLUG=)');
+  lines.push(
+    '#   Turnstile: CAPTCHA_* are PROVISIONED from CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID',
+  );
   lines.push(
     '#   PostHog:   POSTHOG_PERSONAL_API_KEY=  (setup resolves POSTHOG_KEY + POSTHOG_HOST)',
   );
@@ -343,17 +299,16 @@ export function writeEnvSetupTemplateIfMissing(config: SetupConfig): boolean {
   return true;
 }
 
-export function appendMissingEnvSetupVariables(config: SetupConfig): string[] {
+export function appendMissingEnvSetupVariables(_config: SetupConfig): string[] {
   if (!existsSync(ENV_SETUP_PATH)) return [];
   const content = readFileSync(ENV_SETUP_PATH, 'utf-8');
   const existingKeys = new Set(Object.keys(parseEnvFile(content)));
   const appended: string[] = [];
   const blocks: string[] = [];
 
-  // Account-wide, env-agnostic credential keys (incl. Turnstile's single Site/Secret pair) plus
-  // Stripe's per-environment keys. Remaining app per-env secrets (OAuth) live in `.env.<environment>`.
-  const environmentNames = config.environments.map((environment) => environment.name);
-  for (const [key, url] of [...SIMPLE_VARS, ...stripeSetupVars(environmentNames)]) {
+  // Only account-wide, env-agnostic credential keys are templated. App per-environment secrets
+  // (Stripe / OAuth / Turnstile-via-Cloudflare) are prompted/provisioned into `.env.<environment>`.
+  for (const [key, url] of SIMPLE_VARS) {
     if (!existingKeys.has(key)) {
       blocks.push(`# ${url}\n${key}=`);
       appended.push(key);

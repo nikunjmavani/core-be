@@ -278,20 +278,20 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
     {
       providerName: 'Cloudflare Turnstile',
       enabledCheck: (configuration) => configuration.providers.turnstile.enabled,
-      secretsCheck: (secrets) => isSecretFilled(secrets.turnstile.secretKey),
-      browserUrls: ['https://dash.cloudflare.com/?to=/:account/turnstile'],
+      secretsCheck: (secrets) =>
+        isSecretFilled(secrets.cloudflare.apiToken) && isSecretFilled(secrets.cloudflare.accountId),
+      browserUrls: ['https://dash.cloudflare.com/profile/api-tokens'],
       instructions: [
-        '1. Log in to the Cloudflare dashboard (the link is already on your clipboard)',
-        '2. Go to Turnstile → "Add widget"',
-        '3. Add your hostname(s) — localhost for dev, your domain for prod (one widget can list both)',
-        '4. Pick a widget mode (Managed / Non-Interactive / Invisible — Invisible matches core-fe)',
-        '5. Copy the Site Key (public) and Secret Key (server-side)',
-        '6. Paste each one below when prompted (input is hidden) — they are saved for you,',
-        '   and setup writes CAPTCHA_PROVIDER/SITE_KEY/SECRET into each .env.<environment>.',
+        '1. Log in to Cloudflare and open the API Tokens page (link is on your clipboard)',
+        '2. Create Token → Custom token → permission "Turnstile : Edit" → Continue → Create',
+        '3. Copy the token. Also copy your Account ID (any domain → Overview → right sidebar)',
+        '4. Paste both below when prompted (input is hidden) — saved to .setup-credentials for you.',
+        `   Setup then CREATES one widget per environment (${config.project.name}-<env>) and writes`,
+        '   CAPTCHA_PROVIDER/SITE_KEY/SECRET into each .env.<environment> — no manual widget needed.',
       ],
       secretPrompts: [
-        { key: 'CAPTCHA_SITE_KEY', label: 'Turnstile SITE key (public, 0x4AAA…)' },
-        { key: 'CAPTCHA_SECRET', label: 'Turnstile SECRET key (server-side, 0x4AAA…)' },
+        { key: 'CLOUDFLARE_API_TOKEN', label: 'Cloudflare API token (Turnstile:Edit)' },
+        { key: 'CLOUDFLARE_ACCOUNT_ID', label: 'Cloudflare Account ID' },
       ],
     },
     {

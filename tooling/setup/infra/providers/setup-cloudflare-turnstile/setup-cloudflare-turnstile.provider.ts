@@ -1,131 +1,236 @@
 /**
  * Cloudflare Turnstile provider for `pnpm setup:infra`.
  *
- * Reads the Turnstile keys from `.setup/.setup-credentials` (CAPTCHA_SITE_KEY / CAPTCHA_SECRET),
- * validates the secret against Cloudflare siteverify, and writes CAPTCHA_PROVIDER / CAPTCHA_SITE_KEY
- * / CAPTCHA_SECRET into each `.env.<environment>` via `toEnvironmentVariables`. A single Turnstile
- * widget can list multiple hostnames (localhost + your domain), so one Site/Secret pair is
- * env-agnostic and shared across every environment — hence it lives in `.setup-credentials`
- * (like RESEND_API_KEY) rather than per-env in the env files.
+ * PROVISIONS Turnstile: with CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID (from
+ * `.setup/.setup-credentials`), it creates/adopts ONE widget per environment via the Cloudflare
+ * API and writes `CAPTCHA_PROVIDER` / `CAPTCHA_SITE_KEY` / `CAPTCHA_SECRET` into each
+ * `.env.<environment>`. The widget secret is only returned by Cloudflare on create/rotate, so a
+ * secret already on file is kept (idempotent); a remote widget with no local secret is rotated.
  *
  * NAMING (single source of truth = setup.config.json): organization/project names from
  * `config.project.*`, environment names from `config.environments[].name` — never hardcoded.
- * SECRETS: read from `.setup/.setup-credentials`, written to `.env.<environment>` only (via
- * build-env-vars), never printed to the console; setup secret files are gitignored and unreadable
- * by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
+ * SECRETS: written to `.env.<environment>` only, never printed to the console; setup secret files
+ * are gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
  */
-import * as logger from '@tooling/setup/common/logger.js';
 import { isSecretFilled } from '@tooling/setup/common/secrets.js';
+import { resourceStatus } from '@tooling/setup/common/interactive-step.js';
+import * as logger from '@tooling/setup/common/logger.js';
 import { setupFetch } from '@tooling/setup/common/setup-fetch.js';
 import type {
-  EnvironmentVariables,
+  InfraProvider,
   InfraProviderContext,
   ProviderResult,
+  SetupConfig,
 } from '@tooling/setup/common/types.js';
-import { createValidationProvider } from '../create-validation-provider.js';
+import {
+  everyEnvironmentHasEnvKeys,
+  frontendUrlForEnvironment,
+  oauthAppDisplayName,
+} from '@tooling/setup/envs/env-file-setup.util.js';
+import { readEnvFileValue, upsertEnvFileValue } from '@tooling/setup/envs/read-env-file.js';
 
-const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
-const DASHBOARD_URL = 'https://dash.cloudflare.com/?to=/:account/turnstile';
+const CF_API_BASE = 'https://api.cloudflare.com/client/v4';
+const TOKEN_URL = 'https://dash.cloudflare.com/profile/api-tokens';
 
-/** Cloudflare always-pass/fail TEST secret keys begin with `1x` / `2x` / `3x`. */
-function isTestSecret(secret: string): boolean {
-  return /^[123]x/.test(secret);
+interface TurnstileWidget {
+  sitekey: string;
+  name: string;
+}
+interface TurnstileWidgetWithSecret extends TurnstileWidget {
+  secret: string;
 }
 
-/**
- * Validate a Turnstile secret against Cloudflare siteverify. A dummy response token is always
- * rejected (success:false), but the `error-codes` distinguish a bad secret (`invalid-input-secret`)
- * from a merely invalid token (`invalid-input-response`) — only the former is wrong. Test secrets
- * (1x/2x/3x) are accepted without a network call.
- */
-async function validateSecret(secretKey: string): Promise<boolean> {
-  if (isTestSecret(secretKey)) {
-    logger.success('  Turnstile — test secret key (skipping live validation)');
-    return true;
+/** Call the Cloudflare API and unwrap the `result`, throwing on `success:false`. */
+async function cloudflareApi<T>(
+  token: string,
+  path: string,
+  init?: { method?: string; body?: string },
+): Promise<T> {
+  const response = await setupFetch({
+    name: 'Cloudflare',
+    url: `${CF_API_BASE}${path}`,
+    init: {
+      method: init?.method ?? 'GET',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      ...(init?.body ? { body: init.body } : {}),
+    },
+  });
+  const body = (await response.json()) as {
+    success: boolean;
+    errors?: Array<{ message: string }>;
+    result: T;
+  };
+  if (!(response.ok && body.success)) {
+    const detail =
+      body.errors?.map((error) => error.message).join('; ') || `HTTP ${response.status}`;
+    throw new Error(detail);
   }
-  try {
-    const response = await setupFetch({
-      name: 'Turnstile',
-      url: SITEVERIFY_URL,
-      init: {
-        method: 'POST',
-        body: new URLSearchParams({ secret: secretKey, response: 'setup-probe-token' }),
-      },
-    });
-    const result = (await response.json()) as { 'error-codes'?: string[] };
-    if (result['error-codes']?.includes('invalid-input-secret')) {
-      logger.error('  Turnstile — secret rejected by Cloudflare (invalid-input-secret)');
-      return false;
+  return body.result;
+}
+
+/** Widget name per env: `core-be-development` for dev, `core-be` for production (mirrors OAuth apps). */
+function widgetName(config: SetupConfig, environmentName: string): string {
+  return oauthAppDisplayName(config.project.name, environmentName);
+}
+
+/** Turnstile domains (hostnames) for an env: localhost for dev + the configured frontend host. */
+function domainsForEnvironment(config: SetupConfig, environmentName: string): string[] {
+  const domains = new Set<string>();
+  if (environmentName === 'development') domains.add('localhost');
+  const url = frontendUrlForEnvironment(config, environmentName);
+  if (url) {
+    try {
+      domains.add(new URL(url).hostname);
+    } catch {
+      // ignore malformed frontend URL
     }
-    logger.success('  Turnstile — secret accepted by Cloudflare');
-    return true;
-  } catch {
-    logger.warn('  Turnstile — siteverify unreachable (offline?)');
-    return true;
   }
+  if (domains.size === 0) domains.add('localhost');
+  return [...domains];
 }
 
-async function validateTurnstile(context: InfraProviderContext): Promise<ProviderResult> {
-  const secretKey = context.secrets.turnstile.secretKey ?? '';
-  if (!secretKey) {
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function provisionTurnstile(context: InfraProviderContext): Promise<ProviderResult> {
+  const { apiToken, accountId } = context.secrets.cloudflare;
+  if (!(apiToken && accountId)) {
     return {
       success: true,
-      message: 'Turnstile: skipped (no CAPTCHA_SECRET in .setup-credentials)',
-    };
-  }
-  // Guard: a single shared key set is written to every environment, so never let an always-pass
-  // TEST key reach production. Real keys must be used when a production environment exists.
-  if (context.environments.includes('production') && isTestSecret(secretKey)) {
-    return {
-      success: false,
       message:
-        'Turnstile: test keys cannot be used for production — set real CAPTCHA_SECRET in .setup/.setup-credentials',
+        'Turnstile: skipped (set CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID in .setup/.setup-credentials)',
     };
   }
-  logger.info('Validating Cloudflare Turnstile secret...');
-  const valid = await validateSecret(secretKey);
-  return {
-    success: valid,
-    message: valid ? 'Turnstile: secret validated' : 'Turnstile: secret invalid',
-  };
+
+  const widgetsPath = `/accounts/${accountId}/challenges/widgets`;
+  let existing: TurnstileWidget[];
+  try {
+    existing = await cloudflareApi<TurnstileWidget[]>(apiToken, widgetsPath);
+  } catch (error) {
+    return { success: false, message: `Turnstile: cannot list widgets — ${errorMessage(error)}` };
+  }
+
+  for (const environmentName of context.environments) {
+    const name = widgetName(context.config, environmentName);
+    const found = existing.find((widget) => widget.name === name);
+    const onFileSecret = readEnvFileValue(environmentName, 'CAPTCHA_SECRET');
+
+    try {
+      if (found && onFileSecret) {
+        // Already provisioned and we still hold its secret — keep it (don't rotate every run).
+        upsertEnvFileValue(environmentName, 'CAPTCHA_PROVIDER', 'turnstile');
+        upsertEnvFileValue(environmentName, 'CAPTCHA_SITE_KEY', found.sitekey);
+        logger.success(`  Turnstile "${environmentName}" — widget "${name}" already provisioned`);
+        continue;
+      }
+
+      let widget: TurnstileWidgetWithSecret;
+      if (found) {
+        // Remote widget exists but we don't hold the secret → rotate to obtain a usable one.
+        const rotated = await cloudflareApi<TurnstileWidgetWithSecret>(
+          apiToken,
+          `${widgetsPath}/${found.sitekey}/rotate_secret`,
+          { method: 'POST', body: '{}' },
+        );
+        widget = { name, sitekey: found.sitekey, secret: rotated.secret };
+        logger.success(`  Turnstile "${environmentName}" — adopted "${name}" (secret rotated)`);
+      } else {
+        widget = await cloudflareApi<TurnstileWidgetWithSecret>(apiToken, widgetsPath, {
+          method: 'POST',
+          body: JSON.stringify({
+            name,
+            domains: domainsForEnvironment(context.config, environmentName),
+            mode: 'managed',
+          }),
+        });
+        logger.success(`  Turnstile "${environmentName}" — created widget "${name}"`);
+      }
+
+      upsertEnvFileValue(environmentName, 'CAPTCHA_PROVIDER', 'turnstile');
+      upsertEnvFileValue(environmentName, 'CAPTCHA_SITE_KEY', widget.sitekey);
+      upsertEnvFileValue(environmentName, 'CAPTCHA_SECRET', widget.secret);
+    } catch (error) {
+      return { success: false, message: `Turnstile "${environmentName}": ${errorMessage(error)}` };
+    }
+  }
+
+  return { success: true, message: 'Turnstile: widget(s) provisioned → .env.<environment>' };
 }
 
-export const setupCloudflareTurnstileProvider = createValidationProvider({
+export const setupCloudflareTurnstileProvider: InfraProvider = {
   key: 'turnstile',
   name: 'Cloudflare Turnstile',
   isEnabled: ({ config, secrets }) =>
-    config.providers.turnstile.enabled && isSecretFilled(secrets.turnstile.secretKey),
+    config.providers.turnstile.enabled &&
+    isSecretFilled(secrets.cloudflare.apiToken) &&
+    isSecretFilled(secrets.cloudflare.accountId),
   disabledReason: ({ config }) =>
     !config.providers.turnstile.enabled
       ? 'disabled in setup.config.json'
-      : 'CAPTCHA_SECRET missing in .setup/.setup-credentials',
-  preview: {
-    detail: 'Site + Secret key',
-    url: DASHBOARD_URL,
-    configKey: 'turnstile.siteKey / turnstile.secretKey (.setup-credentials)',
-  },
-  settingsDetail: 'validate CAPTCHA_SECRET + write CAPTCHA_* to each env',
-  instructions: [
-    'A Turnstile widget is created by hand in the Cloudflare dashboard (opens automatically):',
-    `  ${DASHBOARD_URL}`,
-    'Add your hostname(s) — localhost for dev, your domain for prod (one widget can list both).',
-    'Pick a widget mode (Managed / Non-Interactive / Invisible — Invisible matches core-fe).',
-    'Copy the Site Key (public) and Secret Key (server-side) into .setup/.setup-credentials:',
-    '  CAPTCHA_SITE_KEY=0x...   CAPTCHA_SECRET=0x...',
-    'setup:infra validates the secret and writes CAPTCHA_PROVIDER/SITE_KEY/SECRET into each .env.<environment>.',
-  ],
+      : 'CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID missing in .setup/.setup-credentials',
+  preview: ({ config }) =>
+    config.providers.turnstile.enabled
+      ? {
+          detail: 'Creates one Turnstile widget per env → writes CAPTCHA_* to .env.<environment>',
+          url: TOKEN_URL,
+          configKey: '.setup-credentials → CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID',
+        }
+      : null,
+  settingsReview: ({ config }) =>
+    config.providers.turnstile.enabled
+      ? [{ bucket: 'resource', provider: 'Cloudflare Turnstile', detail: 'widget per environment' }]
+      : [],
   describe: ({ environments }) => ({ environments }),
-  toEnvironmentVariables: ({ config, secrets }, environmentName): Partial<EnvironmentVariables> => {
-    const { siteKey, secretKey } = secrets.turnstile;
-    if (!(config.providers.turnstile.enabled && secretKey)) return {};
-    // Never bake an always-pass test key into a production env file.
-    if (environmentName === 'production' && isTestSecret(secretKey)) return {};
-    const variables: Partial<EnvironmentVariables> = {
-      CAPTCHA_PROVIDER: 'turnstile',
-      CAPTCHA_SECRET: secretKey,
-    };
-    if (siteKey) variables.CAPTCHA_SITE_KEY = siteKey;
-    return variables;
+  inspectRemote: async (context) => {
+    if (!context.config.providers.turnstile.enabled) {
+      return { present: false, fields: [], error: 'disabled in setup.config.json' };
+    }
+    const { apiToken, accountId } = context.secrets.cloudflare;
+    if (!(apiToken && accountId)) {
+      return {
+        present: false,
+        fields: [],
+        error: 'CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID missing in .setup/.setup-credentials',
+      };
+    }
+    try {
+      const widgets = await cloudflareApi<TurnstileWidget[]>(
+        apiToken,
+        `/accounts/${accountId}/challenges/widgets`,
+      );
+      const fields = context.environments.map((environmentName) => {
+        const name = widgetName(context.config, environmentName);
+        const found = widgets.some((widget) => widget.name === name);
+        return {
+          label: `widget (${environmentName})`,
+          expected: name,
+          remote: found ? name : '—',
+          matches: found,
+        };
+      });
+      return { present: fields.every((field) => field.matches), fields };
+    } catch (error) {
+      return { present: false, fields: [], error: errorMessage(error) };
+    }
   },
-  validate: validateTurnstile,
-});
+  buildStep: (context: InfraProviderContext) => ({
+    name: 'Cloudflare Turnstile',
+    enabled: setupCloudflareTurnstileProvider.isEnabled(context),
+    enabledReason: setupCloudflareTurnstileProvider.disabledReason(context),
+    instructions: [
+      `Create a Cloudflare API token with Turnstile:Edit: ${TOKEN_URL}`,
+      'Copy your Account ID (Cloudflare dashboard → any domain → Overview → right sidebar).',
+      'Put both in .setup/.setup-credentials: CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=…',
+      `Setup creates one widget per environment (${context.environments.join(', ')}) and writes`,
+      'CAPTCHA_PROVIDER / CAPTCHA_SITE_KEY / CAPTCHA_SECRET into each .env.<environment>.',
+      'Idempotent: an existing widget is adopted; a secret already on file is kept.',
+    ],
+    detectStatus: () =>
+      resourceStatus(
+        everyEnvironmentHasEnvKeys(context.config, ['CAPTCHA_SITE_KEY', 'CAPTCHA_SECRET']),
+        'Turnstile widget per environment',
+      ),
+    execute: () => provisionTurnstile(context),
+  }),
+};
