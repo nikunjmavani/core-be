@@ -129,6 +129,7 @@ export const setupStateSchema = z.object({
     .optional(),
   postman: z
     .object({
+      workspaceId: z.string().optional(),
       collectionId: z.string().optional(),
     })
     .optional(),
