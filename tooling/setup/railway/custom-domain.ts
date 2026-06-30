@@ -519,7 +519,9 @@ function printDownstreamEnvHints(input: DownstreamHintInput): void {
     logger.info(`  OAUTH_GOOGLE_REDIRECT_URI — https://${input.domain}/auth/oauth/google/callback`);
   }
   if (input.oauthGithubEnabled) {
-    logger.info(`  OAUTH_GITHUB_REDIRECT_URI — https://${input.domain}/auth/oauth/github/callback`);
+    logger.info(
+      `  OAUTH_GITHUB_REDIRECT_URI — https://${input.domain}/api/v1/auth/oauth/github/callback`,
+    );
   }
   logger.blank();
 
@@ -537,7 +539,7 @@ function printDownstreamEnvHints(input: DownstreamHintInput): void {
   }
   if (input.oauthGithubEnabled) {
     logger.info(
-      `    gh secret set OAUTH_GITHUB_REDIRECT_URI --env ${input.environmentName} --body "https://${input.domain}/auth/oauth/github/callback"`,
+      `    gh secret set OAUTH_GITHUB_REDIRECT_URI --env ${input.environmentName} --body "https://${input.domain}/api/v1/auth/oauth/github/callback"`,
     );
   }
   logger.info('  Or push from the local env file via `pnpm github:sync <environment>`.');

@@ -7,9 +7,18 @@ import {
   reloadSecrets,
   isSecretFilled,
   getSecretsPath,
+  getEnvSetupValue,
+  setEnvSetupVariable,
 } from '@tooling/setup/common/secrets.js';
 import { hasGithubToken } from '@tooling/setup/common/secrets.js';
-import { readEnvFileValue } from '@tooling/setup/envs/read-env-file.js';
+import { questionHidden } from '@tooling/setup/common/prompts.js';
+import { clipboardAvailable, copyToClipboard } from '@tooling/setup/common/clipboard.js';
+import {
+  frontendUrlForEnvironment,
+  oauthAppDisplayName,
+  everyEnvironmentHasEnvKeys,
+} from '@tooling/setup/envs/env-file-setup.util.js';
+import { posthogGuideConfigured } from '@tooling/setup/infra/providers/setup-posthog/setup-posthog.provider.js';
 import type { SetupConfig } from '@tooling/setup/common/types.js';
 
 function openBrowser(url: string): void {
@@ -37,12 +46,27 @@ async function waitForEnter(prompt: string): Promise<void> {
   });
 }
 
+/** A value to collect via hidden input and write into `.setup-credentials` for the user. */
+interface GuideSecretPrompt {
+  /** Env var name in `.setup-credentials` (e.g. `CAPTCHA_SECRET`). */
+  key: string;
+  /** What to ask the user (e.g. `Turnstile SECRET key (0x4AAA…)`). */
+  label: string;
+}
+
 interface GuideStepDefinition {
   providerName: string;
   enabledCheck: (config: SetupConfig) => boolean;
   secretsCheck: (secrets: ReturnType<typeof reloadSecrets>) => boolean;
   browserUrls: string[];
   instructions: string[];
+  /**
+   * Optional values to collect interactively (hidden input) and write straight into
+   * `.setup-credentials`. When present, the guide prompts for each missing one instead of
+   * asking the user to hand-edit the file. Omit for providers whose values live in
+   * `.env.<environment>` (OAuth, Scalar) — those keep the manual-edit flow.
+   */
+  secretPrompts?: GuideSecretPrompt[];
 }
 
 function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
@@ -55,6 +79,10 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
       enabledCheck: (configuration) => configuration.providers.neon.enabled,
       secretsCheck: (secrets) => isSecretFilled(secrets.neon.apiKey),
       browserUrls: ['https://console.neon.tech/app/settings/api-keys'],
+      secretPrompts: [
+        { key: 'NEON_API_KEY', label: 'Neon API key (napi_…)' },
+        { key: 'NEON_ORG_ID', label: 'Neon Org ID' },
+      ],
       instructions: [
         '1. Log in to your Neon account (or sign up at neon.tech)',
         '2. You will land on the "API Keys" page',
@@ -72,6 +100,10 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
       secretsCheck: (secrets) =>
         isSecretFilled(secrets.aws.accessKeyId) && isSecretFilled(secrets.aws.secretAccessKey),
       browserUrls: ['https://console.aws.amazon.com/iam/home#/users'],
+      secretPrompts: [
+        { key: 'AWS_ACCESS_KEY_ID', label: 'AWS Access Key ID' },
+        { key: 'AWS_SECRET_ACCESS_KEY', label: 'AWS Secret Access Key' },
+      ],
       instructions: [
         '1. Log in to AWS Console',
         '2. You will land on the IAM Users page',
@@ -92,6 +124,7 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
       enabledCheck: (configuration) => configuration.providers.sentry.enabled,
       secretsCheck: (secrets) => isSecretFilled(secrets.sentry.authToken),
       browserUrls: ['https://sentry.io/settings/auth-tokens/new-token/'],
+      secretPrompts: [{ key: 'SENTRY_AUTH_TOKEN', label: 'Sentry auth token (sntrys_…)' }],
       instructions: [
         '1. Log in to Sentry (or sign up at sentry.io)',
         '2. You will land on "Create New Token"',
@@ -108,6 +141,7 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
       enabledCheck: (configuration) => configuration.providers.resend.enabled,
       secretsCheck: (secrets) => isSecretFilled(secrets.resend.apiKey),
       browserUrls: ['https://resend.com/api-keys'],
+      secretPrompts: [{ key: 'RESEND_API_KEY', label: 'Resend API key (re_…)' }],
       instructions: [
         '1. Log in to Resend (or sign up at resend.com)',
         '2. You will land on the "API Keys" page',
@@ -123,110 +157,141 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
     {
       providerName: 'Stripe',
       enabledCheck: (configuration) => configuration.providers.stripe.enabled,
+      // Stripe keys live in .setup/.setup-credentials per environment (STRIPE_<ENV>_SECRET_KEY);
+      // setup writes STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET into each .env.<environment>.
       secretsCheck: () =>
         environmentNames.every((environmentName) =>
-          isSecretFilled(readEnvFileValue(environmentName, 'STRIPE_SECRET_KEY')),
+          isSecretFilled(
+            getEnvSetupValue(
+              `STRIPE_${environmentName.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_SECRET_KEY`,
+            ),
+          ),
         ),
       browserUrls: [
         'https://dashboard.stripe.com/test/apikeys',
         'https://dashboard.stripe.com/apikeys',
       ],
+      // Collect each per-environment key via HIDDEN input → saved straight to .setup-credentials.
+      // The secret is never echoed to the terminal and the file is never hand-edited.
+      secretPrompts: config.environments.flatMap((environment) => {
+        const environmentName = environment.name;
+        const prefix = `STRIPE_${environmentName.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`;
+        const keyFormat = environmentName === 'development' ? 'sk_test_…' : 'sk_live_…';
+        return [
+          {
+            key: `${prefix}_SECRET_KEY`,
+            label: `Stripe ${environmentName} SECRET key (${keyFormat})`,
+          },
+          {
+            key: `${prefix}_WEBHOOK_SECRET`,
+            label: `Stripe ${environmentName} webhook signing secret (whsec_…, optional — Enter to skip)`,
+          },
+        ];
+      }),
       instructions: [
-        '1. Log in to Stripe Dashboard',
-        '2. For development: Use the TEST mode keys (toggle "Test mode" on)',
-        '   Copy the Secret key (starts with sk_test_...)',
-        '3. For production: Switch to LIVE mode',
-        '   Copy the Secret key (starts with sk_live_...)',
-        '4. For webhooks: Go to Developers → Webhooks → Add endpoint',
-        '   (Leave webhook secrets empty for now — they are created later)',
-        '5. In each .env.<environment> set: STRIPE_SECRET_KEY=sk_...  STRIPE_WEBHOOK_SECRET=',
-        '',
-        '6. Save the file',
+        'For EACH environment you will paste the key at a hidden prompt below — the input is never',
+        'shown and is saved to .setup/.setup-credentials for you (no hand-editing, no clear-text paste).',
+        '1. The API-keys page was opened and its link copied to your clipboard. In Stripe:',
+        '   Developers → API keys → "Secret key" → Reveal → copy.',
+        '     • development → TEST mode  (sk_test_… , dashboard.stripe.com/test/apikeys)',
+        '     • production  → LIVE mode  (sk_live_… , dashboard.stripe.com/apikeys)',
+        '2. Webhook signing secret (optional): Developers → Webhooks → your endpoint → "Signing secret" (whsec_…).',
+        '   For local dev, `stripe listen --print-secret` also prints a whsec_… you can paste.',
+        'setup validates each key via the Stripe API and writes STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET',
+        'into each .env.<environment>.',
       ],
     },
     {
       providerName: 'Google OAuth',
       enabledCheck: (configuration) => configuration.providers.oauth.google.enabled,
-      secretsCheck: () =>
-        environmentNames.every((environmentName) =>
-          isSecretFilled(readEnvFileValue(environmentName, 'OAUTH_GOOGLE_CLIENT_ID')),
-        ),
+      secretsCheck: () => everyEnvironmentHasEnvKeys(config, ['OAUTH_GOOGLE_CLIENT_ID']),
       browserUrls: ['https://console.cloud.google.com/apis/credentials'],
-      instructions: [
-        '1. Log in to Google Cloud Console',
-        '2. Select or create a project',
-        '3. Go to "APIs & Services" → "Credentials"',
-        '4. Click "Create Credentials" → "OAuth 2.0 Client ID"',
-        '5. Application type: "Web application"',
-        `6. Create one for each environment (${environmentNames.join(', ')})`,
-        '7. Set Authorized redirect URIs per env:',
-        ...environmentNames.map(
-          (environmentName) =>
-            `   ${environmentName}: ${config.app.frontendUrl[environmentName] ?? 'http://localhost:3000'}/auth/oauth/google/callback`,
-        ),
-        '8. In each .env.<environment> set: OAUTH_GOOGLE_CLIENT_ID=...  OAUTH_GOOGLE_CLIENT_SECRET=...  OAUTH_GOOGLE_REDIRECT_URI=...',
-        '',
-        '9. Save the file',
-      ],
+      instructions: config.environments.flatMap((environment) => {
+        const environmentName = environment.name;
+        const appName = oauthAppDisplayName(config.project.name, environmentName);
+        const frontendUrl = frontendUrlForEnvironment(config, environmentName);
+        const callbackUrl = frontendUrl
+          ? `${frontendUrl}/auth/oauth/google/callback`
+          : 'https://<your-frontend>/auth/oauth/google/callback';
+        return [
+          `--- ${environmentName} → .env.${environmentName} ---`,
+          '1. Google Cloud Console → APIs & Services → Credentials',
+          '2. Create Credentials → OAuth 2.0 Client ID → Web application',
+          `3. Application name: "${appName}"`,
+          `4. Authorized redirect URI: ${callbackUrl}`,
+          `5. In .env.${environmentName} set:`,
+          '   OAUTH_GOOGLE_CLIENT_ID=….apps.googleusercontent.com',
+          '   OAUTH_GOOGLE_CLIENT_SECRET=…',
+          `   OAUTH_GOOGLE_REDIRECT_URI=${callbackUrl}`,
+          '',
+        ];
+      }),
     },
     {
       providerName: 'GitHub OAuth',
       enabledCheck: (configuration) => configuration.providers.oauth.github.enabled,
-      secretsCheck: () =>
-        environmentNames.every((environmentName) =>
-          isSecretFilled(readEnvFileValue(environmentName, 'OAUTH_GITHUB_CLIENT_ID')),
-        ),
+      secretsCheck: () => everyEnvironmentHasEnvKeys(config, ['OAUTH_GITHUB_CLIENT_ID']),
       browserUrls: ['https://github.com/settings/developers'],
-      instructions: [
-        '1. Log in to GitHub',
-        '2. Go to Settings → Developer settings → OAuth Apps',
-        '3. Click "New OAuth App"',
-        `4. Create one for each environment (${environmentNames.join(', ')})`,
-        '5. Set Homepage URL and Callback URL per env:',
-        ...environmentNames.map(
-          (environmentName) =>
-            `   ${environmentName}: callback = ${config.app.frontendUrl[environmentName] ?? 'http://localhost:3000'}/auth/oauth/github/callback`,
-        ),
-        '6. After creating, copy Client ID and generate a Client Secret',
-        '7. In each .env.<environment> set: OAUTH_GITHUB_CLIENT_ID=...  OAUTH_GITHUB_CLIENT_SECRET=...  OAUTH_GITHUB_REDIRECT_URI=...',
-        '',
-        '8. Save the file',
-      ],
+      instructions: config.environments.flatMap((environment) => {
+        const environmentName = environment.name;
+        const appName = oauthAppDisplayName(config.project.name, environmentName);
+        const frontendUrl = frontendUrlForEnvironment(config, environmentName);
+        // Backend OAuth handler is mounted under /api/v1 — the callback MUST include it.
+        const callbackUrl = frontendUrl
+          ? `${frontendUrl}/api/v1/auth/oauth/github/callback`
+          : 'https://<your-backend>/api/v1/auth/oauth/github/callback';
+        return [
+          `--- ${environmentName} → .env.${environmentName} ---`,
+          '1. GitHub → Settings → Developer settings → OAuth Apps → New OAuth App',
+          `2. Application name: "${appName}"`,
+          frontendUrl
+            ? `3. Homepage URL: ${frontendUrl}`
+            : `3. Set app.frontendUrl.${environmentName} in setup.config.json first`,
+          `4. Authorization callback URL: ${callbackUrl}`,
+          '5. Generate client secret',
+          `6. In .env.${environmentName} set:`,
+          '   OAUTH_GITHUB_CLIENT_ID=…',
+          '   OAUTH_GITHUB_CLIENT_SECRET=…',
+          `   OAUTH_GITHUB_REDIRECT_URI=${callbackUrl}`,
+          '',
+        ];
+      }),
     },
     {
       providerName: 'PostHog',
       enabledCheck: (configuration) => configuration.providers.posthog.enabled,
-      secretsCheck: (secrets) =>
-        isSecretFilled(secrets.posthog?.personalApiKey) ||
-        isSecretFilled(secrets.posthog?.projectApiKey),
+      secretsCheck: () => posthogGuideConfigured(),
       browserUrls: ['https://us.posthog.com/settings/user-api-keys'],
+      secretPrompts: [
+        { key: 'POSTHOG_PERSONAL_API_KEY', label: 'PostHog personal API key (phx_…)' },
+      ],
       instructions: [
-        '1. Log in to PostHog',
-        '2. Go to Settings → Personal API keys → "Create personal API key"',
-        '3. Scopes: "All access" → Create → copy it (starts with phx_...)',
-        `4. In ${secretsPath} set: POSTHOG_PERSONAL_API_KEY=phx_...`,
-        '   (setup resolves the project key POSTHOG_KEY via the PostHog API)',
-        '   Optional override: POSTHOG_PROJECT_API_KEY=phc_... (skips the API lookup)',
-        '',
-        '5. Save the file',
+        '1. Log in to PostHog (the link is already on your clipboard / the page opens automatically)',
+        '2. Settings → Personal API keys → "Create personal API key" → scopes: "All access"',
+        '3. Copy the key (starts with phx_...)',
+        '4. Paste it below when prompted (input is hidden) — it is saved to .setup-credentials for you.',
+        `   Setup then reuses (or creates) the "${config.project.name}" project under org`,
+        `   "${config.project.organization}" and writes POSTHOG_KEY + POSTHOG_HOST into each .env.<environment>.`,
+        '   Optional: POSTHOG_PROJECT_API_KEY=phc_... skips the API lookup; POSTHOG_PROJECT_ID pins a project.',
       ],
     },
     {
       providerName: 'Cloudflare Turnstile',
       enabledCheck: (configuration) => configuration.providers.turnstile.enabled,
-      secretsCheck: () =>
-        environmentNames.every((environmentName) =>
-          isSecretFilled(readEnvFileValue(environmentName, 'CAPTCHA_SECRET')),
-        ),
+      secretsCheck: (secrets) => isSecretFilled(secrets.turnstile.secretKey),
       browserUrls: ['https://dash.cloudflare.com/?to=/:account/turnstile'],
       instructions: [
-        '1. Log in to the Cloudflare dashboard',
+        '1. Log in to the Cloudflare dashboard (the link is already on your clipboard)',
         '2. Go to Turnstile → "Add widget"',
-        `3. Create one widget per environment (${environmentNames.join(', ')})`,
-        '4. Copy the Site Key (public) and Secret Key (server-side) for each',
-        '5. In each .env.<environment> set: CAPTCHA_SITE_KEY=0x...  CAPTCHA_SECRET=0x...  (CAPTCHA_PROVIDER=turnstile)',
-        '',
-        '6. Save the file',
+        '3. Add your hostname(s) — localhost for dev, your domain for prod (one widget can list both)',
+        '4. Pick a widget mode (Managed / Non-Interactive / Invisible — Invisible matches core-fe)',
+        '5. Copy the Site Key (public) and Secret Key (server-side)',
+        '6. Paste each one below when prompted (input is hidden) — they are saved for you,',
+        '   and setup writes CAPTCHA_PROVIDER/SITE_KEY/SECRET into each .env.<environment>.',
+      ],
+      secretPrompts: [
+        { key: 'CAPTCHA_SITE_KEY', label: 'Turnstile SITE key (public, 0x4AAA…)' },
+        { key: 'CAPTCHA_SECRET', label: 'Turnstile SECRET key (server-side, 0x4AAA…)' },
       ],
     },
     {
@@ -234,13 +299,14 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
       enabledCheck: (configuration) => configuration.providers.railway.enabled,
       secretsCheck: (secrets) => isSecretFilled(secrets.railway.apiToken),
       browserUrls: ['https://railway.com/account/tokens'],
+      secretPrompts: [{ key: 'RAILWAY_API_TOKEN', label: 'Railway account token' }],
       instructions: [
         '1. Log in to Railway (or sign up at railway.app)',
         '2. You will land on the "Tokens" page',
         '3. Click "Create Token"',
         `4. Name it: ${config.project.name}-setup`,
         '5. Copy the token',
-        `6. In ${secretsPath} set: RAILWAY_TOKEN=<paste-here>`,
+        `6. In ${secretsPath} set: RAILWAY_API_TOKEN=<paste-here>`,
         '',
         '7. Save the file',
       ],
@@ -262,39 +328,50 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
     {
       providerName: 'Postman',
       enabledCheck: (configuration) => configuration.providers.postman.enabled,
-      secretsCheck: (secrets) =>
-        isSecretFilled(secrets.postman?.apiKey) && isSecretFilled(secrets.postman?.workspaceId),
+      secretsCheck: () =>
+        everyEnvironmentHasEnvKeys(config, ['POSTMAN_API_KEY', 'POSTMAN_WORKSPACE_ID']),
       browserUrls: [
         'https://go.postman.co/settings/me/api-keys',
         'https://go.postman.co/workspaces',
       ],
-      instructions: [
-        '1. Log in to Postman',
-        '2. First URL: API Keys page → Click "Generate API Key"',
-        `3. Name it: ${config.project.name}`,
-        '4. Copy the key (starts with PMAK-...)',
-        '5. Second URL: Workspaces page → click your workspace',
-        '6. Copy the Workspace ID from the URL bar',
-        `7. In ${secretsPath} set: POSTMAN_API_KEY=... POSTMAN_WORKSPACE_ID=...`,
-        '',
-        '8. Save the file',
-      ],
+      instructions: config.environments.flatMap((environment) => {
+        const environmentName = environment.name;
+        return [
+          `--- ${environmentName} → .env.${environmentName} ---`,
+          '1. Postman → Settings → API Keys → Generate API Key',
+          `2. Name: ${config.project.name}-${environmentName}`,
+          '3. Workspaces → open target workspace → copy Workspace ID from URL',
+          `4. In .env.${environmentName} set:`,
+          '   POSTMAN_API_KEY=PMAK-…',
+          '   POSTMAN_WORKSPACE_ID=…',
+          '',
+        ];
+      }),
     },
     {
       providerName: 'Scalar',
       enabledCheck: (configuration) => configuration.providers.scalar.enabled,
-      secretsCheck: (secrets) =>
-        isSecretFilled(secrets.scalar?.apiKey) && isSecretFilled(secrets.scalar?.namespace),
+      secretsCheck: () =>
+        everyEnvironmentHasEnvKeys(config, ['SCALAR_API_KEY', 'SCALAR_NAMESPACE']),
       browserUrls: ['https://dashboard.scalar.com'],
-      instructions: [
-        '1. Log in to Scalar (or sign up at scalar.com)',
-        '2. Go to Settings → API keys and create a key',
-        `3. Name it: ${config.project.name}`,
-        '4. Copy the key and note your team namespace',
-        `5. In ${secretsPath} set: SCALAR_API_KEY=... SCALAR_NAMESPACE=... (optional SCALAR_SLUG=...)`,
-        '',
-        '6. Save the file',
-      ],
+      instructions: config.environments.flatMap((environment) => {
+        const environmentName = environment.name;
+        const slug =
+          environmentName === 'production'
+            ? config.project.name
+            : `${config.project.name}-${environmentName}`;
+        return [
+          `--- ${environmentName} → .env.${environmentName} ---`,
+          '1. Scalar dashboard → Settings → API keys → create key',
+          `2. Name: ${slug}`,
+          '3. Note your team namespace',
+          `4. In .env.${environmentName} set:`,
+          '   SCALAR_API_KEY=…',
+          '   SCALAR_NAMESPACE=your-team',
+          `   SCALAR_SLUG=${slug}  (optional — defaults to project name)`,
+          '',
+        ];
+      }),
     },
   ];
 
@@ -327,14 +404,45 @@ export async function runGuide(config: SetupConfig): Promise<void> {
 
     logger.stepHeader(currentStep, totalSteps, step.providerName);
 
-    for (const url of step.browserUrls) {
-      logger.info(`Opening browser: ${url}`);
+    // Open the dashboard AND copy the primary link to the clipboard, so the user can just
+    // paste it if the tab did not open. Announced prominently (this is the main affordance).
+    const [primaryUrl, ...otherUrls] = step.browserUrls;
+    if (primaryUrl) {
+      openBrowser(primaryUrl);
+      if (clipboardAvailable() && copyToClipboard(primaryUrl)) {
+        logger.success('🔗 Link copied to your clipboard — just paste it in the browser:');
+        logger.info(`     ${primaryUrl}`);
+      } else {
+        logger.info(`Open this link: ${primaryUrl}`);
+      }
+    }
+    for (const url of otherUrls) {
+      logger.info(`Also opening: ${url}`);
       openBrowser(url);
     }
 
     logger.instruction(step.instructions);
 
-    await waitForEnter('  Press Enter when done...');
+    // When the step declares secret prompts, collect each missing value via HIDDEN input and
+    // write it straight into .setup-credentials — the user never pastes a secret in the clear,
+    // and never has to hand-edit the file. Otherwise fall back to the manual "press Enter" flow.
+    if (step.secretPrompts && step.secretPrompts.length > 0 && process.stdin.isTTY) {
+      for (const { key, label } of step.secretPrompts) {
+        if (isSecretFilled(getEnvSetupValue(key))) {
+          logger.success(`  ${key} — already set, skipping`);
+          continue;
+        }
+        const value = await questionHidden(`  ${label} [hidden, paste & Enter]: `);
+        if (value) {
+          setEnvSetupVariable(key, value);
+          logger.success(`  ✓ ${key} saved to .setup-credentials (input hidden)`);
+        } else {
+          logger.warn(`  ${key} left empty — set it later in ${getSecretsPath()}`);
+        }
+      }
+    } else {
+      await waitForEnter('  Press Enter when done...');
+    }
 
     secrets = reloadSecrets(config);
 

@@ -17,8 +17,13 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import * as logger from '@tooling/setup/common/logger.js';
 import { resourceStatus } from '@tooling/setup/common/interactive-step.js';
-import { isSecretFilled } from '@tooling/setup/common/secrets.js';
 import { setupFetch } from '@tooling/setup/common/setup-fetch.js';
+import {
+  anyEnvironmentHasEnvKey,
+  collectEnvCredentials,
+  resolveDefaultEnvironmentName,
+} from '@tooling/setup/envs/env-file-setup.util.js';
+import { readEnvFileValue } from '@tooling/setup/envs/read-env-file.js';
 import { buildEnvironmentVariables } from '@tooling/setup/envs/build-env-vars.js';
 import { refreshEnvFiles } from '@tooling/setup/envs/export-env-files.js';
 import type {
@@ -57,23 +62,27 @@ function buildRegistryUrl(namespace: string, slug: string): string {
 
 export async function provision(
   config: SetupConfig,
-  secrets: SetupSecrets,
+  _secrets: SetupSecrets,
   state: SetupState,
 ): Promise<ProviderResult> {
-  if (!(secrets.scalar?.apiKey && secrets.scalar?.namespace)) {
-    return { success: true, message: 'Scalar: skipped (no API key or namespace)' };
+  const defaultEnvironmentName = resolveDefaultEnvironmentName(config);
+  const apiKey = readEnvFileValue(defaultEnvironmentName, 'SCALAR_API_KEY');
+  const namespace = readEnvFileValue(defaultEnvironmentName, 'SCALAR_NAMESPACE');
+  const slugOverride = readEnvFileValue(defaultEnvironmentName, 'SCALAR_SLUG');
+
+  if (!(apiKey && namespace)) {
+    return {
+      success: true,
+      message: `Scalar: skipped (SCALAR_API_KEY or SCALAR_NAMESPACE missing in .env.${defaultEnvironmentName})`,
+    };
   }
 
   // Refresh .env.<environment> from current state so the subprocess' dotenv
   // loader doesn't override the injected env with stale empty values.
   refreshEnvFiles();
 
-  const defaultEnvironmentName =
-    config.environments.find((environment) => environment.isDefault)?.name ??
-    config.environments[0]?.name ??
-    'development';
   const environment = toProcessEnvironment(
-    buildEnvironmentVariables(defaultEnvironmentName, config, secrets, state),
+    buildEnvironmentVariables(defaultEnvironmentName, config, _secrets, state),
   );
 
   const spinner = logger.startSpinner('Generating OpenAPI spec...');
@@ -107,8 +116,8 @@ export async function provision(
       env: environment,
     });
 
-    const slug = secrets.scalar.slug || config.project.name;
-    const registryUrl = buildRegistryUrl(secrets.scalar.namespace, slug);
+    const slug = slugOverride || config.project.name;
+    const registryUrl = buildRegistryUrl(namespace, slug);
 
     logger.stopSpinner(uploadSpinner, `Scalar Registry published: ${registryUrl}`);
 
@@ -116,7 +125,7 @@ export async function provision(
       success: true,
       message: 'Scalar: OpenAPI document published to registry',
       stateUpdates: {
-        scalar: { namespace: secrets.scalar.namespace, slug, registryUrl },
+        scalar: { namespace, slug, registryUrl },
       },
     };
   } catch (provisionError) {
@@ -130,18 +139,18 @@ export async function provision(
 export const setupScalarProvider: InfraProvider = {
   key: 'scalar',
   name: 'Scalar',
-  isEnabled: ({ config, secrets }) =>
-    config.providers.scalar.enabled && isSecretFilled(secrets.scalar?.apiKey),
+  isEnabled: ({ config }) =>
+    config.providers.scalar.enabled && anyEnvironmentHasEnvKey(config, 'SCALAR_API_KEY'),
   disabledReason: ({ config }) =>
     !config.providers.scalar.enabled
       ? 'disabled in setup.config.json'
-      : 'SCALAR_API_KEY missing in .setup/.setup-credentials',
+      : 'SCALAR_API_KEY missing in .env.<environment>',
   preview: ({ config }) =>
     config.providers.scalar.enabled
       ? {
-          detail: 'API key + namespace',
+          detail: 'API key + namespace per .env.<environment>',
           url: 'https://dashboard.scalar.com',
-          configKey: 'scalar.apiKey, scalar.namespace',
+          configKey: '.env.<environment> → SCALAR_API_KEY, SCALAR_NAMESPACE, optional SCALAR_SLUG',
         }
       : null,
   settingsReview: ({ config }) =>
@@ -149,18 +158,20 @@ export const setupScalarProvider: InfraProvider = {
       ? [{ bucket: 'extra', provider: 'Scalar', detail: 'publish OpenAPI to registry' }]
       : [],
   describe: ({ config }) => ({ project: config.project.name }),
-  inspectRemote: async ({ config, secrets }) => {
+  inspectRemote: async ({ config }) => {
     if (!config.providers.scalar.enabled) {
       return { present: false, fields: [], error: 'disabled in setup.config.json' };
     }
-    const namespace = secrets.scalar?.namespace ?? '';
-    if (!namespace)
+    const defaultEnvironmentName = resolveDefaultEnvironmentName(config);
+    const namespace = readEnvFileValue(defaultEnvironmentName, 'SCALAR_NAMESPACE') ?? '';
+    if (!namespace) {
       return {
         present: false,
         fields: [],
-        error: 'SCALAR_NAMESPACE missing in .setup/.setup-credentials',
+        error: `SCALAR_NAMESPACE missing in .env.${defaultEnvironmentName}`,
       };
-    const slug = secrets.scalar?.slug || config.project.name;
+    }
+    const slug = readEnvFileValue(defaultEnvironmentName, 'SCALAR_SLUG') || config.project.name;
     try {
       const response = await setupFetch({ name: 'Scalar', url: buildRegistryUrl(namespace, slug) });
       return {
@@ -177,25 +188,27 @@ export const setupScalarProvider: InfraProvider = {
       };
     }
   },
-  toEnvironmentVariables: ({ config, secrets }) => {
-    if (!(config.providers.scalar.enabled && secrets.scalar?.apiKey)) return {};
-    return {
-      SCALAR_API_KEY: secrets.scalar.apiKey,
-      ...(secrets.scalar.namespace ? { SCALAR_NAMESPACE: secrets.scalar.namespace } : {}),
-      ...(secrets.scalar.slug ? { SCALAR_SLUG: secrets.scalar.slug } : {}),
-    };
-  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'Scalar',
     enabled: setupScalarProvider.isEnabled(context),
     enabledReason: setupScalarProvider.disabledReason(context),
     instructions: [
-      'Will generate the OpenAPI document and publish it to your Scalar Registry namespace.',
+      'Enter SCALAR_API_KEY and SCALAR_NAMESPACE in each .env.<environment> (see guide).',
+      'Will generate OpenAPI and publish to Scalar Registry using the default environment credentials.',
       'Idempotent: re-publishing overrides the existing version (scalar registry publish --force).',
     ],
     detectStatus: () =>
       resourceStatus(Boolean(context.state.scalar?.registryUrl), 'Scalar Registry published'),
     execute: async () => {
+      await collectEnvCredentials(context.config, {
+        providerName: 'Scalar',
+        scope: 'account',
+        fields: [
+          { key: 'SCALAR_API_KEY', label: 'API key', secret: true },
+          { key: 'SCALAR_NAMESPACE', label: 'Team namespace' },
+          { key: 'SCALAR_SLUG', label: 'Registry slug (optional)' },
+        ],
+      });
       const result = await provision(context.config, context.secrets, context.state);
       context.applyStateUpdates(result.stateUpdates ?? {});
       if (!result.success) throw new Error(result.message);

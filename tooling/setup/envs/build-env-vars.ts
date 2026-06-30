@@ -34,8 +34,10 @@ function pickPerEnvironmentString(
  * via `provider.toEnvironmentVariables()` — so adding a provider never touches this file. The
  * required-but-provisioned keys (`DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`) start as empty
  * defaults and are overwritten by their owning provider (Neon / Railway Redis / JWT) when
- * state is populated. **Side effects:** none (pure). App per-env secrets (Stripe / OAuth /
- * Turnstile) are intentionally NOT produced here — they live directly in `.env.<environment>`.
+ * state is populated. **Side effects:** none (pure). OAuth secrets are intentionally NOT produced
+ * here — they live directly in `.env.<environment>`. Cloudflare Turnstile (CAPTCHA_*) and Stripe
+ * (STRIPE_*) ARE produced here: their providers read keys from `.setup-credentials` and emit the
+ * matching `.env.<environment>` slice via `toEnvironmentVariables()`.
  */
 export function buildEnvironmentVariables(
   environmentName: string,

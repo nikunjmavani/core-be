@@ -19,9 +19,10 @@ import { setupSentryProvider } from './setup-sentry/setup-sentry.provider.js';
 import { setupJwtProvider } from './setup-jwt/setup-jwt.provider.js';
 import { setupResendProvider } from './setup-resend/setup-resend.provider.js';
 import { setupStripeProvider } from './setup-stripe/setup-stripe.provider.js';
-import { setupOauthProvider } from './setup-oauth/setup-oauth.provider.js';
+import { setupGoogleOauthProvider } from './setup-google-oauth/setup-google-oauth.provider.js';
+import { setupGithubOauthProvider } from './setup-github-oauth/setup-github-oauth.provider.js';
 import { setupPosthogProvider } from './setup-posthog/setup-posthog.provider.js';
-import { setupTurnstileProvider } from './setup-turnstile/setup-turnstile.provider.js';
+import { setupCloudflareTurnstileProvider } from './setup-cloudflare-turnstile/setup-cloudflare-turnstile.provider.js';
 import { setupRailwayProvider } from './setup-railway/setup-railway.provider.js';
 import { setupRailwayRedisProvider } from './setup-railway-redis/setup-railway-redis.provider.js';
 import { setupGithubProvider } from './setup-github/setup-github.provider.js';
@@ -35,9 +36,10 @@ export const INFRA_PROVIDERS: readonly InfraProvider[] = [
   setupJwtProvider,
   setupResendProvider,
   setupStripeProvider,
-  setupOauthProvider,
+  setupGoogleOauthProvider,
+  setupGithubOauthProvider,
   setupPosthogProvider,
-  setupTurnstileProvider,
+  setupCloudflareTurnstileProvider,
   setupRailwayProvider,
   setupRailwayRedisProvider,
   setupGithubProvider,

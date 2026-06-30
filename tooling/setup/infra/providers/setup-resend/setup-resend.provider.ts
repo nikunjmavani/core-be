@@ -8,9 +8,13 @@
  * SECRETS: written to `.env.<environment>` only (via build-env-vars), never printed to the
  * console; setup secret files are gitignored and unreadable by the agent (deny-read guard). See SETUP_INFRA_PROVIDER_TEMPLATE.md.
  */
+import {
+  resolveResendFromAddress,
+  resolveResendFromName,
+} from '@tooling/setup/common/resend-from.js';
 import { isSecretFilled } from '@tooling/setup/common/secrets.js';
 import { setupFetch } from '@tooling/setup/common/setup-fetch.js';
-import type { ProviderResult } from '@tooling/setup/common/types.js';
+import type { EnvironmentVariables, ProviderResult } from '@tooling/setup/common/types.js';
 import { createValidationProvider } from '../create-validation-provider.js';
 
 async function validateResend(apiKey: string): Promise<ProviderResult> {
@@ -40,12 +44,16 @@ export const setupResendProvider = createValidationProvider({
     'No resource is created — Resend exposes a single org-level key.',
   ],
   toEnvironmentVariables: ({ config, secrets }) => {
-    if (!(config.providers.resend.enabled && secrets.resend.apiKey)) return {};
-    return {
-      RESEND_API_KEY: secrets.resend.apiKey,
-      EMAIL_FROM_ADDRESS: config.providers.resend.fromAddress,
-      EMAIL_FROM_NAME: config.providers.resend.fromName,
+    if (!config.providers.resend.enabled) return {};
+    // EMAIL_FROM_* are plain config (derived from project identity), so emit them
+    // whenever Resend is enabled — independent of whether the API key is set yet.
+    const vars: Partial<EnvironmentVariables> = {
+      EMAIL_FROM_ADDRESS: resolveResendFromAddress(config),
+      EMAIL_FROM_NAME: resolveResendFromName(config),
     };
+    // The key is a secret — only emit it once it is present in .setup-credentials.
+    if (secrets.resend.apiKey) vars.RESEND_API_KEY = secrets.resend.apiKey;
+    return vars;
   },
   validate: ({ secrets }) => validateResend(secrets.resend.apiKey),
 });

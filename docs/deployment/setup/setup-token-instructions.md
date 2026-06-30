@@ -1,108 +1,68 @@
 # Setup Token Instructions
 
-Where to get each token and where to put it. Run `pnpm setup:infra:preview` to see the list and config. Run `pnpm setup --init` to generate config and an env-style template interactively.
+Where to get each token and **which file to put it in**. Run `pnpm setup:infra:preview` for the checklist. Run `pnpm setup --init` to scaffold config + `.setup/.setup-credentials`.
 
 ---
 
-## Token-only automation (no CLI login)
+## Two input files
 
-Setup uses **tokens from `.setup/.setup-credentials`** only — no `gh auth login` or `railway login` required. If `GITHUB_TOKEN` and/or `RAILWAY_TOKEN` are set in `.setup/.setup-credentials`, the prerequisite check treats you as authenticated and provisioning uses those tokens (GitHub via `gh` with the token, Railway via API). Fill all required keys in `.setup/.setup-credentials` and run `pnpm setup:infra`; the guide and provisioning run without interactive login.
+| File | What goes here |
+| ---- | -------------- |
+| **`.setup/.setup-credentials`** | Account-wide setup-tooling tokens (Neon, AWS, Sentry, Resend, Railway, GitHub PAT) **plus per-environment Stripe keys** (`STRIPE_<ENV>_SECRET_KEY` / `_WEBHOOK_SECRET`) |
+| **`.env.<environment>`** | Per-environment app secrets (OAuth, Postman, Scalar input) |
 
----
-
-## Init and GitHub token
-
-1. Run **`pnpm setup --init`** to generate `tooling/setup/setup.config.json` and `.setup/.setup-credentials` (template with URLs for each key). Init also asks for **Neon Organization ID** — get it from [Neon Console → Settings](https://console.neon.tech/app/settings) → select your **Organization** → **General** → **Organization ID** (e.g. `org-soft-block-10705736`). If you enter it, init writes it to `.setup/.setup-credentials` as `NEON_ORG_ID`. If either file already exists, init does not erase existing values; it only updates the header and prompt defaults from existing config.
-2. Fill **`.setup/.setup-credentials`** with your API keys. For automation (CI or headless), include at least:
-   - **`GITHUB_TOKEN`** — [GitHub → Personal access tokens](https://github.com/settings/tokens) (scopes: `repo`, `admin:repo_hook`, or fine-grained with repo + secrets). Required if GitHub provider is enabled (repo/env secrets).
-   - **`RAILWAY_TOKEN`** — [Railway → Tokens](https://railway.app/account/tokens). Required if Railway provider is enabled.
-3. Run **`pnpm setup:infra`** for full provisioning. No `gh auth login` or `railway login` needed when these tokens are set.
+Setup **generates** outputs into `.env.<environment>` (e.g. `DATABASE_URL`, `POSTHOG_KEY`, `SENTRY_DSN`) — you do not enter those by hand.
 
 ---
 
-## Config and secrets
+## `.setup/.setup-credentials` (setup-tooling only)
 
-- **Config:** `tooling/setup/setup.config.json` — which providers and environments. Generate with `pnpm setup --init` (asks org, project, envs, and Neon Organization ID).
-- **Secrets:** `.setup/.setup-credentials` at project root — one `KEY=value` per line. Each variable has a comment above it with the **URL where to get the key**. Gitignored. You can also `export NEON_API_KEY=...` etc. and run `pnpm setup:infra`; process.env is merged with `.setup/.setup-credentials`.
-- **Per-environment files:** After provisioning, setup writes `.env.<environment>` (e.g. `.env.dev`, `.env.production`) with all app env vars for that environment. Use these to push values to GitHub Environment secrets (structure matches `.env.example`). Run `pnpm setup:infra:export-env` to regenerate anytime.
+| Provider | Where to get token | Variable(s) |
+| -------- | ------------------ | ----------- |
+| **Neon Postgres** | [API Keys](https://console.neon.tech/app/settings/api-keys); optional [Org ID](https://console.neon.tech/app/settings) | `NEON_API_KEY`, optional `NEON_ORG_ID` |
+| **AWS IAM** | [IAM → Create access key](https://console.aws.amazon.com/iam/home#/users) | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
+| **Sentry** | [Auth Tokens](https://sentry.io/settings/auth-tokens/new-token/) | `SENTRY_AUTH_TOKEN` |
+| **Resend** | [API Keys](https://resend.com/api-keys) | `RESEND_API_KEY` |
+| **Railway** | [Account tokens](https://railway.com/account/tokens) | `RAILWAY_API_TOKEN` |
+| **GitHub** (repo/env secrets) | [Personal access tokens](https://github.com/settings/tokens) | `GITHUB_TOKEN` |
 
----
-
-## Double confirm before provisioning
-
-When you run `pnpm setup:infra`, you will see:
-
-1. **Settings review** — which third parties will be provisioned
-2. **First confirm** — "Are these settings correct?" (y/N)
-3. **Second confirm** — "FINAL CONFIRMATION: Proceed with provisioning? This will create REAL resources." (y/N)
-
-Only after both confirms will provisioning run. You can abort at any time.
+With `GITHUB_TOKEN` and `RAILWAY_API_TOKEN` set, no `gh auth login` or `railway login` is required.
 
 ---
 
-## Per-provider token instructions
+## `.env.<environment>` (per environment)
 
-| Provider                          | Where to get token                                                                                                                                                                                                              | Variable in .setup/.setup-credentials                                   |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| **Neon Postgres**                 | [console.neon.tech → API Keys](https://console.neon.tech/app/settings/api-keys); optional: [Organization → General](https://console.neon.tech/app/settings) for `NEON_ORG_ID` if create project fails with "org_id is required" | `NEON_API_KEY`, optional `NEON_ORG_ID`                   |
-| **AWS IAM**                       | [AWS IAM → Users → Create access key](https://console.aws.amazon.com/iam/home#/users)                                                                                                                                           | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`             |
-| **Sentry**                        | [sentry.io → Auth Tokens](https://sentry.io/settings/auth-tokens/new-token/)                                                                                                                                                    | `SENTRY_AUTH_TOKEN`                                      |
-| **Resend**                        | [resend.com → API Keys](https://resend.com/api-keys)                                                                                                                                                                            | `RESEND_API_KEY`                                         |
-| **GitHub (for repo/env secrets)** | [GitHub → Personal access tokens](https://github.com/settings/tokens)                                                                                                                                                           | `GITHUB_TOKEN`                                           |
-| **PostHog**                       | [PostHog → Personal API keys](https://us.posthog.com/settings/user-api-keys)                                                                                                                                                    | `POSTHOG_PERSONAL_API_KEY` (resolves `POSTHOG_KEY`)     |
-| **Railway**                       | [railway.app → Tokens](https://railway.app/account/tokens)                                                                                                                                                                      | `RAILWAY_API_TOKEN`                                          |
-| **Postman**                       | [Postman → API Keys](https://go.postman.co/settings/me/api-keys), [Workspaces](https://go.postman.co/workspaces)                                                                                                                | `POSTMAN_API_KEY`, `POSTMAN_WORKSPACE_ID`                |
-| **Scalar**                        | [Scalar Dashboard → API Keys](https://dashboard.scalar.com)                                                                                                                                                                     | `SCALAR_API_KEY`, `SCALAR_NAMESPACE`, optional `SCALAR_SLUG` |
+| Provider | Keys you enter | What setup does |
+| -------- | -------------- | --------------- |
+| **Google OAuth** | `OAUTH_GOOGLE_CLIENT_ID` / `_CLIENT_SECRET` / `_REDIRECT_URI` | Step-by-step guide (`setup-google-oauth`); app names `core-be-development`, `core-be` (production) |
+| **GitHub OAuth** | `OAUTH_GITHUB_CLIENT_ID` / `_CLIENT_SECRET` / `_REDIRECT_URI` | Step-by-step guide (`setup-github-oauth`); same naming |
+| **Turnstile** | `CAPTCHA_SITE_KEY`, `CAPTCHA_SECRET` | Validates via siteverify |
+| **Postman** | `POSTMAN_API_KEY`, `POSTMAN_WORKSPACE_ID` | Uploads OpenAPI collection |
+| **Scalar** | `SCALAR_API_KEY`, `SCALAR_NAMESPACE`, optional `SCALAR_SLUG` | Publishes to Scalar Registry |
+| **PostHog** | `POSTHOG_PERSONAL_API_KEY` (optional `POSTHOG_PROJECT_ID` / `POSTHOG_PROJECT_API_KEY`) | **Generates** `POSTHOG_KEY` + `POSTHOG_HOST` |
 
-> **Stripe, OAuth (Google/GitHub), Cloudflare Turnstile** are app per-environment secrets —
-> they are **not** in `.setup/.setup-credentials`. Enter them directly in each
-> `.env.<environment>` (no `<ENV>` suffix): `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`,
-> `OAUTH_GOOGLE_CLIENT_ID`/`_SECRET`/`_REDIRECT_URI` (+ `OAUTH_GITHUB_*`),
-> `CAPTCHA_SITE_KEY` / `CAPTCHA_SECRET`. Their `setup:infra` providers validate them from the
-> env files. Get them at: [Stripe](https://dashboard.stripe.com/apikeys) ·
-> [Google](https://console.cloud.google.com/apis/credentials) ·
-> [GitHub OAuth](https://github.com/settings/developers) ·
-> [Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile).
+Get links: [Stripe](https://dashboard.stripe.com/apikeys) · [Google OAuth](https://console.cloud.google.com/apis/credentials) · [GitHub OAuth](https://github.com/settings/developers) · [Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) · [Postman](https://go.postman.co/settings/me/api-keys) · [Scalar](https://dashboard.scalar.com) · [PostHog](https://us.posthog.com/settings/user-api-keys)
+
+---
+
+## Init flow
+
+1. **`pnpm setup --init`** → `setup.config.json` + `.setup/.setup-credentials` template.
+2. Fill **`.setup/.setup-credentials`** with account-wide tokens (table above).
+3. Fill **`.env.development`** / **`.env.production`** with per-env keys (table above). Run `pnpm setup:infra` — the interactive guide prints per-environment OAuth/Postman/Scalar steps.
+4. **`pnpm setup:infra`** → provisions infra, resolves PostHog, validates Stripe/OAuth, writes/updates `.env.<environment>`.
 
 ---
 
 ## GITHUB_TOKEN — step-by-step
 
-Required for writing repository and environment secrets (GitHub provider). No `gh auth login` needed when set in `.setup/.setup-credentials`.
-
-1. Open **[GitHub → Personal access tokens](https://github.com/settings/tokens)** (Settings → Developer settings → Personal access tokens).
-2. Click **“Generate new token”** (classic) or create a **fine-grained** token.
-3. **Scopes:** For classic: enable `repo` and `admin:repo_hook`. For fine-grained: select the repository and **Actions: Secrets** (read + write).
-4. Generate the token and copy it.
-5. In **`.setup/.setup-credentials`** at project root, set:  
-   `GITHUB_TOKEN=<paste-your-token-here>`
-6. Save the file. Run `pnpm setup:infra`; the script will use this token to set repo and environment secrets.
-
----
-
-## Env-style (.setup/.setup-credentials) variable names
-
-If you use `.setup/.setup-credentials` or export env vars, use these names (script maps them internally):
-
-| Variable                                                          | Purpose                                                                      |
-| ----------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `NEON_API_KEY`                                                    | Neon Postgres API key                                                        |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`                      | AWS IAM                                                                      |
-| `SENTRY_AUTH_TOKEN`                                               | Sentry                                                                       |
-| `RESEND_API_KEY`                                                  | Resend                                                                       |
-| `GITHUB_TOKEN`                                                    | GitHub personal access token (repo/env secrets; no `gh auth login` when set) |
-| `RAILWAY_API_TOKEN`                                              | Railway (no `railway login` when set; API-only)                              |
-| `POSTMAN_API_KEY`, `POSTMAN_WORKSPACE_ID`                         | Postman                                                                      |
-| `SCALAR_API_KEY`, `SCALAR_NAMESPACE`, `SCALAR_SLUG`              | Scalar Registry (OpenAPI publish; slug defaults to `core-be`)               |
-| `POSTHOG_PERSONAL_API_KEY` (optional `POSTHOG_PROJECT_ID` / `_API_KEY`) | PostHog (resolves `POSTHOG_KEY` / `POSTHOG_HOST`; region in `setup.config.json`) |
-
-> Stripe / OAuth / Turnstile are **not** setup-credential variables — they live in
-> `.env.<environment>` as `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`,
-> `OAUTH_*_CLIENT_ID`/`_SECRET`/`_REDIRECT_URI`, `CAPTCHA_SITE_KEY`/`CAPTCHA_SECRET` (no `<ENV>` suffix).
+1. [GitHub → Personal access tokens](https://github.com/settings/tokens)
+2. Classic: scopes `repo`, `admin:repo_hook` — or fine-grained with repo + Actions secrets write
+3. In **`.setup/.setup-credentials`**: `GITHUB_TOKEN=<paste>`
 
 ---
 
 ## See Also
 
 - [setup-automation.md](setup-automation.md) — full setup flow
-- [cicd-and-deployment.md](../ci-cd/cicd-and-deployment.md) — deploy after infra is ready
+- [SETUP_INFRA_PREREQUISITES.md](../../../tooling/setup/SETUP_INFRA_PREREQUISITES.md) — quick reference tables

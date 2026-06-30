@@ -98,7 +98,7 @@ export async function provision(
         const newProject = await sentryRequest<SentryProject>(
           authToken,
           'POST',
-          `/teams/${sentryConfig.organization}/${sentryConfig.project ?? sentryConfig.team}/projects/`,
+          `/teams/${sentryConfig.organization}/${sentryConfig.team ?? sentryConfig.project}/projects/`,
           {
             name: projectName,
             slug: projectName,

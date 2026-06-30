@@ -1,6 +1,11 @@
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createReadline, questionWithDefault } from '@tooling/setup/common/prompts.js';
+import {
+  createReadline,
+  questionWithDefault,
+  questionHidden,
+  presentLinkStep,
+} from '@tooling/setup/common/prompts.js';
 import {
   writeEnvSetupTemplateIfMissing,
   updateEnvSetupHeader,
@@ -9,6 +14,7 @@ import {
   setEnvSetupVariable,
 } from '@tooling/setup/common/secrets.js';
 import { loadConfigIfExists } from '@tooling/setup/common/config.js';
+import { resolveResendFromAddress } from '@tooling/setup/common/resend-from.js';
 import { SetupError } from '@tooling/setup/common/setup-error.js';
 import { assertInteractive } from '@tooling/setup/common/interactive-step.js';
 import * as logger from '@tooling/setup/common/logger.js';
@@ -71,11 +77,25 @@ export function buildEnvironmentsFromNames(names: string[]): SetupConfig['enviro
   }));
 }
 
+/**
+ * Per-prompt Sentry overrides collected by the init wizard. Each is optional so
+ * non-interactive callers (and existing tests) keep the historical defaults:
+ * organization → project organization, project → project name, no team,
+ * platform → 'node'.
+ */
+export interface SentryConfigOptions {
+  organization?: string;
+  project?: string;
+  team?: string;
+  platform?: string;
+}
+
 export function buildConfig(
   organization: string,
   projectName: string,
   displayName: string,
   environmentNames: string[],
+  sentryOptions: SentryConfigOptions = {},
 ): SetupConfig {
   const environments = buildEnvironmentsFromNames(environmentNames);
 
@@ -139,15 +159,18 @@ export function buildConfig(
       },
       sentry: {
         enabled: true,
-        organization,
-        project: projectName,
-        platform: 'node',
+        organization: sentryOptions.organization ?? organization,
+        project: sentryOptions.project ?? projectName,
+        ...(sentryOptions.team ? { team: sentryOptions.team } : {}),
+        platform: sentryOptions.platform ?? 'node',
         sampleRates,
       },
       resend: {
+        // Empty => derived from project identity (noreply@<project-name>.com / displayName),
+        // so a rename auto-updates the sender. Override with a verified domain when needed.
         enabled: true,
-        fromAddress: 'noreply@yourdomain.com',
-        fromName: displayName,
+        fromAddress: '',
+        fromName: '',
       },
       stripe: { enabled: true },
       oauth: {
@@ -178,7 +201,7 @@ export function buildConfig(
 export async function runInitWizard(): Promise<void> {
   assertInteractive();
   logger.info(
-    'Setup init — we will ask for organization, project, and environments, then generate setup.config.json.',
+    'Setup init — we will ask for organization, project, environments, and Sentry slugs, then generate setup.config.json.',
   );
   logger.blank();
 
@@ -210,13 +233,55 @@ export async function runInitWizard(): Promise<void> {
   );
 
   const defaultNeonOrgId = getEnvSetupValue('NEON_ORG_ID');
-  logger.info(
-    '  Neon Organization ID: get it from https://console.neon.tech/app/settings → select Organization → General → Organization ID',
-  );
+  presentLinkStep({
+    title: 'Neon Organization ID — needed to provision the Postgres database',
+    url: 'https://console.neon.tech/app/settings',
+    steps: [
+      'Sign in to Neon (the link is on your clipboard — just paste it).',
+      'Select your Organization, then open Settings → General.',
+      'Copy the "Organization ID" (looks like org-soft-block-10705736).',
+      'Paste it at the prompt below (or press Enter to keep the current value).',
+    ],
+  });
   const neonOrgId = await questionWithDefault(
     readline,
     'Neon Organization ID (e.g. org-soft-block-10705736)',
     defaultNeonOrgId,
+  );
+
+  // Sentry slugs come from https://sentry.io/settings/ and can differ from the
+  // project organization (the org slug often carries a suffix, e.g. "-7j"). Each
+  // prompt defaults to the existing setup.config.json value (press Enter to keep it).
+  const sentryDefaults = existingConfig?.providers.sentry;
+  presentLinkStep({
+    title: 'Sentry slugs — organization, team, project (press Enter on each to keep the default)',
+    url: 'https://sentry.io/settings/',
+    steps: [
+      'Sign in to Sentry (the link is on your clipboard — just paste it).',
+      'Organization slug: it is in the URL (/settings/<org-slug>/) — it may carry a suffix like "-7j".',
+      'Team slug: Settings → Teams → the team that will own the project.',
+      'Project slug + platform: Settings → Projects → your project.',
+    ],
+  });
+  const sentryOrganization = await questionWithDefault(
+    readline,
+    'Sentry organization slug',
+    sentryDefaults?.organization ?? organization,
+  );
+  const sentryProject = await questionWithDefault(
+    readline,
+    'Sentry project slug',
+    sentryDefaults?.project ?? projectName,
+  );
+  const sentryTeam = await questionWithDefault(
+    readline,
+    'Sentry team slug (the team the project is created under)',
+    sentryDefaults?.team ?? '',
+  );
+  const sentryPlatform = await questionWithDefault(
+    readline,
+    'Sentry platform (e.g. node, node-fastify, javascript-react)',
+    sentryDefaults?.platform ?? 'node',
   );
 
   readline.close();
@@ -232,12 +297,33 @@ export async function runInitWizard(): Promise<void> {
     );
   }
 
-  const config = buildConfig(organization, projectName, displayName, environmentNames);
+  const sentryOptions: SentryConfigOptions = {
+    organization: sentryOrganization,
+    project: sentryProject,
+    platform: sentryPlatform,
+  };
+  const trimmedSentryTeam = sentryTeam.trim();
+  if (trimmedSentryTeam) {
+    sentryOptions.team = trimmedSentryTeam;
+  }
+
+  const config = buildConfig(
+    organization,
+    projectName,
+    displayName,
+    environmentNames,
+    sentryOptions,
+  );
 
   writeFileSync(SETUP_CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
   logger.success(`Wrote ${SETUP_CONFIG_PATH}`);
   logger.info(`  Project: ${config.project.displayName} (${config.project.name})`);
   logger.info(`  Organization: ${config.project.organization}`);
+  logger.info(
+    `  Sentry: ${config.providers.sentry.organization}/${config.providers.sentry.project}` +
+      `${config.providers.sentry.team ? ` (team ${config.providers.sentry.team})` : ''}` +
+      ` · ${config.providers.sentry.platform}`,
+  );
   logger.info(`  Environments: ${environmentNames.join(', ')}`);
   logger.blank();
 
@@ -261,5 +347,70 @@ export async function runInitWizard(): Promise<void> {
   if (neonOrgId.trim()) {
     setEnvSetupVariable('NEON_ORG_ID', neonOrgId.trim());
     logger.success('Set NEON_ORG_ID in .setup/.setup-credentials');
+  }
+
+  // Sentry auth token — a SECRET. Collected last (the main prompt readline is
+  // already closed) via hidden input and written only to .setup/.setup-credentials.
+  const existingSentryToken = getEnvSetupValue('SENTRY_AUTH_TOKEN');
+  presentLinkStep({
+    title: existingSentryToken
+      ? 'Sentry auth token — already set (press Enter to keep it, or paste a new one to replace)'
+      : 'Sentry auth token — needed to create/adopt the project and upload source maps',
+    url: 'https://sentry.io/settings/auth-tokens/new-token/',
+    steps: [
+      'Sign in to Sentry (the link is on your clipboard — just paste it).',
+      'Name the token (e.g. "core-be setup").',
+      'Grant scopes: project:read, project:write, project:admin, org:read.',
+      'Click "Create token" and copy the value.',
+      'Paste it at the prompt below — input stays hidden and is saved only to .setup/.setup-credentials.',
+    ],
+  });
+  const sentryAuthToken = await questionHidden(
+    existingSentryToken
+      ? 'Paste Sentry auth token (hidden — Enter to keep current): '
+      : 'Paste Sentry auth token (hidden): ',
+  );
+  if (sentryAuthToken.trim()) {
+    setEnvSetupVariable('SENTRY_AUTH_TOKEN', sentryAuthToken.trim());
+    logger.success('Saved SENTRY_AUTH_TOKEN to .setup/.setup-credentials (value hidden).');
+  } else if (!existingSentryToken) {
+    logger.warn(
+      'No Sentry auth token entered — fill SENTRY_AUTH_TOKEN in .setup/.setup-credentials before running pnpm setup:infra.',
+    );
+  }
+
+  // Resend API key — a SECRET. Hidden input, saved only to .setup/.setup-credentials.
+  // Only prompt when Resend is enabled in the config we just built.
+  if (config.providers.resend.enabled) {
+    const existingResendKey = getEnvSetupValue('RESEND_API_KEY');
+    presentLinkStep({
+      title: existingResendKey
+        ? 'Resend API key — already set (press Enter to keep it, or paste a new one to replace)'
+        : 'Resend API key — needed to send transactional email',
+      url: 'https://resend.com/api-keys',
+      steps: [
+        'Sign in to Resend (the link is on your clipboard — just paste it).',
+        'Click "Create API Key".',
+        `Name it (e.g. "${config.project.name} setup") and pick permission "Sending access".`,
+        'Click "Add", then copy the key — it is shown only once and starts with "re_".',
+        'Paste it at the prompt below — input stays hidden and is saved only to .setup/.setup-credentials.',
+      ],
+    });
+    const resendApiKey = await questionHidden(
+      existingResendKey
+        ? 'Paste Resend API key (hidden — Enter to keep current): '
+        : 'Paste Resend API key (hidden): ',
+    );
+    if (resendApiKey.trim()) {
+      setEnvSetupVariable('RESEND_API_KEY', resendApiKey.trim());
+      logger.success('Saved RESEND_API_KEY to .setup/.setup-credentials (value hidden).');
+    } else if (!existingResendKey) {
+      logger.warn(
+        'No Resend API key entered — fill RESEND_API_KEY in .setup/.setup-credentials before running pnpm setup:infra.',
+      );
+    }
+    logger.info(
+      `Sender is ${resolveResendFromAddress(config)} — verify that domain at https://resend.com/domains or delivery will fail.`,
+    );
   }
 }

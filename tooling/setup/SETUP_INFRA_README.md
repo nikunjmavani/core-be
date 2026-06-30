@@ -35,7 +35,7 @@ Registered in [`infra/providers/index.ts`](./infra/providers/index.ts) — the o
 iterates this list and treats each one uniformly (preview → settings-review →
 detect-existing → interactive step → check → delete-instructions).
 
-`neon` · `aws` · `sentry` · `jwt` · `resend` · `stripe` · `oauth` (Google + GitHub) ·
+`neon` · `aws` · `sentry` · `jwt` · `resend` · `stripe` · `google-oauth` · `github-oauth` ·
 `posthog` · `turnstile` · `railway` · `railway-redis` · `github` · `postman` · `scalar`
 
 Enable/disable each in `setup.config.json` (`providers.<key>.enabled`). Fill its tokens in
@@ -70,7 +70,7 @@ resource) already exists before doing anything:
 
 Detection uses the in-memory state for the current run (hydrated from live remote via each
 provider's `detectRemote` during the pre-flight reconstruct); remote existence is also surfaced
-in `setup:infra:preview` / `detectExisting()`. Validate-only providers (oauth, resend, stripe,
+in `setup:infra:preview` / `detectExisting()`. Validate-only providers (google-oauth, github-oauth, resend, stripe,
 turnstile) create nothing, so they simply re-validate each run.
 
 ## All scripts

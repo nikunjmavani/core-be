@@ -17,7 +17,7 @@ When you **add or remove a third-party provider** in the setup:infra flow (`pnpm
 
 ## Source of truth (provider list)
 
-Registered in `tooling/setup/infra/providers/index.ts` (`INFRA_PROVIDERS`): **Neon**, **AWS**, **Sentry**, **JWT**, **Resend**, **Stripe**, **OAuth (Google + GitHub)**, **PostHog**, **Turnstile**, **Railway**, **Railway Redis**, **GitHub** (repo/env secrets), **Postman**, **Scalar**. Each appears in multiple places below; keep them in sync.
+Registered in `tooling/setup/infra/providers/index.ts` (`INFRA_PROVIDERS`): **Neon**, **AWS**, **Sentry**, **JWT**, **Resend**, **Stripe**, **Google OAuth**, **GitHub OAuth**, **PostHog**, **Turnstile**, **Railway**, **Railway Redis**, **GitHub** (repo/env secrets), **Postman**, **Scalar**. Each appears in multiple places below; keep them in sync.
 
 > **Quickest path to add one:** follow [`tooling/setup/SETUP_INFRA_PROVIDER_TEMPLATE.md`](../../../tooling/setup/SETUP_INFRA_PROVIDER_TEMPLATE.md) (10-step checklist + copy-paste `InfraProvider` skeleton). This skill is the exhaustive reference behind that template. Overview of the whole flow + all scripts: [`tooling/setup/SETUP_INFRA_README.md`](../../../tooling/setup/SETUP_INFRA_README.md).
 

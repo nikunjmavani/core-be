@@ -49,6 +49,7 @@
     "setup:github:check": "tsx tooling/setup/github/sync.ts --check",
     "setup:github:dry-run": "tsx tooling/setup/github/sync.ts --dry-run",
     "setup:github:status": "tsx tooling/setup/github/github.ts --status",
+    "setup:google:oauth": "tsx tooling/setup/google/setup-google-oauth.ts",
     "validate:locale-keys": "tsx src/scripts/validators/locale/validate-locale-keys.ts",
     "validate:constants": "tsx src/scripts/validators/code/validate-constants-centralization.ts",
     "validate:test-api-prefix": "tsx src/scripts/validators/tests/validate-test-api-prefix.ts",

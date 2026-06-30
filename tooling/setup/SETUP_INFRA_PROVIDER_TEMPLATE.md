@@ -7,7 +7,8 @@ store, the env emission, and drop one provider file.
 
 Replace `<key>` (kebab-case, e.g. `posthog`) and `<Name>` (PascalCase, e.g. `Posthog`)
 throughout. See `setup-resend` (validate-only), `setup-sentry` (writes state), and
-`setup-turnstile` (per-env secrets) as worked examples.
+`setup-cloudflare-turnstile` (validate a `.setup-credentials` secret + emit env vars) as
+worked examples.
 
 ---
 

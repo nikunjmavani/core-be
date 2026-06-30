@@ -56,9 +56,10 @@
     },
     "sentry": {
       "enabled": true,
-      "organization": "albetrios",
+      "organization": "albetrios-7j",
       "project": "core-be",
-      "platform": "node",
+      "team": "albetrios",
+      "platform": "node-fastify",
       "sampleRates": {
         "development": {
           "traces": 1,
@@ -72,8 +73,8 @@
     },
     "resend": {
       "enabled": true,
-      "fromAddress": "noreply@ig.albetrios.com",
-      "fromName": "core-be"
+      "fromAddress": "",
+      "fromName": ""
     },
     "stripe": {
       "enabled": true

@@ -95,8 +95,12 @@ export const setupConfigSchema = z.object({
       }),
     resend: z.object({
       enabled: z.boolean(),
-      fromAddress: z.string().min(1),
-      fromName: z.string().min(1),
+      // Empty => derived at emit time so a project rename auto-updates them:
+      //   fromAddress -> noreply@<project.name>.com   (see resolveResendFromAddress)
+      //   fromName    -> <project.displayName>          (see resolveResendFromName)
+      // Set a non-empty value here to pin an explicit override (e.g. a verified domain).
+      fromAddress: z.string().default(''),
+      fromName: z.string().default(''),
     }),
     stripe: z.object({ enabled: z.boolean() }),
     oauth: z.object({

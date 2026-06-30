@@ -17,6 +17,12 @@ import { SetupAbort, SetupError } from '@tooling/setup/common/setup-error.js';
 import { loadConfigIfExists, saveConfig } from '@tooling/setup/common/config.js';
 import { createReadline, questionWithDefault } from '@tooling/setup/common/prompts.js';
 import {
+  deriveResendFromAddress,
+  deriveResendFromName,
+  resolveResendFromAddress,
+  resolveResendFromName,
+} from '@tooling/setup/common/resend-from.js';
+import {
   DEFAULT_DISPLAY_NAME,
   DEFAULT_ENVIRONMENTS,
   DEFAULT_ORGANIZATION,
@@ -65,6 +71,9 @@ function printIdentitySummary(config: SetupConfig): void {
   logger.info(`    Project displayName : ${config.project.displayName}`);
   logger.info(`    Organization        : ${config.project.organization}`);
   logger.info(`    GitHub repository   : ${config.providers.github.repository}`);
+  logger.info(
+    `    Email from          : ${resolveResendFromName(config)} <${resolveResendFromAddress(config)}>`,
+  );
   for (const environment of config.environments) {
     const defaultMark = environment.isDefault ? ' (default)' : '';
     logger.info(
@@ -123,6 +132,28 @@ async function editIdentity(config: SetupConfig): Promise<SetupConfig> {
     '  GitHub repository (owner/name)',
     config.providers.github.repository,
   );
+
+  // Email "from" identity. Defaults derive from the project (name/displayName) so a
+  // rename auto-updates them; when the entered value matches the derived default we
+  // persist '' to keep it dynamic, and only store a literal for an explicit override.
+  const derivedFromName = deriveResendFromName(displayName);
+  const fromNameInput = (
+    await questionWithDefault(
+      readline,
+      '  Email "from" name',
+      config.providers.resend.fromName.trim() || derivedFromName,
+    )
+  ).trim();
+  const derivedFromAddress = deriveResendFromAddress(projectName);
+  const fromAddressInput = (
+    await questionWithDefault(
+      readline,
+      '  Email "from" address',
+      config.providers.resend.fromAddress.trim() || derivedFromAddress,
+    )
+  ).trim();
+  const fromName = fromNameInput === derivedFromName ? '' : fromNameInput;
+  const fromAddress = fromAddressInput === derivedFromAddress ? '' : fromAddressInput;
 
   const environmentNamesInput = await questionWithDefault(
     readline,
@@ -204,6 +235,11 @@ async function editIdentity(config: SetupConfig): Promise<SetupConfig> {
       github: {
         ...config.providers.github,
         repository,
+      },
+      resend: {
+        ...config.providers.resend,
+        fromName,
+        fromAddress,
       },
     },
     app: {

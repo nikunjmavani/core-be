@@ -12,11 +12,16 @@ import { execSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import * as logger from '@tooling/setup/common/logger.js';
-import { isSecretFilled } from '@tooling/setup/common/secrets.js';
 import { setupFetch } from '@tooling/setup/common/setup-fetch.js';
 import { resourceStatus } from '@tooling/setup/common/interactive-step.js';
+import {
+  anyEnvironmentHasEnvKey,
+  collectEnvCredentials,
+  resolveDefaultEnvironmentName,
+} from '@tooling/setup/envs/env-file-setup.util.js';
+import { readEnvFileValue } from '@tooling/setup/envs/read-env-file.js';
 import { buildEnvironmentVariables } from '@tooling/setup/envs/build-env-vars.js';
-import { refreshEnvFiles } from '@tooling/setup/envs/export-env-files.js';
+import { exportEnvFiles } from '@tooling/setup/envs/export-env-files.js';
 import type {
   SetupConfig,
   SetupSecrets,
@@ -46,16 +51,23 @@ function toProcessEnvironment(
 
 export async function provision(
   config: SetupConfig,
-  secrets: SetupSecrets,
+  _secrets: SetupSecrets,
   state: SetupState,
 ): Promise<ProviderResult> {
-  if (!(secrets.postman?.apiKey && secrets.postman?.workspaceId)) {
-    return { success: true, message: 'Postman: skipped (no API key or workspace ID)' };
+  const defaultEnvironmentName = resolveDefaultEnvironmentName(config);
+  const apiKey = readEnvFileValue(defaultEnvironmentName, 'POSTMAN_API_KEY');
+  const workspaceId = readEnvFileValue(defaultEnvironmentName, 'POSTMAN_WORKSPACE_ID');
+
+  if (!(apiKey && workspaceId)) {
+    return {
+      success: true,
+      message: `Postman: skipped (POSTMAN_API_KEY or POSTMAN_WORKSPACE_ID missing in .env.${defaultEnvironmentName})`,
+    };
   }
 
-  // Refresh .env.<environment> from current state so the subprocess'
-  // dotenv loader doesn't override the injected env with stale empty values.
-  refreshEnvFiles();
+  // Regenerate .env.<environment> from current state so the subprocess' dotenv loader sees
+  // fresh provisioned values — preserving (not wiping) the POSTMAN_* keys just collected.
+  exportEnvFiles();
 
   const spinner = logger.startSpinner('Generating OpenAPI spec and Postman collection...');
 
@@ -66,14 +78,7 @@ export async function provision(
       encoding: 'utf-8',
       timeout: 60000,
       env: toProcessEnvironment(
-        buildEnvironmentVariables(
-          config.environments.find((environment) => environment.isDefault)?.name ??
-            config.environments[0]?.name ??
-            'development',
-          config,
-          secrets,
-          state,
-        ),
+        buildEnvironmentVariables(resolveDefaultEnvironmentName(config), config, _secrets, state),
       ),
     });
 
@@ -102,7 +107,7 @@ export async function provision(
       url = `${POSTMAN_API_BASE}/collections/${collectionId}`;
     } else {
       method = 'POST';
-      url = `${POSTMAN_API_BASE}/collections?workspace=${secrets.postman.workspaceId}`;
+      url = `${POSTMAN_API_BASE}/collections?workspace=${workspaceId}`;
     }
 
     const response = await setupFetch({
@@ -111,7 +116,7 @@ export async function provision(
       init: {
         method,
         headers: {
-          'X-Api-Key': secrets.postman.apiKey,
+          'X-Api-Key': apiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ collection: collectionData }),
@@ -153,18 +158,18 @@ export async function provision(
 export const setupPostmanProvider: InfraProvider = {
   key: 'postman',
   name: 'Postman',
-  isEnabled: ({ config, secrets }) =>
-    config.providers.postman.enabled && isSecretFilled(secrets.postman?.apiKey),
+  isEnabled: ({ config }) =>
+    config.providers.postman.enabled && anyEnvironmentHasEnvKey(config, 'POSTMAN_API_KEY'),
   disabledReason: ({ config }) =>
     !config.providers.postman.enabled
       ? 'disabled in setup.config.json'
-      : 'POSTMAN_API_KEY missing in .setup/.setup-credentials',
+      : 'POSTMAN_API_KEY missing in .env.<environment>',
   preview: ({ config }) =>
     config.providers.postman.enabled
       ? {
-          detail: 'API key + Workspace ID',
+          detail: 'API key + workspace ID per .env.<environment>',
           url: 'https://go.postman.co/settings/me/api-keys',
-          configKey: 'postman.apiKey, postman.workspaceId',
+          configKey: '.env.<environment> → POSTMAN_API_KEY, POSTMAN_WORKSPACE_ID',
         }
       : null,
   settingsReview: ({ config }) =>
@@ -172,18 +177,20 @@ export const setupPostmanProvider: InfraProvider = {
       ? [{ bucket: 'extra', provider: 'Postman', detail: 'upload collection' }]
       : [],
   describe: ({ config }) => ({ project: config.project.name }),
-  inspectRemote: async ({ config, secrets }) => {
+  inspectRemote: async ({ config }) => {
     if (!config.providers.postman.enabled) {
       return { present: false, fields: [], error: 'disabled in setup.config.json' };
     }
-    const apiKey = secrets.postman?.apiKey ?? '';
-    if (!apiKey)
+    const defaultEnvironmentName = resolveDefaultEnvironmentName(config);
+    const apiKey = readEnvFileValue(defaultEnvironmentName, 'POSTMAN_API_KEY');
+    if (!apiKey) {
       return {
         present: false,
         fields: [],
-        error: 'POSTMAN_API_KEY missing in .setup/.setup-credentials',
+        error: `POSTMAN_API_KEY missing in .env.${defaultEnvironmentName}`,
       };
-    const workspaceId = secrets.postman?.workspaceId;
+    }
+    const workspaceId = readEnvFileValue(defaultEnvironmentName, 'POSTMAN_WORKSPACE_ID');
     try {
       const url = workspaceId
         ? `${POSTMAN_API_BASE}/collections?workspace=${workspaceId}`
@@ -218,24 +225,26 @@ export const setupPostmanProvider: InfraProvider = {
       };
     }
   },
-  toEnvironmentVariables: ({ config, secrets }) => {
-    if (!(config.providers.postman.enabled && secrets.postman?.apiKey)) return {};
-    return {
-      POSTMAN_API_KEY: secrets.postman.apiKey,
-      ...(secrets.postman.workspaceId ? { POSTMAN_WORKSPACE_ID: secrets.postman.workspaceId } : {}),
-    };
-  },
   buildStep: (context: InfraProviderContext) => ({
     name: 'Postman',
     enabled: setupPostmanProvider.isEnabled(context),
     enabledReason: setupPostmanProvider.disabledReason(context),
     instructions: [
-      'Will generate the OpenAPI spec, convert to Postman Collection, and upload to your workspace.',
+      'Enter POSTMAN_API_KEY and POSTMAN_WORKSPACE_ID in each .env.<environment> (see guide).',
+      'Will generate OpenAPI + Postman collection and upload using the default environment credentials.',
       'Idempotent: an existing collection is updated; otherwise a new one is created.',
     ],
     detectStatus: () =>
       resourceStatus(Boolean(context.state.postman?.collectionId), 'Postman collection uploaded'),
     execute: async () => {
+      await collectEnvCredentials(context.config, {
+        providerName: 'Postman',
+        scope: 'account',
+        fields: [
+          { key: 'POSTMAN_API_KEY', label: 'API key (PMAK-…)', secret: true },
+          { key: 'POSTMAN_WORKSPACE_ID', label: 'Workspace ID' },
+        ],
+      });
       const result = await provision(context.config, context.secrets, context.state);
       context.applyStateUpdates(result.stateUpdates ?? {});
       if (!result.success) throw new Error(result.message);
