@@ -58,6 +58,7 @@ export interface EnvironmentVariables {
   EMAIL_FROM_ADDRESS?: string;
   EMAIL_FROM_NAME?: string;
   STRIPE_SECRET_KEY?: string;
+  STRIPE_PUBLISHABLE_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   OAUTH_GOOGLE_CLIENT_ID?: string;
   OAUTH_GOOGLE_CLIENT_SECRET?: string;
@@ -71,6 +72,7 @@ export interface EnvironmentVariables {
   CAPTCHA_SITE_KEY?: string;
   CAPTCHA_SECRET?: string;
   SENTRY_DSN?: string;
+  SENTRY_FRONTEND_DSN?: string;
   SENTRY_ENVIRONMENT?: string;
   SENTRY_TRACES_SAMPLE_RATE?: string;
   SENTRY_PROFILE_SAMPLE_RATE?: string;
@@ -81,11 +83,7 @@ export interface EnvironmentVariables {
   RAILWAY_TOKEN?: string;
   RAILWAY_SERVICE_ID?: string;
   RAILWAY_WORKER_SERVICE_ID?: string;
-  POSTMAN_API_KEY?: string;
   POSTMAN_WORKSPACE_ID?: string;
-  SCALAR_API_KEY?: string;
-  SCALAR_NAMESPACE?: string;
-  SCALAR_SLUG?: string;
 }
 
 export interface GuideStep {

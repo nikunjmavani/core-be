@@ -214,8 +214,6 @@ A rename is a delete + add, atomic in the same PR:
 - **Setup manifest:** `tooling/setup/setup.config.json` (single source of truth for project identity)
 - **GitHub sync:** `tooling/setup/github/sync.ts`
 - **Environment value sync helper:** `tooling/setup/envs/sync-github.ts`
-- **Section parser shared by both:** `tooling/setup/envs/parse-env-sections.ts`
 - **Schema ↔ template validator:** `src/scripts/validators/env/sync-env-example.ts` (`pnpm tool:sync-env-example`)
 - **Cross-dimension consistency (in github:sync):** `tooling/setup/github/sync-config.ts` — run `pnpm github:sync --check` before pushing
 - **Add hosted environment:** edit `tooling/setup/setup.config.json`, run `pnpm tool:generate-project-identity`, then `pnpm github:sync` (no env:add script)
-- **Deploy-required keys assertion:** `tooling/setup/github/validate.ts` (`pnpm validate:github-env`)

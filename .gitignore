@@ -16,6 +16,7 @@ dist/
 # use `.env.example` as the schema reference for variable names.
 .env*
 !.env.example
+!.env.example.fe
 
 # Setup-tooling files live in the gitignored `.setup/` dir (credentials + state),
 # separate from app `.env.<environment>`. The only committed setup file is the template

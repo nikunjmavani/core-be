@@ -2,6 +2,23 @@ import { createInterface } from 'node:readline';
 import { clipboardAvailable, copyToClipboard } from './clipboard.js';
 import * as logger from './logger.js';
 
+// ─── Non-interactive (--yes) mode ────────────────────────────────────────────
+// When set, every confirmation/decision prompt resolves to its SAFE default without
+// blocking on stdin: gating confirms → yes, step/env decisions → continue, "already
+// present" → skip, on-failure → skip (never an infinite retry). Enabled by `--yes`/`-y`
+// in setup.ts. Lets the whole run proceed unattended after the settings review.
+let assumeYes = false;
+
+/** Enable/disable non-interactive mode (auto-answer prompts with their safe default). */
+export function setAssumeYes(value: boolean): void {
+  assumeYes = value;
+}
+
+/** True when `--yes` / non-interactive mode is active. */
+export function isAssumeYes(): boolean {
+  return assumeYes;
+}
+
 export function createReadline(): ReturnType<typeof createInterface> {
   return createInterface({ input: process.stdin, output: process.stdout });
 }

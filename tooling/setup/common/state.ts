@@ -92,12 +92,21 @@ export const setupStateSchema = z.object({
     .object({
       projectSlug: z.string(),
       dsn: z.string(),
+      /** Separate frontend (core-fe) Sentry project slug, when `config.frontend.name` is set. */
+      frontendProjectSlug: z.string().optional(),
+      /** Frontend project DSN — public, emitted as SENTRY_FRONTEND_DSN for the core-fe bundle. */
+      frontendDsn: z.string().optional(),
     })
     .optional(),
   posthog: z
     .object({
-      /** Resolved project API key (`phc_…`) — public by design, emitted as POSTHOG_KEY. */
-      projectApiKey: z.string(),
+      /** Legacy single project key (`phc_…`) — read as a fallback for older state. */
+      projectApiKey: z.string().optional(),
+      /**
+       * Per-environment project keys (`phc_…`) keyed by environment name — one shared FE+BE
+       * project per env (`core-<env>`). Public by design; emitted as POSTHOG_KEY per env.
+       */
+      projectApiKeys: z.record(z.string(), z.string()).optional(),
       /** Ingestion host emitted as POSTHOG_HOST (US or EU cloud). */
       host: z.string(),
     })
@@ -130,7 +139,10 @@ export const setupStateSchema = z.object({
   postman: z
     .object({
       workspaceId: z.string().optional(),
+      /** Legacy single-collection id (pre per-environment collections). */
       collectionId: z.string().optional(),
+      /** Per-environment collection ids keyed by environment name (`core-be-<env>` collections). */
+      collections: z.record(z.string(), z.string()).optional(),
     })
     .optional(),
   scalar: z
@@ -139,6 +151,10 @@ export const setupStateSchema = z.object({
       slug: z.string().optional(),
       version: z.string().optional(),
       registryUrl: z.string().optional(),
+      /** Per-environment published slugs + registry URLs (`core-be-<env>`), keyed by env name. */
+      environments: z
+        .record(z.string(), z.object({ slug: z.string(), registryUrl: z.string().optional() }))
+        .optional(),
     })
     .optional(),
 });

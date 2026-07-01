@@ -21,6 +21,8 @@ const TOKEN_URLS: Record<string, string> = {
   GITHUB_TOKEN: 'https://github.com/settings/tokens',
   RAILWAY_API_TOKEN: 'https://railway.com/account/tokens',
   POSTHOG_PERSONAL_API_KEY: 'https://us.posthog.com/settings/user-api-keys',
+  POSTMAN_API_KEY: 'https://go.postman.co/settings/me/api-keys (setup creates the workspace)',
+  SCALAR_API_KEY: 'https://dashboard.scalar.com → API Keys (setup resolves the team namespace)',
   CLOUDFLARE_API_TOKEN:
     'https://dash.cloudflare.com/profile/api-tokens (token with Turnstile:Edit)',
   CLOUDFLARE_ACCOUNT_ID:
@@ -36,6 +38,11 @@ const SIMPLE_VARS: Array<[string, string]> = [
   ['RESEND_API_KEY', TOKEN_URLS.RESEND_API_KEY ?? ''],
   ['GITHUB_TOKEN', TOKEN_URLS.GITHUB_TOKEN ?? ''],
   ['RAILWAY_API_TOKEN', TOKEN_URLS.RAILWAY_API_TOKEN ?? ''],
+  // Postman: setup uses this account API key to create the workspace + upload a per-env collection.
+  ['POSTMAN_API_KEY', TOKEN_URLS.POSTMAN_API_KEY ?? ''],
+  // Scalar: setup uses this account API key to publish the OpenAPI doc; the team namespace is
+  // auto-resolved from the token (per-env slug `<project>-<env>`).
+  ['SCALAR_API_KEY', TOKEN_URLS.SCALAR_API_KEY ?? ''],
   // Cloudflare Turnstile is PROVISIONED by setup: with a Cloudflare API token + account id, the
   // provider creates one widget per environment and writes CAPTCHA_SITE_KEY/CAPTCHA_SECRET into
   // each .env.<environment>. So the inputs here are the Cloudflare credentials, not CAPTCHA_*.
@@ -90,6 +97,29 @@ export const setupSecretsSchema = z.object({
     apiToken: z.string().optional(),
     /** Account id the widget is created under (`CLOUDFLARE_ACCOUNT_ID`). */
     accountId: z.string().optional(),
+  }),
+  /**
+   * Postman account API key (`POSTMAN_API_KEY`). Setup-only credential — it provisions the
+   * workspace + uploads the collection and is never written into `.env.<environment>`. Stays
+   * in `.setup-credentials` (same place as the other account-wide provider tokens).
+   */
+  postman: z.object({
+    /** Personal API key (`PMAK-…`) used for `X-Api-Key` auth against the Postman API. */
+    apiKey: z.string().optional(),
+  }),
+  /**
+   * Scalar account API key (`SCALAR_API_KEY`). Setup-only credential — it publishes the OpenAPI
+   * document to the Scalar Registry and is never written into `.env.<environment>`. The team
+   * namespace is auto-resolved from the token (the active team); slug defaults to the project
+   * name. `namespace` / `slug` are optional pins for multi-team accounts or a custom slug.
+   */
+  scalar: z.object({
+    /** Account API key used by `scalar auth login --token`. */
+    apiKey: z.string().optional(),
+    /** Optional team namespace override (`SCALAR_NAMESPACE`); auto-resolved when omitted. */
+    namespace: z.string().optional(),
+    /** Optional registry slug override (`SCALAR_SLUG`); defaults to the project name. */
+    slug: z.string().optional(),
   }),
 });
 
@@ -159,6 +189,14 @@ export function loadSecretsFromEnv(_environmentNames: string[]): SetupSecrets {
       apiToken: get(source, 'CLOUDFLARE_API_TOKEN') || undefined,
       accountId: get(source, 'CLOUDFLARE_ACCOUNT_ID') || undefined,
     },
+    postman: {
+      apiKey: get(source, 'POSTMAN_API_KEY') || undefined,
+    },
+    scalar: {
+      apiKey: get(source, 'SCALAR_API_KEY') || undefined,
+      namespace: get(source, 'SCALAR_NAMESPACE') || undefined,
+      slug: get(source, 'SCALAR_SLUG') || undefined,
+    },
   };
 }
 
@@ -178,10 +216,6 @@ export function isSecretFilled(value: string | undefined): boolean {
 }
 
 export function getSecretsPath(): string {
-  return ENV_SETUP_PATH;
-}
-
-export function envSecretsPath(): string {
   return ENV_SETUP_PATH;
 }
 
@@ -225,7 +259,9 @@ export function hasAnyEnvSecret(environmentNames: string[]): boolean {
     filled(secrets.sentry.authToken) ||
     filled(secrets.resend.apiKey) ||
     filled(secrets.railway.apiToken) ||
-    filled(secrets.cloudflare.apiToken)
+    filled(secrets.cloudflare.apiToken) ||
+    filled(secrets.postman.apiKey) ||
+    filled(secrets.scalar.apiKey)
   );
 }
 
@@ -278,8 +314,6 @@ export function buildEnvSetupTemplateContent(config: SetupConfig): string {
   lines.push(
     '#   OAuth:     OAUTH_GOOGLE_CLIENT_ID/_CLIENT_SECRET/_REDIRECT_URI  (+ OAUTH_GITHUB_*)',
   );
-  lines.push('#   Postman:   POSTMAN_API_KEY=  POSTMAN_WORKSPACE_ID=');
-  lines.push('#   Scalar:    SCALAR_API_KEY=  SCALAR_NAMESPACE=  (optional SCALAR_SLUG=)');
   lines.push(
     '#   Turnstile: CAPTCHA_* are PROVISIONED from CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID',
   );

@@ -8,7 +8,8 @@
  *   2. If !descriptor.enabled, mark "skipped (disabled)" and return.
  *   3. If descriptor.alreadyDone() → mark "already-done" and return.
  *   4. Print instructions (so the user understands what's about to happen).
- *   5. Prompt: continue / skip / abort.
+ *   5. Auto-continue (no per-step prompt — the up-front final confirmation gates the run); an
+ *      "already present" resource defaults to update (re-run), and guide providers pause in execute().
  *   6. Execute; on throw, ask retry / skip / abort.
  *   7. Verify state (read the in-memory run state); fail prompt if missing.
  *   8. Verify live (call provider check API); fail prompt if unhealthy.
@@ -16,7 +17,10 @@
  * Used by orchestrator.runProvision so every provisioning step is interactive.
  */
 import { createInterface } from 'node:readline';
+import chalk from 'chalk';
 import * as logger from './logger.js';
+import { isAssumeYes } from './prompts.js';
+import { isNonRecoverableProvisionerError } from './provisioner-failure.util.js';
 import { SetupError } from './setup-error.js';
 
 export type StepDecision = 'continue' | 'skip' | 'abort';
@@ -100,8 +104,12 @@ export interface StepOutcome<T> {
  * when stdin/stdout isn't a TTY so a piped/automated invocation fails fast and clearly.
  */
 export function assertInteractive(): void {
+  // --yes (non-interactive) deliberately runs unattended — no TTY required.
+  if (isAssumeYes()) return;
   if (!(process.stdin.isTTY && process.stdout.isTTY)) {
-    throw new SetupError('setup:infra is interactive and human-only — run it in a terminal.');
+    throw new SetupError(
+      'setup:infra is interactive and human-only — run it in a terminal, or pass --yes for non-interactive mode.',
+    );
   }
 }
 
@@ -116,14 +124,119 @@ async function ask(question: string, defaultValue: string): Promise<string> {
   });
 }
 
-async function promptStepDecision(): Promise<StepDecision> {
+/** One option in a single-keypress chooser. `label` is the text AFTER the key letter, e.g. key `c` + label `ontinue`. */
+interface KeyChoice<T> {
+  key: string;
+  label: string;
+  value: T;
+  aliases?: string[];
+}
+
+/**
+ * Read ONE keypress without waiting for Enter (raw mode). Resolves the char (Enter → `\n`); Ctrl+C
+ * exits. Returns `null` when stdin isn't a raw-capable TTY (piped/redirected) so callers fall back
+ * to line input.
+ */
+function readSingleKey(): Promise<string | null> {
+  const stdin = process.stdin;
+  if (!stdin.isTTY || typeof stdin.setRawMode !== 'function') return Promise.resolve(null);
+  return new Promise((resolvePromise) => {
+    const wasRaw = stdin.isRaw;
+    stdin.setRawMode(true);
+    stdin.resume();
+    const onData = (data: Buffer): void => {
+      stdin.removeListener('data', onData);
+      stdin.setRawMode(wasRaw);
+      stdin.pause();
+      const key = data.toString('utf8');
+      if (key === '\u0003') {
+        // Ctrl+C
+        process.stdout.write('\n');
+        process.exit(130);
+      }
+      resolvePromise(key);
+    };
+    stdin.on('data', onData);
+  });
+}
+
+/**
+ * Single-keypress chooser: prints a colored hint with the default option highlighted, then reads
+ * one key (no Enter needed; Enter takes the default). Degrades to the line-based {@link ask} when
+ * stdin isn't a raw TTY. The chosen key is echoed back so the transcript stays readable.
+ */
+async function promptKeyChoice<T>(
+  prompt: string,
+  choices: KeyChoice<T>[],
+  defaultKey: string,
+): Promise<T> {
+  const defaultChoice = choices.find((choice) => choice.key === defaultKey) ?? choices[0];
+  if (!defaultChoice) throw new SetupError('promptKeyChoice requires at least one choice.');
+  const hint = choices
+    .map((choice) =>
+      choice.key === defaultChoice.key
+        ? chalk.bold.green(`(${choice.key})${choice.label}`)
+        : chalk.cyan(`(${choice.key})`) + chalk.gray(choice.label),
+    )
+    .join(chalk.gray('  ·  '));
+
   while (true) {
-    const answer = await ask('Proceed? (c)ontinue / (s)kip / (a)bort', 'c');
-    if (['c', 'continue', 'y', 'yes'].includes(answer)) return 'continue';
-    if (['s', 'skip'].includes(answer)) return 'skip';
-    if (['a', 'abort', 'q', 'quit', 'exit'].includes(answer)) return 'abort';
-    logger.warn('  Please answer with c (continue), s (skip), or a (abort).');
+    process.stdout.write(`  ${prompt}  ${hint} ${chalk.gray(`[${defaultChoice.key}]`)} `);
+    const raw = await readSingleKey();
+    if (raw === null) {
+      // Non-raw stdin (piped) — fall back to line input.
+      const typed = await ask(prompt, defaultChoice.key);
+      const fallback = choices.find(
+        (choice) => choice.key === typed || choice.aliases?.includes(typed),
+      );
+      return (fallback ?? defaultChoice).value;
+    }
+    const key = raw.toLowerCase();
+    if (key === '\r' || key === '\n') {
+      process.stdout.write(chalk.bold.green(`${defaultChoice.key}\n`));
+      return defaultChoice.value;
+    }
+    const match = choices.find((choice) => choice.key === key || choice.aliases?.includes(key));
+    if (match) {
+      process.stdout.write(chalk.bold(`${match.key}\n`));
+      return match.value;
+    }
+    process.stdout.write(chalk.yellow(`${key.trim() || '?'}\n`));
+    logger.warn(
+      `  Press ${choices.map((choice) => choice.key).join(' / ')} (or Enter for ${defaultChoice.key}).`,
+    );
   }
+}
+
+// Steps auto-run: the up-front settings review + "create REAL resources?" final confirmation (and
+// the per-environment scope choice) already gate the run, so a per-step continue/skip/abort prompt
+// is redundant noise. Provisioning steps run automatically; guide-only providers still pause inside
+// execute() to collect pasted values (those prompts never auto-answer). Granular control remains via
+// per-environment skip and SETUP_INFRA_PROVIDERS / SETUP_INFRA_SKIP_PROVIDERS.
+async function promptStepDecision(): Promise<StepDecision> {
+  return 'continue';
+}
+
+/** True when setup should run all providers for one environment before moving to the next. */
+export function usesEnvironmentFirstTraversal(environments: string[]): boolean {
+  return environments.length > 1;
+}
+
+/**
+ * Gate an entire environment phase (all providers for that env) when multiple environments exist.
+ */
+export async function promptSetupEnvironmentPhase(environmentName: string): Promise<StepDecision> {
+  if (isAssumeYes()) return 'continue';
+  logger.blank();
+  return promptKeyChoice<StepDecision>(
+    `Set up environment ${chalk.bold(`"${environmentName}"`)}?`,
+    [
+      { key: 'c', label: 'ontinue', value: 'continue', aliases: ['y'] },
+      { key: 's', label: 'kip', value: 'skip' },
+      { key: 'a', label: 'bort', value: 'abort', aliases: ['q'] },
+    ],
+    'c',
+  );
 }
 
 /**
@@ -131,23 +244,25 @@ async function promptStepDecision(): Promise<StepDecision> {
  * (re-run the step) or skip and keep what's there. Defaults to skip — never mutate
  * existing infrastructure without an explicit choice.
  */
+// Already-present resources default to UPDATE (re-run the idempotent step to refresh) with no
+// prompt — the up-front final confirmation already gated the whole run, and every provider's
+// execute is adopt-or-update. The "already present — <detail>" line is still printed for context.
 async function promptExistingDecision(): Promise<'update' | 'skip'> {
-  while (true) {
-    const answer = await ask('Already present — (u)pdate / (s)kip', 's');
-    if (['u', 'update', 'y', 'yes'].includes(answer)) return 'update';
-    if (['s', 'skip', 'n', 'no'].includes(answer)) return 'skip';
-    logger.warn('  Please answer with u (update) or s (skip).');
-  }
+  return 'update';
 }
 
 async function promptOnFailure(): Promise<FailureDecision> {
-  while (true) {
-    const answer = await ask('What now? (r)etry / (s)kip / (a)bort', 'r');
-    if (['r', 'retry', 'y', 'yes'].includes(answer)) return 'retry';
-    if (['s', 'skip'].includes(answer)) return 'skip';
-    if (['a', 'abort', 'q', 'quit', 'exit'].includes(answer)) return 'abort';
-    logger.warn('  Please answer with r (retry), s (skip), or a (abort).');
-  }
+  // Non-interactive: skip the failing step (best-effort) rather than loop on retry.
+  if (isAssumeYes()) return 'skip';
+  return promptKeyChoice<FailureDecision>(
+    'What now?',
+    [
+      { key: 'r', label: 'etry', value: 'retry', aliases: ['y'] },
+      { key: 's', label: 'kip', value: 'skip' },
+      { key: 'a', label: 'bort', value: 'abort', aliases: ['q'] },
+    ],
+    'r',
+  );
 }
 
 function toError(value: unknown): Error {
@@ -185,7 +300,9 @@ export async function runInteractiveStep<T>(
     }
   }
 
-  if (descriptor.instructions.length > 0) {
+  // When the resource already exists we are only adopting it — the "how to set this up" walkthrough
+  // is noise, so show instructions only for steps that actually provision something new.
+  if (!updatingExisting && descriptor.instructions.length > 0) {
     logger.instruction(descriptor.instructions);
   }
 
@@ -210,7 +327,14 @@ export async function runInteractiveStep<T>(
       result = await descriptor.execute();
     } catch (executionError) {
       const message = toError(executionError).message;
+      logger.failActiveSpinner(`Failed: ${message}`);
       logger.error(`Failed: ${message}`);
+      if (isNonRecoverableProvisionerError(message)) {
+        logger.error(
+          'Fix credentials or config in .setup/.setup-credentials, then re-run setup:infra.',
+        );
+        return { name: descriptor.name, status: 'aborted', errorMessage: message };
+      }
       const recovery = await promptOnFailure();
       if (recovery === 'retry') continue;
       if (recovery === 'skip') {

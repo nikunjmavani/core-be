@@ -5,11 +5,11 @@ description: Master index of all project skills with trigger conditions. Use thi
 
 # Skill index (core-be)
 
-Master directory of all **42 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
+Master directory of all **41 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
 
 For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global-skills**.
 
-## Project skills (42)
+## Project skills (41)
 
 | Skill                          | Path                                                                      |
 | ------------------------------ | ------------------------------------------------------------------------- |
@@ -43,7 +43,6 @@ For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global
 | system-narrative-maintainer    | `agent-os/skills/system-narrative-maintainer/SKILL.md`                     |
 | overview-doc-maintainer        | `agent-os/skills/overview-doc-maintainer/SKILL.md`                         |
 | tsdoc-export-guard             | `agent-os/skills/tsdoc-export-guard/SKILL.md`                              |
-| setup-infra-maintainer         | `agent-os/skills/setup-infra-maintainer/SKILL.md`                          |
 | pr-babysit                     | `agent-os/skills/pr-babysit/SKILL.md`                                      |
 | split-to-prs                   | `agent-os/skills/split-to-prs/SKILL.md`                                    |
 | ci-investigator                | `agent-os/skills/ci-investigator/SKILL.md`                                 |
@@ -89,7 +88,6 @@ For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global
 | Changed `.vscode/extensions.json` or `.vscode/settings.json`                                                                                                                                                    | **ide-productivity-guard**                                                                                         | `agent-os/skills/ide-productivity-guard/SKILL.md`                  |
 | Added/renamed/moved a doc under `docs/` (hand-written .md); changed `docs/deployment/ci-cd/branch-protection.md` or `.github/rulesets/*.json`; or changed CI job `name:` fields referenced in branch protection | **docs-maintainer**                                                                                                | `agent-os/skills/docs-maintainer/SKILL.md`                         |
 | User asks to "review docs" or "audit documentation"                                                                                                                                                             | **docs-audit**                                                                                                     | `agent-os/skills/docs-audit/SKILL.md`                              |
-| Added/removed/changed a third-party provider in setup:infra (`tooling/setup/`)                                                                                                                                  | **setup-infra-maintainer**                                                                                         | `agent-os/skills/setup-infra-maintainer/SKILL.md`                  |
 | User asks to babysit a PR, fix PR CI, or get branch merge-ready                                                                                                                                                 | **pr-babysit**                                                                                                     | `agent-os/skills/pr-babysit/SKILL.md`                              |
 | User asks why a specific CI check failed                                                                                                                                                                        | **ci-investigator**                                                                                                | `agent-os/skills/ci-investigator/SKILL.md`                         |
 | User asks to split work into multiple PRs                                                                                                                                                                       | **split-to-prs**                                                                                                   | `agent-os/skills/split-to-prs/SKILL.md`                            |
@@ -214,11 +212,9 @@ After completing any task, scan the changes and invoke matching skills:
 - **Action**: read and follow `sql-design-guard` — run the full checklist: table naming, column naming, data types, auto-index suggestions, partitioning recommendations, constraint naming, audit/soft-delete patterns, and SQL formatting. Output the SQL Design Guard Review block at the end.
 - **Note**: this runs alongside `schema-generator` (which handles scaffolding); `sql-design-guard` reviews and enhances the design quality.
 
-### Setup infra (third-party providers)
-
-- **Trigger**: added, removed, or changed a third-party provider in the setup:infra flow (e.g. new provider in `tooling/setup/setup.config.json`, new `tooling/setup/infra/providers/<name>/<name>.provider.ts`, guide steps, or token instructions)
-- **Action**: read and follow `setup-infra-maintainer` (and the template `tooling/setup/SETUP_INFRA_PROVIDER_TEMPLATE.md`) — keep names read from `setup.config.json` only, implement the registry-driven `InfraProvider` hooks, and keep config schema, init defaults, secrets/`.setup-credentials` template, provider module + `providers/index.ts`, state, build-env-vars, guide, prerequisites, and `docs/deployment/setup/setup-token-instructions.md` in sync. Then run `pnpm typecheck` and `pnpm setup:infra:preview` to verify.
-- **Follow-up**: if `docs/deployment/setup/setup-token-instructions.md` or other deployment docs were updated, invoke **docs-maintainer** to keep the docs index and cross-links correct.
+> **Setup infra (third-party providers)** moved to the standalone **core-infra** repo
+> (`../core-infra`, skill `setup-infra-maintainer`). core-be keeps only `github:sync`, `env:add`,
+> and `envs:sync:github`; provider/`setup:infra` changes are made in core-infra.
 
 ### In-source docs (TSDoc, <folder>.overview.md, system narratives, route schema)
 
@@ -315,7 +311,6 @@ The following `agent-os/rules/*.mdc` files auto-invoke skills based on file glob
 | `openapi-multilingual-sync.mdc`           | `src/shared/locales/*/openapi.json`, OpenAPI generator scripts                                                                                                                      | openapi-multilingual                                                       |
 | `contract-test-maintainer-sync.mdc`       | `src/tests/contract/**`, payment/mail/storage infra, `tooling/vitest/contract.config.ts`                                                                                            | contract-test-maintainer                                                   |
 | `chaos-test-maintainer-sync.mdc`          | `src/tests/chaos/**`, `tooling/vitest/chaos.config.ts`, chaos provision, `docker-compose.yml`                                                                                       | chaos-test-maintainer                                                      |
-| `setup-infra-maintainer-sync.mdc`         | `tooling/setup/**/*.ts`, `tooling/setup/setup.config.json`, `docs/deployment/setup/setup-token-instructions.md`                                                                           | setup-infra-maintainer                                                     |
 
 **supabase-porting** = manual only (Supabase Edge Functions → core-be).
 

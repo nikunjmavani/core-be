@@ -2,8 +2,8 @@
  * Typed errors for the setup-infra module.
  *
  * Providers, the orchestrator, and helpers `throw` these instead of calling
- * `process.exit()`. Only the CLI entrypoints (`setup.ts`, `infra/infra.ts`) catch
- * them, print, and exit — so the module stays importable and unit-testable.
+ * `process.exit()`. Only the CLI entrypoint (`setup.ts`) catches them, prints,
+ * and exits — so the module stays importable and unit-testable.
  */
 
 /** A recoverable, user-facing setup failure. `hint` is an optional next-step suggestion. */

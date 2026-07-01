@@ -54,6 +54,23 @@ export const setupConfigSchema = z.object({
     artifacts: projectArtifactsSchema.optional(),
   }),
   git: projectGitSchema.optional(),
+  /**
+   * Product-level name for resources SHARED by the backend and frontend (PostHog project,
+   * Turnstile widget) — named `<product.name>-<env>` (e.g. `core-development`). Optional;
+   * defaults to `project.name` so existing configs keep backend-centric naming.
+   */
+  product: z.object({ name: z.string().min(1) }).optional(),
+  /**
+   * Frontend (core-fe) identity. `name` is the frontend's Sentry project (separate from the
+   * backend project); `url` is the per-environment frontend origin (used for the Turnstile widget
+   * domain list). Optional — omit when there is no separate frontend.
+   */
+  frontend: z
+    .object({
+      name: z.string().min(1),
+      url: perEnvironmentString.optional(),
+    })
+    .optional(),
   environments: z.array(environmentSchema).min(1),
   providers: z.object({
     neon: z.object({
@@ -102,7 +119,9 @@ export const setupConfigSchema = z.object({
       fromAddress: z.string().default(''),
       fromName: z.string().default(''),
     }),
-    stripe: z.object({ enabled: z.boolean() }),
+    stripe: z.object({
+      enabled: z.boolean(),
+    }),
     oauth: z.object({
       google: z.object({ enabled: z.boolean() }),
       github: z.object({ enabled: z.boolean() }),
@@ -116,6 +135,13 @@ export const setupConfigSchema = z.object({
     github: z.object({
       enabled: z.boolean(),
       repository: z.string().regex(/^[^/]+\/[^/]+$/),
+      /**
+       * Push local `.env.<environment>` secrets/variables to GitHub Environments as the final
+       * setup:infra step ("Sync .env.<environment> to GitHub Environments"). Set to false to skip
+       * that sync entirely (e.g. when GitHub Environment config is managed elsewhere, or to avoid
+       * GitHub's secondary rate limit). Branch/ruleset/environment creation is unaffected. Default true.
+       */
+      syncEnvironments: z.boolean().default(true),
     }),
     postman: z.object({ enabled: z.boolean() }),
     scalar: z.object({ enabled: z.boolean() }),

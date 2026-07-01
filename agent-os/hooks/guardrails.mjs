@@ -45,7 +45,8 @@ function isReadableSecretPath(p) {
 const SECRET_READ_DENIAL =
   "Blocked by core-be guardrail: reading secrets files (.env.<env> / .setup-credentials / .setup-state.*) " +
   "is not allowed for the agent — they hold provisioned secrets. App config goes in .env.<environment> " +
-  "(editable), setup creds in .setup-credentials (off-limits). If a human needs a value: `pnpm setup:infra:output --copy <KEY>`.";
+  "(editable), setup creds in .setup-credentials (off-limits). If a human needs a value, read it from " +
+  ".env.<environment> directly, or use core-infra's `pnpm setup:infra:output --copy <KEY>`.";
 
 function deny(reason) {
   process.stdout.write(

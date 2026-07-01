@@ -1,7 +1,7 @@
 # Skill triggers (core-be)
 
 When you edit a file matching a pattern below, invoke the listed skill(s).
-Single source of truth — consult instead of reading all 26 sync rules.
+Single source of truth — consult instead of reading all 25 sync rules.
 Skills live in [`agent-os/skills/`](../skills/).
 
 | File pattern | Invoke skill(s) | Notes |
@@ -25,7 +25,6 @@ Skills live in [`agent-os/skills/`](../skills/).
 | `src/tests/chaos/**` | chaos-test-maintainer | |
 | `src/tests/contract/**` | contract-test-maintainer | |
 | `.vscode/extensions.json`, `.vscode/settings.json` | ide-productivity-guard | |
-| `tooling/setup/**`, `setup.config.json` | setup-infra-maintainer | |
 | `src/shared/locales/*/openapi.json` | openapi-multilingual | |
 | `CLAUDE.md`, `AGENTS.md`, `agent-os/rules/**`, `agent-os/skills/**`, `agent-os/agents/**`, `agent-os/mcp/**`, `.mcp.example.json`, `.mcp.default.json` | structure-maintainer | MCP template edits: keep each root template and its `agent-os/mcp/` mirror identical, and keep the `.mcp.default.json` pair identical to its `.mcp.example.json` entries (enforced by the `mcp-config` global test) |
 | `tooling/setup/setup.config.json`, `src/shared/constants/project-identity.constants.ts` | project-identity-sync | Rule, **not a skill** — run `pnpm tool:generate-project-identity` (constant map in `project-identity.mdc`) |
@@ -33,7 +32,7 @@ Skills live in [`agent-os/skills/`](../skills/).
 | `src/shared/middlewares/core/idempotency.middleware.ts`, idempotencyRequired routes, `src/infrastructure/payment/stripe.client.ts` | idempotency-guard | |
 | **Finishing any code change** (before declaring it done) | change-completeness-guard | Definition-of-done: own tests + cross-cutting suites + docs + rules + skills all moved with the change. Always-applied rule: `agent-os/rules/change-completeness.mdc` |
 
-> The 26 `agent-os/rules/*-sync.mdc` files remain for Cursor's glob auto-attach.
+> The 25 `agent-os/rules/*-sync.mdc` files remain for Cursor's glob auto-attach.
 > This table is the human-readable cross-platform equivalent.
 >
 > Every entry in the "Invoke skill(s)" column is a skill in `agent-os/skills/` **except** `project-identity-sync` — the one command-driven sync rule (`agent-os/rules/project-identity-sync.mdc`) with no backing skill.

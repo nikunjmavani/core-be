@@ -323,6 +323,12 @@ export async function runGithubInit(args: {
   readonly skipPreflight?: boolean;
   /** When true, scaffold local IaC on sync mode (default). github/sync.ts passes false — it scaffolds first. */
   readonly scaffoldOnSync?: boolean;
+  /**
+   * Restrict the sync to these environment names (setup:infra runs this once per environment, so
+   * each pass syncs only that environment's branch + ruleset + GitHub Environment). Omit for the
+   * whole repository (`pnpm github:sync`).
+   */
+  readonly environmentNames?: readonly string[];
 }): Promise<RunGithubInitResult> {
   const config = loadConfig();
   const scaffoldOnSync = args.scaffoldOnSync ?? true;
@@ -331,9 +337,29 @@ export async function runGithubInit(args: {
   }
 
   const repository = getRepositoryIdentifier();
-  const locals = loadLocalRulesets();
-  const branches = getGithubSyncBranches(config);
-  const environments = getGithubSyncEnvironmentNames(config);
+  const allLocals = loadLocalRulesets();
+  const allBranches = getGithubSyncBranches(config);
+  const allEnvironments = getGithubSyncEnvironmentNames(config);
+
+  // Per-environment scope: narrow branches / rulesets / GitHub Environments to the requested
+  // environment(s). Each environment maps 1:1 to a branch (`config.environments[].branch`) and a
+  // committed ruleset file `<branch>.json`, so filtering by env cleanly separates the work.
+  const scopeEnvironments = args.environmentNames;
+  const scopedBranches = new Set(
+    (scopeEnvironments
+      ? config.environments.filter((environment) => scopeEnvironments.includes(environment.name))
+      : config.environments
+    ).map((environment) => environment.branch),
+  );
+  const branches = scopeEnvironments
+    ? allBranches.filter((branch) => scopedBranches.has(branch))
+    : allBranches;
+  const environments = scopeEnvironments
+    ? allEnvironments.filter((environment) => scopeEnvironments.includes(environment))
+    : allEnvironments;
+  const locals = scopeEnvironments
+    ? allLocals.filter((local) => scopedBranches.has(local.fileName.replace(/\.json$/, '')))
+    : allLocals;
 
   console.log(`Repository:    ${repository}`);
   console.log(`Mode:          ${args.mode}`);

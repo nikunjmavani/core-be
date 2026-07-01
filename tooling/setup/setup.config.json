@@ -15,6 +15,14 @@
     "protectedBranches": ["dev", "main"],
     "defaultBranch": "dev"
   },
+  "product": { "name": "core" },
+  "frontend": {
+    "name": "core-fe",
+    "url": {
+      "development": "http://localhost:5173",
+      "production": ""
+    }
+  },
   "environments": [
     {
       "name": "development",
@@ -77,11 +85,11 @@
       "fromName": ""
     },
     "stripe": {
-      "enabled": true
+      "enabled": false
     },
     "oauth": {
       "google": {
-        "enabled": true
+        "enabled": false
       },
       "github": {
         "enabled": true
@@ -99,7 +107,8 @@
     },
     "github": {
       "enabled": true,
-      "repository": "nikunjmavani/core-be"
+      "repository": "nikunjmavani/core-be",
+      "syncEnvironments": false
     },
     "postman": {
       "enabled": true

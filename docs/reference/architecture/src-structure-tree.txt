@@ -404,6 +404,7 @@ src/
     │   │   │   ├── workers/
     │   │   │       ├── subscription-seat-sync.processor.ts
     │   │   │       └── subscription-seat-sync.worker.ts
+    │   │   │   ├── billing-account.serializer.ts
     │   │   │   ├── payment-provider.port.ts
     │   │   │   ├── stripe-payment-provider.ts
     │   │   │   ├── subscription.controller.ts
@@ -725,7 +726,8 @@ src/
     │   │   │   │   │   ├── organization.serializer.unit.test.ts
     │   │   │   │   │   ├── organization.service.unit.test.ts
     │   │   │   │   │   ├── organization.validator.unit.test.ts
-    │   │   │   │   │   └── personal-organization-provisioning.db.unit.test.ts
+    │   │   │   │   │   ├── personal-organization-provisioning.db.unit.test.ts
+    │   │   │   │   │   └── team-organization-provisioning.db.unit.test.ts
     │   │   │   ├── organization-api-key/
     │   │   │   │   ├── __tests__/
     │   │   │   │   │   ├── unit/
@@ -2071,6 +2073,10 @@ src/
     │   │   │   ├── route-extractor.unit.test.ts
     │   │   │   ├── route-response-map-statuses.unit.test.ts
     │   │   │   └── schema-enricher.unit.test.ts
+    │   │   ├── setup/
+    │   │   │   ├── inspect-remote.unit.test.ts
+    │   │   │   ├── provider-docs-sync.unit.test.ts
+    │   │   │   └── setup-infra.unit.test.ts
     │   │   ├── agent-docker-daemon-script.unit.test.ts
     │   │   ├── check-patch-coverage.unit.test.ts
     │   │   ├── deploy-env-sync.util.unit.test.ts
