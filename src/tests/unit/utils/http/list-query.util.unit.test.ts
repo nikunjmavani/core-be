@@ -22,7 +22,7 @@ const row = (over: Partial<Row> = {}): Row => ({
 });
 
 const columns = {
-  name: { column: roles.name, kind: 'text' as const, valueOf: (r: Row) => r.name },
+  name: { column: roles.name, kind: 'text' as const, getSortValue: (r: Row) => r.name },
   created_at: { column: roles.created_at, kind: 'created_at' as const },
 };
 

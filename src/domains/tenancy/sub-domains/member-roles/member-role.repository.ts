@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
@@ -11,15 +11,18 @@ import {
   acquireResourceQuotaLock,
 } from '@/infrastructure/database/resource-quota-lock.util.js';
 import {
-  buildAscendingTextIdCursorCondition,
-  createOpaqueCursorFromRow,
-  parseListCursor,
-} from '@/shared/utils/http/pagination.util.js';
+  buildSearchCondition,
+  finishKeysetPage,
+  resolveKeysetSort,
+} from '@/shared/utils/http/list-query.util.js';
 import type { MemberRoleRow } from './member-role.types.js';
 
 interface MemberRoleListPagination {
   after?: string;
   limit: number;
+  q?: string;
+  sort?: 'name' | 'created_at';
+  order: 'asc' | 'desc';
 }
 
 /**
@@ -56,36 +59,33 @@ export class MemberRoleRepository extends BaseRepository {
   }
 
   async findByOrganizationId(organization_id: number, pagination: MemberRoleListPagination) {
-    const { after, limit } = pagination;
-    const cursorCondition = buildAscendingTextIdCursorCondition(
-      roles.name,
-      roles.id,
-      parseListCursor(after),
-    );
+    const { after, limit, q, sort, order } = pagination;
+    const { orderBy, cursorCondition, sortValueFor, filterFingerprint } =
+      resolveKeysetSort<MemberRoleRow>({
+        columns: {
+          name: { column: roles.name, kind: 'text', getSortValue: (role) => role.name },
+          created_at: { column: roles.created_at, kind: 'created_at' },
+        },
+        idColumn: roles.id,
+        defaultSort: 'name',
+        sort,
+        order,
+        q,
+        after,
+      });
     const where = and(
       eq(roles.organization_id, organization_id),
       isNull(roles.deleted_at),
+      buildSearchCondition([roles.name], q),
       cursorCondition,
     );
-    const rows = await getRequestDatabase()
+    const rows = (await getRequestDatabase()
       .select()
       .from(roles)
       .where(where)
-      .orderBy(asc(roles.name), asc(roles.id))
-      .limit(limit + 1);
-    const hasMore = rows.length > limit;
-    const items = (hasMore ? rows.slice(0, limit) : rows) as MemberRoleRow[];
-    const lastItem = items.at(-1);
-    return {
-      items,
-      total: null,
-      limit,
-      has_more: hasMore,
-      next_cursor:
-        hasMore && lastItem !== undefined
-          ? createOpaqueCursorFromRow({ ...lastItem, sort_value: lastItem.name })
-          : null,
-    };
+      .orderBy(...orderBy)
+      .limit(limit + 1)) as MemberRoleRow[];
+    return finishKeysetPage(rows, { limit, sortValueFor, filterFingerprint });
   }
 
   async findByPublicId(public_id: string, organization_id: number): Promise<MemberRoleRow | null> {

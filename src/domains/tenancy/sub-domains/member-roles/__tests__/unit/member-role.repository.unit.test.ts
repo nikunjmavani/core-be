@@ -47,7 +47,7 @@ describe('MemberRoleRepository', () => {
   it('findByOrganizationId returns empty list when no rows', async () => {
     mockLimit.mockResolvedValue([]);
 
-    const result = await repository.findByOrganizationId(1, { limit: 20 });
+    const result = await repository.findByOrganizationId(1, { limit: 20, order: 'asc' });
 
     expect(result.items).toEqual([]);
     expect(result.total).toBeNull();
@@ -67,7 +67,7 @@ describe('MemberRoleRepository', () => {
     ];
     mockLimit.mockResolvedValue(rows);
 
-    const result = await repository.findByOrganizationId(1, { limit: 20 });
+    const result = await repository.findByOrganizationId(1, { limit: 20, order: 'asc' });
 
     expect(result.items).toHaveLength(1);
     expect(result.has_more).toBe(false);

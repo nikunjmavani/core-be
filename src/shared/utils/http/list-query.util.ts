@@ -85,7 +85,7 @@ export interface KeysetSortColumn<Row> {
   column: AnyColumn;
   kind: 'text' | 'created_at';
   /** Extract the sort value for the opaque cursor (required for `kind: 'text'`). */
-  valueOf?: (row: Row) => string;
+  getSortValue?: (row: Row) => string;
 }
 
 /**
@@ -100,7 +100,7 @@ export function resolveKeysetSort<Row>(args: {
   defaultSort: string;
   sort: string | undefined;
   order: 'asc' | 'desc';
-  q?: string;
+  q?: string | undefined;
   after: string | undefined;
 }): {
   sortField: string;
@@ -131,7 +131,7 @@ export function resolveKeysetSort<Row>(args: {
   const { column, kind } = spec;
   const idAsc = asc(args.idColumn);
   const sortValueFor: (row: Row) => string | undefined =
-    kind === 'text' && spec.valueOf ? spec.valueOf : () => undefined;
+    kind === 'text' && spec.getSortValue ? spec.getSortValue : () => undefined;
 
   if (kind === 'created_at') {
     return args.order === 'desc'
