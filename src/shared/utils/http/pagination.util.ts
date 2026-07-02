@@ -284,3 +284,23 @@ export function buildDescendingCreatedAtIdCursorCondition(
     and(eq(createdAtColumn, cursor.created_at), lt(idColumn, cursorId)),
   )!;
 }
+
+/**
+ * Builds a Drizzle `WHERE` clause for descending pagination on `(text_column, id)`.
+ * Mirrors {@link buildAscendingTextIdCursorCondition} but uses `<` (id still tie-breaks
+ * ascending, matching a `ORDER BY text DESC, id ASC` page). Requires `sort_value` + `id`.
+ */
+export function buildDescendingTextIdCursorCondition(
+  textColumn: AnyColumn,
+  idColumn: AnyColumn,
+  cursor: ParsedListCursor | null,
+): SQL | undefined {
+  if (cursor === null) {
+    return undefined;
+  }
+  const sortValue = cursor.sort_value;
+  if (sortValue === undefined || cursor.id === undefined) {
+    return undefined;
+  }
+  return or(lt(textColumn, sortValue), and(eq(textColumn, sortValue), gt(idColumn, cursor.id)))!;
+}
