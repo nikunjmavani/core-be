@@ -2,9 +2,11 @@ import { parseWithSchema } from '@/shared/utils/validation/parse-with-schema.uti
 import {
   ChangePlanDto,
   CreateSubscriptionDto,
+  listInvoicesQueryDto,
   UpdateSubscriptionDto,
   type ChangePlanInput,
   type CreateSubscriptionInput,
+  type ListInvoicesQueryInput,
   type UpdateSubscriptionInput,
 } from './subscription.dto.js';
 
@@ -31,4 +33,12 @@ export function validateUpdateSubscription(data: unknown): UpdateSubscriptionInp
  */
 export function validateChangePlan(data: unknown): ChangePlanInput {
   return parseWithSchema(ChangePlanDto, data);
+}
+
+/**
+ * Parses the `GET /api/v1/billing/invoices` query against {@link listInvoicesQueryDto}, throwing
+ * `ValidationError` with field-level details on failure.
+ */
+export function validateListInvoicesQuery(data: unknown): ListInvoicesQueryInput {
+  return parseWithSchema(listInvoicesQueryDto, data);
 }

@@ -313,6 +313,7 @@ export class MembershipService {
         omitUndefined({
           after: parsed.after,
           limit: parsed.limit,
+          q: parsed.q,
         }),
       );
       return {

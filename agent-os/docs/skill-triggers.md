@@ -8,6 +8,7 @@ Skills live in [`agent-os/skills/`](../skills/).
 | ------------ | --------------- | ----- |
 | `src/domains/**/*.routes.ts` | api-contract-guard → route-schema-doc-guard → route-catalog → seed-maintainer | Also openapi-multilingual if tags changed |
 | Route params / public ids / response statuses / request headers | api-contract-guard | Status policy: `docs/reference/api/response-codes.md` |
+| List endpoints (search/sort/pagination), `src/shared/utils/http/list-query.util.ts` | api-contract-guard | Common method: `listSearchSortSchema`/`resolveKeysetSort`/`finishKeysetPage`; `sort`/`order`/new-route `limit` are `.optional()` not `.default` (a defaulted param serializes `required` → oasdiff breaking); external-provider lists are a cursor passthrough. Searching a FORCE-RLS joined column → rls-tenant-isolation-guard |
 | `src/domains/**/*.schema.ts` | schema-generator → sql-design-guard → db-migration-maintainer → rls-tenant-isolation-guard | |
 | `src/domains/**/*.container.ts`, `src/routes.ts` | domain-generator (check wiring) | |
 | `migrations/*.sql` | db-migration-maintainer | |

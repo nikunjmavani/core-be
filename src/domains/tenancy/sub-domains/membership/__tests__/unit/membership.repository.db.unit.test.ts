@@ -57,6 +57,127 @@ describe('MembershipRepository (database)', () => {
     expect(afterDelete).toBeNull();
   });
 
+  it('q search filters members by email / name via the SECURITY DEFINER resolver', async () => {
+    const owner = await createTestUser({ email: 'search-owner@test.com' });
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const role = await createRoleWithPermissions({
+      organizationId: organization.id,
+      permissionCodes: ['organization:read'],
+    });
+    const alice = await createTestUser({
+      email: 'alice.smith@example.com',
+      firstName: 'Alice',
+      lastName: 'Smith',
+    });
+    const bob = await createTestUser({
+      email: 'bob.jones@example.com',
+      firstName: 'Bob',
+      lastName: 'Jones',
+    });
+    const aliceMembership = await createMembership({
+      userId: alice.id,
+      organizationId: organization.id,
+      roleId: role.id,
+    });
+    await createMembership({ userId: bob.id, organizationId: organization.id, roleId: role.id });
+
+    // Match by email fragment.
+    const byEmail = await repository.findByOrganizationId(organization.id, {
+      limit: 20,
+      q: 'alice.smith',
+    });
+    expect(byEmail.items).toHaveLength(1);
+    expect(byEmail.items[0]!.public_id).toBe(aliceMembership.public_id);
+
+    // Match by last name (case-insensitive).
+    const byLastName = await repository.findByOrganizationId(organization.id, {
+      limit: 20,
+      q: 'smith',
+    });
+    expect(byLastName.items.map((row) => row.public_id)).toEqual([aliceMembership.public_id]);
+
+    // Match by full "first last".
+    const byFullName = await repository.findByOrganizationId(organization.id, {
+      limit: 20,
+      q: 'alice sm',
+    });
+    expect(byFullName.items).toHaveLength(1);
+
+    // A wildcard character in the term is escaped (matched literally), so it finds nothing.
+    const escaped = await repository.findByOrganizationId(organization.id, {
+      limit: 20,
+      q: 'alice%',
+    });
+    expect(escaped.items).toHaveLength(0);
+
+    // No match → empty page, no cursor.
+    const none = await repository.findByOrganizationId(organization.id, { limit: 20, q: 'zzzzz' });
+    expect(none.items).toHaveLength(0);
+    expect(none.has_more).toBe(false);
+    expect(none.next_cursor).toBeNull();
+  });
+
+  it('q search still paginates via the (created_at, id) keyset', async () => {
+    const owner = await createTestUser({ email: 'page-owner@test.com' });
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const role = await createRoleWithPermissions({
+      organizationId: organization.id,
+      permissionCodes: ['organization:read'],
+    });
+    // Three members sharing the "shared" token in their email.
+    for (const tag of ['a', 'b', 'c']) {
+      const user = await createTestUser({ email: `shared-${tag}@example.com` });
+      await createMembership({ userId: user.id, organizationId: organization.id, roleId: role.id });
+    }
+
+    const first = await repository.findByOrganizationId(organization.id, {
+      limit: 2,
+      q: 'shared-',
+    });
+    expect(first.items).toHaveLength(2);
+    expect(first.has_more).toBe(true);
+    expect(first.next_cursor).not.toBeNull();
+
+    const second = await repository.findByOrganizationId(organization.id, {
+      limit: 2,
+      q: 'shared-',
+      after: first.next_cursor!,
+    });
+    expect(second.items).toHaveLength(1);
+    expect(second.has_more).toBe(false);
+    // No overlap between pages.
+    const firstIds = new Set(first.items.map((row) => row.public_id));
+    expect(second.items.every((row) => !firstIds.has(row.public_id))).toBe(true);
+  });
+
+  it('q search is organization-scoped (no cross-organization leak)', async () => {
+    const ownerA = await createTestUser({ email: 'scope-owner-a@test.com' });
+    const orgA = await createTestOrganization({ ownerUserId: ownerA.id });
+    const roleA = await createRoleWithPermissions({
+      organizationId: orgA.id,
+      permissionCodes: ['organization:read'],
+    });
+    const ownerB = await createTestUser({ email: 'scope-owner-b@test.com' });
+    const orgB = await createTestOrganization({ ownerUserId: ownerB.id });
+    const roleB = await createRoleWithPermissions({
+      organizationId: orgB.id,
+      permissionCodes: ['organization:read'],
+    });
+    // Same searchable member email present in BOTH orgs.
+    const shared = await createTestUser({ email: 'crossorg@example.com' });
+    const inA = await createMembership({
+      userId: shared.id,
+      organizationId: orgA.id,
+      roleId: roleA.id,
+    });
+    await createMembership({ userId: shared.id, organizationId: orgB.id, roleId: roleB.id });
+
+    const resultA = await repository.findByOrganizationId(orgA.id, { limit: 20, q: 'crossorg' });
+    expect(resultA.items).toHaveLength(1);
+    expect(resultA.items[0]!.public_id).toBe(inA.public_id);
+    expect(resultA.items[0]!.organization_id).toBe(orgA.id);
+  });
+
   it('returns null for missing memberships and supports non-active updates', async () => {
     const owner = await createTestUser({ email: 'owner-missing@example.com' });
     const invitee = await createTestUser({ email: 'invitee-missing@example.com' });

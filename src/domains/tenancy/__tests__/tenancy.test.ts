@@ -304,6 +304,37 @@ describe('Tenancy Domain — Integration', () => {
       expect(owner.status).toBe('ACTIVE');
       expect(owner.invitation).toBeNull();
     });
+
+    it('filters members by the `q` search term (email / name)', async () => {
+      const { organization, role, token } = await createAuthorizedUserAndOrganization();
+      const searchable = await createTestUser({
+        email: 'searchable.member@example.com',
+        firstName: 'Searchable',
+        lastName: 'Member',
+      });
+      await createMembership({
+        userId: searchable.id,
+        organizationId: organization.id,
+        roleId: role.id,
+      });
+
+      const response = await injectAuthenticated(app, {
+        url: testApiPath('/tenancy/organization/memberships?q=searchable.member'),
+        token,
+      });
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { data?: Array<{ user?: { email: string } }> };
+      expect(body.data).toHaveLength(1);
+      expect(body.data![0]!.user!.email).toBe('searchable.member@example.com');
+
+      // A term that matches nobody returns an empty page.
+      const empty = await injectAuthenticated(app, {
+        url: testApiPath('/tenancy/organization/memberships?q=nobodyhere'),
+        token,
+      });
+      expect(empty.statusCode).toBe(200);
+      expect((empty.json() as { data?: unknown[] }).data).toHaveLength(0);
+    });
   });
 
   describe('POST /api/v1/tenancy/organization/leave', () => {
