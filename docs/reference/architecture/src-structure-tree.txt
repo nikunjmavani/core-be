@@ -2073,17 +2073,10 @@ src/
     │   │   │   ├── route-extractor.unit.test.ts
     │   │   │   ├── route-response-map-statuses.unit.test.ts
     │   │   │   └── schema-enricher.unit.test.ts
-    │   │   ├── setup/
-    │   │   │   ├── inspect-remote.unit.test.ts
-    │   │   │   ├── provider-docs-sync.unit.test.ts
-    │   │   │   └── setup-infra.unit.test.ts
     │   │   ├── agent-docker-daemon-script.unit.test.ts
     │   │   ├── check-patch-coverage.unit.test.ts
-    │   │   ├── deploy-env-sync.util.unit.test.ts
-    │   │   ├── github-environments.util.unit.test.ts
     │   │   ├── project-identity.policy.unit.test.ts
-    │   │   ├── route-catalog-auth.unit.test.ts
-    │   │   └── validate-github-env.unit.test.ts
+    │   │   └── route-catalog-auth.unit.test.ts
     │   ├── utils/
     │   │   ├── auth/
     │   │   │   ├── account-status.util.unit.test.ts

@@ -63,9 +63,9 @@ Legend:
 ================================================================================
 
   — Sub Domains —
-  GET    /api/v1/billing/invoices                                 ???  -    ???   PERM: subscription:read
-  GET    /api/v1/billing/payment-methods                          ???  -    ???   PERM: subscription:read
-  POST   /api/v1/billing/payment-methods/setup                    ???  req  ???   PERM: subscription:manage
+  GET    /api/v1/billing/invoices                                 200  -    both  PERM: subscription:read
+  GET    /api/v1/billing/payment-methods                          200  -    both  PERM: subscription:read
+  POST   /api/v1/billing/payment-methods/setup                    201  req  team  PERM: subscription:manage
   GET    /api/v1/billing/plans                                    200  -    both  PUBLIC
   GET    /api/v1/billing/plans/:plan_id                           200  -    both  PUBLIC
   GET    /api/v1/billing/subscriptions                            200  -    both  PERM: subscription:read
@@ -74,7 +74,7 @@ Legend:
   PATCH  /api/v1/billing/subscriptions/:subscription_id           200  -    both  PERM: subscription:manage
   POST   /api/v1/billing/subscriptions/:subscription_id/cancel    201  req  team  PERM: subscription:manage
   POST   /api/v1/billing/subscriptions/:subscription_id/change-plan  201  req  team  PERM: subscription:manage
-  GET    /api/v1/billing/subscriptions/:subscription_id/payment-setup  ???  -    ???   PERM: subscription:read
+  GET    /api/v1/billing/subscriptions/:subscription_id/payment-setup  200  -    both  PERM: subscription:read
   POST   /api/v1/billing/subscriptions/:subscription_id/resume    201  req  team  PERM: subscription:manage
   POST   /api/v1/billing/webhook                                  200  -    both  PUBLIC
 
@@ -221,7 +221,7 @@ Legend:
   Role-guarded    : 9
   Perm-guarded    : 52
   Token-guarded   : 4
-  Team-only (O)   : 8
+  Team-only (O)   : 9
 
 ================================================================================
   IDEMPOTENCY-REQUIRED WRITES (13) — X-Idempotency-Key required
