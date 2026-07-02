@@ -15,6 +15,14 @@
     "protectedBranches": ["dev", "main"],
     "defaultBranch": "dev"
   },
+  "product": { "name": "core" },
+  "frontend": {
+    "name": "core-fe",
+    "url": {
+      "development": "http://localhost:5173",
+      "production": ""
+    }
+  },
   "environments": [
     {
       "name": "development",
@@ -55,10 +63,11 @@
       "iamUserPrefix": "core-be-s3"
     },
     "sentry": {
-      "enabled": false,
-      "organization": "albetrios",
+      "enabled": true,
+      "organization": "albetrios-7j",
       "project": "core-be",
-      "platform": "node",
+      "team": "albetrios",
+      "platform": "node-fastify",
       "sampleRates": {
         "development": {
           "traces": 1,
@@ -72,8 +81,8 @@
     },
     "resend": {
       "enabled": true,
-      "fromAddress": "noreply@ig.albetrios.com",
-      "fromName": "core-be"
+      "fromAddress": "",
+      "fromName": ""
     },
     "stripe": {
       "enabled": false
@@ -83,15 +92,23 @@
         "enabled": false
       },
       "github": {
-        "enabled": false
+        "enabled": true
       }
+    },
+    "posthog": {
+      "enabled": true,
+      "region": "us"
+    },
+    "turnstile": {
+      "enabled": true
     },
     "railway": {
       "enabled": true
     },
     "github": {
       "enabled": true,
-      "repository": "nikunjmavani/core-be"
+      "repository": "nikunjmavani/core-be",
+      "syncEnvironments": false
     },
     "postman": {
       "enabled": true

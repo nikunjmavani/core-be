@@ -112,5 +112,34 @@ export function createSubscriptionController(service: SubscriptionService) {
       );
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
+    getPaymentSetup: async (
+      request: FastifyRequest<{ Params: { subscription_id: string } }>,
+      _reply: FastifyReply,
+    ) => {
+      requirePrincipal(request);
+      const data = await service.getPaymentSetup(
+        resolveActiveOrganizationId(request),
+        validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
+      );
+      return successResponse(data, getRequestIdentifier(request));
+    },
+    listInvoices: async (request: FastifyRequest, _reply: FastifyReply) => {
+      requirePrincipal(request);
+      const data = await service.listInvoices(resolveActiveOrganizationId(request));
+      return successResponse(data, getRequestIdentifier(request));
+    },
+    listPaymentMethods: async (request: FastifyRequest, _reply: FastifyReply) => {
+      requirePrincipal(request);
+      const data = await service.listPaymentMethods(resolveActiveOrganizationId(request));
+      return successResponse(data, getRequestIdentifier(request));
+    },
+    createPaymentMethodSetup: async (request: FastifyRequest, _reply: FastifyReply) => {
+      requirePrincipal(request);
+      const data = await service.createPaymentMethodSetup(
+        resolveActiveOrganizationId(request),
+        readIdempotencyKey(request),
+      );
+      return successResponse(data, getRequestIdentifier(request));
+    },
   };
 }

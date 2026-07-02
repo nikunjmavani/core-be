@@ -197,6 +197,24 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
     }))
     .filter((group) => group.tags.length > 0);
 
+  // Per-environment base URL: setup:infra sets OPENAPI_SERVER_URL when generating an environment's
+  // Postman collection / Scalar doc so the artifact points at that env's API. Unset (normal
+  // `docs:generate` / CI) → the default localhost server, so the committed spec is unchanged.
+  const serverOverrideUrl = process.env.OPENAPI_SERVER_URL?.trim();
+  const servers = serverOverrideUrl
+    ? [
+        {
+          url: serverOverrideUrl,
+          description: process.env.OPENAPI_SERVER_DESCRIPTION?.trim() || 'API server',
+        },
+      ]
+    : [
+        {
+          url: 'http://localhost:3000',
+          description: localeStrings.servers?.local ?? 'Local development',
+        },
+      ];
+
   return {
     openapi: '3.0.0',
     info: {
@@ -206,12 +224,7 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
         'Backend API for the Core platform. Includes authentication, multi-tenant organization management, billing, notifications, webhooks, and admin operations.\n\nAll authenticated endpoints require a Bearer JWT token in the Authorization header. Organization-scoped endpoints also require the appropriate permission.',
       version,
     },
-    servers: [
-      {
-        url: 'http://localhost:3000',
-        description: localeStrings.servers?.local ?? 'Local development',
-      },
-    ],
+    servers,
     tags: buildTagDefinitions(tagSet, localeStrings.tags),
     paths,
     'x-tagGroups': tagGroups,

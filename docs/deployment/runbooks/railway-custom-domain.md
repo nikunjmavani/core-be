@@ -19,8 +19,8 @@ The command is implemented in [`tooling/setup/railway/custom-domain.ts`](../../.
 
 ## Prerequisites
 
-1. `RAILWAY_TOKEN` set in `.env.setup` (project token; see [setup-token-instructions.md](../setup/setup-token-instructions.md)).
-2. `pnpm setup:infra` has been run at least once so `.setup-state.json` contains the Railway project / environments / services.
+1. `RAILWAY_TOKEN` set in `.setup-credentials` (project token; see [setup-token-instructions.md](../setup/setup-token-instructions.md)).
+2. The Railway project / environments / services already exist (provisioned via `pnpm setup:infra`). `setup:domain` discovers them from **live remote** at run start — there is no local state file.
 3. You can edit DNS for the parent zone of the domain you want to attach (`example.com` if attaching `api.example.com`).
 4. The service you are attaching to is HTTP-facing (the `api` service). `worker` services do not accept inbound HTTP and the script rejects them.
 
@@ -37,7 +37,7 @@ flowchart TD
   LocalDns --> RailwayCheck[Re-fetch customDomains.status]
   RailwayCheck --> Ready{verified AND certIssued?}
   Ready -->|no| Poll
-  Ready -->|yes| Persist[Write customDomain into .setup-state.json]
+  Ready -->|yes| Persist[Record customDomain on in-memory run state]
   Persist --> Hints[Print ALLOWED_ORIGINS / FRONTEND_URL / OAuth follow-ups]
 ```
 
@@ -65,8 +65,8 @@ After DNS verifies, Railway typically issues the Let's Encrypt certificate withi
 
 | Flag                          | Purpose                                                                                |
 | ----------------------------- | -------------------------------------------------------------------------------------- |
-| `--environment <name>`        | Repeatable. Limit run to specific environments from `.setup-state.json`.               |
-| `--all-environments`          | Loop every environment recorded in `.setup-state.json`.                                |
+| `--environment <name>`        | Repeatable. Limit run to specific environments (resolved from live remote).            |
+| `--all-environments`          | Loop every environment found remotely for the project.                                 |
 | `--service <name>`            | Defaults to `api`. `worker` is rejected.                                                |
 | `--domain <fqdn>`             | Required (per env) when running non-interactively. Mutually exclusive with template.   |
 | `--domain-template <pattern>` | `{env}` placeholder, e.g. `api.{env}.example.com`. Convenient with `--all-environments`. |
@@ -95,7 +95,7 @@ The script prints copy-pasteable `gh secret set ... --env <env>` commands. You c
 | Cert status `FAILED` / `VALIDATION_FAILED`       | CAA blocks Let's Encrypt, or wrong DNS value              | Add `CAA 0 issue "letsencrypt.org"`, or fix the record to match what Railway returned. |
 | Timeout (`--wait-timeout-seconds` elapsed)       | Slow DNS or Railway re-check                              | Re-run with `--check` — it is read-only and resumes polling.                            |
 | `Custom domain ... disappeared from Railway`     | Domain was deleted in the dashboard mid-poll              | Re-run without `--check` to re-attach.                                                  |
-| `RAILWAY_TOKEN is not set`                        | `.env.setup` missing the token                            | See [setup-token-instructions.md](../setup/setup-token-instructions.md).                |
+| `RAILWAY_TOKEN is not set`                        | `.setup-credentials` missing the token                            | See [setup-token-instructions.md](../setup/setup-token-instructions.md).                |
 | `worker` rejected                                | Workers don't accept inbound HTTP                         | Use `--service api` (or pick `api` interactively).                                       |
 
 ## See also

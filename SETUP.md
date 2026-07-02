@@ -123,8 +123,8 @@ The runtime loader reads `.env.${NODE_ENV}` (defaults to `.env.development`) the
 Use this to provision managed providers for a shared or hosted environment. Auto-deploy on push to `dev` / `main` expects this infrastructure to already exist.
 
 ```bash
-pnpm setup --init              # optional: interactive config → setup.config.json + .env.setup template
-$EDITOR .env.setup             # fill provider API keys (each line has a comment with the URL)
+pnpm setup --init              # optional: interactive config → setup.config.json + .setup/.setup-credentials template
+$EDITOR .setup/.setup-credentials             # fill provider API keys (each line has a comment with the URL)
 pnpm setup:infra:preview       # show providers + where to get each token (no API calls)
 pnpm setup:infra               # provision Neon, Redis, S3, Sentry, Railway, GitHub (double confirm)
 pnpm setup:infra:check         # health-check provisioned resources
@@ -133,7 +133,7 @@ pnpm setup:infra:status        # what is provisioned vs missing per environment
 
 Notes:
 
-- **Config** lives in `tooling/setup/setup.config.json` (committed); **secrets** in `.env.setup` at root (gitignored).
+- **Config** lives in `tooling/setup/setup.config.json` (committed); **secrets** in `.setup/.setup-credentials` at root (gitignored).
 - `setup:infra` does **not** run migrations or seeds — those run via the CD pipeline.
 - After provisioning it writes `.env.<environment>` files you can push to GitHub Environment secrets. Regenerate anytime with `pnpm setup:infra:export-env`.
 - `setup:infra:delete` only prints manual-delete dashboard URLs — it never deletes resources.

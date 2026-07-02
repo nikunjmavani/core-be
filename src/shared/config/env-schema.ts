@@ -360,6 +360,8 @@ const envSchemaBase = z.object({
 
   // Stripe
   STRIPE_SECRET_KEY: z.string().min(1).optional(),
+  // STRIPE_PUBLISHABLE_KEY is intentionally NOT in this schema: it is public, browser-only, and the
+  // backend never reads it. setup:infra writes it to `.env.<environment>` and surfaces it to core-fe.
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
   /** Stripe Node client per-request HTTP timeout (ms). */
   STRIPE_HTTP_TIMEOUT_MS: z.coerce.number().int().min(1000).max(180_000).default(30_000),
@@ -383,6 +385,8 @@ const envSchemaBase = z.object({
 
   // Sentry
   SENTRY_DSN: z.url().optional(),
+  // SENTRY_FRONTEND_DSN is intentionally NOT in this schema: it is the public core-fe project DSN,
+  // never read by the backend. setup:infra writes it to `.env.<environment>` and surfaces it to core-fe.
   SENTRY_ENVIRONMENT: z.string().min(1).optional(),
   SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).optional(),
   SENTRY_PROFILE_SAMPLE_RATE: z.coerce.number().min(0).max(1).optional(),
@@ -755,8 +759,8 @@ const envSchemaBase = z.object({
   CAPTCHA_PROVIDER: z.enum(['turnstile', 'disabled']).default('disabled'),
   /** Turnstile secret key — required when CAPTCHA_PROVIDER=turnstile. */
   CAPTCHA_SECRET: z.string().min(1).optional(),
-  /** Public site key for frontend widget (optional; not used server-side). */
-  CAPTCHA_SITE_KEY: z.string().min(1).optional(),
+  // CAPTCHA_SITE_KEY is intentionally NOT in this schema: it is the public Turnstile widget key,
+  // used only by the browser. setup:infra writes it to `.env.<environment>` and surfaces it to core-fe.
   /**
    * Dev/test only: request header name that bypasses CAPTCHA when value is true/1.
    * Ignored in production.
@@ -1234,10 +1238,13 @@ export const envSchema = envSchemaBase
     (data) =>
       data.STRIPE_SECRET_KEY === undefined ||
       data.STRIPE_SECRET_KEY.startsWith('sk_test_') ||
-      data.STRIPE_SECRET_KEY.startsWith('sk_live_'),
+      data.STRIPE_SECRET_KEY.startsWith('sk_live_') ||
+      // Restricted test keys (Dashboard sandbox / restricted API keys).
+      data.STRIPE_SECRET_KEY.startsWith('rk_test_') ||
+      data.STRIPE_SECRET_KEY.startsWith('rkcs_test_'),
     {
       message:
-        'STRIPE_SECRET_KEY must begin with `sk_test_` or `sk_live_` (Stripe API key format).',
+        'STRIPE_SECRET_KEY must begin with `sk_test_` / `sk_live_` (API key) or `rk_test_` / `rkcs_test_` (restricted sandbox key).',
       path: ['STRIPE_SECRET_KEY'],
     },
   )

@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
-import * as logger from './logger.js';
+import { SetupError } from './setup-error.js';
 
 const sampleRatesSchema = z.object({
   traces: z.number().min(0).max(1),
@@ -38,6 +38,15 @@ const projectGitSchema = z.object({
 });
 
 export const setupConfigSchema = z.object({
+  // ─── NAMING — SINGLE SOURCE OF TRUTH ────────────────────────────────────────
+  // setup.config.json is the ONE place these names are defined. Every setup script
+  // and provider MUST read them from the loaded config — never hardcode a literal:
+  //   • project.name         — PROJECT NAME (e.g. slugs, image tags, Scalar slug)
+  //   • project.displayName   — human-readable PROJECT NAME (logs, email "from name")
+  //   • project.organization  — ORGANIZATION NAME (Sentry org, GitHub owner, etc.)
+  //   • environments[].name   — ENVIRONMENT NAMES (the only valid env identifiers;
+  //                             alias maps like dev→development only NORMALIZE input)
+  // Change a name here and re-run `pnpm setup:infra:init` / `pnpm tool:generate-project-identity`.
   project: z.object({
     name: z.string().min(1),
     displayName: z.string().min(1),
@@ -45,6 +54,23 @@ export const setupConfigSchema = z.object({
     artifacts: projectArtifactsSchema.optional(),
   }),
   git: projectGitSchema.optional(),
+  /**
+   * Product-level name for resources SHARED by the backend and frontend (PostHog project,
+   * Turnstile widget) — named `<product.name>-<env>` (e.g. `core-development`). Optional;
+   * defaults to `project.name` so existing configs keep backend-centric naming.
+   */
+  product: z.object({ name: z.string().min(1) }).optional(),
+  /**
+   * Frontend (core-fe) identity. `name` is the frontend's Sentry project (separate from the
+   * backend project); `url` is the per-environment frontend origin (used for the Turnstile widget
+   * domain list). Optional — omit when there is no separate frontend.
+   */
+  frontend: z
+    .object({
+      name: z.string().min(1),
+      url: perEnvironmentString.optional(),
+    })
+    .optional(),
   environments: z.array(environmentSchema).min(1),
   providers: z.object({
     neon: z.object({
@@ -86,18 +112,36 @@ export const setupConfigSchema = z.object({
       }),
     resend: z.object({
       enabled: z.boolean(),
-      fromAddress: z.string().min(1),
-      fromName: z.string().min(1),
+      // Empty => derived at emit time so a project rename auto-updates them:
+      //   fromAddress -> noreply@<project.name>.com   (see resolveResendFromAddress)
+      //   fromName    -> <project.displayName>          (see resolveResendFromName)
+      // Set a non-empty value here to pin an explicit override (e.g. a verified domain).
+      fromAddress: z.string().default(''),
+      fromName: z.string().default(''),
     }),
-    stripe: z.object({ enabled: z.boolean() }),
+    stripe: z.object({
+      enabled: z.boolean(),
+    }),
     oauth: z.object({
       google: z.object({ enabled: z.boolean() }),
       github: z.object({ enabled: z.boolean() }),
     }),
+    posthog: z.object({
+      enabled: z.boolean(),
+      region: z.enum(['us', 'eu']).default('us'),
+    }),
+    turnstile: z.object({ enabled: z.boolean() }),
     railway: z.object({ enabled: z.boolean() }),
     github: z.object({
       enabled: z.boolean(),
       repository: z.string().regex(/^[^/]+\/[^/]+$/),
+      /**
+       * Push local `.env.<environment>` secrets/variables to GitHub Environments as the final
+       * setup:infra step ("Sync .env.<environment> to GitHub Environments"). Set to false to skip
+       * that sync entirely (e.g. when GitHub Environment config is managed elsewhere, or to avoid
+       * GitHub's secondary rate limit). Branch/ruleset/environment creation is unaffected. Default true.
+       */
+      syncEnvironments: z.boolean().default(true),
     }),
     postman: z.object({ enabled: z.boolean() }),
     scalar: z.object({ enabled: z.boolean() }),
@@ -181,9 +225,9 @@ export function loadConfigIfExists(): z.infer<typeof setupConfigSchema> | null {
 export function loadConfig(): z.infer<typeof setupConfigSchema> {
   const config = loadConfigIfExists();
   if (!config) {
-    logger.error(`Config file not found or invalid: ${CONFIG_PATH}`);
-    logger.info('Run pnpm setup --init to create tooling/setup/setup.config.json.');
-    process.exit(1);
+    throw new SetupError(`Config file not found or invalid: ${CONFIG_PATH}`, {
+      hint: 'Run pnpm setup --init to create tooling/setup/setup.config.json.',
+    });
   }
   return config;
 }

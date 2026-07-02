@@ -19,6 +19,12 @@ export interface CreateTestSubscriptionOptions {
    * `sub_test_*` id, which makes the fail-closed service attempt a Stripe call.
    */
   providerSubscriptionId?: string | null;
+  /**
+   * Provider (Stripe) customer id stored on the row. Needed by billing endpoints that resolve the
+   * customer from the active subscription (e.g. `POST /billing/payment-methods/setup`). Defaults to
+   * `null` (no customer), matching the pre-existing behavior for tests that don't need one.
+   */
+  providerCustomerId?: string | null;
   createdByUserId?: number;
 }
 
@@ -56,6 +62,7 @@ export async function createTestSubscription(options: CreateTestSubscriptionOpti
       status: options.status ?? 'ACTIVE',
       provider,
       provider_subscription_id: providerSubscriptionId,
+      provider_customer_id: options.providerCustomerId ?? null,
       current_period_start: now,
       current_period_end: periodEnd,
       created_by_user_id: options.createdByUserId,

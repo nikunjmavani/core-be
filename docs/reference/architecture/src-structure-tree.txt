@@ -404,6 +404,7 @@ src/
     │   │   │   ├── workers/
     │   │   │       ├── subscription-seat-sync.processor.ts
     │   │   │       └── subscription-seat-sync.worker.ts
+    │   │   │   ├── billing-account.serializer.ts
     │   │   │   ├── payment-provider.port.ts
     │   │   │   ├── stripe-payment-provider.ts
     │   │   │   ├── subscription.controller.ts
@@ -725,7 +726,8 @@ src/
     │   │   │   │   │   ├── organization.serializer.unit.test.ts
     │   │   │   │   │   ├── organization.service.unit.test.ts
     │   │   │   │   │   ├── organization.validator.unit.test.ts
-    │   │   │   │   │   └── personal-organization-provisioning.db.unit.test.ts
+    │   │   │   │   │   ├── personal-organization-provisioning.db.unit.test.ts
+    │   │   │   │   │   └── team-organization-provisioning.db.unit.test.ts
     │   │   │   ├── organization-api-key/
     │   │   │   │   ├── __tests__/
     │   │   │   │   │   ├── unit/
@@ -2073,11 +2075,8 @@ src/
     │   │   │   └── schema-enricher.unit.test.ts
     │   │   ├── agent-docker-daemon-script.unit.test.ts
     │   │   ├── check-patch-coverage.unit.test.ts
-    │   │   ├── deploy-env-sync.util.unit.test.ts
-    │   │   ├── github-environments.util.unit.test.ts
     │   │   ├── project-identity.policy.unit.test.ts
-    │   │   ├── route-catalog-auth.unit.test.ts
-    │   │   └── validate-github-env.unit.test.ts
+    │   │   └── route-catalog-auth.unit.test.ts
     │   ├── utils/
     │   │   ├── auth/
     │   │   │   ├── account-status.util.unit.test.ts

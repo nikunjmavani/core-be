@@ -3,10 +3,11 @@
  *
  * Required env vars:
  *   SCALAR_API_KEY       — Scalar API key (https://scalar.com/products/agent/key)
- *   SCALAR_NAMESPACE     — Scalar team namespace
- *   SCALAR_SLUG          — Registry slug (default: core-be)
  *
  * Optional:
+ *   SCALAR_NAMESPACE     — Scalar team namespace (auto-resolved from the token's active team
+ *                          when omitted)
+ *   SCALAR_SLUG          — Registry slug (default: core-be)
  *   OPENAPI_SPEC_PATH    — Path to OpenAPI JSON (default: docs/openapi/openapi.json)
  *   SCALAR_VERSION       — Registry version label (default: package.json version)
  *
@@ -23,7 +24,7 @@ const DEFAULT_OPENAPI_SPEC_PATH = join(process.cwd(), 'docs', 'openapi', 'openap
 const DEFAULT_SCALAR_SLUG = 'core-be';
 const SCALAR_REGISTRY_BASE_URL = 'https://registry.scalar.com';
 
-const SCALAR_UPLOAD_REQUIRED_VARIABLES = ['SCALAR_API_KEY', 'SCALAR_NAMESPACE'] as const;
+const SCALAR_UPLOAD_REQUIRED_VARIABLES = ['SCALAR_API_KEY'] as const;
 
 function getRequiredEnvironmentVariable(name: string): string {
   const value = process.env[name];
@@ -71,7 +72,8 @@ function main(): void {
   }
 
   const apiKey = getRequiredEnvironmentVariable('SCALAR_API_KEY');
-  const namespace = getRequiredEnvironmentVariable('SCALAR_NAMESPACE');
+  // Optional — when omitted, the Scalar CLI resolves the active team's namespace from the token.
+  const namespace = process.env.SCALAR_NAMESPACE;
   const slug = process.env.SCALAR_SLUG ?? DEFAULT_SCALAR_SLUG;
   const version = process.env.SCALAR_VERSION ?? getPackageVersion();
   const openApiSpecPath = resolveOpenApiSpecPath();
@@ -81,15 +83,15 @@ function main(): void {
     process.exit(1);
   }
 
-  console.log(`Publishing ${openApiSpecPath} to Scalar Registry (${namespace}/${slug})...`);
+  const target = namespace ? `${namespace}/${slug}` : `<active team>/${slug}`;
+  console.log(`Publishing ${openApiSpecPath} to Scalar Registry (${target})...`);
 
   runScalarCommand(['auth', 'login', '--token', apiKey]);
   runScalarCommand([
     'registry',
     'publish',
     openApiSpecPath,
-    '--namespace',
-    namespace,
+    ...(namespace ? ['--namespace', namespace] : []),
     '--slug',
     slug,
     '--version',
@@ -97,8 +99,11 @@ function main(): void {
     '--force',
   ]);
 
-  const registryUrl = buildRegistryUrl(namespace, slug);
-  console.log(`Published to Scalar Registry: ${registryUrl}`);
+  if (namespace) {
+    console.log(`Published to Scalar Registry: ${buildRegistryUrl(namespace, slug)}`);
+  } else {
+    console.log(`Published to Scalar Registry under your active team (slug: ${slug}).`);
+  }
 }
 
 main();

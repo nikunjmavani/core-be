@@ -403,7 +403,149 @@ export async function updateStripeSubscriptionQuantity(
   );
 }
 
+// ── Invoices & payment methods (Stripe proxy) ─────────────────
+
+/**
+ * Lists Stripe invoices for a billing customer (newest first).
+ */
+export async function listStripeInvoices(
+  customerId: string,
+  options?: { limit?: number; requestId?: string },
+): Promise<Stripe.Invoice[]> {
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: 'stripe',
+      requestId: options?.requestId,
+      enforceAbortTimeout: false,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        const page = await stripe.invoices.list(
+          {
+            customer: customerId,
+            limit: options?.limit ?? 24,
+          },
+          { timeout: env.STRIPE_HTTP_TIMEOUT_MS, maxNetworkRetries: 0 },
+        );
+        return page.data;
+      },
+    }),
+  );
+}
+
+/**
+ * Lists card payment methods saved on a Stripe customer.
+ */
+export async function listStripePaymentMethods(
+  customerId: string,
+  options?: { requestId?: string },
+): Promise<Stripe.PaymentMethod[]> {
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: 'stripe',
+      requestId: options?.requestId,
+      enforceAbortTimeout: false,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        const page = await stripe.paymentMethods.list(
+          {
+            customer: customerId,
+            type: 'card',
+          },
+          { timeout: env.STRIPE_HTTP_TIMEOUT_MS, maxNetworkRetries: 0 },
+        );
+        return page.data;
+      },
+    }),
+  );
+}
+
+/**
+ * Retrieves the customer's default payment method id when set on invoice settings.
+ */
+export async function retrieveStripeCustomerDefaultPaymentMethodId(
+  customerId: string,
+  requestId?: string,
+): Promise<string | null> {
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: 'stripe',
+      requestId,
+      enforceAbortTimeout: false,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        const customer = await stripe.customers.retrieve(customerId);
+        if (customer.deleted) return null;
+        const defaultPm = customer.invoice_settings?.default_payment_method;
+        if (!defaultPm) return null;
+        return typeof defaultPm === 'string' ? defaultPm : defaultPm.id;
+      },
+    }),
+  );
+}
+
+/**
+ * Creates a SetupIntent so the frontend can collect a card and attach it to the customer.
+ */
+export async function createStripeSetupIntent(
+  customerId: string,
+  options?: { requestId?: string; idempotencyKey?: string },
+): Promise<string | null> {
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: 'stripe',
+      requestId: options?.requestId,
+      enforceAbortTimeout: false,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        const intent = await stripe.setupIntents.create(
+          {
+            customer: customerId,
+            payment_method_types: ['card'],
+            usage: 'off_session',
+          },
+          options?.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
+        );
+        return intent.client_secret ?? null;
+      },
+    }),
+  );
+}
+
 // ── Webhook verification ──────────────────────────────────────
+
+/**
+ * Retrieves the PaymentIntent `client_secret` for an incomplete Stripe subscription so
+ * the frontend can confirm the first payment via Stripe.js (`default_incomplete` flow).
+ */
+export async function retrieveStripeSubscriptionPaymentClientSecret(
+  subscriptionId: string,
+  requestId?: string,
+): Promise<string | null> {
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: 'stripe',
+      requestId,
+      enforceAbortTimeout: false,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+          expand: ['latest_invoice.confirmation_secret'],
+        });
+        const latestInvoice = subscription.latest_invoice;
+        if (!latestInvoice || typeof latestInvoice === 'string') return null;
+        // Stripe API 2026-05-27.dahlia removed `Invoice.payment_intent`; the
+        // `default_incomplete` PaymentIntent's client_secret is now exposed via
+        // the expandable `confirmation_secret` field.
+        return latestInvoice.confirmation_secret?.client_secret ?? null;
+      },
+    }),
+  );
+}
 
 /**
  * Verifies the `Stripe-Signature` header against the raw body and returns the parsed
