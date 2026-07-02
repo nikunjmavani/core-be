@@ -11,6 +11,7 @@
   },
 
   "GET /api/v1/billing/subscriptions/:subscription_id": { "model": "org" },
+  "GET /api/v1/billing/subscriptions/:subscription_id/payment-setup": { "model": "org" },
   "PATCH /api/v1/billing/subscriptions/:subscription_id": {
     "model": "org",
     "verifyNoMutation": true

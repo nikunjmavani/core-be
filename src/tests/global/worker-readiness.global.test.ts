@@ -54,12 +54,12 @@ describe('Worker readiness (global)', () => {
     expect(workflow).not.toContain('railway up --service');
     expect(workflow).not.toContain('run: pnpm build');
 
-    const deployImageToolPath = resolve(ROOT, 'tooling/setup/railway/deploy-image.ts');
-    const deployImageTool = readFileSync(deployImageToolPath, 'utf8');
-    expect(deployImageTool).toContain('Project-Access-Token');
-    expect(deployImageTool).toContain('projectToken');
-    expect(deployImageTool).toContain('serviceInstanceUpdate');
-    expect(deployImageTool).toContain('serviceInstanceDeployV2');
+    // The deploy-image tool now lives in the standalone core-infra repo; the workflow checks it
+    // out and runs it against this repo via `--dir core-infra`. Its implementation
+    // (serviceInstanceUpdate / serviceInstanceDeployV2 / project token) is verified in core-infra's
+    // own tests, so here we only assert the workflow delegates to it.
+    expect(workflow).toContain('Checkout core-infra');
+    expect(workflow).toContain('core-infra" tool:railway-deploy-image');
   });
 
   it('deploy workflow probes API health and relies on Railway terminal status for the worker', () => {
