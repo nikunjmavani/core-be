@@ -35,6 +35,8 @@ const RUNTIME_COVERAGE: Readonly<Record<string, string>> = {
   // ── model: org — cross-org reads (cross-org-resource.security.test.ts) ─────
   'GET /api/v1/billing/subscriptions/:subscription_id':
     'object-ownership: subscriptions (cross-org)',
+  'GET /api/v1/billing/subscriptions/:subscription_id/payment-setup':
+    'object-ownership: subscription payment-setup (cross-org)',
   'GET /api/v1/notify/webhooks/:webhook_id': 'cross-org-resource: webhook',
   'GET /api/v1/notify/webhooks/:webhook_id/delivery-attempts':
     'cross-org-resource: webhook delivery-attempts',
