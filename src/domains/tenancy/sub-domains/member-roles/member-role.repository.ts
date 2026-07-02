@@ -22,7 +22,7 @@ interface MemberRoleListPagination {
   limit: number;
   q?: string;
   sort?: 'name' | 'created_at';
-  order: 'asc' | 'desc';
+  order?: 'asc' | 'desc';
 }
 
 /**

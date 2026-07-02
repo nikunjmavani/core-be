@@ -36,7 +36,7 @@ interface OrganizationApiKeyListPagination {
   limit: number;
   q?: string;
   sort?: 'name' | 'created_at';
-  order: 'asc' | 'desc';
+  order?: 'asc' | 'desc';
 }
 
 function parseScopesColumn(value: unknown): string[] {

@@ -44,7 +44,10 @@ export function listSearchSortSchema<const Fields extends readonly [string, ...s
     .extend({
       q: z.string().trim().min(1).max(SEARCH_TERM_MAX_LENGTH).optional(),
       sort: z.enum(sortFields).optional(),
-      order: z.enum(['asc', 'desc']).default('asc'),
+      // Optional (not `.default`) so OpenAPI emits it as an optional query param — a defaulted
+      // param serializes as `required`, which oasdiff flags as a breaking change. Defaulted to
+      // ascending inside resolveKeysetSort instead.
+      order: z.enum(['asc', 'desc']).optional(),
     })
     .strict();
 }
@@ -99,7 +102,7 @@ export function resolveKeysetSort<Row>(args: {
   idColumn: AnyColumn;
   defaultSort: string;
   sort: string | undefined;
-  order: 'asc' | 'desc';
+  order?: 'asc' | 'desc' | undefined;
   q?: string | undefined;
   after: string | undefined;
 }): {
@@ -116,10 +119,12 @@ export function resolveKeysetSort<Row>(args: {
       `No keyset sort column configured for "${sortField}" or default "${args.defaultSort}"`,
     );
   }
+  // `order` is optional at the boundary (so OpenAPI emits an optional param); default to ascending.
+  const effectiveOrder = args.order ?? 'asc';
   const filterFingerprint = computeListFilterFingerprint({
     q: args.q,
     sort: sortField,
-    order: args.order,
+    order: effectiveOrder,
   });
 
   // Ignore a cursor minted under a different sort/filter — restart rather than interleave pages.
@@ -134,7 +139,7 @@ export function resolveKeysetSort<Row>(args: {
     kind === 'text' && spec.getSortValue ? spec.getSortValue : () => undefined;
 
   if (kind === 'created_at') {
-    return args.order === 'desc'
+    return effectiveOrder === 'desc'
       ? {
           sortField,
           orderBy: [desc(column), desc(args.idColumn)],
@@ -152,7 +157,7 @@ export function resolveKeysetSort<Row>(args: {
   }
 
   // text keyset — id tie-break stays ascending in both directions (matches the text keyset builders)
-  return args.order === 'desc'
+  return effectiveOrder === 'desc'
     ? {
         sortField,
         orderBy: [desc(column), idAsc],

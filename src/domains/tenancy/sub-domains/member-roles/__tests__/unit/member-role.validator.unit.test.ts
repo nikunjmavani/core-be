@@ -17,7 +17,7 @@ describe('member-role validators', () => {
   });
 
   it('validateListMemberRolesQuery applies defaults', () => {
-    expect(validateListMemberRolesQuery({})).toMatchObject({ limit: 25, order: 'asc' });
+    expect(validateListMemberRolesQuery({})).toMatchObject({ limit: 25 });
   });
 
   it('validateListMemberRolesQuery rejects legacy page query parameter', () => {

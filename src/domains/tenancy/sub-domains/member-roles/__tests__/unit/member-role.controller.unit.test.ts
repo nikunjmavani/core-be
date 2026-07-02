@@ -62,7 +62,7 @@ describe('createMemberRoleController', () => {
       mockRequest({ params: { organization_id: organizationPublicId } }),
       mockReply(),
     );
-    expect(service.list).toHaveBeenCalledWith(organizationPublicId, { limit: 25, order: 'asc' });
+    expect(service.list).toHaveBeenCalledWith(organizationPublicId, { limit: 25 });
     expect(response).toMatchObject({
       data: [role],
       meta: { pagination: expect.objectContaining({ has_more: true, next: 'role_cursor_2' }) },

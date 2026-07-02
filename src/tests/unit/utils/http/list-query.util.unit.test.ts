@@ -28,11 +28,14 @@ const columns = {
 
 describe('list-query.util', () => {
   describe('listSearchSortSchema', () => {
-    it('parses q/sort/order and defaults order to asc', () => {
-      expect(schema.parse({ q: 'ann', sort: 'name' })).toMatchObject({
-        q: 'ann',
-        sort: 'name',
-        order: 'asc',
+    it('parses q/sort/order; order is optional (defaulted to asc in resolveKeysetSort, not the schema)', () => {
+      // No `.default` on order so OpenAPI emits it as an optional query param (a defaulted param
+      // serializes as `required`, which oasdiff flags as breaking).
+      const parsed = schema.parse({ q: 'ann', sort: 'name' });
+      expect(parsed).toMatchObject({ q: 'ann', sort: 'name' });
+      expect('order' in parsed).toBe(false);
+      expect(schema.parse({ q: 'ann', sort: 'name', order: 'desc' })).toMatchObject({
+        order: 'desc',
       });
     });
     it('rejects an unknown sort value and unknown keys (strict)', () => {
