@@ -121,7 +121,7 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Cache Vitest
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
           path: node_modules/.vitest
           key: vitest-integration-${{ runner.os }}-${{ matrix.shard.id }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -230,7 +230,7 @@ jobs:
         uses: ./.github/actions/test-env
 
       - name: Cache Vitest
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
           path: node_modules/.vitest
           key: vitest-unit-cov-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'tooling/vitest/**') }}

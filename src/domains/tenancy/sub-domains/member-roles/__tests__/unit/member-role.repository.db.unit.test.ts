@@ -20,7 +20,10 @@ describe('MemberRoleRepository (database)', () => {
   it('paginates an empty organization role list', async () => {
     const owner = await createTestUser();
     const organization = await createTestOrganization({ ownerUserId: owner.id });
-    const emptyPage = await repository.findByOrganizationId(organization.id, { limit: 20 });
+    const emptyPage = await repository.findByOrganizationId(organization.id, {
+      limit: 20,
+      order: 'asc',
+    });
     expect(emptyPage.items).toEqual([]);
     expect(emptyPage.total).toBeNull();
   });
@@ -33,7 +36,10 @@ describe('MemberRoleRepository (database)', () => {
       permissionCodes: ['organization:read'],
     });
 
-    const page = await repository.findByOrganizationId(organization.id, { limit: 20 });
+    const page = await repository.findByOrganizationId(organization.id, {
+      limit: 20,
+      order: 'asc',
+    });
     expect(page.items.some((row) => row.public_id === role.public_id)).toBe(true);
 
     const byPublicId = await repository.findByPublicId(role.public_id, organization.id);

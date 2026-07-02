@@ -44,6 +44,15 @@ For **worker / processor** code touching tenant data:
 
 For **`SECURITY DEFINER`** functions — the RLS-bypass resolvers across `auth` / `tenancy` / `billing` / `notify` (`grep -rl 'SECURITY DEFINER' migrations/` lists the current set; it grows over time): each one MUST pin `SET search_path` and `GRANT EXECUTE` only to `core_be_app`. Because the function bypasses RLS, **its body is the sole tenant/ownership boundary** — scope every query by the resolved id and return only the caller's rows.
 
+### Reading / searching a FORCE-RLS column that lives on a *joined* table
+
+A very common trap: the members list runs under **org-only** context (`app.current_organization_id` set, `app.current_user_id` NOT set), but member email / name live in `auth.users`, which is FORCE RLS behind a self-owner policy keyed on `app.current_user_id`. Under the non-superuser `core_be_app` role a plain `memberships JOIN auth.users` therefore resolves the auth.users policy to NULL and returns **ZERO rows** — the query silently matches nothing in production while passing under the RLS-exempt local/CI superuser (the exact trap behind 20260530000010 / 20260603120000 and the org-mandated-MFA bypass).
+
+**Rule:** whenever a read/search/sort needs a column from a FORCE-RLS table that the current context can't satisfy (e.g. a user column under org context, or an org column before any tenant GUC exists), route it through a narrow SECURITY DEFINER resolver instead of a plain join. Prefer returning **only ids / the minimal columns** and let the caller's normal RLS-scoped, typed query apply the keyset + serialize — keeps typing, pagination, and the auth.users column exposure minimal.
+
+- **Reference:** `tenancy.search_organization_membership_ids(org_id, pattern)` (migration `20260702000000`) returns matching membership **ids**; `MembershipRepository.findByOrganizationId` then filters its typed `(created_at,id)` keyset query with `id IN (...)`. Search term arrives pre-escaped via `buildContainsLikePattern` and matches with default `ESCAPE '\'`. Sibling read-only resolvers: `auth.resolve_user_summaries_by_ids`, `auth.resolve_user_public_ids_by_ids`, `tenancy.resolve_organization_default_locale`.
+- **Test it as `core_be_app`, not the superuser.** Add a `src/tests/security/rls/*.security.test.ts` using `grantCoreBeAppRoleForTests` + `executeAsCoreBeAppTenant(orgPublicId, …)` that (a) shows the raw join is blocked to 0 rows [control], (b) shows the resolver returns the match, and (c) shows it never returns another org's row. A superuser-only db-unit test will pass even if the resolver is broken — it proves nothing about RLS. See `membership-search-resolver.security.test.ts`.
+
 ## Top failure modes
 
 1. **`ENABLE` without `FORCE`** → table owner bypasses RLS → cross-org leak. (Tell: not added to `EXPECTED_FORCE_RLS_TABLES`.)

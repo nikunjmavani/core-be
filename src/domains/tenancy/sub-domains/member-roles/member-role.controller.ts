@@ -6,11 +6,8 @@ import {
   requirePrincipal,
   resolveActiveOrganizationId,
 } from '@/shared/utils/http/request.util.js';
-import {
-  cursorPaginationSchema,
-  ensureCursorOnlyPagination,
-} from '@/shared/utils/http/pagination.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
+import { validateListMemberRolesQuery } from './member-role.validator.js';
 import {
   buildAuditActorFields,
   recordScopedAuditEvent,
@@ -27,8 +24,7 @@ export function createMemberRoleController(service: MemberRoleService) {
   return {
     listRoles: async (request: FastifyRequest, _reply: FastifyReply) => {
       const organizationId = resolveActiveOrganizationId(request);
-      ensureCursorOnlyPagination(request.query);
-      const pagination = cursorPaginationSchema.parse(request.query);
+      const pagination = validateListMemberRolesQuery(request.query);
       const result = await service.list(organizationId, pagination);
       return paginatedResponse(result.items, getRequestIdentifier(request), {
         per_page: result.limit,

@@ -35,6 +35,7 @@ import type { PaymentProvider } from './payment-provider.port.js';
 import type { SubscriptionRepository } from './subscription.repository.js';
 import type { SubscriptionUpdateData } from './subscription.types.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { PAGINATION } from '@/shared/constants/pagination.constants.js';
 import { BillingAccountSerializer } from './billing-account.serializer.js';
 import {
   createStripeSetupIntent,
@@ -80,6 +81,7 @@ type SubscriptionRowWithSeatState = {
 import {
   validateChangePlan,
   validateCreateSubscription,
+  validateListInvoicesQuery,
   validateUpdateSubscription,
 } from './subscription.validator.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
@@ -998,16 +1000,45 @@ export class SubscriptionService {
   }
 
   /**
-   * Lists Stripe invoices for the organization's billing customer. Returns an empty list when
-   * Stripe is not configured or the org has no provider customer yet.
+   * Lists Stripe invoices for the organization's billing customer, one cursor page at a time.
+   *
+   * @remarks
+   * - **Algorithm:** validates the cursor query (`limit` ≤ 100, `after` = a Stripe invoice id),
+   *   fetches one Stripe page via `starting_after` + `limit`, and returns the standard list envelope
+   *   (`items`/`limit`/`has_more`/`next_cursor`). The next cursor is the last row's Stripe id when
+   *   Stripe reports `has_more`; `total` is always `null` (Stripe exposes no count).
+   * - **Notes:** returns an empty page when Stripe is not configured or the org has no provider
+   *   customer yet. Invoices live in Stripe, not our DB — this is a cursor passthrough, not a keyset
+   *   query, so it does not use the DB list helpers.
    */
-  async listInvoices(organization_public_id: string) {
+  async listInvoices(organization_public_id: string, query: unknown) {
+    const parsed = validateListInvoicesQuery(query);
+    // `limit` is optional in the DTO (kept optional in OpenAPI) — apply the shared default here.
+    const limit = parsed.limit ?? PAGINATION.DEFAULT_LIMIT;
+    const emptyPage = {
+      items: [] as ReturnType<typeof BillingAccountSerializer.invoices>,
+      total: null,
+      limit,
+      has_more: false,
+      next_cursor: null as string | null,
+    };
     const customerId = await this.resolveStripeCustomerId(organization_public_id);
     if (!(customerId && isStripeConfigured())) {
-      return [];
+      return emptyPage;
     }
-    const invoices = await listStripeInvoices(customerId);
-    return BillingAccountSerializer.invoices(invoices);
+    const page = await listStripeInvoices(customerId, {
+      limit,
+      ...(parsed.after ? { startingAfter: parsed.after } : {}),
+    });
+    const items = BillingAccountSerializer.invoices(page.data);
+    const lastItem = items.at(-1);
+    return {
+      items,
+      total: null,
+      limit,
+      has_more: page.has_more,
+      next_cursor: page.has_more ? (lastItem?.id ?? null) : null,
+    };
   }
 
   /**

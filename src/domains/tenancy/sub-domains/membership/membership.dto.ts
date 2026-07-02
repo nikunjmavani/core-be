@@ -40,8 +40,16 @@ export const updateMembershipDto = z
     message: 'Provide at least one of status or role_id',
   });
 
-/** Zod schema for the `GET /organization/memberships` cursor pagination query. */
-export const listMembershipsQueryDto = cursorPaginationSchema.strict();
+/**
+ * Zod schema for the `GET /organization/memberships` list query: cursor pagination plus an optional
+ * `q` free-text search over the member's email / first name / last name. `q` is `.optional()` (a
+ * newly-added, non-breaking query param); the `(created_at, id)` keyset is unchanged.
+ */
+export const listMembershipsQueryDto = cursorPaginationSchema
+  .extend({
+    q: z.string().trim().min(1).max(200).optional(),
+  })
+  .strict();
 
 /**
  * Zod schema for the `POST /organization/transfer-ownership` request

@@ -14,7 +14,7 @@ import {
 import { serializeMemberRole } from './member-role.serializer.js';
 import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
-import type { CursorPaginationInput } from '@/shared/utils/http/pagination.util.js';
+import type { ListMemberRolesQueryInput } from './member-role.dto.js';
 
 /**
  * Application service for the per-organization role catalog: list, get,
@@ -46,21 +46,21 @@ export class MemberRoleService {
     private readonly memberRoleRepository: MemberRoleRepository,
   ) {}
 
-  async list(organization_public_id: string, pagination: CursorPaginationInput) {
+  async list(organization_public_id: string, pagination: ListMemberRolesQueryInput) {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
         );
-      validateListMemberRolesQuery({
-        limit: pagination.limit,
-        after: pagination.after,
-      });
+      validateListMemberRolesQuery(pagination);
       const result = await this.memberRoleRepository.findByOrganizationId(
         organization.id,
         omitUndefined({
           after: pagination.after,
           limit: pagination.limit,
+          q: pagination.q,
+          sort: pagination.sort,
+          order: pagination.order,
         }),
       );
       return {

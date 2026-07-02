@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { successResponse } from '@/shared/utils/http/response.util.js';
+import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
 import {
   getActingUserPublicId,
   getRequestIdentifier,
@@ -125,8 +125,16 @@ export function createSubscriptionController(service: SubscriptionService) {
     },
     listInvoices: async (request: FastifyRequest, _reply: FastifyReply) => {
       requirePrincipal(request);
-      const data = await service.listInvoices(resolveActiveOrganizationId(request));
-      return successResponse(data, getRequestIdentifier(request));
+      const result = await service.listInvoices(
+        resolveActiveOrganizationId(request),
+        request.query,
+      );
+      return paginatedResponse(result.items, getRequestIdentifier(request), {
+        per_page: result.limit,
+        next: result.next_cursor,
+        has_more: result.has_more,
+        ...(result.total !== null ? { estimated_total: result.total } : {}),
+      });
     },
     listPaymentMethods: async (request: FastifyRequest, _reply: FastifyReply) => {
       requirePrincipal(request);

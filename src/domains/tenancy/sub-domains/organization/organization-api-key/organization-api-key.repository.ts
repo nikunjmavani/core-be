@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -11,10 +11,10 @@ import {
   acquireResourceQuotaLock,
 } from '@/infrastructure/database/resource-quota-lock.util.js';
 import {
-  buildAscendingCreatedAtIdCursorCondition,
-  createOpaqueCursorFromRow,
-  parseListCursor,
-} from '@/shared/utils/http/pagination.util.js';
+  buildSearchCondition,
+  finishKeysetPage,
+  resolveKeysetSort,
+} from '@/shared/utils/http/list-query.util.js';
 import type {
   OrganizationApiKeyAuthenticationCandidate,
   OrganizationApiKeyRow,
@@ -34,6 +34,9 @@ interface ApiKeyAuthenticationResolverRow {
 interface OrganizationApiKeyListPagination {
   after?: string;
   limit: number;
+  q?: string;
+  sort?: 'name' | 'created_at';
+  order?: 'asc' | 'desc';
 }
 
 function parseScopesColumn(value: unknown): string[] {
@@ -91,33 +94,33 @@ export class OrganizationApiKeyRepository extends BaseRepository {
     organization_id: number,
     pagination: OrganizationApiKeyListPagination,
   ) {
-    const { after, limit } = pagination;
-    const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
-      api_keys.created_at,
-      api_keys.id,
-      parseListCursor(after),
-    );
+    const { after, limit, q, sort, order } = pagination;
+    const { orderBy, cursorCondition, sortValueFor, filterFingerprint } =
+      resolveKeysetSort<OrganizationApiKeyRow>({
+        columns: {
+          name: { column: api_keys.name, kind: 'text', getSortValue: (apiKey) => apiKey.name },
+          created_at: { column: api_keys.created_at, kind: 'created_at' },
+        },
+        idColumn: api_keys.id,
+        defaultSort: 'created_at',
+        sort,
+        order,
+        q,
+        after,
+      });
     const where = and(
       eq(api_keys.organization_id, organization_id),
       isNull(api_keys.deleted_at),
+      buildSearchCondition([api_keys.name], q),
       cursorCondition,
     );
-    const rows = await getRequestDatabase()
+    const rows = (await getRequestDatabase()
       .select()
       .from(api_keys)
       .where(where)
-      .orderBy(asc(api_keys.created_at), asc(api_keys.id))
-      .limit(limit + 1);
-    const hasMore = rows.length > limit;
-    const items = (hasMore ? rows.slice(0, limit) : rows) as OrganizationApiKeyRow[];
-    const lastItem = items.at(-1);
-    return {
-      items,
-      total: null,
-      limit,
-      has_more: hasMore,
-      next_cursor: hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null,
-    };
+      .orderBy(...orderBy)
+      .limit(limit + 1)) as OrganizationApiKeyRow[];
+    return finishKeysetPage(rows, { limit, sortValueFor, filterFingerprint });
   }
 
   async findByPublicId(
