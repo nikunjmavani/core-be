@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { env } from '@/shared/config/env.config.js';
+import { PAGINATION } from '@/shared/constants/pagination.constants.js';
 import { buildOutboundCallOptions, outboundCall } from '@/infrastructure/outbound/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
@@ -406,12 +407,19 @@ export async function updateStripeSubscriptionQuantity(
 // ── Invoices & payment methods (Stripe proxy) ─────────────────
 
 /**
- * Lists Stripe invoices for a billing customer (newest first).
+ * Lists Stripe invoices for a billing customer (newest first), one cursor page.
+ *
+ * @remarks
+ * - **Algorithm:** a single `invoices.list` page using Stripe's own cursor pagination — `limit`
+ *   (1–100) plus `starting_after` (a Stripe invoice id `in_*`). Returns the page rows and Stripe's
+ *   `has_more` flag so the caller can mint a `next` cursor without a count.
+ * - **Notes:** the caller derives the next cursor from the last row's `id`; Stripe orders newest
+ *   first, so paging walks backwards in time.
  */
 export async function listStripeInvoices(
   customerId: string,
-  options?: { limit?: number; requestId?: string },
-): Promise<Stripe.Invoice[]> {
+  options?: { limit?: number; startingAfter?: string; requestId?: string },
+): Promise<{ data: Stripe.Invoice[]; has_more: boolean }> {
   return outboundCall(
     buildOutboundCallOptions({
       name: 'stripe',
@@ -423,11 +431,12 @@ export async function listStripeInvoices(
         const page = await stripe.invoices.list(
           {
             customer: customerId,
-            limit: options?.limit ?? 24,
+            limit: options?.limit ?? PAGINATION.DEFAULT_LIMIT,
+            ...(options?.startingAfter ? { starting_after: options.startingAfter } : {}),
           },
           { timeout: env.STRIPE_HTTP_TIMEOUT_MS, maxNetworkRetries: 0 },
         );
-        return page.data;
+        return { data: page.data, has_more: page.has_more };
       },
     }),
   );

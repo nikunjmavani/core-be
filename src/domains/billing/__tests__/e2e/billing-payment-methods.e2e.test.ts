@@ -28,7 +28,7 @@ vi.mock('@/infrastructure/payment/stripe.client.js', async (importOriginal) => {
   return {
     ...actual,
     isStripeConfigured: () => true,
-    listStripeInvoices: vi.fn(async () => []),
+    listStripeInvoices: vi.fn(async () => ({ data: [], has_more: false })),
     listStripePaymentMethods: vi.fn(async () => []),
     retrieveStripeCustomerDefaultPaymentMethodId: vi.fn(async () => null),
     createStripeSetupIntent: vi.fn(async () => 'seti_test_client_secret_0123456789'),
@@ -79,13 +79,19 @@ describe('Billing payment methods (e2e)', () => {
     return { token, subscription };
   }
 
-  it('GET /billing/invoices returns 200', async () => {
+  it('GET /billing/invoices returns 200 with a paginated envelope', async () => {
     const { token } = await createBillingContext();
     const response = await injectAuthenticated(app, {
       url: testApiPath('/billing/invoices'),
       token,
     });
     expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      data: unknown[];
+      meta: { pagination: { has_more: boolean; next: string | null } };
+    };
+    expect(Array.isArray(body.data)).toBe(true);
+    expect(body.meta.pagination).toMatchObject({ has_more: false, next: null });
   });
 
   it('GET /billing/payment-methods returns 200', async () => {

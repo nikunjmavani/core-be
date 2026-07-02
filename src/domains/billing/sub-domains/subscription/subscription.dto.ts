@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PAGINATION } from '@/shared/constants/pagination.constants.js';
 import { trimmedString, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 /** Zod schema for the `:subscription_id` path param (get/update/change-plan/cancel/resume). */
@@ -49,3 +50,23 @@ export const ChangePlanDto = z
 
 /** Inferred input type from {@link ChangePlanDto}. */
 export type ChangePlanInput = z.infer<typeof ChangePlanDto>;
+
+/**
+ * Zod schema for the `GET /api/v1/billing/invoices` cursor pagination query. Invoices are proxied
+ * from Stripe, so `after` is a Stripe invoice id (`in_*`) fed to Stripe's `starting_after`, and
+ * `limit` is capped at Stripe's page maximum (MAX_LIMIT = 100).
+ *
+ * @remarks
+ * `limit` is `.optional()` (not `.default`) so the OpenAPI query param stays optional — these
+ * params are newly added to a pre-existing route, and a defaulted param serializes as `required`,
+ * which oasdiff flags as a breaking change. The default is applied in the service instead.
+ */
+export const listInvoicesQueryDto = z
+  .object({
+    after: z.string().max(512).optional(),
+    limit: z.coerce.number().int().min(1).max(PAGINATION.MAX_LIMIT).optional(),
+  })
+  .strict();
+
+/** Validated query inferred from {@link listInvoicesQueryDto}. */
+export type ListInvoicesQueryInput = z.infer<typeof listInvoicesQueryDto>;
