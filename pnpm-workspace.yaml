@@ -7,6 +7,9 @@ engineStrict: true
 useNodeVersion: 24.13.0
 
 allowBuilds:
+  # Telemetry package pulled in transitively; deny its postinstall build so a
+  # strict install does not fail on an undecided build script (ERR_PNPM_IGNORED_BUILDS).
+  '@scarf/scarf': false
   '@sentry/node-cpu-profiler': true
   argon2: true
   cpu-features: true
