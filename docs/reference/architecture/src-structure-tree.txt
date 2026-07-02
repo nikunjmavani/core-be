@@ -279,6 +279,7 @@ src/
     ├── billing/
     │   ├── __tests__/
     │   │   ├── e2e/
+    │   │   │   ├── billing-payment-methods.e2e.test.ts
     │   │   │   └── subscription-lifecycle.e2e.test.ts
     │   │   ├── factories/
     │   │   │   ├── index.ts
@@ -1499,6 +1500,7 @@ src/
     │   │   ├── api-versioning.util.ts
     │   │   ├── fastify-server.util.ts
     │   │   ├── http-cache.util.ts
+    │   │   ├── list-query.util.ts
     │   │   ├── pagination.util.ts
     │   │   ├── request.util.ts
     │   │   ├── response.util.ts
@@ -2087,6 +2089,7 @@ src/
     │   │   ├── http/
     │   │   │   ├── api-versioning.util.unit.test.ts
     │   │   │   ├── fastify-server.util.unit.test.ts
+    │   │   │   ├── list-query.util.unit.test.ts
     │   │   │   ├── pagination.util.unit.test.ts
     │   │   │   ├── request.util.unit.test.ts
     │   │   │   ├── response-format-envelope.util.unit.test.ts
