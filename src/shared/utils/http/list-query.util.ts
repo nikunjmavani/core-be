@@ -52,9 +52,14 @@ export function listSearchSortSchema<const Fields extends readonly [string, ...s
     .strict();
 }
 
-/** Escapes `ILIKE` wildcards so a user's `%`/`_`/`\` are matched literally. */
-function escapeLikeTerm(term: string): string {
+/** Escapes `ILIKE` wildcards so a user's `%`/`_`/`\` are matched literally (default `ESCAPE '\'`). */
+export function escapeLikeTerm(term: string): string {
   return term.replace(/[\\%_]/g, (match) => `\\${match}`);
+}
+
+/** Builds a contained `%term%` `ILIKE` pattern with the user's wildcards escaped. */
+export function buildContainsLikePattern(term: string): string {
+  return `%${escapeLikeTerm(term)}%`;
 }
 
 /**
@@ -68,7 +73,7 @@ export function buildSearchCondition(
   if (!q || columns.length === 0) {
     return undefined;
   }
-  const pattern = `%${escapeLikeTerm(q)}%`;
+  const pattern = buildContainsLikePattern(q);
   const conditions = columns.map((column) => ilike(column, pattern));
   return conditions.length === 1 ? conditions[0] : or(...conditions);
 }
