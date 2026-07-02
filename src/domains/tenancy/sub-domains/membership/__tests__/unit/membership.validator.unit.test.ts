@@ -39,6 +39,15 @@ describe('membership validators', () => {
     expect(validateListMembershipsQuery({})).toMatchObject({ limit: 25 });
   });
 
+  it('validateListMembershipsQuery accepts and trims a q search term', () => {
+    expect(validateListMembershipsQuery({ q: '  alice  ' })).toMatchObject({ q: 'alice' });
+  });
+
+  it('validateListMembershipsQuery rejects an over-long q term and unknown keys (strict)', () => {
+    expect(() => validateListMembershipsQuery({ q: 'a'.repeat(201) })).toThrow(ValidationError);
+    expect(() => validateListMembershipsQuery({ bogus: 1 })).toThrow(ValidationError);
+  });
+
   it('validateListMembershipsQuery rejects legacy page query parameter', () => {
     try {
       validateListMembershipsQuery({ page: '1', limit: '10' });

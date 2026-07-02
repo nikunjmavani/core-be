@@ -15,10 +15,13 @@ import {
   createOpaqueCursorFromRow,
   parseListCursor,
 } from '@/shared/utils/http/pagination.util.js';
+import { buildContainsLikePattern } from '@/shared/utils/http/list-query.util.js';
 
 interface MembershipListPagination {
   after?: string;
   limit: number;
+  /** Optional free-text search over the member's email / first name / last name. */
+  q?: string;
 }
 
 /** Row shape returned by {@link MembershipRepository.listOrganizationsForUserDataExport}. */
@@ -85,21 +88,37 @@ export class MembershipRepository extends BaseRepository {
   }
 
   async findByOrganizationId(organization_id: number, pagination: MembershipListPagination) {
-    const { after, limit } = pagination;
-    const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
-      memberships.created_at,
-      memberships.id,
-      parseListCursor(after),
-    );
-    const where = and(
-      eq(memberships.organization_id, organization_id),
-      isNull(memberships.deleted_at),
-      cursorCondition,
-    );
+    const { after, limit, q } = pagination;
+    const cursor = parseListCursor(after);
+    // Search restricts to the membership ids whose member's user email/name matches `q`. That match
+    // needs a join to `auth.users` (FORCE RLS), which under org-only context can only be read through
+    // the SECURITY DEFINER resolver — see searchMembershipIds. With no match, short-circuit to an
+    // empty page; otherwise the normal typed keyset query below adds `id IN (...)`.
+    let searchIdFilter: SQL | undefined;
+    if (q !== undefined) {
+      const matchingIds = await this.searchMembershipIds(organization_id, q);
+      if (matchingIds.length === 0) {
+        return {
+          items: [] as MembershipRow[],
+          total: null,
+          limit,
+          has_more: false,
+          next_cursor: null,
+        };
+      }
+      searchIdFilter = inArray(memberships.id, matchingIds);
+    }
     const rows = await getRequestDatabase()
       .select()
       .from(memberships)
-      .where(where)
+      .where(
+        and(
+          eq(memberships.organization_id, organization_id),
+          isNull(memberships.deleted_at),
+          searchIdFilter,
+          buildAscendingCreatedAtIdCursorCondition(memberships.created_at, memberships.id, cursor),
+        ),
+      )
       .orderBy(asc(memberships.created_at), asc(memberships.id))
       .limit(limit + 1);
     const hasMore = rows.length > limit;
@@ -112,6 +131,25 @@ export class MembershipRepository extends BaseRepository {
       has_more: hasMore,
       next_cursor: hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null,
     };
+  }
+
+  /**
+   * Resolves the membership ids in an organization whose member's user email / first name / last
+   * name matches `q`. `auth.users` is FORCE RLS behind a self-owner policy, so under org-only context
+   * a plain join matches zero rows — the search goes through the
+   * `tenancy.search_organization_membership_ids` SECURITY DEFINER function (20260702000000), which
+   * bypasses RLS by explicit organization scoping and exposes no `auth.users` columns. The term is
+   * escaped into a `%…%` `ILIKE` pattern before binding.
+   */
+  private async searchMembershipIds(organization_id: number, q: string): Promise<number[]> {
+    const pattern = buildContainsLikePattern(q);
+    const result = await getRequestDatabase().execute(
+      sql`SELECT id FROM tenancy.search_organization_membership_ids(${organization_id}::bigint, ${pattern}::text)`,
+    );
+    const rows = (
+      Array.isArray(result) ? result : ((result as { rows?: unknown[] }).rows ?? [])
+    ) as { id: number | string }[];
+    return rows.map((row) => Number(row.id));
   }
 
   /**

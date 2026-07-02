@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
 import {
+  buildContainsLikePattern,
   buildSearchCondition,
   computeListFilterFingerprint,
   finishKeysetPage,
@@ -41,6 +42,13 @@ describe('list-query.util', () => {
     it('rejects an unknown sort value and unknown keys (strict)', () => {
       expect(schema.safeParse({ sort: 'email' }).success).toBe(false);
       expect(schema.safeParse({ bogus: 1 }).success).toBe(false);
+    });
+  });
+
+  describe('buildContainsLikePattern', () => {
+    it('wraps in %…% and escapes user wildcards', () => {
+      expect(buildContainsLikePattern('ann')).toBe('%ann%');
+      expect(buildContainsLikePattern('50%_off\\x')).toBe('%50\\%\\_off\\\\x%');
     });
   });
 
