@@ -54,6 +54,21 @@ The policy is enforced centrally in `method-status-policy.middleware.ts`; declar
 - Every serialized organization carries a `capabilities` object (`can_invite_members`, `can_manage_members`, `can_manage_roles`, `can_transfer_ownership`, `can_delete`, `can_manage_billing`) describing the **org type's** capability (not the caller's permission), so clients discover this without probing for a 422.
 - The route catalog encodes this as the `O` column (`both` | `team`), kept in sync with `tooling/openapi/route-catalog/route-org-scope.json` by `pnpm validate:route-org-scope`.
 
+## List endpoints — common search / sort / pagination method
+
+Every org-scoped list endpoint uses the **shared** helpers in `src/shared/utils/http/list-query.util.ts` — do **not** hand-roll keyset / cursor / filter-binding per repository:
+
+- **DTO**: build the query schema with `listSearchSortSchema([...sortFields] as const)` (adds `q`, `sort`, `order` to `cursorPaginationSchema`, `.strict()`). For a search-only list (no sortable columns), extend `cursorPaginationSchema` with just `q`. Register the DTO in `tooling/openapi/query-schema-map.ts` so OpenAPI documents `after`/`limit`/`q`/`sort`/`order`.
+- **Repository**: `resolveKeysetSort({ columns, idColumn, defaultSort, sort, order, q, after })` → `orderBy` / `cursorCondition` / `sortValueFor` / `filterFingerprint`; `buildSearchCondition(columns, q)` for the `ILIKE`; `finishKeysetPage(rows, { limit, sortValueFor, filterFingerprint })` (fetch `limit + 1`). Escape user `ILIKE` terms with `buildContainsLikePattern(q)` — never interpolate a raw term.
+- **Controller**: return `paginatedResponse(items, id, { per_page: limit, next: next_cursor, has_more, ...(total !== null ? { estimated_total: total } : {}) })`.
+- **sec-U12**: the minted cursor carries a SHA-256 fingerprint of `{q, sort, order}`; a cursor whose fingerprint no longer matches the current query is ignored (resets to page 1) so a cursor can't interleave pages across filters. This is automatic via `resolveKeysetSort` — don't bypass it.
+
+**`.optional()`, never `.default`, for `sort` / `order` (and `limit` on a route that did not previously have it).** Zod `.default(...)` serializes the OpenAPI query param as `required`, which oasdiff flags as `added the new required request parameter` — a breaking change on an existing route. Keep these params `.optional()` and apply the default in `resolveKeysetSort` / the service (`order ?? 'asc'`, `limit ?? PAGINATION.DEFAULT_LIMIT`). Adding a **new optional** param is non-breaking; adding a new **required** one is not. Verify with `pnpm docs:breaking` before pushing.
+
+**External-provider lists (Stripe, etc.) are a cursor passthrough, not a DB keyset** — they do NOT use the helpers above. Expose the provider's own cursor: pass `limit` + `starting_after` (a provider id), return `{ data, has_more }` from the client, and shape the same `paginatedResponse` envelope with `next` = the last row's provider id when `has_more`. See `GET /billing/invoices` (`listStripeInvoices`).
+
+**Searching a column that lives on a FORCE-RLS joined table** (e.g. member email/name in `auth.users`) can't use a plain join under org-only context — it needs a SECURITY DEFINER resolver. See `rls-tenant-isolation-guard` (member-search example, `tenancy.search_organization_membership_ids`).
+
 ## Header matrix (client-sent)
 
 - `Authorization: Bearer <ACCESS_TOKEN>` — every authed route (OpenAPI security scheme; Postman collection-level bearer `{{ACCESS_TOKEN}}`).
