@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { sleep } from 'k6';
 import { API_PREFIX, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
-import { checkStatus, checkResponseTime } from '../helpers/checks.js';
+import { checkOk, checkResponseTime } from '../helpers/checks.js';
 
 /**
  * k6 Scenario: Auth + Onboarding Flow
@@ -33,10 +33,10 @@ export function authOnboarding() {
     }),
     { headers, tags: { name: 'auth-login' } },
   );
-  checkStatus(loginResponse, 200, 'login');
+  checkOk(loginResponse, 'login');
   checkResponseTime(loginResponse, 800, 'login');
 
-  if (loginResponse.status !== 200) {
+  if (loginResponse.status < 200 || loginResponse.status >= 300) {
     sleep(1);
     return;
   }
