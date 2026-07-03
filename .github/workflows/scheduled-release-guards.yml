@@ -1,13 +1,22 @@
 # Release-flow guards — scheduled canaries that catch release-cycle drift while it
-# is still a notification, not a blocked release (both bit the 4.8.0 release):
+# is still a notification, not a blocked release (all of these bit the 4.8.0 release):
 #   1. Branch ancestry (daily): `main` must be an ancestor of `dev`. A failed or
 #      missed post-release back-merge silently diverges the branches; the next
 #      dev → main promote then needs a manual ancestry-repair PR. Fix by merging
 #      the open `release/backmerge-v*` PR or re-running "Post-release back-merge".
 #   2. GitHub environment protection drift (weekly): the committed
-#      `.github/environments/*.json` must match the GitHub UI. The Railway deploy
-#      validates this as a pre-flight and refuses to deploy on drift, so catching
-#      it here turns a failed production deploy into a Monday notification.
+#      `.github/environments/*.json` must match the GitHub UI, and every committed
+#      `.github/rulesets/*.json` must have a live, active ruleset counterpart. The
+#      Railway deploy validates environment protection as a pre-flight and refuses
+#      to deploy on drift, so catching it here turns a failed production deploy
+#      into a Monday notification.
+#   3. RELEASE_PLEASE_TOKEN canary (weekly): probes the development environment's
+#      PAT copy for expiry. Rotation (`pnpm github:sync`) updates both environment
+#      copies together, so the unprotected development copy is a usable canary for
+#      the production copy — which cannot be probed on a schedule without tripping
+#      the production required-reviewer gate every week. The production copy is
+#      additionally verified at use time by the tripwire step in post-merge-ci's
+#      release-please job.
 
 name: Release-flow guards
 
@@ -86,12 +95,67 @@ jobs:
           CORE_BE_DIR: ${{ github.workspace }}
         run: pnpm --dir core-infra validate:github-environments
 
+      - name: Verify committed rulesets are live and active
+        # `.github/rulesets/*.json` is the committed source of truth for branch
+        # protection; a deleted or disabled live ruleset silently removes the
+        # merge gates (required checks, merge-method lock, review rules).
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GH_REPOSITORY}/rulesets" \
+            --jq '[.[] | {name, enforcement}]' > /tmp/live-rulesets.json
+          failures=0
+          for ruleset_file in .github/rulesets/*.json; do
+            name="$(jq -r '.name' "$ruleset_file")"
+            live_enforcement="$(jq -r --arg n "$name" \
+              '[.[] | select(.name == $n) | .enforcement][0] // "absent"' /tmp/live-rulesets.json)"
+            if [ "$live_enforcement" != "active" ]; then
+              echo "::error::Committed ruleset '${name}' (${ruleset_file}) is not live+active on GitHub (live state: ${live_enforcement}). Re-apply it via pnpm github:sync or the repo Rules settings."
+              failures=$((failures + 1))
+            else
+              echo "OK: ruleset '${name}' is live and active."
+            fi
+          done
+          [ "$failures" -eq 0 ]
+
+  release-token:
+    name: RELEASE_PLEASE_TOKEN canary (development copy)
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 6 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # The development environment has no protection rules, so a scheduled job can
+    # read its secrets without an approval prompt (production's copy would require
+    # the reviewer gate weekly; it is covered at use time in post-merge-ci).
+    environment: development
+    steps:
+      - name: Probe RELEASE_PLEASE_TOKEN for expiry
+        env:
+          RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RELEASE_PLEASE_TOKEN:-}" ]; then
+            echo "::error::RELEASE_PLEASE_TOKEN is not set in the development environment — release automation is silently degraded (Releases/tags cannot be created)."
+            exit 1
+          fi
+          status="$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${RELEASE_PLEASE_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GH_REPOSITORY}")"
+          if [ "$status" = "401" ]; then
+            echo "::error::RELEASE_PLEASE_TOKEN (development copy) is expired or revoked. Rotate the PAT and update BOTH environment copies (pnpm github:sync) before the next release needs it."
+            exit 1
+          fi
+          echo "RELEASE_PLEASE_TOKEN accepted by the API (HTTP ${status})."
+
   notify-failure:
     name: Notify failure
-    needs: [branch-ancestry, environment-drift]
+    needs: [branch-ancestry, environment-drift, release-token]
     if: |
       always() &&
-      (needs.branch-ancestry.result == 'failure' || needs.environment-drift.result == 'failure')
+      (needs.branch-ancestry.result == 'failure' || needs.environment-drift.result == 'failure' || needs.release-token.result == 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -107,6 +171,7 @@ jobs:
           GH_REPOSITORY: ${{ github.repository }}
           ANCESTRY_RESULT: ${{ needs.branch-ancestry.result }}
           DRIFT_RESULT: ${{ needs.environment-drift.result }}
+          TOKEN_RESULT: ${{ needs.release-token.result }}
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -120,10 +185,12 @@ jobs:
             "| guard | result |" \
             "| --- | --- |" \
             "| branch ancestry (main ⊆ dev) | ${ANCESTRY_RESULT} |" \
-            "| environment protection drift | ${DRIFT_RESULT} |" \
+            "| environment/ruleset drift | ${DRIFT_RESULT} |" \
+            "| RELEASE_PLEASE_TOKEN canary | ${TOKEN_RESULT} |" \
             "" \
             "Ancestry red → merge the open release/backmerge-v* PR or re-run the Post-release back-merge workflow." \
-            "Drift red → align GitHub environment settings with .github/environments/*.json." \
+            "Drift red → align GitHub environment settings with .github/environments/*.json and re-apply .github/rulesets/*.json." \
+            "Token red → rotate the RELEASE_PLEASE_TOKEN PAT and update both environment copies (pnpm github:sync)." \
             "" \
             "Close this issue once the guard is green again.")"
           existing="$(gh issue list --repo "$GH_REPOSITORY" --state open --label ci-failure \

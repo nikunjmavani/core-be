@@ -253,6 +253,32 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
+      # PAT tripwire: `secrets.RELEASE_PLEASE_TOKEN || github.token` below makes an
+      # EXPIRED PAT fail deep inside release-please as a cryptic "Bad credentials"
+      # (and an unset one silently degrade to a token that cannot create releases).
+      # Probe the PAT first so expiry fails THIS step with an actionable message —
+      # notify-failure then opens a ci-failure issue. Expired production PAT stalled
+      # the v4.8.0 release cascade.
+      - name: Verify RELEASE_PLEASE_TOKEN validity
+        env:
+          RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RELEASE_PLEASE_TOKEN:-}" ]; then
+            echo "::warning::RELEASE_PLEASE_TOKEN is not set in this GitHub Environment — falling back to github.token (release PRs work, Releases/tags cannot be created)."
+            exit 0
+          fi
+          status="$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${RELEASE_PLEASE_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GH_REPOSITORY}")"
+          if [ "$status" = "401" ]; then
+            echo "::error::RELEASE_PLEASE_TOKEN is expired or revoked (API returned 401). Rotate the PAT in this GitHub Environment (both development AND production copies) — do not rely on the github.token fallback, it cannot create releases."
+            exit 1
+          fi
+          echo "RELEASE_PLEASE_TOKEN accepted by the API (HTTP ${status})."
+
       - name: Run release-please
         id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
