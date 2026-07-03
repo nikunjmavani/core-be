@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.8.1](https://github.com/nikunjmavani/core-be/compare/v4.8.0...v4.8.1) (2026-07-03)
+
+
+### Fixed
+
+* **ci:** call core-infra's validate:github-environments in Railway deploy ([26696f1](https://github.com/nikunjmavani/core-be/commit/26696f13d60e782eb3affad48d1232bc135fe343))
+* **ci:** correct core-infra validate script name in Railway deploy ([cab27b2](https://github.com/nikunjmavani/core-be/commit/cab27b26b81db286fff1bccb9c3109a8353b9781))
+
 ## [4.8.0](https://github.com/nikunjmavani/core-be/compare/v4.7.1...v4.8.0) (2026-07-03)
 
 
