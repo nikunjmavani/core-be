@@ -1884,6 +1884,7 @@ src/
     │   │   ├── billing-subscriptions-with-check.security.test.ts
     │   │   ├── bola-cross-tenant.security.test.ts
     │   │   ├── core-be-app-role-privileges.security.test.ts
+    │   │   ├── membership-name-sort-resolver.security.test.ts
     │   │   ├── membership-search-resolver.security.test.ts
     │   │   ├── organization-rls-session.security.test.ts
     │   │   ├── organization-settings-resolvers.security.test.ts

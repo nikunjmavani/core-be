@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
+import { listSearchSortSchema } from '@/shared/utils/http/list-query.util.js';
 import { trimmedEmail, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 /** Zod schema for the `:membership_id` path param (get/get-permissions/update/delete membership). */
@@ -41,15 +41,16 @@ export const updateMembershipDto = z
   });
 
 /**
- * Zod schema for the `GET /organization/memberships` list query: cursor pagination plus an optional
- * `q` free-text search over the member's email / first name / last name. `q` is `.optional()` (a
- * newly-added, non-breaking query param); the `(created_at, id)` keyset is unchanged.
+ * Zod schema for the `GET /organization/memberships` list query: cursor pagination plus optional
+ * `q` (free-text search over the member's email / first name / last name), `sort` (`name` |
+ * `created_at`), and `order` (`asc` | `desc`). Brings memberships to parity with the roles / api-key
+ * lists (`listSearchSortSchema`) so the FE can sort the members table server-side. `sort` / `order`
+ * are `.optional()` (a defaulted param serializes as `required`, which oasdiff flags breaking); the
+ * repository defaults to `created_at` ascending to preserve the pre-sort ordering. Sorting by `name`
+ * orders by the member's `auth.users` display name and is resolved through a SECURITY DEFINER
+ * function (that table is FORCE RLS — a plain join under org-only context matches zero rows).
  */
-export const listMembershipsQueryDto = cursorPaginationSchema
-  .extend({
-    q: z.string().trim().min(1).max(200).optional(),
-  })
-  .strict();
+export const listMembershipsQueryDto = listSearchSortSchema(['name', 'created_at'] as const);
 
 /**
  * Zod schema for the `POST /organization/transfer-ownership` request

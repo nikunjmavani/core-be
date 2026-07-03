@@ -43,7 +43,7 @@ import {
 import { MILLISECONDS_PER_MINUTE } from '@/shared/constants/ttl.constants.js';
 
 /** Token category persisted in `verification_tokens.token_type` for the email verification-code login flow. */
-const EMAIL_CODE_TOKEN_TYPE = 'EMAIL_CODE' as const;
+const EMAIL_CODE_TOKEN_TYPE = 'EMAIL_CODE';
 
 /** Redis key prefix for the per-user email verification-code attempt counter (brute-force cap). */
 const EMAIL_CODE_VERIFY_ATTEMPT_KEY_PREFIX = 'auth:email_code_verify_attempts:';
