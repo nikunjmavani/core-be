@@ -246,8 +246,6 @@ jobs:
       releases_created: ${{ steps.release.outputs.releases_created == 'true' && 'true' || 'false' }}
     env:
       CHANNEL_SUFFIX: ${{ github.ref_name == 'dev' && '.dev' || '' }}
-      # secrets.* is not readable in step `if:` expressions — hoist to job env.
-      HAS_RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -255,16 +253,31 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      # The github.token fallback below keeps this job green when the PAT is
-      # missing or expired, but degrades SILENTLY: release creation can fail and
-      # auto-merged release-PR merges stop re-triggering this workflow (no tag /
-      # GitHub Release on the merge commit). An expired RELEASE_PLEASE_TOKEN has
-      # bitten this repo before (#676/#677) — surface it on every run instead of
-      # at release time. Ported from core-fe.
-      - name: Tripwire — RELEASE_PLEASE_TOKEN not provisioned
-        if: env.HAS_RELEASE_PLEASE_TOKEN != 'true'
+      # PAT tripwire: `secrets.RELEASE_PLEASE_TOKEN || github.token` below makes an
+      # EXPIRED PAT fail deep inside release-please as a cryptic "Bad credentials"
+      # (and an unset one silently degrade to a token that cannot create releases).
+      # Probe the PAT first so expiry fails THIS step with an actionable message —
+      # notify-failure then opens a ci-failure issue. Expired production PAT stalled
+      # the v4.8.0 release cascade.
+      - name: Verify RELEASE_PLEASE_TOKEN validity
+        env:
+          RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          GH_REPOSITORY: ${{ github.repository }}
         run: |
-          echo "::warning title=RELEASE_PLEASE_TOKEN not provisioned::Release Please is running on the default GITHUB_TOKEN fallback. Releases cannot be created and release-PR auto-merge will NOT re-trigger post-merge CI. Provision/renew the PAT (repo + workflow scopes) as RELEASE_PLEASE_TOKEN in the development and production GitHub Environments (pnpm github:sync)."
+          set -euo pipefail
+          if [ -z "${RELEASE_PLEASE_TOKEN:-}" ]; then
+            echo "::warning::RELEASE_PLEASE_TOKEN is not set in this GitHub Environment — falling back to github.token. Releases/tags cannot be created, and release-PR merges performed with github.token do NOT re-trigger post-merge CI (no tag or Release on the merge commit). Provision the PAT via pnpm github:sync."
+            exit 0
+          fi
+          status="$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${RELEASE_PLEASE_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GH_REPOSITORY}")"
+          if [ "$status" = "401" ]; then
+            echo "::error::RELEASE_PLEASE_TOKEN is expired or revoked (API returned 401). Rotate the PAT in this GitHub Environment (both development AND production copies) — do not rely on the github.token fallback, it cannot create releases."
+            exit 1
+          fi
+          echo "RELEASE_PLEASE_TOKEN accepted by the API (HTTP ${status})."
 
       - name: Run release-please
         id: release
