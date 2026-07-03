@@ -12,24 +12,33 @@ export const LoginDto = z
 /** Inferred input type of {@link LoginDto}. */
 export type LoginInput = z.infer<typeof LoginDto>;
 
-/** Zod schema for the `POST /api/v1/auth/magic-link/send` request body. */
-export const MagicLinkSendDto = z
+/** Zod schema for the `POST /api/v1/auth/email/send-code` request body. */
+export const EmailSendCodeDto = z
   .object({
     email: trimmedEmail(),
   })
   .strict();
-/** Inferred input type of {@link MagicLinkSendDto}. */
-export type MagicLinkSendInput = z.infer<typeof MagicLinkSendDto>;
+/** Inferred input type of {@link EmailSendCodeDto}. */
+export type EmailSendCodeInput = z.infer<typeof EmailSendCodeDto>;
 
-/** Zod schema for the `POST /api/v1/auth/magic-link/verify` request body (email + the 6-digit sign-in code emailed by `magic-link/send`). */
-export const MagicLinkVerifyDto = z
+/**
+ * Zod schema for the `POST /api/v1/auth/email/login` request body (email + the 6-char alphanumeric
+ * verification code emailed by `email/send-code`). The code is accepted case-insensitively and is
+ * normalized server-side before matching; any well-formed-but-wrong code surfaces as a uniform
+ * "invalid or expired" rejection rather than a validation error.
+ */
+export const EmailLoginDto = z
   .object({
     email: trimmedEmail(),
-    code: z.string().trim().length(6).regex(/^\d+$/),
+    code: z
+      .string()
+      .trim()
+      .length(6)
+      .regex(/^[A-Za-z0-9]+$/),
   })
   .strict();
-/** Inferred input type of {@link MagicLinkVerifyDto}. */
-export type MagicLinkVerifyInput = z.infer<typeof MagicLinkVerifyDto>;
+/** Inferred input type of {@link EmailLoginDto}. */
+export type EmailLoginInput = z.infer<typeof EmailLoginDto>;
 
 /** Zod schema for the `POST /api/v1/auth/me/mfa/verify` request body (6-digit TOTP code). */
 export const MfaVerifyDto = z
@@ -44,7 +53,7 @@ export type MfaVerifyInput = z.infer<typeof MfaVerifyDto>;
  * Zod schema for the `POST /api/v1/auth/me/auth-methods` request body that links a new auth method
  * to the current user.
  *
- * route-#3: `method_type` is restricted to `MAGIC_LINK` — the only type this endpoint can create
+ * route-#3: `method_type` is restricted to `EMAIL_CODE` — the only type this endpoint can create
  * as a functional credential-less row. `PASSWORD` needs a hash (set via the password flows),
  * `MFA_*` need an encrypted secret (set via the enroll ceremony), and `OAUTH` proves an external
  * identity (written only by the verified callback). Previously the DTO accepted every auth-method
@@ -54,7 +63,7 @@ export type MfaVerifyInput = z.infer<typeof MfaVerifyDto>;
  */
 export const CreateAuthMethodDto = z
   .object({
-    method_type: z.literal(AUTH_METHOD_TYPE.MAGIC_LINK),
+    method_type: z.literal(AUTH_METHOD_TYPE.EMAIL_CODE),
     is_primary: z.boolean().optional().default(false),
   })
   .strict();
@@ -115,22 +124,6 @@ export const ResetPasswordDto = z
 /** Inferred input type of {@link ResetPasswordDto}. */
 export type ResetPasswordInput = z.infer<typeof ResetPasswordDto>;
 
-/**
- * Zod schema for the `POST /api/v1/auth/signup` request body: email + a policy-compliant
- * password (the same strength rule as reset/change) plus optional display name. A successful
- * signup creates the user with `is_email_verified=false` and logs them in immediately.
- */
-export const SignupDto = z
-  .object({
-    email: trimmedEmail(),
-    password: passwordPolicy(),
-    first_name: trimmedStringMinMax(1, 100).optional(),
-    last_name: trimmedStringMinMax(1, 100).optional(),
-  })
-  .strict();
-/** Inferred input type of {@link SignupDto}. */
-export type SignupInput = z.infer<typeof SignupDto>;
-
 /** Zod schema for the authenticated `POST /api/v1/auth/password/change` request body. */
 export const ChangePasswordDto = z
   .object({
@@ -149,17 +142,6 @@ export const StepUpVerifyDto = z
   .strict();
 /** Inferred input type of {@link StepUpVerifyDto}. */
 export type StepUpVerifyInput = z.infer<typeof StepUpVerifyDto>;
-
-// Email verification
-/** Zod schema for the `POST /api/v1/auth/email/verify` request body (email + 6-digit verification code). */
-export const VerifyEmailDto = z
-  .object({
-    email: trimmedEmail(),
-    code: z.string().trim().length(6).regex(/^\d+$/),
-  })
-  .strict();
-/** Inferred input type of {@link VerifyEmailDto}. */
-export type VerifyEmailInput = z.infer<typeof VerifyEmailDto>;
 
 // MFA
 /**

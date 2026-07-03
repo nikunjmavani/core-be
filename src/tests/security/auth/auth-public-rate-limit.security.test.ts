@@ -43,7 +43,7 @@ describe('Security: Auth public rate limit burst (429)', () => {
     const application = Fastify();
     await application.register(rateLimit, { global: false });
     application.post(
-      '/auth/magic-link/send',
+      '/auth/email/send-code',
       {
         ...STRICT_PUBLIC_RATE_LIMIT,
       },
@@ -61,14 +61,14 @@ describe('Security: Auth public rate limit burst (429)', () => {
     return application;
   }
 
-  it('caps magic-link-style public POST at 5 req/min per IP (6th returns 429)', async () => {
+  it('caps email-code-style public POST at 5 req/min per IP (6th returns 429)', async () => {
     const application = await createAuthStylePublicRouteApp();
     const responses = [];
     for (let attempt = 0; attempt < 7; attempt += 1) {
       responses.push(
         await application.inject({
           method: 'POST',
-          url: '/auth/magic-link/send',
+          url: '/auth/email/send-code',
           payload: { email: `burst-${attempt}@example.com` },
         }),
       );
@@ -100,7 +100,7 @@ describe('Security: Auth public rate limit burst (429)', () => {
       responses.push(
         await application.inject({
           method: 'POST',
-          url: '/auth/magic-link/send',
+          url: '/auth/email/send-code',
           // Spoof a different "client IP" on every request, plus a distinct email
           // so the per-email throttle never confounds the per-IP measurement.
           headers: { 'x-forwarded-for': `203.0.113.${attempt}` },

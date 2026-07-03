@@ -56,7 +56,10 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
     zodApplication.post(
       '/subscriptions',
       {
-        config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
+        config: {
+          idempotencyRequired: true,
+          ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config,
+        },
         schema: {
           summary: 'Create subscription',
           description:
@@ -89,7 +92,10 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
     zodApplication.post<{ Params: { subscription_id: string } }>(
       '/subscriptions/:subscription_id/change-plan',
       {
-        config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
+        config: {
+          idempotencyRequired: true,
+          ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config,
+        },
         schema: {
           summary: 'Change subscription plan',
           description:
@@ -106,7 +112,10 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
     zodApplication.post<{ Params: { subscription_id: string } }>(
       '/subscriptions/:subscription_id/cancel',
       {
-        config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
+        config: {
+          idempotencyRequired: true,
+          ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config,
+        },
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE)],
         schema: {
@@ -122,7 +131,10 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
     zodApplication.post<{ Params: { subscription_id: string } }>(
       '/subscriptions/:subscription_id/resume',
       {
-        config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
+        config: {
+          idempotencyRequired: true,
+          ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config,
+        },
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE)],
         schema: {
@@ -134,6 +146,67 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
         },
       },
       controller.resumeSubscription,
+    );
+    zodApplication.get<{ Params: { subscription_id: string } }>(
+      '/subscriptions/:subscription_id/payment-setup',
+      {
+        onRequest: [app.authenticate],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ)],
+        schema: {
+          summary: 'Get payment setup for incomplete subscription',
+          description:
+            'Returns the Stripe PaymentIntent client_secret for an INCOMPLETE subscription so the frontend can confirm the first payment. Requires SUBSCRIPTION_READ permission.',
+          tags: ['Subscription'],
+          params: subscriptionIdParamsDto,
+        },
+      },
+      controller.getPaymentSetup,
+    );
+    zodApplication.get(
+      '/invoices',
+      {
+        onRequest: [app.authenticate],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ)],
+        schema: {
+          summary: 'List billing invoices',
+          description:
+            "Returns Stripe invoices for the active organization's billing customer. Requires SUBSCRIPTION_READ.",
+          tags: ['Subscription'],
+        },
+      },
+      controller.listInvoices,
+    );
+    zodApplication.get(
+      '/payment-methods',
+      {
+        onRequest: [app.authenticate],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ)],
+        schema: {
+          summary: 'List payment methods',
+          description:
+            "Returns card payment methods saved for the organization's Stripe customer. Requires SUBSCRIPTION_READ.",
+          tags: ['Subscription'],
+        },
+      },
+      controller.listPaymentMethods,
+    );
+    zodApplication.post(
+      '/payment-methods/setup',
+      {
+        config: {
+          idempotencyRequired: true,
+          ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config,
+        },
+        onRequest: [app.authenticate],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE)],
+        schema: {
+          summary: 'Create payment method setup',
+          description:
+            'Returns a SetupIntent client_secret so the frontend can collect a new card in-app. Requires SUBSCRIPTION_MANAGE and X-Idempotency-Key.',
+          tags: ['Subscription'],
+        },
+      },
+      controller.createPaymentMethodSetup,
     );
   };
 }

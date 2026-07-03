@@ -25,6 +25,7 @@ const NO_BODY_ROUTE_PATH_ALLOWLIST = [
   '/decline',
   '/cancel',
   '/resume',
+  '/payment-methods/setup',
   '/rotate',
   '/mark-all-read',
   '/read',

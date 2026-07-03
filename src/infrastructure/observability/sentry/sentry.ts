@@ -116,13 +116,14 @@ export function initSentry(): void {
   // context, so dropping it would degrade error reports even though error capture itself is cheap.
   const tracingEnabled = defaultTracesSampleRate > 0;
   const profilingEnabled = profileSessionSampleRate > 0;
-  const integrations = [Sentry.httpIntegration()];
-  if (profilingEnabled) {
-    integrations.push(nodeProfilingIntegration());
-  }
-  if (tracingEnabled) {
-    integrations.push(Sentry.postgresIntegration(), Sentry.redisIntegration());
-  }
+  // Build via conditional spreads so the array's element type is the union of the
+  // integration return types (each extends Integration) — `.push` of a differently
+  // named integration would otherwise be rejected under exactOptionalPropertyTypes.
+  const integrations = [
+    Sentry.httpIntegration(),
+    ...(profilingEnabled ? [nodeProfilingIntegration()] : []),
+    ...(tracingEnabled ? [Sentry.postgresIntegration(), Sentry.redisIntegration()] : []),
+  ];
 
   Sentry.init({
     dsn,

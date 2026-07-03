@@ -49,13 +49,13 @@ describe('run-pre-commit-guard conditionals', () => {
       stagedFiles: ['src/domains/auth/auth.service.ts'],
       scripts: baseScripts,
     });
-    expect(withRuntime.find((step) => step.id === '16')?.when).toBe('always');
+    expect(withRuntime.find((step) => step.id === '17')?.when).toBe('always');
 
     const withoutRuntime = buildGuardSteps({
       stagedFiles: ['docs/README.md'],
       scripts: baseScripts,
     });
-    expect(withoutRuntime.find((step) => step.id === '16')?.when).toBe('conditional');
+    expect(withoutRuntime.find((step) => step.id === '17')?.when).toBe('conditional');
   });
 
   it('includes optional steps only when package scripts exist', () => {

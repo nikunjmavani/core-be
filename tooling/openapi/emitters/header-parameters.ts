@@ -1,6 +1,6 @@
 /**
  * Per-operation request-header documentation. Mirrors the runtime middleware
- * truth: idempotency (`X-Idempotency-Key`, required on the 12 writes that
+ * truth: idempotency (`X-Idempotency-Key`, required on the 13 writes that
  * register `idempotencyRequired: true`), captcha on the public auth surface
  * (`X-Captcha-Token`), CSRF on the cookie refresh flow (`X-CSRF-Token`), and
  * Stripe's own `Stripe-Signature` on webhook ingestion.
@@ -23,6 +23,7 @@ const IDEMPOTENCY_REQUIRED_ROUTE_KEYS = new Set([
   'POST /api/v1/billing/subscriptions/{subscription_id}/change-plan',
   'POST /api/v1/billing/subscriptions/{subscription_id}/cancel',
   'POST /api/v1/billing/subscriptions/{subscription_id}/resume',
+  'POST /api/v1/billing/payment-methods/setup',
   'POST /api/v1/notify/webhooks',
   'POST /api/v1/uploads',
 ]);
@@ -30,10 +31,10 @@ const IDEMPOTENCY_REQUIRED_ROUTE_KEYS = new Set([
 const CAPTCHA_ROUTE_KEYS = new Set([
   'POST /api/v1/auth/login',
   'POST /api/v1/auth/mfa/login',
-  'POST /api/v1/auth/magic-link/send',
+  'POST /api/v1/auth/email/send-code',
+  'POST /api/v1/auth/email/login',
   'POST /api/v1/auth/password/forgot',
   'POST /api/v1/auth/password/reset',
-  'POST /api/v1/auth/email/verify',
   'POST /api/v1/auth/webauthn/authenticate/options',
   'GET /api/v1/auth/oauth/{provider}',
 ]);

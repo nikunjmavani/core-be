@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { magicLinkTemplate } from '@/infrastructure/mail/templates/magic-link.template.js';
+import { verificationCodeTemplate } from '@/infrastructure/mail/templates/verification-code.template.js';
 import { invitationTemplate } from '@/infrastructure/mail/templates/invitation.template.js';
 
 describe('mail templates (snapshots)', () => {
-  it('magicLinkTemplate matches snapshot', () => {
-    const html = magicLinkTemplate({
-      code: '123456',
+  it('verificationCodeTemplate matches snapshot', () => {
+    const html = verificationCodeTemplate({
+      code: 'AB2CD3',
       expiresInMinutes: 15,
     });
     expect(html).toMatchSnapshot();

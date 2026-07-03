@@ -1,10 +1,15 @@
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
 import type { SetupConfig, SetupSecrets } from './types.js';
 
 const PROJECT_ROOT = resolve(import.meta.dirname, '../../..');
-const ENV_SETUP_PATH = resolve(PROJECT_ROOT, '.env.setup');
+// Setup-tooling input credentials live in the gitignored `.setup/` directory, deliberately
+// kept OUT of the app's `.env.<environment>` namespace so the two are never confused. The
+// committed template lives at the repo root as `.setup-credentials.example` (next to
+// `.env.example`) for discoverability. (State is ephemeral/in-memory — no file lives here.)
+const SETUP_DIR = resolve(PROJECT_ROOT, '.setup');
+const ENV_SETUP_PATH = resolve(SETUP_DIR, '.setup-credentials');
 
 const TOKEN_URLS: Record<string, string> = {
   NEON_API_KEY: 'https://console.neon.tech/app/settings/api-keys',
@@ -15,11 +20,13 @@ const TOKEN_URLS: Record<string, string> = {
   RESEND_API_KEY: 'https://resend.com/api-keys',
   GITHUB_TOKEN: 'https://github.com/settings/tokens',
   RAILWAY_API_TOKEN: 'https://railway.com/account/tokens',
-  POSTMAN_API_KEY: 'https://go.postman.co/settings/me/api-keys',
-  POSTMAN_WORKSPACE_ID: 'https://go.postman.co/workspaces',
-  SCALAR_API_KEY: 'https://dashboard.scalar.com (Settings → API keys)',
-  SCALAR_NAMESPACE: 'https://dashboard.scalar.com (your team namespace)',
-  SCALAR_SLUG: 'https://dashboard.scalar.com (registry slug; defaults to core-be)',
+  POSTHOG_PERSONAL_API_KEY: 'https://us.posthog.com/settings/user-api-keys',
+  POSTMAN_API_KEY: 'https://go.postman.co/settings/me/api-keys (setup creates the workspace)',
+  SCALAR_API_KEY: 'https://dashboard.scalar.com → API Keys (setup resolves the team namespace)',
+  CLOUDFLARE_API_TOKEN:
+    'https://dash.cloudflare.com/profile/api-tokens (token with Turnstile:Edit)',
+  CLOUDFLARE_ACCOUNT_ID:
+    'https://dash.cloudflare.com → any domain → Overview (Account ID in the right sidebar)',
 };
 
 const SIMPLE_VARS: Array<[string, string]> = [
@@ -31,25 +38,26 @@ const SIMPLE_VARS: Array<[string, string]> = [
   ['RESEND_API_KEY', TOKEN_URLS.RESEND_API_KEY ?? ''],
   ['GITHUB_TOKEN', TOKEN_URLS.GITHUB_TOKEN ?? ''],
   ['RAILWAY_API_TOKEN', TOKEN_URLS.RAILWAY_API_TOKEN ?? ''],
+  // Postman: setup uses this account API key to create the workspace + upload a per-env collection.
   ['POSTMAN_API_KEY', TOKEN_URLS.POSTMAN_API_KEY ?? ''],
-  ['POSTMAN_WORKSPACE_ID', TOKEN_URLS.POSTMAN_WORKSPACE_ID ?? ''],
+  // Scalar: setup uses this account API key to publish the OpenAPI doc; the team namespace is
+  // auto-resolved from the token (per-env slug `<project>-<env>`).
   ['SCALAR_API_KEY', TOKEN_URLS.SCALAR_API_KEY ?? ''],
-  ['SCALAR_NAMESPACE', TOKEN_URLS.SCALAR_NAMESPACE ?? ''],
-  ['SCALAR_SLUG', TOKEN_URLS.SCALAR_SLUG ?? ''],
+  // Cloudflare Turnstile is PROVISIONED by setup: with a Cloudflare API token + account id, the
+  // provider creates one widget per environment and writes CAPTCHA_SITE_KEY/CAPTCHA_SECRET into
+  // each .env.<environment>. So the inputs here are the Cloudflare credentials, not CAPTCHA_*.
+  ['CLOUDFLARE_API_TOKEN', TOKEN_URLS.CLOUDFLARE_API_TOKEN ?? ''],
+  ['CLOUDFLARE_ACCOUNT_ID', TOKEN_URLS.CLOUDFLARE_ACCOUNT_ID ?? ''],
 ];
 
 // ─── Zod schemas ────────────────────────────────────────────────────────────
 
-const oauthEnvironmentSchema = z.object({
-  clientId: z.string(),
-  clientSecret: z.string(),
-  redirectUri: z.string(),
-});
-
-const stripeEnvironmentSchema = z.object({
-  secretKey: z.string(),
-  webhookSecret: z.string(),
-});
+// NOTE: app-level per-environment secrets are entered directly in `.env.<environment>` (NOT in
+// `.setup/.setup-credentials` — no env-suffixed keys here):
+//   - OAuth (Google + GitHub): validated by reading the env files.
+//   - Stripe: prompted from stdin and written as STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET.
+// Cloudflare Turnstile is PROVISIONED: setup uses CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID to
+// create one widget per environment and writes CAPTCHA_SITE_KEY / CAPTCHA_SECRET into each env file.
 
 export const setupSecretsSchema = z.object({
   neon: z.object({
@@ -66,42 +74,53 @@ export const setupSecretsSchema = z.object({
   resend: z.object({
     apiKey: z.string(),
   }),
-  stripe: z.record(z.string(), stripeEnvironmentSchema).optional().default({}),
-  oauth: z
-    .object({
-      google: z.record(z.string(), oauthEnvironmentSchema).optional().default({}),
-      github: z.record(z.string(), oauthEnvironmentSchema).optional().default({}),
-    })
-    .optional()
-    .default({ google: {}, github: {} }),
   railway: z.object({
     /**
      * Account / project-wide token (Bearer auth). Required at setup time when the Railway
      * provider is enabled — gives full project lifecycle (create project, list user
      * projects, mint per-environment project tokens via `projectTokenCreate`, read/write
-     * variables across environments). Set via `RAILWAY_API_TOKEN` in `.env.setup`. Stays
-     * in `.env.setup` only; never pushed to GitHub Environments or Railway service
+     * variables across environments). Set via `RAILWAY_API_TOKEN` in `.setup-credentials`.
+     * Stays in `.setup-credentials` only; never pushed to GitHub Environments or Railway service
      * variables. Per-environment runtime tokens are minted from this and persisted into
      * `state.railway.environmentTokens`, then written into each `.env.<env>` as
      * `RAILWAY_TOKEN`.
      */
     apiToken: z.string().optional(),
   }),
-  postman: z
-    .object({
-      apiKey: z.string(),
-      workspaceId: z.string(),
-    })
-    .optional()
-    .default({ apiKey: '', workspaceId: '' }),
-  scalar: z
-    .object({
-      apiKey: z.string(),
-      namespace: z.string(),
-      slug: z.string(),
-    })
-    .optional()
-    .default({ apiKey: '', namespace: '', slug: '' }),
+  /**
+   * Cloudflare credentials used to PROVISION Turnstile. With these, the Turnstile provider
+   * creates one widget per environment and writes `CAPTCHA_SITE_KEY` / `CAPTCHA_SECRET` into each
+   * `.env.<environment>`. The widget API is account-scoped, so both token and account id are needed.
+   */
+  cloudflare: z.object({
+    /** API token with Turnstile:Edit (`CLOUDFLARE_API_TOKEN`). */
+    apiToken: z.string().optional(),
+    /** Account id the widget is created under (`CLOUDFLARE_ACCOUNT_ID`). */
+    accountId: z.string().optional(),
+  }),
+  /**
+   * Postman account API key (`POSTMAN_API_KEY`). Setup-only credential — it provisions the
+   * workspace + uploads the collection and is never written into `.env.<environment>`. Stays
+   * in `.setup-credentials` (same place as the other account-wide provider tokens).
+   */
+  postman: z.object({
+    /** Personal API key (`PMAK-…`) used for `X-Api-Key` auth against the Postman API. */
+    apiKey: z.string().optional(),
+  }),
+  /**
+   * Scalar account API key (`SCALAR_API_KEY`). Setup-only credential — it publishes the OpenAPI
+   * document to the Scalar Registry and is never written into `.env.<environment>`. The team
+   * namespace is auto-resolved from the token (the active team); slug defaults to the project
+   * name. `namespace` / `slug` are optional pins for multi-team accounts or a custom slug.
+   */
+  scalar: z.object({
+    /** Account API key used by `scalar auth login --token`. */
+    apiKey: z.string().optional(),
+    /** Optional team namespace override (`SCALAR_NAMESPACE`); auto-resolved when omitted. */
+    namespace: z.string().optional(),
+    /** Optional registry slug override (`SCALAR_SLUG`); defaults to the project name. */
+    slug: z.string().optional(),
+  }),
 });
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -150,38 +169,10 @@ function get(source: Record<string, string>, key: string): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-// ─── Load secrets from .env.setup ───────────────────────────────────────────
+// ─── Load secrets from .setup-credentials ────────────────────────────────────
 
-export function loadSecretsFromEnv(environmentNames: string[]): SetupSecrets {
+export function loadSecretsFromEnv(_environmentNames: string[]): SetupSecrets {
   const source = getEnvSource();
-
-  const stripe: SetupSecrets['stripe'] = {};
-  const oauthGoogle: Record<
-    string,
-    { clientId: string; clientSecret: string; redirectUri: string }
-  > = {};
-  const oauthGithub: Record<
-    string,
-    { clientId: string; clientSecret: string; redirectUri: string }
-  > = {};
-
-  for (const env of environmentNames) {
-    const sk = get(source, `STRIPE_${env.toUpperCase()}_SECRET_KEY`);
-    const ws = get(source, `STRIPE_${env.toUpperCase()}_WEBHOOK_SECRET`);
-    if (sk || ws) stripe[env] = { secretKey: sk, webhookSecret: ws };
-
-    const gClient = get(source, `OAUTH_GOOGLE_${env.toUpperCase()}_CLIENT_ID`);
-    const gSecret = get(source, `OAUTH_GOOGLE_${env.toUpperCase()}_CLIENT_SECRET`);
-    const gRedirect = get(source, `OAUTH_GOOGLE_${env.toUpperCase()}_REDIRECT_URI`);
-    if (gClient || gSecret || gRedirect)
-      oauthGoogle[env] = { clientId: gClient, clientSecret: gSecret, redirectUri: gRedirect };
-
-    const ghClient = get(source, `OAUTH_GITHUB_${env.toUpperCase()}_CLIENT_ID`);
-    const ghSecret = get(source, `OAUTH_GITHUB_${env.toUpperCase()}_CLIENT_SECRET`);
-    const ghRedirect = get(source, `OAUTH_GITHUB_${env.toUpperCase()}_REDIRECT_URI`);
-    if (ghClient || ghSecret || ghRedirect)
-      oauthGithub[env] = { clientId: ghClient, clientSecret: ghSecret, redirectUri: ghRedirect };
-  }
 
   return {
     neon: { apiKey: get(source, 'NEON_API_KEY'), orgId: get(source, 'NEON_ORG_ID') || undefined },
@@ -191,22 +182,20 @@ export function loadSecretsFromEnv(environmentNames: string[]): SetupSecrets {
     },
     sentry: { authToken: get(source, 'SENTRY_AUTH_TOKEN') },
     resend: { apiKey: get(source, 'RESEND_API_KEY') },
-    stripe: Object.keys(stripe).length > 0 ? stripe : {},
-    oauth: {
-      google: oauthGoogle,
-      github: oauthGithub,
-    },
     railway: {
       apiToken: get(source, 'RAILWAY_API_TOKEN') || undefined,
     },
+    cloudflare: {
+      apiToken: get(source, 'CLOUDFLARE_API_TOKEN') || undefined,
+      accountId: get(source, 'CLOUDFLARE_ACCOUNT_ID') || undefined,
+    },
     postman: {
-      apiKey: get(source, 'POSTMAN_API_KEY'),
-      workspaceId: get(source, 'POSTMAN_WORKSPACE_ID'),
+      apiKey: get(source, 'POSTMAN_API_KEY') || undefined,
     },
     scalar: {
-      apiKey: get(source, 'SCALAR_API_KEY'),
-      namespace: get(source, 'SCALAR_NAMESPACE'),
-      slug: get(source, 'SCALAR_SLUG'),
+      apiKey: get(source, 'SCALAR_API_KEY') || undefined,
+      namespace: get(source, 'SCALAR_NAMESPACE') || undefined,
+      slug: get(source, 'SCALAR_SLUG') || undefined,
     },
   };
 }
@@ -227,10 +216,6 @@ export function isSecretFilled(value: string | undefined): boolean {
 }
 
 export function getSecretsPath(): string {
-  return ENV_SETUP_PATH;
-}
-
-export function envSecretsPath(): string {
   return ENV_SETUP_PATH;
 }
 
@@ -274,6 +259,7 @@ export function hasAnyEnvSecret(environmentNames: string[]): boolean {
     filled(secrets.sentry.authToken) ||
     filled(secrets.resend.apiKey) ||
     filled(secrets.railway.apiToken) ||
+    filled(secrets.cloudflare.apiToken) ||
     filled(secrets.postman.apiKey) ||
     filled(secrets.scalar.apiKey)
   );
@@ -315,61 +301,51 @@ export function buildEnvSetupTemplateContent(config: SetupConfig): string {
     lines.push('');
   }
 
-  for (const env of environmentNames) {
-    const u = env.toUpperCase();
-    lines.push(
-      `# Stripe (${env}) — secret: https://dashboard.stripe.com/apikeys  webhook: https://dashboard.stripe.com/webhooks`,
-    );
-    lines.push(`STRIPE_${u}_SECRET_KEY=`);
-    lines.push(`STRIPE_${u}_WEBHOOK_SECRET=`);
-    lines.push('');
-  }
-
-  lines.push('# Optional OAuth per env:');
-  lines.push('# Google: https://console.cloud.google.com/apis/credentials');
+  // App-level per-environment secrets are NOT templated here — the environment is the
+  // `.env.<environment>` file, not a key suffix. Setup prompts for these from stdin at apply time
+  // (or you enter them directly in each env file):
   lines.push(
-    '#   OAUTH_GOOGLE_<ENV>_CLIENT_ID=  OAUTH_GOOGLE_<ENV>_CLIENT_SECRET=  OAUTH_GOOGLE_<ENV>_REDIRECT_URI=',
+    '# App per-environment secrets are prompted at apply and written to .env.<environment>',
   );
-  lines.push('# GitHub OAuth: https://github.com/settings/developers');
+  lines.push('#   (NOT here — the environment is the file, not a key suffix):');
   lines.push(
-    '#   OAUTH_GITHUB_<ENV>_CLIENT_ID=  OAUTH_GITHUB_<ENV>_CLIENT_SECRET=  OAUTH_GITHUB_<ENV>_REDIRECT_URI=',
+    '#   Stripe:    STRIPE_SECRET_KEY=  STRIPE_WEBHOOK_SECRET=  (test in dev, live in prod)',
+  );
+  lines.push(
+    '#   OAuth:     OAUTH_GOOGLE_CLIENT_ID/_CLIENT_SECRET/_REDIRECT_URI  (+ OAUTH_GITHUB_*)',
+  );
+  lines.push(
+    '#   Turnstile: CAPTCHA_* are PROVISIONED from CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID',
+  );
+  lines.push(
+    '#   PostHog:   POSTHOG_PERSONAL_API_KEY=  (setup resolves POSTHOG_KEY + POSTHOG_HOST)',
+  );
+  lines.push(
+    '# (See SETUP_INFRA_PREREQUISITES.md.) Providers read/validate these from .env.<environment>.',
   );
   return lines.join('\n');
 }
 
 export function writeEnvSetupTemplateIfMissing(config: SetupConfig): boolean {
   if (existsSync(ENV_SETUP_PATH)) return false;
+  mkdirSync(dirname(ENV_SETUP_PATH), { recursive: true });
   writeFileSync(ENV_SETUP_PATH, buildEnvSetupTemplateContent(config), 'utf-8');
   return true;
 }
 
-export function appendMissingEnvSetupVariables(config: SetupConfig): string[] {
+export function appendMissingEnvSetupVariables(_config: SetupConfig): string[] {
   if (!existsSync(ENV_SETUP_PATH)) return [];
   const content = readFileSync(ENV_SETUP_PATH, 'utf-8');
   const existingKeys = new Set(Object.keys(parseEnvFile(content)));
   const appended: string[] = [];
   const blocks: string[] = [];
 
+  // Only account-wide, env-agnostic credential keys are templated. App per-environment secrets
+  // (Stripe / OAuth / Turnstile-via-Cloudflare) are prompted/provisioned into `.env.<environment>`.
   for (const [key, url] of SIMPLE_VARS) {
     if (!existingKeys.has(key)) {
       blocks.push(`# ${url}\n${key}=`);
       appended.push(key);
-    }
-  }
-
-  const environmentNames = config.environments.map((environment) => environment.name);
-  for (const env of environmentNames) {
-    const u = env.toUpperCase();
-    const secretKey = `STRIPE_${u}_SECRET_KEY`;
-    const webhookSecret = `STRIPE_${u}_WEBHOOK_SECRET`;
-    const needSecret = !existingKeys.has(secretKey);
-    const needWebhook = !existingKeys.has(webhookSecret);
-    if (needSecret || needWebhook) {
-      blocks.push(
-        `# Stripe (${env}) — secret: https://dashboard.stripe.com/apikeys  webhook: https://dashboard.stripe.com/webhooks\n${secretKey}=\n${webhookSecret}=`,
-      );
-      if (needSecret) appended.push(secretKey);
-      if (needWebhook) appended.push(webhookSecret);
     }
   }
 

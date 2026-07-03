@@ -3,11 +3,7 @@ import { getRequestDatabase } from '@/infrastructure/database/contexts/request-d
 import { verification_tokens } from './verification-token.schema.js';
 
 /** Enum of token categories that share the unified {@link verification_tokens} table. */
-export type VerificationTokenType =
-  | 'MAGIC_LINK'
-  | 'PASSWORD_RESET'
-  | 'EMAIL_VERIFICATION'
-  | 'EMAIL_CHANGE';
+export type VerificationTokenType = 'EMAIL_CODE' | 'PASSWORD_RESET' | 'EMAIL_CHANGE';
 
 /**
  * Drizzle repository for the shared `verification_tokens` table.
@@ -94,16 +90,18 @@ export class VerificationTokenRepository {
   }
 
   /**
-   * Atomically consume a numeric OTP scoped to a specific user and token type: marks the row used
-   * only if a matching, unexpired, unused row exists. Returns the row when this caller consumed it,
-   * else `null` (missing / expired / already used / wrong code).
+   * Atomically consume a verification code scoped to a specific user and token type: marks the row
+   * used only if a matching, unexpired, unused row exists. Returns the row when this caller consumed
+   * it, else `null` (missing / expired / already used / wrong code).
    *
    * @remarks
    * Unlike {@link VerificationTokenRepository.consumeIfValid} — which looks up by the high-entropy
-   * 32-byte token hash (plus its `expectedType`) — a 6-digit OTP has only ~1e6 values, so the lookup
-   * MUST be bound to `user_id` + `token_type` (and gated by a per-user attempt cap at the call site).
-   * Without that scoping an attacker could spray codes against ANY pending OTP across all users. The
-   * single atomic UPDATE also prevents two concurrent verifies from both succeeding.
+   * 32-byte token hash (plus its `expectedType`) — a verification code is short, so the lookup MUST be
+   * bound to `user_id` + `token_type` (and gated by a per-user attempt cap at the call site). Without
+   * that scoping an attacker could spray codes against ANY pending code across all users. The single
+   * atomic UPDATE also prevents two concurrent verifies from both succeeding. After a winning consume,
+   * the caller invalidates the user's remaining live codes via {@link invalidateAllForUser} so the
+   * whole concurrent set is single-use the instant any one is redeemed.
    */
   async consumeOtpForUser(userId: number, tokenType: VerificationTokenType, codeHash: string) {
     const rows = await getRequestDatabase()
@@ -138,7 +136,7 @@ export class VerificationTokenRepository {
 
   /**
    * Invalidate ALL outstanding tokens for a user across every token type. Used by the
-   * offboarding sequence (sec-U1) so a magic-link / password-reset / email-verify token
+   * offboarding sequence (sec-U1) so an email-code / password-reset / email-verify token
    * issued seconds before soft-delete cannot mint a session for the deleted user.
    */
   async invalidateAllByUser(userId: number) {

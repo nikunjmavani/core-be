@@ -32,6 +32,13 @@ describe('createSubscriptionController', () => {
     changePlan: vi.fn().mockResolvedValue({ public_id: subscriptionPublicId }),
     cancel: vi.fn().mockResolvedValue({ public_id: subscriptionPublicId }),
     resume: vi.fn().mockResolvedValue({ public_id: subscriptionPublicId }),
+    listInvoices: vi.fn().mockResolvedValue({
+      items: [{ id: 'in_2' }],
+      total: null,
+      limit: 25,
+      has_more: true,
+      next_cursor: 'in_2',
+    }),
   } as unknown as SubscriptionService;
 
   const controller = createSubscriptionController(service);
@@ -43,6 +50,19 @@ describe('createSubscriptionController', () => {
     );
     expect(service.list).toHaveBeenCalledWith(organizationPublicId);
     expect(response).toMatchObject({ data: [] });
+  });
+
+  it('listInvoices maps the service page into a paginated envelope', async () => {
+    const response = await controller.listInvoices(
+      mockRequest({ params: { organization_id: organizationPublicId }, query: { limit: 25 } }),
+      mockReply(),
+    );
+    // The Stripe cursor + limit are validated in the service; the controller forwards request.query.
+    expect(service.listInvoices).toHaveBeenCalledWith(organizationPublicId, { limit: 25 });
+    expect(response).toMatchObject({
+      data: [{ id: 'in_2' }],
+      meta: { pagination: { per_page: 25, next: 'in_2', has_more: true } },
+    });
   });
 
   it('getSubscription delegates to service', async () => {

@@ -3012,40 +3012,46 @@
       }
     }
   },
-  "POST /api/v1/auth/email/resend-verification": {
+  "POST /api/v1/auth/email/login": {
+    "request_body": {
+      "email": "user@example.com",
+      "code": "AB2CD3"
+    },
     "responses": {
       "201": {
         "data": {
-          "message": "Verification email sent."
+          "access_token": "<redacted>",
+          "session_id": "ses_example00000000000000"
         },
         "meta": {
-          "request_id": "4f11d760-1ea5-446b-9f63-e7418d66194c"
+          "request_id": "f2d58703-a630-4c9b-9814-f966efd6cec4"
         }
       },
       "401": {
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "Missing Authorization header",
+          "detail": "Invalid or expired verification code",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
-          "request_id": "12c59626-f771-44e4-9a71-30d31316230a"
+          "request_id": "b24c5a29-502f-460c-9abb-12d68926d8fa"
         }
       }
     }
   },
-  "POST /api/v1/auth/email/verify": {
+  "POST /api/v1/auth/email/send-code": {
     "request_body": {
-      "token": "<redacted>"
+      "email": "user@example.com"
     },
     "responses": {
       "201": {
         "data": {
-          "message": "Email verified successfully."
+          "message": "If an account exists with this email, you will receive a sign-in code shortly.",
+          "expires_in_minutes": 15
         },
         "meta": {
-          "request_id": "7eefb97b-7bb2-411f-9e17-1845dfae9895"
+          "request_id": "3fce5cf3-035e-4903-9c5e-ac4b7b974942"
         }
       },
       "400": {
@@ -3056,24 +3062,13 @@
           "documentation_url": "https://example.com/resource",
           "errors": [
             {
-              "field": "body.token",
+              "field": "body.email",
               "message": "Invalid input: expected string, received undefined"
             }
           ]
         },
         "meta": {
-          "request_id": "b875aa9b-46cf-4423-99f4-ecab0d1f73c5"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Invalid or expired verification token",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "9fb622b8-b998-4b8d-95a2-955fcbe38d0f"
+          "request_id": "4cc65107-2712-4a24-99a7-362feea68b65"
         }
       }
     }
@@ -3142,86 +3137,9 @@
       }
     }
   },
-  "POST /api/v1/auth/magic-link/send": {
-    "request_body": {
-      "email": "user@example.com"
-    },
-    "responses": {
-      "201": {
-        "data": {
-          "message": "If an account exists with this email, you will receive a magic link shortly.",
-          "expires_in_minutes": 15
-        },
-        "meta": {
-          "request_id": "3fce5cf3-035e-4903-9c5e-ac4b7b974942"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid values for fields in request",
-          "documentation_url": "https://example.com/resource",
-          "errors": [
-            {
-              "field": "body.email",
-              "message": "Invalid input: expected string, received undefined"
-            }
-          ]
-        },
-        "meta": {
-          "request_id": "4cc65107-2712-4a24-99a7-362feea68b65"
-        }
-      }
-    }
-  },
-  "POST /api/v1/auth/magic-link/verify": {
-    "request_body": {
-      "token": "<redacted>"
-    },
-    "responses": {
-      "201": {
-        "data": {
-          "access_token": "<redacted>",
-          "session_id": "ses_example00000000000000"
-        },
-        "meta": {
-          "request_id": "f2d58703-a630-4c9b-9814-f966efd6cec4"
-        }
-      },
-      "400": {
-        "error": {
-          "type": "validation_error",
-          "code": "invalid_field",
-          "detail": "Invalid values for fields in request",
-          "documentation_url": "https://example.com/resource",
-          "errors": [
-            {
-              "field": "body.token",
-              "message": "Invalid input: expected string, received undefined"
-            }
-          ]
-        },
-        "meta": {
-          "request_id": "5f83b11f-483f-40d1-9b6b-c3b8637f29e7"
-        }
-      },
-      "401": {
-        "error": {
-          "type": "request_error",
-          "code": "unauthorized",
-          "detail": "Invalid or expired magic link",
-          "documentation_url": "https://example.com/resource"
-        },
-        "meta": {
-          "request_id": "b24c5a29-502f-460c-9abb-12d68926d8fa"
-        }
-      }
-    }
-  },
   "POST /api/v1/auth/me/auth-methods": {
     "request_body": {
-      "method_type": "MAGIC_LINK",
+      "method_type": "EMAIL_CODE",
       "is_primary": false
     },
     "responses": {

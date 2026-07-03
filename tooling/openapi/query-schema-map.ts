@@ -7,6 +7,7 @@
 import type { ZodTypeAny } from 'zod';
 import { ListAuditLogsQueryDto } from '@/domains/audit/audit.dto.js';
 import { OauthCallbackQueryDto } from '@/domains/auth/auth.dto.js';
+import { listInvoicesQueryDto } from '@/domains/billing/sub-domains/subscription/subscription.dto.js';
 import { listNotificationsQueryDto } from '@/domains/notify/sub-domains/notification/notification.dto.js';
 import { listMembershipsQueryDto } from '@/domains/tenancy/sub-domains/membership/membership.dto.js';
 import { listMemberRolesQueryDto } from '@/domains/tenancy/sub-domains/member-roles/member-role.dto.js';
@@ -18,6 +19,7 @@ import { listLimitQuerySchema } from '@/shared/utils/http/pagination.util.js';
 export const routeQuerySchemaMap: Record<string, ZodTypeAny> = {
   'GET /api/v1/audit/logs': ListAuditLogsQueryDto,
   'GET /api/v1/users': ListUsersDto,
+  'GET /api/v1/billing/invoices': listInvoicesQueryDto,
   'GET /api/v1/tenancy/organizations': listOrganizationsQueryDto,
   'GET /api/v1/tenancy/organization/audit-logs': ListAuditLogsQueryDto,
   'GET /api/v1/tenancy/organization/api-keys': listOrganizationApiKeysQueryDto,

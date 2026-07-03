@@ -390,6 +390,23 @@ describe('Security: object-ownership BOLA matrix', () => {
       expect(res.statusCode).toBe(404);
     });
 
+    it("member of org A GET org B's subscription payment-setup → 404", async () => {
+      const fixture = await seedTwoOrganizationsWithSubscriptions();
+      const tokenScopedToOrgA = await generateTestToken({
+        userId: fixture.userA.public_id,
+        organizationPublicId: fixture.organizationA.public_id,
+      });
+      const res = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(
+          `/billing/subscriptions/${fixture.subscriptionInB.public_id}/payment-setup`,
+        ),
+        token: tokenScopedToOrgA,
+        organizationPublicId: fixture.organizationA.public_id,
+      });
+      expect(res.statusCode).toBe(404);
+    });
+
     it('baseline: member GET own org subscription → 200', async () => {
       const fixture = await seedTwoOrganizationsWithSubscriptions();
       const tokenScopedToOrgA = await generateTestToken({

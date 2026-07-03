@@ -42,7 +42,7 @@ exports[`mail templates (snapshots) > invitationTemplate matches snapshot 1`] = 
 </html>"
 `;
 
-exports[`mail templates (snapshots) > magicLinkTemplate matches snapshot 1`] = `
+exports[`mail templates (snapshots) > verificationCodeTemplate matches snapshot 1`] = `
 "<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -61,14 +61,14 @@ exports[`mail templates (snapshots) > magicLinkTemplate matches snapshot 1`] = `
   </style>
 </head>
 <body>
-  <span class="preheader">Your sign-in code is 123456 — expires in 15 minutes.</span>
+  <span class="preheader">Your sign-in code is AB2CD3 — expires in 15 minutes.</span>
   <div class="container">
     <div class="card">
       
       <h1>Sign in to your account</h1>
       <p>Enter the code below to securely sign in. This code expires in 15 minutes.</p>
       <p style="text-align: center; margin: 32px 0;">
-        <span style="display: inline-block; font-size: 32px; font-weight: 700; letter-spacing: 8px; color: #111827;">123456</span>
+        <span style="display: inline-block; font-size: 32px; font-weight: 700; letter-spacing: 8px; color: #111827;">AB2CD3</span>
       </p>
       <p style="font-size: 13px; color: #6b7280;">If you didn't request this, you can safely ignore this email.</p>
     

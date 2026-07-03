@@ -96,19 +96,13 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
     example: null,
   },
-  'POST /api/v1/auth/signup': {
-    // Creates the account and logs the user in immediately — same access-token envelope as login.
-    statusCode: 201,
-    schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
-    example: null,
-  },
   'POST /api/v1/auth/logout': { statusCode: 201, schema: null, example: null },
-  'POST /api/v1/auth/magic-link/send': {
+  'POST /api/v1/auth/email/send-code': {
     statusCode: 201,
-    schema: wrapSuccess(schemas.magicLinkSentSchema, schemas.magicLinkSentExample),
+    schema: wrapSuccess(schemas.verificationCodeSentSchema, schemas.verificationCodeSentExample),
     example: null,
   },
-  'POST /api/v1/auth/magic-link/verify': {
+  'POST /api/v1/auth/email/login': {
     statusCode: 201,
     schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
     example: null,
@@ -146,16 +140,6 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     example: null,
   },
   'POST /api/v1/auth/password/change': { statusCode: 201, schema: null, example: null },
-  'POST /api/v1/auth/email/verify': {
-    statusCode: 201,
-    schema: wrapSuccess(schemas.messageSchema, { message: 'Email verified successfully' }),
-    example: null,
-  },
-  'POST /api/v1/auth/email/resend-verification': {
-    statusCode: 201,
-    schema: wrapSuccess(schemas.messageSchema, { message: 'Verification email sent' }),
-    example: null,
-  },
   'POST /api/v1/auth/me/mfa/enroll': {
     statusCode: 201,
     schema: wrapSuccess(schemas.mfaEnrollSchema, schemas.mfaEnrollExample),

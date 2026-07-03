@@ -58,6 +58,7 @@ export interface EnvironmentVariables {
   EMAIL_FROM_ADDRESS?: string;
   EMAIL_FROM_NAME?: string;
   STRIPE_SECRET_KEY?: string;
+  STRIPE_PUBLISHABLE_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   OAUTH_GOOGLE_CLIENT_ID?: string;
   OAUTH_GOOGLE_CLIENT_SECRET?: string;
@@ -65,7 +66,13 @@ export interface EnvironmentVariables {
   OAUTH_GITHUB_CLIENT_ID?: string;
   OAUTH_GITHUB_CLIENT_SECRET?: string;
   OAUTH_GITHUB_REDIRECT_URI?: string;
+  POSTHOG_KEY?: string;
+  POSTHOG_HOST?: string;
+  CAPTCHA_PROVIDER?: string;
+  CAPTCHA_SITE_KEY?: string;
+  CAPTCHA_SECRET?: string;
   SENTRY_DSN?: string;
+  SENTRY_FRONTEND_DSN?: string;
   SENTRY_ENVIRONMENT?: string;
   SENTRY_TRACES_SAMPLE_RATE?: string;
   SENTRY_PROFILE_SAMPLE_RATE?: string;
@@ -76,11 +83,7 @@ export interface EnvironmentVariables {
   RAILWAY_TOKEN?: string;
   RAILWAY_SERVICE_ID?: string;
   RAILWAY_WORKER_SERVICE_ID?: string;
-  POSTMAN_API_KEY?: string;
   POSTMAN_WORKSPACE_ID?: string;
-  SCALAR_API_KEY?: string;
-  SCALAR_NAMESPACE?: string;
-  SCALAR_SLUG?: string;
 }
 
 export interface GuideStep {
@@ -129,7 +132,7 @@ export interface InfraProviderDeleteInstruction {
   /** Optional list of step-by-step actions (rendered as bullets). */
   steps?: string[];
   /**
-   * Resources currently recorded in `.setup-state.json` that the user must
+   * Resources currently recorded in the run state that the user must
    * delete in the dashboard. Empty array is allowed (we still print the URL
    * so the user can audit). Identifier is whatever the dashboard shows
    * (project ID, bucket name, etc.).
@@ -140,6 +143,51 @@ export interface InfraProviderDeleteInstruction {
 export interface InfraProviderExistingResource {
   provider: string;
   detail: string;
+}
+
+/**
+ * The organization / project / environment names a provider operates on — exactly as the
+ * provider's own code derives them (all from `setup.config.json`, never hardcoded).
+ * Surfaced as columns by `setup:infra:plan`. `—` (omitted field) = not applicable.
+ */
+export interface InfraProviderDescription {
+  /** Org / owner / workspace name (e.g. Sentry org, GitHub owner). */
+  organization?: string;
+  /** Project / repo / bucket-prefix / slug name. */
+  project?: string;
+  /** Per-environment resource names (or the env names when 1:1). */
+  environments?: string[];
+  /** Service names this provider deploys (e.g. Railway api/worker, Railway Redis redis). */
+  services?: string[];
+  /**
+   * Optional grouping label. Providers sharing a `planGroup` are merged into one row in
+   * `setup:infra:plan` (e.g. Railway server + Railway Redis → a single "Railway" line).
+   */
+  planGroup?: string;
+}
+
+/** One field compared between `setup.config.json` (expected) and the live provider (remote). */
+export interface RemoteField {
+  /** Field label, e.g. "project name", "branch (development)", "region", "organization". */
+  label: string;
+  /** Expected value from config (single source of truth). */
+  expected: string;
+  /** Value read from the provider API (`—` when absent). */
+  remote: string;
+  /** True when expected === remote. */
+  matches: boolean;
+  /** Marks a required prerequisite (e.g. organization) that setup will NOT create. */
+  prerequisite?: boolean;
+}
+
+/** Result of a live remote inspection for one provider (see `inspectRemote`). */
+export interface RemoteInspection {
+  /** True when the provider's resource(s) exist at the provider's end. */
+  present: boolean;
+  /** Deep, field-by-field comparison of config vs remote. */
+  fields: RemoteField[];
+  /** Set when the check could not run (no token / unreachable / API error). Never throws. */
+  error?: string;
 }
 
 export interface InfraProvider {
@@ -159,6 +207,24 @@ export interface InfraProvider {
   detectExisting?(context: InfraProviderContext): Promise<InfraProviderExistingResource[]>;
   /** Remote resource detection for state reconstruction (used by --reconstruct). */
   detectRemote?(context: InfraProviderContext): Promise<Record<string, unknown>>;
+  /**
+   * Live remote inspection: does the resource exist at the provider, and does its config
+   * match `setup.config.json` (field-by-field)? Powers `setup:infra:inspect` and
+   * `setup:infra:plan --remote`. Must degrade gracefully (return `{ error }`, never throw).
+   */
+  inspectRemote?(context: InfraProviderContext): Promise<RemoteInspection>;
+  /** Org / project / environment names this provider operates on (for `setup:infra:plan`). */
+  describe?(context: InfraProviderContext): InfraProviderDescription;
+  /**
+   * The `.env.<environment>` keys this provider contributes for one environment. Composed by
+   * `buildEnvironmentVariables()` — each provider owns its own slice (DATABASE_URL, S3_*, …)
+   * instead of a central switch. Return `{}` (or omit the hook) when the provider creates no
+   * runtime env vars (validate-only providers whose secrets are user-entered in the env file).
+   */
+  toEnvironmentVariables?(
+    context: InfraProviderContext,
+    environmentName: string,
+  ): Partial<EnvironmentVariables>;
   /** Build the interactive step descriptor for the provision loop. */
   buildStep(context: InfraProviderContext): StepDescriptor<unknown>;
   /** Health check used by `runCheck`. Return true when not applicable. */

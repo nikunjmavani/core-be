@@ -1,6 +1,6 @@
 ================================================================================
   ROUTE CATALOG — core-be
-  Total routes: 130
+  Total routes: 131
 ================================================================================
 
 Legend:
@@ -20,15 +20,13 @@ Legend:
 
 ================================================================================
   DOMAIN: AUTH (/api/v1/auth)
-  Routes: 36
+  Routes: 33
 ================================================================================
 
-  POST   /api/v1/auth/email/resend-verification                   201  -    both  AUTH
-  POST   /api/v1/auth/email/verify                                201  -    both  PUBLIC
+  POST   /api/v1/auth/email/login                                 201  -    both  PUBLIC
+  POST   /api/v1/auth/email/send-code                             201  -    both  PUBLIC
   POST   /api/v1/auth/login                                       201  -    both  PUBLIC
   POST   /api/v1/auth/logout                                      201  -    both  TOKEN: access-token
-  POST   /api/v1/auth/magic-link/send                             201  -    both  PUBLIC
-  POST   /api/v1/auth/magic-link/verify                           201  -    both  PUBLIC
   GET    /api/v1/auth/me/auth-methods                             200  -    both  AUTH
   POST   /api/v1/auth/me/auth-methods                             201  -    both  AUTH
   DELETE /api/v1/auth/me/auth-methods/:auth_method_id             204  -    both  AUTH
@@ -53,7 +51,6 @@ Legend:
   POST   /api/v1/auth/password/forgot                             201  -    both  PUBLIC
   POST   /api/v1/auth/password/reset                              201  -    both  PUBLIC
   POST   /api/v1/auth/refresh                                     201  -    both  PUBLIC
-  POST   /api/v1/auth/signup                                      201  -    both  PUBLIC
   POST   /api/v1/auth/step-up                                     201  -    both  AUTH
   POST   /api/v1/auth/switch-to-organization                      201  -    both  AUTH
   POST   /api/v1/auth/switch-to-personal                          201  -    both  AUTH
@@ -62,10 +59,13 @@ Legend:
 
 ================================================================================
   DOMAIN: BILLING (/api/v1/billing)
-  Routes: 10
+  Routes: 14
 ================================================================================
 
   — Sub Domains —
+  GET    /api/v1/billing/invoices                                 200  -    both  PERM: subscription:read
+  GET    /api/v1/billing/payment-methods                          200  -    both  PERM: subscription:read
+  POST   /api/v1/billing/payment-methods/setup                    201  req  team  PERM: subscription:manage
   GET    /api/v1/billing/plans                                    200  -    both  PUBLIC
   GET    /api/v1/billing/plans/:plan_id                           200  -    both  PUBLIC
   GET    /api/v1/billing/subscriptions                            200  -    both  PERM: subscription:read
@@ -74,6 +74,7 @@ Legend:
   PATCH  /api/v1/billing/subscriptions/:subscription_id           200  -    both  PERM: subscription:manage
   POST   /api/v1/billing/subscriptions/:subscription_id/cancel    201  req  team  PERM: subscription:manage
   POST   /api/v1/billing/subscriptions/:subscription_id/change-plan  201  req  team  PERM: subscription:manage
+  GET    /api/v1/billing/subscriptions/:subscription_id/payment-setup  200  -    both  PERM: subscription:read
   POST   /api/v1/billing/subscriptions/:subscription_id/resume    201  req  team  PERM: subscription:manage
   POST   /api/v1/billing/webhook                                  200  -    both  PUBLIC
 
@@ -214,21 +215,22 @@ Legend:
   SUMMARY
 ================================================================================
 
-  Total routes    : 130
-  Public          : 19
-  Authenticated   : 50
+  Total routes    : 131
+  Public          : 17
+  Authenticated   : 49
   Role-guarded    : 9
-  Perm-guarded    : 48
+  Perm-guarded    : 52
   Token-guarded   : 4
-  Team-only (O)   : 8
+  Team-only (O)   : 9
 
 ================================================================================
-  IDEMPOTENCY-REQUIRED WRITES (12) — X-Idempotency-Key required
+  IDEMPOTENCY-REQUIRED WRITES (13) — X-Idempotency-Key required
 ================================================================================
 
   Routes flagged I = req reject a missing or reused key (422); every other write
   accepts an optional key (24h Redis cache).
 
+    POST /api/v1/billing/payment-methods/setup
     POST /api/v1/billing/subscriptions
     POST /api/v1/billing/subscriptions/:subscription_id/cancel
     POST /api/v1/billing/subscriptions/:subscription_id/change-plan

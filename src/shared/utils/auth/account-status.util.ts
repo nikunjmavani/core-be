@@ -1,4 +1,4 @@
-import { UnauthorizedError } from '@/shared/errors/index.js';
+import { ForbiddenError, UnauthorizedError } from '@/shared/errors/index.js';
 
 /** The only `users.status` value permitted to mint or refresh an authenticated session. */
 export const ACTIVE_USER_STATUS = 'ACTIVE';
@@ -37,5 +37,26 @@ export function assertUserAccountActive(input: string | AccountActiveInput): voi
   }
   if (normalized.deleted_at !== undefined && normalized.deleted_at !== null) {
     throw new UnauthorizedError('errors:accountNotActive');
+  }
+}
+
+/**
+ * Refuses login-factor enrollment (MFA TOTP, WebAuthn passkey) until the account's email is verified.
+ *
+ * @remarks
+ * Closes the Trojan-credential account pre-hijacking vector: an attacker who pre-registers a
+ * victim's email holds an UNVERIFIED account whose password they set, so a password step-up lets
+ * them seed an MFA method or passkey — a factor that survives the victim's password-reset recovery
+ * (reset revokes sessions, not enrolled credentials), yielding a silent retained takeover or a
+ * lockout. Gating enrollment on email control — the one thing the pre-registering attacker lacks —
+ * collapses the attack, mirroring the invitation-accept verified-email gate. Throws
+ * `ForbiddenError('errors:emailVerificationRequiredForCredential')` (403) for an unverified account.
+ * OAuth linking is guarded separately by the verified-account linking guard in `oauth-user-session`.
+ */
+export function assertEmailVerifiedForCredentialEnrollment(input: {
+  is_email_verified: boolean;
+}): void {
+  if (!input.is_email_verified) {
+    throw new ForbiddenError('errors:emailVerificationRequiredForCredential');
   }
 }

@@ -21,7 +21,7 @@ import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
 type AuthAuthMethodHandlersDependencies = Pick<AuthContainer, 'authMethodService' | 'authService'>;
 
-/** Builds the auth-method management Fastify handlers (`listAuthMethods`, `createAuthMethod`, `deleteAuthMethod`, plus the password and email-verification flows) and emits the `auth.auth_method.*` audit events. Reset-password auto-logs-in via {@link AuthContainer.authService}. */
+/** Builds the auth-method management Fastify handlers (`listAuthMethods`, `createAuthMethod`, `deleteAuthMethod`, plus the password flows) and emits the `auth.auth_method.*` audit events. Reset-password auto-logs-in via {@link AuthContainer.authService}. */
 export function createAuthAuthMethodHandlers({
   authMethodService,
   authService,
@@ -91,7 +91,7 @@ export function createAuthAuthMethodHandlers({
       // Auto-login: the reset revoked every prior session, so this freshly-minted one is the only
       // live session — the user lands logged in instead of being bounced to the sign-in page.
       setSessionCookie(reply, data.session_public_id, data.session_refresh_secret);
-      // sec-A8: a reset auto-login is a login surface — audit it like password / magic-link / OAuth.
+      // sec-A8: a reset auto-login is a login surface — audit it like password / email-code / OAuth.
       await recordLoginAuditEvent(request, data, 'password');
       return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
     },
@@ -125,23 +125,6 @@ export function createAuthAuthMethodHandlers({
         resource_type: 'user',
       });
       return reply.code(204).send();
-    },
-    verifyEmail: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const data = await authMethodService.verifyEmail(request.body);
-      return successResponse(
-        resolveAuthMessageKeyResponse(request, data),
-        getRequestIdentifier(request),
-      );
-    },
-    resendEmailVerification: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const auth = requireAuth(request);
-      const data = await authMethodService.resendEmailVerification(auth.userId, {
-        requestId: getRequestIdentifier(request),
-      });
-      return successResponse(
-        resolveAuthMessageKeyResponse(request, data),
-        getRequestIdentifier(request),
-      );
     },
   };
 }

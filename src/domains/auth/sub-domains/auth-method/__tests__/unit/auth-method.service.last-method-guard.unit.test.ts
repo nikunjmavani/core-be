@@ -17,7 +17,7 @@ const METHOD_PUB_A = 'testmethodpuba123456'; // being deleted
 
 /**
  * Regression for sec-A5 (Medium): `DELETE /me/auth-methods/:publicId` must refuse to revoke the
- * user's last login-capable credential (PASSWORD/OAUTH/MAGIC_LINK), or the user is locked out.
+ * user's last login-capable credential (PASSWORD/OAUTH/EMAIL_CODE), or the user is locked out.
  *
  * route-audit C1: the "is another login-capable method active?" check and the revoke now run in ONE
  * statement (`revokeUnlessLastLoginCapable` — an `EXISTS` over the user's other active rows), so two
@@ -86,7 +86,7 @@ describe('AuthMethodService.delete — last-method guard (sec-A5 / route-audit C
     expect(authMethodRepository.revokeUnlessLastLoginCapable).toHaveBeenCalledWith(
       42,
       user.id,
-      expect.arrayContaining(['PASSWORD', 'OAUTH', 'MAGIC_LINK']),
+      expect.arrayContaining(['PASSWORD', 'OAUTH', 'EMAIL_CODE']),
     );
     // PASSWORD revocation also clears the stale hash.
     expect(userService.clearPasswordHash).toHaveBeenCalledWith('user_pub');

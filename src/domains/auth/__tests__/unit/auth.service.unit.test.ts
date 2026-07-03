@@ -126,10 +126,6 @@ describe('AuthService', () => {
   } as unknown as Redis;
 
   const authMethodService = {
-    createPasswordMethod: vi.fn().mockResolvedValue(undefined),
-    resendEmailVerification: vi
-      .fn()
-      .mockResolvedValue({ messageKey: 'success:verificationEmailSent' }),
     // resetPassword consumes the token + updates the password + revokes sessions, then returns the
     // reset user so AuthService can mint a fresh session (auto-login).
     resetPassword: vi.fn().mockResolvedValue(user),

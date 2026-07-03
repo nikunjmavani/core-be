@@ -106,7 +106,7 @@ Set on **both** API and worker services (Railway / K8s):
 | `DATABASE_URL`                                                     | Managed Postgres with TLS                                                                       |
 | `REDIS_URL`                                                        | Managed Redis                                                                                   |
 | `STRIPE_WEBHOOK_SECRET`                                            | Required when Stripe billing webhooks are enabled                                               |
-| `GLOBAL_ADMIN_EMAILS`                                              | Comma-separated platform admin emails (JWT `super_admin` on login/refresh/OAuth/magic-link/MFA) |
+| `GLOBAL_ADMIN_EMAILS`                                              | Comma-separated platform admin emails (JWT `super_admin` on login/refresh/OAuth/email verification-code/MFA) |
 | `ENABLE_QUEUE_DASHBOARD`                                           | `false` unless network-restricted                                                               |
 | `ENABLE_MCP_SERVER`                                                | `false` unless network-restricted                                                               |
 | `ENABLE_RESPONSE_ENCRYPTION`                                       | If `true`, `RESPONSE_ENCRYPTION_KEY` must be set (encryption fails closed on error)             |

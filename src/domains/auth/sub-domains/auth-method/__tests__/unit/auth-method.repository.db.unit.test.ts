@@ -54,7 +54,7 @@ describe('AuthMethodRepository (database)', () => {
   });
 
   it('route-audit C1: revokeUnlessLastLoginCapable refuses to revoke the last login-capable method', async () => {
-    const LOGIN_CAPABLE = ['PASSWORD', 'OAUTH', 'MAGIC_LINK'];
+    const LOGIN_CAPABLE = ['PASSWORD', 'OAUTH', 'EMAIL_CODE'];
     const user = await createTestUser({ email: 'last-login-capable@test.com' });
 
     const password = await repository.create({

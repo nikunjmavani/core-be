@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
+import { listSearchSortSchema } from '@/shared/utils/http/list-query.util.js';
 import { trimmedString, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 /** Zod schema for the `:role_id` path param (get/update/delete role + list/replace role permissions). */
@@ -39,7 +39,7 @@ export const updateMemberRoleDto = z
   .strict();
 
 /** Zod schema for the `GET /organization/roles` cursor pagination query. */
-export const listMemberRolesQueryDto = cursorPaginationSchema.strict();
+export const listMemberRolesQueryDto = listSearchSortSchema(['name', 'created_at'] as const);
 
 /** Validated body inferred from {@link createMemberRoleDto}. */
 export type CreateMemberRoleInput = z.infer<typeof createMemberRoleDto>;

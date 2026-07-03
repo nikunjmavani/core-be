@@ -6,7 +6,10 @@ import {
   encryptFieldSecret,
 } from '@/shared/utils/security/field-secret-encryption.util.js';
 import { ForbiddenError, UnauthorizedError } from '@/shared/errors/index.js';
-import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
+import {
+  assertEmailVerifiedForCredentialEnrollment,
+  assertUserAccountActive,
+} from '@/shared/utils/auth/account-status.util.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
@@ -340,6 +343,10 @@ export class MfaService {
     const parsed = validateMfaEnroll(body);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
+    // Pre-hijacking guard: an unverified (e.g. attacker-pre-registered) account must not seed an
+    // MFA factor that would survive the real owner's password-reset recovery (sec — account
+    // pre-hijacking, Trojan-credential variant).
+    assertEmailVerifiedForCredentialEnrollment(user);
     if (parsed.method_type !== 'MFA_TOTP') {
       throw new UnauthorizedError('errors:mfaOnlyTotpSupported');
     }

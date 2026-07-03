@@ -214,9 +214,9 @@ function buildDomainProbes(): RouteProbe[] {
       expectedStatus: [200, 204, 401],
     },
     {
-      name: 'POST /api/v1/auth/magic-link/send',
+      name: 'POST /api/v1/auth/email/send-code',
       method: 'POST',
-      path: `${API_PREFIX}/auth/magic-link/send`,
+      path: `${API_PREFIX}/auth/email/send-code`,
       expectedStatus: 201,
       body: { email: EMAIL },
     },

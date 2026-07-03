@@ -1,7 +1,5 @@
 {
-  "magicLinkSubject": "Sign in to your account",
+  "verificationCodeSubject": "Sign in to your account",
   "passwordResetSubject": "Reset your password",
-  "passwordResetHtml": "Click <a href=\"{{resetUrl}}\">here</a> to reset your password. This link expires in {{expiresInMinutes}} minutes.",
-  "emailVerificationSubject": "Verify your email address",
-  "emailVerificationHtml": "Your email verification code is <strong>{{code}}</strong>. It expires in {{expiresInMinutes}} minutes."
+  "passwordResetHtml": "Click <a href=\"{{resetUrl}}\">here</a> to reset your password. This link expires in {{expiresInMinutes}} minutes."
 }

@@ -22,8 +22,12 @@ describe('rate-limit-presets', () => {
     vi.resetModules();
   });
 
-  it('STRICT_PUBLIC_RATE_LIMIT allows 5000 req/min in test NODE_ENV', async () => {
-    mockEnv.NODE_ENV = 'test';
+  it.each([
+    'test',
+    'development',
+    'local',
+  ] as const)('STRICT_PUBLIC_RATE_LIMIT allows 5000 req/min in %s NODE_ENV', async (nodeEnv) => {
+    mockEnv.NODE_ENV = nodeEnv;
     const { STRICT_PUBLIC_RATE_LIMIT } = await import(
       '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
@@ -49,8 +53,11 @@ describe('rate-limit-presets', () => {
     expect(STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.hook).toBe('preHandler');
   });
 
-  it('STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS lifts the cap under test NODE_ENV', async () => {
-    mockEnv.NODE_ENV = 'test';
+  it.each([
+    'test',
+    'development',
+  ] as const)('STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS lifts the cap under %s NODE_ENV', async (nodeEnv) => {
+    mockEnv.NODE_ENV = nodeEnv;
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
       '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
@@ -168,7 +175,10 @@ describe('rate-limit-presets', () => {
     } as never);
     expect(noOrgContext).toBe('actor:user-1');
 
-    const unauthenticated = await keyGenerator?.({ ip: '203.0.113.7', auth: undefined } as never);
+    const unauthenticated = await keyGenerator?.({
+      ip: '203.0.113.7',
+      auth: undefined,
+    } as never);
     expect(unauthenticated).toBe('ip:203.0.113.7');
   });
 });

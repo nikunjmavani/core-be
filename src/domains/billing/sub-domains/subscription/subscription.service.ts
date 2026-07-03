@@ -35,6 +35,15 @@ import type { PaymentProvider } from './payment-provider.port.js';
 import type { SubscriptionRepository } from './subscription.repository.js';
 import type { SubscriptionUpdateData } from './subscription.types.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { PAGINATION } from '@/shared/constants/pagination.constants.js';
+import { BillingAccountSerializer } from './billing-account.serializer.js';
+import {
+  createStripeSetupIntent,
+  isStripeConfigured,
+  listStripeInvoices,
+  listStripePaymentMethods,
+  retrieveStripeCustomerDefaultPaymentMethodId,
+} from '@/infrastructure/payment/stripe.client.js';
 
 /**
  * Cross-domain port for the tenancy seat counter (REQ-4): resolves how many seats an
@@ -72,6 +81,7 @@ type SubscriptionRowWithSeatState = {
 import {
   validateChangePlan,
   validateCreateSubscription,
+  validateListInvoicesQuery,
   validateUpdateSubscription,
 } from './subscription.validator.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
@@ -336,7 +346,9 @@ export class SubscriptionService {
     }
 
     await withOrganizationDatabaseContext(organization_public_id, async () =>
-      this.repository.update(subscription.public_id, organization.id, { seats: quantity }),
+      this.repository.update(subscription.public_id, organization.id, {
+        seats: quantity,
+      }),
     );
   }
 
@@ -512,6 +524,44 @@ export class SubscriptionService {
       const [decorated] = await this.decorateWithSeatCounts(organization_public_id, [subscription]);
       return decorated!;
     });
+  }
+
+  /**
+   * Returns the Stripe PaymentIntent `client_secret` for an INCOMPLETE subscription so the
+   * frontend can confirm the first payment. Stripe network I/O runs outside RLS context.
+   */
+  async getPaymentSetup(organization_public_id: string, subscription_public_id: string) {
+    const providerSubscriptionId = await withOrganizationDatabaseContext(
+      organization_public_id,
+      async () => {
+        const organization =
+          await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        const subscription = await this.repository.findByPublicId(
+          subscription_public_id,
+          organization.id,
+        );
+        if (!subscription) throw new NotFoundError('Subscription');
+        if (subscription.status !== 'INCOMPLETE') {
+          return null;
+        }
+        return subscription.provider_subscription_id ?? null;
+      },
+    );
+
+    if (!providerSubscriptionId) {
+      return { client_secret: null as string | null };
+    }
+
+    const { isStripeConfigured, retrieveStripeSubscriptionPaymentClientSecret } = await import(
+      '@/infrastructure/payment/stripe.client.js'
+    );
+    if (!isStripeConfigured()) {
+      return { client_secret: null };
+    }
+
+    const client_secret =
+      await retrieveStripeSubscriptionPaymentClientSecret(providerSubscriptionId);
+    return { client_secret };
   }
 
   async create(
@@ -947,5 +997,95 @@ export class SubscriptionService {
     if (!updated) throw new NotFoundError('Subscription');
     const [decorated] = await this.decorateWithSeatCounts(organization_public_id, [updated]);
     return decorated!;
+  }
+
+  /**
+   * Lists Stripe invoices for the organization's billing customer, one cursor page at a time.
+   *
+   * @remarks
+   * - **Algorithm:** validates the cursor query (`limit` ≤ 100, `after` = a Stripe invoice id),
+   *   fetches one Stripe page via `starting_after` + `limit`, and returns the standard list envelope
+   *   (`items`/`limit`/`has_more`/`next_cursor`). The next cursor is the last row's Stripe id when
+   *   Stripe reports `has_more`; `total` is always `null` (Stripe exposes no count).
+   * - **Notes:** returns an empty page when Stripe is not configured or the org has no provider
+   *   customer yet. Invoices live in Stripe, not our DB — this is a cursor passthrough, not a keyset
+   *   query, so it does not use the DB list helpers.
+   */
+  async listInvoices(organization_public_id: string, query: unknown) {
+    const parsed = validateListInvoicesQuery(query);
+    // `limit` is optional in the DTO (kept optional in OpenAPI) — apply the shared default here.
+    const limit = parsed.limit ?? PAGINATION.DEFAULT_LIMIT;
+    const emptyPage = {
+      items: [] as ReturnType<typeof BillingAccountSerializer.invoices>,
+      total: null,
+      limit,
+      has_more: false,
+      next_cursor: null as string | null,
+    };
+    const customerId = await this.resolveStripeCustomerId(organization_public_id);
+    if (!(customerId && isStripeConfigured())) {
+      return emptyPage;
+    }
+    const page = await listStripeInvoices(customerId, {
+      limit,
+      ...(parsed.after ? { startingAfter: parsed.after } : {}),
+    });
+    const items = BillingAccountSerializer.invoices(page.data);
+    const lastItem = items.at(-1);
+    return {
+      items,
+      total: null,
+      limit,
+      has_more: page.has_more,
+      next_cursor: page.has_more ? (lastItem?.id ?? null) : null,
+    };
+  }
+
+  /**
+   * Lists card payment methods on the organization's Stripe customer.
+   */
+  async listPaymentMethods(organization_public_id: string) {
+    const customerId = await this.resolveStripeCustomerId(organization_public_id);
+    if (!(customerId && isStripeConfigured())) {
+      return [];
+    }
+    const [methods, defaultId] = await Promise.all([
+      listStripePaymentMethods(customerId),
+      retrieveStripeCustomerDefaultPaymentMethodId(customerId),
+    ]);
+    return BillingAccountSerializer.paymentMethods(methods, defaultId);
+  }
+
+  /**
+   * Creates a SetupIntent `client_secret` so the frontend can add a card in-app.
+   */
+  async createPaymentMethodSetup(organization_public_id: string, idempotencyKey?: string) {
+    const customerId = await this.resolveStripeCustomerId(organization_public_id);
+    if (!customerId) {
+      throw new UnprocessableEntityError('errors:subscriptionNotMutable');
+    }
+    if (!isStripeConfigured()) {
+      return { client_secret: null as string | null };
+    }
+    const client_secret = await createStripeSetupIntent(
+      customerId,
+      omitUndefined({
+        idempotencyKey: idempotencyKey
+          ? buildStripeIdempotencyKey('pm-setup', organization_public_id, idempotencyKey)
+          : undefined,
+      }),
+    );
+    return { client_secret };
+  }
+
+  /** Resolves the Stripe customer id from the org's active subscription row. */
+  private async resolveStripeCustomerId(organization_public_id: string): Promise<string | null> {
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+      assertTeamOrganization(organization, 'BILLING');
+      const subscription = await this.repository.findActiveByOrganization(organization.id);
+      return subscription?.provider_customer_id ?? null;
+    });
   }
 }

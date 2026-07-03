@@ -68,16 +68,15 @@ src/
     ├── auth/
     │   ├── __tests__/
     │   │   ├── e2e/
-    │   │   │   ├── magic-link-flow.e2e.test.ts
+    │   │   │   ├── email-login-flow.e2e.test.ts
     │   │   │   ├── organization-switch.e2e.test.ts
     │   │   │   └── webauthn-passkey-flow.e2e.test.ts
     │   │   ├── factories/
-    │   │   │   └── magic-link-token.factory.ts
+    │   │   │   └── verification-code-token.factory.ts
     │   │   ├── integration/
     │   │   │   ├── auth-me-context.integration.test.ts
     │   │   │   ├── auth-recovery-atomicity.integration.test.ts
     │   │   │   ├── auth-route-smoke.integration.test.ts
-    │   │   │   ├── auth-signup.integration.test.ts
     │   │   │   ├── auth.integration.test.ts
     │   │   │   ├── logout-revokes-token.integration.test.ts
     │   │   │   ├── refresh-preserves-active-organization.integration.test.ts
@@ -93,7 +92,6 @@ src/
     │   │   │   ├── auth.serializer.unit.test.ts
     │   │   │   ├── auth.service.unit.test.ts
     │   │   │   ├── auth.validator.oauth-callback.unit.test.ts
-    │   │   │   ├── auth.validator.signup.unit.test.ts
     │   │   │   └── auth.validator.unit.test.ts
     │   │   └── auth.test.ts
     │   ├── events/
@@ -101,13 +99,12 @@ src/
     │   │   └── index.ts
     │   ├── handlers/
     │   │   ├── auth-auth-method.handlers.ts
+    │   │   ├── auth-email-login.handlers.ts
     │   │   ├── auth-login.handlers.ts
-    │   │   ├── auth-magic-link.handlers.ts
     │   │   ├── auth-me-context.handlers.ts
     │   │   ├── auth-mfa.handlers.ts
     │   │   ├── auth-oauth.handlers.ts
     │   │   ├── auth-session.handlers.ts
-    │   │   ├── auth-signup.handlers.ts
     │   │   └── auth-webauthn.handlers.ts
     │   ├── seed/
     │   │   └── index.ts
@@ -132,10 +129,9 @@ src/
     │   │   │   │   │   ├── auth-method.service.step-up-mfa.unit.test.ts
     │   │   │   │   │   ├── auth-method.service.unit.test.ts
     │   │   │   │   │   ├── auth-method.validator.unit.test.ts
-    │   │   │   │   │   ├── auth-method.verify-email.db.unit.test.ts
-    │   │   │   │   │   ├── email-otp.unit.test.ts
-    │   │   │   │   │   ├── magic-link.service.unit.test.ts
-    │   │   │   │   │   └── magic-link.verify-atomicity.db.unit.test.ts
+    │   │   │   │   │   ├── email-login.service.unit.test.ts
+    │   │   │   │   │   ├── email-login.verify-atomicity.db.unit.test.ts
+    │   │   │   │   │   └── verification-code.unit.test.ts
     │   │   │   ├── events/
     │   │   │   │   ├── auth.event-handlers.ts
     │   │   │   │   ├── auth.events.ts
@@ -180,9 +176,8 @@ src/
     │   │   │   ├── auth-method.schema.ts
     │   │   │   ├── auth-method.service.ts
     │   │   │   ├── auth-method.types.ts
-    │   │   │   ├── email-otp.ts
-    │   │   │   ├── email-password-signup.ts
-    │   │   │   └── magic-link.service.ts
+    │   │   │   ├── email-login.service.ts
+    │   │   │   └── verification-code.ts
     │   │   ├── auth-mfa/
     │   │   │   ├── __tests__/
     │   │   │   │   ├── integration/
@@ -284,6 +279,7 @@ src/
     ├── billing/
     │   ├── __tests__/
     │   │   ├── e2e/
+    │   │   │   ├── billing-payment-methods.e2e.test.ts
     │   │   │   └── subscription-lifecycle.e2e.test.ts
     │   │   ├── factories/
     │   │   │   ├── index.ts
@@ -409,6 +405,7 @@ src/
     │   │   │   ├── workers/
     │   │   │       ├── subscription-seat-sync.processor.ts
     │   │   │       └── subscription-seat-sync.worker.ts
+    │   │   │   ├── billing-account.serializer.ts
     │   │   │   ├── payment-provider.port.ts
     │   │   │   ├── stripe-payment-provider.ts
     │   │   │   ├── subscription.controller.ts
@@ -730,7 +727,8 @@ src/
     │   │   │   │   │   ├── organization.serializer.unit.test.ts
     │   │   │   │   │   ├── organization.service.unit.test.ts
     │   │   │   │   │   ├── organization.validator.unit.test.ts
-    │   │   │   │   │   └── personal-organization-provisioning.db.unit.test.ts
+    │   │   │   │   │   ├── personal-organization-provisioning.db.unit.test.ts
+    │   │   │   │   │   └── team-organization-provisioning.db.unit.test.ts
     │   │   │   ├── organization-api-key/
     │   │   │   │   ├── __tests__/
     │   │   │   │   │   ├── unit/
@@ -1125,11 +1123,11 @@ src/
     │   │   │   │   ├── base.template.unit.test.ts
     │   │   │   │   ├── escape-html.util.unit.test.ts
     │   │   │   │   ├── invitation.template.unit.test.ts
-    │   │   │   │   └── magic-link.template.unit.test.ts
+    │   │   │   │   └── verification-code.template.unit.test.ts
     │   │   ├── base.template.ts
     │   │   ├── escape-html.util.ts
     │   │   ├── invitation.template.ts
-    │   │   └── magic-link.template.ts
+    │   │   └── verification-code.template.ts
     │   ├── workers/
     │   │   ├── __tests__/
     │   │   │   └── mail.worker.unit.test.ts
@@ -1156,6 +1154,7 @@ src/
     │   ├── __tests__/
     │   │   ├── unit/
     │   │   │   ├── bullmq-trace-propagation.unit.test.ts
+    │   │   │   ├── posthog.unit.test.ts
     │   │   │   ├── trace-context.util.unit.test.ts
     │   │   │   └── unhandled-rejection.handler.unit.test.ts
     │   │   ├── opentelemetry.unit.test.ts
@@ -1181,6 +1180,8 @@ src/
     │   │   ├── metrics-registry.ts
     │   │   ├── metrics.ts
     │   │   └── prometheus-metrics.ts
+    │   ├── posthog/
+    │   │   └── posthog.ts
     │   ├── redis-saturation/
     │   │   └── redis-saturation.service.ts
     │   ├── sentry/
@@ -1499,6 +1500,7 @@ src/
     │   │   ├── api-versioning.util.ts
     │   │   ├── fastify-server.util.ts
     │   │   ├── http-cache.util.ts
+    │   │   ├── list-query.util.ts
     │   │   ├── pagination.util.ts
     │   │   ├── request.util.ts
     │   │   ├── response.util.ts
@@ -1698,7 +1700,6 @@ src/
     │   │   │   └── test-http-inject.helper.unit.test.ts
     │   ├── audit-log-partition.helper.ts
     │   ├── fast-check-property.util.ts
-    │   ├── magic-link.helper.ts
     │   ├── object-storage-mock.helper.ts
     │   ├── registered-route.util.ts
     │   ├── rls-matrix.helper.ts
@@ -1716,7 +1717,8 @@ src/
     │   ├── test-http-inject.helper.ts
     │   ├── test-organization.ts
     │   ├── test-redis.ts
-    │   └── test-step-up.helper.ts
+    │   ├── test-step-up.helper.ts
+    │   └── verification-code.helper.ts
     ├── integration/
     │   ├── api/
     │   │   ├── api-contract.integration.test.ts
@@ -1725,7 +1727,7 @@ src/
     │   │   ├── pagination-caps.integration.test.ts
     │   │   └── scalar-reference.integration.test.ts
     │   ├── auth/
-    │   │   └── magic-link.integration.test.ts
+    │   │   └── email-login.integration.test.ts
     │   ├── billing/
     │   │   └── plans.integration.test.ts
     │   ├── database/
@@ -1883,6 +1885,7 @@ src/
     │   │   ├── billing-subscriptions-with-check.security.test.ts
     │   │   ├── bola-cross-tenant.security.test.ts
     │   │   ├── core-be-app-role-privileges.security.test.ts
+    │   │   ├── membership-search-resolver.security.test.ts
     │   │   ├── organization-rls-session.security.test.ts
     │   │   ├── organization-settings-resolvers.security.test.ts
     │   │   ├── organization-user-discovery.security.test.ts
@@ -1968,7 +1971,6 @@ src/
     │   │   │   └── worker-database-guard.unit.test.ts
     │   │   ├── mail/
     │   │   │   ├── __snapshots__/
-    │   │   │   │   ├── email-template.snapshot.test.ts.snap
     │   │   │   │   └── email-template.snapshot.unit.test.ts.snap
     │   │   │   └── email-template.snapshot.unit.test.ts
     │   │   ├── queue/
@@ -2076,11 +2078,8 @@ src/
     │   │   │   └── schema-enricher.unit.test.ts
     │   │   ├── agent-docker-daemon-script.unit.test.ts
     │   │   ├── check-patch-coverage.unit.test.ts
-    │   │   ├── deploy-env-sync.util.unit.test.ts
-    │   │   ├── github-environments.util.unit.test.ts
     │   │   ├── project-identity.policy.unit.test.ts
-    │   │   ├── route-catalog-auth.unit.test.ts
-    │   │   └── validate-github-env.unit.test.ts
+    │   │   └── route-catalog-auth.unit.test.ts
     │   ├── utils/
     │   │   ├── auth/
     │   │   │   ├── account-status.util.unit.test.ts
@@ -2091,6 +2090,7 @@ src/
     │   │   ├── http/
     │   │   │   ├── api-versioning.util.unit.test.ts
     │   │   │   ├── fastify-server.util.unit.test.ts
+    │   │   │   ├── list-query.util.unit.test.ts
     │   │   │   ├── pagination.util.unit.test.ts
     │   │   │   ├── request.util.unit.test.ts
     │   │   │   ├── response-format-envelope.util.unit.test.ts

@@ -77,7 +77,7 @@ describe('Security: Input Validation', () => {
     it('should reject missing email', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/magic-link/send'),
+        url: testApiPath('/auth/email/send-code'),
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -86,7 +86,7 @@ describe('Security: Input Validation', () => {
     it('should reject invalid email format', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/magic-link/send'),
+        url: testApiPath('/auth/email/send-code'),
         payload: { email: 'not-an-email' },
       });
       // 429 when strict auth rate limit is hit by earlier tests in the same file
@@ -96,7 +96,7 @@ describe('Security: Input Validation', () => {
     it('should reject Gmail address with plus in local part', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/magic-link/send'),
+        url: testApiPath('/auth/email/send-code'),
         payload: { email: 'user+label@gmail.com' },
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -167,7 +167,7 @@ describe('Security: Input Validation', () => {
   });
 
   describe('Disposable email (BLOCK_DISPOSABLE_EMAIL switch)', () => {
-    it('when switch is on, magic-link rejects disposable email with 400', async () => {
+    it('when switch is on, email-code rejects disposable email with 400', async () => {
       vi.doMock('@/shared/utils/text/email.util.js', () => ({
         isDisposableEmailBlocked: () => true,
         DISPOSABLE_EMAIL_MESSAGE: 'Disposable or temporary email addresses are not allowed',
@@ -180,7 +180,7 @@ describe('Security: Input Validation', () => {
       const testAppWithMock = await createTestAppFresh();
       const response = await injectUnauthenticatedFresh(testAppWithMock.app, {
         method: 'POST',
-        url: testApiPath('/auth/magic-link/send'),
+        url: testApiPath('/auth/email/send-code'),
         payload: { email: 'test@yopmail.com' },
       });
       await testAppWithMock.app.close();
@@ -202,7 +202,7 @@ describe('Security: Input Validation', () => {
     it('when switch is off (e.g. tests), disposable email is allowed', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/magic-link/send'),
+        url: testApiPath('/auth/email/send-code'),
         payload: { email: 'test@yopmail.com' },
       });
       expect(response.statusCode).toBe(201);

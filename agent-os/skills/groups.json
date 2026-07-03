@@ -35,7 +35,7 @@
       "production-hardening-guard",
       "path-to-production-gate"
     ],
-    "infra-config": ["env-schema-add", "setup-infra-maintainer", "ide-productivity-guard"],
+    "infra-config": ["env-schema-add", "ide-productivity-guard"],
     "seed": ["seed-maintainer"],
     "workflow": [
       "ci-investigator",

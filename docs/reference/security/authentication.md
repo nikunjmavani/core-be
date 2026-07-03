@@ -1,13 +1,13 @@
 # Authentication
 
-core-be supports password login, magic links, OAuth (Google, GitHub), JWT access tokens, session cookies, MFA (TOTP), and organization API keys. Session CSRF and cookie rules are documented in [csrf-and-session-cookies.md](../security/csrf-and-session-cookies.md).
+core-be supports password login, email verification-code login, OAuth (Google, GitHub), JWT access tokens, session cookies, MFA (TOTP), and organization API keys. Session CSRF and cookie rules are documented in [csrf-and-session-cookies.md](../security/csrf-and-session-cookies.md).
 
 ## Current methods
 
 | Method              | Entry routes                            | Notes                                            |
 | ------------------- | --------------------------------------- | ------------------------------------------------ |
 | Email + password    | `POST /api/v1/auth/login`               | May return MFA challenge                         |
-| Magic link          | `POST /api/v1/auth/magic-link/*`        | Passwordless email flow                          |
+| Email verification-code          | `POST /api/v1/auth/email/*`        | Passwordless email flow                          |
 | OAuth               | `GET /api/v1/auth/oauth/{provider}`     | PKCE + state cookie                              |
 | API key             | `Authorization: Bearer` with key prefix | Organization-scoped permissions                  |
 | MFA                 | TOTP + recovery codes                   | Encrypted secrets at rest                        |
@@ -15,34 +15,34 @@ core-be supports password login, magic links, OAuth (Google, GitHub), JWT access
 
 Implementation lives under `src/domains/auth/` (see [sub-domains-layout.md](../architecture/sub-domains-layout.md)).
 
-## Signup and bot abuse (no CAPTCHA vendor)
+## Account creation and bot abuse (no CAPTCHA vendor)
 
-New accounts are created through:
+There is **no signup endpoint** — account creation is folded into the unified login flows, and both creation paths prove control of the email/identity before granting a session:
 
-- **Email/password signup** — `POST /api/v1/auth/signup` (creates the user with `is_email_verified=false`, logs them in immediately, and emails a 6-digit verification code; returns **409** if a *real* account already exists, but **claims** a pre-provisioned invited account — a bare, credential-less, unverified row from add-member-by-email — by setting its first password instead of dead-ending the invitee; disposable domains blocked at signup time)
-- **Magic link** — `POST /api/v1/auth/magic-link/send` (auto-signs-up an unknown email as a passwordless user, then emails a 6-digit sign-in code; disposable domains blocked at send time)
+- **Email verification-code** — `POST /api/v1/auth/email/send-code` (auto-signs-up an unknown email as a passwordless user, then emails a one-time alphanumeric sign-in code; the account becomes usable only after `POST /api/v1/auth/email/login` consumes a valid code, which proves inbox control and flips `is_email_verified=true`; disposable domains blocked at send time)
 - **OAuth** — `GET /api/v1/auth/oauth/{provider}/callback` (new users via `completeOAuthUserSession`; disposable domains blocked before `userService.createFromOAuth`; **claims** a bare invited placeholder — the provider proves control of the email, so the placeholder is flipped to verified and its personal org provisioned, rather than being blocked by the unverified-account takeover guard)
 
-**Invitation onboarding.** A user added to an org by email gets a pre-created **bare** account (no credential, `is_email_verified=false`) so the `INVITED` membership has a `user_id`. "Bare" is determined by `AuthMethodService.hasActiveLoginCredential` — no password, **no** login-capable auth method (`PASSWORD`/`OAUTH`/`MAGIC_LINK`), **and no WebAuthn passkey** — so an account holding any real credential (including a passkey-only account) is never misclassified as claimable, regardless of its `is_email_verified` state. They onboard via any path above — signup **claims** the bare row (sets a password, email stays unverified), while magic-link / OAuth claim it **and flip `is_email_verified=true`** because completing either flow proves control of the inbox. Accepting the invitation (`POST /api/v1/tenancy/invitations/{invitation_id}/accept`) requires authentication, an email **matching** the invitee, **and a verified email** — so a forwarded invite token cannot be used to join by someone who merely password-claimed the address without proving email control. A claimer arriving via magic-link or OAuth clears the verified-email gate in the same step that claims the account. A bare invited row is created **without** a personal organization, so each onboarding path provisions one when it claims the account — signup and OAuth post-commit, magic-link on the first successful verification — keeping the personal-org guarantee consistent across all three (best-effort + idempotent; `tool:backfill-personal-orgs` recovers a miss).
+**Invitation onboarding.** A user added to an org by email gets a pre-created **bare** account (no credential, `is_email_verified=false`) so the `INVITED` membership has a `user_id`. "Bare" is determined by `AuthMethodService.hasActiveLoginCredential` — no password, **no** login-capable auth method (`PASSWORD`/`OAUTH`/`EMAIL_CODE`), **and no WebAuthn passkey** — so an account holding any real credential (including a passkey-only account) is never misclassified as claimable, regardless of its `is_email_verified` state. The invitee onboards via email verification-code or OAuth — both **claim** the bare row **and flip `is_email_verified=true`** because completing either flow proves control of the inbox. Accepting the invitation (`POST /api/v1/tenancy/invitations/{invitation_id}/accept`) requires authentication, an email **matching** the invitee, **and a verified email** — so a forwarded invite token cannot be used to join without proving email control. A bare invited row is created **without** a personal organization, so each onboarding path provisions one when it claims the account (email verification-code on the first successful login, OAuth post-commit) — best-effort + idempotent; `tool:backfill-personal-orgs` recovers a miss.
 
-**Accepted residual risk — invite-email squatting (low).** Because signup-claim sets a password on a bare invited row without first proving email control, someone who *knows* an invited address can claim it before the real invitee. This is accepted as low-severity and self-healing: the squatter gets an **empty, unverified** account that **cannot** accept the invitation (the verified-email + matching-email + token gate) and cannot obtain the global-admin role (unverified); the real owner reclaims via forgot-password or magic-link (both email-control gated), which revokes the squatter's session. The verified-email accept gate is the control that keeps this non-exploitable for org access. (The only way to fully eliminate it is to drop password onboarding for invited emails and require magic-link/OAuth first — a UX trade-off we chose not to make.)
+**Invite-email squatting — eliminated.** Removing password signup closed the prior squatting vector (where a knower of an invited address could set a password on the bare row *without* proving email control). Now **every** account-creation / claim path (email verification-code, OAuth) requires email-control proof before a session is issued, so a bare invited row can only be claimed by someone who actually receives mail at that address.
 
-**Disposable email:** `isDisposableEmailBlocked()` (package `disposable-email-domains-js`) runs on login, magic-link send, password forgot, OAuth user creation, and member invitations. When blocked, the API returns **400** with `errors:disposableEmail`. Toggle with `BLOCK_DISPOSABLE_EMAIL` (default `true`).
+**Disposable email:** `isDisposableEmailBlocked()` (package `disposable-email-domains-js`) runs on login, email verification-code send, password forgot, OAuth user creation, and member invitations. When blocked, the API returns **400** with `errors:disposableEmail`. Toggle with `BLOCK_DISPOSABLE_EMAIL` (default `true`).
 
-**Rate limits:** Public auth routes (`/login`, `/magic-link/*`, `/oauth/*`, password reset, MFA challenge) use `STRICT_PUBLIC_RATE_LIMIT` — **5 requests per minute per IP** in production/staging (`5000` in `NODE_ENV=test` for Vitest). Excess traffic receives **429**.
+**Rate limits:** Public auth routes (`/login`, `/email/*`, `/oauth/*`, password reset, MFA challenge) use `STRICT_PUBLIC_RATE_LIMIT` — **5 requests per minute per IP** in production/staging (`5000` in `NODE_ENV=test` for Vitest). Excess traffic receives **429**.
 
 **CAPTCHA (Cloudflare Turnstile):** When `CAPTCHA_PROVIDER=turnstile` and `CAPTCHA_SECRET` are set, public auth routes require `X-Captcha-Token` from the client widget:
 
 - `POST /api/v1/auth/login`
-- `POST /api/v1/auth/magic-link/send`
+- `POST /api/v1/auth/email/send-code`
+- `POST /api/v1/auth/email/login`
 - `POST /api/v1/auth/password/forgot`
 - `POST /api/v1/auth/password/reset`
-- `POST /api/v1/auth/email/verify`
+- `POST /api/v1/auth/mfa/login`
 - `GET /api/v1/auth/oauth/:provider` (OAuth initiation)
 
 Schema default is `CAPTCHA_PROVIDER=disabled`. In `development` / `test`, verification is skipped when Turnstile is not configured. Optional `CAPTCHA_BYPASS_HEADER` (non-production only) allows local testing. Failures return **401** with `errors:captchaRequired` or `errors:captchaInvalid`.
 
-**Production boot guard.** Because `captchaPreHandler` fail-closes when CAPTCHA is unconfigured, a production deploy with the default `CAPTCHA_PROVIDER=disabled` would turn login, magic-link, password recovery, email verification, and OAuth initiation into **401**s. Boot fails in production unless Turnstile is fully configured (see `src/shared/config/env-schema.ts`):
+**Production boot guard.** Because `captchaPreHandler` fail-closes when CAPTCHA is unconfigured, a production deploy with the default `CAPTCHA_PROVIDER=disabled` would turn login, email verification-code (send + login), password recovery, MFA challenge, and OAuth initiation into **401**s. Boot fails in production unless Turnstile is fully configured (see `src/shared/config/env-schema.ts`):
 
 | Posture                            | Required env                                    | Auth-route behavior                                                   |
 | ---------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------- |
@@ -51,17 +51,17 @@ Schema default is `CAPTCHA_PROVIDER=disabled`. In `development` / `test`, verifi
 
 Outside production (`development`, `test`), the middleware fail-opens by default when Turnstile is not configured.
 
-## Magic-link environment safety
+## Email verification-code environment safety
 
-`MagicLinkService.send` **never** returns the raw 6-digit sign-in code in the JSON body. The code leaves the service only via the `AUTH_EVENT.MAGIC_LINK_REQUESTED` event payload (consumed by the mail handler) and the resulting email — identical behavior across every environment. Verification is `POST /api/v1/auth/magic-link/verify` with `{ email, code }`, gated by a per-user attempt cap (the code is low-entropy).
+`EmailLoginService.sendCode` **never** returns the raw sign-in code in the JSON body. The code leaves the service only via the `AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED` event payload (consumed by the mail handler) and the resulting email — identical behavior across every environment. Login is `POST /api/v1/auth/email/login` with `{ email, code }`, gated by a per-user attempt cap. Codes are 6-char alphanumeric and persisted only as a keyed, user-scoped HMAC (never plaintext, never bare sha256).
 
-**Verify-attempt cap resets on each fresh code.** The per-user attempt counter (magic-link sign-in, email verification) is cleared whenever a new code is issued. This closes a victim-lockout DoS: without it, an attacker who burned the cap against an old code would keep the legitimate owner locked out of redeeming the new one. Brute-force is not weakened — each issued code is an independent random target, the prior code is invalidated atomically with issuance, and `send` / resend are themselves rate-limited per email + IP.
+**Verify-attempt cap resets on each fresh code.** The per-user attempt counter is cleared whenever a new code is issued. This closes a victim-lockout DoS: without it, an attacker who burned the cap would keep the legitimate owner locked out of redeeming a new code. Brute-force is not weakened — each issued code is an independent random target over a large keyspace, only one code is live at a time (each send invalidates the prior), a successful login invalidates any remaining code, and `send-code` is rate-limited per email + IP.
 
 | Guard                     | When it runs                                                  |
 | ------------------------- | ------------------------------------------------------------- |
 | Zod `FRONTEND_URL` refine | Boot — when set, `FRONTEND_URL` must be a valid `http(s)` URL |
 
-**Test code path:** tests subscribe to `AUTH_EVENT.MAGIC_LINK_REQUESTED` via the `captureNextMagicLinkCode(email)` helper in `src/tests/helpers/magic-link.helper.ts` to obtain the raw code for assertions.
+**Test code path:** tests subscribe to `AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED` via the `captureNextVerificationCode(email)` helper in `src/tests/helpers/verification-code.helper.ts` to obtain the raw code for assertions.
 
 **Deployed environments (Railway development, production):** any valid public `FRONTEND_URL` is accepted. The previous environment-based inline-token leak and its localhost-only `FRONTEND_URL` restriction have been removed.
 
@@ -94,4 +94,4 @@ MFA recovery codes (10 single-use) remain under the MFA sub-domain for TOTP back
 - [`src/domains/auth/sub-domains/auth-method/auth-method.overview.md`](../../../src/domains/auth/sub-domains/auth-method/auth-method.overview.md) — credential records, token flows
 - [`src/domains/auth/sub-domains/auth-mfa/auth-mfa.overview.md`](../../../src/domains/auth/sub-domains/auth-mfa/auth-mfa.overview.md) — TOTP enrolment and challenge
 - [`src/domains/auth/sub-domains/auth-webauthn/auth-webauthn.overview.md`](../../../src/domains/auth/sub-domains/auth-webauthn/auth-webauthn.overview.md) — passkey ceremonies
-- [`src/POLICIES.md`](../../../src/POLICIES.md) — `JWT_*`, `MAGIC_LINK_*`, `MFA_*`, `LOCKOUT_*`, `STRICT_PUBLIC_RATE_LIMIT` policy constants
+- [`src/POLICIES.md`](../../../src/POLICIES.md) — `JWT_*`, `EMAIL_CODE/VERIFICATION_CODE_*`, `MFA_*`, `LOCKOUT_*`, `STRICT_PUBLIC_RATE_LIMIT` policy constants

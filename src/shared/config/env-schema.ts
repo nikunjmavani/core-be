@@ -360,6 +360,8 @@ const envSchemaBase = z.object({
 
   // Stripe
   STRIPE_SECRET_KEY: z.string().min(1).optional(),
+  // STRIPE_PUBLISHABLE_KEY is intentionally NOT in this schema: it is public, browser-only, and the
+  // backend never reads it. setup:infra writes it to `.env.<environment>` and surfaces it to core-fe.
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
   /** Stripe Node client per-request HTTP timeout (ms). */
   STRIPE_HTTP_TIMEOUT_MS: z.coerce.number().int().min(1000).max(180_000).default(30_000),
@@ -383,12 +385,23 @@ const envSchemaBase = z.object({
 
   // Sentry
   SENTRY_DSN: z.url().optional(),
+  // SENTRY_FRONTEND_DSN is intentionally NOT in this schema: it is the public core-fe project DSN,
+  // never read by the backend. setup:infra writes it to `.env.<environment>` and surfaces it to core-fe.
   SENTRY_ENVIRONMENT: z.string().min(1).optional(),
   SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).optional(),
   SENTRY_PROFILE_SAMPLE_RATE: z.coerce.number().min(0).max(1).optional(),
   /** Always trace transactions at or above this duration (ms); head + tail sampling. */
   SENTRY_SLOW_TRANSACTION_MS: z.coerce.number().int().min(100).max(300_000).default(3000),
   RAILWAY_GIT_COMMIT_SHA: z.string().min(1).optional(),
+
+  // PostHog (product analytics)
+  /** PostHog project API key (`phc_…`). When unset, server-side PostHog capture is disabled (no-op). */
+  POSTHOG_KEY: z.string().min(1).optional(),
+  /**
+   * PostHog ingestion host (e.g. https://us.i.posthog.com — or https://eu.i.posthog.com for EU).
+   * Defaults to US cloud when POSTHOG_KEY is set but this is omitted.
+   */
+  POSTHOG_HOST: z.url().optional(),
 
   /**
    * When true, exposes GET /metrics (Prometheus text format).
@@ -746,8 +759,8 @@ const envSchemaBase = z.object({
   CAPTCHA_PROVIDER: z.enum(['turnstile', 'disabled']).default('disabled'),
   /** Turnstile secret key — required when CAPTCHA_PROVIDER=turnstile. */
   CAPTCHA_SECRET: z.string().min(1).optional(),
-  /** Public site key for frontend widget (optional; not used server-side). */
-  CAPTCHA_SITE_KEY: z.string().min(1).optional(),
+  // CAPTCHA_SITE_KEY is intentionally NOT in this schema: it is the public Turnstile widget key,
+  // used only by the browser. setup:infra writes it to `.env.<environment>` and surfaces it to core-fe.
   /**
    * Dev/test only: request header name that bypasses CAPTCHA when value is true/1.
    * Ignored in production.
@@ -882,6 +895,16 @@ const envSchemaBase = z.object({
   // Release automation (GitHub Actions only — consumed by .github/workflows/post-merge-ci.yml)
   /** PAT (classic `repo` + `workflow` scopes) release-please uses to create the dev/main GitHub Releases; the default GITHUB_TOKEN cannot — the create-a-release API path requires the `workflow` scope. GitHub Environment secret via `pnpm github:sync`. */
   RELEASE_PLEASE_TOKEN: z.string().min(1).optional(),
+
+  // Local code-quality gate (SonarQube) — local tooling only, never read by the API/worker
+  // runtime. Consumed solely by the `pnpm sonar:*` scripts that drive the local SonarQube
+  // container for the pre-commit / pre-push quality gate. Declared here (always `.optional()`)
+  // so the schema ↔ `.env.example` invariant holds and these keys validate as known config
+  // rather than tripping the "extra key" check; they carry no per-environment requirement.
+  /** Local SonarQube user token for `pnpm sonar:scan`. Local tooling only — leave empty in hosted environments. */
+  SONAR_TOKEN: z.string().min(1).optional(),
+  /** Local SonarQube container admin password for `pnpm sonar:*`. Local tooling only — leave empty in hosted environments. */
+  SONAR_ADMIN_PASSWORD: z.string().min(1).optional(),
 });
 
 /**
@@ -1215,10 +1238,13 @@ export const envSchema = envSchemaBase
     (data) =>
       data.STRIPE_SECRET_KEY === undefined ||
       data.STRIPE_SECRET_KEY.startsWith('sk_test_') ||
-      data.STRIPE_SECRET_KEY.startsWith('sk_live_'),
+      data.STRIPE_SECRET_KEY.startsWith('sk_live_') ||
+      // Restricted test keys (Dashboard sandbox / restricted API keys).
+      data.STRIPE_SECRET_KEY.startsWith('rk_test_') ||
+      data.STRIPE_SECRET_KEY.startsWith('rkcs_test_'),
     {
       message:
-        'STRIPE_SECRET_KEY must begin with `sk_test_` or `sk_live_` (Stripe API key format).',
+        'STRIPE_SECRET_KEY must begin with `sk_test_` / `sk_live_` (API key) or `rk_test_` / `rkcs_test_` (restricted sandbox key).',
       path: ['STRIPE_SECRET_KEY'],
     },
   )

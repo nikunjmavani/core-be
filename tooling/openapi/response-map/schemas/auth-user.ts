@@ -112,8 +112,8 @@ export const accessTokenExample = {
   session_id: 'ses_m7n2p5q8w1r4x9k3a1b2c',
 };
 
-// ── Magic Link Sent ──
-export const magicLinkSentSchema = {
+// ── Email Verification Code Sent ──
+export const verificationCodeSentSchema = {
   type: 'object',
   properties: {
     message: { type: 'string' },
@@ -121,8 +121,8 @@ export const magicLinkSentSchema = {
   },
 };
 
-export const magicLinkSentExample = {
-  message: 'Magic link sent to your email address',
+export const verificationCodeSentExample = {
+  message: 'If an account exists with this email, you will receive a sign-in code shortly.',
   expires_in_minutes: 15,
 };
 

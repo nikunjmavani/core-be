@@ -68,7 +68,7 @@ describe('MemberRoleService', () => {
   });
 
   it('list returns roles', async () => {
-    const result = await service.list(organization.public_id, { limit: 20 });
+    const result = await service.list(organization.public_id, { limit: 20, order: 'asc' });
     expect(result.items).toHaveLength(1);
   });
 
@@ -185,9 +185,9 @@ describe('MemberRoleService', () => {
     vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockRejectedValue(
       new NotFoundError('Organization'),
     );
-    await expect(service.list(organization.public_id, { limit: 20 })).rejects.toBeInstanceOf(
-      NotFoundError,
-    );
+    await expect(
+      service.list(organization.public_id, { limit: 20, order: 'asc' }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('getByPublicId throws when role is missing', async () => {

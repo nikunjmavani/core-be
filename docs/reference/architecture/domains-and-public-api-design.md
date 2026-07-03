@@ -46,7 +46,7 @@ src/domains/<domain>/              # domain = DB schema
 | Domain (folder) | Sub-domains (folders)                                                                                                                                                           |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **audit**       | (single domain, no sub-domains)                                                                                                                                                 |
-| **auth**        | auth-method (magic-link, oauth), auth-session, auth-mfa, auth-webauthn                                                                                                          |
+| **auth**        | auth-method (email verification-code, oauth), auth-session, auth-mfa, auth-webauthn                                                                                                          |
 | **user**        | user-settings, user-notification-preferences, user-data-export                                                                                                                  |
 | **tenancy**     | organization (organization-settings, organization-notification-policy, organization-api-key), membership (member-invitation), member-roles (member-role-permission), permission |
 | **billing**     | plan, subscription, stripe-webhook                                                                                                                                              |
@@ -64,7 +64,7 @@ src/domains/<domain>/              # domain = DB schema
 | **Nested sub-domains** — folders inside a parent sub-domain                   | `sub-domains/webhook/webhook-event/`                                                                                                              |
 | **Organization / membership / member-roles children**                         | `sub-domains/organization/organization-api-key/`, `sub-domains/membership/member-invitation/`, `sub-domains/member-roles/member-role-permission/` |
 | **Prefix** multi-word names with domain/resource name                         | `organization-settings`, `member-invitation`, `webhook-event`                                                                                     |
-| **Implementation modules** (not separate API resources) stay in parent folder | `auth-method/magic-link.service.ts`, `auth-method/oauth/` — not extra folders unless a public resource                                            |
+| **Implementation modules** (not separate API resources) stay in parent folder | `auth-method/email-login.service.ts`, `auth-method/oauth/` — not extra folders unless a public resource                                            |
 | Prefer depth ≤ 4 under `domains/<domain>/` for new work                       | Flatten if a nested folder has no distinct routes or tests                                                                                        |
 
 Nested sub-domains use the same layer files and optional `events/`, `queues/`, `workers/`, `__tests__/` as top-level sub-domains.
@@ -75,7 +75,7 @@ Nested sub-domains use the same layer files and optional `events/`, `queues/`, `
 | ------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------- |
 | **Bundled routes**        | `user.routes.ts` registers settings, preferences, data-export | Sub-domain has service/repository only; same URL prefix as siblings |
 | **Per-sub-domain routes** | `billing/subscription/subscription.routes.ts`                 | Large domain; aggregator `billing.routes.ts` registers plugins      |
-| **Implementation module** | `auth/auth-method/magic-link.service.ts`                      | No separate public resource; wired from parent `auth.routes.ts`     |
+| **Implementation module** | `auth/auth-method/email-login.service.ts`                      | No separate public resource; wired from parent `auth.routes.ts`     |
 | **No repository**         | `upload/` uses `infrastructure/storage`                       | Thin presigned-URL flow                                             |
 | **Aggregate child**       | `webhook/webhook-event/`                                      | Lifecycle tied to parent                                            |
 | **Cross-domain read**     | `user-data-export.service.ts`                                 | Calls auth, tenancy, notify, and audit services (`list*ForUserDataExport`) |
@@ -263,7 +263,7 @@ Domain folder = DB schema; each **sub-domain** is a folder with its own controll
 ### 4.1 auth — sub-domain: users
 
 - **Path:** `src/domains/auth/` (controller, service, repos; sub-domains: auth-method, auth-session, auth-mfa, auth-webauthn).
-- **Routes:** Auth flows `POST /api/v1/auth/login`, `logout`, `magic-link`, `oauth/:provider`; current user `GET|PATCH /api/v1/auth/me`; under me: `GET|PATCH /api/v1/auth/me/settings`, `GET|PUT /api/v1/auth/me/notification-preferences`, `GET|POST|DELETE /api/v1/auth/me/auth-methods`, `GET /api/v1/auth/me/sessions`, `DELETE /api/v1/auth/me/sessions/:session_id`.
+- **Routes:** Auth flows `POST /api/v1/auth/login`, `logout`, `email verification-code`, `oauth/:provider`; current user `GET|PATCH /api/v1/auth/me`; under me: `GET|PATCH /api/v1/auth/me/settings`, `GET|PUT /api/v1/auth/me/notification-preferences`, `GET|POST|DELETE /api/v1/auth/me/auth-methods`, `GET /api/v1/auth/me/sessions`, `DELETE /api/v1/auth/me/sessions/:session_id`.
 - **Self-service MFA / WebAuthn (authenticated, under `/auth/me/`):** managing a user's own second factor is a self-service operation and lives under `/auth/me/`: `GET /api/v1/auth/me/mfa`, `DELETE /api/v1/auth/me/mfa/:mfa_method_id`, `POST /api/v1/auth/me/mfa/enroll`, `POST /api/v1/auth/me/mfa/enroll/confirm`, `POST /api/v1/auth/me/mfa/verify`, `POST /api/v1/auth/me/webauthn/register/options`, `POST /api/v1/auth/me/webauthn/register/verify`. MFA-method ids use the `am_` (auth-method) prefix — `mfa_method_id` validates `^am_[a-z0-9]{21}$`.
 - **Public login-flow second factor (unauthenticated):** the routes used **during login**, before a session exists, stay at the top level: `POST /api/v1/auth/mfa/login`, `POST /api/v1/auth/webauthn/authenticate/options`, `POST /api/v1/auth/webauthn/authenticate/verify`. The old `/auth/mfa*` (non-login) paths now return 404 — there are no deprecation aliases (pre-first-release).
 - **Active-org switch:** `POST /api/v1/auth/switch-to-personal`, `POST /api/v1/auth/switch-to-organization { organization_id }` re-mint the access token with the new `org` claim.

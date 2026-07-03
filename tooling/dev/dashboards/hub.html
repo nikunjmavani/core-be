@@ -474,7 +474,7 @@ function runtimeCell(key, procSums, m, proc) {
 }
 function renderRuntime(sS, sW, worker, stale) {
   const card = el('div', `${CARD} overflow-hidden${stale ? ' stale' : ''}`);
-  if (!sS && !sW) { // both /metrics endpoints down — show a clear unavailable state, not a grid of "—"
+  if (!(sS || sW)) { // both /metrics endpoints down — show a clear unavailable state, not a grid of "—"
     const msg = el('div', 'flex flex-col items-center justify-center gap-1 px-4 py-9 text-center');
     msg.appendChild(el('div', 'font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground', 'Runtime'));
     msg.appendChild(el('div', 'mt-1 text-[13px] font-medium text-foreground/80', 'Metrics unavailable'));
@@ -557,7 +557,7 @@ function renderHealthCard(api, worker, apiPing, sS, stale) {
   return card;
 }
 function renderOverview(d, o) {
-  if (!d.sS && !d.sW && !d.api && !d.worker && !everLoaded.vitals) return;
+  if (!((((d.sS || d.sW ) || d.api ) || d.worker ) || everLoaded.vitals)) return;
   // Two reference panels, width-bounded so the comparison tables never stretch
   // absurdly wide on big screens nor squish below readable on small ones.
   const box = el('div', 'flex flex-wrap items-start gap-3.5');
@@ -669,7 +669,7 @@ let reqFilter = 'all'; // active Requests tab (persists across polls + manual re
 function renderRequests(routes, opts) {
   const host = $('requests'); if (!host) return;
   const stale = !!(opts && opts.stale) && everLoaded.requests;
-  if (!routes && !everLoaded.requests) return;
+  if (!(routes || everLoaded.requests)) return;
   const data = routes || lastGood.routes || [];
   const INFRA = /^\/(metrics|livez|readyz|admin)|^\/reference|^\/_/;
   const avgMsOf = (r) => (r.count ? (r.sum / r.count) * 1000 : 0);
@@ -787,7 +787,7 @@ async function poll() {
 
   renderHeaderAlerts(computeStatus(last, agg, sS, sW));
   renderOverview({ sS, sW, api: api || lastGood.api, worker: worker || lastGood.worker, apiPing: last?.api?.ms },
-    { runtimeStale: !mServer && !mWorker, healthStale: !api || !worker });
+    { runtimeStale: !(mServer || mWorker), healthStale: !(api && worker ) });
   renderQueues(qOk ? qd.queues : lastGood.queues, agg, sS, worker || lastGood.worker, { stale: !qOk });
   renderRequests(routes, { stale: !mServer });
   if (mServer) { const nv = (mServer.match(/nodejs_version_info\{[^}]*version="([^"]+)"/) || [])[1]; if (nv) $('node-ver').textContent = `node ${nv}`; }

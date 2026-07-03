@@ -13,7 +13,7 @@ Claude Code reads `agent-os/` directly via `.claude/` symlinks (`agents`, `skill
 | File | Purpose |
 | ---- | ------- |
 | [`agent-os/docs/principles.md`](agent-os/docs/principles.md) | Engineering principles + project identity (full detail) |
-| [`agent-os/docs/skill-triggers.md`](agent-os/docs/skill-triggers.md) | File pattern → skill map (replaces reading 26 sync rules) |
+| [`agent-os/docs/skill-triggers.md`](agent-os/docs/skill-triggers.md) | File pattern → skill map (replaces reading 25 sync rules) |
 | [`agent-os/docs/agents-catalog.md`](agent-os/docs/agents-catalog.md) | All 10 agents with descriptions and use-when |
 | [`agent-os/docs/platform-access.md`](agent-os/docs/platform-access.md) | How to invoke agents on Cursor, Claude Code, Codex |
 | [`agent-os/agents/`](agent-os/agents/) | Agent definition files |
@@ -109,7 +109,7 @@ Flat domains (`audit`, `upload`) keep layers at domain root (no `sub-domains/`).
 | Domain (folder) | Sub-domains (folders)                                                                                                                                                           |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **audit**       | (single domain, no sub-domains)                                                                                                                                                 |
-| **auth**        | auth-method (magic-link, oauth as services in auth-method/), auth-session, auth-mfa, auth-mfa-session (Redis MFA challenge-ticket store shared by auth-mfa/auth-webauthn), auth-webauthn |
+| **auth**        | auth-method (email verification-code, oauth as services in auth-method/), auth-session, auth-mfa, auth-mfa-session (Redis MFA challenge-ticket store shared by auth-mfa/auth-webauthn), auth-webauthn |
 | **user**        | user-settings, user-notification-preferences, user-data-export                                                                                                                  |
 | **tenancy**     | organization (organization-settings, organization-notification-policy, organization-api-key), membership (member-invitation), member-roles (member-role-permission), permission |
 | **billing**     | plan, subscription, stripe-webhook                                                                                                                                              |
@@ -139,7 +139,7 @@ A **top-level sub-domain** is a direct child of `sub-domains/<name>/`. A **neste
 | **Organization children** nest under `organization/`                                      | `sub-domains/organization/organization-api-key/`, `organization-settings/`          |
 | **Membership / member-roles children** nest under parent                                  | `sub-domains/membership/member-invitation/`, `member-roles/member-role-permission/` |
 | **Prefix** multi-word names with domain/resource name                                     | `organization-settings`, `member-invitation`, `webhook-event`                       |
-| **Implementation modules** (not separate API resources) stay as services in parent folder | `auth-method/magic-link.service.ts`, `oauth/` under `auth-method/`                  |
+| **Implementation modules** (not separate API resources) stay as services in parent folder | `auth-method/email-login.service.ts`, `oauth/` under `auth-method/`                  |
 | Prefer depth ≤ 4 under `domains/<domain>/` for new work                                   | Flatten if a nested folder has no distinct routes or tests                          |
 
 Nested resources use the **same layer files** (controller, service, repository, validator, serializer, dto, types, schema) and the **same optional** `events/`, `queues/`, `workers/`, `__tests__/` as top-level sub-domains.
@@ -178,7 +178,7 @@ src/infrastructure/
     mail.service.ts           # Resend email service
     mail-outbox.schema.ts     # Transactional outbox table (shared infrastructure pattern)
     mail-outbox.repository.ts # Outbox persistence (not domain-owned)
-    templates/                # HTML email templates (base, magic-link, invitation)
+    templates/                # HTML email templates (base, verification-code, invitation)
     queues/
       mail.queue.ts           # BullMQ queue + recordOutboxEmail / dispatchOutboxEmail
     workers/
@@ -264,7 +264,7 @@ Typical flow: `service` → `eventBus.emit` → handler → `recordOutboxEmail()
 
 | Registrar                               | Event types (examples)                                                    | Side effect                            |
 | --------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------- |
-| `registerAuthMethodEventHandlers`       | `AUTH_EVENT.MAGIC_LINK_REQUESTED`, password reset, email verification     | Mail queue                             |
+| `registerAuthMethodEventHandlers`       | `AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED`, `AUTH_EVENT.PASSWORD_RESET_REQUESTED`  | Mail queue                             |
 | `registerMemberInvitationEventHandlers` | `MEMBER_INVITATION_EVENT.CREATED`, `RESENT`                               | Mail queue                             |
 | `registerNotifyEventHandlers`           | `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED`, `BILLING_EVENT.SUBSCRIPTION_*` | BullMQ notification / webhook delivery |
 
@@ -286,7 +286,7 @@ Billing event helpers and types live with the billing sub-domains that emit them
 - **Request helpers**: `src/shared/utils/http/request.util.ts` exports `getRequestIdentifier(request)` and `requireAuth(request)` — use these in ALL controllers.
 - **Auth**: Fastify auth plugin in `src/shared/middlewares/core/auth.middleware.ts`, decorates `request.auth` (JWT RS256 via `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY`). Session cookie (`session_id`) CSRF model and Origin checks for refresh: **`docs/reference/security/csrf-and-session-cookies.md`**
 - **Tenant**: `X-Organization-Id` header → `request.organizationId` via `src/shared/middlewares/tenant/tenant.middleware.ts`
-- **Organization context / RLS**: Organization context is set only for HTTP requests via tenant middleware (`X-Organization-Id` → Postgres session variable `app.current_organization_id` for RLS). Workers and processors must not call or import `getRequestDatabase()` (enforced by global tests and code review; do not import `request-database.context` under `*.worker.ts` / `*.processor.ts`). Use context wrappers (`withOrganizationContext`, `withGlobalRetentionCleanupDatabaseContext`, `withUserDatabaseContext`, `withSessionRetentionCleanupDatabaseContext`) and pass the returned `databaseHandle` into `createWorker*Repository(databaseHandle)` factories or `runTenantScopedWorkerJob` / `runGlobalRetentionWorkerJob` / `runUserScopedWorkerJob` from `src/infrastructure/queue/worker-runtime/worker-processor.util.ts`. Tenant-scoped jobs must include `organizationPublicId` in the job payload. See `src/infrastructure/database/contexts/retention-database.context.ts`; the `app.global_retention_cleanup` RLS bypass clauses are defined in the consolidated baseline migration `migrations/00000000000000_init.sql`.
+- **Organization context / RLS**: Organization context is set only for HTTP requests via tenant middleware (`X-Organization-Id` → Postgres session variable `app.current_organization_id` for RLS). Workers and processors must not call `getRequestDatabase()` — it returns the GUC-less pool and throws in worker runtime (enforced by `no-direct-db-in-services.global.test.ts`, code review, and the `guard-edits.sh` hook); importing DB-handle types or `setLocalDatabaseConfig` from `request-database.context` is allowed (e.g. `audit-outbox-drain.processor.ts`). Use context wrappers (`withOrganizationContext`, `withGlobalRetentionCleanupDatabaseContext`, `withUserDatabaseContext`, `withSessionRetentionCleanupDatabaseContext`) and pass the returned `databaseHandle` into `createWorker*Repository(databaseHandle)` factories or `runTenantScopedWorkerJob` / `runGlobalRetentionWorkerJob` / `runUserScopedWorkerJob` from `src/infrastructure/queue/worker-runtime/worker-processor.util.ts`. Tenant-scoped jobs must include `organizationPublicId` in the job payload. See `src/infrastructure/database/contexts/retention-database.context.ts`; the `app.global_retention_cleanup` RLS bypass clauses are defined in the consolidated baseline migration `migrations/00000000000000_init.sql`.
 - **DB**: `src/infrastructure/database/connection.ts` singleton + Drizzle queries in repositories; repositories may extend `src/infrastructure/database/base-repository.ts` for `paginate()`
 - **Config**: Environment variables from `src/shared/config/env.config.ts`. Env files are **root only**: `.env.example` is the single committed template; per-environment `.env.<environment>` files (e.g. `.env.development`, `.env.production`) and `.env.local` are gitignored. Hosted environment mapping lives in `tooling/setup/setup.config.json` (canonical); `pnpm github:sync` reads it directly. Project identity constants and the CI composite action are generated via `pnpm tool:generate-project-identity`. Scaffold and push with `pnpm github:sync`. Consistency and remote drift: `pnpm github:sync --check`. Runtime loader (`src/shared/config/load-env-files.ts`) reads `.env.${NODE_ENV ?? 'local'}` (default `local`, matching the env schema), so `.env.local` is the **primary** file for local dev; it falls back to `.env.development` when the primary is missing, and for a non-`local` `NODE_ENV` layers `.env.local` on top as an override (never under production). Scaffold a self-contained `.env.local` (`.env.example` + generated JWT keys/`SECRETS_ENCRYPTION_KEY` + localhost `DATABASE_URL`/`REDIS_URL`) with `pnpm setup:local` or `pnpm setup:local --only-env`.
 

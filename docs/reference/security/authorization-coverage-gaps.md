@@ -47,16 +47,14 @@ Answers "is every route — organization-level included — covered, and what is
 | --- | --- | --- | --- | --- |
 | GET | `/api/v1/audit/logs` | ROLE: super_admin, admin | `global-role` | ⚠ partial (admin-deny) |
 
-### AUTH (32)
+### AUTH (30)
 
 | Method | Path | Access | Bucket | Status |
 | --- | --- | --- | --- | --- |
-| POST | `/api/v1/auth/email/resend-verification` | AUTH | `auth-self-mutation` | ⚠ self; not asserted |
-| POST | `/api/v1/auth/email/verify` | PUBLIC | `public` | — (n/a authz) |
 | POST | `/api/v1/auth/login` | PUBLIC | `public` | — (n/a authz) |
 | POST | `/api/v1/auth/logout` | PUBLIC | `public` | — (n/a authz) |
-| POST | `/api/v1/auth/magic-link/send` | PUBLIC | `public` | — (n/a authz) |
-| POST | `/api/v1/auth/magic-link/verify` | PUBLIC | `public` | — (n/a authz) |
+| POST | `/api/v1/auth/email/send-code` | PUBLIC | `public` | — (n/a authz) |
+| POST | `/api/v1/auth/email/login` | PUBLIC | `public` | — (n/a authz) |
 | GET | `/api/v1/auth/me/auth-methods` | AUTH | `auth-self-list` | ✅ caller-scoped |
 | POST | `/api/v1/auth/me/auth-methods` | AUTH | `auth-self-mutation` | ⚠ self; not asserted |
 | DELETE | `/api/v1/auth/me/auth-methods/:auth_method_id` | AUTH | `auth-by-id` | ✅ e2e attack test (Phase 2) |

@@ -54,13 +54,28 @@ The policy is enforced centrally in `method-status-policy.middleware.ts`; declar
 - Every serialized organization carries a `capabilities` object (`can_invite_members`, `can_manage_members`, `can_manage_roles`, `can_transfer_ownership`, `can_delete`, `can_manage_billing`) describing the **org type's** capability (not the caller's permission), so clients discover this without probing for a 422.
 - The route catalog encodes this as the `O` column (`both` | `team`), kept in sync with `tooling/openapi/route-catalog/route-org-scope.json` by `pnpm validate:route-org-scope`.
 
+## List endpoints — common search / sort / pagination method
+
+Every org-scoped list endpoint uses the **shared** helpers in `src/shared/utils/http/list-query.util.ts` — do **not** hand-roll keyset / cursor / filter-binding per repository:
+
+- **DTO**: build the query schema with `listSearchSortSchema([...sortFields] as const)` (adds `q`, `sort`, `order` to `cursorPaginationSchema`, `.strict()`). For a search-only list (no sortable columns), extend `cursorPaginationSchema` with just `q`. Register the DTO in `tooling/openapi/query-schema-map.ts` so OpenAPI documents `after`/`limit`/`q`/`sort`/`order`.
+- **Repository**: `resolveKeysetSort({ columns, idColumn, defaultSort, sort, order, q, after })` → `orderBy` / `cursorCondition` / `sortValueFor` / `filterFingerprint`; `buildSearchCondition(columns, q)` for the `ILIKE`; `finishKeysetPage(rows, { limit, sortValueFor, filterFingerprint })` (fetch `limit + 1`). Escape user `ILIKE` terms with `buildContainsLikePattern(q)` — never interpolate a raw term.
+- **Controller**: return `paginatedResponse(items, id, { per_page: limit, next: next_cursor, has_more, ...(total !== null ? { estimated_total: total } : {}) })`.
+- **sec-U12**: the minted cursor carries a SHA-256 fingerprint of `{q, sort, order}`; a cursor whose fingerprint no longer matches the current query is ignored (resets to page 1) so a cursor can't interleave pages across filters. This is automatic via `resolveKeysetSort` — don't bypass it.
+
+**`.optional()`, never `.default`, for `sort` / `order` (and `limit` on a route that did not previously have it).** Zod `.default(...)` serializes the OpenAPI query param as `required`, which oasdiff flags as `added the new required request parameter` — a breaking change on an existing route. Keep these params `.optional()` and apply the default in `resolveKeysetSort` / the service (`order ?? 'asc'`, `limit ?? PAGINATION.DEFAULT_LIMIT`). Adding a **new optional** param is non-breaking; adding a new **required** one is not. Verify with `pnpm docs:breaking` before pushing.
+
+**External-provider lists (Stripe, etc.) are a cursor passthrough, not a DB keyset** — they do NOT use the helpers above. Expose the provider's own cursor: pass `limit` + `starting_after` (a provider id), return `{ data, has_more }` from the client, and shape the same `paginatedResponse` envelope with `next` = the last row's provider id when `has_more`. See `GET /billing/invoices` (`listStripeInvoices`).
+
+**Searching a column that lives on a FORCE-RLS joined table** (e.g. member email/name in `auth.users`) can't use a plain join under org-only context — it needs a SECURITY DEFINER resolver. See `rls-tenant-isolation-guard` (member-search example, `tenancy.search_organization_membership_ids`).
+
 ## Header matrix (client-sent)
 
 - `Authorization: Bearer <ACCESS_TOKEN>` — every authed route (OpenAPI security scheme; Postman collection-level bearer `{{ACCESS_TOKEN}}`).
 - `Content-Type: application/json` — any body.
 - `X-Organization-Id` — legacy header read directly by a few consumers (e.g. the upload domain); org-scoped routes resolve the active organization from the signed `org` JWT claim, NOT this header. Switch the active org via `/auth/switch-to-personal` / `/auth/switch-to-organization` (which re-mint the access token).
 - `X-Idempotency-Key` — all mutating routes (optional, auto-generate in clients); REQUIRED on the 13 writes registered with `config.idempotencyRequired: true` (org create, memberships, transfer-ownership, invitations, subscription create/change-plan/cancel/resume, webhooks, api-keys, notification-policies, roles, uploads). Live list = the `I` (`req`) column in `docs/routes.txt`.
-- `X-Captcha-Token` — public auth forms only (login, magic-link send, password forgot/reset, email verify, webauthn authenticate options, oauth authorize).
+- `X-Captcha-Token` — public auth forms only (login, email verification-code send + login, password forgot/reset, mfa/login, webauthn authenticate options, oauth authorize).
 - `X-CSRF-Token` — POST /auth/refresh only (double-submit of the csrf_token cookie). Keeps the X- form (frontend-framework default).
 - `Stripe-Signature` — sent BY Stripe to the webhook routes; the app never sends it.
 
@@ -76,4 +91,4 @@ The policy is enforced centrally in `method-status-policy.middleware.ts`; declar
 4. `pnpm docs:generate:multilang && pnpm docs:postman` then `pnpm docs:check`.
 5. Gates: `validate:route-success-statuses`, `validate:route-success-coverage`, unit suites for the response map and examples fixture.
 6. Breaking changes: `pnpm docs:breaking` (local mirror of the CI oasdiff gate); intentional breaks get narrow entries in `.github/oasdiff/breaking-changes-ignore.txt`.
-7. Frontend client contract: when an auth **entry-flow** route or its response body changes (login, signup, magic-link, oauth, webauthn, mfa/login, refresh, switch-to-organization/personal, or `GET /auth/me/context`), or a **client-sent header** requirement (the header matrix above) changes, update `docs/reference/api/frontend-auth-guide.md` — its entry-flow → calls-to-dashboard matrix and the typed `landOnDashboard()` client mirror those shapes. Server-internal sequences for the same journeys live in `src/FLOWS.md`.
+7. Frontend client contract: when an auth **entry-flow** route or its response body changes (login, email verification-code send/login, oauth, webauthn, mfa/login, refresh, switch-to-organization/personal, or `GET /auth/me/context`), or a **client-sent header** requirement (the header matrix above) changes, update `docs/reference/api/frontend-auth-guide.md` — its entry-flow → calls-to-dashboard matrix and the typed `landOnDashboard()` client mirror those shapes. Server-internal sequences for the same journeys live in `src/FLOWS.md`.
