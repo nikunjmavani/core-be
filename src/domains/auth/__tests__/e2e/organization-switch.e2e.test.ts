@@ -7,8 +7,7 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateTestTokenAndSession } from '@/tests/helpers/test-auth.js';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
-import { seedPermissions } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
-import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
+import { seedAllPermissions } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import {
   provisionPersonalOrganization,
   provisionOrganizationWithOwner,
@@ -32,7 +31,8 @@ describe('Auth e2e: organization switch', () => {
 
   beforeEach(async () => {
     await cleanupDatabase();
-    await seedPermissions(Object.values(TENANCY_PERMISSIONS));
+    // Full catalog: provisionOrganizationWithOwner grants billing codes for TEAM orgs.
+    await seedAllPermissions();
   });
 
   it('switch-to-personal re-mints the token and returns the active-org delta (201)', async () => {

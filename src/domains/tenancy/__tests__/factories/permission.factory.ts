@@ -1,5 +1,6 @@
 import { database } from '@/infrastructure/database/connection.js';
 import { permissions } from '@/domains/tenancy/sub-domains/permission/permission.schema.js';
+import { SYSTEM_PERMISSIONS } from '@/domains/tenancy/sub-domains/permission/seed/permission.reference.seed.js';
 import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
 import { role_permissions } from '@/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.schema.js';
 import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
@@ -22,6 +23,20 @@ export async function seedPermissions(codes: string[]): Promise<void> {
     .insert(permissions)
     .values(values)
     .onConflictDoNothing({ target: permissions.code });
+}
+
+/**
+ * Seed the complete system permission catalog (every domain) into the
+ * permissions table.
+ *
+ * Use this in any suite that provisions organizations through the real
+ * service path: TEAM provisioning grants billing codes on top of the tenancy
+ * set (see ownerPermissionCodesForOrganizationType), so seeding only a
+ * per-domain subset violates the role_permissions → permissions FK and makes
+ * provisioning fail with a 500.
+ */
+export async function seedAllPermissions(): Promise<void> {
+  await seedPermissions(SYSTEM_PERMISSIONS.map((permission) => permission.code));
 }
 
 export interface CreateRoleWithPermissionsOptions {

@@ -153,10 +153,12 @@ export function buildFastifyServerOptions(): FastifyServerOptions {
     bodyLimit: DEFAULT_BODY_LIMIT_BYTES,
     requestTimeout: env.FASTIFY_REQUEST_TIMEOUT_MS ?? THIRTY_SECONDS_MS,
     connectionTimeout: env.FASTIFY_CONNECTION_TIMEOUT_MS ?? TEN_SECONDS_MS,
-    // On shutdown, immediately close keep-alive sockets sitting idle between requests rather than
-    // waiting out their keep-alive timeout; in-flight requests still drain normally. Without this a
-    // rolling deploy can hang on idle-but-open client connections until the platform force-kills the
-    // process — a slower, less graceful drain.
-    forceCloseConnections: 'idle',
+    // On shutdown, keep-alive sockets sitting idle between requests are closed by Node itself
+    // (native `server.close()` reaps idle connections on Node >= 19), while in-flight requests
+    // drain normally. Must stay `false`: fastify 5.9.0 (fastify/fastify#6669) made the previous
+    // `'idle'` value fall through to `closeAllConnections()` on native servers, which destroys
+    // ACTIVE sockets mid-request — every in-flight request during a rolling deploy would die
+    // with a connection reset (caught by shutdown-drain.integration.test.ts).
+    forceCloseConnections: false,
   };
 }

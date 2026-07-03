@@ -9,8 +9,7 @@ import {
   provisionPersonalOrganization,
   provisionOrganizationWithOwner,
 } from '@/domains/tenancy/sub-domains/organization/organization-provisioning.js';
-import { seedPermissions } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
-import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
+import { seedAllPermissions } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 /**
@@ -35,7 +34,8 @@ describe('refresh preserves the switched active organization (audit-#3)', () => 
 
   beforeEach(async () => {
     await cleanupDatabase();
-    await seedPermissions(Object.values(TENANCY_PERMISSIONS));
+    // Full catalog: provisionOrganizationWithOwner grants billing codes for TEAM orgs.
+    await seedAllPermissions();
   });
 
   function decodeOrgClaim(accessToken: string): string | undefined {
