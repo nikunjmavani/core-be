@@ -191,7 +191,10 @@ describe('Security: cross-organization mutation isolation (model: org — writes
       label: 'membership PATCH',
       method: 'PATCH',
       target: (org) => `/tenancy/organization/memberships/${org.membership.public_id}`,
-      body: {},
+      // membership update requires at least one mutable field (status/role_id);
+      // an empty body 400s at validation before the cross-org 404 check, so send
+      // a valid body to exercise tenant isolation rather than body validation.
+      body: { status: 'ACTIVE' },
     },
     {
       label: 'membership DELETE',

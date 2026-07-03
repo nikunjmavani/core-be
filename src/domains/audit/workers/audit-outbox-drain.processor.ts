@@ -10,6 +10,7 @@ import { setLocalDatabaseConfig } from '@/infrastructure/database/contexts/reque
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import {
+  AUDIT_OUTBOX_DRAIN_STALE_PENDING_WARN_SECONDS,
   DEFAULT_AUDIT_OUTBOX_DRAIN_BATCH_SIZE,
   DEFAULT_AUDIT_OUTBOX_DRAIN_MAX_ATTEMPTS,
 } from '@/domains/audit/workers/audit-outbox-drain.constants.js';
@@ -203,21 +204,35 @@ async function drainOutboxRow(options: {
   }
 
   try {
-    if (row.organization_public_id !== null) {
-      await setLocalDatabaseConfig(
-        databaseHandle,
-        'app.current_organization_id',
-        row.organization_public_id,
-      );
-    } else {
-      // Tenantless audit (system events). RLS requires the system arm to be true and
-      // organization_id IS NULL; resolveRowInserts guarantees the latter.
-      await setLocalDatabaseConfig(databaseHandle, 'app.system_audit_insert', 'true');
-    }
-
-    await databaseHandle.insert(logs).values(resolution.row);
+    // sec-r7/M2: isolate this row's GUC change + INSERT in a nested transaction (a Postgres
+    // SAVEPOINT, issued by drizzle). A DB-level failure on THIS row otherwise aborts the WHOLE
+    // batch transaction, so the failure-mark UPDATE below would itself throw "current transaction
+    // is aborted" and roll the entire batch back — including the claim's `attempt_count` bump —
+    // leaving the poison row at the head of `claimPendingBatch` (ORDER BY created_at ASC) forever,
+    // never reaching the attempt cap. drizzle rolls the nested transaction back to its savepoint
+    // and re-throws, leaving the OUTER batch transaction valid so the failure is recorded and the
+    // row's retries stay bounded. (Raw `SAVEPOINT` via execute() does NOT integrate with the
+    // postgres-js transaction-error state, so the nested transaction is the supported mechanism.)
+    await databaseHandle.transaction(async (savepoint) => {
+      const savepointHandle = savepoint as unknown as RequestScopedPostgresDatabase;
+      if (row.organization_public_id !== null) {
+        await setLocalDatabaseConfig(
+          savepointHandle,
+          'app.current_organization_id',
+          row.organization_public_id,
+        );
+      } else {
+        // Tenantless audit (system events). RLS requires the system arm to be true and
+        // organization_id IS NULL; resolveRowInserts guarantees the latter.
+        await setLocalDatabaseConfig(savepointHandle, 'app.system_audit_insert', 'true');
+      }
+      await savepointHandle.insert(logs).values(resolution.row);
+    });
     return { kind: 'success', id: row.id };
   } catch (error) {
+    // The nested transaction already rolled this row's partial work back to its savepoint, so the
+    // batch transaction is still usable: record the failure, which commits with the rest of the
+    // batch instead of aborting it.
     const message = error instanceof Error ? error.message : String(error);
     if (row.attempt_count + 1 >= maxAttempts) {
       await drainRepository.markPermanentlyFailed(row.id, message);
@@ -305,6 +320,22 @@ export async function runAuditOutboxDrainJob(
     },
     'audit.outbox.drain.pass.completed',
   );
+
+  // sec-r7/M2 backstop: with poison rows now isolated per-row (savepoint) and bounded by the
+  // attempt cap, a persistently-old PENDING row signals either a chronic failure path or a stuck
+  // queue. Surface it so an operator pages even though no single pass throws.
+  const backlog = await drainRepository.getPendingBacklogStats();
+  if (backlog.oldestPendingAgeSeconds >= AUDIT_OUTBOX_DRAIN_STALE_PENDING_WARN_SECONDS) {
+    logger.warn(
+      {
+        pendingCount: backlog.pendingCount,
+        oldestPendingAgeSeconds: backlog.oldestPendingAgeSeconds,
+        maxAttemptCount: backlog.maxAttemptCount,
+        thresholdSeconds: AUDIT_OUTBOX_DRAIN_STALE_PENDING_WARN_SECONDS,
+      },
+      'audit.outbox.drain.backlog.stalled',
+    );
+  }
 
   return {
     drained: successIds.length,

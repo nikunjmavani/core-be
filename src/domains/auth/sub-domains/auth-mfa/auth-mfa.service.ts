@@ -6,7 +6,10 @@ import {
   encryptFieldSecret,
 } from '@/shared/utils/security/field-secret-encryption.util.js';
 import { ForbiddenError, UnauthorizedError } from '@/shared/errors/index.js';
-import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
+import {
+  assertEmailVerifiedForCredentialEnrollment,
+  assertUserAccountActive,
+} from '@/shared/utils/auth/account-status.util.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
@@ -112,7 +115,12 @@ export class MfaService {
     body: unknown,
     ipAddress: string,
     userAgent?: string,
-  ): Promise<{ access_token: string; session_public_id: string; session_refresh_secret: string }> {
+  ): Promise<{
+    access_token: string;
+    session_public_id: string;
+    session_refresh_secret: string;
+    factor: 'totp' | 'recovery_code';
+  }> {
     const parsed = validateMfaLoginVerify(body);
     const session = await verifyMfaSession(this.redis, parsed.mfa_session_token);
     const user = await this.userService.requireUserRecordByPublicId(session.user_public_id);
@@ -123,6 +131,7 @@ export class MfaService {
     assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
 
     let verified = false;
+    let factor: 'totp' | 'recovery_code' = 'totp';
     if (parsed.totp_code) {
       // audit-#12 / reaudit-#3: the brute-force lockout gates ONLY the TOTP path (6-digit,
       // guessable). Recovery codes are single-use high-entropy break-glass and are
@@ -167,6 +176,7 @@ export class MfaService {
         throw new UnauthorizedError('errors:mfaInvalidOrExpiredRecoveryCode');
       }
       verified = true;
+      factor = 'recovery_code';
     }
 
     if (!verified) {
@@ -175,7 +185,10 @@ export class MfaService {
 
     // audit-#12: successful second factor clears the failure counter.
     await this.clearMfaVerificationFailures(user.id);
-    return this.issueAccessTokenAndSession(user, ipAddress, userAgent);
+    const issued = await this.issueAccessTokenAndSession(user, ipAddress, userAgent);
+    // Surface the factor so the handler can audit recovery-code use (the TOTP-bypass break-glass
+    // path) distinctly from a normal TOTP second factor.
+    return { ...issued, factor };
   }
 
   /**
@@ -330,6 +343,10 @@ export class MfaService {
     const parsed = validateMfaEnroll(body);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
+    // Pre-hijacking guard: an unverified (e.g. attacker-pre-registered) account must not seed an
+    // MFA factor that would survive the real owner's password-reset recovery (sec — account
+    // pre-hijacking, Trojan-credential variant).
+    assertEmailVerifiedForCredentialEnrollment(user);
     if (parsed.method_type !== 'MFA_TOTP') {
       throw new UnauthorizedError('errors:mfaOnlyTotpSupported');
     }

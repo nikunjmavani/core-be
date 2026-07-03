@@ -7,7 +7,12 @@ import { closeRedis } from '@/infrastructure/cache/redis.client.js';
 import { closeMailQueue } from '@/infrastructure/mail/queues/mail.queue.js';
 import { closeNotificationQueue } from '@/domains/notify/sub-domains/notification/queues/notification.queue.js';
 import { closeWebhookDeliveryQueue } from '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js';
+import { closeSubscriptionSeatSyncQueue } from '@/domains/billing/sub-domains/subscription/queues/subscription-seat-sync.queue.js';
+import { closeStripeWebhookQueue } from '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.queue.js';
+import { closeUserDataExportQueue } from '@/domains/user/sub-domains/user-data-export/queues/user-data-export.queue.js';
 import { flushSentry } from '@/infrastructure/observability/sentry/sentry.js';
+import { shutdownPostHog } from '@/infrastructure/observability/posthog/posthog.js';
+import { shutdownOpenTelemetry } from '@/infrastructure/observability/tracing/otel.js';
 import { THREE_SECONDS_MS } from '@/shared/constants/index.js';
 import { setApplicationDraining } from '@/shared/utils/infrastructure/application-lifecycle.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -44,6 +49,18 @@ function getShutdownDrainDelayMs(): number {
 
 const shutdownMiddleware: FastifyPluginAsync = async (app) => {
   app.addHook('onClose', async () => {
+    // #786: under test, many apps are built per Vitest worker and all share the process-level
+    // singletons (the Redis cache client, BullMQ producer queues, the DB pool). Closing them on
+    // every app.close() and reviving them in the next file churns the BullMQ/ioredis connections,
+    // whose re-init / reconnect INFO probe (BullMQ getRedisVersionAndType / ioredis readyCheck)
+    // then rejects against a closing stream at worker teardown — a flaky unhandled rejection that
+    // fails an otherwise-green run. The worker owns those singletons and reaps them at process
+    // exit, so skip the process-level teardown under test. Production/dev (one app per process)
+    // still tears everything down below. Reads raw `process.env.NODE_ENV` (always current; the
+    // `env` const is frozen before the harness sets NODE_ENV=test) so no env-config mock is needed.
+    if (process.env.NODE_ENV === 'test') {
+      return;
+    }
     /**
      * Order: stop accepting jobs (producer queues) → close shared infra (Redis, DB) →
      * flush telemetry. Each close is independent of the others and is awaited via
@@ -53,8 +70,20 @@ const shutdownMiddleware: FastifyPluginAsync = async (app) => {
       closeMailQueue(),
       closeNotificationQueue(),
       closeWebhookDeliveryQueue(),
+      // REQ-4: producer queue used by change-plan + member add/remove on the request path.
+      closeSubscriptionSeatSyncQueue(),
+      // #786: stripe-webhook ingress and user-data-export (POST /users/me/data-export) are also
+      // request-path producer queues — close them too so no BullMQ producer connection leaks at
+      // graceful shutdown (previously only 4 of the 6 producer queues were drained here).
+      closeStripeWebhookQueue(),
+      closeUserDataExportQueue(),
     ]);
     await Promise.allSettled([closeRedis(), closeBullMqRedis(), closeDatabase()]);
+    // audit M5: flush + tear down the OpenTelemetry SDK (no-op when never started)
+    // before the Sentry flush so pending OTLP spans are not dropped on shutdown.
+    await shutdownOpenTelemetry();
+    // Flush pending product-analytics events (no-op when PostHog is disabled).
+    await shutdownPostHog();
     await flushSentry();
   });
 

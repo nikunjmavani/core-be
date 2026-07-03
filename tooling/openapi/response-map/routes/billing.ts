@@ -84,4 +84,11 @@ export const billingRouteResponses: Record<string, ResponseDefinition> = {
     }),
     example: null,
   },
+
+  // ── Stripe webhook (protocol-owned 200) ──
+  'POST /api/v1/billing/webhook': {
+    statusCode: 200,
+    schema: wrapSuccess(schemas.webhookReceivedSchema, schemas.webhookReceivedExample),
+    example: null,
+  },
 };

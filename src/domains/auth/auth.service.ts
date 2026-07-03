@@ -25,6 +25,7 @@ import type { UserService } from '@/domains/user/user.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import type { AuthSessionService } from './sub-domains/auth-session/auth-session.service.js';
 import type { MfaService } from './sub-domains/auth-mfa/auth-mfa.service.js';
+import type { AuthMethodService } from './sub-domains/auth-method/auth-method.service.js';
 import { validateLogin } from './auth.validator.js';
 import { completeFirstFactorAuth } from './shared/complete-first-factor-auth.js';
 import {
@@ -83,6 +84,7 @@ export class AuthService {
     private readonly mfaService: MfaService,
     private readonly organizationSettingsService: OrganizationSettingsService,
     private readonly redis: Redis,
+    private readonly authMethodService: AuthMethodService,
   ) {}
 
   private buildIpKey(ipAddress: string): string {
@@ -232,6 +234,42 @@ export class AuthService {
     });
   }
 
+  /**
+   * Completes `POST /auth/password/reset` and logs the user straight back in.
+   *
+   * @remarks
+   * - **Algorithm:** delegate the token-consume + password-update + revoke-all-sessions to
+   *   {@link AuthMethodService.resetPassword} (one pinned transaction), then mint a fresh session via
+   *   {@link completeFirstFactorAuth} AFTER that commits — so the resetter's new session is the only
+   *   live one, while any attacker-held session from before the reset is gone.
+   * - **Failure modes:** invalid/expired token → `UnauthorizedError` (from the delegate); a
+   *   suspended/locked/deleted account is refused a session via {@link assertUserAccountActive} even
+   *   though its password was reset (mirrors `login`); an MFA user gets the `mfa_required` arm of
+   *   {@link LoginResult} (the reset never bypasses MFA).
+   * - **Side effects:** the delegate's writes (password, token invalidation, session revoke) plus one
+   *   new `auth_sessions` row (unless MFA is required). The caller sets the session cookie + audits.
+   */
+  async resetPassword(body: unknown, ipAddress: string, userAgent?: string): Promise<LoginResult> {
+    const user = await this.authMethodService.resetPassword(body);
+    // The password was reset, but a suspended/locked/deleted account is never issued a session.
+    assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
+    return completeFirstFactorAuth({
+      user: {
+        id: user.id,
+        public_id: user.public_id,
+        email: user.email,
+        status: user.status,
+        is_email_verified: user.is_email_verified,
+        is_mfa_enabled: user.is_mfa_enabled,
+      },
+      ipAddress,
+      userAgent,
+      organizationSettingsService: this.organizationSettingsService,
+      mfaService: this.mfaService,
+      authSessionService: this.authSessionService,
+    });
+  }
+
   async logout(token: string): Promise<void> {
     await this.authSessionService.revokeSessionByAccessToken(token);
   }
@@ -315,7 +353,7 @@ export class AuthService {
     userPublicId: string;
     sessionPublicId: string;
     organizationPublicId: string;
-  }): Promise<{ access_token: string }> {
+  }): Promise<{ access_token: string; organization_public_id: string }> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (user.status !== 'ACTIVE') throw new UnauthorizedError('errors:accountNotActive');
     const resolved = await findUserActiveOrganizationByPublicId(user.id, organizationPublicId);
@@ -334,7 +372,7 @@ export class AuthService {
   }: {
     userPublicId: string;
     sessionPublicId: string;
-  }): Promise<{ access_token: string }> {
+  }): Promise<{ access_token: string; organization_public_id: string }> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (user.status !== 'ACTIVE') throw new UnauthorizedError('errors:accountNotActive');
     const personal = await resolvePersonalOrganization(user.id);
@@ -351,7 +389,7 @@ export class AuthService {
     user: UserAuthRecord,
     sessionPublicId: string,
     organization: { id: number; public_id: string },
-  ): Promise<{ access_token: string }> {
+  ): Promise<{ access_token: string; organization_public_id: string }> {
     const jsonWebToken = await signAccessToken({
       userId: user.public_id,
       role: resolveAccessTokenRoleForUser({
@@ -366,6 +404,6 @@ export class AuthService {
       nextAccessToken: jsonWebToken,
       activeOrganizationId: organization.id,
     });
-    return { access_token: jsonWebToken };
+    return { access_token: jsonWebToken, organization_public_id: organization.public_id };
   }
 }

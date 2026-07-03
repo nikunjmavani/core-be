@@ -21,7 +21,7 @@ Hand-written guides live in **topic subfolders**; generated API artifacts stay a
 **In-source documentation (lives under `src/`, not `docs/`):**
 
 - System narratives — `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` (hand-authored).
-- Per-folder overviews — `src/<folder>/OVERVIEW.md` at meaningful boundaries (hand-authored).
+- Per-folder overviews — `src/<folder>/<folder>.overview.md` at meaningful boundaries (hand-authored).
 - TSDoc on every public export, plus `@remarks` on services/workers/processors/policy files (canonical; gated by `pnpm tsdoc:check`).
 - Route documentation lives in inline Fastify `schema.summary` / `schema.description` and drives [openapi/openapi.json](openapi/openapi.json).
 
@@ -59,6 +59,7 @@ flowchart TB
 | [SETUP.md](../SETUP.md)                                                                       | Local setup, env vars, cloud infra, testing, CI/CD, troubleshooting.                                        |
 | [getting-started/api-testing.md](getting-started/api-testing.md)                             | Manual API checklist and smoke after `pnpm db:seed:full`.                                                   |
 | [getting-started/requirement-intake.md](getting-started/requirement-intake.md)               | Format for new requirements; which skills and rules to run.                                                 |
+| [getting-started/seeded-fixtures.md](getting-started/seeded-fixtures.md)                       | Fixed demo data produced by `pnpm db:seed:full`.                                                            |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md)                                                     | Contributor quick start; **AGENTS.md** (author gate), **pr-review.md** (reviewers).                         |
 | [deployment/runbooks/environment-variables.md](deployment/runbooks/environment-variables.md) | Env variable workflow (`tooling/setup/setup.config.json` → `pnpm github:sync` → edit values → `pnpm github:sync`). |
 | [integrations/credentials-and-env.md](integrations/credentials-and-env.md)                   | Per-provider credential acquisition (S3, Resend, OAuth, Stripe, Sentry, etc.).                              |
@@ -75,6 +76,7 @@ flowchart TB
 | [process/dr-runbook.md](process/dr-runbook.md)       | Disaster recovery — RTO 1h, RPO 15m, failover, quarterly review.                         |
 | [process/backup-drills.md](process/backup-drills.md) | Monthly restore drill — required automated RTO gate + optional manual evidence workflow. |
 | [process/dlq-runbook.md](process/dlq-runbook.md)     | Dead-letter queue inspection and replay.                                                 |
+| [process/sentry-alerts.md](process/sentry-alerts.md) | Sentry alert rules and on-call routing.                                                  |
 
 ---
 
@@ -85,7 +87,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | Doc                                                                                                          | Description                                                                                       |
 | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
 | [deployment/setup/setup-automation.md](deployment/setup/setup-automation.md)                                 | One-command provisioning (`pnpm setup:infra`).                                                    |
-| [deployment/setup/setup-token-instructions.md](deployment/setup/setup-token-instructions.md)                 | Token sources and `.env.setup` variable names.                                                    |
+| [deployment/setup/setup-token-instructions.md](deployment/setup/setup-token-instructions.md)                 | Token sources and `.setup-credentials` variable names.                                                    |
 | [deployment/setup/railway-github-cli-setup.md](deployment/setup/railway-github-cli-setup.md)                 | Manual Railway + GitHub CLI setup.                                                                |
 | [deployment/ci-cd/cicd-and-deployment.md](deployment/ci-cd/cicd-and-deployment.md)                           | CI pipeline, Railway deploy, GitHub secrets.                                                      |
 | [deployment/ci-cd/branch-protection.md](deployment/ci-cd/branch-protection.md)                               | Required CI checks for `main` / `dev`.                                                            |
@@ -101,6 +103,10 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [deployment/runbooks/jwt-key-rotation.md](deployment/runbooks/jwt-key-rotation.md)                           | JWT PEM rotation (ops today; `kid` multi-key deferred).                                           |
 | [deployment/runbooks/upload-storage.md](deployment/runbooks/upload-storage.md)                               | Direct-to-S3 upload hardening: validation, presigned POST, PENDING sweeper, lifecycle policy.     |
 | [deployment/runbooks/railway-custom-domain.md](deployment/runbooks/railway-custom-domain.md)                 | `pnpm setup:domain` — attach a custom domain (SSL) to a Railway service; both envs in one run.    |
+| [deployment/github-production-environment.md](deployment/github-production-environment.md)                     | GitHub production Environment protection and required reviewers.                                  |
+| [deployment/restore-drill.md](deployment/restore-drill.md)                                                   | Backup restore drill procedure and RTO evidence.                                                 |
+| [deployment/runbooks/stripe-subscription-reconciliation.md](deployment/runbooks/stripe-subscription-reconciliation.md) | Reconcile Stripe subscriptions against the local ledger.                               |
+| [deployment/runbooks/worker-scaling.md](deployment/runbooks/worker-scaling.md)                               | Scaling BullMQ worker processes and concurrency.                                                 |
 
 ---
 
@@ -114,7 +120,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [integrations/codegraph.md](integrations/codegraph.md)                                           | Semantic code index for AI agents (MCP); auto-set-up in `setup:local` (phase 7/9).                  |
 | [integrations/understand-anything.md](integrations/understand-anything.md)                         | Knowledge graph, dashboard, and learning-curve steps (`/understand`, tour, chat, diff).             |
 | [integrations/claude-code-sessions.md](integrations/claude-code-sessions.md)                     | Claude Code session setup: the common hooks, gates, and skill routing every session runs. |
-| [integrations/cursor-cloud-agent-environment.md](integrations/cursor-cloud-agent-environment.md) | `Dockerfile.agent` vs production image for Cursor cloud agents.                                     |
+| [integrations/cursor-cloud-agent-environment.md](integrations/cursor-cloud-agent-environment.md) | `Dockerfile.agent` vs production image for Cursor cloud agents; canonical install config in [`agent-os/cloud-environment/`](../agent-os/cloud-environment/). |
 | [integrations/claude-code-web-environment.md](integrations/claude-code-web-environment.md)       | Claude Code on the web: network access, setup script (Node 24), env vars, Postgres/Redis via `pnpm compose`. |
 | [integrations/codex-cloud-agent-setup-archive.md](integrations/codex-cloud-agent-setup-archive.md) | Reference-only notes for removed Codex Cloud session setup attempts; local Codex still uses `.codex/` + `agent-os/`. |
 | [integrations/cursor-agent-system.md](integrations/cursor-agent-system.md)                         | Skills, rules, subagents, and MCP map for Cursor / coding agents.                                   |
@@ -129,19 +135,44 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
 | [reference/architecture/project-structure-guide.md](reference/architecture/project-structure-guide.md)             | Layer matrix, request flow, naming (`pnpm tool:project-structure-tree` for live tree). |
 | [reference/architecture/domains-and-public-api-design.md](reference/architecture/domains-and-public-api-design.md) | Domain layout and Paddle-style API responses.                                          |
+| [reference/architecture/sub-domains-layout.md](reference/architecture/sub-domains-layout.md) | Sub-domain and nested sub-domain folder layout rules. |
+| [reference/architecture/documentation-system.md](reference/architecture/documentation-system.md) | In-source doc system (narratives, OVERVIEWs, TSDoc, route schema); `tsdoc:check` ratchet. |
+| [reference/architecture/personal-vs-team-organizations.md](reference/architecture/personal-vs-team-organizations.md) | Personal vs team organization model and the single route surface. |
+| [reference/architecture/typescript-strictness.md](reference/architecture/typescript-strictness.md) | TypeScript strictness settings and rationale. |
+| [reference/architecture/scripts-layout.md](reference/architecture/scripts-layout.md) | `src/scripts/` layout and script conventions. |
+| [reference/architecture/production-audit-decisions.md](reference/architecture/production-audit-decisions.md) | Audit decisions: seat-entitlement policy, `updated_at` triggers, ops-polish, scale milestones. |
 | [reference/api/api-versioning.md](reference/api/api-versioning.md)                                                 | `/api/v1`, deprecation, `Sunset` / `Deprecation` headers.                              |
 | [reference/api/response-codes.md](reference/api/response-codes.md)                                                 | Method→status policy, when to use each error code, error envelope.                     |
 | [reference/api/route-consistency-and-org-model.md](reference/api/route-consistency-and-org-model.md)               | One route surface for personal/team orgs, the `capabilities` object + 422 backstop, route-catalog S/I/O columns, `/auth/me/*` vs login flow. |
 | [reference/api/frontend-auth-guide.md](reference/api/frontend-auth-guide.md)                                       | Frontend SPA auth: Bearer + reactive refresh, headers per route, org switching.        |
+| [reference/api/frontend-endpoint-mapping.md](reference/api/frontend-endpoint-mapping.md)                           | FE calls → real routes: passkeys, notifications, prefs, webhooks, MFA, sessions, org logo, billing gating. |
+| [reference/api/api-documentation.md](reference/api/api-documentation.md) | OpenAPI / Postman / Scalar generation and hosting. |
 | [reference/data/data-lifecycle-deletion.md](reference/data/data-lifecycle-deletion.md)                             | Soft-delete, retention, Drizzle table inventory.                                       |
 | [reference/data/user-data-export.md](reference/data/user-data-export.md)                                           | Async GDPR export to S3, presigned download, offboarding cleanup.                      |
+| [reference/data/migrations.md](reference/data/migrations.md) | Migration authoring, safety rules, and the migrate runner. |
+| [reference/runtime/workers-and-events.md](reference/runtime/workers-and-events.md) | In-process event bus vs BullMQ workers; registration paths. |
 | [reference/security/authentication.md](reference/security/authentication.md)                                       | Auth methods, rate limits, CAPTCHA (Turnstile) production boot guard.                  |
 | [reference/security/csrf-and-session-cookies.md](reference/security/csrf-and-session-cookies.md)                   | Session cookie CSRF posture and Origin checks.                                         |
 | [reference/security/route-flow-audit-remediation.md](reference/security/route-flow-audit-remediation.md)           | Route-flow audit fixes, regression tests, and deferred-item plans.                     |
+| [reference/security/secrets-management.md](reference/security/secrets-management.md) | Secret storage, encryption key, and rotation. |
+| [reference/security/data-classification.md](reference/security/data-classification.md) | Data sensitivity tiers and handling rules. |
+| [reference/security/audit-logs.md](reference/security/audit-logs.md) | Audit log model and retention. |
+| [reference/security/audit-export.md](reference/security/audit-export.md) | Audit log export workflow. |
+| [reference/security/system-tables-without-tenant-rls.md](reference/security/system-tables-without-tenant-rls.md) | System/shared tables intentionally outside tenant RLS. |
+| [reference/security/authorization-matrix-review.md](reference/security/authorization-matrix-review.md) | Authorization matrix review. |
+| [reference/security/authorization-coverage-gaps.md](reference/security/authorization-coverage-gaps.md) | Authorization coverage gaps tracker. |
+| [reference/security/authorization-testing-plan.md](reference/security/authorization-testing-plan.md) | Authorization testing plan. |
 | [reference/reliability/chaos-testing.md](reference/reliability/chaos-testing.md)                                   | Toxiproxy chaos suite (`pnpm test:chaos`).                                             |
 | [reference/testing/contract-tests.md](reference/testing/contract-tests.md)                                         | Outbound contracts for Stripe, Resend, S3.                                             |
 | [reference/reliability/health-checks.md](reference/reliability/health-checks.md)                                   | API and worker health endpoints, curl examples, k8s/Railway probes.                    |
 | [reference/reliability/process-error-handling.md](reference/reliability/process-error-handling.md)                 | `uncaughtException` vs burst-tolerant `unhandledRejection` policy (audit #14).         |
+| [reference/reliability/idempotency.md](reference/reliability/idempotency.md) | Idempotency keys, `X-Idempotency-Key`, replay, and the required-write set. |
+| [reference/reliability/degraded-mode-runbook.md](reference/reliability/degraded-mode-runbook.md) | Degraded-mode behavior when Redis/DB dependencies are impaired. |
+| [reference/reliability/scalability-and-capacity.md](reference/reliability/scalability-and-capacity.md) | Measured single-instance throughput ceiling (~1k req/s), the DB-pool bottleneck, and how to scale past it. |
+| [reference/testing/testing-conventions.md](reference/testing/testing-conventions.md) | Test layers, naming, and `fastify.inject` conventions. |
+| [reference/testing/mutation-testing.md](reference/testing/mutation-testing.md) | Mutation testing setup and budgets. |
+| [reference/quality/sonarqube-local.md](reference/quality/sonarqube-local.md) | Local SonarQube quality gate (`pnpm sonar:*`) used in pre-commit. |
+| [reference/quality/test-coverage.md](reference/quality/test-coverage.md) | V8 coverage gates and thresholds. |
 
 ---
 

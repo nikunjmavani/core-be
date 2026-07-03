@@ -115,6 +115,29 @@ function gitleaksInstalled(): boolean {
   return result.status === 0;
 }
 
+/**
+ * Hard block on any staged secret/state file (defends against `git add -f`, which
+ * bypasses .gitignore). gitleaks scans content; this rejects the files outright so
+ * provisioned secrets in `.env.<environment>` / `.setup-state.*` can never be committed.
+ */
+function checkSecretFilesStaged(stagedFiles: string[]): number {
+  const allowed = /(^|\/)\.env\.example$|(^|\/)\.setup-credentials\.example$/;
+  const secretFile =
+    /(^|\/)\.env(\.[^/]*)?$|(^|\/)\.setup-credentials$|(^|\/)\.setup-state\.(json|lock|audit\.log)$|(^|\/)setup\.secrets\.json$/;
+  const offenders = stagedFiles.filter((file) => secretFile.test(file) && !allowed.test(file));
+  if (offenders.length > 0) {
+    console.error(
+      'ERROR: Refusing to commit secret/state files (these are gitignored for a reason):',
+    );
+    for (const file of offenders) console.error(`  ${file}`);
+    console.error(
+      'Secrets belong in .env.<environment> / .setup-state.json only — never in git. Unstage them (git restore --staged <file>).',
+    );
+    return 1;
+  }
+  return 0;
+}
+
 function checkConflictMarkers(stagedFiles: string[]): number {
   if (stagedFiles.length === 0) return 0;
   const result = spawnSync(
@@ -279,18 +302,25 @@ export function buildGuardSteps(options: {
     },
     {
       id: '14',
+      label: 'No secret/state files staged',
+      when: 'always',
+      description:
+        'reject staged .env.<env> / .setup-state.* / setup.secrets.json (force-add guard)',
+    },
+    {
+      id: '15',
       label: 'Merge conflict markers',
       when: 'always',
       description: 'grep staged files for conflict markers',
     },
     {
-      id: '15',
+      id: '16',
       label: 'Large staged files (>1MB)',
       when: 'always',
       description: 'reject staged files over 1MB',
     },
     {
-      id: '16',
+      id: '17',
       label: 'SonarQube quality gate',
       when: shouldRunSonarScan(stagedFiles) ? 'always' : 'conditional',
       description:
@@ -437,6 +467,10 @@ export function runPreCommitGuard(options: RunGuardOptions = {}): number {
           }
           return runShell('gitleaks protect --staged --verbose --redact');
         },
+      },
+      {
+        label: 'No secret/state files staged',
+        run: () => checkSecretFilesStaged(stagedFiles),
       },
       {
         label: 'Merge conflict markers',

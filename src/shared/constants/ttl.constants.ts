@@ -147,14 +147,8 @@ export const NOTIFICATION_EMAIL_DISPATCH_IDEMPOTENCY_TTL_SECONDS = SECONDS_PER_D
 /** Browser CORS preflight cache max-age (seconds). */
 export const CORS_PREFLIGHT_MAX_AGE_SECONDS = SECONDS_PER_DAY;
 
-/** Magic-link verification token lifetime (minutes). */
-export const MAGIC_LINK_EXPIRES_IN_MINUTES = 15;
-
 /** Password-reset verification token lifetime (minutes). */
 export const PASSWORD_RESET_EXPIRES_IN_MINUTES = 60;
-
-/** Email-verification token lifetime (hours). */
-export const EMAIL_VERIFICATION_EXPIRES_IN_HOURS = 24;
 
 /** Public catalog HTTP Cache-Control max-age (seconds); aligns with permission cache TTL. */
 export const CATALOG_CACHE_MAX_AGE_SECONDS = PERMISSION_CACHE_DEFAULT_TTL_SECONDS;

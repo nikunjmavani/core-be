@@ -36,7 +36,11 @@ export async function seedOrganization(payload: SeedOrganizationPayload) {
       created_by_user_id: payload.owner_user_id,
     })
     .onConflictDoUpdate({
+      // `idx_organizations_slug` is a PARTIAL unique index (WHERE deleted_at IS NULL),
+      // so the arbiter predicate must be supplied or Postgres raises 42P10
+      // ("no unique or exclusion constraint matching the ON CONFLICT specification").
       target: organizations.slug,
+      targetWhere: sql`${organizations.deleted_at} is null`,
       set: { name: payload.name },
     })
     .returning();

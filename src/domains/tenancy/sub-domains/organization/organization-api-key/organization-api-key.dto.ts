@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
+import { listSearchSortSchema } from '@/shared/utils/http/list-query.util.js';
 import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 /** Zod schema for the `:api_key_id` path param (get/update/delete/rotate API key). */
@@ -34,8 +34,11 @@ export const updateOrganizationApiKeyDto = z
   })
   .strict();
 
-/** Zod schema for the `GET /api/v1/organization/api-keys` query string — cursor-based pagination only. */
-export const listOrganizationApiKeysQueryDto = cursorPaginationSchema.strict();
+/** Zod schema for the `GET /api/v1/organization/api-keys` query string — cursor pagination + search (q) / sort / order. */
+export const listOrganizationApiKeysQueryDto = listSearchSortSchema([
+  'name',
+  'created_at',
+] as const);
 
 /** DTO inferred from {@link createOrganizationApiKeyDto}. */
 export type CreateOrganizationApiKeyInput = z.infer<typeof createOrganizationApiKeyDto>;

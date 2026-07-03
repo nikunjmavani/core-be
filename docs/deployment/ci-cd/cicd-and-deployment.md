@@ -336,7 +336,7 @@ Use **workflow_dispatch** when you need to run part of the pipeline without a fu
 | [bootstrap-railway-service.yml](../../../.github/workflows/bootstrap-railway-service.yml) | One-time or recovery Railway service setup | `environment`, `service` (`api` / `worker` / `both`), `dry_run` (default `true`) |
 | Reusable test/docker workflows | Ad-hoc validation on a branch tip | `merge_commit_sha`, `target_branch` on `reusable-vitest-postgres-redis.yml`, `reusable-docker-build-trivy.yml`, `reusable-chaos-toxiproxy.yml`, `reusable-openapi-postman-publish.yml` |
 
-**Bootstrap flow:** Run **Bootstrap Railway service** with `dry_run=true` first and review `pnpm setup:infra:status` / `pnpm setup:infra:dry-run` output. Flip `dry_run=false` to apply `pnpm setup:infra --yes` and trigger the first deploy via `pnpm tool:railway-deploy-image` (same path as steady-state CD). Re-running against an already-configured environment is idempotent.
+**Bootstrap flow:** Run **Bootstrap Railway service** with `dry_run=true` first and review `pnpm setup:infra:status` / `pnpm setup:infra:plan` output. Flip `dry_run=false` to apply `pnpm setup:infra --yes` and trigger the first deploy via `pnpm tool:railway-deploy-image` (same path as steady-state CD). Re-running against an already-configured environment is idempotent.
 
 **Rollback:** Dispatch **Reusable — Railway deploy** with `image_override=ghcr.io/<owner>/<repo>/core-be-api:previous` (and the worker ref derived automatically when the override contains `core-be-api`).
 

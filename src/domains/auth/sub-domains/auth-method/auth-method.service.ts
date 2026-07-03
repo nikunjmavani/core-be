@@ -1,18 +1,23 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
+  ConflictError,
   ForbiddenError,
   NotFoundError,
   UnauthorizedError,
   ValidationError,
 } from '@/shared/errors/index.js';
+import { MAX_LINKED_AUTH_METHODS_PER_USER } from '@/shared/constants/security.constants.js';
+import type { Redis } from 'ioredis';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { enforceMinimumDuration } from '@/shared/utils/security/anti-enumeration.util.js';
+import { redisConnection } from '@/infrastructure/cache/redis.client.js';
+import { WebauthnCredentialRepository } from '@/domains/auth/sub-domains/auth-webauthn/webauthn-credential.repository.js';
+import { VERIFICATION_CODE_RESEND_COOLDOWN_SECONDS } from '@/domains/auth/sub-domains/auth-method/verification-code.js';
 import { hashPassword, verifyPassword } from '@/shared/utils/security/password.util.js';
 import { eventBus } from '@/core/events/event-bus.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import {
   AUTH_EVENT,
-  type EmailVerificationEmailPayload,
   type PasswordResetEmailPayload,
 } from '@/domains/auth/sub-domains/auth-method/events/auth.events.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
@@ -23,6 +28,7 @@ import {
   runWithPinnedDatabaseHandle,
   type RequestScopedPostgresDatabase,
 } from '@/infrastructure/database/contexts/request-database.context.js';
+import type { UserAuthRecord } from '@/domains/user/user.types.js';
 import type { AuthMethodCreateData } from './auth-method.types.js';
 import type { AuthMethodRepository } from './auth-method.repository.js';
 import type { VerificationTokenRepository } from './verification-token/verification-token.repository.js';
@@ -32,11 +38,12 @@ import {
   validateForgotPassword,
   validateResetPassword,
   validateChangePassword,
-  validateVerifyEmail,
 } from '@/domains/auth/auth.validator.js';
 
 const PASSWORD_RESET_EXPIRES_IN_MINUTES = 60;
-const EMAIL_VERIFICATION_EXPIRES_IN_HOURS = 24;
+
+/** Redis key prefix for the per-email password-reset send cooldown (anti-mail-bomb spacing). */
+const PASSWORD_RESET_COOLDOWN_KEY_PREFIX = 'auth:password_reset_cooldown:';
 
 /**
  * Auth-method types that can mint a session on their own (sec-A5). Used by
@@ -47,7 +54,7 @@ const EMAIL_VERIFICATION_EXPIRES_IN_HOURS = 24;
 const LOGIN_CAPABLE_METHOD_TYPES = new Set<string>([
   AUTH_METHOD_TYPE.PASSWORD,
   AUTH_METHOD_TYPE.OAUTH,
-  AUTH_METHOD_TYPE.MAGIC_LINK,
+  AUTH_METHOD_TYPE.EMAIL_CODE,
 ]);
 
 /**
@@ -56,21 +63,21 @@ const LOGIN_CAPABLE_METHOD_TYPES = new Set<string>([
  *
  * @remarks
  * - **Algorithm:** authenticated callers manage their linked auth methods
- *   (PASSWORD / OAUTH / MAGIC_LINK / MFA_TOTP) via `list` / `create` / `delete`.
- *   Password reset and email verification mint a random 32-byte token, persist
- *   its SHA-256 hash with a TTL ({@link PASSWORD_RESET_EXPIRES_IN_MINUTES} or
- *   {@link EMAIL_VERIFICATION_EXPIRES_IN_HOURS}), and atomically consume it via
+ *   (PASSWORD / OAUTH / EMAIL_CODE / MFA_TOTP) via `list` / `create` / `delete`.
+ *   Password reset mints a random 32-byte token, persists its SHA-256 hash with a TTL
+ *   ({@link PASSWORD_RESET_EXPIRES_IN_MINUTES}), and atomically consumes it via
  *   {@link VerificationTokenRepository.consumeIfValid} to guard against replay.
  * - **Failure modes:** disposable-email submissions throw `ValidationError`;
  *   unknown users surface `NotFoundError`; bad/expired tokens or wrong current
  *   password throw `UnauthorizedError` with i18n keys.
  * - **Side effects:** invalidates outstanding tokens before issuing new ones;
- *   emits `AUTH_EVENT.PASSWORD_RESET_REQUESTED` and `AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED`
- *   (mail enqueue happens in the auth-method event handlers); rehashes user
+ *   emits `AUTH_EVENT.PASSWORD_RESET_REQUESTED` (mail enqueue happens in the
+ *   auth-method event handlers); rehashes user
  *   passwords via {@link UserService.updatePassword}. A password reset revokes
- *   all of the user's sessions; an authenticated change revokes every session
- *   except the caller's current one (or all sessions when no current token is
- *   supplied) via {@link AuthSessionService}.
+ *   all of the user's sessions, marks the email verified (the reset token proves email control), and
+ *   clears any failed-login lockout, then returns the user so the caller can auto-login; an
+ *   authenticated change revokes every session except the caller's current one (or all sessions when
+ *   no current token is supplied) via {@link AuthSessionService}.
  * - **Notes:** the forgot-password flow always returns the same success message
  *   even when the email is unknown, to prevent account enumeration. OAuth
  *   linkage is idempotent via {@link AuthMethodService.linkOAuthProviderIfMissing}.
@@ -81,6 +88,8 @@ export class AuthMethodService {
     private readonly authMethodRepository: AuthMethodRepository,
     private readonly verificationTokenRepository: VerificationTokenRepository,
     private readonly authSessionService: AuthSessionService,
+    private readonly redis: Redis = redisConnection,
+    private readonly webauthnCredentialRepository: WebauthnCredentialRepository = new WebauthnCredentialRepository(),
   ) {}
 
   async list(userPublicId: string) {
@@ -93,24 +102,88 @@ export class AuthMethodService {
     );
   }
 
+  /**
+   * Whether the user retains at least one active login-capable auth method
+   * (`PASSWORD` / `OAUTH` / `EMAIL_CODE`) — i.e. a way to authenticate that does NOT depend on a
+   * passkey.
+   *
+   * @remarks
+   * - **Algorithm:** lists the user's active `auth_methods` under the owner DB context and tests
+   *   membership in {@link LOGIN_CAPABLE_METHOD_TYPES} (the same set used by the last-method delete
+   *   guard). MFA factors (`MFA_TOTP`) are second factors and are intentionally excluded.
+   * - **Failure modes:** `NotFoundError` when the user record is missing.
+   * - **Side effects:** transient owner-scoped DB context only.
+   * - **Notes:** sec-r5-M3 — consulted by {@link WebauthnService.revokeCredential} so a passkey-only
+   *   user cannot delete their last passkey and lock themselves out, while a user with a password /
+   *   OAuth / email-code method may remove every passkey.
+   */
+  async hasLoginCapableMethod(userPublicId: string): Promise<boolean> {
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    if (!user) throw new NotFoundError('User');
+    const methods = await withUserDatabaseContext(userPublicId, () =>
+      this.authMethodRepository.listByUserId(user.id),
+    );
+    return methods.some((method) => LOGIN_CAPABLE_METHOD_TYPES.has(String(method.method_type)));
+  }
+
+  /**
+   * Whether the user holds ANY active authentication credential — a login-capable `auth_methods`
+   * row (`PASSWORD` / `OAUTH` / `EMAIL_CODE`) **or** an active WebAuthn passkey. Used to decide
+   * whether a pre-existing account is a still-unclaimed bare invited placeholder (and therefore
+   * safe to claim via OAuth / signup) vs. a real account that must never be silently merged into.
+   *
+   * @remarks
+   * - **Algorithm:** under the owner DB context, short-circuits on the first login-capable
+   *   `auth_methods` row; otherwise checks for at least one non-revoked `webauthn_credentials` row.
+   *   Both tables are FORCE RLS keyed on the owner, so the read runs inside `withUserDatabaseContext`.
+   * - **Failure modes:** `NotFoundError` when the user record is missing.
+   * - **Side effects:** transient owner-scoped DB context only.
+   * - **Notes:** unlike {@link AuthMethodService.hasLoginCapableMethod} (which intentionally EXCLUDES
+   *   passkeys so a passkey-only user can still delete their last passkey), this counts passkeys —
+   *   the account-claim guards must treat a passkey-only account as a real, non-bare account so
+   *   takeover safety does not rely on the implicit "passkey ⇒ verified email" invariant.
+   */
+  async hasActiveLoginCredential(userPublicId: string): Promise<boolean> {
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    if (!user) throw new NotFoundError('User');
+    return withUserDatabaseContext(userPublicId, async () => {
+      const methods = await this.authMethodRepository.listByUserId(user.id);
+      if (methods.some((method) => LOGIN_CAPABLE_METHOD_TYPES.has(String(method.method_type)))) {
+        return true;
+      }
+      const passkeys = await this.webauthnCredentialRepository.listActiveByUserId(user.id);
+      return passkeys.length > 0;
+    });
+  }
+
   async create(userPublicId: string, body: unknown) {
-    // route-#3: the DTO restricts method_type to MAGIC_LINK — the only type that is a functional
+    // route-#3: the DTO restricts method_type to EMAIL_CODE — the only type that is a functional
     // credential-less row. PASSWORD/MFA_* (need a stored secret) and OAUTH (proves an external
     // identity, written only by the verified callback) are rejected at validation, so none can be
     // inserted here as non-functional phantom rows that the last-credential guard would miscount.
     const parsed = validateCreateAuthMethod(body);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
-    return withUserDatabaseContext(userPublicId, () =>
-      this.authMethodRepository.create(
+    return withUserDatabaseContext(userPublicId, async () => {
+      // Serialize the count + insert under the same per-user credential-mutation advisory lock the
+      // delete guard uses, so concurrent creates cannot both pass the cap check and overshoot
+      // MAX_LINKED_AUTH_METHODS_PER_USER. The xact lock auto-releases at commit.
+      await this.authMethodRepository.acquireCredentialMutationLock(user.id);
+      const activeCount = await this.authMethodRepository.countActiveByUserId(user.id);
+      if (activeCount >= MAX_LINKED_AUTH_METHODS_PER_USER) {
+        throw new ConflictError('errors:authMethodMaxReached', {
+          max: MAX_LINKED_AUTH_METHODS_PER_USER,
+        });
+      }
+      return this.authMethodRepository.create(
         omitUndefined({
           user_id: user.id,
           method_type: parsed.method_type,
           is_primary: parsed.is_primary,
           created_by_user_id: user.id,
         }),
-      ),
-    );
+      );
+    });
   }
 
   /**
@@ -118,7 +191,7 @@ export class AuthMethodService {
    *
    * @remarks
    * sec-A5: refuses to revoke the user's LAST login-capable credential. Login-capable
-   * types are `PASSWORD`, `OAUTH`, and `MAGIC_LINK` (server-issued auth methods of those
+   * types are `PASSWORD`, `OAUTH`, and `EMAIL_CODE` (server-issued auth methods of those
    * kinds) — MFA factors (`MFA_TOTP`, `MFA_SMS`, `MFA_EMAIL`) are second factors and
    * never grant a session on their own, so revoking the last MFA method is permitted
    * here (the org-policy guard on `MfaService.deleteMfa` covers the MFA-required-by-org
@@ -171,7 +244,7 @@ export class AuthMethodService {
   }
 
   /**
-   * Invalidate every outstanding verification token (magic-link, password-reset, email-
+   * Invalidate every outstanding verification token (email-code, password-reset, email-
    * verify, email-change) for a user. Called by the user-offboarding sequence (sec-U1)
    * so a token issued seconds before soft-delete cannot be redeemed to mint a session
    * for the deleted user.
@@ -223,6 +296,31 @@ export class AuthMethodService {
     return this.authMethodRepository.create(data);
   }
 
+  /**
+   * Creates the user's `EMAIL_CODE` auth_method row during email verification-code auto-signup.
+   *
+   * @remarks
+   * - **Algorithm:** inserts one `method_type=EMAIL_CODE` row owned by the user, pinning the owner
+   *   `withUserDatabaseContext` so the FORCE-RLS owner WITH CHECK authorizes the write. Intended to
+   *   run inside the auto-signup pinned transaction so it commits atomically with the user row.
+   * - **Failure modes:** propagates the insert error (e.g. a CHECK/constraint violation) to roll the
+   *   auto-signup transaction back.
+   * - **Side effects:** one `auth.auth_methods` insert.
+   * - **Notes:** `EMAIL_CODE` is a functional credential-less row (no stored secret), so an
+   *   email-code-only user has a real login-capable method that appears in
+   *   `GET /auth/me/auth-methods` and is counted by the last-login-capable-credential guard.
+   */
+  async createEmailCodeMethod(userId: number, userPublicId: string): Promise<void> {
+    await withUserDatabaseContext(userPublicId, () =>
+      this.authMethodRepository.create({
+        user_id: userId,
+        method_type: AUTH_METHOD_TYPE.EMAIL_CODE,
+        is_primary: true,
+        created_by_user_id: userId,
+      }),
+    );
+  }
+
   async updateAuthMethodLastUsedAt(methodId: number, userId: number): Promise<void> {
     await this.authMethodRepository.updateLastUsedAt(methodId, userId);
   }
@@ -268,7 +366,23 @@ export class AuthMethodService {
       ]);
     }
 
-    await this.issuePasswordResetIfUserExists(parsed.email);
+    // Anti-mail-bomb spacing: atomically claim a per-email cooldown slot. If one is already held
+    // (a reset was requested within VERIFICATION_CODE_RESEND_COOLDOWN_SECONDS), skip issuing/sending entirely
+    // and fall through to the SAME uniform success — the cooldown is keyed on the requested email
+    // regardless of whether an account exists, so it never becomes an existence oracle.
+    const cooldownKey = `${PASSWORD_RESET_COOLDOWN_KEY_PREFIX}${createHash('sha256')
+      .update(parsed.email)
+      .digest('hex')}`;
+    const cooldownClaimed = await this.redis.set(
+      cooldownKey,
+      '1',
+      'EX',
+      VERIFICATION_CODE_RESEND_COOLDOWN_SECONDS,
+      'NX',
+    );
+    if (cooldownClaimed) {
+      await this.issuePasswordResetIfUserExists(parsed.email);
+    }
     // Both branches return the same body; hold them to a common minimum duration so the extra
     // token-issuing writes on the known-account path cannot leak existence via response latency.
     await enforceMinimumDuration(startedAtMillis);
@@ -311,7 +425,7 @@ export class AuthMethodService {
     );
   }
 
-  async resetPassword(body: unknown): Promise<void> {
+  async resetPassword(body: unknown): Promise<UserAuthRecord> {
     const parsed = validateResetPassword(body);
     const tokenHash = createHash('sha256').update(parsed.token).digest('hex');
 
@@ -324,11 +438,18 @@ export class AuthMethodService {
     // compromised account's existing sessions live after a recovery reset. One pinned
     // transaction makes every nested `withUserDatabaseContext` call reuse it (all-or-nothing);
     // a mid-operation failure rolls the password change back rather than committing it alone.
-    await withTransaction((transaction) =>
+    // Returns the reset user so the caller (AuthService.resetPassword) can mint a fresh session
+    // AFTER this revoke-all-sessions, leaving the resetter's new session as the only live one.
+    return withTransaction((transaction) =>
       runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
         // Atomic UPDATE also prevents two concurrent resets from both succeeding.
-        const record = await this.verificationTokenRepository.consumeIfValid(tokenHash);
-        if (record?.token_type !== 'PASSWORD_RESET') {
+        // sec-r5-L2: the consume is scoped to PASSWORD_RESET, so a token of another flow
+        // is never matched (returns null) rather than burned and then rejected.
+        const record = await this.verificationTokenRepository.consumeIfValid(
+          tokenHash,
+          'PASSWORD_RESET',
+        );
+        if (!record) {
           throw new UnauthorizedError('errors:invalidOrExpiredResetToken');
         }
 
@@ -336,12 +457,23 @@ export class AuthMethodService {
         if (!user) throw new NotFoundError('User');
 
         await this.userService.updatePassword(user.public_id, passwordHash);
+        // Completing a reset proves control of the email (the token was delivered there), so verify
+        // it — parity with email-code / OAuth, and it unblocks an invited user from accepting their
+        // org invitation after recovering access.
+        await this.userService.updateEmailVerified(user.public_id);
+        // The password just changed, so any prior failed-login lockout is moot — clear the counter +
+        // lock window (mirrors a successful login) so the owner is not held out of the next sign-in.
+        const recovered = await this.userService.updateLoginAttempt(user.public_id, 0, null);
         await this.verificationTokenRepository.invalidateAllForUser(user.id, 'PASSWORD_RESET');
 
         // A reset is the recovery path for a potentially compromised account, so every existing
         // session is revoked. The Redis token-cache invalidation inside `revokeAllSessions` is a
         // sub-millisecond local call; on rollback it merely causes a cache miss, never a leak.
         await this.authSessionService.revokeAllSessions(user.public_id);
+        // `recovered` carries every in-transaction change (new password, verified flag, cleared
+        // lockout); fall back to the pre-update row only on the soft-deleted edge (guarded UPDATEs
+        // return null), where the caller's assertUserAccountActive then refuses a session anyway.
+        return recovered ?? user;
       }),
     );
   }
@@ -417,80 +549,5 @@ export class AuthMethodService {
     if (!user.password_hash) throw new UnauthorizedError('errors:passwordAuthNotEnabled');
     const { valid } = await verifyPassword(password, user.password_hash);
     if (!valid) throw new UnauthorizedError('errors:currentPasswordIncorrect');
-  }
-
-  // ── Email Verification ────────────────────────────────────────
-
-  async verifyEmail(
-    body: unknown,
-  ): Promise<{ messageKey: string; messageParams?: Record<string, string | number> }> {
-    const parsed = validateVerifyEmail(body);
-    const tokenHash = createHash('sha256').update(parsed.token).digest('hex');
-
-    // audit-#12: the token consumption and the verified-flag update must be ONE atomic unit.
-    // Previously the token was consumed first and the user update ran separately, so a
-    // transient failure after consumption permanently burned a valid single-use link and
-    // forced the user to request another email (stranding onboarding during a provider
-    // outage). The pinned transaction makes `consumeIfValid` roll back if the downstream
-    // update fails, leaving the link retryable. The atomic UPDATE in `consumeIfValid` still
-    // prevents two concurrent verifies from both succeeding.
-    await withTransaction((transaction) =>
-      runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
-        const record = await this.verificationTokenRepository.consumeIfValid(tokenHash);
-        if (record?.token_type !== 'EMAIL_VERIFICATION') {
-          throw new UnauthorizedError('errors:invalidOrExpiredVerificationToken');
-        }
-
-        const user = await this.userService.findById(record.user_id);
-        if (!user) throw new NotFoundError('User');
-
-        await this.userService.updateEmailVerified(user.public_id);
-      }),
-    );
-
-    return { messageKey: 'success:emailVerified' };
-  }
-
-  async resendEmailVerification(
-    userPublicId: string,
-    _context?: { requestId?: string },
-  ): Promise<{ messageKey: string; messageParams?: Record<string, string | number> }> {
-    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
-    if (!user) throw new NotFoundError('User');
-    if (user.is_email_verified) {
-      return { messageKey: 'success:emailAlreadyVerified' };
-    }
-
-    const rawToken = randomBytes(32).toString('hex');
-    const tokenHash = createHash('sha256').update(rawToken).digest('hex');
-    const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_EXPIRES_IN_HOURS * 3_600_000);
-
-    // audit-#11: invalidate prior tokens, persist the new token, and record the outbound
-    // mail-outbox row (done inside the EMAIL_VERIFICATION_REQUESTED handler) as ONE atomic unit so
-    // a handler/Redis/process failure cannot invalidate the old link and leave a new valid token
-    // that was never delivered. Queue dispatch stays post-commit (handler schedules it).
-    await withTransaction((transaction) =>
-      runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
-        await this.verificationTokenRepository.invalidateAllForUser(user.id, 'EMAIL_VERIFICATION');
-        await this.verificationTokenRepository.create(
-          'EMAIL_VERIFICATION',
-          user.id,
-          user.email,
-          tokenHash,
-          expiresAt,
-        );
-        await eventBus.emitStrict({
-          type: AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED,
-          payload: {
-            email: user.email,
-            verification_token: rawToken,
-            expires_in_hours: EMAIL_VERIFICATION_EXPIRES_IN_HOURS,
-          } satisfies EmailVerificationEmailPayload,
-          timestamp: new Date(),
-        });
-      }),
-    );
-
-    return { messageKey: 'success:verificationEmailSent' };
   }
 }

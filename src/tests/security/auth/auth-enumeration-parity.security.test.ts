@@ -13,7 +13,7 @@ import type { InjectHttpResult } from '@/tests/helpers/test-http-inject.helper.j
  * The service layer is already built to not leak account existence — the login
  * unknown-account branch runs a dummy Argon2 verify so its timing matches a real
  * wrong-password attempt and throws the same `invalidEmailOrPassword`, while
- * forgot-password / magic-link return a generic response on the unknown branch.
+ * forgot-password / email-code return a generic response on the unknown branch.
  * Those are security-critical invariants with no HTTP-level regression guard:
  * the legacy login test even permitted a 404 for an unknown email. This suite
  * locks the parity so a future refactor cannot reintroduce an oracle.
@@ -69,7 +69,7 @@ describe('Security: auth account-enumeration resistance', () => {
   function sendMagicLink(email: string) {
     return injectUnauthenticated(app, {
       method: 'POST',
-      url: testApiPath('/auth/magic-link/send'),
+      url: testApiPath('/auth/email/send-code'),
       payload: { email },
     });
   }
@@ -105,7 +105,7 @@ describe('Security: auth account-enumeration resistance', () => {
     expect(responseData(unknown)).toEqual(responseData(known));
   });
 
-  it('magic-link/send: known and unknown emails return an identical generic response', async () => {
+  it('email/send-code: known and unknown emails return an identical generic response', async () => {
     await createTestUserWithPassword({
       email: 'enumeration-magic@example.com',
       isEmailVerified: true,

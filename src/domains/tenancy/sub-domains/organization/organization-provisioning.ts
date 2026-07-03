@@ -1,5 +1,6 @@
 import { withGlobalAdminDatabaseContext } from '@/infrastructure/database/contexts/global-admin-database.context.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+import { BILLING_PERMISSIONS } from '@/domains/billing/billing.permissions.js';
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
 import { role_permissions } from '@/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.schema.js';
@@ -12,6 +13,21 @@ export const OWNER_ROLE_NAME = 'Owner';
 
 /** Every tenancy permission code — the owner role is granted the full set. */
 const ALL_TENANCY_PERMISSION_CODES: readonly string[] = Object.values(TENANCY_PERMISSIONS);
+
+const ALL_BILLING_PERMISSION_CODES: readonly string[] = Object.values(BILLING_PERMISSIONS);
+
+/**
+ * Permission codes granted to the auto-provisioned Owner role.
+ * TEAM organizations also receive billing read/manage so the creator can use `/billing/*`.
+ */
+export function ownerPermissionCodesForOrganizationType(
+  type: ProvisionOrganizationInput['type'],
+): readonly string[] {
+  if (type === 'TEAM') {
+    return [...ALL_TENANCY_PERMISSION_CODES, ...ALL_BILLING_PERMISSION_CODES];
+  }
+  return ALL_TENANCY_PERMISSION_CODES;
+}
 
 /** Input for {@link provisionOrganizationWithOwner}. */
 export interface ProvisionOrganizationInput {
@@ -31,9 +47,10 @@ export interface ProvisionOrganizationResult {
 
 /**
  * Atomically bootstrap an organization with full owner access: organization row →
- * system `Owner` role → every tenancy permission granted to it → the owner's ACTIVE
- * membership. Without this, a freshly created organization's owner resolves zero
- * permissions (the permission path is a strict role→membership join with no owner shortcut).
+ * system `Owner` role → every tenancy permission granted to it (plus billing read/manage
+ * for TEAM orgs) → the owner's ACTIVE membership. Without this, a freshly created
+ * organization's owner resolves zero permissions (the permission path is a strict
+ * role→membership join with no owner shortcut).
  *
  * @remarks
  * - **Algorithm:** runs all four inserts inside a single `withGlobalAdminDatabaseContext`
@@ -69,7 +86,12 @@ export async function provisionPersonalOrganization(
   ownerUserId: number,
   name: string = PERSONAL_ORGANIZATION_NAME,
 ): Promise<ProvisionOrganizationResult> {
-  return provisionOrganization({ name, slug: null, type: 'PERSONAL', ownerUserId });
+  return provisionOrganization({
+    name,
+    slug: null,
+    type: 'PERSONAL',
+    ownerUserId,
+  });
 }
 
 async function provisionOrganization(
@@ -101,7 +123,7 @@ async function provisionOrganization(
       .returning();
 
     await databaseHandle.insert(role_permissions).values(
-      ALL_TENANCY_PERMISSION_CODES.map((permission_code) => ({
+      ownerPermissionCodesForOrganizationType(input.type).map((permission_code) => ({
         role_id: role!.id,
         permission_code,
         created_by_user_id: input.ownerUserId,

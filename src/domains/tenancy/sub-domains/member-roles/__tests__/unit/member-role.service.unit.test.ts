@@ -1,15 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@/infrastructure/database/resource-cap-lock.js', () => ({
-  RESOURCE_CAP_ADVISORY_LOCK_NAMESPACES: {
-    OWNED_ORGANIZATION: 1,
-    ORGANIZATION_API_KEY: 2,
-    ORGANIZATION_NOTIFICATION_POLICY: 3,
-    MEMBER_ROLE: 4,
-  },
-  acquireResourceCapAdvisoryLock: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock('@/infrastructure/database/contexts/organization-database.context.js', () => ({
   withOrganizationDatabaseContext: vi.fn(
     async (_organizationPublicId: string, callback: () => Promise<unknown>) => callback(),
@@ -78,7 +68,7 @@ describe('MemberRoleService', () => {
   });
 
   it('list returns roles', async () => {
-    const result = await service.list(organization.public_id, { limit: 20 });
+    const result = await service.list(organization.public_id, { limit: 20, order: 'asc' });
     expect(result.items).toHaveLength(1);
   });
 
@@ -195,9 +185,9 @@ describe('MemberRoleService', () => {
     vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockRejectedValue(
       new NotFoundError('Organization'),
     );
-    await expect(service.list(organization.public_id, { limit: 20 })).rejects.toBeInstanceOf(
-      NotFoundError,
-    );
+    await expect(
+      service.list(organization.public_id, { limit: 20, order: 'asc' }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('getByPublicId throws when role is missing', async () => {

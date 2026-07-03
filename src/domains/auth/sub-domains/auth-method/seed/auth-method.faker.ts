@@ -7,7 +7,7 @@ import { AUTH_METHOD_TYPE } from '@/domains/auth/sub-domains/auth-method/auth-me
 
 /** Generated login credential row for `auth.auth_methods` (one per user). */
 export interface BulkAuthMethodProfile {
-  /** Credential type (`MAGIC_LINK` or `OAUTH`); always a passwordless login method. */
+  /** Credential type (`EMAIL_CODE` or `OAUTH`); always a passwordless login method. */
   method_type: string;
   /** OAuth provider name (only set for `OAUTH`). */
   provider: string | null;
@@ -28,7 +28,7 @@ export function generateBulkAuthMethod(faker: Faker): BulkAuthMethodProfile {
     };
   }
   return {
-    method_type: AUTH_METHOD_TYPE.MAGIC_LINK,
+    method_type: AUTH_METHOD_TYPE.EMAIL_CODE,
     provider: null,
     provider_user_id: null,
   };

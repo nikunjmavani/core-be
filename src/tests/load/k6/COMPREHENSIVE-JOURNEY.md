@@ -97,7 +97,7 @@ Boot: single process `node dist/src/server.js` (after `pnpm build`); cluster via
 - **`MEMBER_ROLE_MAX_PER_ORG`** (per org, env, max 500): raise it **and** clean leaked roles (§3).
 - **`MAX_TEAM_ORGANIZATIONS_PER_OWNER`** (20): why `create-org` is excluded from the journey (it
   accumulates orgs with no cleanup — org-delete is destructive).
-- **Idempotency** (`X-Idempotency-Key` on `POST /organizations|/memberships|/invitations`): reused key
+- **Idempotency** (`X-Idempotency-Key` on `POST /organizations|/memberships|/roles|/api-keys|/notification-policies|/webhooks|/uploads`): reused key
   - different body → 422. Keys are run-unique (`idem-<RUN>-<vu>-<iter>-<n>`).
 
 ## 3. Test data

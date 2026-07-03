@@ -49,6 +49,16 @@ export interface PaymentProvider {
     idempotencyKey?: string,
   ): Promise<void>;
 
+  /**
+   * Sets the purchased seat quantity on the subscription (REQ-4). Synced out-of-band from the
+   * organization's member count by the seat-quantity-sync worker; idempotent via `idempotencyKey`.
+   */
+  updateSubscriptionQuantity(
+    providerSubscriptionId: string,
+    quantity: number,
+    idempotencyKey?: string,
+  ): Promise<void>;
+
   compensateFailedCreate(providerSubscriptionId: string): Promise<void>;
 
   compensatePlanChange(

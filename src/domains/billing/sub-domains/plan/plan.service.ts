@@ -1,6 +1,6 @@
 import { NotFoundError } from '@/shared/errors/index.js';
 import type { PlanRepository } from './plan.repository.js';
-import type { PlanOutput } from './plan.types.js';
+import type { PlanFeatures, PlanOutput } from './plan.types.js';
 import type { plans } from './plan.schema.js';
 
 /**
@@ -52,6 +52,19 @@ export class PlanService {
     return row;
   }
 
+  /**
+   * Resolves the Free-tier seat ceiling (the cheapest active plan's `included_seats`).
+   *
+   * @remarks
+   * - **Algorithm:** delegates to {@link PlanRepository.findFreePlanSeatCeiling}.
+   * - **Notes:** used by `SubscriptionService.reserveSeatCeilingForMemberAdd` as the entitlement
+   *   floor for organizations with no active subscription or a dunning subscription past grace.
+   *   Returns `null` when no active plan exists or the entry tier grants unlimited seats.
+   */
+  async getFreePlanSeatCeiling(): Promise<number | null> {
+    return this.repository.findFreePlanSeatCeiling();
+  }
+
   async list(): Promise<PlanOutput[]> {
     const rows = await this.repository.findAllActive();
     return rows.map(toOutput);
@@ -75,6 +88,10 @@ function toOutput(row: {
   price_yearly: string;
   currency: string;
   is_active: boolean;
+  // REQ-4: previously stripped; now surfaced. `features` is the typed jsonb map and
+  // `included_seats` drives the structured `limits.seats` (null = unlimited).
+  features: PlanFeatures | null;
+  included_seats: number | null;
   created_at: Date;
   updated_at: Date;
 }): PlanOutput {
@@ -86,6 +103,9 @@ function toOutput(row: {
     price_yearly: String(row.price_yearly),
     currency: row.currency,
     is_active: row.is_active,
+    // Defensive `?? {}` keeps the contract stable if a legacy row stored NULL.
+    features: row.features ?? {},
+    limits: { seats: row.included_seats ?? null },
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
   };

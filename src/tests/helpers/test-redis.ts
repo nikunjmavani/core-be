@@ -3,7 +3,20 @@ import { connectRedis, redisConnection } from '@/infrastructure/cache/redis.clie
 
 /** Redis key prefixes cleared between integration tests (Postgres truncate does not touch Redis). */
 /** Logical prefixes (ioredis `keyPrefix: 'core:'` is applied by redisConnection). */
-const TEST_REDIS_PREFIXES = ['perm:', 'idempotency:', 'oauth:state:', 'session:tok:'] as const;
+const TEST_REDIS_PREFIXES = [
+  'perm:',
+  'idempotency:',
+  'oauth:state:',
+  'session:tok:',
+  // Auth OTP/send cooldowns + verify-attempt counters. `TRUNCATE ... RESTART IDENTITY` resets the
+  // user-id sequence, so user-keyed cooldowns/counters (and email-keyed send cooldowns when a test
+  // reuses an address) would otherwise leak across cases and nondeterministically skip a send.
+  'auth:email_code_send_cooldown:',
+  'auth:password_reset_cooldown:',
+  'auth:email_verify_resend_cooldown:',
+  'auth:email_code_verify_attempts:',
+  'auth:email_otp_verify_attempts:',
+] as const;
 
 /**
  * Environments where flushing test-scoped Redis keys is acceptable: the ephemeral `test`

@@ -1,6 +1,6 @@
 /**
  * Per-operation request-header documentation. Mirrors the runtime middleware
- * truth: idempotency (`X-Idempotency-Key`, required on the eight writes that
+ * truth: idempotency (`X-Idempotency-Key`, required on the 13 writes that
  * register `idempotencyRequired: true`), captcha on the public auth surface
  * (`X-Captcha-Token`), CSRF on the cookie refresh flow (`X-CSRF-Token`), and
  * Stripe's own `Stripe-Signature` on webhook ingestion.
@@ -16,20 +16,25 @@ const IDEMPOTENCY_REQUIRED_ROUTE_KEYS = new Set([
   'POST /api/v1/tenancy/organizations',
   'POST /api/v1/tenancy/organization/memberships',
   'POST /api/v1/tenancy/organization/transfer-ownership',
-  'POST /api/v1/tenancy/organization/invitations',
+  'POST /api/v1/tenancy/organization/roles',
+  'POST /api/v1/tenancy/organization/api-keys',
+  'POST /api/v1/tenancy/organization/notification-policies',
   'POST /api/v1/billing/subscriptions',
   'POST /api/v1/billing/subscriptions/{subscription_id}/change-plan',
   'POST /api/v1/billing/subscriptions/{subscription_id}/cancel',
   'POST /api/v1/billing/subscriptions/{subscription_id}/resume',
+  'POST /api/v1/billing/payment-methods/setup',
+  'POST /api/v1/notify/webhooks',
+  'POST /api/v1/uploads',
 ]);
 
 const CAPTCHA_ROUTE_KEYS = new Set([
   'POST /api/v1/auth/login',
   'POST /api/v1/auth/mfa/login',
-  'POST /api/v1/auth/magic-link/send',
+  'POST /api/v1/auth/email/send-code',
+  'POST /api/v1/auth/email/login',
   'POST /api/v1/auth/password/forgot',
   'POST /api/v1/auth/password/reset',
-  'POST /api/v1/auth/email/verify',
   'POST /api/v1/auth/webauthn/authenticate/options',
   'GET /api/v1/auth/oauth/{provider}',
 ]);
@@ -55,7 +60,7 @@ export function buildHeaderParameters(method: string, routeKey: string): object[
       description: required
         ? 'Required. A unique key (UUID recommended) making this write retry-safe: replays return the cached response (`X-Idempotency-Replay: true`), key reuse with a different payload is rejected with 422.'
         : 'Optional but recommended — auto-generate one per write in your API client. Replays within 24h return the cached response (`X-Idempotency-Replay: true`); reusing a key with a different payload is rejected with 422.',
-      schema: { type: 'string', minLength: 16, maxLength: 64 },
+      schema: { type: 'string', minLength: 16, maxLength: 255 },
       example: '7f9c2b4e-0d1a-4e5f-9c3b-2a1d4e5f6a7b',
     });
   }

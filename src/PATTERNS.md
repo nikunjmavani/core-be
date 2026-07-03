@@ -2,7 +2,7 @@
 
 # Cross-cutting patterns
 
-These patterns are implemented identically across the codebase. When a domain `OVERVIEW.md` says **Patterns used: tenant-isolation, audit-emission**, it is asserting that domain follows the contract documented here. Drift = bug.
+These patterns are implemented identically across the codebase. When a domain `<folder>.overview.md` says **Patterns used: tenant-isolation, audit-emission**, it is asserting that domain follows the contract documented here. Drift = bug.
 
 Each entry follows the same shape: **Purpose**, **Where it lives**, **Implementation**, **How to apply**.
 

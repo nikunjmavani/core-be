@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SubscriptionRepository } from '@/domains/billing/sub-domains/subscription/subscription.repository.js';
 
 const mockLimit = vi.fn();
-const mockWhereList = vi.fn(() => ({ limit: mockLimit }));
+// audit #37: listByOrganization now chains `.orderBy().limit()`; other queries still use
+// `.where().limit()` directly, so expose both off the where-result.
+const mockOrderByList = vi.fn(() => ({ limit: mockLimit }));
+const mockWhereList = vi.fn(() => ({ limit: mockLimit, orderBy: mockOrderByList }));
 const mockLeftJoin = vi.fn(() => ({ where: mockWhereList }));
 const mockFromList = vi.fn(() => ({ where: mockWhereList, leftJoin: mockLeftJoin }));
 const mockSelect = vi.fn(() => ({ from: mockFromList }));
@@ -52,7 +55,10 @@ describe('SubscriptionRepository', () => {
   });
 
   it('findByPublicId returns null when subscription is missing', async () => {
-    mockWhereList.mockReturnValueOnce({ limit: vi.fn().mockResolvedValue([]) });
+    mockWhereList.mockReturnValueOnce({
+      limit: vi.fn().mockResolvedValue([]),
+      orderBy: mockOrderByList,
+    });
 
     const result = await repository.findByPublicId('missing', 10);
 

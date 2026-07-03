@@ -41,13 +41,47 @@ function readOrganizationPublicIdFromStripeMetadata(
 }
 
 /**
+ * Extracts the Stripe customer id from a subscription object's `customer` field,
+ * which the API returns either expanded (`Stripe.Customer` / `DeletedCustomer`)
+ * or as a bare id string depending on the webhook configuration.
+ */
+function readStripeCustomerId(
+  customer: Stripe.Subscription['customer'] | null | undefined,
+): string | undefined {
+  if (typeof customer === 'string') {
+    return customer.length > 0 ? customer : undefined;
+  }
+  const customerId = customer?.id;
+  return typeof customerId === 'string' && customerId.length > 0 ? customerId : undefined;
+}
+
+/**
  * Resolves tenancy scope for Stripe webhook side effects (RLS requires app.current_organization_id).
  *
  * @remarks
- * Delegates the Postgres lookup to {@link StripeWebhookEventRepository.resolveOrganizationPublicIdByProviderSubscriptionId}
- * so that direct DB access stays at the repository layer (architecture rule:
- * services and utils call repositories; only repositories own the DB
- * connection).
+ * The **database mapping is authoritative whenever it exists** (audit #2): the
+ * owning organization is resolved from the locally-persisted subscription row
+ * (by provider subscription id) or, when that id is not yet mapped, from the
+ * customer mapping (`provider_customer_id` — present on the local row from the
+ * moment the service creates a subscription). Stripe `metadata.organization_id`
+ * is reduced to a **cross-check**: when a subscription *or* customer mapping
+ * resolves, a metadata value that disagrees throws (a tamper signal) and the
+ * database value wins. This closes the realistic redirect attack — an attacker
+ * with Stripe-side write access who sets `metadata.organization_id` on an
+ * existing customer's subscription can no longer route its events into another
+ * tenant, because the customer mapping now overrides metadata and the mismatch
+ * throws.
+ *
+ * Metadata remains the binding of **last resort** only for a genuinely
+ * first-contact, Dashboard-originated subscription whose customer is also
+ * unknown locally (the fallback-INSERT path, audit-#1): there is no other source
+ * of truth, and the `subscriptions_tenant_isolation` WITH CHECK (audit #41) is
+ * the backstop — a metadata value naming a non-existent organization resolves to
+ * no GUC id and the write fails closed.
+ *
+ * Both Postgres lookups are delegated to {@link StripeWebhookEventRepository} so
+ * direct DB access stays at the repository layer (architecture rule: services
+ * and utils call repositories; only repositories own the DB connection).
  */
 export async function resolveOrganizationPublicIdForStripeEvent(
   event: Stripe.Event,
@@ -64,17 +98,27 @@ export async function resolveOrganizationPublicIdForStripeEvent(
     stripeSubscription.id,
   );
 
-  if (
-    fromMetadata !== undefined &&
-    fromSubscription !== undefined &&
-    fromMetadata !== fromSubscription
-  ) {
+  // The subscription-id mapping is the most specific authoritative source; fall
+  // back to the customer-id mapping only when the subscription is not yet
+  // persisted locally (created-event race / Dashboard-origin).
+  const stripeCustomerId = readStripeCustomerId(stripeSubscription.customer);
+  const fromCustomer =
+    fromSubscription === undefined && stripeCustomerId !== undefined
+      ? await repository.resolveOrganizationPublicIdByStripeCustomerId(stripeCustomerId)
+      : undefined;
+
+  const fromDatabase = fromSubscription ?? fromCustomer;
+
+  if (fromMetadata !== undefined && fromDatabase !== undefined && fromMetadata !== fromDatabase) {
     throw new Error(
       `Stripe webhook event ${event.id} (${event.type}) has mismatched organization metadata for subscription ${stripeSubscription.id}`,
     );
   }
 
-  return fromMetadata ?? fromSubscription;
+  // Database mapping wins when present; metadata is the binding of last resort
+  // for a first-contact subscription with no local row, guarded by the
+  // subscriptions WITH CHECK (audit #41) against a non-existent org.
+  return fromDatabase ?? fromMetadata;
 }
 
 /**

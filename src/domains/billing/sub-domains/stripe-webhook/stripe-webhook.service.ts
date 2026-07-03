@@ -163,6 +163,13 @@ export class StripeWebhookService {
         logger.info({ eventId: event.id, eventType: event.type }, 'stripe.webhook.reclaimed');
       }
 
+      // audit #44 — IDEMPOTENCY BOUNDARY: `markProcessed` (below) runs on a different context than
+      // the business write, so a crash between the two leaves the ledger row `processing` and the
+      // reclaim lease re-runs this dispatch. That is safe ONLY because every side effect here is a
+      // Postgres write guarded by the `last_stripe_event_created_at` watermark + unique-violation
+      // handling (a re-run is a no-op), and there is NO outbound call in this handler. Any NEW side
+      // effect added to `dispatchEvent` MUST be idempotency-keyed or watermark-guarded — do not
+      // assume `markProcessed` is a transactional barrier.
       try {
         await runStripeWebhookHandlerWithOrganizationContext(
           event,
@@ -249,6 +256,12 @@ export class StripeWebhookService {
     const firstItem = stripeSubscription.items.data[0];
     const periodStart = firstItem ? new Date(firstItem.current_period_start * 1000) : new Date();
     const periodEnd = firstItem ? new Date(firstItem.current_period_end * 1000) : new Date();
+    // REQ-4: reconcile the purchased seat quantity FROM Stripe (the subscription item quantity).
+    // Stripe is the source of truth for `seats`, so a Dashboard-driven quantity change flows here.
+    const seats =
+      typeof firstItem?.quantity === 'number' && firstItem.quantity >= 0
+        ? firstItem.quantity
+        : undefined;
 
     /**
      * sec-B7: resolve the Stripe price id → local plan id. When Stripe is the
@@ -301,6 +314,9 @@ export class StripeWebhookService {
         current_period_start: periodStart,
         current_period_end: periodEnd,
         plan_id: resolvedPlanId,
+        // REQ-4: sync the seat quantity from Stripe so local `subscriptions.seats` (and thus
+        // seats_total) stays in lockstep with the provider.
+        seats,
       }),
       stripeEventCreatedAt,
       subscriptionRepository,

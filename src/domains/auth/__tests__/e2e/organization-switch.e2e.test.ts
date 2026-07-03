@@ -35,9 +35,9 @@ describe('Auth e2e: organization switch', () => {
     await seedPermissions(Object.values(TENANCY_PERMISSIONS));
   });
 
-  it('switch-to-personal re-mints the token for the personal organization (201)', async () => {
+  it('switch-to-personal re-mints the token and returns the active-org delta (201)', async () => {
     const user = await createTestUser();
-    await provisionPersonalOrganization(user.id);
+    const { organization } = await provisionPersonalOrganization(user.id);
     const { token } = await generateTestTokenAndSession({ userId: user.public_id });
 
     const response = await injectAuthenticated(app, {
@@ -47,7 +47,23 @@ describe('Auth e2e: organization switch', () => {
     });
 
     expect(response.statusCode).toBe(201);
-    expect((response.json() as { data: { access_token: string } }).data.access_token).toBeDefined();
+    const body = response.json() as {
+      data: {
+        access_token: string;
+        active_organization: {
+          id: string;
+          type: string;
+        };
+        my_permissions: string[];
+        global_role: string | null;
+      };
+    };
+    // Inline active-org delta — the client repaints the dashboard without a second GET /me/context.
+    expect(body.data.access_token).toBeDefined();
+    expect(body.data.active_organization.id).toBe(organization.public_id);
+    expect(body.data.active_organization.type).toBe('PERSONAL');
+    expect(Array.isArray(body.data.my_permissions)).toBe(true);
+    expect(body.data).toHaveProperty('global_role');
   });
 
   it('switch-to-personal returns 404 when the user has no personal organization', async () => {
@@ -76,7 +92,13 @@ describe('Auth e2e: organization switch', () => {
     });
 
     expect(response.statusCode).toBe(201);
-    expect((response.json() as { data: { access_token: string } }).data.access_token).toBeDefined();
+    const body = response.json() as {
+      data: { access_token: string; active_organization: { id: string }; my_permissions: string[] };
+    };
+    // Inline active-org delta (gate reduction: no follow-up GET /me/context needed).
+    expect(body.data.access_token).toBeDefined();
+    expect(body.data.active_organization.id).toBe(organization.public_id);
+    expect(Array.isArray(body.data.my_permissions)).toBe(true);
   });
 
   it('switch-to-organization returns 403 for an org the caller does not belong to', async () => {

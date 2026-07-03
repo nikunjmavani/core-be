@@ -9,10 +9,6 @@ import { env } from '@/shared/config/env.config.js';
 import { GLOBAL_ROLES, type GlobalRole } from '@/shared/constants/roles.constants.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
-import {
-  RESOURCE_CAP_ADVISORY_LOCK_NAMESPACES,
-  acquireResourceCapAdvisoryLock,
-} from '@/infrastructure/database/resource-cap-lock.js';
 import type { OrganizationRepository } from './organization.repository.js';
 import type {
   OrganizationBillingContext,
@@ -388,17 +384,13 @@ export class OrganizationService {
     return withUserDatabaseContext(owner_user_public_id, async () => {
       const ownerId = await this.repository.resolveUserIdByPublicId(owner_user_public_id);
       if (ownerId === null) throw new NotFoundError('User');
-      // TEN-02: serialize concurrent org creates by the same owner so the cap is
-      // transactionally strict (no count-then-insert race past the limit). The
-      // transaction-scoped advisory lock releases at COMMIT.
-      await acquireResourceCapAdvisoryLock(
-        RESOURCE_CAP_ADVISORY_LOCK_NAMESPACES.OWNED_ORGANIZATION,
-        ownerId,
-      );
       // Anti-abuse: cap the number of TEAM organizations a single account may own (personal is
       // exempt — countActiveOwnedByUser already counts only type='TEAM').
-      // audit-#8: serialize the count + insert with a per-owner transaction-scoped advisory lock
-      // so concurrent creates cannot both pass the same count and overshoot the cap.
+      // TEN-02 / audit-#8 / audit-R12: serialize the count + insert with ONE per-owner
+      // transaction-scoped advisory lock (the canonical resource-quota lock; releases at COMMIT) so
+      // concurrent creates by the same owner cannot both pass the same count and overshoot the cap.
+      // Previously this path ALSO took a second, redundant lock from the parallel resource-cap-lock
+      // module (now removed) — either lock alone fully serializes, so the second was dead weight.
       await this.repository.acquireOwnedOrganizationQuotaLock(ownerId);
       const ownedTeamCount = await this.repository.countActiveOwnedByUser(ownerId);
       if (ownedTeamCount >= env.MAX_TEAM_ORGANIZATIONS_PER_OWNER) {
@@ -414,7 +406,7 @@ export class OrganizationService {
           'errors:organizationSlugExists',
           { slug: parsed.slug },
           `Organization with slug "${parsed.slug}" already exists`,
-        );
+        ).withReason('organization_slug_exists');
       try {
         // Atomically create the organization AND bootstrap the owner's role + full
         // permissions + membership — without this the creator resolves zero permissions
@@ -435,7 +427,7 @@ export class OrganizationService {
             'errors:organizationSlugExists',
             { slug: parsed.slug },
             `Organization with slug "${parsed.slug}" already exists`,
-          );
+          ).withReason('organization_slug_exists');
         }
         throw error;
       }
@@ -459,7 +451,7 @@ export class OrganizationService {
             'errors:organizationSlugExists',
             { slug: parsed.slug },
             `Organization with slug "${parsed.slug}" already exists`,
-          );
+          ).withReason('organization_slug_exists');
         }
       }
       let updated: Awaited<ReturnType<typeof this.repository.update>>;
@@ -475,7 +467,7 @@ export class OrganizationService {
             'errors:organizationSlugExists',
             { slug: parsed.slug },
             `Organization with slug "${parsed.slug}" already exists`,
-          );
+          ).withReason('organization_slug_exists');
         }
         throw error;
       }

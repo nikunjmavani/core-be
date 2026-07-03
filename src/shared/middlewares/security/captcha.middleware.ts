@@ -69,7 +69,10 @@ function isCaptchaFailOpen(): boolean {
   // requires CAPTCHA_PROVIDER=turnstile when NODE_ENV=staging, so the fail-open path is only
   // reached when a staging instance is intentionally running without CAPTCHA.
   return (
-    nodeEnvironment === 'test' || nodeEnvironment === 'development' || nodeEnvironment === 'staging'
+    nodeEnvironment === 'local' ||
+    nodeEnvironment === 'test' ||
+    nodeEnvironment === 'development' ||
+    nodeEnvironment === 'staging'
   );
 }
 

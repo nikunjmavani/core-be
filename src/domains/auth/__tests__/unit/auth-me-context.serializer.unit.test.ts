@@ -10,13 +10,6 @@ const organization = (id: string, type: 'PERSONAL' | 'TEAM'): OrganizationOutput
   type,
   status: 'ACTIVE',
   logo_url: null,
-  capabilities: {
-    can_invite_members: type === 'TEAM',
-    can_manage_members: type === 'TEAM',
-    can_manage_roles: type === 'TEAM',
-    can_transfer_ownership: type === 'TEAM',
-    can_delete: type === 'TEAM',
-  },
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
 });
@@ -43,11 +36,10 @@ const baseData = (overrides: Partial<AuthMeContextData> = {}): AuthMeContextData
 });
 
 describe('serializeAuthMeContext', () => {
-  it('passes through user, active organization (with capabilities), permissions, and global role', () => {
+  it('passes through user, active organization, permissions, and global role', () => {
     const output = serializeAuthMeContext(baseData());
     expect(output.user.id).toBe('usr_1');
     expect(output.active_organization?.id).toBe('org_active');
-    expect(output.active_organization?.capabilities.can_invite_members).toBe(true);
     expect(output.my_permissions).toEqual(['organization:read', 'membership:manage']);
     expect(output.global_role).toBeNull();
   });

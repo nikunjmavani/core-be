@@ -3,11 +3,7 @@ import { getRequestDatabase } from '@/infrastructure/database/contexts/request-d
 import { verification_tokens } from './verification-token.schema.js';
 
 /** Enum of token categories that share the unified {@link verification_tokens} table. */
-export type VerificationTokenType =
-  | 'MAGIC_LINK'
-  | 'PASSWORD_RESET'
-  | 'EMAIL_VERIFICATION'
-  | 'EMAIL_CHANGE';
+export type VerificationTokenType = 'EMAIL_CODE' | 'PASSWORD_RESET' | 'EMAIL_CHANGE';
 
 /**
  * Drizzle repository for the shared `verification_tokens` table.
@@ -62,18 +58,29 @@ export class VerificationTokenRepository {
   }
 
   /**
-   * Atomically consume a token: mark used only if it is still valid and unused.
-   * Returns the row when this caller actually consumed the token; returns null
-   * when the token is missing, expired, or was already consumed by a concurrent caller.
+   * Atomically consume a token: mark used only if it is still valid, unused, and of the
+   * `expectedType`. Returns the row when this caller actually consumed the token; returns
+   * null when the token is missing, expired, already consumed by a concurrent caller, or
+   * of a different category.
    * Use this instead of `findValidByTokenHash` + `markUsed` to prevent TOCTOU double-consume races.
+   *
+   * @remarks
+   * sec-r5-L2: the `token_type` predicate is pinned into the atomic `UPDATE … WHERE` itself
+   * rather than checked after consumption. Token hashes are globally unique, so cross-type
+   * collision is practically impossible — but scoping the write by category means a token of
+   * the wrong flow (e.g. a `PASSWORD_RESET` token replayed against the magic-link verify path)
+   * is never matched, locked, or burned in the first place, instead of relying on the caller's
+   * surrounding transaction to roll the consume back. The match is fail-closed against the
+   * caller's declared type.
    */
-  async consumeIfValid(tokenHash: string) {
+  async consumeIfValid(tokenHash: string, expectedType: VerificationTokenType) {
     const rows = await getRequestDatabase()
       .update(verification_tokens)
       .set({ used_at: new Date() })
       .where(
         and(
           eq(verification_tokens.token_hash, tokenHash),
+          eq(verification_tokens.token_type, expectedType),
           gt(verification_tokens.expires_at, new Date()),
           isNull(verification_tokens.used_at),
         ),
@@ -82,11 +89,33 @@ export class VerificationTokenRepository {
     return rows[0] ?? null;
   }
 
-  async markUsed(tokenHash: string) {
+  /**
+   * Atomically consume a verification code scoped to a specific user and token type: marks the row
+   * used only if a matching, unexpired, unused row exists. Returns the row when this caller consumed
+   * it, else `null` (missing / expired / already used / wrong code).
+   *
+   * @remarks
+   * Unlike {@link VerificationTokenRepository.consumeIfValid} — which looks up by the high-entropy
+   * 32-byte token hash (plus its `expectedType`) — a verification code is short, so the lookup MUST be
+   * bound to `user_id` + `token_type` (and gated by a per-user attempt cap at the call site). Without
+   * that scoping an attacker could spray codes against ANY pending code across all users. The single
+   * atomic UPDATE also prevents two concurrent verifies from both succeeding. After a winning consume,
+   * the caller invalidates the user's remaining live codes via {@link invalidateAllForUser} so the
+   * whole concurrent set is single-use the instant any one is redeemed.
+   */
+  async consumeOtpForUser(userId: number, tokenType: VerificationTokenType, codeHash: string) {
     const rows = await getRequestDatabase()
       .update(verification_tokens)
       .set({ used_at: new Date() })
-      .where(eq(verification_tokens.token_hash, tokenHash))
+      .where(
+        and(
+          eq(verification_tokens.user_id, userId),
+          eq(verification_tokens.token_type, tokenType),
+          eq(verification_tokens.token_hash, codeHash),
+          gt(verification_tokens.expires_at, new Date()),
+          isNull(verification_tokens.used_at),
+        ),
+      )
       .returning();
     return rows[0] ?? null;
   }
@@ -107,7 +136,7 @@ export class VerificationTokenRepository {
 
   /**
    * Invalidate ALL outstanding tokens for a user across every token type. Used by the
-   * offboarding sequence (sec-U1) so a magic-link / password-reset / email-verify token
+   * offboarding sequence (sec-U1) so an email-code / password-reset / email-verify token
    * issued seconds before soft-delete cannot mint a session for the deleted user.
    */
   async invalidateAllByUser(userId: number) {

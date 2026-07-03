@@ -37,6 +37,17 @@ const projectRoot = process.cwd();
 const RATE_LIMIT_BACKOFF_MS = [15_000, 30_000, 60_000, 120_000, 240_000] as const;
 
 /**
+ * Minimum spacing between MUTATIVE requests (POST/PUT/PATCH/DELETE). GitHub's secondary
+ * (abuse-detection) rate limit fires on bursts of writes even when the primary quota is healthy,
+ * and its guidance is ≥1s between mutative calls. The primary-quota pacing can dip to ~250ms, so
+ * writes are floored here to stay under the secondary limit.
+ */
+const MUTATION_MIN_DELAY_MS = 1_100;
+
+/** Minimum wait when a 429 is the SECONDARY rate limit (no Retry-After header — needs a real pause). */
+const SECONDARY_RATE_LIMIT_MIN_WAIT_MS = 60_000;
+
+/**
  * Dynamic-delay tuning. Between every successful request we wait
  * `clamp(timeToReset / remaining, MIN, MAX)` so a long batch is paced evenly
  * across the GitHub primary-rate-limit window. This avoids the secondary
@@ -156,14 +167,20 @@ async function requestGitHub<T>(
   pathname: string,
   options: { readonly method?: string; readonly body?: unknown } = {},
 ): Promise<T> {
+  const method = options.method ?? 'GET';
+  const isMutation = method !== 'GET';
   const dynamicDelayMs = computeDynamicDelayMs();
-  if (dynamicDelayMs > 0) {
-    await sleep(dynamicDelayMs);
+  // Writes are floored at MUTATION_MIN_DELAY_MS to avoid tripping the secondary (abuse) limit.
+  const preRequestDelayMs = isMutation
+    ? Math.max(dynamicDelayMs, MUTATION_MIN_DELAY_MS)
+    : dynamicDelayMs;
+  if (preRequestDelayMs > 0) {
+    await sleep(preRequestDelayMs);
   }
 
   for (let attempt = 0; ; attempt += 1) {
     const response = await fetch(buildGitHubApiUrl(pathname), {
-      method: options.method ?? 'GET',
+      method,
       headers: {
         Accept: 'application/vnd.github+json',
         Authorization: `Bearer ${token}`,
@@ -191,7 +208,16 @@ async function requestGitHub<T>(
       RATE_LIMIT_BACKOFF_MS[attempt] ??
       RATE_LIMIT_BACKOFF_MS[RATE_LIMIT_BACKOFF_MS.length - 1] ??
       1000;
-    const waitMs = retryAfterMs !== null && retryAfterMs > 0 ? retryAfterMs : fallbackBackoffMs;
+    // Secondary (abuse) rate limit sends no Retry-After — back off at least a minute (and keep
+    // climbing via the backoff schedule) so it actually clears instead of hammering it.
+    const secondaryRateLimit =
+      response.status === 429 && /secondary rate limit/i.test(responseText);
+    const secondaryFloorMs = secondaryRateLimit ? SECONDARY_RATE_LIMIT_MIN_WAIT_MS : 0;
+    const waitMs = Math.max(
+      retryAfterMs !== null && retryAfterMs > 0 ? retryAfterMs : 0,
+      fallbackBackoffMs,
+      secondaryFloorMs,
+    );
     console.warn(
       `  ! GitHub API throttled "${label}" — backing off ${formatDuration(waitMs)} ` +
         `(retry ${attempt + 1}/${RATE_LIMIT_BACKOFF_MS.length})`,

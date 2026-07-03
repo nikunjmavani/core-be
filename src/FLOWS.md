@@ -4,13 +4,16 @@
 
 These are the multi-domain user journeys that touch more than one bounded context. Each flow lists the **trigger**, the **sequence** across domains, the **side effects** the platform produces, and the **failure modes** the platform tolerates.
 
-When a domain `OVERVIEW.md` says **Cross-domain flows: signup-flow, subscription-change-flow**, it is asserting that the domain participates in the journeys documented here. Drift = bug.
+When a domain `<folder>.overview.md` says **Cross-domain flows: signup-flow, subscription-change-flow**, it is asserting that the domain participates in the journeys documented here. Drift = bug.
 
-## signup-flow
+> **Client-facing companion:** the sequences below show the **server internals** (services, DB, event bus, mail). For the **frontend** view of the auth journeys — the HTTP-only call sequence, the response body at each step, and how many calls each entry flow takes to land on the dashboard — see [docs/reference/api/frontend-auth-guide.md](docs/reference/api/frontend-auth-guide.md) (kept in step with `signup-flow`, `login-flow`, and the organization-switch flow below).
+
+## signup-flow (unified email verification-code login)
 
 ### Trigger
 
-Anonymous user submits an email at the signup form: `POST /api/v1/auth/magic-link`.
+Anonymous user submits an email at the unified login/sign-up form: `POST /api/v1/auth/email/send-code`.
+There is no separate sign-up — an unknown email is auto-signed-up on first successful login.
 
 ### Sequence
 
@@ -18,51 +21,56 @@ Anonymous user submits an email at the signup form: `POST /api/v1/auth/magic-lin
 sequenceDiagram
   participant Client
   participant Auth as auth.controller
-  participant ML as MagicLinkService
+  participant EL as EmailLoginService
   participant US as UserService
   participant DB as Postgres
   participant Bus as event-bus
   participant Mail as mail.processor
   participant Resend
-  Client->>Auth: POST /auth/magic-link {email}
-  Auth->>ML: send({email})
-  ML->>US: findByEmail(email)
-  US-->>ML: user | null
-  alt user exists
-    ML->>DB: insert verification_tokens (MAGIC_LINK, sha256(token), expires_at = now + 15m)
-    ML->>Bus: emit AUTH_EVENT.MAGIC_LINK_REQUESTED {email, magic_link_token, expires_in_minutes}
-    Bus->>Mail: recordOutboxEmail (via event handler)
-  else user does not exist
-    Note over ML: silent success — no token, no event, no email
+  Client->>Auth: POST /auth/email/send-code {email}
+  Auth->>EL: sendCode({email})
+  EL->>US: findByEmail(email)
+  US-->>EL: user | null
+  alt user does not exist (auto-signup)
+    EL->>DB: insert users (passwordless, is_email_verified=false) + auth_methods (EMAIL_CODE), atomic
+    Note over EL: post-commit best-effort provisionPersonalOrganization (when enabled)
   end
-  ML-->>Auth: {messageKey: success:magicLinkEmailSent, expires_in_minutes: 15}
-  Auth-->>Client: 200
-  Mail->>Resend: POST /emails (signed)
+  Note over EL: new and existing users converge on the same issue-code path
+  EL->>DB: invalidateAllForUser (prior EMAIL_CODE codes) + insert verification_tokens (EMAIL_CODE, HMAC(pepper, type:user:code), expires_at = now + 15m)
+  EL->>Bus: emit AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED {email, verification_code, expires_in_minutes}
+  Bus->>Mail: recordOutboxEmail (via event handler)
+  EL-->>Auth: {messageKey: success:verificationCodeSent, expires_in_minutes: 15}
+  Auth-->>Client: 201 (uniform — no account enumeration)
+  Mail->>Resend: POST /emails (signed, alphanumeric code)
   Resend-->>Mail: 200
-  Client->>Auth: GET /auth/magic-link/verify?token=...
-  Auth->>ML: verify({token})
-  ML->>DB: UPDATE verification_tokens SET consumed_at=NOW() WHERE token_hash=$1 AND consumed_at IS NULL RETURNING *
-  ML->>DB: SELECT user
-  ML->>DB: INSERT auth_sessions
-  ML-->>Auth: {access_token, session_public_id}
-  Auth-->>Client: 200 + Set-Cookie session_id
+  Client->>Auth: POST /auth/email/login {email, code}
+  Auth->>EL: login({email, code})
+  EL->>US: findByEmail(email) + per-user attempt cap (Redis)
+  EL->>DB: UPDATE verification_tokens SET used_at=NOW() WHERE user_id=$1 AND token_type='EMAIL_CODE' AND token_hash=$2 AND used_at IS NULL RETURNING *
+  EL->>DB: invalidateAllForUser (single-use: redeeming one code kills the rest of the live set)
+  EL->>DB: UPDATE users SET is_email_verified=true (when not already)
+  EL->>DB: INSERT auth_sessions (or, when MFA enrolled, mint mfa_session_token instead — see /auth/mfa/login)
+  Note over EL: post-commit best-effort provisionPersonalOrganization on FIRST login (claims a bare invited placeholder created without one; idempotent no-op for a brand-new user already provisioned at send)
+  EL-->>Auth: {access_token, session_public_id} | {mfa_required, mfa_session_token}
+  Auth-->>Client: 201 + Set-Cookie session_id
 ```
 
 ### Side effects
 
-- `verification_tokens` row inserted with 15-min TTL (only when the email maps to a real user — anti-enumeration).
-- `AUTH_EVENT.MAGIC_LINK_REQUESTED` event emitted on the in-process event bus.
+- `verification_tokens`: a single live code per user — each send invalidates the prior unused codes. Codes are stored only as a keyed, user-scoped HMAC (never plaintext, never bare SHA-256).
+- `AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED` event emitted on the in-process event bus.
 - `mail_outbox` row inserted by the event handler (transactional outbox).
 - Mail worker delivers via Resend (best-effort; retries via DLQ).
-- On verify: `auth_sessions` row + JWT issued (RS256, 15-minute access-token TTL).
+- On login: `auth_sessions` row + JWT issued (RS256, 15-minute access-token TTL); the user's other live codes are invalidated.
 
 ### Failure modes
 
-- **Throttle exceeded** → silent success returned to the client (no token created, no email sent). Anti-enumeration: response is identical to the user-not-found case.
+- **Throttle / send cooldown** → uniform success returned to the client (no new code issued, no email). Anti-enumeration: response is identical for known and unknown emails.
 - **Disposable email domain** → 400 `errors:disposableEmail`. Not silent because the user can fix it.
 - **Mail enqueue failure** → does not fail the HTTP request; mail outbox sweeper retries.
-- **Token replay** → atomic `UPDATE ... RETURNING` consumes the token on the first verify. A race between two concurrent `/verify` requests results in exactly one session.
-- **Token expired** → 401 `errors:invalidOrExpiredMagicLink`.
+- **Code replay** → atomic `UPDATE ... RETURNING` consumes the code on the first login; the post-consume `invalidateAllForUser` invalidates any other live code, keeping login single-use. Two concurrent `/email/login` requests yield exactly one session.
+- **Wrong / expired code, or attempt cap exceeded** → 401 `errors:invalidOrExpiredVerificationCode`.
+- **MFA enrolled** → login returns `mfa_required` + `mfa_session_token`; the client completes via `POST /auth/mfa/login`.
 
 ## login-flow
 
@@ -126,7 +134,6 @@ sequenceDiagram
   participant Sess as AuthSessionService
   participant Tenancy as tenancy.controller
   participant Org as OrganizationService
-  participant Cap as organization-capability
   participant DB as Postgres
   Client->>Auth: POST /auth/switch-to-organization {organization_id}
   Auth->>Sess: re-check membership, re-mint access token with org claim
@@ -135,77 +142,78 @@ sequenceDiagram
   Client->>Tenancy: GET /api/v1/tenancy/organization (Bearer new token)
   Tenancy->>Org: get active organization (from org claim)
   Org->>DB: SELECT organization
-  Org->>Cap: organizationCapabilities(type)
-  Cap-->>Org: {can_invite_members, can_manage_members, can_manage_roles, can_transfer_ownership, can_delete}
-  Org-->>Tenancy: organization + capabilities
-  Tenancy-->>Client: 200 {data: {..., capabilities}}
-  Note over Client: client reads capabilities to enable/disable team-only actions — no 422 probing
+  Org-->>Tenancy: organization (with type)
+  Tenancy-->>Client: 200 {data: {..., type}}
+  Note over Client: client reads type + my_permissions to enable/disable team-only actions — no 422 probing
 ```
 
 ### Side effects
 
 - A new access token is minted with the target organization in the `org` claim (the prior token's org is replaced). No DB write to the organization itself.
-- Every serialized organization response (this `GET`, list, create, patch) carries a `capabilities` object derived from the org `type` (`organizationCapabilities(type)` in `src/domains/tenancy/sub-domains/organization/organization-capability.ts`). `TEAM` → all flags `true`; `PERSONAL` → all `false`.
+- Both switch endpoints (`switch-to-organization` / `switch-to-personal`) return the **active-org delta inline** — `{ access_token, active_organization, my_permissions, global_role }` (`AuthMeContextService.getActiveOrganizationContext` post-gate read) — so the client repaints the dashboard for the new org **without** a follow-up `GET /auth/me/context`. The omitted `user` / `organizations[]` are stable across a switch and reused from the client's initial context.
+- Serialized organization responses (this `GET`, list, create, patch) carry the org `type` (`PERSONAL` / `TEAM`) but **no** `capabilities` object. Clients derive team-only availability from `type` and gate the action on the caller's `my_permissions`. The personal-vs-team rule is enforced server-side by `assertTeamOrganization` in `src/domains/tenancy/sub-domains/organization/organization-capability.ts`.
 
 ### Failure modes
 
 - **Not a member of the target organization** → switch is rejected (the token is not re-minted); the active org is unchanged.
-- **Client ignores `capabilities` and calls a team-only route on a personal org** → the centralized guard `assertTeamOrganization` rejects with **422** (`unprocessable_entity`), not 409, because the org `type` is immutable and retrying is futile. The `capabilities` object exists precisely so clients hide/disable those actions up front instead of probing for the 422. The five team-only routes: `DELETE /api/v1/tenancy/organization`, `POST .../organization/invitations`, `POST .../organization/memberships`, `POST .../organization/transfer-ownership`, `POST .../organization/roles`.
+- **Client calls a team-only route on a personal org** → the centralized guard `assertTeamOrganization` rejects with **422** (`unprocessable_entity`), not 409, because the org `type` is immutable and retrying is futile. Clients hide/disable those actions up front from the org `type` + permissions instead of probing for the 422. The team-only routes: `DELETE /api/v1/tenancy/organization`, `POST .../organization/invitations`, `POST .../organization/memberships`, `POST .../organization/transfer-ownership`, `POST .../organization/roles`, and the four subscription mutations `POST /api/v1/billing/subscriptions` (+ `/{subscription_id}/change-plan`, `/cancel`, `/resume`).
 
 ## organization-invitation-flow
 
 ### Trigger
 
-Organization admin invites a teammate: `POST /api/v1/tenancy/organizations/:id/invitations`.
+Organization admin adds a teammate by email: `POST /api/v1/tenancy/organization/memberships {email, role_id, expires_in_days?}` (REQ-1). That single call provisions/finds the user, creates the `INVITED` membership, and issues the invitation — there is no separate "create invitation" route.
 
 ### Sequence
 
 ```mermaid
 sequenceDiagram
   participant Admin as Admin Client
-  participant Tenancy as tenancy.controller
+  participant Mem as MembershipService
+  participant Usr as UserService
   participant Inv as MemberInvitationService
   participant DB as Postgres (RLS scoped to org)
   participant Bus as event-bus
   participant Mail as mail.processor
   participant Invitee as Invitee Client
-  participant Auth as auth.controller
-  Admin->>Tenancy: POST /organizations/:id/invitations {email, member_role}
-  Tenancy->>Inv: create(orgId, body, invitedByUserId)
-  Inv->>DB: BEGIN; SET LOCAL app.current_organization_id
-  Inv->>DB: insert member_invitations (token_hash, expires_at, status=pending)
-  Inv->>DB: COMMIT
-  Inv->>Bus: emit MEMBER_INVITATION_EVENT.CREATED {email, raw_token, organization_name, ...}
+  participant Auth as auth (OAuth / email-code)
+  Admin->>Mem: POST /organization/memberships {email, role_id}
+  Mem->>Usr: findOrCreateInvitedByEmail(email)
+  Usr->>DB: resolve by email (SECURITY DEFINER) — else INSERT auth.users (ACTIVE, is_email_verified=false, no auth method)
+  Mem->>DB: BEGIN; SET LOCAL app.current_organization_id
+  Mem->>DB: privilege-escalation guard; INSERT memberships (status=INVITED)
+  Mem->>Inv: createForMembership(...)
+  Inv->>DB: INSERT member_invitations (token_hash, expires_at)
+  Inv->>Bus: emitStrict MEMBER_INVITATION_EVENT.CREATED {email, raw_token, organization_name, ...}
+  Mem->>DB: COMMIT
   Bus->>Mail: recordOutboxEmail (via event handler)
   Mail-->>Invitee: invitation email (raw_token in URL)
 
-  Invitee->>Auth: POST /auth/magic-link {email} (signup-flow if new user)
-  Note over Invitee,Auth: invitee establishes a session
-
-  Invitee->>Tenancy: POST /tenancy/invitations/:invitation_id/accept {token}
-  Tenancy->>Inv: accept(invitationId, token, currentUserId)
+  Note over Invitee,Auth: invitee onboards (claims the pre-created user) via email verification-code login or OAuth — find-by-email reuses the row and email-code/OAuth set is_email_verified
+  Invitee->>Inv: POST /tenancy/invitations/:invitation_id/accept {token} (authenticated)
+  Inv->>Usr: requireUserRecordByPublicId(actingUser) — 403 if email unverified, 403 if email ≠ invitee
   Inv->>DB: BEGIN; SET LOCAL app.current_organization_id
-  Inv->>DB: UPDATE member_invitations SET status=accepted, accepted_at=NOW() WHERE token_hash=$1
-  Inv->>DB: INSERT memberships (user_id, organization_id, member_role_id)
+  Inv->>DB: UPDATE member_invitations SET accepted_at=NOW() WHERE token_hash=$1 (atomic, single-use)
+  Inv->>DB: UPDATE memberships SET status=ACTIVE, joined_at=NOW() (activateForInvitationAccept)
   Inv->>DB: COMMIT
-  Inv-->>Tenancy: {membership}
-  Tenancy-->>Invitee: 200
+  Inv-->>Invitee: 201 {invitation}
 ```
 
 ### Side effects
 
-- `member_invitations` row created with hashed token; raw token leaves the platform only via the email payload (parallel to `magic-link`).
-- `MEMBER_INVITATION_EVENT.CREATED` event → mail outbox row → invitation email delivered.
-- On accept: `memberships` row created; permission cache invalidated for the new member.
-- Audit log row recorded for both create and accept (`audit-emission`).
+- New invitee → a bare ACTIVE `auth.users` row (`is_email_verified=false`, no auth method), claimed on first onboarding — **email verification-code login** or **OAuth**; an existing address resolves to that account.
+- `INVITED` `memberships` row + `member_invitations` row (hashed token; the raw token leaves the platform only via the email payload, parallel to the email verification code).
+- `MEMBER_INVITATION_EVENT.CREATED` (emitStrict — a failed outbox write rolls back the whole org transaction) → mail outbox → invitation email.
+- Accept requires authentication, a **verified** email, and an email matching the invitee (sec-T4 + follow-up) — so a forwarded invite token alone, or a password-claim that has not yet verified, cannot join the org. On accept the membership is activated (`status=ACTIVE`, `joined_at`) and the member's permission cache invalidated.
+- On revoke (`DELETE /organization/invitations/:id`): the invitation is revoked AND the auto-created `INVITED` membership is soft-deleted (no ghost invitee in the members table).
 
 ### Failure modes
 
 - **Disposable email** → 400 `errors:disposableEmail`.
-- **Invitee already a member** → 409 `errors:invitationAlreadyMember`.
-- **Token expired** → 401 `errors:invitationTokenExpired`.
-- **Token reuse** → atomic `UPDATE ... RETURNING` consumes the row on first accept; second attempt sees `status=accepted` and returns 409.
-- **Invitation cancelled before accept** → 410 `errors:invitationCancelled`.
+- **Already a member (ACTIVE or live INVITED) for that email** → 409 `errors:membershipAlreadyExists`.
+- **Personal organization** (single-member) → 422 (team-only route).
+- **Token expired / invalid / revoked / already accepted** → `ValidationError` on accept.
+- **Token reuse** → the atomic accept consumes the row on first accept; a second attempt fails validation.
 
 ## subscription-change-flow
 

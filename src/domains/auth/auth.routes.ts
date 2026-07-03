@@ -14,10 +14,10 @@ import {
   authMethodPublicIdParamsDto,
   ChangePasswordDto,
   CreateAuthMethodDto,
+  EmailLoginDto,
+  EmailSendCodeDto,
   ForgotPasswordDto,
   LoginDto,
-  MagicLinkSendDto,
-  MagicLinkVerifyDto,
   MfaEnrollConfirmDto,
   MfaEnrollDto,
   MfaLoginVerifyDto,
@@ -28,15 +28,15 @@ import {
   ResetPasswordDto,
   sessionIdParamsDto,
   StepUpVerifyDto,
-  VerifyEmailDto,
 } from './auth.dto.js';
 import {
   webauthnAuthenticateOptionsDto,
   webauthnAuthenticateVerifyDto,
+  webauthnCredentialIdParamsDto,
   webauthnRegisterVerifyDto,
 } from './sub-domains/auth-webauthn/webauthn.dto.js';
 
-/** Fastify plugin that registers all `/api/v1/auth/*` routes — login, logout, refresh, magic link, OAuth, password, email verification, MFA, WebAuthn, sessions, and auth-method management. */
+/** Fastify plugin that registers all `/api/v1/auth/*` routes — login, logout, refresh, email verification-code login, OAuth, password, MFA, WebAuthn, sessions, and auth-method management. */
 export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
   const controller = createAuthController(app.authDomain);
   const zodApplication = app.withTypeProvider<ZodTypeProvider>();
@@ -72,28 +72,29 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     },
     controller.logout,
   );
-  zodApplication.post('/magic-link/send', {
+  zodApplication.post('/email/send-code', {
     ...STRICT_PUBLIC_RATE_LIMIT,
     preHandler: [perEmailRateLimit, captchaPreHandler],
     schema: {
-      summary: 'Send magic link email',
+      summary: 'Send email sign-in code',
       description:
-        'Sends a passwordless login link to the provided email address. The link expires after a short period.',
-      tags: ['Magic Link'],
-      body: MagicLinkSendDto,
+        'Sends a one-time alphanumeric verification code to the provided email address for passwordless login or sign-up. Always returns a uniform success (no account enumeration) and the code expires after a short period. Re-call this endpoint to resend a code.',
+      tags: ['Email Login'],
+      body: EmailSendCodeDto,
     },
-    handler: controller.sendMagicLink,
+    handler: controller.sendEmailCode,
   });
-  zodApplication.post('/magic-link/verify', {
+  zodApplication.post('/email/login', {
     ...STRICT_PUBLIC_RATE_LIMIT,
+    preHandler: [captchaPreHandler],
     schema: {
-      summary: 'Verify magic link token',
+      summary: 'Log in with an email verification code',
       description:
-        'Validates the magic link token and returns access and refresh tokens on success.',
-      tags: ['Magic Link'],
-      body: MagicLinkVerifyDto,
+        'Validates the 6-character email verification code and returns an access token + session on success (auto-signing-up an unknown email). If MFA is enabled, returns a challenge requiring a second factor.',
+      tags: ['Email Login'],
+      body: EmailLoginDto,
     },
-    handler: controller.verifyMagicLink,
+    handler: controller.emailLogin,
   });
   zodApplication.get(
     '/oauth/providers',
@@ -149,23 +150,12 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     preHandler: [captchaPreHandler],
     schema: {
       summary: 'Reset password with token',
-      description: 'Resets the user password using a valid reset token received via email.',
+      description:
+        'Resets the user password using a valid reset token received via email, revokes all prior sessions, marks the email verified (the token proves email control), clears any failed-login lockout, and logs the user in immediately (returns an access token and sets the session cookie). MFA-enabled users receive an mfa_required challenge instead of a session.',
       tags: ['Password'],
       body: ResetPasswordDto,
     },
     handler: controller.resetPassword,
-  });
-  zodApplication.post('/email/verify', {
-    ...STRICT_PUBLIC_RATE_LIMIT,
-    preHandler: [captchaPreHandler],
-    schema: {
-      summary: 'Verify email address',
-      description:
-        "Confirms the user's email address using a verification token sent during registration.",
-      tags: ['Email Verification'],
-      body: VerifyEmailDto,
-    },
-    handler: controller.verifyEmail,
   });
   zodApplication.post(
     '/mfa/login',
@@ -288,19 +278,6 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     controller.stepUp,
   );
   zodApplication.post(
-    '/email/resend-verification',
-    {
-      onRequest: [app.authenticate],
-      ...STRICT_AUTHED_RATE_LIMIT,
-      schema: {
-        summary: 'Resend email verification',
-        description: 'Resends the email verification link to the currently authenticated user.',
-        tags: ['Email Verification'],
-      },
-    },
-    controller.resendEmailVerification,
-  );
-  zodApplication.post(
     '/me/mfa/enroll',
     {
       onRequest: [app.authenticate],
@@ -363,6 +340,36 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       },
     },
     controller.webauthnRegisterVerify,
+  );
+  zodApplication.get(
+    '/me/webauthn/credentials',
+    {
+      onRequest: [app.authenticate],
+      ...STRICT_AUTHED_RATE_LIMIT,
+      schema: {
+        summary: 'List registered passkeys',
+        description:
+          'Returns the authenticated user’s active WebAuthn passkeys (opaque id, device type, transports, created/last-used timestamps). Never returns credential material or the raw WebAuthn credential blob.',
+        tags: ['WebAuthn'],
+      },
+    },
+    controller.webauthnListCredentials,
+  );
+  zodApplication.delete<{ Params: { credential_id: string } }>(
+    '/me/webauthn/credentials/:credential_id',
+    {
+      onRequest: [app.authenticate],
+      preHandler: [requireRecentStepUpPreHandler],
+      ...STRICT_AUTHED_RATE_LIMIT,
+      schema: {
+        summary: 'Revoke a passkey',
+        description:
+          'Revokes one of the authenticated user’s passkeys by its opaque id. Requires recent step-up authentication. Refused with 409 if it would remove a passkey-only user’s last remaining login credential.',
+        tags: ['WebAuthn'],
+        params: webauthnCredentialIdParamsDto,
+      },
+    },
+    controller.webauthnRevokeCredential,
   );
   zodApplication.get(
     '/me/mfa',
@@ -495,7 +502,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'List my active sessions',
         description:
-          'Returns all active sessions for the authenticated user, including device and location info.',
+          'Returns all active sessions for the authenticated user, including the source IP and parsed device/browser info.',
         tags: ['Session'],
       },
     },

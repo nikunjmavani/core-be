@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as fc from 'fast-check';
 import {
   IDEMPOTENCY_KEY_MAX_LENGTH,
+  IDEMPOTENCY_KEY_MIN_LENGTH,
   parseIdempotencyKeyHeader,
 } from '@/shared/utils/idempotency/idempotency-key.util.js';
 import { propertyAssertOptions } from '@/tests/helpers/fast-check-property.util.js';
@@ -11,7 +12,7 @@ const IDEMPOTENCY_KEY_ALLOWED_CHARACTERS =
 
 const idempotencyKeyArbitrary = fc
   .array(fc.constantFrom(...IDEMPOTENCY_KEY_ALLOWED_CHARACTERS), {
-    minLength: 1,
+    minLength: IDEMPOTENCY_KEY_MIN_LENGTH,
     maxLength: IDEMPOTENCY_KEY_MAX_LENGTH,
   })
   .map((characters) => characters.join(''));
@@ -48,6 +49,22 @@ describe('idempotency key (property)', () => {
 
     fc.assert(
       fc.property(tooLongKeyArbitrary, (key) => {
+        expect(parseIdempotencyKeyHeader(key)).toEqual({ kind: 'invalid' });
+      }),
+      propertyOptions,
+    );
+  });
+
+  it('rejects keys shorter than the minimum length after trim', () => {
+    const tooShortKeyArbitrary = fc
+      .array(fc.constantFrom(...IDEMPOTENCY_KEY_ALLOWED_CHARACTERS), {
+        minLength: 1,
+        maxLength: IDEMPOTENCY_KEY_MIN_LENGTH - 1,
+      })
+      .map((characters) => characters.join(''));
+
+    fc.assert(
+      fc.property(tooShortKeyArbitrary, (key) => {
         expect(parseIdempotencyKeyHeader(key)).toEqual({ kind: 'invalid' });
       }),
       propertyOptions,

@@ -13,7 +13,7 @@ import { isSensitiveKey } from '@/shared/utils/security/sensitive-redaction.util
  */
 const IDEMPOTENCY_EXCLUDED_ROUTE_PATTERNS: RegExp[] = [
   /\/auth\/login$/,
-  /\/auth\/magic-link\/verify$/,
+  /\/auth\/email\/login$/,
   /\/auth\/mfa\/login$/,
   /\/auth\/oauth\/[^/]+\/callback$/,
   /\/auth\/webauthn\/authenticate\/verify$/,

@@ -41,8 +41,11 @@ export async function assertCallerCanGrantPermissionCodes(options: {
   const catalogRows = await options.permissionRepository.findAll();
   const knownPermissionCodes = new Set(catalogRows.map((row) => row.code));
 
+  // sec-r5-L3: resolve the caller's held permissions straight from the database, not the
+  // 5-minute Redis cache. This is a privilege-escalation backstop — a code revoked from the
+  // caller seconds ago must not still be grantable to a role/API key during the stale window.
   const callerPermissionCodes =
-    await options.authorizationService.resolveUserOrganizationPermissions(
+    await options.authorizationService.resolveUserOrganizationPermissionsFromDatabase(
       options.callerUserPublicId,
       options.organizationPublicId,
     );

@@ -1,6 +1,6 @@
 # Documentation system (core-be)
 
-How agents and contributors keep **skills**, **CLAUDE.md**, **hand-written docs in `docs/`**, and **in-source documentation** aligned. Skills orchestrate; docs own the narrative; TSDoc and `OVERVIEW.md` anchor documentation to the code it describes.
+How agents and contributors keep **skills**, **CLAUDE.md**, **hand-written docs in `docs/`**, and **in-source documentation** aligned. Skills orchestrate; docs own the narrative; TSDoc and `<folder>.overview.md` anchor documentation to the code it describes.
 
 ---
 
@@ -14,7 +14,7 @@ flowchart TB
   end
   subgraph layered [In-source docs - lives in src/]
     sysNarr[src/{OVERVIEW,PATTERNS,FLOWS,POLICIES}.md]
-    overview[src/<folder>/OVERVIEW.md]
+    overview[src/<folder>/<folder>.overview.md]
     tsdoc[TSDoc on every public export]
     schema[Fastify route schema]
   end
@@ -31,7 +31,7 @@ flowchart TB
 
 | System | What it covers | Lives in | Owner skills | Hard gate |
 | --- | --- | --- | --- | --- |
-| **In-source docs** | Code-anchored: every public export's TSDoc, every Fastify route schema, every folder's hand-written `OVERVIEW.md`, system narrative files | TSDoc inside `*.ts`; `**/OVERVIEW.md`; `src/{OVERVIEW,PATTERNS,FLOWS,POLICIES}.md` | tsdoc-export-guard, route-schema-doc-guard, overview-doc-maintainer, system-narrative-maintainer | `pnpm tsdoc:check`, `pnpm docs:check` (OpenAPI drift) |
+| **In-source docs** | Code-anchored: every public export's TSDoc, every Fastify route schema, every folder's hand-written `<folder>.overview.md`, system narrative files | TSDoc inside `*.ts`; `**/<folder>.overview.md`; `src/{OVERVIEW,PATTERNS,FLOWS,POLICIES}.md` | tsdoc-export-guard, route-schema-doc-guard, overview-doc-maintainer, system-narrative-maintainer | `pnpm tsdoc:check`, `pnpm docs:check` (OpenAPI drift) |
 | **Hand-written docs** | Narrative guides — setup, runbooks, deployment, integrations, architecture overviews | `docs/**/*.md` | docs-maintainer | `pnpm docs:lint`, `pnpm docs:links:check` |
 
 The two systems are independent and never overwrite each other.
@@ -45,11 +45,11 @@ There is intentionally **no auto-generated `DOCS.md`** layer. The previous `tool
 | Layer | File(s) | Source of truth | Skill |
 | --- | --- | --- | --- |
 | **System narratives** (cross-cutting) | `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` | Hand-written | system-narrative-maintainer |
-| **Per-folder overviews** (hand-written narrative) | `src/<folder>/OVERVIEW.md` (~47 files at meaningful boundaries — domains, sub-domains, infra subsystems, test suites) | Hand-written | overview-doc-maintainer |
+| **Per-folder overviews** (hand-written narrative) | `src/<folder>/<folder>.overview.md` (~47 files at meaningful boundaries — domains, sub-domains, infra subsystems, test suites) | Hand-written | overview-doc-maintainer |
 | **Symbol-level TSDoc** (per-export documentation) | every `export <kind> <name>` declaration in `*.ts`; IDE hover, TypeDoc, and `tsdoc:check` all read this | Hand-written, in-source | tsdoc-export-guard |
 | **Fastify route schema** (route documentation) | `schema: { summary, description, tags }` on every route registration → drives `docs/openapi/openapi.json` → Postman + API hub | Inline Zod schema | route-schema-doc-guard |
 
-### File-header rule (per-folder OVERVIEW.md)
+### File-header rule (per-folder <folder>.overview.md)
 
 Line 1 must be the bare backticked relative path:
 
@@ -193,7 +193,7 @@ Full skill triggers live in [skill-index](../../../.cursor/skills/skill-index/SK
 | New / changed `*.routes.ts` | route-schema-doc-guard | domains-and-public-api-design.md, api-versioning.md |
 | New `events/`, `queues/`, `workers/` | tsdoc-export-guard, overview-doc-maintainer | workers-and-events.md |
 | New / changed `*.schema.ts`, migrations (retention/soft-delete) | tsdoc-export-guard | data-lifecycle-deletion.md |
-| Test layout, `*.unit.test.ts` tiers | overview-doc-maintainer (`src/tests/<suite>/OVERVIEW.md`) | testing-conventions.md |
+| Test layout, `*.unit.test.ts` tiers | overview-doc-maintainer (`src/tests/<suite>/<suite>.overview.md`) | testing-conventions.md |
 | `env.config.ts` (user-facing) | tsdoc-export-guard | integrations/credentials-and-env.md |
 | Auth/session middleware | tsdoc-export-guard | csrf-and-session-cookies.md |
 | New domain or sub-domain folder | overview-doc-maintainer + system-narrative-maintainer (Domains table) | sub-domains-layout.md, project-structure-guide.md |
@@ -246,7 +246,7 @@ The four **in-source documentation skills** (system-narrative-maintainer, overvi
 
 If only behavior changed, prefer **content-sync** only. Update CLAUDE only when a non-negotiable invariant changed.
 
-**Scope boundary:** docs-maintainer covers only `docs/**/*.md`. In-source docs under `src/` (TSDoc + `OVERVIEW.md` + system narrative files) are owned by the in-source skills above.
+**Scope boundary:** docs-maintainer covers only `docs/**/*.md`. In-source docs under `src/` (TSDoc + `<folder>.overview.md` + system narrative files) are owned by the in-source skills above.
 
 ---
 
@@ -279,7 +279,7 @@ A previous iteration of this system included an auto-generated `DOCS.md` per dir
 1. **TSDoc was already the source of truth.** `DOCS.md` was just a re-render — IDE hover, TypeDoc, and AI agents reading the source all read the TSDoc directly.
 2. **Routes had triple coverage.** `schema.description` → OpenAPI → Postman / API hub; the route tables in `DOCS.md` were a fourth re-render of the same content.
 3. **The generator was ~1500 lines of code** that had to stay healthy forever, plus a baseline file, plus a markdown-lint gate for its own output.
-4. **`OVERVIEW.md` already covered the only thing TSDoc could not** — design decisions, failure modes, tuning knobs, external dependencies — and survived intact.
+4. **`<folder>.overview.md` already covered the only thing TSDoc could not** — design decisions, failure modes, tuning knobs, external dependencies — and survived intact.
 
 If a browsable HTML API site is ever required, [TypeDoc](https://typedoc.org/) can render one from TSDoc on demand without committing intermediate artifacts.
 

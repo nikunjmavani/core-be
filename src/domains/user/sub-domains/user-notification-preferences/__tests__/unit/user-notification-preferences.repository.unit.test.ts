@@ -7,22 +7,30 @@ function createMockDatabase() {
   const mockInsert = vi.fn().mockReturnValue({ values: mockValues });
   const mockWhereDelete = vi.fn().mockResolvedValue(undefined);
   const mockDelete = vi.fn().mockReturnValue({ where: mockWhereDelete });
-  const mockWhereSelect = vi.fn().mockResolvedValue([]);
+  // audit #36: listByUserId now chains `.where().limit()` (limit+1 + capListWithWarning).
+  const mockLimit = vi.fn().mockResolvedValue([]);
+  const mockWhereSelect = vi.fn().mockReturnValue({ limit: mockLimit });
   const mockFrom = vi.fn().mockReturnValue({ where: mockWhereSelect });
   const mockSelect = vi.fn().mockReturnValue({ from: mockFrom });
+  // replaceAll acquires a per-user pg_advisory_xact_lock via `execute(...)` before
+  // the delete-then-insert, so the mock DB must expose `execute` like the real handle.
+  const mockExecute = vi.fn().mockResolvedValue(undefined);
 
   return {
     select: mockSelect,
     insert: mockInsert,
     delete: mockDelete,
+    execute: mockExecute,
     mockReturning,
     mockValues,
     mockFrom,
     mockWhereSelect,
+    mockLimit,
     mockWhereDelete,
     mockInsert,
     mockDelete,
     mockSelect,
+    mockExecute,
   };
 }
 
@@ -38,16 +46,18 @@ describe('UserNotificationPreferencesRepository', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockDatabase.mockReturning.mockResolvedValue([]);
-    mockDatabase.mockWhereSelect.mockResolvedValue([]);
+    mockDatabase.mockLimit.mockResolvedValue([]);
+    mockDatabase.mockWhereSelect.mockReturnValue({ limit: mockDatabase.mockLimit });
     mockDatabase.mockWhereDelete.mockResolvedValue(undefined);
     mockDatabase.mockSelect.mockReturnValue({ from: mockDatabase.mockFrom });
     mockDatabase.mockFrom.mockReturnValue({ where: mockDatabase.mockWhereSelect });
     mockDatabase.mockDelete.mockReturnValue({ where: mockDatabase.mockWhereDelete });
     mockDatabase.mockInsert.mockReturnValue({ values: mockDatabase.mockValues });
+    mockDatabase.mockExecute.mockResolvedValue(undefined);
   });
 
   it('listByUserId queries preferences for user', async () => {
-    mockDatabase.mockWhereSelect.mockResolvedValueOnce([
+    mockDatabase.mockLimit.mockResolvedValueOnce([
       { id: 1, notification_type: 'SUBSCRIPTION_UPDATED' },
     ]);
     const rows = await repository.listByUserId(10);
@@ -80,6 +90,8 @@ describe('UserNotificationPreferencesRepository', () => {
     );
 
     expect(rows).toHaveLength(1);
+    // the per-user advisory lock must be acquired before the replace mutation
+    expect(mockDatabase.mockExecute).toHaveBeenCalled();
     expect(mockDatabase.mockDelete).toHaveBeenCalled();
     expect(mockDatabase.mockInsert).toHaveBeenCalled();
   });

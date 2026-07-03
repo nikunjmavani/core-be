@@ -38,7 +38,7 @@ The AI fills these unless your message says otherwise. List overrides in your fi
 | **Validation** | Zod DTO in `*.dto.ts` + function validator with `.safeParse()` in `*.validator.ts` |
 | **API version** | `/api/v1` prefix for public HTTP routes |
 | **Target branch** | Feature work merges to `dev` unless you say hotfix/production |
-| **In-source docs** | TSDoc on every public export, `@remarks` on services / workers / processors / policy files, hand-written `OVERVIEW.md` for new folders, `schema: { summary, description, tags }` on every Fastify route, `pnpm tsdoc:check` must pass |
+| **In-source docs** | TSDoc on every public export, `@remarks` on services / workers / processors / policy files, hand-written `<folder>.overview.md` for new folders, `schema: { summary, description, tags }` on every Fastify route, `pnpm tsdoc:check` must pass |
 
 ---
 
@@ -88,7 +88,7 @@ It runs the pipeline (each step is an existing skill), self-healing failed gates
 8. **test-generator** — `.cursor/skills/test-generator/SKILL.md`
 9. **seed-maintainer** (if seed data needed) — `.cursor/skills/seed-maintainer/SKILL.md`
 10. **tsdoc-export-guard** — TSDoc on every public export added — `.cursor/skills/tsdoc-export-guard/SKILL.md`
-11. **overview-doc-maintainer** — `OVERVIEW.md` for the new domain (Template A.1) and the new sub-domain (Template A.2) — `.cursor/skills/overview-doc-maintainer/SKILL.md`
+11. **overview-doc-maintainer** — `<folder>.overview.md` for the new domain (Template A.1) and the new sub-domain (Template A.2) — `.cursor/skills/overview-doc-maintainer/SKILL.md`
 12. **system-narrative-maintainer** (only when adding a new domain) — update Domains table in `src/OVERVIEW.md`; add patterns/flows entries if introduced — `.cursor/skills/system-narrative-maintainer/SKILL.md`
 13. **structure-maintainer** — `.cursor/skills/structure-maintainer/SKILL.md`
 14. **code-smells-and-best-practices** — zero new lint issues in touched files; run `pnpm tsdoc:check` to confirm coverage budget is not exceeded
@@ -384,7 +384,7 @@ flowchart LR
 
 | Skill                          | Path                                                     | When to invoke                                            |
 | ------------------------------ | -------------------------------------------------------- | --------------------------------------------------------- |
-| **skill-index**                | `.cursor/skills/skill-index/SKILL.md`                    | **First** — full catalog and triggers (40 project skills) |
+| **skill-index**                | `.cursor/skills/skill-index/SKILL.md`                    | **First** — full catalog and triggers (42 project skills) |
 | domain-generator               | `.cursor/skills/domain-generator/SKILL.md`               | New domain/sub-domain scaffold                            |
 | route-catalog                  | `.cursor/skills/route-catalog/SKILL.md`                  | Any change to `*.routes.ts`                               |
 | route-schema-doc-guard         | `.cursor/skills/route-schema-doc-guard/SKILL.md`         | Route `schema: { summary, description, tags }`          |
@@ -418,7 +418,7 @@ flowchart LR
 | chaos-test-maintainer          | `.cursor/skills/chaos-test-maintainer/SKILL.md`          | Toxiproxy chaos tests                                     |
 | cursor-global-skills           | `.cursor/skills/cursor-global-skills/SKILL.md`           | Reference: Cursor built-in skills                         |
 | **system-narrative-maintainer**| `.cursor/skills/system-narrative-maintainer/SKILL.md`    | Hand-authored `src/OVERVIEW.md` / `src/PATTERNS.md` / `src/FLOWS.md` / `src/POLICIES.md` |
-| **overview-doc-maintainer**    | `.cursor/skills/overview-doc-maintainer/SKILL.md`        | Per-folder `OVERVIEW.md` (hand-written) |
+| **overview-doc-maintainer**    | `.cursor/skills/overview-doc-maintainer/SKILL.md`        | Per-folder `<folder>.overview.md` (hand-written) |
 | **route-schema-doc-guard**     | `.cursor/skills/route-schema-doc-guard/SKILL.md`         | Fastify route `schema: { summary, description, tags }`    |
 | **tsdoc-export-guard**         | `.cursor/skills/tsdoc-export-guard/SKILL.md`             | TSDoc on every public export + `@remarks` on services / workers / processors / policy files; gated by `pnpm tsdoc:check` |
 

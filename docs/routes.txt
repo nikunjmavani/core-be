@@ -23,12 +23,10 @@ Legend:
   Routes: 33
 ================================================================================
 
-  POST   /api/v1/auth/email/resend-verification                   201  -    both  AUTH
-  POST   /api/v1/auth/email/verify                                201  -    both  PUBLIC
+  POST   /api/v1/auth/email/login                                 201  -    both  PUBLIC
+  POST   /api/v1/auth/email/send-code                             201  -    both  PUBLIC
   POST   /api/v1/auth/login                                       201  -    both  PUBLIC
   POST   /api/v1/auth/logout                                      201  -    both  TOKEN: access-token
-  POST   /api/v1/auth/magic-link/send                             201  -    both  PUBLIC
-  POST   /api/v1/auth/magic-link/verify                           201  -    both  PUBLIC
   GET    /api/v1/auth/me/auth-methods                             200  -    both  AUTH
   POST   /api/v1/auth/me/auth-methods                             201  -    both  AUTH
   DELETE /api/v1/auth/me/auth-methods/:auth_method_id             204  -    both  AUTH
@@ -41,6 +39,8 @@ Legend:
   GET    /api/v1/auth/me/sessions                                 200  -    both  AUTH
   DELETE /api/v1/auth/me/sessions                                 204  -    both  AUTH
   DELETE /api/v1/auth/me/sessions/:session_id                     204  -    both  AUTH
+  GET    /api/v1/auth/me/webauthn/credentials                     200  -    both  AUTH
+  DELETE /api/v1/auth/me/webauthn/credentials/:credential_id      204  -    both  AUTH
   POST   /api/v1/auth/me/webauthn/register/options                201  -    both  AUTH
   POST   /api/v1/auth/me/webauthn/register/verify                 201  -    both  AUTH
   POST   /api/v1/auth/mfa/login                                   201  -    both  PUBLIC
@@ -59,19 +59,23 @@ Legend:
 
 ================================================================================
   DOMAIN: BILLING (/api/v1/billing)
-  Routes: 10
+  Routes: 14
 ================================================================================
 
   — Sub Domains —
+  GET    /api/v1/billing/invoices                                 200  -    both  PERM: subscription:read
+  GET    /api/v1/billing/payment-methods                          200  -    both  PERM: subscription:read
+  POST   /api/v1/billing/payment-methods/setup                    201  req  team  PERM: subscription:manage
   GET    /api/v1/billing/plans                                    200  -    both  PUBLIC
   GET    /api/v1/billing/plans/:plan_id                           200  -    both  PUBLIC
   GET    /api/v1/billing/subscriptions                            200  -    both  PERM: subscription:read
-  POST   /api/v1/billing/subscriptions                            201  req  both  PERM: subscription:manage
+  POST   /api/v1/billing/subscriptions                            201  req  team  PERM: subscription:manage
   GET    /api/v1/billing/subscriptions/:subscription_id           200  -    both  PERM: subscription:read
   PATCH  /api/v1/billing/subscriptions/:subscription_id           200  -    both  PERM: subscription:manage
-  POST   /api/v1/billing/subscriptions/:subscription_id/cancel    201  req  both  PERM: subscription:manage
-  POST   /api/v1/billing/subscriptions/:subscription_id/change-plan  201  req  both  PERM: subscription:manage
-  POST   /api/v1/billing/subscriptions/:subscription_id/resume    201  req  both  PERM: subscription:manage
+  POST   /api/v1/billing/subscriptions/:subscription_id/cancel    201  req  team  PERM: subscription:manage
+  POST   /api/v1/billing/subscriptions/:subscription_id/change-plan  201  req  team  PERM: subscription:manage
+  GET    /api/v1/billing/subscriptions/:subscription_id/payment-setup  200  -    both  PERM: subscription:read
+  POST   /api/v1/billing/subscriptions/:subscription_id/resume    201  req  team  PERM: subscription:manage
   POST   /api/v1/billing/webhook                                  200  -    both  PUBLIC
 
 ================================================================================
@@ -105,13 +109,11 @@ Legend:
 
 ================================================================================
   DOMAIN: TENANCY (/api/v1/tenancy)
-  Routes: 45
+  Routes: 41
 ================================================================================
 
   — Sub Domains —
   POST   /api/v1/tenancy/invitations/:invitation_id/accept        201  -    both  AUTH
-  POST   /api/v1/tenancy/invitations/:invitation_id/decline       201  -    both  AUTH
-  GET    /api/v1/tenancy/invitations/pending                      200  -    both  AUTH
   GET    /api/v1/tenancy/organization                             200  -    both  AUTH
   PATCH  /api/v1/tenancy/organization                             200  -    both  PERM: organization:update
   DELETE /api/v1/tenancy/organization                             204  -    team  PERM: organization:delete
@@ -122,8 +124,6 @@ Legend:
   DELETE /api/v1/tenancy/organization/api-keys/:api_key_id        204  -    both  PERM: api-key:manage
   POST   /api/v1/tenancy/organization/api-keys/:api_key_id/rotate  201  -    both  PERM: api-key:manage
   GET    /api/v1/tenancy/organization/audit-logs                  200  -    both  PERM: audit-log:read
-  GET    /api/v1/tenancy/organization/invitations                 200  -    both  PERM: invitation:manage
-  POST   /api/v1/tenancy/organization/invitations                 201  req  team  PERM: invitation:manage
   DELETE /api/v1/tenancy/organization/invitations/:invitation_id  204  -    both  PERM: invitation:manage
   POST   /api/v1/tenancy/organization/invitations/:invitation_id/resend  201  -    both  PERM: invitation:manage
   POST   /api/v1/tenancy/organization/leave                       201  -    both  AUTH
@@ -216,12 +216,12 @@ Legend:
 ================================================================================
 
   Total routes    : 131
-  Public          : 18
-  Authenticated   : 50
+  Public          : 17
+  Authenticated   : 49
   Role-guarded    : 9
-  Perm-guarded    : 50
+  Perm-guarded    : 52
   Token-guarded   : 4
-  Team-only (O)   : 5
+  Team-only (O)   : 9
 
 ================================================================================
   IDEMPOTENCY-REQUIRED WRITES (13) — X-Idempotency-Key required
@@ -230,13 +230,13 @@ Legend:
   Routes flagged I = req reject a missing or reused key (422); every other write
   accepts an optional key (24h Redis cache).
 
+    POST /api/v1/billing/payment-methods/setup
     POST /api/v1/billing/subscriptions
     POST /api/v1/billing/subscriptions/:subscription_id/cancel
     POST /api/v1/billing/subscriptions/:subscription_id/change-plan
     POST /api/v1/billing/subscriptions/:subscription_id/resume
     POST /api/v1/notify/webhooks
     POST /api/v1/tenancy/organization/api-keys
-    POST /api/v1/tenancy/organization/invitations
     POST /api/v1/tenancy/organization/memberships
     POST /api/v1/tenancy/organization/notification-policies
     POST /api/v1/tenancy/organization/roles

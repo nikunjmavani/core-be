@@ -2,7 +2,7 @@
 
 Outbound HTTP to Stripe, Resend, and S3 uses a **Redis-backed circuit breaker** ([`circuit-breaker.ts`](../../../src/infrastructure/resilience/circuit-breaker.ts)) shared across API replicas. State changes are logged and reported to Sentry via `captureMessage`.
 
-Notify **outbound webhooks** (customer URLs) use a separate **in-memory** [opossum](https://github.com/nodeshift/opossum) circuit per destination webhook in [`webhook-outbound-circuit.ts`](../../../src/domains/notify/sub-domains/webhook/workers/webhook-outbound-circuit.ts) — not cluster-wide. Breakers are cached in a bounded LRU+TTL map keyed by internal webhook id (cap 5,000, idle TTL 1h), so URL churn and multi-tenant growth cannot leak breakers and a URL update reuses the same breaker rather than orphaning it.
+Notify **outbound webhooks** (customer URLs) use a separate **in-memory** [opossum](https://github.com/nodeshift/opossum) circuit per destination webhook in [`webhook-outbound-circuit.ts`](../../../src/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-outbound-circuit.ts) — not cluster-wide. Breakers are cached in a bounded LRU+TTL map keyed by internal webhook id (cap 5,000, idle TTL 1h), so URL churn and multi-tenant growth cannot leak breakers and a URL update reuses the same breaker rather than orphaning it.
 
 ---
 
@@ -73,6 +73,6 @@ HTTP signature verification runs in [`stripe-webhook-ingress.plugin.ts`](../../.
 - [billing-database-schema.md](../data/billing-database-schema.md) — billing PK / FK / RLS
 - [redis-topology.md](../../deployment/runbooks/redis-topology.md)
 - [resource-limits.md](../../deployment/runbooks/resource-limits.md)
-- [`src/infrastructure/resilience/OVERVIEW.md`](../../../src/infrastructure/resilience/OVERVIEW.md) — circuit breaker module overview, design decisions, tuning parameters
-- [`src/infrastructure/payment/OVERVIEW.md`](../../../src/infrastructure/payment/OVERVIEW.md) — Stripe client wrapper invariants
+- [`src/infrastructure/resilience/resilience.overview.md`](../../../src/infrastructure/resilience/resilience.overview.md) — circuit breaker module overview, design decisions, tuning parameters
+- [`src/infrastructure/payment/payment.overview.md`](../../../src/infrastructure/payment/payment.overview.md) — Stripe client wrapper invariants
 - [`src/POLICIES.md`](../../../src/POLICIES.md) — circuit breaker thresholds and reset timeouts

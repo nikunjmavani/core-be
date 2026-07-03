@@ -25,7 +25,9 @@
       "code-smells-and-best-practices",
       "lint-warnings-handler",
       "before-commit-guard",
-      "change-completeness-guard"
+      "change-completeness-guard",
+      "ponytail",
+      "ponytail-audit"
     ],
     "security-hardening": [
       "rls-tenant-isolation-guard",
@@ -33,7 +35,7 @@
       "production-hardening-guard",
       "path-to-production-gate"
     ],
-    "infra-config": ["env-schema-add", "setup-infra-maintainer", "ide-productivity-guard"],
+    "infra-config": ["env-schema-add", "ide-productivity-guard"],
     "seed": ["seed-maintainer"],
     "workflow": [
       "ci-investigator",

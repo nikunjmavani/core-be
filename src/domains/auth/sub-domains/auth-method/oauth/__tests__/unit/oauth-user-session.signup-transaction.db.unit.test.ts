@@ -3,6 +3,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { cleanupDatabase, database } from '@/tests/helpers/test-database.js';
 import { users } from '@/domains/user/user.schema.js';
 import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method.schema.js';
+import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { UserRepository } from '@/domains/user/user.repository.js';
 import { UserService } from '@/domains/user/user.service.js';
 import { AuthMethodRepository } from '@/domains/auth/sub-domains/auth-method/auth-method.repository.js';
@@ -95,5 +96,14 @@ describe('completeOAuthUserSession (database transaction boundary)', () => {
     expect(methods).toHaveLength(1);
     expect(methods[0]?.method_type).toBe(AUTH_METHOD_TYPE.OAUTH);
     expect(methods[0]?.method_type).toBe('OAUTH');
+
+    // First-time OAuth signup provisions the account's PERSONAL organization (default hybrid mode).
+    // Regression guard for the post-commit provisioning fix: the prior in-transaction provision
+    // silently FK-failed because the global-admin connection could not see the uncommitted user.
+    const ownedOrganizations = await database
+      .select({ type: organizations.type })
+      .from(organizations)
+      .where(eq(organizations.owner_user_id, createdUser!.id));
+    expect(ownedOrganizations).toEqual([{ type: 'PERSONAL' }]);
   });
 });

@@ -1,7 +1,8 @@
-import { and, asc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne, sql, type SQL } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
+import { member_invitations } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
 import { BaseRepository } from '@/infrastructure/database/base-repository.js';
@@ -14,10 +15,13 @@ import {
   createOpaqueCursorFromRow,
   parseListCursor,
 } from '@/shared/utils/http/pagination.util.js';
+import { buildContainsLikePattern } from '@/shared/utils/http/list-query.util.js';
 
 interface MembershipListPagination {
   after?: string;
   limit: number;
+  /** Optional free-text search over the member's email / first name / last name. */
+  q?: string;
 }
 
 /** Row shape returned by {@link MembershipRepository.listOrganizationsForUserDataExport}. */
@@ -26,6 +30,30 @@ export interface MembershipOrganizationUserDataExportRow {
   slug: string | null;
   status: string;
   created_at: Date;
+}
+
+/**
+ * Raw user summary from {@link MembershipRepository.resolveUserSummariesByInternalIds}. `avatar_url`
+ * is the RAW stored object key (or absolute provider URL) — the service presigns it before serializing.
+ */
+export interface MembershipUserSummaryRow {
+  public_id: string;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
+}
+
+/** Raw role summary from {@link MembershipRepository.resolveRoleSummariesByInternalIds}. */
+export interface MembershipRoleSummaryRow {
+  public_id: string;
+  name: string;
+}
+
+/** Raw live-invitation reference from {@link MembershipRepository.resolveLiveInvitationsByMembershipIds}. */
+export interface MembershipInvitationRefRow {
+  public_id: string;
+  expires_at: Date;
 }
 
 /**
@@ -60,21 +88,37 @@ export class MembershipRepository extends BaseRepository {
   }
 
   async findByOrganizationId(organization_id: number, pagination: MembershipListPagination) {
-    const { after, limit } = pagination;
-    const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
-      memberships.created_at,
-      memberships.id,
-      parseListCursor(after),
-    );
-    const where = and(
-      eq(memberships.organization_id, organization_id),
-      isNull(memberships.deleted_at),
-      cursorCondition,
-    );
+    const { after, limit, q } = pagination;
+    const cursor = parseListCursor(after);
+    // Search restricts to the membership ids whose member's user email/name matches `q`. That match
+    // needs a join to `auth.users` (FORCE RLS), which under org-only context can only be read through
+    // the SECURITY DEFINER resolver — see searchMembershipIds. With no match, short-circuit to an
+    // empty page; otherwise the normal typed keyset query below adds `id IN (...)`.
+    let searchIdFilter: SQL | undefined;
+    if (q !== undefined) {
+      const matchingIds = await this.searchMembershipIds(organization_id, q);
+      if (matchingIds.length === 0) {
+        return {
+          items: [] as MembershipRow[],
+          total: null,
+          limit,
+          has_more: false,
+          next_cursor: null,
+        };
+      }
+      searchIdFilter = inArray(memberships.id, matchingIds);
+    }
     const rows = await getRequestDatabase()
       .select()
       .from(memberships)
-      .where(where)
+      .where(
+        and(
+          eq(memberships.organization_id, organization_id),
+          isNull(memberships.deleted_at),
+          searchIdFilter,
+          buildAscendingCreatedAtIdCursorCondition(memberships.created_at, memberships.id, cursor),
+        ),
+      )
       .orderBy(asc(memberships.created_at), asc(memberships.id))
       .limit(limit + 1);
     const hasMore = rows.length > limit;
@@ -90,14 +134,34 @@ export class MembershipRepository extends BaseRepository {
   }
 
   /**
-   * Maps internal user ids to public ids for serialization. `auth.users` is FORCE RLS
-   * (self-scoped) and these reads run under org-only context, so a plain join would match zero
-   * rows under the app role — delegate to the SECURITY DEFINER batch resolver (RLS bypass by
-   * ownership). Batched to avoid an N+1 per list page; exposes only the public id.
+   * Resolves the membership ids in an organization whose member's user email / first name / last
+   * name matches `q`. `auth.users` is FORCE RLS behind a self-owner policy, so under org-only context
+   * a plain join matches zero rows — the search goes through the
+   * `tenancy.search_organization_membership_ids` SECURITY DEFINER function (20260702000000), which
+   * bypasses RLS by explicit organization scoping and exposes no `auth.users` columns. The term is
+   * escaped into a `%…%` `ILIKE` pattern before binding.
    */
-  async resolveUserPublicIdsByInternalIds(
+  private async searchMembershipIds(organization_id: number, q: string): Promise<number[]> {
+    const pattern = buildContainsLikePattern(q);
+    const result = await getRequestDatabase().execute(
+      sql`SELECT id FROM tenancy.search_organization_membership_ids(${organization_id}::bigint, ${pattern}::text)`,
+    );
+    const rows = (
+      Array.isArray(result) ? result : ((result as { rows?: unknown[] }).rows ?? [])
+    ) as { id: number | string }[];
+    return rows.map((row) => Number(row.id));
+  }
+
+  /**
+   * Maps internal user ids to display SUMMARIES (public id + email + name + raw avatar key) for the
+   * membership serializer's embedded `user` object. `auth.users` is FORCE RLS (self-scoped) and
+   * these reads run under org-only context, so a plain join would match zero rows under the app
+   * role — delegate to the SECURITY DEFINER batch resolver (RLS bypass by ownership). Batched to
+   * avoid an N+1 per list page; `avatar_url` is the RAW stored key — the service presigns it.
+   */
+  async resolveUserSummariesByInternalIds(
     userInternalIds: readonly number[],
-  ): Promise<Map<number, string>> {
+  ): Promise<Map<number, MembershipUserSummaryRow>> {
     if (userInternalIds.length === 0) return new Map();
     // Build an explicit `ARRAY[...]::bigint[]` literal — drizzle can't bind a JS array as a single
     // parameter to the function's BIGINT[] argument.
@@ -106,27 +170,83 @@ export class MembershipRepository extends BaseRepository {
       sql`, `,
     );
     const result = await getRequestDatabase().execute(
-      sql`SELECT id, public_id FROM auth.resolve_user_public_ids_by_ids(ARRAY[${userIdValues}]::bigint[])`,
+      sql`SELECT id, public_id, email, first_name, last_name, avatar_url FROM auth.resolve_user_summaries_by_ids(ARRAY[${userIdValues}]::bigint[])`,
     );
     const rows = (
       Array.isArray(result) ? result : ((result as { rows?: unknown[] }).rows ?? [])
-    ) as { id: number | string; public_id: string }[];
-    return new Map(rows.map((row) => [Number(row.id), row.public_id]));
+    ) as {
+      id: number | string;
+      public_id: string;
+      email: string;
+      first_name: string | null;
+      last_name: string | null;
+      avatar_url: string | null;
+    }[];
+    return new Map(
+      rows.map((row) => [
+        Number(row.id),
+        {
+          public_id: row.public_id,
+          email: row.email,
+          first_name: row.first_name,
+          last_name: row.last_name,
+          avatar_url: row.avatar_url,
+        },
+      ]),
+    );
   }
 
   /**
-   * Maps internal role ids to public ids for serialization. `roles` is org-scoped, so a normal
-   * RLS-scoped query under the current org context is correct (no resolver needed).
+   * Maps internal role ids to summaries (public id + name) for the serializer's embedded `role`
+   * object. `roles` is org-scoped, so a normal RLS-scoped query under the current org context is
+   * correct (no resolver needed).
    */
-  async resolveRolePublicIdsByInternalIds(
+  async resolveRoleSummariesByInternalIds(
     roleInternalIds: readonly number[],
-  ): Promise<Map<number, string>> {
+  ): Promise<Map<number, MembershipRoleSummaryRow>> {
     if (roleInternalIds.length === 0) return new Map();
     const rows = await getRequestDatabase()
-      .select({ id: roles.id, public_id: roles.public_id })
+      .select({ id: roles.id, public_id: roles.public_id, name: roles.name })
       .from(roles)
-      .where(inArray(roles.id, [...roleInternalIds]));
-    return new Map(rows.map((row) => [row.id, row.public_id]));
+      // audit #38: exclude soft-deleted roles so a membership referencing a deleted role does not
+      // surface the deleted role's name in the member-list response (the serializer then falls
+      // through to its `{ name: '' }` placeholder).
+      .where(and(inArray(roles.id, [...roleInternalIds]), isNull(roles.deleted_at)));
+    return new Map(rows.map((row) => [row.id, { public_id: row.public_id, name: row.name }]));
+  }
+
+  /**
+   * Maps internal membership ids to their live (pending — not accepted, not revoked) invitation, so
+   * the serializer can embed an `invitation` ref on `INVITED` rows (the frontend drives Resend /
+   * Revoke from the members table). Runs under the org RLS context (`member_invitations` is scoped
+   * to the org's memberships) — no SECURITY DEFINER needed. Ordered ascending so the newest live
+   * invite wins for a membership with more than one historical row.
+   */
+  async resolveLiveInvitationsByMembershipIds(
+    membershipInternalIds: readonly number[],
+  ): Promise<Map<number, MembershipInvitationRefRow>> {
+    if (membershipInternalIds.length === 0) return new Map();
+    const rows = await getRequestDatabase()
+      .select({
+        membership_id: member_invitations.membership_id,
+        public_id: member_invitations.public_id,
+        expires_at: member_invitations.expires_at,
+      })
+      .from(member_invitations)
+      .where(
+        and(
+          inArray(member_invitations.membership_id, [...membershipInternalIds]),
+          isNull(member_invitations.accepted_at),
+          isNull(member_invitations.revoked_at),
+        ),
+      )
+      .orderBy(asc(member_invitations.created_at), asc(member_invitations.id));
+    return new Map(
+      rows.map((row) => [
+        row.membership_id,
+        { public_id: row.public_id, expires_at: row.expires_at },
+      ]),
+    );
   }
 
   async findById(id: number): Promise<MembershipRow | null> {
@@ -162,6 +282,78 @@ export class MembershipRepository extends BaseRepository {
         ),
       );
     return rows[0]?.count ?? 0;
+  }
+
+  /**
+   * Counts the seat-occupying memberships in an organization (REQ-4).
+   *
+   * @remarks
+   * A "seat" is consumed by any membership that is either ACTIVE or still INVITED
+   * (`deleted_at IS NULL`) — an outstanding invitation already reserves a seat so a
+   * burst of invites cannot exceed the plan limit once everyone accepts. The count
+   * is exact (no LIMIT) because it feeds a binary `used >= total` seat-availability
+   * check; it is bounded by the per-org member cap. Mirrors {@link countActiveByRoleId}.
+   * SUSPENDED members are intentionally NOT counted (a suspended seat is not in use).
+   */
+  async countActiveByOrganization(organization_id: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ count: sql<number>`count(*)::int` })
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.organization_id, organization_id),
+          inArray(memberships.status, ['ACTIVE', 'INVITED']),
+          isNull(memberships.deleted_at),
+        ),
+      );
+    return rows[0]?.count ?? 0;
+  }
+
+  /**
+   * F2: suspends up to `suspend_count` non-owner ACTIVE members, most-recently-joined first.
+   *
+   * @remarks
+   * - **Algorithm:** selects the candidate ids (`ACTIVE`, not the owner, not soft-deleted) ordered
+   *   by `joined_at DESC` and capped at `suspend_count`, then flips them to `SUSPENDED` in one
+   *   `UPDATE … WHERE id IN (…)`. Two steps (select then update) avoid a self-referential update
+   *   subquery and let the caller log exactly how many were suspended.
+   * - **Failure modes:** none beyond the underlying queries; runs inside the caller's organization
+   *   DB context (RLS-scoped) and transaction.
+   * - **Side effects:** writes `status = 'SUSPENDED'` (a suspended seat is not counted toward the
+   *   cap, so this lowers the org's seat usage). Returns the internal `user_id`s actually suspended
+   *   (empty when no non-owner ACTIVE members remain — e.g. an owner-only org that can't shrink
+   *   further) so the caller can purge each suspended member's permission cache.
+   */
+  async suspendExcessActiveMembers(options: {
+    organization_id: number;
+    owner_user_id: number;
+    suspend_count: number;
+  }): Promise<number[]> {
+    if (options.suspend_count <= 0) return [];
+    const candidates = await getRequestDatabase()
+      .select({ id: memberships.id, user_id: memberships.user_id })
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.organization_id, options.organization_id),
+          eq(memberships.status, 'ACTIVE'),
+          ne(memberships.user_id, options.owner_user_id),
+          isNull(memberships.deleted_at),
+        ),
+      )
+      .orderBy(desc(memberships.joined_at))
+      .limit(options.suspend_count);
+    if (candidates.length === 0) return [];
+    await getRequestDatabase()
+      .update(memberships)
+      .set({ status: 'SUSPENDED', updated_at: new Date() })
+      .where(
+        inArray(
+          memberships.id,
+          candidates.map((candidate) => candidate.id),
+        ),
+      );
+    return candidates.map((candidate) => candidate.user_id);
   }
 
   async findByUserAndOrganization(
@@ -225,11 +417,12 @@ export class MembershipRepository extends BaseRepository {
   async update(
     public_id: string,
     organization_id: number,
-    data: { status?: string },
+    data: { status?: string; role_id?: number },
     updated_by_user_id: number | null,
   ): Promise<MembershipRow | null> {
     const payload: {
       status?: string;
+      role_id?: number;
       joined_at?: Date;
       updated_at: Date | SQL;
       updated_by_user_id?: number;
@@ -239,6 +432,7 @@ export class MembershipRepository extends BaseRepository {
     });
     if (data.status) payload.status = data.status;
     if (data.status === 'ACTIVE') payload.joined_at = new Date();
+    if (data.role_id !== undefined) payload.role_id = data.role_id;
     const rows = await getRequestDatabase()
       .update(memberships)
       .set(payload)

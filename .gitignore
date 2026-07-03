@@ -8,7 +8,7 @@ node_modules/
 # Build
 dist/
 
-# Environment: only `.env.example` and `.env.setup.example` are committed.
+# Environment: only `.env.example` is committed (app runtime config reference).
 # `.env.<environment>` files are gitignored copies created by `pnpm github:sync` and pushed
 # to GitHub Environments via `pnpm github:sync <environment>`.
 # `.env.local` (gitignored) is a machine-specific override that wins over `.env.<NODE_ENV>`
@@ -16,7 +16,13 @@ dist/
 # use `.env.example` as the schema reference for variable names.
 .env*
 !.env.example
-!.env.setup.example
+!.env.example.fe
+
+# Setup-tooling files live in the gitignored `.setup/` dir (credentials + state),
+# separate from app `.env.<environment>`. The only committed setup file is the template
+# `.setup-credentials.example` at the repo root, next to `.env.example`.
+.setup/
+!.setup-credentials.example
 
 # Docker Compose machine-local overrides (auto-merged by compose; never shared with team/CI)
 docker-compose.override.yml
@@ -102,14 +108,28 @@ reports/
 **/*.report.*
 *REPORT*.md
 
-# Setup automation (secrets + provisioned state)
+# Setup automation (secrets + provisioned state). Runtime files live in `.setup/`
+# (ignored above); these patterns also block any stray legacy file at the repo root.
 tooling/setup.secrets.json
 .setup-state.json
+.setup-state.json.bak
+.setup-state.json.tmp
+.setup-state.lock
+.setup-state.audit.log
 
 # Understand Anything — fully regenerable analysis output
 .understand-anything/
 .cache/
 
+# Local dashboards orchestrator (pnpm dashboards:*) — detached process logs + pidfiles
+.dashboards/
+
 # Local scratch output from agent skills/tools (deep-research reports, moodboards,
 # market dumps, etc.). Machine-local and regenerable — never part of the codebase.
 outputs/
+
+# vendored Tailwind Play CDN for the local dashboards hub (regenerable: curl https://cdn.tailwindcss.com)
+tooling/dev/dashboards/tailwind.js
+# vendored gridstack for the resizable dashboard grid (regenerable: curl https://cdn.jsdelivr.net/npm/gridstack@11/dist/gridstack-all.min.js + .../gridstack.min.css)
+tooling/dev/dashboards/gridstack.js
+tooling/dev/dashboards/gridstack.css

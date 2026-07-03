@@ -1,6 +1,8 @@
 import { ConflictError, NotFoundError, UnprocessableEntityError } from '@/shared/errors/index.js';
+import { randomUUID } from 'node:crypto';
 
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
+import { env } from '@/shared/config/env.config.js';
 import { INACTIVE_SUBSCRIPTION_STATUSES } from './subscription.repository.js';
 
 /**
@@ -17,18 +19,110 @@ import { INACTIVE_SUBSCRIPTION_STATUSES } from './subscription.repository.js';
  * subscription slot" definitions stay in lockstep (audit-#1).
  */
 const TERMINAL_STATUSES = new Set<string>(INACTIVE_SUBSCRIPTION_STATUSES);
+
+/**
+ * Dunning subscription statuses — a payment has failed but the subscription has not yet been
+ * canceled. The org keeps its full plan ceiling until `current_period_end + BILLING_DUNNING_GRACE_DAYS`
+ * (F4), after which its entitlement lapses to the Free-tier ceiling.
+ */
+const DUNNING_STATUSES = new Set<string>(['PAST_DUE', 'UNPAID', 'INCOMPLETE']);
+
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
+import { assertTeamOrganization } from '@/domains/tenancy/sub-domains/organization/organization-capability.js';
 import type { PlanService } from '@/domains/billing/sub-domains/plan/plan.service.js';
 import type { PaymentProvider } from './payment-provider.port.js';
 import type { SubscriptionRepository } from './subscription.repository.js';
 import type { SubscriptionUpdateData } from './subscription.types.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { PAGINATION } from '@/shared/constants/pagination.constants.js';
+import { BillingAccountSerializer } from './billing-account.serializer.js';
+import {
+  createStripeSetupIntent,
+  isStripeConfigured,
+  listStripeInvoices,
+  listStripePaymentMethods,
+  retrieveStripeCustomerDefaultPaymentMethodId,
+} from '@/infrastructure/payment/stripe.client.js';
+
+/**
+ * Cross-domain port for the tenancy seat counter (REQ-4): resolves how many seats an
+ * organization currently consumes (ACTIVE + INVITED memberships).
+ *
+ * @remarks
+ * - **Algorithm:** declared as a minimal structural interface rather than importing
+ *   `MembershipService`, so billing can read the count without a hard import cycle
+ *   (tenancy's membership service also depends on billing for the seat-limit check).
+ * - **Failure modes:** the implementer runs inside the org RLS context and throws on a
+ *   missing organization.
+ * - **Side effects:** none on this type — the implementer issues the COUNT query.
+ * - **Notes:** satisfied structurally by `MembershipService.countActiveMembers`; wired in
+ *   by the composition root.
+ */
+export type MembershipSeatUsagePort = {
+  countActiveMembers(options: { organizationPublicId: string }): Promise<number>;
+  /**
+   * F2: suspends the most-recently-joined non-owner ACTIVE members until the org's active headcount
+   * fits `ceiling`; returns how many were suspended. The owner is never suspended. Optional so the
+   * worker composition root and minimal test harnesses can omit it (then downgrade auto-suspend is a
+   * no-op). Implemented structurally by `MembershipService.suspendExcessActiveMembersToFitCeiling`.
+   */
+  suspendExcessActiveMembersToFitCeiling?(options: {
+    organizationPublicId: string;
+    ceiling: number;
+  }): Promise<number>;
+};
+
+/** Repository row enriched with the REQ-4 seat counters before serialization. */
+type SubscriptionRowWithSeatState = {
+  seats: number | null;
+  plan_included_seats: number | null;
+};
 import {
   validateChangePlan,
   validateCreateSubscription,
+  validateListInvoicesQuery,
   validateUpdateSubscription,
 } from './subscription.validator.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
+import { enqueueSubscriptionSeatSyncBestEffort } from './queues/subscription-seat-sync.queue.js';
+
+/**
+ * Namespaces a client-supplied `X-Idempotency-Key` by organization (and operation) before it is
+ * forwarded to Stripe (audit #3).
+ *
+ * @remarks
+ * Stripe idempotency keys are scoped per Stripe *account* (the whole platform), not per tenant, so
+ * forwarding a bare client header lets a key chosen by org A collide with the same string from org B
+ * at Stripe — leaking A's cached object to B, or erroring B's request (`idempotency_error`) as a
+ * chosen-key cross-tenant DoS. Prefixing with `op:org` keeps each tenant's key space disjoint.
+ * Returns `undefined` when no client key was supplied (the caller passes nothing to Stripe).
+ */
+export function buildStripeIdempotencyKey(
+  operation: string,
+  organizationPublicId: string,
+  clientKey: string | undefined,
+): string | undefined {
+  return clientKey === undefined ? undefined : `${operation}:${organizationPublicId}:${clientKey}`;
+}
+
+// audit H2: a Stripe-backed subscription must NOT change to a plan that has no
+// Stripe price id for its billing cycle. The Stripe price update in changePlan is
+// gated on `providerPriceId`, but the local `plan_id` write is unconditional — so
+// without this guard the local entitlement switches to the new tier while Stripe
+// keeps billing the OLD price, and the watermark stamp blocks the reconciling
+// `customer.subscription.updated` webhook (un-self-healing divergence). Only a
+// genuinely local-only subscription (no `provider_subscription_id`) may change to
+// a price-less plan. Extracted so changePlan stays within its complexity budget.
+function assertProviderPriceForStripeBackedPlanChange(
+  providerSubscriptionId: string | null,
+  providerPriceId: string | null | undefined,
+): void {
+  if (providerSubscriptionId && !providerPriceId) {
+    throw new UnprocessableEntityError('errors:planNotAvailableForBillingCycle');
+  }
+}
 
 /**
  * Coordinates plan lookups, payment-provider calls, and subscription updates
@@ -44,7 +138,10 @@ import { withOrganizationDatabaseContext } from '@/infrastructure/database/conte
  *   accept a repository override so the webhook worker can pass its own
  *   worker-scoped handle.
  * - **Failure modes:** Throws {@link NotFoundError} when the organization,
- *   plan, or subscription cannot be loaded. On `create`, throws
+ *   plan, or subscription cannot be loaded. The mutating operations (`create` /
+ *   `changePlan` / `cancel` / `resume`) first reject a PERSONAL organization with
+ *   422 via `assertTeamOrganization(organization, 'BILLING')` — billing is a
+ *   team-only action (a PERSONAL organization cannot manage billing). On `create`, throws
  *   {@link ConflictError} (`errors:subscriptionAlreadyExists`) when the
  *   organization already has a non-terminal subscription (checked before the
  *   Stripe call) or when a concurrent create loses the partial-unique-index
@@ -70,7 +167,190 @@ export class SubscriptionService {
     private readonly planService: PlanService,
     private readonly repository: SubscriptionRepository,
     private readonly paymentProvider: PaymentProvider,
+    // REQ-4: resolves seats_used (ACTIVE + INVITED memberships). Optional so the worker
+    // composition root and minimal test harnesses can omit it; when unset, seats_used
+    // reports 0 (the read paths still return a coherent shape). The HTTP container always wires it.
+    private readonly membershipSeatUsage?: MembershipSeatUsagePort,
   ) {}
+
+  /**
+   * Computes `seats_total` / `seats_used` for a subscription row (REQ-4).
+   *
+   * @remarks
+   * - **Algorithm:** `seats_total = row.seats ?? row.plan_included_seats ?? null` (null =
+   *   unlimited); `seats_used` is the org's ACTIVE + INVITED membership count from the injected
+   *   {@link MembershipSeatUsagePort}.
+   * - **Failure modes:** when the membership port is not wired, `seats_used` defaults to 0 (and a
+   *   warning is logged) so the response shape stays stable for minimal/worker harnesses.
+   * - **Side effects:** one cross-domain membership COUNT (under the org RLS context) per call.
+   * - **Notes:** the count is resolved ONCE per request and reused across every row (a list of an
+   *   org's subscriptions all share the same org seat usage).
+   */
+  private async decorateWithSeatCounts<TRow extends SubscriptionRowWithSeatState>(
+    organization_public_id: string,
+    rows: TRow[],
+  ): Promise<(TRow & { seats_total: number | null; seats_used: number })[]> {
+    let seatsUsed = 0;
+    if (this.membershipSeatUsage) {
+      seatsUsed = await this.membershipSeatUsage.countActiveMembers({
+        organizationPublicId: organization_public_id,
+      });
+    } else {
+      logger.warn(
+        { organizationPublicId: organization_public_id },
+        'subscription.seats_used.membership_port_unwired',
+      );
+    }
+    return rows.map((row) => ({
+      ...row,
+      seats_total: row.seats ?? row.plan_included_seats ?? null,
+      seats_used: seatsUsed,
+    }));
+  }
+
+  /**
+   * Reads the org's active seat allowance under a row lock (REQ-4 seat enforcement).
+   *
+   * @remarks
+   * - **Algorithm:** delegates to {@link SubscriptionRepository.findActiveSeatStateByOrganizationForUpdate},
+   *   which takes `FOR UPDATE` on the active subscription row, then resolves the ceiling:
+   *   active entitlement → purchased `seats` ?? plan `included_seats`; **no active subscription**
+   *   (F3) or a **dunning subscription past its grace window** (F4) → the Free-tier ceiling
+   *   ({@link PlanService.getFreePlanSeatCeiling}). `null` still means "no ceiling to enforce"
+   *   (unlimited plan, or no plan catalog configured).
+   * - **Failure modes:** none beyond the underlying queries; the caller MUST already hold an
+   *   organization DB context + transaction so the lock spans the subsequent membership insert.
+   * - **Side effects:** acquires a `FOR UPDATE` row lock (released at the caller's COMMIT) when an
+   *   active subscription exists. The Free-tier path has no subscription row to lock; with the
+   *   seeded Free plan at 1 seat (owner-only) the `used >= ceiling` check blocks any member add, so
+   *   serialization is not required there — see `docs/reference/architecture/production-audit-decisions.md`.
+   * - **Notes:** this is the cross-domain entry point tenancy's `MembershipService` calls to
+   *   enforce the seat limit on add-member; it returns only the numeric ceiling, never the row.
+   */
+  async reserveSeatCeilingForMemberAdd(organization_id: number): Promise<number | null> {
+    const seatState =
+      await this.repository.findActiveSeatStateByOrganizationForUpdate(organization_id);
+    // F3/F4: no active subscription, or a dunning subscription past its grace window, falls back to
+    // the Free-tier ceiling (the cheapest active plan's included_seats) rather than "unlimited".
+    if (!seatState || this.isDunningEntitlementLapsed(seatState)) {
+      return this.planService.getFreePlanSeatCeiling();
+    }
+    return seatState.seats ?? seatState.plan_included_seats ?? null;
+  }
+
+  /**
+   * F4: true when `seatState` is a dunning subscription (PAST_DUE / UNPAID / INCOMPLETE) whose grace
+   * window (`current_period_end + BILLING_DUNNING_GRACE_DAYS`) has elapsed, so its entitlement has
+   * lapsed to the Free tier. Non-dunning (ACTIVE / TRIALING / PAUSED) and within-grace dunning keep
+   * the full plan ceiling.
+   */
+  private isDunningEntitlementLapsed(seatState: {
+    status: string;
+    current_period_end: Date;
+  }): boolean {
+    if (!DUNNING_STATUSES.has(seatState.status)) return false;
+    const graceEndsAt =
+      new Date(seatState.current_period_end).getTime() +
+      env.BILLING_DUNNING_GRACE_DAYS * MILLISECONDS_PER_DAY;
+    return Date.now() > graceEndsAt;
+  }
+
+  /**
+   * Best-effort enqueue of a Stripe seat-quantity reconciliation for an org (REQ-4).
+   *
+   * @remarks
+   * - **Algorithm:** fire-and-forget enqueue onto the seat-sync queue, coalesced per org. The
+   *   worker re-reads the authoritative member count and pushes it to Stripe.
+   * - **Failure modes:** swallows enqueue errors (logged) — a Redis blip must never fail the
+   *   member-management or change-plan request that triggered it.
+   * - **Side effects:** writes one (coalesced) job to the seat-sync queue.
+   * - **Notes:** the cross-domain entry point tenancy's `MembershipService` calls after a member
+   *   add/remove commits, and `changePlan` calls after a successful plan change.
+   */
+  enqueueSeatQuantitySync(organization_public_id: string, idempotencyKey?: string): void {
+    // audit #1: stamp a STABLE per-enqueue idempotency token when the caller (the member
+    // add/remove hot path) provides none. It is stored in the BullMQ job data, so every RETRY of
+    // the same job reuses it — the Stripe quantity update is then deduped at Stripe instead of
+    // re-issued (which, with proration/usage billing, would post duplicate proration line items).
+    // A separate enqueue gets a fresh token (avoids a stale idempotent replay on an N→M→N seat
+    // oscillation); `changePlan` keeps passing its own client-derived key.
+    const seatSyncToken = idempotencyKey ?? `seat-sync:${organization_public_id}:${randomUUID()}`;
+    enqueueSubscriptionSeatSyncBestEffort(
+      omitUndefined({
+        organizationPublicId: organization_public_id,
+        idempotencyKey: seatSyncToken,
+      }),
+    );
+  }
+
+  /**
+   * Reconciles the Stripe subscription quantity to the org's current member count (REQ-4).
+   *
+   * @remarks
+   * - **Algorithm:** phase 1 (org DB context) reads the active subscription; the Stripe quantity
+   *   update then runs OUTSIDE any DB context (no checkout held across the round trip — mirrors the
+   *   HTTP create/cancel/change-plan phasing); phase 2 (org DB context) persists `subscriptions.seats`
+   *   so reads reflect the synced quantity immediately (the `customer.subscription.updated` webhook
+   *   also confirms it). Seat usage (ACTIVE + INVITED) comes from the injected membership port.
+   * - **Failure modes:** a Stripe outage throws `ServiceUnavailableError` from the provider so the
+   *   caller (BullMQ worker) retries; no active subscription / no member-port is a no-op. Local-only
+   *   subscriptions (no `provider_subscription_id`) skip the Stripe call but still persist `seats`.
+   * - **Side effects:** at most one Stripe update + one local `subscriptions.seats` write.
+   * - **Notes:** safe to call from the seat-sync worker directly (it manages its own contexts, like
+   *   `cancelActiveForOrganizationOffboarding`); never holds a checkout across the Stripe call.
+   */
+  async syncSeatQuantityForOrganization(
+    organization_public_id: string,
+    idempotencyKey?: string,
+  ): Promise<void> {
+    if (!this.membershipSeatUsage) {
+      logger.warn(
+        { organizationPublicId: organization_public_id },
+        'subscription.seat_sync.membership_port_unwired',
+      );
+      return;
+    }
+    const { organization, subscription } = await withOrganizationDatabaseContext(
+      organization_public_id,
+      async () => {
+        const organization =
+          await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        const subscription = await this.repository.findActiveByOrganization(organization.id);
+        return { organization, subscription };
+      },
+    );
+    if (!subscription) return;
+
+    const seatsUsed = await this.membershipSeatUsage.countActiveMembers({
+      organizationPublicId: organization_public_id,
+    });
+    // Stripe requires quantity >= 1; never push 0 (which Stripe rejects) — clamp to 1 so a transient
+    // empty-membership read cannot fail the sync.
+    const quantity = Math.max(1, seatsUsed);
+
+    // audit #1: scope the Stripe idempotency key by the resolved quantity. The base token is stable
+    // across a job's retries (so a retried update with the SAME quantity is deduped at Stripe — no
+    // duplicate proration); appending the quantity means a retry that recomputes a DIFFERENT desired
+    // quantity becomes a distinct operation instead of a Stripe param-mismatch error. Undefined only
+    // on a non-queue direct call (the enqueue path always stamps a token).
+    const quantityUpdateIdempotencyKey =
+      idempotencyKey !== undefined ? `${idempotencyKey}:qty:${quantity}` : undefined;
+
+    // Stripe network call — OUTSIDE any database context.
+    if (subscription.provider_subscription_id) {
+      await this.paymentProvider.updateSubscriptionQuantity(
+        subscription.provider_subscription_id,
+        quantity,
+        quantityUpdateIdempotencyKey,
+      );
+    }
+
+    await withOrganizationDatabaseContext(organization_public_id, async () =>
+      this.repository.update(subscription.public_id, organization.id, {
+        seats: quantity,
+      }),
+    );
+  }
 
   async syncFromStripeProviderSubscription(
     provider_subscription_id: string,
@@ -225,7 +505,9 @@ export class SubscriptionService {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-      return this.repository.listByOrganization(organization.id);
+      const rows = await this.repository.listByOrganization(organization.id);
+      // REQ-4: enrich each row with seats_total / seats_used (cross-domain membership count).
+      return this.decorateWithSeatCounts(organization_public_id, rows);
     });
   }
 
@@ -238,8 +520,48 @@ export class SubscriptionService {
         organization.id,
       );
       if (!subscription) throw new NotFoundError('Subscription');
-      return subscription;
+      // REQ-4: attach seats_total / seats_used to the single subscription.
+      const [decorated] = await this.decorateWithSeatCounts(organization_public_id, [subscription]);
+      return decorated!;
     });
+  }
+
+  /**
+   * Returns the Stripe PaymentIntent `client_secret` for an INCOMPLETE subscription so the
+   * frontend can confirm the first payment. Stripe network I/O runs outside RLS context.
+   */
+  async getPaymentSetup(organization_public_id: string, subscription_public_id: string) {
+    const providerSubscriptionId = await withOrganizationDatabaseContext(
+      organization_public_id,
+      async () => {
+        const organization =
+          await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        const subscription = await this.repository.findByPublicId(
+          subscription_public_id,
+          organization.id,
+        );
+        if (!subscription) throw new NotFoundError('Subscription');
+        if (subscription.status !== 'INCOMPLETE') {
+          return null;
+        }
+        return subscription.provider_subscription_id ?? null;
+      },
+    );
+
+    if (!providerSubscriptionId) {
+      return { client_secret: null as string | null };
+    }
+
+    const { isStripeConfigured, retrieveStripeSubscriptionPaymentClientSecret } = await import(
+      '@/infrastructure/payment/stripe.client.js'
+    );
+    if (!isStripeConfigured()) {
+      return { client_secret: null };
+    }
+
+    const client_secret =
+      await retrieveStripeSubscriptionPaymentClientSecret(providerSubscriptionId);
+    return { client_secret };
   }
 
   async create(
@@ -254,6 +576,9 @@ export class SubscriptionService {
       async () => {
         const organization =
           await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        // Personal organizations cannot manage billing (assertTeamOrganization → 422).
+        // Reject before the Stripe call so a personal org gets 422, not a churned provider call.
+        assertTeamOrganization(organization, 'BILLING');
         // Reject before the Stripe call when a non-terminal subscription already
         // exists, so a duplicate request never churns the payment provider.
         const existingActive = await this.repository.findActiveByOrganization(organization.id);
@@ -277,12 +602,17 @@ export class SubscriptionService {
         organization,
         plan,
         billingCycle: parsed.billing_cycle,
-        idempotencyKey,
+        // audit #3: namespace the client key by org before it reaches Stripe's global key space.
+        idempotencyKey: buildStripeIdempotencyKey(
+          'sub-create',
+          organization_public_id,
+          idempotencyKey,
+        ),
       }),
     );
 
     try {
-      return await withOrganizationDatabaseContext(organization_public_id, async () =>
+      const created = await withOrganizationDatabaseContext(organization_public_id, async () =>
         this.repository.create(
           omitUndefined({
             organization_id: organization.id,
@@ -313,6 +643,10 @@ export class SubscriptionService {
           }),
         ),
       );
+      // REQ-4: a freshly-created subscription has no Stripe-synced `seats` yet, so seats_total
+      // falls back to the plan's included_seats; seats_used reflects current memberships.
+      const [decorated] = await this.decorateWithSeatCounts(organization_public_id, [created]);
+      return decorated!;
     } catch (error) {
       if (paymentResult.providerSubscriptionId) {
         await this.paymentProvider.compensateFailedCreate(paymentResult.providerSubscriptionId);
@@ -331,16 +665,62 @@ export class SubscriptionService {
     // PATCH `cancel_at_period_end` (or other billing-state fields) is rejected with 422
     // and must use the dedicated /cancel and /resume routes (which DO call Stripe).
     validateUpdateSubscription(body);
-    return withOrganizationDatabaseContext(organization_public_id, async () => {
+    const existing = await withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-      const existing = await this.repository.findByPublicId(
-        subscription_public_id,
-        organization.id,
-      );
-      if (!existing) throw new NotFoundError('Subscription');
-      return existing;
+      const found = await this.repository.findByPublicId(subscription_public_id, organization.id);
+      if (!found) throw new NotFoundError('Subscription');
+      return found;
     });
+    // REQ-4: keep the response shape consistent with list/get/create.
+    const [decorated] = await this.decorateWithSeatCounts(organization_public_id, [existing]);
+    return decorated!;
+  }
+
+  /**
+   * F2: brings the org's active headcount within the new plan's seat allowance by auto-suspending
+   * the most-recently-joined non-owner members (the owner is never suspended), AFTER the plan change
+   * has committed.
+   *
+   * @remarks
+   * - **Algorithm:** delegates to the tenancy seat port's `suspendExcessActiveMembersToFitCeiling`,
+   *   which suspends `activeCount - ceiling` non-owner ACTIVE members ordered by `joined_at DESC`.
+   * - **Failure modes:** **best-effort** — a suspend failure is logged but never rethrown, because
+   *   the plan change is already committed; throwing here would trip the Stripe-compensation catch
+   *   and roll back the *price* while leaving the local plan changed (divergence). The add-member
+   *   ceiling check still blocks further growth until the org is back within its allowance.
+   * - **Side effects:** flips excess memberships to `SUSPENDED`. No-op when the new plan grants
+   *   unlimited seats (`included_seats === null`) or the port is unwired (worker/test harnesses).
+   * - **Notes:** suspended members re-consume a seat on reactivation and are re-checked against the
+   *   ceiling (the F1 guard), so they can be restored after an upgrade.
+   */
+  private async suspendExcessMembersForDowngrade(
+    organizationPublicId: string,
+    newPlan: { included_seats: number | null },
+  ): Promise<void> {
+    if (
+      newPlan.included_seats === null ||
+      !this.membershipSeatUsage?.suspendExcessActiveMembersToFitCeiling
+    ) {
+      return;
+    }
+    try {
+      const suspended = await this.membershipSeatUsage.suspendExcessActiveMembersToFitCeiling({
+        organizationPublicId,
+        ceiling: newPlan.included_seats,
+      });
+      if (suspended > 0) {
+        logger.info(
+          { organizationPublicId, ceiling: newPlan.included_seats, suspended },
+          'billing.changePlan.members_suspended',
+        );
+      }
+    } catch (error) {
+      logger.error(
+        { organizationPublicId, ceiling: newPlan.included_seats, error },
+        'billing.changePlan.suspend_excess_failed',
+      );
+    }
   }
 
   async changePlan(
@@ -354,6 +734,9 @@ export class SubscriptionService {
       await withOrganizationDatabaseContext(organization_public_id, async () => {
         const organization =
           await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        // Personal organizations cannot manage billing — reject before the subscription
+        // lookup so a personal org gets 422 (capability unavailable), not 404.
+        assertTeamOrganization(organization, 'BILLING');
         const plan = await this.planService.requireActivePlanByPublicId(parsed.plan_id);
         const subscription = await this.repository.findByPublicId(
           subscription_public_id,
@@ -376,6 +759,14 @@ export class SubscriptionService {
     );
     let providerPlanUpdated = false;
 
+    // audit H2: fail closed before any local write when a Stripe-backed subscription
+    // would change to a plan with no Stripe price for its cycle (extracted to keep
+    // changePlan's cognitive complexity within budget).
+    assertProviderPriceForStripeBackedPlanChange(
+      subscription.provider_subscription_id,
+      providerPriceId,
+    );
+
     // Stripe network call — outside any database context. Fail-closed: a provider
     // failure throws ServiceUnavailableError here (before any local write), so the
     // local plan never silently diverges from Stripe. Local-only subscriptions
@@ -384,7 +775,7 @@ export class SubscriptionService {
       await this.paymentProvider.updateSubscriptionPrice(
         subscription.provider_subscription_id,
         providerPriceId,
-        idempotencyKey,
+        buildStripeIdempotencyKey('sub-change-plan', organization_public_id, idempotencyKey),
       );
       providerPlanUpdated = true;
     }
@@ -404,7 +795,17 @@ export class SubscriptionService {
         }),
       );
       if (!updated) throw new NotFoundError('Subscription');
-      return updated;
+      // F2: the plan change is now committed, so the new ceiling is in effect. Auto-suspend the
+      // most-recently-joined non-owner members down to the new allowance (best-effort; never rolls
+      // back the committed plan change). Runs before the Stripe quantity sync so it reconciles to the
+      // post-suspension headcount.
+      await this.suspendExcessMembersForDowngrade(organization_public_id, plan);
+      // REQ-4: a plan change can change the seat allowance and proration, so reconcile the
+      // Stripe subscription quantity to the current member count out-of-band (never inline —
+      // a Stripe outage must not fail the plan change). No-op for local-only subscriptions.
+      this.enqueueSeatQuantitySync(organization_public_id, idempotencyKey);
+      const [decorated] = await this.decorateWithSeatCounts(organization_public_id, [updated]);
+      return decorated!;
     } catch (error) {
       if (providerPlanUpdated && subscription.provider_subscription_id) {
         const previousProviderPriceId = this.paymentProvider.getProviderPriceId(
@@ -432,6 +833,9 @@ export class SubscriptionService {
       async () => {
         const organization =
           await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        // Personal organizations cannot manage billing — reject before the subscription
+        // lookup so a personal org gets 422 (capability unavailable), not 404.
+        assertTeamOrganization(organization, 'BILLING');
         const subscription = await this.repository.findByPublicId(
           subscription_public_id,
           organization.id,
@@ -454,7 +858,7 @@ export class SubscriptionService {
       if (subscription.provider_subscription_id) {
         await this.paymentProvider.cancelSubscriptionImmediately(
           subscription.provider_subscription_id,
-          idempotencyKey,
+          buildStripeIdempotencyKey('sub-cancel-now', organization_public_id, idempotencyKey),
         );
       }
       const canceled = await withOrganizationDatabaseContext(organization_public_id, async () =>
@@ -465,14 +869,17 @@ export class SubscriptionService {
         }),
       );
       if (!canceled) throw new NotFoundError('Subscription');
-      return canceled;
+      const [decoratedCanceled] = await this.decorateWithSeatCounts(organization_public_id, [
+        canceled,
+      ]);
+      return decoratedCanceled!;
     }
 
     // Stripe network call — outside any database context.
     if (subscription.provider_subscription_id) {
       await this.paymentProvider.cancelSubscriptionAtPeriodEnd(
         subscription.provider_subscription_id,
-        idempotencyKey,
+        buildStripeIdempotencyKey('sub-cancel', organization_public_id, idempotencyKey),
       );
     }
 
@@ -485,7 +892,8 @@ export class SubscriptionService {
       }),
     );
     if (!updated) throw new NotFoundError('Subscription');
-    return updated;
+    const [decorated] = await this.decorateWithSeatCounts(organization_public_id, [updated]);
+    return decorated!;
   }
 
   /**
@@ -515,8 +923,17 @@ export class SubscriptionService {
 
     // Stripe network call — outside any database context.
     if (subscription.provider_subscription_id) {
+      // audit L1: stamp a deterministic idempotency key so an org-delete retry
+      // re-issues the SAME cancel (Stripe dedups) instead of an un-keyed duplicate.
+      // No client key exists on the offboarding path, so the provider subscription
+      // id is the stable per-subscription discriminator.
       await this.paymentProvider.cancelSubscriptionImmediately(
         subscription.provider_subscription_id,
+        buildStripeIdempotencyKey(
+          'sub-cancel-offboarding',
+          organization_public_id,
+          subscription.provider_subscription_id,
+        ),
       );
     }
     await withOrganizationDatabaseContext(organization_public_id, async () =>
@@ -538,6 +955,9 @@ export class SubscriptionService {
       async () => {
         const organization =
           await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        // Personal organizations cannot manage billing — reject before the subscription
+        // lookup so a personal org gets 422 (capability unavailable), not 404.
+        assertTeamOrganization(organization, 'BILLING');
         const subscription = await this.repository.findByPublicId(
           subscription_public_id,
           organization.id,
@@ -555,7 +975,7 @@ export class SubscriptionService {
     if (subscription.provider_subscription_id) {
       await this.paymentProvider.resumeSubscription(
         subscription.provider_subscription_id,
-        idempotencyKey,
+        buildStripeIdempotencyKey('sub-resume', organization_public_id, idempotencyKey),
       );
     }
 
@@ -575,6 +995,97 @@ export class SubscriptionService {
       }),
     );
     if (!updated) throw new NotFoundError('Subscription');
-    return updated;
+    const [decorated] = await this.decorateWithSeatCounts(organization_public_id, [updated]);
+    return decorated!;
+  }
+
+  /**
+   * Lists Stripe invoices for the organization's billing customer, one cursor page at a time.
+   *
+   * @remarks
+   * - **Algorithm:** validates the cursor query (`limit` ≤ 100, `after` = a Stripe invoice id),
+   *   fetches one Stripe page via `starting_after` + `limit`, and returns the standard list envelope
+   *   (`items`/`limit`/`has_more`/`next_cursor`). The next cursor is the last row's Stripe id when
+   *   Stripe reports `has_more`; `total` is always `null` (Stripe exposes no count).
+   * - **Notes:** returns an empty page when Stripe is not configured or the org has no provider
+   *   customer yet. Invoices live in Stripe, not our DB — this is a cursor passthrough, not a keyset
+   *   query, so it does not use the DB list helpers.
+   */
+  async listInvoices(organization_public_id: string, query: unknown) {
+    const parsed = validateListInvoicesQuery(query);
+    // `limit` is optional in the DTO (kept optional in OpenAPI) — apply the shared default here.
+    const limit = parsed.limit ?? PAGINATION.DEFAULT_LIMIT;
+    const emptyPage = {
+      items: [] as ReturnType<typeof BillingAccountSerializer.invoices>,
+      total: null,
+      limit,
+      has_more: false,
+      next_cursor: null as string | null,
+    };
+    const customerId = await this.resolveStripeCustomerId(organization_public_id);
+    if (!(customerId && isStripeConfigured())) {
+      return emptyPage;
+    }
+    const page = await listStripeInvoices(customerId, {
+      limit,
+      ...(parsed.after ? { startingAfter: parsed.after } : {}),
+    });
+    const items = BillingAccountSerializer.invoices(page.data);
+    const lastItem = items.at(-1);
+    return {
+      items,
+      total: null,
+      limit,
+      has_more: page.has_more,
+      next_cursor: page.has_more ? (lastItem?.id ?? null) : null,
+    };
+  }
+
+  /**
+   * Lists card payment methods on the organization's Stripe customer.
+   */
+  async listPaymentMethods(organization_public_id: string) {
+    const customerId = await this.resolveStripeCustomerId(organization_public_id);
+    if (!(customerId && isStripeConfigured())) {
+      return [];
+    }
+    const [methods, defaultId] = await Promise.all([
+      listStripePaymentMethods(customerId),
+      retrieveStripeCustomerDefaultPaymentMethodId(customerId),
+    ]);
+    return BillingAccountSerializer.paymentMethods(methods, defaultId);
+  }
+
+  /**
+   * Creates a SetupIntent `client_secret` so the frontend can add a card in-app.
+   */
+  async createPaymentMethodSetup(organization_public_id: string, idempotencyKey?: string) {
+    const customerId = await this.resolveStripeCustomerId(organization_public_id);
+    if (!customerId) {
+      throw new UnprocessableEntityError('errors:subscriptionNotMutable');
+    }
+    if (!isStripeConfigured()) {
+      return { client_secret: null as string | null };
+    }
+    const client_secret = await createStripeSetupIntent(
+      customerId,
+      omitUndefined({
+        idempotencyKey: idempotencyKey
+          ? buildStripeIdempotencyKey('pm-setup', organization_public_id, idempotencyKey)
+          : undefined,
+      }),
+    );
+    return { client_secret };
+  }
+
+  /** Resolves the Stripe customer id from the org's active subscription row. */
+  private async resolveStripeCustomerId(organization_public_id: string): Promise<string | null> {
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+      assertTeamOrganization(organization, 'BILLING');
+      const subscription = await this.repository.findActiveByOrganization(organization.id);
+      return subscription?.provider_customer_id ?? null;
+    });
   }
 }

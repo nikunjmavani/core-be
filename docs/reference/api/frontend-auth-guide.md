@@ -8,7 +8,10 @@ frontend exactly what to do.
 > Backend internals live elsewhere: credential types and rate limits in
 > [authentication.md](../security/authentication.md); cookie/CSRF posture in
 > [csrf-and-session-cookies.md](../security/csrf-and-session-cookies.md); the organization model in
-> [personal-team-organizations.md](../architecture/personal-team-organizations.md).
+> [personal-vs-team-organizations.md](../architecture/personal-vs-team-organizations.md).
+>
+> Realigning FE calls (passkeys, notifications, preferences, webhooks, MFA, sessions, org logo,
+> billing gating) to the real routes: [frontend-endpoint-mapping.md](frontend-endpoint-mapping.md).
 
 ---
 
@@ -66,7 +69,7 @@ flowchart LR
 | `Authorization: Bearer <access_token>` | every authenticated request | **Yes** (authed routes) | The in-memory access token. Carries the active `org` claim. |
 | `Content-Type: application/json` | any request with a JSON body | **Yes** for JSON bodies | — |
 | `X-Idempotency-Key: <uuid>` | `POST`/`PUT`/`PATCH` writes | **Required on 13 routes**, optional elsewhere | `422` if missing on a required route. See [Idempotency keys](#idempotency-keys). |
-| `X-Captcha-Token: <widget token>` | public auth forms | **Required only when Turnstile is configured** (production) | From the Cloudflare Turnstile widget. Routes: `login`, `mfa/login`, `magic-link/send`, `password/forgot`, `password/reset`, `email/verify`, OAuth init. |
+| `X-Captcha-Token: <widget token>` | public auth forms | **Required only when Turnstile is configured** (production) | From the Cloudflare Turnstile widget. Routes: `login`, `mfa/login`, `email/send-code`, `password/forgot`, `password/reset`, `email/verify`, OAuth init. |
 | `X-CSRF-Token: <csrf_token cookie value>` | `POST /auth/refresh` **only**, **only if you don't send `Origin`** | Browsers: **not needed** | Browsers always send `Origin`, which satisfies the refresh origin check. This is a fallback for non-browser clients. |
 | `X-Organization-Id: <org_…>` | **upload domain routes only** | Upload only | The flat org-scoped routes **ignore** it (org comes from the token claim). Do **not** send it elsewhere. |
 
@@ -94,6 +97,8 @@ You don't watch a clock. When a call returns `401` (token expired), refresh once
 
 | Step | Request | Result |
 |------|---------|--------|
+| **Email code — send** | `POST /auth/email/send-code` | `201` (uniform — no enumeration). Emails a one-time alphanumeric sign-in code; auto-creates a passwordless account for an unknown email. |
+| **Email code — login** | `POST /auth/email/login` | `201` → `{ data: { access_token } }` + `Set-Cookie: session_id` (or `{ mfa_required, mfa_session_token }`). Verifies the code, logging in or completing first-time sign-up. |
 | Login | `POST /auth/login` | `201` → `{ data: { access_token } }` + `Set-Cookie: session_id` |
 | Use | any route + `Authorization: Bearer` | `200/201/…` |
 | Expiry | any route | `401` → trigger refresh |
@@ -129,19 +134,21 @@ is issued — the same `session_id` keeps working, and a later refresh re-mints 
 {
   "data": {
     "user": { "id": "usr_…", "email": "…", "is_mfa_enabled": false },
-    "active_organization": { "id": "org_…", "type": "TEAM", "capabilities": { "can_invite_members": true, "…": "…" } },
+    "active_organization": { "id": "org_…", "type": "TEAM" },
     "my_permissions": ["organization:read", "membership:manage"],
     "global_role": null,
-    "organizations": [{ "id": "org_…", "type": "TEAM", "capabilities": { "…": "…" }, "is_active": true }]
+    "organizations": [{ "id": "org_…", "type": "TEAM", "is_active": true }]
   }
 }
 ```
 
-- **`capabilities` vs `my_permissions` — render on the intersection.** `capabilities` describes what the org **type** allows (a personal org can never invite members → `can_invite_members: false`); `my_permissions` is what **this caller** may do in the active org (resolved permission codes). Show an action only when the capability is available **and** the caller holds the permission.
+- **`type` vs `my_permissions` — render on the intersection.** The org `type` says what the org **kind** allows (only a `TEAM` org can invite members); `my_permissions` is what **this caller** may do in the active org (resolved permission codes). Show a team-only action only when `type === 'TEAM'` **and** the caller holds the permission.
 - **`organizations`** is the org-switcher list, each flagged `is_active` — render it directly.
-- **Switch flow:** call `POST /auth/switch-to-organization` (or `…-personal`) → swap your in-memory Bearer for the returned `access_token` → re-fetch `GET /auth/me/context` to repaint identity, capabilities, and permissions for the new org.
+- **Switch flow (one call):** `POST /auth/switch-to-organization` (or `…-personal`) re-mints the token **and returns the active-org delta** — `{ access_token, active_organization, my_permissions, global_role }`. Swap your in-memory Bearer for the new `access_token`, repaint from `active_organization` + `my_permissions`, and flip `is_active` in your cached `organizations[]`. The `user` and org-switcher list are stable across a switch, so **no follow-up `GET /auth/me/context` is needed** — re-fetch the full context only on a cold reload.
+- **Join flow:** `POST /tenancy/invitations/{invitation_id}/accept` returns the joined `organization_id`; pass it straight to `POST /auth/switch-to-organization` (above) to land on the new team's dashboard — no lookup in between.
+  - **Invited user with no account (first time):** the invite already created a passwordless, unverified **placeholder** for that email, and `accept` requires a **verified** email (else `403 errors:invitationRequiresVerifiedEmail` — a forwarded invite must not be claimable by the wrong person). So the new user first authenticates in a way that proves email control: **email verification-code** (`/auth/email/send-code` → `/auth/email/login`) or **OAuth** both claim the placeholder, verify the email, and provision their personal org in one step. After that, the same `accept` → (`organization_id`) → `switch-to-organization` tail applies. Don't hard-block the UI when `is_email_verified` is false — route the user through the email-code login, then call `accept`.
 
-This works **identically for personal and team organizations** — there is one route surface, and the `capabilities` flags (not different URLs) tell the UI what to show. See [route-consistency-and-org-model.md](route-consistency-and-org-model.md).
+This works **identically for personal and team organizations** — there is one route surface, and the org `type` (not different URLs) tells the UI what to show. See [route-consistency-and-org-model.md](route-consistency-and-org-model.md).
 
 `GET /users/me` (profile + deployment `capabilities`) and `GET /tenancy/organizations` (paginated org list) remain available if you need them individually.
 
@@ -151,6 +158,52 @@ This works **identically for personal and team organizations** — there is one 
 > to one active org stay plural: `GET|POST /api/v1/tenancy/organizations`,
 > `GET /api/v1/tenancy/organizations/by-slug/{slug}`, and cross-org invitation actions
 > `POST /api/v1/tenancy/invitations/{invitation_id}/accept|decline`.
+
+---
+
+## Entry flows → how many calls to the dashboard
+
+Every way into the app converges on the same tail: **obtain an access token, then make one call — `GET /auth/me/context` ([above](#active-organization--switching)) — to paint the dashboard.** So "land on the dashboard" costs *(calls to obtain a token)* **+ 1**. The only exception is an org **switch**, which returns the active-org delta inline and needs no `/auth/me/context` follow-up.
+
+```mermaid
+sequenceDiagram
+  participant FE as Frontend SPA
+  participant API as core-be
+  Note over FE,API: step 1 — obtain an access token (any entry flow below)
+  FE->>API: POST /auth/login  [or email verification-code login / oauth callback / passkey verify / refresh]
+  alt user has MFA, or org policy requires it
+    API-->>FE: 201 { mfa_required: true, mfa_session_token }
+    FE->>API: POST /auth/mfa/login { mfa_session_token, totp_code }
+  end
+  API-->>FE: 201 { access_token, session_id }  + Set-Cookie session_id
+  Note over FE: keep access_token in memory
+  FE->>API: GET /auth/me/context   [Authorization: Bearer]
+  API-->>FE: 200 { user, active_organization, my_permissions, global_role, organizations[] }
+  Note over FE: dashboard painted
+```
+
+The first-factor entry points (`login`, `email/send-code`, `email/login`, `oauth/.../callback`, `webauthn/authenticate/verify`, `password/reset`) all return the **same discriminated body** — branch on the field, **not** the HTTP status (every POST here is `201`):
+
+- `{ access_token, session_id }` → logged in; store the token and call `GET /auth/me/context`.
+- `{ mfa_required: true, mfa_session_token }` → collect a TOTP or recovery code and call `POST /auth/mfa/login`, which then returns `{ access_token, session_id }`.
+
+| Entry flow | API call sequence (in order) | Terminal success body | Calls to dashboard |
+|------------|------------------------------|-----------------------|--------------------|
+| **Email + password — login** | `POST /auth/login` → `GET /auth/me/context` | `{ access_token, session_id }` *or* `{ mfa_required }` | **2** (+1 if MFA) |
+| **MFA second factor** *(continues any first factor)* | `POST /auth/mfa/login` → `GET /auth/me/context` | `{ access_token, session_id }` | the **+1** above |
+| **Email verification-code / email OTP** | `POST /auth/email/send-code` → `POST /auth/email/login` → `GET /auth/me/context` | `{ access_token, session_id }` — unknown emails are auto-signed-up | **3** (+1 if MFA) |
+| **OAuth (Google / GitHub / …)** | `GET /auth/oauth/{provider}` *(redirect to provider)* → `GET /auth/oauth/{provider}/callback` → `GET /auth/me/context` | `{ access_token, session_id }` | **3** (+1 if MFA; optional `GET /auth/oauth/providers` to list) |
+| **WebAuthn / passkey** | `POST /auth/webauthn/authenticate/options` → `POST /auth/webauthn/authenticate/verify` → `GET /auth/me/context` | `{ access_token, session_id }` | **3** (+1 if MFA) |
+| **Silent resume (app boot / reload)** | `POST /auth/refresh` → `GET /auth/me/context` | `{ access_token }` — no `session_id`; restores the previously-active `org` | **2** |
+| **Forgot / reset password** | `POST /auth/password/forgot` → `POST /auth/password/reset` → `GET /auth/me/context` | `{ access_token, session_id }` — logs straight in | **3** (+1 if MFA) |
+| **Invited teammate → land in the team** | *onboard via email verification-code / OAuth (2–3)* → `POST /tenancy/invitations/{invitation_id}/accept` → `POST /auth/switch-to-organization` | `{ access_token, active_organization, my_permissions, global_role }` — switch delta, no `/auth/me/context` needed | onboarding **+ 2** |
+
+Notes:
+
+- **Two-step flows** (email verification-code, OAuth, passkey) cost an extra call because the first request only *starts* the challenge — send the code / redirect to the provider / fetch assertion options — and the **second** request is the one that returns the access token.
+- **Captcha:** the public auth POSTs may require `X-Captcha-Token` when Turnstile is configured — see [Headers the client sends](#headers-the-client-sends).
+- **No `session_id` on refresh:** `POST /auth/refresh` returns only `{ access_token }`; the `session_id` cookie is rotated via `Set-Cookie`, not echoed in the body.
+- **Server-internal sequences** (services, DB, event bus, mail) for these journeys live in [`src/FLOWS.md`](../../../src/FLOWS.md) — this table is the **client-facing** view (HTTP calls only), so the two do not overlap.
 
 ---
 
@@ -293,6 +346,209 @@ The four rules that keep it correct:
 
 ---
 
+## Typed contracts & `landOnDashboard()` helpers
+
+The reference client above is the **transport layer** (Bearer attach, single-flight refresh, switching). This section adds the **TypeScript response contracts** and a **`landOnDashboard()` helper per entry flow** that composes those entry points with the single `GET /auth/me/context` paint. Rename `auth.js` → `auth.ts` to adopt the types; the snippets below live in the **same module**, so they share the in-memory `accessToken` and the `apiFetch` / `login` / `completeMfaLogin` / `switchOrganization` / `bootstrap` defined above — nothing from the transport layer is re-implemented here.
+
+### Response contracts
+
+Each interface mirrors a backend serializer; the `// source:` path is the single source of truth — keep the interface in step if that serializer changes.
+
+```ts
+// types.ts
+// source: src/shared/utils/http/response.util.ts
+export interface Envelope<T> { data: T; meta: { request_id: string } }
+
+// source: src/domains/auth/auth.serializer.ts → AuthSerializer.accessToken
+export interface AccessTokenResponse {
+  access_token: string;
+  session_id?: string;          // present on login/email verification-code/oauth/passkey/mfa; omitted by /auth/refresh
+}
+// source: src/domains/auth/auth.serializer.ts → AuthSerializer.mfaRequired
+export interface MfaRequiredResponse { mfa_required: true; mfa_session_token: string }
+
+/** First-factor entry points return one of these — discriminate on `mfa_required`. */
+export type FirstFactorResponse = AccessTokenResponse | MfaRequiredResponse;
+
+// source: src/domains/auth/auth.serializer.ts → AuthSerializer.verificationCodeSent
+export interface VerificationCodeSentResponse { message: string; expires_in_minutes: number }
+
+// source: src/domains/tenancy/sub-domains/organization/organization-capability.ts → OrganizationCapabilities
+export interface OrganizationCapabilities {
+  can_invite_members: boolean;
+  can_manage_members: boolean;
+  can_manage_roles: boolean;
+  can_transfer_ownership: boolean;
+  can_delete: boolean;
+  can_manage_billing: boolean;
+}
+// source: src/domains/tenancy/sub-domains/organization/organization.types.ts → OrganizationOutput
+export interface Organization {
+  id: string;                   // org_…
+  name: string;
+  slug: string | null;          // null for a PERSONAL org
+  type: 'PERSONAL' | 'TEAM';
+  status: string;
+  logo_url: string | null;
+  capabilities: OrganizationCapabilities;
+  created_at: string;           // ISO-8601
+  updated_at: string;
+}
+// source: src/shared/constants/roles.constants.ts → GlobalRole
+export type GlobalRole = 'super_admin' | 'admin' | 'user';
+
+// source: src/domains/user/user.types.ts → UserOutput (self projection)
+export interface MeUser {
+  id: string;                   // usr_…
+  email: string;
+  is_email_verified: boolean;
+  is_mfa_enabled: boolean;
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  capabilities?: { personal_organizations: boolean; team_organizations: boolean };
+  personal_organization_id?: string | null;   // null when personal orgs are disabled (team-only deployment)
+}
+// source: src/domains/auth/auth-me-context.types.ts → AuthMeContextOutput
+export interface MeContext {
+  user: MeUser;
+  active_organization: Organization | null;             // null → no org in scope; route to onboarding
+  my_permissions: string[];                              // e.g. ["organization:read", "membership:manage"]
+  global_role: GlobalRole | null;                        // null for a standard user
+  organizations: Array<Organization & { is_active: boolean }>;   // org-switcher list
+}
+// source: src/domains/auth/auth.serializer.ts → AuthSerializer.accessTokenWithActiveOrganization
+export interface SwitchResponse {
+  access_token: string;
+  active_organization: Organization;
+  my_permissions: string[];
+  global_role: GlobalRole | null;
+}
+```
+
+### The one paint call + a helper per flow
+
+`getMeContext()` is the single dashboard read; each `landOnDashboard.*` composes an entry flow with it. Gate UI on the **intersection** of `my_permissions` and `active_organization.capabilities` (see [Active organization & switching](#active-organization--switching)).
+
+```ts
+// auth.ts (same module as the reference client) ------------------------------
+import type {
+  Envelope, FirstFactorResponse, VerificationCodeSentResponse, MeContext,
+} from './types';
+
+// --- thin helpers for public (unauthenticated) auth routes: no Bearer, no refresh-retry
+async function postPublic<T>(path: string, body: unknown, captchaToken?: string): Promise<T> {
+  const res = await fetch(`${API}${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...(captchaToken ? { 'X-Captcha-Token': captchaToken } : {}) },
+    body: body == null ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`request_failed_${res.status}`);
+  return (await res.json() as Envelope<T>).data;
+}
+async function getPublic<T>(path: string): Promise<T> {
+  const res = await fetch(`${API}${path}`, { method: 'GET', credentials: 'include' });
+  if (!res.ok) throw new Error(`request_failed_${res.status}`);
+  return (await res.json() as Envelope<T>).data;
+}
+
+// --- the single authoritative dashboard read ---------------------------------
+export async function getMeContext(): Promise<MeContext> {
+  const res = await apiFetch('/auth/me/context');       // Bearer attach + refresh-on-401 handled by apiFetch
+  if (!res.ok) throw new Error('me_context_failed');
+  return (await res.json() as Envelope<MeContext>).data;
+}
+
+// --- shared tail: token-or-MFA → dashboard -----------------------------------
+export type LandResult =
+  | { status: 'mfa_required'; mfaSessionToken: string }  // collect a code, then landOnDashboard.completeMfa(...)
+  | { status: 'ready'; dashboard: MeContext };
+
+async function finishFirstFactor(resp: FirstFactorResponse): Promise<LandResult> {
+  if ('mfa_required' in resp) return { status: 'mfa_required', mfaSessionToken: resp.mfa_session_token };
+  accessToken = resp.access_token;                       // store in-memory (shared module variable)
+  return { status: 'ready', dashboard: await getMeContext() };
+}
+
+// --- entry points the reference client doesn't already have ------------------
+export const sendEmailCode = (email: string, captcha?: string) =>
+  postPublic<VerificationCodeSentResponse>('/auth/email/send-code', { email }, captcha);
+export const emailLogin = (email: string, code: string) =>
+  postPublic<FirstFactorResponse>('/auth/email/login', { email, code });
+export const listOAuthProviders = () => getPublic<{ providers: string[] }>('/auth/oauth/providers');
+export const startOAuth = (provider: string) => getPublic<{ url: string }>(`/auth/oauth/${provider}`); // then redirect to .url
+export const passkeyOptions = (email?: string) =>
+  postPublic<unknown>('/auth/webauthn/authenticate/options', { email });   // feed to navigator.credentials.get()
+export const verifyPasskey = (assertion: unknown) =>
+  postPublic<FirstFactorResponse>('/auth/webauthn/authenticate/verify', assertion);
+export const requestPasswordReset = (email: string, captcha?: string) =>
+  postPublic<{ message: string }>('/auth/password/forgot', { email }, captcha);
+export const resetPassword = (token: string, password: string, captcha?: string) =>
+  postPublic<FirstFactorResponse>('/auth/password/reset', { token, password }, captcha);
+export const acceptInvitation = (invitationId: string, token: string) =>   // authenticated write → apiFetch
+  apiFetch(`/tenancy/invitations/${invitationId}/accept`, { method: 'POST', body: JSON.stringify({ token }) })
+    .then(async (r) => {
+      if (!r.ok) throw new Error('accept_failed');
+      return (await r.json() as Envelope<{ organization_id: string }>).data;
+    });
+
+// --- one helper per entry flow: returns the painted dashboard (or an MFA gate)
+export const landOnDashboard = {
+  // 3 calls — send-code + login + /me/context (unknown emails are auto-signed-up)
+  emailCodeLogin: async (email: string, code: string) => finishFirstFactor(await emailLogin(email, code)),
+
+  // 2 calls (+1 if MFA) — login + /me/context; the reference login() sets the token on the non-MFA branch
+  login: async (email: string, password: string, captcha?: string): Promise<LandResult> => {
+    const data = await login(email, password, captcha);
+    return 'mfa_required' in data
+      ? { status: 'mfa_required', mfaSessionToken: data.mfa_session_token }
+      : { status: 'ready', dashboard: await getMeContext() };
+  },
+
+  // the +1 for any MFA flow — mfa/login + /me/context. Recovery code: completeMfaLogin posts { recovery_code } instead.
+  completeMfa: async (mfaSessionToken: string, totpCode: string, captcha?: string) => {
+    await completeMfaLogin(mfaSessionToken, totpCode, captcha);   // reference client fn (sets the token)
+    return getMeContext();
+  },
+
+  // 3 calls — send + verify + /me/context (user types the emailed code between the two)
+  emailCodeSend: (email: string, captcha?: string) => sendEmailCode(email, captcha),
+  emailLogin: async (email: string, code: string) => finishFirstFactor(await emailLogin(email, code)),
+
+  // 3 calls — start (redirect to provider) + callback + /me/context
+  oauthStart: (provider: string) => startOAuth(provider),        // returns { url } → window.location = url
+  oauthComplete: async (provider: string, code: string, state: string) =>
+    finishFirstFactor(await getPublic<FirstFactorResponse>(
+      `/auth/oauth/${provider}/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`)),
+
+  // 3 calls — options + verify + /me/context
+  passkeyOptions: (email?: string) => passkeyOptions(email),
+  passkeyVerify: async (assertion: unknown) => finishFirstFactor(await verifyPasskey(assertion)),
+
+  // 3 calls — forgot + reset + /me/context (user clicks the emailed link between the two)
+  passwordForgot: (email: string, captcha?: string) => requestPasswordReset(email, captcha),
+  passwordReset: async (token: string, password: string, captcha?: string) =>
+    finishFirstFactor(await resetPassword(token, password, captcha)),
+
+  // 2 calls — silent refresh + /me/context; null when there is no live session
+  resume: async (): Promise<MeContext | null> => (await bootstrap()) ? getMeContext() : null,
+
+  // invited teammate: accept → switch into the team → refresh context (the switcher list just gained an org).
+  // Onboarding (email verification-code / OAuth) happens via one of the flows above before this runs.
+  acceptInvitationAndEnter: async (invitationId: string, token: string): Promise<MeContext> => {
+    const { organization_id } = await acceptInvitation(invitationId, token);
+    await switchOrganization(organization_id);                   // reference client fn — re-mints the token
+    return getMeContext();
+  },
+};
+```
+
+---
+
 ## Idempotency keys
 
 The server **requires** `X-Idempotency-Key` on these **13 write routes** (returns `422
@@ -362,8 +618,8 @@ The auth/tenancy flow was reshaped across mid-2026 — if you integrated against
 - **`X-Organization-Id` is no longer used by the app routes** — only the upload domain still reads it.
 - **`/auth/mfa/login` now accepts `X-Captcha-Token`** (bot-protection at the MFA step).
 
-See [personal-team-organizations.md](../architecture/personal-team-organizations.md) for the full
-organization model and capability flags.
+See [personal-vs-team-organizations.md](../architecture/personal-vs-team-organizations.md) for the full
+organization model and deployment modes.
 
 ---
 
@@ -371,7 +627,7 @@ organization model and capability flags.
 
 - [authentication.md](../security/authentication.md) — auth methods, rate limits, CAPTCHA boot guard
 - [csrf-and-session-cookies.md](../security/csrf-and-session-cookies.md) — cookie + CSRF posture, Origin checks
-- [personal-team-organizations.md](../architecture/personal-team-organizations.md) — org model, `org` claim, switching
+- [personal-vs-team-organizations.md](../architecture/personal-vs-team-organizations.md) — org model, `org` claim, switching
 - [response-codes.md](response-codes.md) — method→status policy, error envelope
 - [idempotency.md](../reliability/idempotency.md) — idempotency-key semantics
 - [api-versioning.md](api-versioning.md) — `/api/v1`, deprecation headers

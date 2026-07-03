@@ -8,7 +8,6 @@ import {
   resolveOutboundDefaults,
   type OutboundIntegrationName,
 } from '@/infrastructure/outbound/outbound-defaults.js';
-import { redactOutboundHeaders } from '@/infrastructure/outbound/outbound-redaction.js';
 
 const REQUEST_ID_HEADER = 'X-Request-Id';
 
@@ -131,24 +130,4 @@ export async function outboundFetch(options: OutboundFetchOptions): Promise<Resp
     }
     throw classifyOutboundError(error, options.name);
   });
-}
-
-/**
- * Builds a redacted log/breadcrumb payload for an outbound HTTP attempt — header values
- * pass through {@link redactOutboundHeaders} so Authorization and API key tokens never
- * land in logs.
- */
-export function buildOutboundFetchLogContext(options: {
-  url: string;
-  init?: RequestInit;
-  requestId?: string;
-}): Record<string, unknown> {
-  return {
-    url: options.url,
-    method: options.init?.method ?? 'GET',
-    requestId: options.requestId,
-    headers: options.init?.headers
-      ? redactOutboundHeaders(options.init.headers as Headers)
-      : undefined,
-  };
 }

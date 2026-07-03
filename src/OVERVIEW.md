@@ -71,7 +71,7 @@ Bounded contexts live under [src/domains/](src/domains/). Each domain owns its r
 | Domain | Routes | Purpose |
 | --- | --- | --- |
 | [audit](src/domains/audit/) | `/api/v1/audit` | Append-only audit log of security- and governance-relevant actions (`audit-emission` pattern). Read API is global-admin only. |
-| [auth](src/domains/auth/) | `/api/v1/auth` | Authentication: passwords (argon2id), magic links, OAuth, MFA (TOTP), WebAuthn, sessions. Issues short-lived JWTs and Origin-checked session cookies. |
+| [auth](src/domains/auth/) | `/api/v1/auth` | Authentication: passwords (argon2id), email verification-code login, OAuth, MFA (TOTP), WebAuthn, sessions. Issues short-lived JWTs and Origin-checked session cookies. |
 | [billing](src/domains/billing/) | `/api/v1/billing` | Plans, subscriptions, and the Stripe integration. Stripe is authoritative; webhooks reconcile state via the `subscription-change-flow` and `dunning-flow`. |
 | [notify](src/domains/notify/) | `/api/v1/notify` | In-app notifications and outbound webhook delivery to customer endpoints (transactional outbox + retries + DLQ). |
 | [tenancy](src/domains/tenancy/) | `/api/v1/tenancy` | Organizations, memberships, member roles + permissions, invitations, organization API keys. Owner of `tenant-isolation` enforcement. |
@@ -95,7 +95,7 @@ These patterns are implemented identically across the codebase. See [src/PATTERN
 
 Top user journeys that touch more than one domain. Full sequence diagrams and failure modes in [src/FLOWS.md](src/FLOWS.md).
 
-- **`signup-flow`** — magic-link sign-up across `auth` (verification token, JWT issuance) → `notify`/mail (delivery) → `user` (profile materialization).
+- **`signup-flow`** — email verification-code sign-up across `auth` (verification token, JWT issuance) → `notify`/mail (delivery) → `user` (profile materialization).
 - **`login-flow`** — password + optional MFA across `auth` (challenge, lockout) → audit (`audit-emission`).
 - **`organization-invitation-flow`** — admin invites teammate across `tenancy` (membership materialization) → `notify`/mail → `auth` (signup-flow for new users).
 - **`subscription-change-flow`** — Stripe webhook reconciliation across `billing` (subscription state) → `notify` (in-app + email) → `audit`.
@@ -105,7 +105,7 @@ Top user journeys that touch more than one domain. Full sequence diagrams and fa
 
 Deliberate business, UX, and security trade-offs encoded as constants. Full rationale and consequences-of-change in [src/POLICIES.md](src/POLICIES.md).
 
-- **`MAGIC_LINK_EXPIRES_IN_MINUTES = 15`** — security/UX trade-off on the verification-token replay window.
+- **`VERIFICATION_CODE_TTL_MINUTES = 15`** — security/UX trade-off on the verification-token replay window.
 - **`ACCESS_TOKEN_EXPIRY_SECONDS = 900`** — short JWT lifetime; refresh via Origin-checked session cookie.
 - **`MAX_FAILED_LOGIN_ATTEMPTS = 10` / `ACCOUNT_LOCKOUT_MINUTES = 30`** — credential-stuffing deterrent.
 - **`IDEMPOTENCY_RESPONSE_CACHE_TTL_SECONDS = 86 400`** — mirrors Stripe's 24 h replay window.

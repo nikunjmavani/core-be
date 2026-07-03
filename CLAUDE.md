@@ -8,13 +8,13 @@ For **any new requirement** (new domain, routes, worker, schema, etc.), use the 
 
 `agent-os/` at the repo root is the single source of truth for all AI tooling.
 Cursor reads agents/skills/rules via symlinks (`.cursor/agents → agent-os/agents`, etc.).
-Claude Code reads `agent-os/` directly via `.claude/` symlinks.
+Claude Code reads `agent-os/` directly via `.claude/` symlinks (`agents`, `skills`, `commands`, `hooks`) — there is intentionally **no** `.claude/rules`: Claude Code follows `CLAUDE.md`, while the `.mdc` rule files are Cursor's glob auto-attach (`.cursor/rules`).
 
 | File | Purpose |
 | ---- | ------- |
 | [`agent-os/docs/principles.md`](agent-os/docs/principles.md) | Engineering principles + project identity (full detail) |
-| [`agent-os/docs/skill-triggers.md`](agent-os/docs/skill-triggers.md) | File pattern → skill map (replaces reading 26 sync rules) |
-| [`agent-os/docs/agents-catalog.md`](agent-os/docs/agents-catalog.md) | All 9 agents with descriptions and use-when |
+| [`agent-os/docs/skill-triggers.md`](agent-os/docs/skill-triggers.md) | File pattern → skill map (replaces reading 25 sync rules) |
+| [`agent-os/docs/agents-catalog.md`](agent-os/docs/agents-catalog.md) | All 10 agents with descriptions and use-when |
 | [`agent-os/docs/platform-access.md`](agent-os/docs/platform-access.md) | How to invoke agents on Cursor, Claude Code, Codex |
 | [`agent-os/agents/`](agent-os/agents/) | Agent definition files |
 | [`agent-os/skills/`](agent-os/skills/) | Skill definition files |
@@ -109,7 +109,7 @@ Flat domains (`audit`, `upload`) keep layers at domain root (no `sub-domains/`).
 | Domain (folder) | Sub-domains (folders)                                                                                                                                                           |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **audit**       | (single domain, no sub-domains)                                                                                                                                                 |
-| **auth**        | auth-method (magic-link, oauth as services in auth-method/), auth-session, auth-mfa, auth-webauthn                                                                              |
+| **auth**        | auth-method (email verification-code, oauth as services in auth-method/), auth-session, auth-mfa, auth-mfa-session (Redis MFA challenge-ticket store shared by auth-mfa/auth-webauthn), auth-webauthn |
 | **user**        | user-settings, user-notification-preferences, user-data-export                                                                                                                  |
 | **tenancy**     | organization (organization-settings, organization-notification-policy, organization-api-key), membership (member-invitation), member-roles (member-role-permission), permission |
 | **billing**     | plan, subscription, stripe-webhook                                                                                                                                              |
@@ -139,7 +139,7 @@ A **top-level sub-domain** is a direct child of `sub-domains/<name>/`. A **neste
 | **Organization children** nest under `organization/`                                      | `sub-domains/organization/organization-api-key/`, `organization-settings/`          |
 | **Membership / member-roles children** nest under parent                                  | `sub-domains/membership/member-invitation/`, `member-roles/member-role-permission/` |
 | **Prefix** multi-word names with domain/resource name                                     | `organization-settings`, `member-invitation`, `webhook-event`                       |
-| **Implementation modules** (not separate API resources) stay as services in parent folder | `auth-method/magic-link.service.ts`, `oauth/` under `auth-method/`                  |
+| **Implementation modules** (not separate API resources) stay as services in parent folder | `auth-method/email-login.service.ts`, `oauth/` under `auth-method/`                  |
 | Prefer depth ≤ 4 under `domains/<domain>/` for new work                                   | Flatten if a nested folder has no distinct routes or tests                          |
 
 Nested resources use the **same layer files** (controller, service, repository, validator, serializer, dto, types, schema) and the **same optional** `events/`, `queues/`, `workers/`, `__tests__/` as top-level sub-domains.
@@ -154,36 +154,49 @@ src/infrastructure/
     connection.ts             # Exports: database, sql, closeDatabase
     base-repository.ts        # Abstract BaseRepository with paginate()
     transaction.ts            # withTransaction() helper
-    migrate.ts                # Migration runner
+    resource-quota-lock.util.ts # Advisory-lock guard for resource caps (per-scope count+insert serialization)
     pg-schemas.ts             # Shared pgSchema definitions (auth, tenancy, billing, notify, audit, upload)
+    migration/migrate.ts      # Migration runner (+ migration-version.ts, migration-execution-mode.ts)
+    contexts/                 # DB context wrappers (request / organization / user / retention / worker / system-audit) that set the RLS GUC
+    pool/                     # Pool instrumentation (organization-rls-checkout-counter.ts)
+    safety/                   # Boot guards: assert-database-rls-safety.ts, assert-database-tls-safety.ts
+    utils/                    # batch-delete, capped-count, force-rls-tables.constants, hosted-deployment, database-handle.types
   cache/
     redis.client.ts           # Redis connection (managed service)
+    bullmq-redis.client.ts    # Separate BullMQ Redis client (logical DB) + redis-url / redis-prefix utils
   queue/
     connection.ts             # Re-exports Redis for BullMQ + getBullMQConnectionOptions()
     health.ts                  # BullMQ readiness helper (notification queue client ping)
-    worker-options.ts         # Shared stall / lock tuning for workers
-    dead-letter.ts            # Per-source `<queue>-dlq` + final-retry Sentry from bootstrap
     bootstrap.ts              # Registers repeatable jobs + starts domain workers; attaches DLQ hooks
     scheduler.ts              # Central BullMQ repeatable-job registry (cron index for retention workers)
+    queue.constants.ts        # Shared queue names / constants
+    queue-dashboard.ts        # Bull-Board dashboard wiring (/admin/queues)
+    worker-runtime/           # Worker tuning + lifecycle: worker-options.ts, worker-processor.util.ts, worker-close.util.ts, worker-registration.registry.ts, worker-health.server.ts, scheduler-registry-audit.ts
+    dlq/                      # Dead-letter subsystem: dead-letter.ts (per-source `<queue>-dlq` + final-retry Sentry), dead-letter.repository.ts/.schema.ts, dlq-auto-retry.*, dlq-replay.util.ts, poison-job.util.ts
+    commit-dispatch/          # Post-commit dispatch recovery: commit-dispatch.executor.ts/.store.ts, commit-dispatch-recovery.worker.ts/.processor.ts
   mail/
     mail.service.ts           # Resend email service
     mail-outbox.schema.ts     # Transactional outbox table (shared infrastructure pattern)
     mail-outbox.repository.ts # Outbox persistence (not domain-owned)
-    templates/                # HTML email templates (base, magic-link, invitation)
+    templates/                # HTML email templates (base, verification-code, invitation)
     queues/
       mail.queue.ts           # BullMQ queue + recordOutboxEmail / dispatchOutboxEmail
     workers/
-      mail.worker.ts          # BullMQ processor for email delivery
+      mail.worker.ts          # BullMQ processor for email delivery (+ mail-outbox-sweeper.worker.ts)
   payment/
     stripe.client.ts          # Stripe SDK client + helpers (customer, subscription, webhook)
   storage/
     storage.service.ts        # S3 storage service (presigned URLs, head object)
+    s3-adapter.ts             # S3 adapter behind object-storage.port.ts
+  outbound/                   # Hardened outbound HTTP (outbound-fetch.ts: timeouts, redaction) for third-party calls
   observability/
-    sentry.ts                        # Sentry: errors, tracing, continuous profiling (V8 CpuProfiler), structured logs
-    idempotency-cardinality.constants.ts  # BullMQ queue name for idempotency Redis cardinality sampling
-    idempotency-cardinality.service.ts    # Bounded SCAN + threshold log / Sentry
-    idempotency-cardinality.worker.ts     # Worker processor (repeatable schedule in queue/scheduler.ts)
-    redis-saturation/                     # Redis used_memory/maxmemory ratio + BullMQ waiting-depth sampling (log + Sentry; sampled by dlq-depth worker)
+    sentry/sentry.ts          # Sentry: errors, tracing, continuous profiling (V8 CpuProfiler), structured logs (+ sentry-sampling.util.ts)
+    tracing/                  # OpenTelemetry: otel.ts, trace-context.util.ts, trace-context-job-fields.schema.ts
+    metrics/                  # Prometheus / metrics registry (HTTP, DB-pool, BullMQ, business, event-loop)
+    idempotency-cardinality/  # Bounded SCAN of idempotency keys → threshold log / Sentry (constants, service, worker; scheduled in queue/scheduler.ts)
+    dlq-depth/                # DLQ depth + DB-pool alert sampling (service, worker, constants)
+    redis-saturation/         # Redis used_memory/maxmemory ratio + BullMQ waiting-depth sampling (sampled by dlq-depth worker)
+    unhandled-rejection.handler.ts  # Burst-tolerant unhandledRejection policy
   mcp/
     mcp-server.ts             # MCP (ENABLE_MCP_SERVER, dynamic import; @modelcontextprotocol/sdk optionalDependency): POST /api/v1/mcp
 ```
@@ -228,7 +241,7 @@ src/shared/
 - **Infrastructure only**: Connection (Redis), **scheduler** (repeatable retention cron registry), **bootstrap** that registers schedulers and starts each worker.
 - **Jobs and processors**: Live in **respective domains only** — never in `common` or `shared`.
 - Layout:
-  - `infrastructure/queue/`: `connection.ts`, `health.ts`, `scheduler.ts` (all `upsertJobScheduler` calls for retention), `dead-letter.ts` (per-queue `<name>-dlq` + final-failure Sentry), `bootstrap.ts`
+  - `infrastructure/queue/`: `connection.ts`, `health.ts`, `scheduler.ts` (all `upsertJobScheduler` calls for retention), `dlq/dead-letter.ts` (per-queue `<name>-dlq` + final-failure Sentry), `worker-runtime/` (worker options + lifecycle), `bootstrap.ts`
   - `domains/<domain>/<sub-domain>/queues/*`: Queue definition + enqueue helpers
   - `domains/<domain>/<sub-domain>/workers/*`: BullMQ processor(s)
 - **No** `infrastructure/queue/processors/` — processors live in domains.
@@ -251,7 +264,7 @@ Typical flow: `service` → `eventBus.emit` → handler → `recordOutboxEmail()
 
 | Registrar                               | Event types (examples)                                                    | Side effect                            |
 | --------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------- |
-| `registerAuthMethodEventHandlers`       | `AUTH_EVENT.MAGIC_LINK_REQUESTED`, password reset, email verification     | Mail queue                             |
+| `registerAuthMethodEventHandlers`       | `AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED`, `AUTH_EVENT.PASSWORD_RESET_REQUESTED`  | Mail queue                             |
 | `registerMemberInvitationEventHandlers` | `MEMBER_INVITATION_EVENT.CREATED`, `RESENT`                               | Mail queue                             |
 | `registerNotifyEventHandlers`           | `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED`, `BILLING_EVENT.SUBSCRIPTION_*` | BullMQ notification / webhook delivery |
 
@@ -273,7 +286,7 @@ Billing event helpers and types live with the billing sub-domains that emit them
 - **Request helpers**: `src/shared/utils/http/request.util.ts` exports `getRequestIdentifier(request)` and `requireAuth(request)` — use these in ALL controllers.
 - **Auth**: Fastify auth plugin in `src/shared/middlewares/core/auth.middleware.ts`, decorates `request.auth` (JWT RS256 via `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY`). Session cookie (`session_id`) CSRF model and Origin checks for refresh: **`docs/reference/security/csrf-and-session-cookies.md`**
 - **Tenant**: `X-Organization-Id` header → `request.organizationId` via `src/shared/middlewares/tenant/tenant.middleware.ts`
-- **Organization context / RLS**: Organization context is set only for HTTP requests via tenant middleware (`X-Organization-Id` → Postgres session variable `app.current_organization_id` for RLS). Workers and processors must not call or import `getRequestDatabase()` (enforced by global tests and code review; do not import `request-database.context` under `*.worker.ts` / `*.processor.ts`). Use context wrappers (`withOrganizationContext`, `withGlobalRetentionCleanupDatabaseContext`, `withUserDatabaseContext`, `withSessionRetentionCleanupDatabaseContext`) and pass the returned `databaseHandle` into `createWorker*Repository(databaseHandle)` factories or `runTenantScopedWorkerJob` / `runGlobalRetentionWorkerJob` / `runUserScopedWorkerJob` from `src/infrastructure/queue/worker-runtime/worker-processor.util.ts`. Tenant-scoped jobs must include `organizationPublicId` in the job payload. See `src/infrastructure/database/contexts/retention-database.context.ts`; the `app.global_retention_cleanup` RLS bypass clauses are defined in the consolidated baseline migration `migrations/00000000000000_init.sql`.
+- **Organization context / RLS**: Organization context is set only for HTTP requests via tenant middleware (`X-Organization-Id` → Postgres session variable `app.current_organization_id` for RLS). Workers and processors must not call `getRequestDatabase()` — it returns the GUC-less pool and throws in worker runtime (enforced by `no-direct-db-in-services.global.test.ts`, code review, and the `guard-edits.sh` hook); importing DB-handle types or `setLocalDatabaseConfig` from `request-database.context` is allowed (e.g. `audit-outbox-drain.processor.ts`). Use context wrappers (`withOrganizationContext`, `withGlobalRetentionCleanupDatabaseContext`, `withUserDatabaseContext`, `withSessionRetentionCleanupDatabaseContext`) and pass the returned `databaseHandle` into `createWorker*Repository(databaseHandle)` factories or `runTenantScopedWorkerJob` / `runGlobalRetentionWorkerJob` / `runUserScopedWorkerJob` from `src/infrastructure/queue/worker-runtime/worker-processor.util.ts`. Tenant-scoped jobs must include `organizationPublicId` in the job payload. See `src/infrastructure/database/contexts/retention-database.context.ts`; the `app.global_retention_cleanup` RLS bypass clauses are defined in the consolidated baseline migration `migrations/00000000000000_init.sql`.
 - **DB**: `src/infrastructure/database/connection.ts` singleton + Drizzle queries in repositories; repositories may extend `src/infrastructure/database/base-repository.ts` for `paginate()`
 - **Config**: Environment variables from `src/shared/config/env.config.ts`. Env files are **root only**: `.env.example` is the single committed template; per-environment `.env.<environment>` files (e.g. `.env.development`, `.env.production`) and `.env.local` are gitignored. Hosted environment mapping lives in `tooling/setup/setup.config.json` (canonical); `pnpm github:sync` reads it directly. Project identity constants and the CI composite action are generated via `pnpm tool:generate-project-identity`. Scaffold and push with `pnpm github:sync`. Consistency and remote drift: `pnpm github:sync --check`. Runtime loader (`src/shared/config/load-env-files.ts`) reads `.env.${NODE_ENV ?? 'local'}` (default `local`, matching the env schema), so `.env.local` is the **primary** file for local dev; it falls back to `.env.development` when the primary is missing, and for a non-`local` `NODE_ENV` layers `.env.local` on top as an override (never under production). Scaffold a self-contained `.env.local` (`.env.example` + generated JWT keys/`SECRETS_ENCRYPTION_KEY` + localhost `DATABASE_URL`/`REDIS_URL`) with `pnpm setup:local` or `pnpm setup:local --only-env`.
 
@@ -304,7 +317,7 @@ See **[import-paths.mdc](.cursor/rules/import-paths.mdc)** — `@/` in `src/`, `
 - **Orchestrator** (`src/scripts/seed/bulk.ts` + `bulk-config.ts`): Registers one `DomainSeedModule` per domain (`MODULES`), topologically orders them by `dependsOn` (`orderModules`), runs every `seedReference` first, then every `seedBulk`. Behind a production guard (`production-guard.ts`, `assertBulkSeedAllowed`); reproducible via `SEED`; idempotent (count-and-resume or `onConflictDoNothing`).
 - **Three tiers** (all share the contract/seeders): `pnpm db:seed` (minimal/reference only), `pnpm db:seed:full` (fixed demo data), `pnpm db:seed:bulk` (scaled volume via profiles). Profiles `demo` / `edge` / `load` set base counts; `SCALE` multiplies volume-bearing counts (bounded by `HARD_CAP`); per-knob env overrides `BULK_ORGS`, `BULK_USERS_PER_ORG`, `BULK_AUDIT_MONTHS`, `BULK_AUDIT_PER_ORG_PER_MONTH`. Example: `BULK_PROFILE=load SCALE=5 pnpm db:seed:bulk`.
 - **Route alignment**: Seed data should support what the API exposes. When routes are added, removed, or updated, run **route-catalog** skill (`pnpm routes:catalog`) and **seed-maintainer** so seeds stay aligned with routes.
-- **Conventions and detail**: scoped rule `.cursor/rules/seed-conventions.mdc` (auto-attaches under `src/domains/**` and `src/scripts/seed/**`); skill `.cursor/skills/seed-maintainer/SKILL.md`; overview `src/scripts/seed/OVERVIEW.md`. The domain-structure validator allows `seed/` at domain root.
+- **Conventions and detail**: scoped rule `.cursor/rules/seed-conventions.mdc` (auto-attaches under `src/domains/**` and `src/scripts/seed/**`); skill `.cursor/skills/seed-maintainer/SKILL.md`; overview `src/scripts/seed/seed.overview.md`. The domain-structure validator allows `seed/` at domain root.
 
 ## Context7 (version-wise backend docs)
 
@@ -315,7 +328,7 @@ This repo uses **Context7 MCP** for up-to-date, version-specific documentation. 
 Two committed, secret-free templates define the agent-only MCP set (each mirrored under [`agent-os/mcp/`](agent-os/mcp/)):
 
 - **Default auto-start pair — [`.mcp.default.json`](.mcp.default.json): `codegraph` + `headroom`** (zero-config local CLIs, no token). `pnpm setup:local`, the session-start hook, and the cloud bootstrap declare both in the gitignored `.mcp.json` so they are present before the first prompt.
-- **On-demand set — [`.mcp.example.json`](.mcp.example.json): the full set** (`context7`, `core-be:api`, `neon`, `sentry`, `railway`, `aws`, `stripe`, `semgrep`, `sonarqube`, `redis`, `postman`, `resend`, `codegraph`, `headroom`; most need a provider token). Scaffold with **`pnpm mcp:setup`** — all, or a subset by name (`pnpm mcp:setup stripe sentry`); `pnpm mcp:setup:default` for just the pair, `pnpm mcp:setup --list` for status (per-server runtime/token catalog: **`docs/integrations/agentic-third-party-tooling.md`**). The pair in `.mcp.default.json` mirrors its entries in `.mcp.example.json` — the `mcp-config` global test blocks drift.
+- **On-demand set — [`.mcp.example.json`](.mcp.example.json): the full set** (`context7`, `core-be:api`, `neon`, `sentry`, `railway`, `aws`, `stripe`, `semgrep`, `sonarqube`, `redis`, `postman`, `resend`, `dashboards`, `codegraph`, `headroom`; most need a provider token). Scaffold with **`pnpm mcp:setup`** — all, or a subset by name (`pnpm mcp:setup stripe sentry`); `pnpm mcp:setup:default` for just the pair, `pnpm mcp:setup --list` for status (per-server runtime/token catalog: **`docs/integrations/agentic-third-party-tooling.md`**). The pair in `.mcp.default.json` mirrors its entries in `.mcp.example.json` — the `mcp-config` global test blocks drift.
 
 On **Claude Code web** the live MCP set is loaded by the platform from the environment's MCP settings (web UI), **not** `.mcp.json` — configure `codegraph` + `headroom` there to auto-start, and add others as needed. `Composio`, `Descript`, and `Slack` are intentionally **not** part of this project. See **`docs/integrations/claude-code-web-environment.md`** and **`docs/integrations/agentic-third-party-tooling.md`**.
 
@@ -342,11 +355,11 @@ Every directory under `src/` participates in the in-source documentation system.
 | Layer | File | Owner skill |
 | --- | --- | --- |
 | System narratives | `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` | **system-narrative-maintainer** |
-| Per-folder overviews (hand-written) | `src/<folder>/OVERVIEW.md` at meaningful boundaries | **overview-doc-maintainer** |
+| Per-folder overviews (hand-written) | `src/<folder>/<folder>.overview.md` at meaningful boundaries | **overview-doc-maintainer** |
 | TSDoc on exports (canonical) | every `*.ts` file's `export <kind> <name>` declaration | **tsdoc-export-guard** |
 | Route schema (drives OpenAPI) | `schema: { summary, description, tags }` on Fastify route registrations | **route-schema-doc-guard** |
 
-The hard gate is `pnpm tsdoc:check` — a **budget-driven ratchet** at [`tooling/tsdoc-coverage/budget.json`](tooling/tsdoc-coverage/budget.json). Counts of `MISSING_DESCRIPTION` and `MISSING_REMARKS` may decrease but may not increase; the eventual target is 0/0. Runs on pre-commit (step 4d) and CI (`ci:local`, `ci:quality`).
+The hard gate is `pnpm tsdoc:check` — a **budget-driven ratchet** at [`tooling/tsdoc-coverage/budget.json`](tooling/tsdoc-coverage/budget.json). Counts of `MISSING_DESCRIPTION` and `MISSING_REMARKS` may decrease but may not increase; the eventual target is 0/0. Runs on pre-commit (step 8) and CI (`ci:local`, `ci:quality`).
 
 See [docs/reference/architecture/documentation-system.md](docs/reference/architecture/documentation-system.md) for the full system, including why the auto-generated DOCS.md aggregator was retired.
 

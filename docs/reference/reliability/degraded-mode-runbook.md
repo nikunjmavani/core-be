@@ -37,7 +37,7 @@ availability — that reintroduces double-execution risk for writes.
 **Behavior.** In production the captcha pre-handler
 (`src/shared/middlewares/security/captcha.middleware.ts`) fails **closed**: if Turnstile cannot be
 reached (including when the per-provider circuit breaker is open) the request is rejected with `401
-captchaProviderUnavailable`. Captcha-gated routes — login, signup, magic-link, password-reset
+captchaProviderUnavailable`. Captcha-gated routes — login, email verification-code, password-reset
 request — are therefore unavailable during a Turnstile outage. Fail-open is intentionally **not**
 available in production (it would invite credential stuffing during the outage); the bypass header is
 honored only in non-production.

@@ -51,7 +51,7 @@ jobs:
       GH_VARS_JSON: ${{ toJSON(vars) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 1
 
@@ -60,6 +60,21 @@ jobs:
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
+
+      # The setup:infra provisioning tool lives in the standalone core-infra repo. Check it out
+      # alongside core-be and run it against this checkout via CORE_BE_DIR. Override the repo/ref
+      # with the CORE_INFRA_REPO / CORE_INFRA_REF vars and CORE_INFRA_TOKEN secret when needed.
+      - name: Checkout core-infra (provisioning tool)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ vars.CORE_INFRA_REPO || format('{0}/core-infra', github.repository_owner) }}
+          ref: ${{ vars.CORE_INFRA_REF || 'main' }}
+          token: ${{ secrets.CORE_INFRA_TOKEN || github.token }}
+          path: core-infra
+          fetch-depth: 1
+
+      - name: Install core-infra deps
+        run: pnpm --dir core-infra install --frozen-lockfile
 
       - name: Export GitHub Environment to runner
         run: |
@@ -84,14 +99,20 @@ jobs:
             done
 
       - name: Railway infra status
-        run: pnpm setup:infra:status
+        env:
+          CORE_BE_DIR: ${{ github.workspace }}
+        run: pnpm --dir core-infra setup:infra:status
 
       - name: Railway infra dry-run
-        run: pnpm setup:infra:dry-run
+        env:
+          CORE_BE_DIR: ${{ github.workspace }}
+        run: pnpm --dir core-infra setup:infra:plan
 
       - name: Apply Railway infra (non-dry-run only)
         if: inputs.dry_run != true
-        run: pnpm setup:infra --yes
+        env:
+          CORE_BE_DIR: ${{ github.workspace }}
+        run: pnpm --dir core-infra setup:infra -- --yes
 
       - name: Deploy selected services
         if: inputs.dry_run != true
@@ -105,7 +126,7 @@ jobs:
             local service_id="$1"
             local image="$2"
             local label="$3"
-            pnpm tool:railway-deploy-image \
+            pnpm --dir "${GITHUB_WORKSPACE}/core-infra" tool:railway-deploy-image \
               --service "$service_id" \
               --image "$image" \
               --label "$label"

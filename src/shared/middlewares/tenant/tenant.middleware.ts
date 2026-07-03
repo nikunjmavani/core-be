@@ -7,12 +7,14 @@ import { PUBLIC_ID_REGEX } from '@/shared/utils/identity/public-id.util.js';
  * `request.organizationId`. Validates the format to prevent injection attacks.
  *
  * @remarks
- * The active organization for organization-scoped routes now flows from the
- * signed `org` JWT claim (resolved post-auth by `resolveActiveOrganizationId` /
+ * The active organization for organization-scoped routes flows from the signed
+ * `org` JWT claim (resolved post-auth by `resolveActiveOrganizationId` /
  * `requireOrganizationPermission`), NOT from the URL — routes no longer carry an
- * `{organization_id}` path segment. This header remains the org source only for
- * the few consumers that read `request.organizationId` directly (e.g. the upload
- * domain); it is not the authority for permission checks or the RLS GUC.
+ * `{organization_id}` path segment. audit #43: `request.organizationId` set here is
+ * effectively DEAD in the authorization path — no production controller reads it for
+ * scoping (verified by grep across `src/domains/**`); it is retained only as a
+ * pre-auth format-validated decoration and is never the authority for permission
+ * checks or the RLS GUC. Do not introduce new consumers that trust it pre-auth.
  *
  * Row-Level Security for Postgres uses `SET LOCAL app.current_organization_id`
  * inside the short-lived `withOrganizationDatabaseContext` transaction opened at

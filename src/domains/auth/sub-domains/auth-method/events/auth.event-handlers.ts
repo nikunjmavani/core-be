@@ -5,15 +5,14 @@ import {
   recordOutboxEmail,
   type MailEnqueueInput,
 } from '@/infrastructure/mail/queues/mail.queue.js';
-import { magicLinkTemplate } from '@/infrastructure/mail/templates/magic-link.template.js';
+import { verificationCodeTemplate } from '@/infrastructure/mail/templates/verification-code.template.js';
 import { isMailConfigured } from '@/infrastructure/mail/mail.service.js';
 import { env } from '@/shared/config/env.config.js';
 import { DEFAULT_FRONTEND_URL } from '@/shared/constants/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import {
   AUTH_EVENT,
-  type EmailVerificationEmailPayload,
-  type MagicLinkEmailPayload,
+  type EmailVerificationCodePayload,
   type PasswordResetEmailPayload,
 } from './auth.events.js';
 
@@ -33,27 +32,25 @@ async function recordAndScheduleOutboxEmail(
   );
 }
 
-async function handleMagicLinkEmail(
-  payload: MagicLinkEmailPayload,
+async function handleVerificationCodeEmail(
+  payload: EmailVerificationCodePayload,
   requestId?: string,
 ): Promise<void> {
   if (!isMailConfigured()) {
     throw new ServiceUnavailableError('errors:mailNotConfigured');
   }
 
-  const frontendUrl = env.FRONTEND_URL ?? DEFAULT_FRONTEND_URL;
-  const magicLinkUrl = `${frontendUrl}/auth/magic-link/verify?token=${payload.magic_link_token}&email=${encodeURIComponent(payload.email)}`;
-  const html = magicLinkTemplate({
-    magicLinkUrl,
+  const html = verificationCodeTemplate({
+    code: payload.verification_code,
     expiresInMinutes: payload.expires_in_minutes,
   });
 
   await recordAndScheduleOutboxEmail(
     {
       to: payload.email,
-      subject: i18next.t('mail:magicLinkSubject', { lng: 'en' }),
+      subject: i18next.t('mail:verificationCodeSubject', { lng: 'en' }),
       html,
-      tags: [{ name: 'category', value: 'magic-link' }],
+      tags: [{ name: 'category', value: 'verification-code' }],
     },
     requestId !== undefined ? { requestId } : undefined,
   );
@@ -85,40 +82,14 @@ async function handlePasswordResetEmail(
   );
 }
 
-async function handleEmailVerificationEmail(
-  payload: EmailVerificationEmailPayload,
-  requestId?: string,
-): Promise<void> {
-  if (!isMailConfigured()) {
-    throw new ServiceUnavailableError('errors:mailNotConfigured');
-  }
-
-  const frontendUrl = env.FRONTEND_URL ?? DEFAULT_FRONTEND_URL;
-  const verifyUrl = `${frontendUrl}/auth/email/verify?token=${payload.verification_token}`;
-
-  await recordAndScheduleOutboxEmail(
-    {
-      to: payload.email,
-      subject: i18next.t('mail:emailVerificationSubject', { lng: 'en' }),
-      html: i18next.t('mail:emailVerificationHtml', {
-        lng: 'en',
-        verifyUrl,
-        expiresInHours: payload.expires_in_hours,
-      }),
-      tags: [{ name: 'category', value: 'email-verification' }],
-    },
-    requestId !== undefined ? { requestId } : undefined,
-  );
-}
-
-async function onMagicLinkEmailEvent(event: DomainEvent): Promise<void> {
-  const payload = event.payload as MagicLinkEmailPayload;
+async function onVerificationCodeEmailEvent(event: DomainEvent): Promise<void> {
+  const payload = event.payload as EmailVerificationCodePayload;
   try {
-    await handleMagicLinkEmail(payload, event.requestId);
+    await handleVerificationCodeEmail(payload, event.requestId);
   } catch (error) {
     logger.warn(
       { error, eventType: event.type, email: payload.email },
-      'auth.magic_link.email.enqueue.failed',
+      'auth.email_verification_code.email.enqueue.failed',
     );
     throw error;
   }
@@ -137,28 +108,14 @@ async function onPasswordResetEmailEvent(event: DomainEvent): Promise<void> {
   }
 }
 
-async function onEmailVerificationEmailEvent(event: DomainEvent): Promise<void> {
-  const payload = event.payload as EmailVerificationEmailPayload;
-  try {
-    await handleEmailVerificationEmail(payload, event.requestId);
-  } catch (error) {
-    logger.warn(
-      { error, eventType: event.type, email: payload.email },
-      'auth.email_verification.email.enqueue.failed',
-    );
-    throw error;
-  }
-}
-
 let authEventHandlersRegistered = false;
 
 function registerAuthMethodEmailEventHandlers(): void {
-  eventBus.on(AUTH_EVENT.MAGIC_LINK_REQUESTED, onMagicLinkEmailEvent);
+  eventBus.on(AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED, onVerificationCodeEmailEvent);
   eventBus.on(AUTH_EVENT.PASSWORD_RESET_REQUESTED, onPasswordResetEmailEvent);
-  eventBus.on(AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED, onEmailVerificationEmailEvent);
 }
 
-/** Subscribes the auth-method side-effect handlers to the in-process event bus (magic link, password reset, and email-verification emails). Idempotent: subsequent calls are no-ops. */
+/** Subscribes the auth-method side-effect handlers to the in-process event bus (email verification code and password reset emails). Idempotent: subsequent calls are no-ops. */
 export function registerAuthMethodEventHandlers(): void {
   if (authEventHandlersRegistered) return;
   authEventHandlersRegistered = true;

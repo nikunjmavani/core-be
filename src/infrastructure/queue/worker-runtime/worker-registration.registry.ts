@@ -62,6 +62,11 @@ import { createStripeWebhookEventReclaimWorker } from '@/domains/billing/sub-dom
 import { STRIPE_WEBHOOK_EVENT_RECLAIM_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-reclaim.constants.js';
 import { createStripeWebhookEventCatchupWorker } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-catchup.worker.js';
 import { STRIPE_WEBHOOK_EVENT_CATCHUP_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-catchup.constants.js';
+import {
+  createSubscriptionSeatSyncWorker,
+  type SubscriptionSeatSyncWorkerBillingContainer,
+} from '@/domains/billing/sub-domains/subscription/workers/subscription-seat-sync.worker.js';
+import { SUBSCRIPTION_SEAT_SYNC_QUEUE_NAME } from '@/domains/billing/sub-domains/subscription/queues/subscription-seat-sync.queue.js';
 import { createNotificationRetentionWorker } from '@/domains/notify/sub-domains/notification/workers/notification-retention.worker.js';
 import { NOTIFICATION_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/notification/workers/notification-retention.constants.js';
 import {
@@ -276,6 +281,25 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
         workerContainers.tenancyDomain.organizationService,
       ),
   }),
+  {
+    // REQ-4: reconciles the Stripe subscription quantity to the org member count, out-of-band so a
+    // Stripe outage never fails member management. Event-driven (enqueued on member add/remove +
+    // change-plan). Stripe-gated like the rest of the family; the service phases the Stripe call
+    // outside its DB context so no checkout is held during external IO.
+    queueName: SUBSCRIPTION_SEAT_SYNC_QUEUE_NAME,
+    family: 'stripe',
+    logLabel: 'subscription seat sync worker',
+    usesPostgres: true,
+    scheduled: false,
+    criticality: 'throughput',
+    holdsConnectionDuringExternalIo: false,
+    resolvePostgresConcurrency: () => getWorkerConcurrencyStripe(),
+    isEnabled: () => isStripeConfigured(),
+    create: (workerContainers) =>
+      createSubscriptionSeatSyncWorker(
+        workerContainers.billingDomain as SubscriptionSeatSyncWorkerBillingContainer,
+      ),
+  },
   retentionDefinition({
     queueName: STRIPE_WEBHOOK_EVENT_RETENTION_QUEUE_NAME,
     family: 'stripe',

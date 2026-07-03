@@ -7,15 +7,11 @@ import {
   STRICT_AUTHED_RATE_LIMIT,
   STRICT_PUBLIC_RATE_LIMIT,
 } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
-import { rejectLegacyPagePagination } from '@/shared/utils/http/pagination.util.js';
 import type { MembershipService } from './membership.service.js';
 import type { MemberInvitationService } from './member-invitation/member-invitation.service.js';
 import {
   acceptMemberInvitationDto,
-  createMemberInvitationDto,
   invitationIdParamsDto,
-  listMemberInvitationsQueryDto,
-  listPendingMemberInvitationsQueryDto,
   resendMemberInvitationDto,
 } from './member-invitation/member-invitation.dto.js';
 import {
@@ -104,9 +100,9 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE)],
         schema: {
-          summary: 'Create membership',
+          summary: 'Add member by email',
           description:
-            'Adds a user as a member of the organization with a specific role. Requires MEMBERSHIP_MANAGE permission.',
+            'Adds a member by email: provisions or resolves the user, creates an INVITED membership with the given role, and emails an invitation token. The invitee becomes ACTIVE on accept. Requires MEMBERSHIP_MANAGE permission.',
           tags: ['Membership'],
           body: createMembershipDto,
         },
@@ -123,7 +119,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
         schema: {
           summary: 'Update membership',
           description:
-            'Updates a membership status (e.g. suspend or activate). Requires MEMBERSHIP_MANAGE permission.',
+            "Updates a membership's status and/or role (suspend, reactivate, or change role). Requires MEMBERSHIP_MANAGE permission.",
           tags: ['Membership'],
           params: membershipIdParamsDto,
           body: updateMembershipDto,
@@ -188,38 +184,8 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
     );
 
     // ── Org-admin invitations (active org, INVITATION_MANAGE) ──
-    zodApplication.get(
-      '/organization/invitations',
-      {
-        schema: {
-          summary: 'List invitations',
-          description:
-            'Returns all pending invitations for the organization. Requires INVITATION_MANAGE permission.',
-          tags: ['Invitation'],
-          querystring: listMemberInvitationsQueryDto,
-        },
-        onRequest: [app.authenticate],
-        preValidation: [rejectLegacyPagePagination],
-        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.INVITATION_MANAGE)],
-      },
-      invitationController.listMemberInvitations,
-    );
-    zodApplication.post(
-      '/organization/invitations',
-      {
-        onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.INVITATION_MANAGE)],
-        config: { ...MODERATE_AUTHED_RATE_LIMIT.config, idempotencyRequired: true },
-        schema: {
-          summary: 'Create invitation',
-          description:
-            'Sends an invitation email to join the organization. Requires INVITATION_MANAGE permission.',
-          tags: ['Invitation'],
-          body: createMemberInvitationDto,
-        },
-      },
-      invitationController.createMemberInvitation,
-    );
+    // Adding a member (which issues the invitation) is `POST /organization/memberships` (REQ-1);
+    // these routes manage an already-issued invitation.
     zodApplication.delete<{ Params: { invitation_id: string } }>(
       '/organization/invitations/:invitation_id',
       {
@@ -257,21 +223,6 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
     );
 
     // ── Recipient invitations (the invited user, cross-org, auth-only) ──
-    zodApplication.get(
-      '/invitations/pending',
-      {
-        onRequest: [app.authenticate],
-        preValidation: [rejectLegacyPagePagination],
-        schema: {
-          summary: 'List my pending invitations',
-          description:
-            'Returns the authenticated user’s pending invitations across all organizations, cursor-paginated (`limit` + opaque `after`). Replaces the previous fixed 100-row cap (R5 / TEN-35).',
-          tags: ['Invitation'],
-          querystring: listPendingMemberInvitationsQueryDto,
-        },
-      },
-      invitationController.listPendingInvitations,
-    );
     zodApplication.post<{ Params: { invitation_id: string } }>(
       '/invitations/:invitation_id/accept',
       {
@@ -284,30 +235,13 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
         schema: {
           summary: 'Accept invitation',
           description:
-            "Accepts a pending invitation using the invitation token. Requires authentication; the authenticated user's email must match the invitee email on the invitation. Creates a membership for the user.",
+            "Accepts a pending invitation using the invitation token. Requires authentication; the authenticated user's email must match the invitee email on the invitation. Activates the invitee's pre-existing membership (sets it ACTIVE).",
           tags: ['Invitation'],
           params: invitationIdParamsDto,
           body: acceptMemberInvitationDto,
         },
       },
       invitationController.acceptMemberInvitation,
-    );
-    zodApplication.post<{ Params: { invitation_id: string } }>(
-      '/invitations/:invitation_id/decline',
-      {
-        // sec-r4-I3: decline targets a single invitation row by id; without a
-        // cap a hijacked session could probe invitation existence by 404
-        // vs 204 across enumerated ids. Cap at the moderate-authed tier.
-        ...MODERATE_AUTHED_RATE_LIMIT,
-        onRequest: [app.authenticate],
-        schema: {
-          summary: 'Decline invitation',
-          description: 'Declines a pending invitation. The invitation is marked as declined.',
-          tags: ['Invitation'],
-          params: invitationIdParamsDto,
-        },
-      },
-      invitationController.declineInvitation,
     );
   };
 }

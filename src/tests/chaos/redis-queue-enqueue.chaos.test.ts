@@ -50,7 +50,7 @@ describe('Chaos resilience: Redis outage while enqueueing transactional email wo
     const mailEnqueueObservationSpyListening = vi.spyOn(logger, 'error');
 
     const userSendingOutboundMagicLinks = await createTestUser({
-      email: `chaos-magic-link-enqueue-${randomUUID()}@example.com`,
+      email: `chaos-email-code-enqueue-${randomUUID()}@example.com`,
     });
 
     try {
@@ -60,7 +60,7 @@ describe('Chaos resilience: Redis outage while enqueueing transactional email wo
           const magicLinkResponseAwaitingObservation =
             await chaosListeningFastifyApplication.inject({
               method: 'POST',
-              url: testApiPath('/auth/magic-link/send'),
+              url: testApiPath('/auth/email/send-code'),
               payload: JSON.stringify({ email: userSendingOutboundMagicLinks.email }),
               headers: {
                 'content-type': 'application/json',

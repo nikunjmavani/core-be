@@ -68,3 +68,11 @@ export const subscriptionExample = {
   created_at: '2026-01-15T10:30:00.000Z',
   updated_at: '2026-02-01T00:00:00.000Z',
 };
+
+// ── Stripe webhook acknowledgement (protocol-owned 200) ──
+export const webhookReceivedSchema = {
+  type: 'object',
+  properties: { received: { type: 'boolean' } },
+};
+
+export const webhookReceivedExample = { received: true };

@@ -23,6 +23,12 @@ describe('user.validator', () => {
     expect(() => validateUpdateMe({ avatar_key: 'uploads/photo.png' })).toThrow(ValidationError);
   });
 
+  it('R13: validateUpdateMe rejects avatar_key containing path traversal (..)', () => {
+    expect(() => validateUpdateMe({ avatar_key: 'avatars/user-1/../../etc/passwd' })).toThrow(
+      ValidationError,
+    );
+  });
+
   it('validateListUsers applies pagination defaults', () => {
     expect(validateListUsers({})).toMatchObject({ limit: 25 });
   });
@@ -70,6 +76,12 @@ describe('user.validator', () => {
 
   it('validateUploadAvatar rejects avatar_key without avatars/ prefix', () => {
     expect(() => validateUploadAvatar({ avatar_key: 'uploads/photo.png' })).toThrow(
+      ValidationError,
+    );
+  });
+
+  it('R13: validateUploadAvatar rejects avatar_key with a control character', () => {
+    expect(() => validateUploadAvatar({ avatar_key: 'avatars/user-1/x\u0001.png' })).toThrow(
       ValidationError,
     );
   });

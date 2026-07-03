@@ -97,12 +97,12 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     example: null,
   },
   'POST /api/v1/auth/logout': { statusCode: 201, schema: null, example: null },
-  'POST /api/v1/auth/magic-link/send': {
+  'POST /api/v1/auth/email/send-code': {
     statusCode: 201,
-    schema: wrapSuccess(schemas.magicLinkSentSchema, schemas.magicLinkSentExample),
+    schema: wrapSuccess(schemas.verificationCodeSentSchema, schemas.verificationCodeSentExample),
     example: null,
   },
-  'POST /api/v1/auth/magic-link/verify': {
+  'POST /api/v1/auth/email/login': {
     statusCode: 201,
     schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
     example: null,
@@ -134,18 +134,12 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     }),
     example: null,
   },
-  'POST /api/v1/auth/password/reset': { statusCode: 201, schema: null, example: null },
+  'POST /api/v1/auth/password/reset': {
+    statusCode: 201,
+    schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
+    example: null,
+  },
   'POST /api/v1/auth/password/change': { statusCode: 201, schema: null, example: null },
-  'POST /api/v1/auth/email/verify': {
-    statusCode: 201,
-    schema: wrapSuccess(schemas.messageSchema, { message: 'Email verified successfully' }),
-    example: null,
-  },
-  'POST /api/v1/auth/email/resend-verification': {
-    statusCode: 201,
-    schema: wrapSuccess(schemas.messageSchema, { message: 'Verification email sent' }),
-    example: null,
-  },
   'POST /api/v1/auth/me/mfa/enroll': {
     statusCode: 201,
     schema: wrapSuccess(schemas.mfaEnrollSchema, schemas.mfaEnrollExample),
@@ -172,6 +166,87 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
   'POST /api/v1/auth/refresh': {
     statusCode: 201,
     schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
+    example: null,
+  },
+
+  // ── Auth: Active-org switch + me context (REQ-5) ──
+  'POST /api/v1/auth/switch-to-organization': {
+    // Re-mints the access token bound to the newly active org AND returns the active-org delta
+    // (active_organization + my_permissions + global_role) so the client repaints the dashboard
+    // without a follow-up GET /auth/me/context.
+    statusCode: 201,
+    schema: wrapSuccess(
+      {
+        type: 'object',
+        properties: {
+          ...schemas.accessTokenSchema.properties,
+          active_organization: schemas.organizationSchema,
+          my_permissions: { type: 'array', items: { type: 'string' } },
+          global_role: { type: 'string', nullable: true },
+        },
+      },
+      {
+        access_token: schemas.accessTokenExample.access_token,
+        active_organization: schemas.organizationExample,
+        my_permissions: ['organization:read', 'membership:manage'],
+        global_role: null,
+      },
+    ),
+    example: null,
+  },
+  'POST /api/v1/auth/switch-to-personal': {
+    // Same active-org delta envelope as switch-to-organization; active_organization is the caller's
+    // own personal organization (type PERSONAL, all capabilities false).
+    statusCode: 201,
+    schema: wrapSuccess(
+      {
+        type: 'object',
+        properties: {
+          ...schemas.accessTokenSchema.properties,
+          active_organization: schemas.organizationSchema,
+          my_permissions: { type: 'array', items: { type: 'string' } },
+          global_role: { type: 'string', nullable: true },
+        },
+      },
+      {
+        access_token: schemas.accessTokenExample.access_token,
+        active_organization: schemas.organizationExample,
+        my_permissions: ['organization:read'],
+        global_role: null,
+      },
+    ),
+    example: null,
+  },
+  'GET /api/v1/auth/me/context': {
+    statusCode: 200,
+    schema: wrapSuccess(
+      {
+        type: 'object',
+        properties: {
+          user: schemas.userSchema,
+          active_organization: { ...schemas.organizationSchema, nullable: true },
+          my_permissions: { type: 'array', items: { type: 'string' } },
+          global_role: { type: 'string', nullable: true },
+          organizations: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                ...schemas.organizationSchema.properties,
+                is_active: { type: 'boolean' },
+              },
+            },
+          },
+        },
+      },
+      {
+        user: schemas.userExample,
+        active_organization: schemas.organizationExample,
+        my_permissions: ['organization:read', 'membership:read'],
+        global_role: null,
+        organizations: [{ ...schemas.organizationExample, is_active: true }],
+      },
+    ),
     example: null,
   },
 
@@ -213,6 +288,61 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
   'DELETE /api/v1/auth/me/auth-methods/{auth_method_id}': {
     statusCode: 204,
     schema: null,
+    example: null,
+  },
+
+  // ── WebAuthn (passkeys) ──
+  'POST /api/v1/auth/me/webauthn/register/options': {
+    statusCode: 201,
+    schema: wrapSuccess(
+      schemas.webauthnCeremonyOptionsSchema,
+      schemas.webauthnRegistrationOptionsExample,
+    ),
+    example: null,
+  },
+  'POST /api/v1/auth/me/webauthn/register/verify': {
+    statusCode: 201,
+    schema: wrapSuccess(
+      schemas.webauthnRegisterVerifySchema,
+      schemas.webauthnRegisterVerifyExample,
+    ),
+    example: null,
+  },
+  'GET /api/v1/auth/me/webauthn/credentials': {
+    statusCode: 200,
+    schema: wrapSuccess({ type: 'array', items: schemas.webauthnCredentialSchema }, [
+      schemas.webauthnCredentialExample,
+    ]),
+    example: null,
+  },
+  'DELETE /api/v1/auth/me/webauthn/credentials/{credential_id}': {
+    statusCode: 204,
+    schema: null,
+    example: null,
+  },
+  'POST /api/v1/auth/webauthn/authenticate/options': {
+    statusCode: 201,
+    schema: wrapSuccess(
+      schemas.webauthnCeremonyOptionsSchema,
+      schemas.webauthnAuthenticationOptionsExample,
+    ),
+    example: null,
+  },
+  'POST /api/v1/auth/webauthn/authenticate/verify': {
+    statusCode: 201,
+    schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
+    example: null,
+  },
+
+  // ── Step-up + MFA enrollment confirm ──
+  'POST /api/v1/auth/step-up': {
+    statusCode: 201,
+    schema: wrapSuccess(schemas.stepUpSchema, schemas.stepUpExample),
+    example: null,
+  },
+  'POST /api/v1/auth/me/mfa/enroll/confirm': {
+    statusCode: 201,
+    schema: wrapSuccess(schemas.mfaEnrollConfirmSchema, schemas.mfaEnrollConfirmExample),
     example: null,
   },
 

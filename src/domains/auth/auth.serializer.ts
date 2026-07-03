@@ -1,3 +1,6 @@
+import type { GlobalRole } from '@/shared/constants/roles.constants.js';
+import type { OrganizationOutput } from '@/domains/tenancy/sub-domains/organization/organization.types.js';
+
 /** Subset of an `auth_methods` row that is safe to return to the owning user. */
 interface AuthMethodResponseInput {
   public_id: string;
@@ -35,10 +38,31 @@ export const AuthSerializer = {
       ...(data.session_public_id !== undefined ? { session_id: data.session_public_id } : {}),
     };
   },
+  /**
+   * Access token plus the active-org delta returned by the org-switch endpoints
+   * (`switch-to-organization` / `switch-to-personal`): the newly active organization
+   * (with capabilities) and the caller's resolved permissions in it, so the client
+   * repaints the dashboard without a follow-up `GET /auth/me/context`.
+   */
+  accessTokenWithActiveOrganization(
+    token: { access_token: string },
+    context: {
+      active_organization: OrganizationOutput;
+      my_permissions: string[];
+      global_role: GlobalRole | null;
+    },
+  ) {
+    return {
+      access_token: token.access_token,
+      active_organization: context.active_organization,
+      my_permissions: context.my_permissions,
+      global_role: context.global_role,
+    };
+  },
   mfaRequired(data: { mfa_required: true; mfa_session_token: string }) {
     return data;
   },
-  magicLinkSent(data: { message: string; expires_in_minutes: number }) {
+  verificationCodeSent(data: { message: string; expires_in_minutes: number }) {
     return {
       message: data.message,
       expires_in_minutes: data.expires_in_minutes,

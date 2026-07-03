@@ -4,6 +4,7 @@
 services:
   postgres:
     network_mode: host
+    cgroupns_mode: host
     ports: !reset []
 
   redis:

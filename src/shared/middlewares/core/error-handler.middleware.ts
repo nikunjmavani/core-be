@@ -27,17 +27,21 @@ function buildErrorPayload(
   code: string,
   detail: string,
   errors?: { field: string; message: string }[],
+  reason?: string,
 ) {
   const docsBaseUrl = getDocsBaseUrl();
   const payload: {
     type: string;
     code: string;
+    reason?: string;
     detail: string;
     documentation_url?: string;
     errors?: { field: string; message: string }[];
   } = {
     type,
     code,
+    // Optional stable machine-readable sub-code (REQ-6) — additive; the FE can branch on it.
+    ...(reason ? { reason } : {}),
     detail,
     ...(docsBaseUrl ? { documentation_url: `${docsBaseUrl}/${code}` } : {}),
   };
@@ -154,6 +158,8 @@ function handleAppErrorResponse(
       code,
       detail,
       errors,
+      // 5xx detail is masked, so omit the reason there too; only surface it on client-facing 4xx.
+      error.statusCode >= 500 ? undefined : error.reason,
     ),
     meta: { request_id: requestId },
   };
@@ -221,11 +227,14 @@ function handleUnhandledErrorResponse(
       organizationId: request.organizationId ?? undefined,
     }),
   );
+  // `error` is serialized by Pino's stdSerializers.err (configured for both `err` and `error`), so
+  // it already carries the message + stack as structured fields. Duplicating them as top-level
+  // plain strings (errorMessage/errorStack) only added an extra free-text copy that the key-based
+  // redactor cannot scrub — a third-party exception message can embed a secret. errorName/errorCode
+  // stay: they are low-risk structured values useful for log filtering.
   logger.error(
     {
       error,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorStack: error instanceof Error ? error.stack : undefined,
       errorName: error instanceof Error ? error.name : undefined,
       errorCode:
         error instanceof Error && 'code' in error

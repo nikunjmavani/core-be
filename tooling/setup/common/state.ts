@@ -1,7 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { z } from 'zod';
-import * as logger from './logger.js';
 
 const neonBranchStateSchema = z.object({
   branchId: z.string(),
@@ -95,6 +92,23 @@ export const setupStateSchema = z.object({
     .object({
       projectSlug: z.string(),
       dsn: z.string(),
+      /** Separate frontend (core-fe) Sentry project slug, when `config.frontend.name` is set. */
+      frontendProjectSlug: z.string().optional(),
+      /** Frontend project DSN — public, emitted as SENTRY_FRONTEND_DSN for the core-fe bundle. */
+      frontendDsn: z.string().optional(),
+    })
+    .optional(),
+  posthog: z
+    .object({
+      /** Legacy single project key (`phc_…`) — read as a fallback for older state. */
+      projectApiKey: z.string().optional(),
+      /**
+       * Per-environment project keys (`phc_…`) keyed by environment name — one shared FE+BE
+       * project per env (`core-<env>`). Public by design; emitted as POSTHOG_KEY per env.
+       */
+      projectApiKeys: z.record(z.string(), z.string()).optional(),
+      /** Ingestion host emitted as POSTHOG_HOST (US or EU cloud). */
+      host: z.string(),
     })
     .optional(),
   jwt: z.record(z.string(), jwtSecretStateSchema).optional(),
@@ -124,7 +138,11 @@ export const setupStateSchema = z.object({
     .optional(),
   postman: z
     .object({
+      workspaceId: z.string().optional(),
+      /** Legacy single-collection id (pre per-environment collections). */
       collectionId: z.string().optional(),
+      /** Per-environment collection ids keyed by environment name (`core-be-<env>` collections). */
+      collections: z.record(z.string(), z.string()).optional(),
     })
     .optional(),
   scalar: z
@@ -133,13 +151,22 @@ export const setupStateSchema = z.object({
       slug: z.string().optional(),
       version: z.string().optional(),
       registryUrl: z.string().optional(),
+      /** Per-environment published slugs + registry URLs (`core-be-<env>`), keyed by env name. */
+      environments: z
+        .record(z.string(), z.object({ slug: z.string(), registryUrl: z.string().optional() }))
+        .optional(),
     })
     .optional(),
 });
 
-const STATE_PATH = resolve(import.meta.dirname, '../../../.setup-state.json');
+// State is EPHEMERAL: held in memory for the lifetime of a single setup process and never
+// persisted to disk — there is no `.setup-state.json`. Within one `pnpm setup:infra` run the
+// in-memory object carries provider outputs (resource ids, urls, write-once secrets) to the
+// env-file writer; standalone commands hydrate it from live remote via the reconstruct path
+// (each provider's `detectRemote`). The durable record of provisioned values is the
+// `.env.<environment>` files plus the providers' own dashboards — not a local state file.
 
-export function createEmptyState(): z.infer<typeof setupStateSchema> {
+function buildEmptyState(): z.infer<typeof setupStateSchema> {
   const now = new Date().toISOString();
   return {
     version: 1,
@@ -148,40 +175,37 @@ export function createEmptyState(): z.infer<typeof setupStateSchema> {
   };
 }
 
-export function loadState(): z.infer<typeof setupStateSchema> {
-  if (!existsSync(STATE_PATH)) {
-    return createEmptyState();
-  }
+let inMemoryState: z.infer<typeof setupStateSchema> = buildEmptyState();
 
-  const raw = readFileSync(STATE_PATH, 'utf-8');
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    logger.warn('Corrupted .setup-state.json — starting fresh.');
-    return createEmptyState();
-  }
-
-  const result = setupStateSchema.safeParse(parsed);
-  if (!result.success) {
-    logger.warn('Invalid .setup-state.json schema — starting fresh.');
-    return createEmptyState();
-  }
-
-  return result.data;
+export function createEmptyState(): z.infer<typeof setupStateSchema> {
+  return buildEmptyState();
 }
 
+/** Returns the process-scoped in-memory state. Empty until a run or reconstruct populates it. */
+export function loadState(): z.infer<typeof setupStateSchema> {
+  return inMemoryState;
+}
+
+/** Replaces the in-memory state. No disk write — state is never persisted. */
 export function saveState(state: z.infer<typeof setupStateSchema>): void {
   state.updatedAt = new Date().toISOString();
-  writeFileSync(STATE_PATH, `${JSON.stringify(state, null, 2)}\n`, 'utf-8');
+  inMemoryState = state;
 }
 
+/**
+ * Advisory-lock no-op. The ephemeral model has no shared state file for concurrent runs to
+ * clobber, so there is nothing to lock. Returns a no-op `release()` for call-site symmetry.
+ */
+export function acquireStateLock(): () => void {
+  return () => {};
+}
+
+/** Always false — there is no persisted state file in the ephemeral model. */
 export function stateFileExists(): boolean {
-  return existsSync(STATE_PATH);
+  return false;
 }
 
+/** Resets the in-memory state to empty. */
 export function clearState(): void {
-  if (existsSync(STATE_PATH)) {
-    writeFileSync(STATE_PATH, `${JSON.stringify(createEmptyState(), null, 2)}\n`, 'utf-8');
-  }
+  inMemoryState = buildEmptyState();
 }

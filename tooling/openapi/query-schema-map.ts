@@ -7,8 +7,8 @@
 import type { ZodTypeAny } from 'zod';
 import { ListAuditLogsQueryDto } from '@/domains/audit/audit.dto.js';
 import { OauthCallbackQueryDto } from '@/domains/auth/auth.dto.js';
+import { listInvoicesQueryDto } from '@/domains/billing/sub-domains/subscription/subscription.dto.js';
 import { listNotificationsQueryDto } from '@/domains/notify/sub-domains/notification/notification.dto.js';
-import { listMemberInvitationsQueryDto } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.dto.js';
 import { listMembershipsQueryDto } from '@/domains/tenancy/sub-domains/membership/membership.dto.js';
 import { listMemberRolesQueryDto } from '@/domains/tenancy/sub-domains/member-roles/member-role.dto.js';
 import { listOrganizationApiKeysQueryDto } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.dto.js';
@@ -19,13 +19,13 @@ import { listLimitQuerySchema } from '@/shared/utils/http/pagination.util.js';
 export const routeQuerySchemaMap: Record<string, ZodTypeAny> = {
   'GET /api/v1/audit/logs': ListAuditLogsQueryDto,
   'GET /api/v1/users': ListUsersDto,
+  'GET /api/v1/billing/invoices': listInvoicesQueryDto,
   'GET /api/v1/tenancy/organizations': listOrganizationsQueryDto,
   'GET /api/v1/tenancy/organization/audit-logs': ListAuditLogsQueryDto,
   'GET /api/v1/tenancy/organization/api-keys': listOrganizationApiKeysQueryDto,
   'GET /api/v1/tenancy/organization/memberships': listMembershipsQueryDto,
   'GET /api/v1/tenancy/organization/roles': listMemberRolesQueryDto,
   'GET /api/v1/notify/notifications': listNotificationsQueryDto,
-  'GET /api/v1/tenancy/organization/invitations': listMemberInvitationsQueryDto,
   'GET /api/v1/notify/webhooks/{webhook_id}/delivery-attempts': listLimitQuerySchema,
   'GET /api/v1/auth/oauth/{provider}/callback': OauthCallbackQueryDto,
 };

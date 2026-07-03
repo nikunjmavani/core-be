@@ -96,7 +96,7 @@ describe('MFA Sub-Domain — Integration', () => {
 
   describe('full TOTP ceremony (enroll → confirm → verify → mfa login)', () => {
     it('completes step-up verify and the public mfa login with valid TOTP codes', async () => {
-      const { user, password } = await createTestUserWithPassword();
+      const { user, password } = await createTestUserWithPassword({ isEmailVerified: true });
       const token = await generateTestToken({ userId: user.public_id });
 
       const stepUp = await injectAuthenticated(app, {
@@ -164,6 +164,35 @@ describe('MFA Sub-Domain — Integration', () => {
       expect(mfaLogin.statusCode, mfaLogin.body).toBe(201);
       const mfaLoginBody = (mfaLogin.json() as { data: { access_token?: string } }).data;
       expect(mfaLoginBody.access_token).toBeTypeOf('string');
+    });
+  });
+
+  describe('pre-hijacking guard: unverified email cannot seed a login factor', () => {
+    it('rejects MFA enrollment with 403 for an UNVERIFIED account, even after a valid step-up', async () => {
+      // Account pre-hijacking (Trojan-credential variant): an attacker who pre-registers a
+      // victim's email holds an UNVERIFIED account whose password they set. A password step-up is
+      // a factor they control, so it must NOT let them seed an MFA method — which would survive the
+      // victim's password-reset recovery (reset revokes sessions, not enrolled factors). Email
+      // verification is the gate that the pre-registering attacker cannot pass.
+      const { user, password } = await createTestUserWithPassword({ isEmailVerified: false });
+      const token = await generateTestToken({ userId: user.public_id });
+
+      const stepUp = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/step-up'),
+        token,
+        payload: { password },
+      });
+      expect(stepUp.statusCode, stepUp.body).toBe(201);
+
+      const enroll = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/me/mfa/enroll'),
+        token,
+        payload: { method_type: 'MFA_TOTP' },
+      });
+      expect(enroll.statusCode, enroll.body).toBe(403);
+      expect((enroll.json() as { error: { code: string } }).error.code).toBe('forbidden');
     });
   });
 });

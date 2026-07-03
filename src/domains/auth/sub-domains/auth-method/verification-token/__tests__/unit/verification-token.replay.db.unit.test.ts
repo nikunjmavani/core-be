@@ -14,12 +14,12 @@ describe('VerificationTokenRepository — atomic consume (replay protection)', (
     const user = await createTestUser();
     const tokenHash = `replay-hash-${user.public_id}`;
     const expiresAt = new Date(Date.now() + 3_600_000);
-    await repository.create('MAGIC_LINK', user.id, user.email, tokenHash, expiresAt);
+    await repository.create('EMAIL_CODE', user.id, user.email, tokenHash, expiresAt);
 
-    const first = await repository.consumeIfValid(tokenHash);
+    const first = await repository.consumeIfValid(tokenHash, 'EMAIL_CODE');
     expect(first?.token_hash).toBe(tokenHash);
 
-    const second = await repository.consumeIfValid(tokenHash);
+    const second = await repository.consumeIfValid(tokenHash, 'EMAIL_CODE');
     expect(second).toBeNull();
   });
 
@@ -29,20 +29,34 @@ describe('VerificationTokenRepository — atomic consume (replay protection)', (
     const expiresAt = new Date(Date.now() - 60_000);
     await repository.create('PASSWORD_RESET', user.id, user.email, tokenHash, expiresAt);
 
-    const result = await repository.consumeIfValid(tokenHash);
+    const result = await repository.consumeIfValid(tokenHash, 'PASSWORD_RESET');
     expect(result).toBeNull();
+  });
+
+  it('sec-r5-L2: consumeIfValid returns null for a token of a different type (cross-type rejected)', async () => {
+    const user = await createTestUser({ email: 'cross-type-token@example.com' });
+    const tokenHash = `cross-type-hash-${user.public_id}`;
+    const expiresAt = new Date(Date.now() + 3_600_000);
+    await repository.create('PASSWORD_RESET', user.id, user.email, tokenHash, expiresAt);
+
+    // A valid PASSWORD_RESET token replayed against the EMAIL_CODE flow must not match — and
+    // therefore must not be consumed (burned): the row stays redeemable on its own flow.
+    const wrongType = await repository.consumeIfValid(tokenHash, 'EMAIL_CODE');
+    expect(wrongType).toBeNull();
+    const rightType = await repository.consumeIfValid(tokenHash, 'PASSWORD_RESET');
+    expect(rightType?.token_hash).toBe(tokenHash);
   });
 
   it('consumeIfValid only allows one winner under concurrent consume attempts', async () => {
     const user = await createTestUser({ email: 'concurrent-token@example.com' });
     const tokenHash = `concurrent-hash-${user.public_id}`;
     const expiresAt = new Date(Date.now() + 3_600_000);
-    await repository.create('MAGIC_LINK', user.id, user.email, tokenHash, expiresAt);
+    await repository.create('EMAIL_CODE', user.id, user.email, tokenHash, expiresAt);
 
     const results = await Promise.all([
-      repository.consumeIfValid(tokenHash),
-      repository.consumeIfValid(tokenHash),
-      repository.consumeIfValid(tokenHash),
+      repository.consumeIfValid(tokenHash, 'EMAIL_CODE'),
+      repository.consumeIfValid(tokenHash, 'EMAIL_CODE'),
+      repository.consumeIfValid(tokenHash, 'EMAIL_CODE'),
     ]);
 
     const winners = results.filter((result) => result !== null);
@@ -53,9 +67,9 @@ describe('VerificationTokenRepository — atomic consume (replay protection)', (
     const user = await createTestUser({ email: 'find-after-consume@example.com' });
     const tokenHash = `find-hash-${user.public_id}`;
     const expiresAt = new Date(Date.now() + 3_600_000);
-    await repository.create('EMAIL_VERIFICATION', user.id, user.email, tokenHash, expiresAt);
+    await repository.create('EMAIL_CHANGE', user.id, user.email, tokenHash, expiresAt);
 
-    await repository.consumeIfValid(tokenHash);
+    await repository.consumeIfValid(tokenHash, 'EMAIL_CHANGE');
     const found = await repository.findValidByTokenHash(tokenHash);
     expect(found).toBeNull();
   });
@@ -63,10 +77,10 @@ describe('VerificationTokenRepository — atomic consume (replay protection)', (
   it('invalidateAllForUser only invalidates the specified token type', async () => {
     const user = await createTestUser({ email: 'invalidate-type@example.com' });
     const expiresAt = new Date(Date.now() + 3_600_000);
-    await repository.create('MAGIC_LINK', user.id, user.email, 'magic-hash', expiresAt);
+    await repository.create('EMAIL_CODE', user.id, user.email, 'magic-hash', expiresAt);
     await repository.create('PASSWORD_RESET', user.id, user.email, 'reset-hash', expiresAt);
 
-    await repository.invalidateAllForUser(user.id, 'MAGIC_LINK');
+    await repository.invalidateAllForUser(user.id, 'EMAIL_CODE');
 
     expect(await repository.findValidByTokenHash('magic-hash')).toBeNull();
     expect(await repository.findValidByTokenHash('reset-hash')).not.toBeNull();

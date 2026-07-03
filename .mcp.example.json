@@ -101,6 +101,13 @@
         "mcp",
         "serve"
       ]
+    },
+    "dashboards": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "tooling/dev/dashboards/mcp.mjs"
+      ]
     }
   }
 }

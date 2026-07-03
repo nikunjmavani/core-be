@@ -61,3 +61,14 @@ export function trimmedSlug(): z.ZodType<string> {
 export function escapeLikePattern(input: string): string {
   return input.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
+
+/**
+ * audit R13: returns false when a client-supplied storage object key contains a path-traversal
+ * segment (`..`) or any ASCII control character (`\x00`–`\x1f`). S3 treats keys as opaque literals
+ * (so traversal is not exploitable on the bucket today) and confirmed-upload keys are owner-bound by
+ * exact match — but rejecting traversal here makes the no-traversal invariant explicit rather than
+ * incidental, so it survives any future consumer that derives a path or normalizes the key.
+ */
+export function isTraversalFreeStorageKey(key: string): boolean {
+  return !(key.includes('..') || [...key].some((char) => char.charCodeAt(0) <= 0x1f));
+}

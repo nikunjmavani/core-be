@@ -60,11 +60,24 @@ if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
   exit 0
 fi
 
+user_bin="${HOME}/.local/bin"
+case ":${PATH}:" in
+  *":${user_bin}:"*) : ;;
+  *)
+    export PATH="${user_bin}:${PATH}"
+    [ -n "${CLAUDE_ENV_FILE:-}" ] && printf 'export PATH=%s:$PATH\n' "${user_bin}" >> "${CLAUDE_ENV_FILE}"
+    ;;
+esac
+
 if ! command -v codegraph >/dev/null 2>&1; then
   echo "install-codegraph: installing ${CODEGRAPH_PACKAGE}…" >&2
   if ! npm install -g "${CODEGRAPH_PACKAGE}" >&2 2>&1; then
-    echo "install-codegraph: global install failed — run \`npm i -g ${CODEGRAPH_PACKAGE}\` manually (non-fatal)." >&2
-    exit 0
+    echo "install-codegraph: global install failed — trying user prefix (${user_bin})…" >&2
+    mkdir -p "${user_bin}" 2>/dev/null || true
+    if ! npm install -g "${CODEGRAPH_PACKAGE}" --prefix "${HOME}/.local" >&2 2>&1; then
+      echo "install-codegraph: user-prefix install failed — run \`npm i -g ${CODEGRAPH_PACKAGE}\` manually (non-fatal)." >&2
+      exit 0
+    fi
   fi
 fi
 

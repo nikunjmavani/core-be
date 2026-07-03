@@ -60,40 +60,6 @@ export const WebhookSerializer = {
 };
 
 /**
- * Delivery-attempt row fields exposed to API consumers. The audit-trail table has no
- * `public_id` column (append-only; rows are addressed only via list, not by id), so
- * the bigserial `id` and the bigint `webhook_id` are dropped from the response — both
- * would leak platform delivery volume and webhook enumeration otherwise.
- */
-interface WebhookDeliveryAttemptRow {
-  event_type: string;
-  event_key: string | null;
-  payload: unknown;
-  status: string;
-  http_status_code: number | null;
-  response_body: string | null;
-  sent_at: NullableSerializableTimestamp;
-  attempt_count: number;
-  next_retry_at: NullableSerializableTimestamp;
-  created_at: SerializableTimestamp;
-}
-
-function serializeDeliveryAttempt<T extends WebhookDeliveryAttemptRow>(row: T) {
-  return {
-    event_type: row.event_type,
-    event_key: row.event_key,
-    payload: row.payload,
-    status: row.status,
-    http_status_code: row.http_status_code,
-    response_body: row.response_body,
-    sent_at: toIsoString(row.sent_at),
-    attempt_count: row.attempt_count,
-    next_retry_at: toIsoString(row.next_retry_at),
-    created_at: toIsoString(row.created_at),
-  };
-}
-
-/**
  * Row shape returned by the trimmed listByWebhook projection (sec-r4-D6).
  * `payload` and `response_body` are intentionally absent — the list response
  * never exposes them. A dedicated single-attempt detail endpoint can expose
@@ -127,14 +93,9 @@ function serializeDeliveryAttemptListItem<T extends WebhookDeliveryAttemptListRo
  * Strip-only response serializer for `notify.webhook_delivery_attempts` rows that drops
  * the internal bigserial `id` and `webhook_id` from the API response (sec-T finding #17).
  *
- * sec-r4-D6: `many` is the list-row shape and excludes `payload` + `response_body`;
- * `one` keeps them for the single-attempt detail path (no detail endpoint exists
- * today, but the shape is preserved so a future endpoint can use it).
+ * sec-r4-D6: `many` is the list-row shape and excludes `payload` + `response_body`.
  */
 export const WebhookDeliveryAttemptSerializer = {
-  one(row: WebhookDeliveryAttemptRow) {
-    return serializeDeliveryAttempt(row);
-  },
   many(rows: readonly WebhookDeliveryAttemptListRow[]) {
     return rows.map((row) => serializeDeliveryAttemptListItem(row));
   },

@@ -115,6 +115,23 @@ if [ "$(id -u)" -ne 0 ]; then
   fi
 fi
 
+# bootstrap.sh sets this when overlay/cgroup compose fails on an otherwise "healthy" daemon.
+if [ "${FORCE_RESTRICTED_VFS:-0}" = "1" ] && command -v dockerd >/dev/null 2>&1; then
+  log "forcing restricted VFS Docker mode (FORCE_RESTRICTED_VFS=1)."
+  stop_dockerd
+  start_restricted_vfs_dockerd
+  if [ -S /var/run/docker.sock ] && [ "${#sudo_cmd[@]}" -gt 0 ]; then
+    "${sudo_cmd[@]}" chmod a+rw /var/run/docker.sock >/dev/null 2>&1 || true
+  fi
+  if wait_for_docker; then
+    printf 'restricted-vfs\n' >"${MODE_FILE}"
+    log "Docker daemon is reachable with forced restricted VFS mode."
+    exit 0
+  fi
+  log "forced restricted VFS Docker mode failed."
+  exit 1
+fi
+
 if ! command -v docker >/dev/null 2>&1; then
   log "docker CLI is not installed."
   exit 1

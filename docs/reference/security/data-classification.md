@@ -17,4 +17,4 @@ When adding columns that hold email, phone, government ids, or payment instrumen
 
 - [`src/PATTERNS.md`](../../../src/PATTERNS.md) § Tenant Isolation, § Soft Delete — how PII is partitioned and how soft-delete preserves history
 - [`src/POLICIES.md`](../../../src/POLICIES.md) — retention windows, GDPR export caps, session lifetimes
-- [`src/domains/user/sub-domains/user-data-export/OVERVIEW.md`](../../../src/domains/user/sub-domains/user-data-export/OVERVIEW.md) — GDPR export pipeline invariants
+- [`src/domains/user/sub-domains/user-data-export/user-data-export.overview.md`](../../../src/domains/user/sub-domains/user-data-export/user-data-export.overview.md) — GDPR export pipeline invariants

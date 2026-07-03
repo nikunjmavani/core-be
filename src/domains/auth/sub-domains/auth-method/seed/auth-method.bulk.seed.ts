@@ -1,6 +1,6 @@
 /**
  * Auth-method bulk seeder — inserts one verified, primary `auth.auth_methods` login credential
- * (MAGIC_LINK or OAUTH) per user in the registry.
+ * (EMAIL_CODE or OAUTH) per user in the registry.
  *
  * Idempotency: count-and-resume — only users that have no seeded auth method receive one, so a
  * re-run with the same registry is a no-op.

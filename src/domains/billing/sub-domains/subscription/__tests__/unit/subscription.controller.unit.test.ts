@@ -32,6 +32,13 @@ describe('createSubscriptionController', () => {
     changePlan: vi.fn().mockResolvedValue({ public_id: subscriptionPublicId }),
     cancel: vi.fn().mockResolvedValue({ public_id: subscriptionPublicId }),
     resume: vi.fn().mockResolvedValue({ public_id: subscriptionPublicId }),
+    listInvoices: vi.fn().mockResolvedValue({
+      items: [{ id: 'in_2' }],
+      total: null,
+      limit: 25,
+      has_more: true,
+      next_cursor: 'in_2',
+    }),
   } as unknown as SubscriptionService;
 
   const controller = createSubscriptionController(service);
@@ -45,6 +52,19 @@ describe('createSubscriptionController', () => {
     expect(response).toMatchObject({ data: [] });
   });
 
+  it('listInvoices maps the service page into a paginated envelope', async () => {
+    const response = await controller.listInvoices(
+      mockRequest({ params: { organization_id: organizationPublicId }, query: { limit: 25 } }),
+      mockReply(),
+    );
+    // The Stripe cursor + limit are validated in the service; the controller forwards request.query.
+    expect(service.listInvoices).toHaveBeenCalledWith(organizationPublicId, { limit: 25 });
+    expect(response).toMatchObject({
+      data: [{ id: 'in_2' }],
+      meta: { pagination: { per_page: 25, next: 'in_2', has_more: true } },
+    });
+  });
+
   it('getSubscription delegates to service', async () => {
     await controller.getSubscription(
       mockRequest({
@@ -55,7 +75,7 @@ describe('createSubscriptionController', () => {
     expect(service.get).toHaveBeenCalledWith(organizationPublicId, subscriptionPublicId);
   });
 
-  it('createSubscription passes idempotency key', async () => {
+  it('createSubscription forwards the idempotency key to service.create', async () => {
     await controller.createSubscription(
       mockRequest({
         params: { organization_id: organizationPublicId },
@@ -64,7 +84,13 @@ describe('createSubscriptionController', () => {
       }),
       mockReply(),
     );
-    expect(service.create).toHaveBeenCalled();
+    // Money-path regression: the key must reach service.create as the 4th arg — the service
+    // forwards it on to Stripe as the subscription-create idempotency key, so a dropped key
+    // lets a retry/double-click mint a second paid subscription. (Asserting positions 0 and 3
+    // directly because the 3rd arg — acting user public id — is undefined for this mock auth.)
+    const createCall = vi.mocked(service.create).mock.calls[0];
+    expect(createCall?.[0]).toBe(organizationPublicId);
+    expect(createCall?.[3]).toBe('idem-key-123456789012');
   });
 
   it('updateSubscription delegates to service', async () => {

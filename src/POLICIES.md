@@ -6,11 +6,11 @@ Every value here is a deliberate business, UX, or security trade-off. Each entry
 
 The canonical exports live under [src/shared/constants/](src/shared/constants/) (`ttl.constants.ts`, `limits.constants.ts`, `security.constants.ts`, `pagination.constants.ts`, `billing.constants.ts`). When a new policy constant is added there, the `tsdoc-export-guard` skill cross-pings `system-narrative-maintainer` to add a row here.
 
-## MAGIC_LINK_EXPIRES_IN_MINUTES
+## VERIFICATION_CODE_TTL_MINUTES
 
 - **Value**: 15 minutes
 - **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
-- **Rationale**: Balances security (limited replay window) and UX (a user must have time to switch from the signup form → email client → click the link).
+- **Rationale**: Balances security (limited replay window) and UX (a user must have time to switch from the login form → email client → read and type the code).
 - **Consequences of change**:
   - Decreasing → tighter replay window; users on slow devices or pulling email through corporate spam filtering may miss the window and have to retry.
   - Increasing → larger token replay window; review with security if pushing past 30 minutes.
@@ -20,20 +20,10 @@ The canonical exports live under [src/shared/constants/](src/shared/constants/) 
 
 - **Value**: 60 minutes
 - **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
-- **Rationale**: Password resets are deliberately less time-pressured than magic-link sign-ins — users may be locked out of their inbox temporarily, may need to switch devices, and the recovery flow is a 1× operation rather than a sign-in primitive.
+- **Rationale**: Password resets are deliberately less time-pressured than email verification-code sign-ins — users may be locked out of their inbox temporarily, may need to switch devices, and the recovery flow is a 1× operation rather than a sign-in primitive.
 - **Consequences of change**:
   - Decreasing → support tickets from users who couldn't reach a working device in time.
   - Increasing → larger reset-token replay window; pair with stricter throttle if pushing past 24 hours.
-- **Last reviewed**: 2026-05-28
-
-## EMAIL_VERIFICATION_EXPIRES_IN_HOURS
-
-- **Value**: 24 hours
-- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
-- **Rationale**: Email verification is a 1× lifecycle step; the user may take a day or more to come back to it.
-- **Consequences of change**:
-  - Decreasing → users who don't verify the same day must re-trigger the verification email.
-  - Increasing → larger replay window; not recommended past 7 days because the verification token grants access to a sensitive lifecycle action.
 - **Last reviewed**: 2026-05-28
 
 ## ACCESS_TOKEN_EXPIRY_SECONDS
@@ -314,14 +304,15 @@ The canonical exports live under [src/shared/constants/](src/shared/constants/) 
 
 ## ORGANIZATION_TYPE_CAPABILITY_MATRIX
 
-- **Value**: `PERSONAL` → all capabilities `false`; `TEAM` → all capabilities `true`. Capabilities: `can_invite_members`, `can_manage_members`, `can_manage_roles`, `can_transfer_ownership`, `can_delete`.
-- **Source**: [src/domains/tenancy/sub-domains/organization/organization-capability.ts](src/domains/tenancy/sub-domains/organization/organization-capability.ts) (`organizationCapabilities(type)` derives the flags; `assertTeamOrganization(organization, capability)` enforces them).
-- **Rationale**: There is **one** route surface for both organization types — no personal-only / team-only paths. A personal organization is a single-owner workspace, so the five team-only capabilities (invite members, manage members, manage roles, transfer ownership, delete) are structurally unavailable to it. Rather than fork the URL space or have clients probe-and-handle errors, every serialized organization carries a `capabilities` object describing what its **type** permits (not what the caller is permitted), and the five team-only routes are backstopped by a single centralized guard. The five routes: `DELETE /api/v1/tenancy/organization`, `POST /api/v1/tenancy/organization/invitations`, `POST /api/v1/tenancy/organization/memberships`, `POST /api/v1/tenancy/organization/transfer-ownership`, `POST /api/v1/tenancy/organization/roles`.
-- **422-on-personal-org policy**: `assertTeamOrganization` rejects a personal organization with **HTTP 422** (`unprocessable_entity`), not 409. The org `type` is **immutable**, so an identical retry can never succeed — 409 (transient state conflict) would mislead clients into retrying. The `capabilities` flags and the guard share one source module so the discoverable booleans and the enforced rejection can never drift. See [docs/reference/api/response-codes.md](docs/reference/api/response-codes.md) (`409 vs 422`) and [docs/reference/api/route-consistency-and-org-model.md](docs/reference/api/route-consistency-and-org-model.md).
+- **Value**: A `PERSONAL` organization cannot exercise the six team-only actions — invite members, manage members, manage roles, transfer ownership, delete, manage billing; a `TEAM` organization can. The org `type` is the **sole** determinant (no per-org or plan-based variation today).
+- **Source**: [src/domains/tenancy/sub-domains/organization/organization-capability.ts](src/domains/tenancy/sub-domains/organization/organization-capability.ts) (`assertTeamOrganization(organization, capability)` enforces the rule; capability buckets `MEMBERS | ROLES | MUTATION | BILLING`).
+- **Rationale**: There is **one** route surface for both organization types — no personal-only / team-only paths. The team-only actions are structurally unavailable to a single-owner personal workspace. Rather than fork the URL space, the team-only routes are backstopped by a single centralized guard; clients derive availability from the organization `type` (`PERSONAL` vs `TEAM`) and gate the action on the caller's permissions. The API response carries **no** `capabilities` object — it was a redundant projection of `type`; reintroduce a purpose-built `features`/`entitlements` object only if availability ever stops being purely type-derived. The team-only routes: `DELETE /api/v1/tenancy/organization`, `POST /api/v1/tenancy/organization/invitations`, `POST /api/v1/tenancy/organization/memberships`, `POST /api/v1/tenancy/organization/transfer-ownership`, `POST /api/v1/tenancy/organization/roles`, and the four subscription mutations (`POST /api/v1/billing/subscriptions` + `/{subscription_id}/change-plan`, `/cancel`, `/resume`).
+- **422-on-personal-org policy**: `assertTeamOrganization` rejects a personal organization with **HTTP 422** (`unprocessable_entity`), not 409. The org `type` is **immutable**, so an identical retry can never succeed — 409 (transient state conflict) would mislead clients into retrying. See [docs/reference/api/response-codes.md](docs/reference/api/response-codes.md) (`409 vs 422`) and [docs/reference/api/route-consistency-and-org-model.md](docs/reference/api/route-consistency-and-org-model.md).
 - **Consequences of change**:
-  - Adding a capability flag → add it to `OrganizationCapabilities`, `organizationCapabilities()`, the serializer, and the OpenAPI schema in the same commit; audit every team-only route to confirm it calls `assertTeamOrganization`.
+  - Adding a team-only action → call `assertTeamOrganization(organization, <bucket>)` in its service before the mutation, and add the route to the list above.
   - Allowing a personal org to gain a team capability → would require making the org `type` mutable; that changes the 422 rationale (a retry could then succeed) and must be reviewed against the response-code policy.
-- **Last reviewed**: 2026-06-16
+  - Re-introducing client-facing availability hints → build a purpose-named `features`/`entitlements` object (not a `type` mirror) when a real per-org/plan need exists.
+- **Last reviewed**: 2026-06-24
 
 ## SLUG_REGEX / UUID_REGEX
 

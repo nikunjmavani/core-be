@@ -47,7 +47,11 @@ export function createDomainContainers(
     tenancyDomain.authorizationService,
   );
   const auditDomain = createAuditContainer(tenancyDomain.organizationService, userBase.userService);
-  const billingDomain = createBillingContainer(tenancyDomain.organizationService);
+  const billingDomain = createBillingContainer(
+    tenancyDomain.organizationService,
+    // REQ-4: tenancy membership service supplies seats_used + the seat-sync worker's member count.
+    tenancyDomain.membershipService,
+  );
   const notifyDomain = createNotifyContainer(
     tenancyDomain.organizationService,
     userBase.userService,
@@ -87,6 +91,10 @@ export function createDomainContainers(
     // route-audit-#2: cancel the org's active subscription on org delete so billing stops.
     billingDomain.subscriptionService,
   );
+
+  // REQ-4: late-wire billing's subscription service into the membership service so seat enforcement
+  // + Stripe seat reconciliation work in the worker process too (membership↔subscription cycle).
+  tenancyDomain.membershipService.wireSeatEnforcement(billingDomain.subscriptionService);
 
   userDomain.userDataExportService.wireCrossDomainServices({
     authSessionService: authDomain.authSessionService,

@@ -27,32 +27,36 @@ export class UserSettingsRepository {
       preferred_locales?: unknown;
     },
   ) {
-    const existing = await this.getByUserId(user_id);
-    const payload = {
-      is_dark_mode_enabled: data.is_dark_mode_enabled ?? existing?.is_dark_mode_enabled ?? false,
-      is_notifications_enabled:
-        data.is_notifications_enabled ?? existing?.is_notifications_enabled ?? true,
-      language: data.language ?? existing?.language ?? 'en',
-      preferred_locales: (data.preferred_locales as string[] | undefined) ??
-        (existing?.preferred_locales as string[] | undefined) ?? ['en'],
-      updated_at: databaseNowTimestamp,
-    };
-    if (existing) {
-      const rows = await getRequestDatabase()
-        .update(user_settings)
-        .set(payload)
-        .where(eq(user_settings.user_id, user_id))
-        .returning();
-      return rows[0]!;
-    }
+    // audit #12: single atomic INSERT ... ON CONFLICT DO UPDATE. The prior read-branch-write
+    // (getByUserId → UPDATE or INSERT) raced under concurrency: two concurrent first-time writes
+    // both read `existing = null`, both INSERT, and one hit the user_id PK (23505) → HTTP 500;
+    // concurrent partial updates also lost fields. The INSERT carries factory defaults for a brand
+    // new row; the conflict SET touches ONLY the fields this call actually supplied (others keep
+    // their stored value), so concurrent partial updates compose instead of clobbering.
     const rows = await getRequestDatabase()
       .insert(user_settings)
       .values({
         user_id,
-        is_dark_mode_enabled: payload.is_dark_mode_enabled,
-        is_notifications_enabled: payload.is_notifications_enabled,
-        language: payload.language,
-        preferred_locales: payload.preferred_locales,
+        is_dark_mode_enabled: data.is_dark_mode_enabled ?? false,
+        is_notifications_enabled: data.is_notifications_enabled ?? true,
+        language: data.language ?? 'en',
+        preferred_locales: (data.preferred_locales as string[] | undefined) ?? ['en'],
+      })
+      .onConflictDoUpdate({
+        target: user_settings.user_id,
+        set: {
+          ...(data.is_dark_mode_enabled !== undefined && {
+            is_dark_mode_enabled: data.is_dark_mode_enabled,
+          }),
+          ...(data.is_notifications_enabled !== undefined && {
+            is_notifications_enabled: data.is_notifications_enabled,
+          }),
+          ...(data.language !== undefined && { language: data.language }),
+          ...(data.preferred_locales !== undefined && {
+            preferred_locales: data.preferred_locales as string[],
+          }),
+          updated_at: databaseNowTimestamp,
+        },
       })
       .returning();
     return rows[0]!;

@@ -7,7 +7,7 @@
  *
  * @remarks
  * Keep this in sync with the auth routes (`auth.routes.ts`), the active-org token
- * model (`docs/reference/architecture/personal-team-organizations.md`), and the
+ * model (`docs/reference/architecture/personal-vs-team-organizations.md`), and the
  * API-contract rule. It is intentionally a hand-written narrative — the machine-
  * readable surface lives in the `core-be://openapi` and `core-be://routes`
  * resources, which clients should read alongside this guide.
@@ -22,9 +22,9 @@ alongside \`core-be://openapi\` (full spec) and \`core-be://routes\` (route list
 - **Password login:** \`POST /api/v1/auth/login\` with \`{ email, password }\` →
   \`{ data: { access_token, ... } }\`. Public auth forms must send an
   \`X-Captcha-Token\` header.
-- **Alternatives:** magic link (\`POST /api/v1/auth/magic-link/send\` then
-  \`/verify\`), OAuth (\`/api/v1/auth/oauth/...\`), and MFA / WebAuthn step-up for
-  sensitive actions.
+- **Alternatives:** email verification-code login (\`POST /api/v1/auth/email/send-code\`
+  then \`/auth/email/login\`), OAuth (\`/api/v1/auth/oauth/...\`), and MFA / WebAuthn
+  step-up for sensitive actions.
 - The \`access_token\` is a short-lived RS256 JWT. Send it as
   \`Authorization: Bearer <access_token>\` on every authenticated request. It
   carries the **active organization** as the \`org\` claim and a session-version

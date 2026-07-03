@@ -98,7 +98,7 @@ src/domains/<domain>/sub-domains/<resource>/__tests__/
 | ------ | ------- |
 | `*.unit.test.ts` | `subscription.validator.unit.test.ts` |
 | `*.integration.test.ts` | `auth.integration.test.ts` |
-| `*.e2e.test.ts` | `magic-link-flow.e2e.test.ts` |
+| `*.e2e.test.ts` | `email-login-flow.e2e.test.ts` |
 | `*.smoke.test.ts` | `health.smoke.test.ts` |
 
 ---
@@ -261,5 +261,5 @@ describe('example.validator', () => {
 - [sub-domains-layout.md](../architecture/sub-domains-layout.md) — test placement vs with/without routes
 - [api-testing.md](../../getting-started/api-testing.md) — manual smoke checklist
 - [documentation-system.md](../architecture/documentation-system.md) — layered docs ownership map
-- `src/tests/<suite>/OVERVIEW.md` — per-suite scope (unit, integration, e2e, global, chaos, contract, performance, security, smoke, load, bench)
+- `src/tests/<suite>/<suite>.overview.md` — per-suite scope (unit, integration, e2e, global, chaos, contract, performance, security, smoke, load, bench)
 - `.cursor/skills/test-generator/SKILL.md` — orchestration checklist

@@ -81,6 +81,11 @@ export const RLS_MATRIX_SKIP_CRUD_TABLES = new Set([
   // dedicated test file (audit-append-only.security.test.ts) covers both
   // semantics precisely.
   tableKey('audit', 'logs'),
+  // audit.outbox has no generic tenant SELECT policy — reads require the `app.audit_outbox_drain`
+  // GUC (drain worker) and writes are org-scoped INSERT-only / drain-gated, so the generic org CRUD
+  // matrix does not fit. Its dedicated test (audit-outbox-insert-rls.security.test.ts) covers the
+  // INSERT isolation precisely; FORCE/drift coverage comes from EXPECTED_FORCE_RLS_TABLES.
+  tableKey('audit', 'outbox'),
 ]);
 
 export async function grantCoreBeAppRoleForTests(): Promise<void> {
@@ -540,6 +545,7 @@ export async function seedUserScopedRlsFixtures(): Promise<RlsUserFixture> {
   const [credentialA] = await database
     .insert(webauthn_credentials)
     .values({
+      public_id: generatePublicId('webauthnCredential'),
       user_id: userA.id,
       credential_id: generatePublicId('organization'),
       public_key: 'key-a',
@@ -548,6 +554,7 @@ export async function seedUserScopedRlsFixtures(): Promise<RlsUserFixture> {
   const [credentialB] = await database
     .insert(webauthn_credentials)
     .values({
+      public_id: generatePublicId('webauthnCredential'),
       user_id: userB.id,
       credential_id: generatePublicId('organization'),
       public_key: 'key-b',

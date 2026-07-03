@@ -106,9 +106,11 @@ async function dispatchNotificationEmail(options: {
   await markNotificationEmailDispatched({ notificationId, recipient: email });
 
   // Do NOT throw on dispatch failure — the mail-outbox sweeper re-enqueues the row.
+  let dispatchSucceeded = false;
   if (mailOutboxId !== undefined) {
     try {
       await dispatchOutboxEmail(mailOutboxId, requestId ? { requestId } : undefined);
+      dispatchSucceeded = true;
     } catch (dispatchError) {
       logger.warn(
         { error: dispatchError, mailOutboxId, notificationId },
@@ -117,7 +119,13 @@ async function dispatchNotificationEmail(options: {
     }
   }
 
-  return 'email:queued';
+  // audit #45: distinguish a durably-persisted-but-not-yet-dispatched outbox row
+  // (the BullMQ enqueue failed; the mail-outbox sweeper will re-enqueue it, and
+  // its depth is tracked by the `mail_outbox_pending` gauge) from a send that was
+  // actually handed to the queue. The prior unconditional `email:queued` masked
+  // the pending state as success, so a persistent enqueue failure looked healthy
+  // in the per-channel outcome.
+  return dispatchSucceeded ? 'email:queued' : 'email:outbox_pending';
 }
 
 /**

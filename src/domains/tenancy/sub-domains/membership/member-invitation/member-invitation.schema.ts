@@ -53,6 +53,14 @@ export const member_invitations = tenancySchema
       ),
       index('idx_member_invitations_created_id').on(table.created_at, table.id),
       index('idx_member_invitations_email').on(table.email, table.accepted_at),
+      // audit #18: covers the cross-org pending-invitation keyset query
+      // (`tenancy.list_pending_member_invitations_for_email`), which filters
+      // email + accepted_at IS NULL + revoked_at IS NULL and keyset-orders by
+      // (created_at, id). The plain (email, accepted_at) index above left the
+      // sort columns uncovered → per-page in-memory sort for heavily-invited emails.
+      index('idx_member_invitations_email_pending')
+        .on(table.email, table.created_at, table.id)
+        .where(sql`${table.accepted_at} IS NULL AND ${table.revoked_at} IS NULL`),
       index('idx_member_invitations_expires').on(table.expires_at),
       check('chk_member_inv_expires', sql`${table.expires_at} > ${table.created_at}`),
       check(
@@ -71,6 +79,13 @@ export const member_invitations = tenancySchema
             )
           )
           OR current_setting('app.global_retention_cleanup', true) = 'true'`,
+        withCheck: sql`${table.membership_id} IN (
+            SELECT id FROM tenancy.memberships
+            WHERE organization_id = (
+              SELECT id FROM tenancy.organizations
+              WHERE public_id = current_setting('app.current_organization_id', true)
+            )
+          )`,
       }),
     ],
   )

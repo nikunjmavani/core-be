@@ -2,20 +2,29 @@ import { describe, expect, it } from 'vitest';
 import { ValidationError } from '@/shared/errors/index.js';
 import {
   validateForgotPassword,
-  validateMagicLinkSend,
-  validateMagicLinkVerify,
+  validateEmailSendCode,
+  validateEmailLogin,
   validateResetPassword,
 } from '@/domains/auth/auth.validator.js';
 
 describe('auth-method.validator', () => {
-  it('validateMagicLinkSend accepts email', () => {
-    expect(validateMagicLinkSend({ email: 'user@example.com' })).toEqual({
+  it('validateEmailSendCode accepts email', () => {
+    expect(validateEmailSendCode({ email: 'user@example.com' })).toEqual({
       email: 'user@example.com',
     });
   });
 
-  it('validateMagicLinkVerify accepts token', () => {
-    expect(validateMagicLinkVerify({ token: 'abc-token' })).toEqual({ token: 'abc-token' });
+  it('validateEmailLogin accepts email + 6-char alphanumeric code', () => {
+    expect(validateEmailLogin({ email: 'user@example.com', code: 'AB2CD3' })).toEqual({
+      email: 'user@example.com',
+      code: 'AB2CD3',
+    });
+  });
+
+  it('validateEmailLogin rejects a non-6-char code', () => {
+    expect(() => validateEmailLogin({ email: 'user@example.com', code: 'AB2CD' })).toThrow(
+      ValidationError,
+    );
   });
 
   it('validateForgotPassword accepts email', () => {

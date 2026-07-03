@@ -6,6 +6,7 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { seedPermissions } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
+import { BILLING_PERMISSIONS } from '@/domains/billing/billing.permissions.js';
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
 import { injectAuthenticated } from '@/tests/helpers/test-http-inject.helper.js';
 import type { FastifyInstance } from 'fastify';
@@ -31,10 +32,13 @@ describe('Cross-domain e2e: tenancy + billing organization', () => {
     // role_permissions_permission_code_permissions_code_fk FK violation.
     // Re-seed the full tenancy catalog (idempotent ON CONFLICT DO NOTHING),
     // mirroring the organization-onboarding e2e.
-    await seedPermissions(Object.values(TENANCY_PERMISSIONS));
+    await seedPermissions([
+      ...Object.values(TENANCY_PERMISSIONS),
+      ...Object.values(BILLING_PERMISSIONS),
+    ]);
   });
 
-  it('creates organization then reads billing plans', async () => {
+  it('creates organization then reads billing plans and subscriptions', async () => {
     const user = await createTestUser();
     const token = await generateTestToken({ userId: user.public_id });
 
@@ -47,13 +51,23 @@ describe('Cross-domain e2e: tenancy + billing organization', () => {
     });
     expect(createResponse.statusCode).toBe(201);
     const created = createResponse.json() as { data: { id: string } };
+    const orgToken = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: created.data.id,
+    });
 
     const plansResponse = await injectAuthenticated(app, {
       method: 'GET',
       url: testApiPath('/billing/plans'),
-      token,
-      organizationPublicId: created.data.id,
+      token: orgToken,
     });
     expect(plansResponse.statusCode).toBe(200);
+
+    const subscriptionsResponse = await injectAuthenticated(app, {
+      method: 'GET',
+      url: testApiPath('/billing/subscriptions'),
+      token: orgToken,
+    });
+    expect(subscriptionsResponse.statusCode).toBe(200);
   });
 });

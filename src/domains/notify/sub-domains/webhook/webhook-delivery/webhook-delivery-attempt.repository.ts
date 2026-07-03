@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt, type SQL } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, ne, type SQL } from 'drizzle-orm';
 import { countWithCap } from '@/infrastructure/database/utils/capped-count.util.js';
 import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
@@ -45,6 +45,25 @@ export class WebhookDeliveryAttemptRepository {
     return resolveRepositoryDatabaseHandle(this.databaseHandle);
   }
 
+  /**
+   * Lists delivery attempts for one webhook (dashboard history), keyset-paginated.
+   *
+   * @remarks
+   * - **Tenant-isolation precondition (audit #42):** `webhook_id` MUST be an
+   *   internal id the caller resolved for the active organization — the
+   *   controller obtains it via {@link getWebhookId}`(public_id, organization_id)`,
+   *   so a webhook from another org never reaches this query. It is also a pure
+   *   defense-in-depth backstop: this runs on the request-scoped handle, and the
+   *   `webhook_delivery_attempts_tenant_isolation` RLS policy scopes visibility to
+   *   `webhook_id IN (SELECT id FROM notify.webhooks WHERE organization_id =
+   *   current_org)`, so even a forged `webhook_id` from a foreign org returns zero
+   *   rows. No explicit org predicate is added here to avoid duplicating the RLS
+   *   join on every page read.
+   * - **Algorithm:** descending `(created_at, id)` keyset page of `limit + 1`
+   *   rows; an optional capped total when `include_total` is set.
+   * - **Side effects:** none — read-only. `payload` and `response_body` are
+   *   intentionally not projected (sec-r4-D6: they can carry PII).
+   */
   async listByWebhook(webhook_id: number, pagination: WebhookDeliveryAttemptListPagination) {
     const { after, limit } = pagination;
     const includeTotal = pagination.include_total === true;
@@ -210,6 +229,17 @@ export class WebhookDeliveryAttemptRepository {
 
   /**
    * Persist terminal or in-progress delivery outcome (used by webhook-delivery worker).
+   *
+   * @remarks
+   * - **Side effects:** updates one `webhook_delivery_attempts` row, guarded so a terminal
+   *   `SENT` row is never overwritten.
+   * - **Notes:** a delivery whose lease expired can be reclaimed and re-sent by another
+   *   worker. If the original (slow) worker's outcome lands late, it must NOT flip an
+   *   already-delivered (`SENT`) webhook back to `FAILED` — that would resurrect a
+   *   delivered attempt and trigger a spurious redelivery. `SENT` is terminal, so the
+   *   `ne(status, 'SENT')` guard makes a late write against an already-delivered row a
+   *   no-op. The benign at-least-once duplicate that the reclaim itself can cause is
+   *   covered receiver-side by the `X-Webhook-Delivery-Id` header.
    */
   async recordOutcome(
     deliveryAttemptId: number,
@@ -228,7 +258,12 @@ export class WebhookDeliveryAttemptRepository {
         response_body: outcome.response_body ?? null,
         next_retry_at: outcome.next_retry_at ?? null,
       })
-      .where(eq(webhook_delivery_attempts.id, deliveryAttemptId));
+      .where(
+        and(
+          eq(webhook_delivery_attempts.id, deliveryAttemptId),
+          ne(webhook_delivery_attempts.status, 'SENT'),
+        ),
+      );
   }
 
   /** Record a delivery attempt (used for both real events and test deliveries). */

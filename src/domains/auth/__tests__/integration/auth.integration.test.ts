@@ -459,13 +459,13 @@ describe('Auth Domain — Integration', () => {
     });
   });
 
-  // ─── Magic Link ───────────────────────────────────────────────
+  // ─── Email verification-code login ────────────────────────────
 
-  describe('POST /api/v1/auth/magic-link/send', () => {
+  describe('POST /api/v1/auth/email/send-code', () => {
     it('should return 400 for missing email', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/magic-link/send'),
+        url: testApiPath('/auth/email/send-code'),
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -474,54 +474,54 @@ describe('Auth Domain — Integration', () => {
     it('should accept valid email format', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/magic-link/send'),
+        url: testApiPath('/auth/email/send-code'),
         payload: { email: 'test@example.com' },
       });
-      // May return 201 (sent) or 404 (user not found) depending on config
-      expect([201, 404]).toContain(response.statusCode);
+      // Uniform 201 for known and unknown emails (no account enumeration).
+      expect(response.statusCode).toBe(201);
     });
 
-    it('when BLOCK_DISPOSABLE_EMAIL is off, magic-link send accepts disposable email', async () => {
+    it('when BLOCK_DISPOSABLE_EMAIL is off, send-code accepts disposable email', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/magic-link/send'),
+        url: testApiPath('/auth/email/send-code'),
         payload: { email: 'test@yopmail.com' },
       });
       expect(response.statusCode).toBe(201);
       expect((response.json() as { data: Record<string, unknown> }).data.message).toBeDefined();
     });
 
-    it('returns translated success message for magic-link send with Accept-Language: es', async () => {
+    it('returns translated success message for send-code with Accept-Language: es', async () => {
       const response = await injectRoute(app, {
         method: 'POST',
-        url: testApiPath('/auth/magic-link/send'),
+        url: testApiPath('/auth/email/send-code'),
         headers: { 'accept-language': 'es' },
-        payload: { email: 'unknown-magic-link-user@example.com' },
+        payload: { email: 'unknown-email-code-user@example.com' },
       });
       expect(response.statusCode).toBe(201);
       expect((response.json() as { data: Record<string, unknown> }).data.message).toBeDefined();
       expect([
-        'If an account exists with this email, you will receive a magic link shortly.',
-        'Si existe una cuenta con este correo, recibirás un enlace mágico en breve.',
+        'If an account exists with this email, you will receive a sign-in code shortly.',
+        'Si existe una cuenta con este correo, recibirás un código de inicio de sesión en breve.',
       ]).toContain((response.json() as { data: Record<string, unknown> }).data.message);
     });
   });
 
-  describe('POST /api/v1/auth/magic-link/verify', () => {
-    it('should return 400 for missing token', async () => {
+  describe('POST /api/v1/auth/email/login', () => {
+    it('should return 400 for missing email/code', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/magic-link/verify'),
+        url: testApiPath('/auth/email/login'),
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
     });
 
-    it('should return 401 for invalid token', async () => {
+    it('should return 401 for an unknown email / wrong code', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/magic-link/verify'),
-        payload: { token: 'invalid-token' },
+        url: testApiPath('/auth/email/login'),
+        payload: { email: 'unknown-email-login@example.com', code: 'ZZZZZZ' },
       });
       expect([401, 404]).toContain(response.statusCode);
     });
@@ -736,93 +736,6 @@ describe('Auth Domain — Integration', () => {
     });
   });
 
-  // ─── Email Verification ───────────────────────────────────────
-
-  describe('POST /api/v1/auth/email/verify', () => {
-    it('should return 400 for missing token', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/email/verify'),
-        payload: {},
-      });
-      expect([400, 422]).toContain(response.statusCode);
-    });
-
-    it('should return 401 for invalid verification token', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/email/verify'),
-        payload: { token: 'invalid-verification-token' },
-      });
-      expect(response.statusCode).toBe(401);
-    });
-
-    it('should verify email with a valid token', async () => {
-      const user = await createTestUser({ isEmailVerified: false });
-
-      // Create an email verification token directly in DB
-      const rawToken = randomBytes(32).toString('hex');
-      const tokenHash = createHash('sha256').update(rawToken).digest('hex');
-      const expiresAt = new Date(Date.now() + 86_400_000); // 24 hours
-
-      await database.insert(verification_tokens).values({
-        token_type: 'EMAIL_VERIFICATION',
-        token_hash: tokenHash,
-        user_id: user.id,
-        email: user.email,
-        expires_at: expiresAt,
-      });
-
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/email/verify'),
-        payload: { token: rawToken },
-      });
-      expect(response.statusCode).toBe(201);
-      expect((response.json() as { data: Record<string, unknown> }).data).toHaveProperty('message');
-      expect((response.json() as { data: Record<string, unknown> }).data.message).toContain(
-        'verified',
-      );
-    });
-  });
-
-  describe('POST /api/v1/auth/email/resend-verification', () => {
-    it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/email/resend-verification'),
-        payload: {},
-      });
-      expect(response.statusCode).toBe(401);
-    });
-
-    it('should return message for unverified user', async () => {
-      const user = await createTestUser({ isEmailVerified: false });
-      const token = await generateTestToken({ userId: user.public_id });
-      const response = await injectAuthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/email/resend-verification'),
-        token: token,
-      });
-      expect(response.statusCode).toBe(201);
-      expect((response.json() as { data: Record<string, unknown> }).data).toHaveProperty('message');
-    });
-
-    it('should return already-verified message for verified user', async () => {
-      const user = await createTestUser({ isEmailVerified: true });
-      const token = await generateTestToken({ userId: user.public_id });
-      const response = await injectAuthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/email/resend-verification'),
-        token: token,
-      });
-      expect(response.statusCode).toBe(201);
-      expect((response.json() as { data: Record<string, unknown> }).data.message).toContain(
-        'already verified',
-      );
-    });
-  });
-
   // ─── i18n (Accept-Language) ────────────────────────────────────
 
   describe('i18n response messages', () => {
@@ -852,20 +765,15 @@ describe('Auth Domain — Integration', () => {
       expect(['Route not found', 'Ruta no encontrada']).toContain(errorDetail);
     });
 
-    it('returns success message (translated) for resend-verification when already verified', async () => {
-      const user = await createTestUser({ isEmailVerified: true });
-      const token = await generateTestToken({ userId: user.public_id });
-      const response = await injectAuthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/email/resend-verification'),
-        token: token,
+    it('returns 404 error detail in Spanish when supported (Accept-Language: es)', async () => {
+      const response = await injectRoute(app, {
+        method: 'GET',
+        url: testApiPath('/auth/another-nonexistent-route-for-i18n-test'),
         headers: { 'accept-language': 'es' },
       });
-      expect(response.statusCode).toBe(201);
-      expect((response.json() as { data: Record<string, unknown> }).data.message).toBeDefined();
-      expect((response.json() as { data: Record<string, unknown> }).data.message).toMatch(
-        /verified|verificado/,
-      );
+      expect(response.statusCode).toBe(404);
+      const errorDetail = (response.json() as { error?: { detail?: string } }).error?.detail;
+      expect(['Route not found', 'Ruta no encontrada']).toContain(errorDetail);
     });
   });
 });

@@ -25,21 +25,25 @@ export interface AuditOutboxInsertInput {
 
 /**
  * Inserts a PENDING row into `audit.outbox` using the currently-pinned request
- * database handle. Enrolls in the caller's transaction so the audit row commits
- * atomically with the business write being audited — and rolls back with it if
- * the business write fails (which is the whole point of the outbox pattern).
+ * database handle. The handle is pinned by `AuditService.record`, which wraps this
+ * call in the RLS context that matches the row (audit R10): an org context for
+ * org-scoped rows, the system-audit-insert context for tenantless rows.
  *
  * @remarks
  * - **Algorithm:** single `INSERT ... RETURNING id` against the request-scoped
- *   handle resolved from ALS. Never opens its own transaction.
+ *   handle resolved from ALS. Never opens its own transaction — the wrapping
+ *   context (org / system-audit-insert) owns the transaction boundary.
  * - **Failure modes:** RLS rejects the INSERT when `app.current_organization_id`
  *   does not match the supplied `organizationPublicId` (or, for tenantless
  *   audits, when `app.system_audit_insert` is not `'true'`). The thrown error
  *   bubbles back to the caller's audit-record wrapper, which catches and logs
  *   so the business write itself is never failed by an audit problem.
- * - **Side effects:** one INSERT in the caller's transaction.
+ * - **Side effects:** one INSERT in the wrapping context's short transaction.
+ *   Post-sec-M4 this is decoupled from the originating business write (which has
+ *   already committed in its own scoped context), so the audit row is best-effort,
+ *   not atomic with the audited write.
  * - **Notes:** never reachable from worker runtime — callers must already hold
- *   a request DB context (HTTP request or system-audit-insert worker context).
+ *   a request DB context (`AuditService.record` establishes it).
  */
 export async function insertAuditOutboxRow(input: AuditOutboxInsertInput): Promise<number> {
   const database = getRequestDatabase();
@@ -154,6 +158,58 @@ export function createDrainAuditOutboxRepository(databaseHandle: RequestScopedPo
           updated_at: new Date(),
         })
         .where(eq(audit_outbox.id, id));
+    },
+
+    /**
+     * Backstop telemetry (sec-r7/M2) for the drain worker: the count of still-PENDING rows, the
+     * highest `attempt_count` among them, and the age in seconds of the oldest one. A wedged or
+     * chronically-failing queue shows up as a growing oldest-age / max-attempts even though the
+     * per-row attempt cap now bounds retries.
+     *
+     * @remarks
+     * - **Algorithm:** single aggregate `SELECT` over `audit.outbox WHERE status = 'PENDING'`.
+     * - **Failure modes:** propagates query errors; expected to run inside the drain context.
+     * - **Side effects:** read-only.
+     * - **Notes:** `oldestPendingAgeSeconds` / `maxAttemptCount` are `0` when nothing is pending.
+     */
+    async getPendingBacklogStats(): Promise<{
+      pendingCount: number;
+      oldestPendingAgeSeconds: number;
+      maxAttemptCount: number;
+    }> {
+      const result = await databaseHandle.execute<{
+        pending_count: number;
+        oldest_age_seconds: number;
+        max_attempt_count: number;
+      }>(drizzleSql`
+        SELECT
+          COUNT(*)::int AS pending_count,
+          COALESCE(EXTRACT(EPOCH FROM (NOW() - MIN(created_at))), 0)::int AS oldest_age_seconds,
+          COALESCE(MAX(attempt_count), 0)::int AS max_attempt_count
+        FROM audit.outbox
+        WHERE status = 'PENDING'
+      `);
+      const rows = Array.isArray(result)
+        ? (result as {
+            pending_count: number;
+            oldest_age_seconds: number;
+            max_attempt_count: number;
+          }[])
+        : ((
+            result as {
+              rows?: {
+                pending_count: number;
+                oldest_age_seconds: number;
+                max_attempt_count: number;
+              }[];
+            }
+          ).rows ?? []);
+      const stats = rows[0];
+      return {
+        pendingCount: stats?.pending_count ?? 0,
+        oldestPendingAgeSeconds: stats?.oldest_age_seconds ?? 0,
+        maxAttemptCount: stats?.max_attempt_count ?? 0,
+      };
     },
 
     /**

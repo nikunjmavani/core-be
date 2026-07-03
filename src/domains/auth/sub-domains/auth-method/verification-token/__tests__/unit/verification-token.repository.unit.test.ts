@@ -30,11 +30,11 @@ describe('VerificationTokenRepository', () => {
   });
 
   it('create inserts verification token', async () => {
-    const created = { id: 1, token_type: 'MAGIC_LINK' };
+    const created = { id: 1, token_type: 'EMAIL_CODE' };
     mockReturning.mockResolvedValueOnce([created]);
 
     const result = await repository.create(
-      'MAGIC_LINK',
+      'EMAIL_CODE',
       10,
       'user@example.com',
       'hash',
@@ -56,24 +56,18 @@ describe('VerificationTokenRepository', () => {
   it('consumeIfValid returns consumed row or null', async () => {
     const consumed = { id: 3, token_type: 'PASSWORD_RESET' };
     mockReturning.mockResolvedValueOnce([consumed]);
-    expect(await repository.consumeIfValid('hash')).toEqual(consumed);
+    expect(await repository.consumeIfValid('hash', 'PASSWORD_RESET')).toEqual(consumed);
 
     mockReturning.mockResolvedValueOnce([]);
-    expect(await repository.consumeIfValid('missing')).toBeNull();
+    expect(await repository.consumeIfValid('missing', 'PASSWORD_RESET')).toBeNull();
   });
 
-  it('markUsed updates token by hash', async () => {
-    const used = { id: 4, used_at: new Date() };
-    mockReturning.mockResolvedValueOnce([used]);
-    expect(await repository.markUsed('hash')).toEqual(used);
-
-    mockReturning.mockResolvedValueOnce([]);
-    expect(await repository.markUsed('missing')).toBeNull();
-  });
+  // audit #19: the unguarded `markUsed` was removed (dead code that bypassed the expiry/used-once
+  // guards — a latent single-use-token double-consume). Consumers use the atomic `consumeIfValid`.
 
   it('invalidateAllForUser marks unused tokens used', async () => {
     mockWhereForUpdate.mockReturnValueOnce({ returning: vi.fn().mockResolvedValue([]) });
-    await repository.invalidateAllForUser(10, 'EMAIL_VERIFICATION');
+    await repository.invalidateAllForUser(10, 'EMAIL_CHANGE');
     expect(mockUpdate).toHaveBeenCalled();
   });
 });

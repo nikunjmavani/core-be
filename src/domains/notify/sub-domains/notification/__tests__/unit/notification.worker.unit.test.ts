@@ -133,10 +133,12 @@ describe('notification.worker', () => {
     expect(result).toEqual({ channels: ['email:deduplicated', 'in_app:persisted'] });
   });
 
-  it('marks dispatched AFTER persisting the outbox row, and does not throw when the BullMQ enqueue fails (audit-#7)', async () => {
+  it('marks dispatched AFTER persisting the outbox row, and returns email:outbox_pending when the BullMQ enqueue fails (audit-#7 / #45)', async () => {
     // Durability-first: the outbox row is written, the dedup marker is set, then the
     // (best-effort) enqueue runs. A dispatch failure after the durable row lands must
-    // not throw — the mail-outbox sweeper re-enqueues stale pending rows.
+    // not throw — the mail-outbox sweeper re-enqueues stale pending rows. audit #45:
+    // the outcome must report `email:outbox_pending`, not `email:queued`, so the
+    // persisted-but-undelivered state is not masked as a successful send.
     dispatchOutboxEmailMock.mockRejectedValueOnce(new Error('redis down'));
     const repository = createNotificationRepository(buildNotificationRow());
 
@@ -157,7 +159,8 @@ describe('notification.worker', () => {
       markNotificationEmailDispatchedMock.mock.invocationCallOrder[0]!,
     );
     expect(dispatchOutboxEmailMock).toHaveBeenCalledTimes(1);
-    expect(result.channels).toContain('email:queued');
+    expect(result.channels).toContain('email:outbox_pending');
+    expect(result.channels).not.toContain('email:queued');
   });
 
   it('rethrows and does NOT mark dispatched when the outbox INSERT itself fails so BullMQ retries (audit-#7)', async () => {

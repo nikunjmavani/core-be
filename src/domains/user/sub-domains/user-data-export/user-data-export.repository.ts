@@ -1,4 +1,6 @@
 import { and, asc, eq, gt, inArray, isNotNull } from 'drizzle-orm';
+import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
+import { capListWithWarning } from '@/shared/utils/infrastructure/list-cap.util.js';
 import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
@@ -78,7 +80,20 @@ export class UserDataExportRepository {
   }
 
   async listByUserId(user_id: number) {
-    return this.db().select().from(user_data_exports).where(eq(user_data_exports.user_id, user_id));
+    // audit #36: bound this user-self-scoped read with limit+1 + capListWithWarning so a buggy or
+    // abusive export loop (or a future "export history" endpoint) cannot load an unbounded array.
+    const rows = await this.db()
+      .select()
+      .from(user_data_exports)
+      .where(eq(user_data_exports.user_id, user_id))
+      .orderBy(asc(user_data_exports.id))
+      .limit(DEFAULT_REPOSITORY_LIST_LIMIT + 1);
+    return capListWithWarning({
+      rows,
+      limit: DEFAULT_REPOSITORY_LIST_LIMIT,
+      resource: 'user.user_data_exports',
+      context: { userId: user_id },
+    });
   }
 
   /**

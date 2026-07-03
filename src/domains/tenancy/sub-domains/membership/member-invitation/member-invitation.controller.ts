@@ -1,9 +1,8 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
+import { successResponse } from '@/shared/utils/http/response.util.js';
 import { ForbiddenError } from '@/shared/errors/index.js';
 import {
   getRequestIdentifier,
-  requireAuth,
   requirePrincipal,
   resolveActiveOrganizationId,
 } from '@/shared/utils/http/request.util.js';
@@ -11,43 +10,17 @@ import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.u
 import type { MemberInvitationService } from './member-invitation.service.js';
 
 /**
- * Builds the HTTP handler map for organization-scoped invitation routes
- * (list/create/cancel/resend under `/organization/invitations`) and the
- * cross-org user-facing routes (`/invitations/pending`,
- * `/invitations/:invitation_id/accept`, `/invitations/:invitation_id/decline`).
+ * Builds the HTTP handler map for the invitation routes that remain after REQ-1: the org-scoped
+ * `revoke` / `resend` under `/organization/invitations/:invitation_id` and the invitee-facing
+ * `/invitations/:invitation_id/accept`. Adding a member now issues the invitation via
+ * `POST /organization/memberships`, so the standalone create/list, the invitee pending-list, and
+ * decline routes were removed.
  */
 export function createMemberInvitationController(service: MemberInvitationService) {
   return {
-    listMemberInvitations: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const organizationId = resolveActiveOrganizationId(request);
-      const result = await service.list({
-        organization_public_id: organizationId,
-        query: request.query,
-      });
-      return paginatedResponse(result.items, getRequestIdentifier(request), {
-        per_page: result.limit,
-        next: result.next_cursor,
-        has_more: result.has_more,
-        ...(result.total !== null ? { estimated_total: result.total } : {}),
-      });
-    },
-    createMemberInvitation: async (request: FastifyRequest, reply: FastifyReply) => {
-      const auth = requireAuth(request);
-      const organizationId = resolveActiveOrganizationId(request);
-      // R1 / TEN-32: the raw invitation token is a bearer credential and is NEVER
-      // returned in the HTTP response — it is delivered only via the invitation
-      // email. The response carries the invitation metadata only.
-      const invitation = await service.create(organizationId, request.body, auth.userId, {
-        requestId: getRequestIdentifier(request),
-      });
-      reply.code(201);
-      return successResponse({ invitation }, getRequestIdentifier(request));
-    },
     acceptMemberInvitation: async (request: FastifyRequest, _reply: FastifyReply) => {
-      // sec-T4: route now `app.authenticate`-gated; service binds the
-      // invitee email to the acting user's email. API-key principals
-      // cannot accept invitations (no user identity to bind to) — gate
-      // explicitly with a 403.
+      // sec-T4: route is `app.authenticate`-gated; the service binds the invitee email to the acting
+      // user's email. API-key principals cannot accept invitations (no user identity to bind to).
       const auth = requirePrincipal(request);
       if (auth.kind !== 'user') {
         throw new ForbiddenError('errors:invitationEmailMismatch');
@@ -79,25 +52,6 @@ export function createMemberInvitationController(service: MemberInvitationServic
         requestId: getRequestIdentifier(request),
       });
       return successResponse({ invitation }, getRequestIdentifier(request));
-    },
-    listPendingInvitations: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const auth = requireAuth(request);
-      const result = await service.listPendingInvitations(auth.userId, request.query);
-      return paginatedResponse(result.items, getRequestIdentifier(request), {
-        per_page: result.limit,
-        next: result.next_cursor,
-        has_more: result.has_more,
-      });
-    },
-    declineInvitation: async (request: FastifyRequest, reply: FastifyReply) => {
-      const auth = requireAuth(request);
-      const { invitation_id: rawDeclineId } = (request.params as { invitation_id: string }) ?? {
-        invitation_id: '',
-      };
-      // sec-new-T2: reject malformed path params before reaching the service layer.
-      const invitationId = validatePublicIdParam(rawDeclineId ?? '', 'invitation_id');
-      await service.decline(invitationId, auth.userId);
-      return reply.code(204).send();
     },
   };
 }

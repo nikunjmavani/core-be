@@ -114,7 +114,9 @@ function buildRateLimitKeyFromOrganizationActorOrIpAddress(request: FastifyReque
   // the legacy `X-Organization-Id` header, which flat-route clients no longer send. Without this the
   // per-(organization, actor) bucket would collapse to per-actor post-flatten, so one actor's spend
   // in one org would throttle them everywhere instead of isolating quota by active organization.
-  const requestWithOrganization = request as FastifyRequest & { organizationId?: string | null };
+  const requestWithOrganization = request as FastifyRequest & {
+    organizationId?: string | null;
+  };
   const organizationPublicId =
     request.auth?.organizationPublicId ?? requestWithOrganization.organizationId;
   if (
@@ -136,12 +138,23 @@ function buildRateLimitKeyFromOrganizationActorOrIpAddress(request: FastifyReque
 const NODE_ENV_FOR_RATE_LIMIT_CAPS = env.NODE_ENV;
 
 /**
- * Sensitive public endpoints use a tight cap in production/staging so credentials cannot be brute-forced
- * from a single IPv4 rapidly. Integration tests hammer these routes from loopback in one Vitest file, so lift
- * the ceiling only under NODE_ENV=test to avoid flaky Redis-backed rate-limit waits/timeouts.
+ * Non-hosted runtimes where strict public-auth caps (5/min) cause flaky local E2E and dev UX.
+ * Production and staging keep the tight cap — credential stuffing protection stays on there.
  */
-const STRICT_PUBLIC_ROUTE_MAX_REQUESTS_PER_WINDOW =
-  NODE_ENV_FOR_RATE_LIMIT_CAPS === 'test' ? 5000 : 5;
+function isRelaxedPublicAuthRateLimitEnv(nodeEnv: string): boolean {
+  return nodeEnv === 'test' || nodeEnv === 'development' || nodeEnv === 'local';
+}
+
+/**
+ * Sensitive public endpoints use a tight cap in production/staging so credentials cannot be brute-forced
+ * from a single IPv4 rapidly. Lift the ceiling in test/development/local so Playwright E2E and
+ * loopback integration suites do not trip Redis-backed 429s from parallel workers.
+ */
+const STRICT_PUBLIC_ROUTE_MAX_REQUESTS_PER_WINDOW = isRelaxedPublicAuthRateLimitEnv(
+  NODE_ENV_FOR_RATE_LIMIT_CAPS,
+)
+  ? 5000
+  : 5;
 
 /** Sensitive public auth-style endpoints — strict cap keyed by IP. */
 export const STRICT_PUBLIC_RATE_LIMIT = {
@@ -160,11 +173,14 @@ export const STRICT_PUBLIC_RATE_LIMIT = {
  * credential and outbound-email endpoints (login, magic-link request, password-reset request).
  * The IP-only {@link STRICT_PUBLIC_RATE_LIMIT} is spoofable, so this complements it by binding the
  * limit to the targeted account/email — blunting credential stuffing, account enumeration, and
- * mailbomb abuse on public auth routes. Lifted under
- * NODE_ENV=test so loopback suites that loop these routes do not produce flaky 429s.
+ * mailbomb abuse on public auth routes. Lifted under test/development/local so loopback
+ * suites that loop these routes do not produce flaky 429s.
  */
-const STRICT_PUBLIC_PER_EMAIL_MAX_REQUESTS_PER_WINDOW =
-  NODE_ENV_FOR_RATE_LIMIT_CAPS === 'test' ? 5000 : 5;
+const STRICT_PUBLIC_PER_EMAIL_MAX_REQUESTS_PER_WINDOW = isRelaxedPublicAuthRateLimitEnv(
+  NODE_ENV_FOR_RATE_LIMIT_CAPS,
+)
+  ? 5000
+  : 5;
 const STRICT_PUBLIC_PER_EMAIL_WINDOW_MS = 15 * MILLISECONDS_PER_MINUTE;
 
 /**

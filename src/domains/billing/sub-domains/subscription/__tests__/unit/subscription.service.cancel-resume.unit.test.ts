@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// REQ-4: stub the seat-sync producer queue so changePlan's best-effort enqueue never opens Redis.
+vi.mock(
+  '@/domains/billing/sub-domains/subscription/queues/subscription-seat-sync.queue.js',
+  () => ({
+    enqueueSubscriptionSeatSyncBestEffort: vi.fn(),
+  }),
+);
+
 vi.mock('@/infrastructure/database/contexts/organization-database.context.js', () => ({
   withOrganizationDatabaseContext: vi.fn(
     async (_organizationPublicId: string, callback: () => Promise<unknown>) => callback(),
@@ -74,6 +82,7 @@ function buildService() {
     cancelSubscriptionImmediately: vi.fn().mockResolvedValue(undefined),
     resumeSubscription: vi.fn().mockResolvedValue(undefined),
     updateSubscriptionPrice: vi.fn().mockResolvedValue(undefined),
+    updateSubscriptionQuantity: vi.fn().mockResolvedValue(undefined),
     compensateFailedCreate: vi.fn().mockResolvedValue(undefined),
     compensatePlanChange: vi.fn().mockResolvedValue(undefined),
   } satisfies PaymentProvider;
@@ -156,8 +165,12 @@ describe('SubscriptionService cancel / resume / changePlan guards', () => {
 
     await service.cancelActiveForOrganizationOffboarding('org_public');
 
-    // Immediate Stripe cancel (org is going away — stop billing now, not at period end)...
-    expect(paymentProvider.cancelSubscriptionImmediately).toHaveBeenCalledWith('sub_provider');
+    // Immediate Stripe cancel (org is going away — stop billing now, not at period end)
+    // with a deterministic idempotency key so an org-delete retry dedups (audit L1).
+    expect(paymentProvider.cancelSubscriptionImmediately).toHaveBeenCalledWith(
+      'sub_provider',
+      'sub-cancel-offboarding:org_public:sub_provider',
+    );
     expect(paymentProvider.cancelSubscriptionAtPeriodEnd).not.toHaveBeenCalled();
     // ...and the local row is set CANCELED.
     expect(repository.update).toHaveBeenCalledWith(

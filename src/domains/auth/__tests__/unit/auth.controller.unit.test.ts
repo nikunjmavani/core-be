@@ -84,6 +84,11 @@ describe('createAuthController', () => {
     refreshToken: vi
       .fn()
       .mockResolvedValue({ access_token: 'new-token', refresh_secret: 'new-refresh-secret' }),
+    resetPassword: vi.fn().mockResolvedValue({
+      access_token: 'token',
+      session_public_id: 'session',
+      session_refresh_secret: 'refresh-secret',
+    }),
   };
 
   const authMethodService = {
@@ -93,17 +98,13 @@ describe('createAuthController', () => {
     forgotPassword: vi.fn().mockResolvedValue({ messageKey: 'success:forgotPassword' }),
     resetPassword: vi.fn().mockResolvedValue(undefined),
     changePassword: vi.fn().mockResolvedValue(undefined),
-    verifyEmail: vi.fn().mockResolvedValue({ messageKey: 'success:emailVerified' }),
-    resendEmailVerification: vi
-      .fn()
-      .mockResolvedValue({ messageKey: 'success:emailVerificationSent' }),
   };
 
-  const magicLinkService = {
-    send: vi
+  const emailLoginService = {
+    sendCode: vi
       .fn()
-      .mockResolvedValue({ messageKey: 'success:magicLinkEmailSent', expires_in_minutes: 15 }),
-    verify: vi.fn().mockResolvedValue({
+      .mockResolvedValue({ messageKey: 'success:verificationCodeSent', expires_in_minutes: 15 }),
+    login: vi.fn().mockResolvedValue({
       access_token: 'token',
       session_public_id: 'session',
       session_refresh_secret: 'refresh-secret',
@@ -158,7 +159,7 @@ describe('createAuthController', () => {
   const controller = createAuthController({
     authService: authService as never,
     authMethodService: authMethodService as never,
-    magicLinkService: magicLinkService as never,
+    emailLoginService: emailLoginService as never,
     oauthService: oauthService as never,
     mfaService: mfaService as never,
     webauthnService: webauthnService as never,
@@ -189,15 +190,18 @@ describe('createAuthController', () => {
     );
   });
 
-  it('magic link handlers delegate to magic link service', async () => {
-    const verifyReply = mockReply();
-    await controller.sendMagicLink(
+  it('email login handlers delegate to the email login service', async () => {
+    const loginReply = mockReply();
+    await controller.sendEmailCode(
       mockRequest({ body: { email: 'user@example.com' } }),
       mockReply(),
     );
-    await controller.verifyMagicLink(mockRequest({ body: { token: 'raw-token' } }), verifyReply);
-    expect(magicLinkService.send).toHaveBeenCalled();
-    expect(verifyReply.setCookie).toHaveBeenCalled();
+    await controller.emailLogin(
+      mockRequest({ body: { email: 'user@example.com', code: 'ABCDEF' } }),
+      loginReply,
+    );
+    expect(emailLoginService.sendCode).toHaveBeenCalled();
+    expect(loginReply.setCookie).toHaveBeenCalled();
   });
 
   it('oauth handlers delegate to oauth service', async () => {
@@ -291,10 +295,9 @@ describe('createAuthController', () => {
     );
     const changeReply = mockReply();
     await controller.changePassword(mockRequest({ body: { password: 'new' } }), changeReply);
-    await controller.verifyEmail(mockRequest({ body: { token: 'verify' } }), mockReply());
-    await controller.resendEmailVerification(mockRequest(), mockReply());
-    expect(authMethodService.resetPassword).toHaveBeenCalled();
-    expect(resetReply.code).toHaveBeenCalledWith(204);
+    // Reset now auto-logs-in via authService: it sets the session cookie instead of returning 204.
+    expect(authService.resetPassword).toHaveBeenCalled();
+    expect(resetReply.setCookie).toHaveBeenCalled();
   });
 
   it('refreshToken uses session cookie and revokeAllSessions does NOT clear the cookie', async () => {
@@ -371,12 +374,12 @@ describe('createAuthController', () => {
     expect(responsePayload.data).toHaveProperty('message');
   });
 
-  it('verifyMagicLink skips session cookie when session_public_id is absent', async () => {
-    vi.mocked(magicLinkService.verify).mockResolvedValueOnce({
+  it('emailLogin skips session cookie when session_public_id is absent', async () => {
+    vi.mocked(emailLoginService.login).mockResolvedValueOnce({
       access_token: 'token-only',
     } as never);
     const reply = mockReply();
-    await controller.verifyMagicLink(mockRequest({ body: { token: 'magic' } }), reply);
+    await controller.emailLogin(mockRequest({ body: { email: 'a@b.com', code: 'ABCDEF' } }), reply);
     expect(reply.setCookie).not.toHaveBeenCalled();
   });
 
@@ -391,14 +394,6 @@ describe('createAuthController', () => {
     );
     expect(oauthService.handleCallback).toHaveBeenCalled();
     expect(callbackReply.setCookie).toHaveBeenCalled();
-  });
-
-  it('resendEmailVerification uses i18next when request.t is absent', async () => {
-    const responsePayload = await controller.resendEmailVerification(
-      mockRequest({ t: undefined }),
-      mockReply(),
-    );
-    expect(responsePayload.data).toHaveProperty('message');
   });
 
   it('oauthRedirect returns 501 when error name is NotImplementedError', async () => {
@@ -467,9 +462,9 @@ describe('createAuthController', () => {
     expect(reply.clearCookie).not.toHaveBeenCalled();
   });
 
-  it('verifyEmail uses i18next fallback when request.t is absent', async () => {
-    const responsePayload = await controller.verifyEmail(
-      mockRequest({ body: { token: 'verify' }, t: undefined }),
+  it('sendEmailCode uses i18next fallback when request.t is absent', async () => {
+    const responsePayload = await controller.sendEmailCode(
+      mockRequest({ body: { email: 'a@b.com' }, t: undefined }),
       mockReply(),
     );
     expect(responsePayload.data).toHaveProperty('message');

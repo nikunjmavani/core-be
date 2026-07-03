@@ -29,7 +29,7 @@ describe('Auth WebAuthn — Integration', () => {
 
   describe('POST /api/v1/auth/me/webauthn/register/options', () => {
     it('should return registration options for authenticated user', async () => {
-      const user = await createTestUser();
+      const user = await createTestUser({ isEmailVerified: true });
       const { token, sessionPublicId } = await generateTestTokenWithActiveSession(
         app,
         user.public_id,
@@ -49,6 +49,28 @@ describe('Auth WebAuthn — Integration', () => {
       };
       expect(body.data.options.challenge).toBeTruthy();
       expect(body.data.challenge_token).toBeTruthy();
+    });
+
+    it('rejects registration for an UNVERIFIED account with 403, even with a valid step-up', async () => {
+      // Account pre-hijacking (Trojan-credential variant): an unverified (e.g. attacker-pre-
+      // registered) account must not seed a passkey that would survive the real owner's
+      // password-reset recovery. Step-up (a password the attacker set) is not enough — email
+      // verification is the required gate.
+      const user = await createTestUser({ isEmailVerified: false });
+      const { token, sessionPublicId } = await generateTestTokenWithActiveSession(
+        app,
+        user.public_id,
+      );
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/me/webauthn/register/options'),
+        token,
+        payload: {},
+      });
+      expect(response.statusCode).toBe(403);
+      expect((response.json() as { error: { code: string } }).error.code).toBe('forbidden');
     });
 
     it('should return 401 without authentication', async () => {
@@ -71,7 +93,7 @@ describe('Auth WebAuthn — Integration', () => {
     });
 
     it('should return 400 for invalid body', async () => {
-      const user = await createTestUser();
+      const user = await createTestUser({ isEmailVerified: true });
       const { token } = await generateTestTokenWithActiveSession(app, user.public_id);
       const response = await injectAuthenticated(app, {
         method: 'POST',
@@ -80,6 +102,88 @@ describe('Auth WebAuthn — Integration', () => {
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
+    });
+  });
+
+  describe('GET /api/v1/auth/me/webauthn/credentials', () => {
+    it('returns an empty list for an authenticated user with no passkeys', async () => {
+      const user = await createTestUser({ isEmailVerified: true });
+      const { token } = await generateTestTokenWithActiveSession(app, user.public_id);
+
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/auth/me/webauthn/credentials'),
+        token,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { data: unknown[] };
+      expect(Array.isArray(body.data)).toBe(true);
+      expect(body.data).toHaveLength(0);
+    });
+
+    it('returns 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/auth/me/webauthn/credentials'),
+      });
+      expect(response.statusCode).toBe(401);
+    });
+  });
+
+  describe('DELETE /api/v1/auth/me/webauthn/credentials/:credential_id', () => {
+    const validCredentialId = 'wac_a1b2c3d4e5f6g7h8i9j0k';
+
+    it('returns 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/auth/me/webauthn/credentials/${validCredentialId}`),
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('returns 403 when recent step-up is missing', async () => {
+      const user = await createTestUser({ isEmailVerified: true });
+      const { token } = await generateTestTokenWithActiveSession(app, user.public_id);
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/auth/me/webauthn/credentials/${validCredentialId}`),
+        token,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('returns 400 for a malformed credential id (before any lookup)', async () => {
+      const user = await createTestUser({ isEmailVerified: true });
+      const { token, sessionPublicId } = await generateTestTokenWithActiveSession(
+        app,
+        user.public_id,
+      );
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath('/auth/me/webauthn/credentials/not-a-public-id'),
+        token,
+      });
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('returns 404 for a well-formed but unknown passkey id (with step-up)', async () => {
+      const user = await createTestUser({ isEmailVerified: true });
+      const { token, sessionPublicId } = await generateTestTokenWithActiveSession(
+        app,
+        user.public_id,
+      );
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/auth/me/webauthn/credentials/${validCredentialId}`),
+        token,
+      });
+      expect(response.statusCode).toBe(404);
     });
   });
 

@@ -265,15 +265,75 @@ describe('Tenancy Domain — Integration', () => {
       expect(response.statusCode).toBe(403);
     });
 
-    it('should return memberships with permission', async () => {
+    it('should return memberships with embedded user + role summaries (REQ-2)', async () => {
       const { token } = await createAuthorizedUserAndOrganization();
       const response = await injectAuthenticated(app, {
         url: testApiPath('/tenancy/organization/memberships'),
         token,
       });
       expect(response.statusCode).toBe(200);
-      const body = response.json() as { data?: unknown };
-      expect(body.data).toBeDefined();
+      const body = response.json() as {
+        data?: Array<{
+          status: string;
+          user_id: string;
+          role_id: string;
+          user?: {
+            id: string;
+            email: string;
+            first_name: string | null;
+            last_name: string | null;
+            avatar_url: string | null;
+          };
+          role?: { id: string; name: string };
+          invitation?: unknown;
+        }>;
+      };
+      expect(Array.isArray(body.data) && body.data!.length > 0).toBe(true);
+      const owner = body.data![0]!;
+      // Embedded user summary lets the FE render a members table without an N+1 per-row fetch.
+      expect(owner.user).toBeDefined();
+      expect(typeof owner.user!.id).toBe('string');
+      expect(typeof owner.user!.email).toBe('string');
+      expect(owner.user!.id).toBe(owner.user_id); // flat id mirrors the embedded public id
+      expect(owner.user).toHaveProperty('avatar_url');
+      // Embedded role summary (id + name).
+      expect(owner.role).toBeDefined();
+      expect(owner.role!.id).toBe(owner.role_id);
+      expect(typeof owner.role!.name).toBe('string');
+      // The owner membership is ACTIVE → no live invitation embedded.
+      expect(owner.status).toBe('ACTIVE');
+      expect(owner.invitation).toBeNull();
+    });
+
+    it('filters members by the `q` search term (email / name)', async () => {
+      const { organization, role, token } = await createAuthorizedUserAndOrganization();
+      const searchable = await createTestUser({
+        email: 'searchable.member@example.com',
+        firstName: 'Searchable',
+        lastName: 'Member',
+      });
+      await createMembership({
+        userId: searchable.id,
+        organizationId: organization.id,
+        roleId: role.id,
+      });
+
+      const response = await injectAuthenticated(app, {
+        url: testApiPath('/tenancy/organization/memberships?q=searchable.member'),
+        token,
+      });
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { data?: Array<{ user?: { email: string } }> };
+      expect(body.data).toHaveLength(1);
+      expect(body.data![0]!.user!.email).toBe('searchable.member@example.com');
+
+      // A term that matches nobody returns an empty page.
+      const empty = await injectAuthenticated(app, {
+        url: testApiPath('/tenancy/organization/memberships?q=nobodyhere'),
+        token,
+      });
+      expect(empty.statusCode).toBe(200);
+      expect((empty.json() as { data?: unknown[] }).data).toHaveLength(0);
     });
   });
 
@@ -287,77 +347,23 @@ describe('Tenancy Domain — Integration', () => {
     });
   });
 
-  // ─── Invitations ──────────────────────────────────────────────
+  // ─── Add member (invite by email) ─────────────────────────────
+  // REQ-1: the standalone POST/GET /organization/invitations and the invitee
+  // pending-list / decline routes were removed. Adding a member now issues the
+  // invitation via POST /organization/memberships (validation guard kept here;
+  // the full add-member flow is covered in membership.integration.test.ts).
 
-  describe('GET /api/v1/tenancy/organization/invitations', () => {
-    it('should return 403 without membership manage permission', async () => {
-      const { organization } = await createAuthorizedUserAndOrganization();
-      const user = await createTestUser({ email: 'noperm3@test.com' });
-      const token = await generateTestToken({
-        userId: user.public_id,
-        organizationPublicId: organization.public_id,
-      });
-      const response = await injectAuthenticated(app, {
-        url: testApiPath('/tenancy/organization/invitations'),
-        token,
-      });
-      expect(response.statusCode).toBe(403);
-    });
-
-    it('should return invitations with manage permission', async () => {
-      const { token } = await createAuthorizedUserAndOrganization();
-      const response = await injectAuthenticated(app, {
-        url: testApiPath('/tenancy/organization/invitations'),
-        token,
-      });
-      expect(response.statusCode).toBe(200);
-      const body = response.json() as {
-        meta?: { pagination?: { has_more?: boolean; next?: string | null } };
-      };
-      expect(body.meta?.pagination).toMatchObject({ has_more: false, next: null });
-    });
-  });
-
-  describe('POST /api/v1/tenancy/organization/invitations', () => {
-    it('should return 400 for missing body', async () => {
+  describe('POST /api/v1/tenancy/organization/memberships', () => {
+    it('should return 400/422 for missing body', async () => {
       const { token } = await createAuthorizedUserAndOrganization();
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: testApiPath('/tenancy/organization/invitations'),
+        url: testApiPath('/tenancy/organization/memberships'),
         token,
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
-    });
-
-    it('when BLOCK_DISPOSABLE_EMAIL is off, invitation create accepts disposable email', async () => {
-      const { token } = await createAuthorizedUserAndOrganization();
-      const membershipsResponse = await injectAuthenticated(app, {
-        url: testApiPath('/tenancy/organization/memberships'),
-        token,
-      });
-      expect(membershipsResponse.statusCode).toBe(200);
-      const membershipsBody = membershipsResponse.json() as {
-        data: Array<{ id?: number; public_id?: string }>;
-      };
-      const memberships = membershipsBody.data;
-      expect(Array.isArray(memberships) && memberships.length > 0).toBe(true);
-      const firstMembership = memberships[0]!;
-      const membershipId = firstMembership.id ?? firstMembership.public_id;
-
-      const response = await injectAuthenticatedOrganizationMutation(app, {
-        method: 'POST',
-        url: testApiPath('/tenancy/organization/invitations'),
-        token,
-        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
-        payload: {
-          membership_id: membershipId,
-          expires_in_days: 7,
-        },
-      });
-      expect(response.statusCode).toBe(201);
-      const body = response.json() as { data?: unknown };
-      expect(body.data).toBeDefined();
     });
   });
 

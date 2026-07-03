@@ -10,6 +10,7 @@ import {
   ValidationError,
 } from '@/shared/errors/index.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
+import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { AuthorizationService } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
@@ -43,6 +44,7 @@ interface ReservePendingUploadSlotParams {
   userInternalId: number;
   userPublicId: string;
   organizationInternalId: number | null;
+  organizationPublicId: string | null;
   fileName: string;
   fileKey: string;
   contentType: string;
@@ -138,6 +140,8 @@ export class UploadService {
       userInternalId: user.id,
       userPublicId,
       organizationInternalId,
+      organizationPublicId:
+        input.for === UPLOAD_TARGETS.ORGANIZATION ? (input.organization_id ?? null) : null,
       fileName: input.file_name,
       fileKey: pendingKey,
       contentType: input.content_type,
@@ -189,14 +193,26 @@ export class UploadService {
   }
 
   /**
-   * Atomically reserves a PENDING upload row while enforcing the per-user quota.
+   * Atomically reserves a PENDING upload row while enforcing the per-user (and, for org
+   * uploads, the per-org) quota.
    *
-   * Runs the advisory lock, pending-count check, and insert inside a single
-   * `withUserDatabaseContext` transaction so concurrent create-upload requests are
-   * serialized per user: a request can only insert when the committed pending count is
-   * still below the cap. The advisory lock releases at COMMIT, after which the next waiter
-   * sees the freshly committed row. Stops storage/bandwidth cost abuse from a flood of
-   * presign requests that previously all passed a non-atomic count and then over-inserted.
+   * Runs the advisory lock, pending-count check, and insert inside a single RLS database
+   * transaction so concurrent create-upload requests are serialized: a request can only
+   * insert when the committed pending count is still below the cap. The advisory lock
+   * releases at COMMIT, after which the next waiter sees the freshly committed row. Stops
+   * storage/bandwidth cost abuse from a flood of presign requests that previously all
+   * passed a non-atomic count and then over-inserted.
+   *
+   * @remarks
+   * - **sec-r7/M4:** the RLS context MUST match the row being inserted. An org-scoped
+   *   upload (`organization_id` set) only satisfies the `uploads_tenant_isolation`
+   *   `WITH CHECK` under `withOrganizationDatabaseContext` (`app.current_organization_id`);
+   *   under `withUserDatabaseContext` the INSERT is rejected by RLS as the production
+   *   `core_be_app` role (FORCE RLS) — every org-logo / org-file upload would 500.
+   *   User-scoped uploads (`organization_id` NULL, e.g. avatars) run under
+   *   `withUserDatabaseContext` so the `uploads_owner_access` policy applies. The org cap
+   *   is the primary abuse guard for org uploads (sec-UP4); the per-user cap is enforced
+   *   against the user's pending rows visible in the active context.
    */
   private async reservePendingUploadSlot(
     params: ReservePendingUploadSlotParams,
@@ -205,6 +221,7 @@ export class UploadService {
       userInternalId,
       userPublicId,
       organizationInternalId,
+      organizationPublicId,
       fileName,
       fileKey,
       contentType,
@@ -214,7 +231,9 @@ export class UploadService {
     const environment = getEnv();
     const pendingCap = environment.UPLOAD_MAX_PENDING_PER_USER;
     const orgPendingCap = environment.UPLOAD_MAX_PENDING_PER_ORGANIZATION;
-    return withUserDatabaseContext(userPublicId, async () => {
+    // Org-scoped uploads must run under organization RLS context so the tenant-isolation
+    // WITH CHECK passes; user-scoped uploads run under user context for owner-access.
+    const runReservation = async (): Promise<UploadRow> => {
       // audit-#7: take the ORG-scoped advisory lock BEFORE the per-user lock (a globally
       // consistent org-then-user order, deadlock-free) so concurrent reservations from
       // DIFFERENT members of the same org serialize on the org cap. Previously the org count
@@ -273,7 +292,12 @@ export class UploadService {
         status: 'PENDING',
         created_by_user_id: userInternalId,
       });
-    });
+    };
+
+    if (organizationInternalId !== null && organizationPublicId !== null) {
+      return withOrganizationDatabaseContext(organizationPublicId, runReservation);
+    }
+    return withUserDatabaseContext(userPublicId, runReservation);
   }
 
   private async resolveUploadOrganizationInternalId(

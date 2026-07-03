@@ -9,7 +9,7 @@ import { VerificationTokenRepository } from './sub-domains/auth-method/verificat
 import { AuthSessionRepository } from './sub-domains/auth-session/auth-session.repository.js';
 import { AuthService } from './auth.service.js';
 import { AuthMethodService } from './sub-domains/auth-method/auth-method.service.js';
-import { MagicLinkService } from './sub-domains/auth-method/magic-link.service.js';
+import { EmailLoginService } from './sub-domains/auth-method/email-login.service.js';
 import { OAuthService } from './sub-domains/auth-method/oauth/oauth.service.js';
 import { MfaService } from './sub-domains/auth-mfa/auth-mfa.service.js';
 import { WebauthnService } from './sub-domains/auth-webauthn/webauthn.service.js';
@@ -21,7 +21,7 @@ import { AuthMeContextService } from './auth-me-context.service.js';
 export type AuthContainer = {
   authService: AuthService;
   authMethodService: AuthMethodService;
-  magicLinkService: MagicLinkService;
+  emailLoginService: EmailLoginService;
   oauthService: OAuthService;
   mfaService: MfaService;
   webauthnService: WebauthnService;
@@ -29,7 +29,7 @@ export type AuthContainer = {
   authMeContextService: AuthMeContextService;
 };
 
-/** Builds the auth-domain {@link AuthContainer}: instantiates auth-method, magic-link, OAuth, MFA, WebAuthn, and session services with their repositories and Redis. */
+/** Builds the auth-domain {@link AuthContainer}: instantiates auth-method, email verification-code, OAuth, MFA, WebAuthn, and session services with their repositories and Redis. */
 export function createAuthContainer(
   userService: UserService,
   organizationSettingsService: OrganizationSettingsService,
@@ -60,13 +60,16 @@ export function createAuthContainer(
     mfaService,
     organizationSettingsService,
     redisConnection,
+    authMethodService,
   );
-  const magicLinkService = new MagicLinkService(
+  const emailLoginService = new EmailLoginService(
     userService,
     verificationTokenRepository,
     organizationSettingsService,
     mfaService,
     authSessionService,
+    authMethodService,
+    redisConnection,
   );
   const webauthnCredentialRepository = new WebauthnCredentialRepository();
   const webauthnService = new WebauthnService(
@@ -76,6 +79,7 @@ export function createAuthContainer(
     redisConnection,
     organizationSettingsService,
     mfaService,
+    authMethodService,
   );
   const oauthService = new OAuthService(
     userService,
@@ -95,7 +99,7 @@ export function createAuthContainer(
   return {
     authService,
     authMethodService,
-    magicLinkService,
+    emailLoginService,
     oauthService,
     mfaService,
     webauthnService,

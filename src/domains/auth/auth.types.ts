@@ -1,19 +1,14 @@
-/** Minimal HTTP-response shape for endpoints that return only an access token (e.g. refresh). */
-export interface AuthLoginResult {
-  access_token: string;
-}
-
 /**
- * Magic-link send result.
+ * Email verification-code send result.
  *
- * The raw token is intentionally absent — it is dispatched only via
- * `AUTH_EVENT.MAGIC_LINK_REQUESTED` and the resulting email. Tests use
- * `captureNextMagicLinkToken` (src/tests/helpers/magic-link.helper.ts) to read it.
+ * The raw verification code is intentionally absent — it is dispatched only via
+ * `AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED` and the resulting email. Tests use
+ * `captureNextVerificationCode` (src/tests/helpers/verification-code.helper.ts) to read it.
  *
  * `messageKey` is translated by the HTTP handler via `translateMessageKeyPayload`
  * before reaching the API response.
  */
-export interface MagicLinkSendResult {
+export interface EmailSendCodeResult {
   messageKey: string;
   expires_in_minutes: number;
 }

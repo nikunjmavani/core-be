@@ -84,8 +84,8 @@ erDiagram
 - [external-service-resilience.md](../reliability/external-service-resilience.md) — Stripe/Resend circuits and webhook flow
 - [migrations.md](migrations.md) — how to change schema safely
 - [domains-and-public-api-design.md](../architecture/domains-and-public-api-design.md) — billing routes and permissions
-- [`src/domains/billing/OVERVIEW.md`](../../../src/domains/billing/OVERVIEW.md) — domain overview (Stripe authoritative, idempotency, stale-event protection)
-- [`src/domains/billing/sub-domains/plan/OVERVIEW.md`](../../../src/domains/billing/sub-domains/plan/OVERVIEW.md) — plan catalog invariants
-- [`src/domains/billing/sub-domains/subscription/OVERVIEW.md`](../../../src/domains/billing/sub-domains/subscription/OVERVIEW.md) — subscription state machine, immutable ledger semantics
-- [`src/domains/billing/sub-domains/stripe-webhook/OVERVIEW.md`](../../../src/domains/billing/sub-domains/stripe-webhook/OVERVIEW.md) — webhook receiver, reclaim window, per-source DLQ
+- [`src/domains/billing/billing.overview.md`](../../../src/domains/billing/billing.overview.md) — domain overview (Stripe authoritative, idempotency, stale-event protection)
+- [`src/domains/billing/sub-domains/plan/plan.overview.md`](../../../src/domains/billing/sub-domains/plan/plan.overview.md) — plan catalog invariants
+- [`src/domains/billing/sub-domains/subscription/subscription.overview.md`](../../../src/domains/billing/sub-domains/subscription/subscription.overview.md) — subscription state machine, immutable ledger semantics
+- [`src/domains/billing/sub-domains/stripe-webhook/stripe-webhook.overview.md`](../../../src/domains/billing/sub-domains/stripe-webhook/stripe-webhook.overview.md) — webhook receiver, reclaim window, per-source DLQ
 - [`src/FLOWS.md`](../../../src/FLOWS.md) § Stripe webhook ingest, § Subscription create — end-to-end flows

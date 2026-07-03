@@ -1,6 +1,7 @@
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { api_keys } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.schema.js';
 import { BaseRepository } from '@/infrastructure/database/base-repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
@@ -10,10 +11,10 @@ import {
   acquireResourceQuotaLock,
 } from '@/infrastructure/database/resource-quota-lock.util.js';
 import {
-  buildAscendingCreatedAtIdCursorCondition,
-  createOpaqueCursorFromRow,
-  parseListCursor,
-} from '@/shared/utils/http/pagination.util.js';
+  buildSearchCondition,
+  finishKeysetPage,
+  resolveKeysetSort,
+} from '@/shared/utils/http/list-query.util.js';
 import type {
   OrganizationApiKeyAuthenticationCandidate,
   OrganizationApiKeyRow,
@@ -33,12 +34,22 @@ interface ApiKeyAuthenticationResolverRow {
 interface OrganizationApiKeyListPagination {
   after?: string;
   limit: number;
+  q?: string;
+  sort?: 'name' | 'created_at';
+  order?: 'asc' | 'desc';
 }
 
 function parseScopesColumn(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((entry): entry is string => typeof entry === 'string');
 }
+
+/**
+ * Upper bound on active API-key candidates examined per authentication for one key prefix
+ * (audit #40). CSPRNG-derived 10-char prefixes make a collision beyond this astronomically
+ * unlikely; the cap bounds the constant-time compare loop regardless.
+ */
+const API_KEY_PREFIX_RESOLVER_CAP = 16;
 
 /**
  * Drizzle data-access for `tenancy.api_keys`. Stores hashed keys (never raw
@@ -83,33 +94,33 @@ export class OrganizationApiKeyRepository extends BaseRepository {
     organization_id: number,
     pagination: OrganizationApiKeyListPagination,
   ) {
-    const { after, limit } = pagination;
-    const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
-      api_keys.created_at,
-      api_keys.id,
-      parseListCursor(after),
-    );
+    const { after, limit, q, sort, order } = pagination;
+    const { orderBy, cursorCondition, sortValueFor, filterFingerprint } =
+      resolveKeysetSort<OrganizationApiKeyRow>({
+        columns: {
+          name: { column: api_keys.name, kind: 'text', getSortValue: (apiKey) => apiKey.name },
+          created_at: { column: api_keys.created_at, kind: 'created_at' },
+        },
+        idColumn: api_keys.id,
+        defaultSort: 'created_at',
+        sort,
+        order,
+        q,
+        after,
+      });
     const where = and(
       eq(api_keys.organization_id, organization_id),
       isNull(api_keys.deleted_at),
+      buildSearchCondition([api_keys.name], q),
       cursorCondition,
     );
-    const rows = await getRequestDatabase()
+    const rows = (await getRequestDatabase()
       .select()
       .from(api_keys)
       .where(where)
-      .orderBy(asc(api_keys.created_at), asc(api_keys.id))
-      .limit(limit + 1);
-    const hasMore = rows.length > limit;
-    const items = (hasMore ? rows.slice(0, limit) : rows) as OrganizationApiKeyRow[];
-    const lastItem = items.at(-1);
-    return {
-      items,
-      total: null,
-      limit,
-      has_more: hasMore,
-      next_cursor: hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null,
-    };
+      .orderBy(...orderBy)
+      .limit(limit + 1)) as OrganizationApiKeyRow[];
+    return finishKeysetPage(rows, { limit, sortValueFor, filterFingerprint });
   }
 
   async findByPublicId(
@@ -242,7 +253,17 @@ export class OrganizationApiKeyRepository extends BaseRepository {
     const resolverRows = (
       Array.isArray(rows) ? rows : ((rows as { rows?: unknown[] }).rows ?? [])
     ) as ApiKeyAuthenticationResolverRow[];
-    return resolverRows.map((row) => ({
+    // audit #40: bound the per-request constant-time compare loop. CSPRNG-derived 10-char prefixes
+    // make >16 active keys sharing a prefix astronomically unlikely; if it ever happens, only the
+    // first 16 are checked and we alert (count only — the prefix is part of the secret).
+    const cappedRows = resolverRows.slice(0, API_KEY_PREFIX_RESOLVER_CAP);
+    if (resolverRows.length > API_KEY_PREFIX_RESOLVER_CAP) {
+      logger.warn(
+        { candidateCount: resolverRows.length, cap: API_KEY_PREFIX_RESOLVER_CAP },
+        'organization-api-key.prefix_resolver_overflow',
+      );
+    }
+    return cappedRows.map((row) => ({
       public_id: row.public_id,
       organization_id: Number(row.organization_id),
       organization_public_id: row.organization_public_id,

@@ -65,4 +65,47 @@ export class AuthMeContextService {
       organizations: organizationsPage.items,
     };
   }
+
+  /**
+   * Resolves the active-org slice of the context for one organization — the
+   * `active_organization` (with capabilities) and the caller's `my_permissions`
+   * in it — without the heavier `user` / `organizations[]` payload.
+   *
+   * @remarks
+   * - **Algorithm:** the same two reads `getContext` performs for the active org —
+   *   `OrganizationService.getByPublicId` + `AuthorizationService.resolveUserOrganizationPermissions`.
+   * - **Failure modes:** propagates `NotFoundError` when the organization is not
+   *   accessible to the caller.
+   * - **Side effects:** none (read-only); permission resolution is Redis-cached.
+   * - **Notes:** returned inline by `POST /auth/switch-to-organization` and
+   *   `POST /auth/switch-to-personal` so the client repaints the dashboard for the
+   *   newly active org without a follow-up `GET /auth/me/context`. The omitted
+   *   `user` and `organizations[]` are stable across a switch, so the client reuses
+   *   the values from its initial `/me/context` and only flips `is_active` locally.
+   */
+  async getActiveOrganizationContext(options: {
+    userPublicId: string;
+    organizationPublicId: string;
+    globalRole: GlobalRole | undefined;
+  }): Promise<{
+    active_organization: OrganizationOutput;
+    my_permissions: string[];
+    global_role: GlobalRole | null;
+  }> {
+    const { userPublicId, organizationPublicId, globalRole } = options;
+    const activeOrganization = await this.organizationService.getByPublicId(
+      organizationPublicId,
+      userPublicId,
+      globalRole,
+    );
+    const myPermissions = await this.authorizationService.resolveUserOrganizationPermissions(
+      userPublicId,
+      organizationPublicId,
+    );
+    return {
+      active_organization: activeOrganization,
+      my_permissions: myPermissions,
+      global_role: globalRole ?? null,
+    };
+  }
 }

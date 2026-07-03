@@ -2,6 +2,7 @@ import { CircuitBreakerOpenError } from '@/infrastructure/resilience/circuit-bre
 import { buildOutboundCallOptions, outboundCall } from '@/infrastructure/outbound/index.js';
 import { getEnv } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { parseAllowedOriginsList } from '@/shared/utils/security/allowed-origins.util.js';
 
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
@@ -14,7 +15,27 @@ export type TurnstileVerifyResult = {
 type TurnstileSiteVerifyResponse = {
   success?: boolean;
   'error-codes'?: string[];
+  // audit #20: `hostname` is the page that solved the challenge; `action` is the widget action.
+  hostname?: string;
+  action?: string;
 };
+
+/**
+ * Returns the set of hostnames Turnstile tokens are permitted to be solved on (derived from
+ * `ALLOWED_ORIGINS`), or `null` when none are configured (no hostname assertion possible).
+ */
+function resolveAllowedTurnstileHostnames(): Set<string> | null {
+  const origins = parseAllowedOriginsList(getEnv().ALLOWED_ORIGINS);
+  const hostnames = new Set<string>();
+  for (const origin of origins) {
+    try {
+      hostnames.add(new URL(origin).hostname.toLowerCase());
+    } catch {
+      // ignore non-absolute origins (none in deployed runtimes; schema enforces https there)
+    }
+  }
+  return hostnames.size > 0 ? hostnames : null;
+}
 
 /** Inputs for {@link verifyTurnstileToken}; `remoteIp` is optional but recommended for Cloudflare's risk scoring. */
 export interface VerifyTurnstileTokenOptions {
@@ -59,6 +80,23 @@ export async function verifyTurnstileToken(
           const errorCodes = payload['error-codes'];
           if (errorCodes !== undefined) {
             result.errorCodes = errorCodes;
+          }
+          // audit #20: a token solved on another property (or a `*`-hostname widget) must not be
+          // replayable against our backend. When Cloudflare returns the solving `hostname` and we
+          // have an allowlist (from ALLOWED_ORIGINS), reject a mismatch — defense-in-depth on top of
+          // the per-IP + per-email rate limits.
+          if (result.success && typeof payload.hostname === 'string') {
+            const allowedHostnames = resolveAllowedTurnstileHostnames();
+            if (
+              allowedHostnames !== null &&
+              !allowedHostnames.has(payload.hostname.toLowerCase())
+            ) {
+              logger.warn(
+                { hostname: payload.hostname, action: payload.action },
+                'turnstile.hostname.mismatch',
+              );
+              return { success: false, errorCodes: ['hostname-mismatch'] };
+            }
           }
           return result;
         },

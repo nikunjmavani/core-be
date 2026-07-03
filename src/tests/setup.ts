@@ -74,6 +74,13 @@ process.env.OAUTH_GITHUB_CLIENT_ID ??= 'test-github-client-id';
 process.env.OAUTH_GITHUB_CLIENT_SECRET ??= 'test-github-client-secret';
 delete process.env.REDIS_KEY_PREFIX;
 delete process.env.WEBHOOK_URL_ALLOWLIST;
+// CAPTCHA mirrors CI (`reusable-vitest-postgres-redis.yml` leaves CAPTCHA_PROVIDER unset →
+// schema default `disabled`). A developer `.env.local` that enables Cloudflare Turnstile
+// (CAPTCHA_PROVIDER=turnstile + CAPTCHA_SECRET, e.g. from a local dashboards bring-up) would
+// otherwise make `captchaPreHandler` enforce a token on every public auth form and fail the
+// whole auth/e2e suite with 401 `errors:captchaRequired`. Hard-disable so local matches CI; the
+// captcha route tests assert the prehandler is registered statically, not enforced at runtime.
+process.env.CAPTCHA_PROVIDER = 'disabled';
 
 /**
  * Placeholder smell — `.env.example` (and the seeded `.env.development`) use `host` as a

@@ -6,6 +6,7 @@ import {
   text,
   boolean,
   decimal,
+  integer,
   timestamp,
   jsonb,
   index,
@@ -14,6 +15,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { billingSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
+import type { PlanFeatures } from './plan.types.js';
 
 /**
  * Drizzle table for `billing.plans` — the global subscription plan catalog with
@@ -30,7 +32,10 @@ export const plans = billingSchema.table(
     price_monthly: decimal('price_monthly', { precision: 10, scale: 2 }).notNull(),
     price_yearly: decimal('price_yearly', { precision: 10, scale: 2 }).notNull(),
     currency: varchar('currency', { length: 3 }).notNull().default('USD'),
-    features: jsonb('features').notNull().default({}),
+    features: jsonb('features').$type<PlanFeatures>().notNull().default({}),
+    // REQ-4: seat allowance baked into the plan tier. NULL = unlimited/unmetered
+    // (the historical behaviour, so existing plans keep an unbounded seat count).
+    included_seats: integer('included_seats'),
     stripe_product_id: varchar('stripe_product_id', { length: 255 }),
     stripe_price_monthly_id: varchar('stripe_price_monthly_id', { length: 255 }),
     stripe_price_yearly_id: varchar('stripe_price_yearly_id', { length: 255 }),
@@ -47,6 +52,11 @@ export const plans = billingSchema.table(
     index('idx_plans_active_price').on(table.is_active, table.price_monthly),
     check('chk_plans_price_m', sql`${table.price_monthly} >= 0`),
     check('chk_plans_price_y', sql`${table.price_yearly} >= 0`),
+    // REQ-4: a NULL seat allowance means unlimited; any concrete value is non-negative.
+    check(
+      'chk_plans_included_seats',
+      sql`${table.included_seats} IS NULL OR ${table.included_seats} >= 0`,
+    ),
     check('chk_plans_currency', sql`${table.currency} ~ '^[A-Z]{3}$'`),
     check('chk_plans_updated', sql`${table.updated_at} >= ${table.created_at}`),
   ],

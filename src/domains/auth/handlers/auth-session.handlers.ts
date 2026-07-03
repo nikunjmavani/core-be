@@ -15,12 +15,16 @@ import { AuthSerializer } from '@/domains/auth/auth.serializer.js';
 import { serializeAuthSessions } from '@/domains/auth/sub-domains/auth-session/auth-session.serializer.js';
 import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
-type AuthSessionHandlersDependencies = Pick<AuthContainer, 'authService' | 'authSessionService'>;
+type AuthSessionHandlersDependencies = Pick<
+  AuthContainer,
+  'authService' | 'authSessionService' | 'authMeContextService'
+>;
 
-/** Builds the session-management Fastify handlers: `logout`, `refreshToken` (cookie + origin allowlist), `listSessions`, `revokeSession`, and `revokeAllSessions`. */
+/** Builds the session-management Fastify handlers: `logout`, `refreshToken` (cookie + origin allowlist), `listSessions`, `revokeSession`, `revokeAllSessions`, and the active-org `switch-to-*` handlers. */
 export function createAuthSessionHandlers({
   authService,
   authSessionService,
+  authMeContextService,
 }: AuthSessionHandlersDependencies) {
   return {
     logout: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -56,7 +60,10 @@ export function createAuthSessionHandlers({
     listSessions: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
       const data = await authSessionService.list(auth.userId);
-      return successResponse(serializeAuthSessions(data), getRequestIdentifier(request));
+      return successResponse(
+        serializeAuthSessions(data, { currentSessionPublicId: auth.sessionPublicId ?? null }),
+        getRequestIdentifier(request),
+      );
     },
     revokeSession: async (
       request: FastifyRequest<{ Params: { session_id: string } }>,
@@ -105,7 +112,26 @@ export function createAuthSessionHandlers({
         userPublicId: auth.userId,
         sessionPublicId: auth.sessionPublicId,
       });
-      return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
+      // Post-gate read: the switch above re-minted the token (the membership/ownership gate ran in
+      // the service), so resolving the new active org + permissions here exposes only what the caller
+      // is already scoped to. Returned inline so the client skips a follow-up GET /auth/me/context.
+      const context = await authMeContextService.getActiveOrganizationContext({
+        userPublicId: auth.userId,
+        organizationPublicId: data.organization_public_id,
+        globalRole: auth.role,
+      });
+      // A switch re-mints the access token with a different `org` claim (tenant-context change), so
+      // lateral movement between tenants on one session is traceable.
+      await recordScopedAuditEvent(request, {
+        actorUserPublicId: auth.userId,
+        action: 'auth.organization.switch',
+        resource_type: 'session',
+        metadata: { session_public_id: auth.sessionPublicId, target: 'personal' },
+      });
+      return successResponse(
+        AuthSerializer.accessTokenWithActiveOrganization(data, context),
+        getRequestIdentifier(request),
+      );
     },
     switchToOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
@@ -119,7 +145,29 @@ export function createAuthSessionHandlers({
         sessionPublicId: auth.sessionPublicId,
         organizationPublicId: organizationId,
       });
-      return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
+      // Post-gate read: switchToOrganization validated active membership (403 otherwise) and re-minted
+      // the token, so resolving the new active org + permissions here is scoped to what the caller may
+      // already see. Returned inline so the client skips a follow-up GET /auth/me/context.
+      const context = await authMeContextService.getActiveOrganizationContext({
+        userPublicId: auth.userId,
+        organizationPublicId: data.organization_public_id,
+        globalRole: auth.role,
+      });
+      // A switch re-mints the access token with a different `org` claim (tenant-context change), so
+      // lateral movement between tenants on one session is traceable.
+      await recordScopedAuditEvent(request, {
+        actorUserPublicId: auth.userId,
+        action: 'auth.organization.switch',
+        resource_type: 'session',
+        metadata: {
+          session_public_id: auth.sessionPublicId,
+          target_organization_id: organizationId,
+        },
+      });
+      return successResponse(
+        AuthSerializer.accessTokenWithActiveOrganization(data, context),
+        getRequestIdentifier(request),
+      );
     },
     revokeAllSessions: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);

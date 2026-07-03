@@ -78,10 +78,10 @@ describe('Request id event-bus to mail worker contract', () => {
   it('propagates requestId from domain event through enqueue into email.sent worker log', async () => {
     enterOnCommitScope();
     await eventBus.emit({
-      type: AUTH_EVENT.MAGIC_LINK_REQUESTED,
+      type: AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED,
       payload: {
         email: 'user@example.com',
-        magic_link_token: 'raw-token',
+        verification_code: 'AB2CD3',
         expires_in_minutes: 15,
       },
       timestamp: new Date(),

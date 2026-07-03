@@ -15,4 +15,4 @@ Structured log event names used in application code. Update dashboards and Sentr
 
 - [architecture-consistency-roadmap-2026-05.md](../../reviews/architecture-consistency-roadmap-2026-05.md) — completed layout program (archival)
 - [domains-and-public-api-design.md](../architecture/domains-and-public-api-design.md)
-- [`src/infrastructure/observability/OVERVIEW.md`](../../../src/infrastructure/observability/OVERVIEW.md) — instrumentation surface, Sentry choice, structured logging design
+- [`src/infrastructure/observability/observability.overview.md`](../../../src/infrastructure/observability/observability.overview.md) — instrumentation surface, Sentry choice, structured logging design

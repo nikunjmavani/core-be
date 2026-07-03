@@ -49,6 +49,7 @@ instinct is right — for code and CI/CD the CLI (or SDK) is the correct tool, n
 | **Context7** (lib docs) | — | — | ✅ `@upstash/context7-mcp` |
 | **codegraph** (code index) | — | `codegraph` | ✅ `codegraph serve --mcp` |
 | **Headroom** (context compression) | — | — | ✅ `headroom mcp serve` (compress large tool output / logs / files before they reach the model) |
+| **dashboards** (local stack status) | — | — | ✅ `node tooling/dev/dashboards/mcp.mjs` (local-only — reads stack health / queue stats / metrics from the dashboards proxy on `:3010`; run `pnpm dashboards:up` first) |
 
 **Stripe is the canonical "all three" case:** the `stripe` SDK runs in the service, the
 `stripe` CLI replays/triggers webhooks against the local `stripe-webhook` domain in dev/CI,

@@ -50,7 +50,7 @@ The full `src/` file tree is **not** duplicated here (it drifts from code quickl
 | `*.worker.ts`                                                       | BullMQ job processor (under `workers/`)                                               |
 | `authorization.service.ts`                                          | Permission resolution (tenancy/permission)                                            |
 | `permission-cache.service.ts`                                       | Redis permission cache (tenancy/permission)                                           |
-| `magic-link.service.ts`, `oauth.service.ts`                         | Auth-method-specific auth flows                                                       |
+| `email-login.service.ts`, `oauth.service.ts`                         | Auth-method-specific auth flows                                                       |
 | `verification-token.repository.ts` / `verification-token.schema.ts` | Verification token entity under auth-method                                           |
 | `webhook-delivery-attempt.repository.ts`                            | Webhook delivery attempt entity under webhook                                         |
 
@@ -58,7 +58,7 @@ The full `src/` file tree is **not** duplicated here (it drifts from code quickl
 
 | File             | Where it lives                                        | Owner skill |
 | ---------------- | ----------------------------------------------------- | --------------------------------------- |
-| `OVERVIEW.md`    | At meaningful boundaries (domains, sub-domains, infra subsystems, test suites). Hand-written: Purpose, design decisions, failure modes, tuning | overview-doc-maintainer |
+| `<folder>.overview.md`    | At meaningful boundaries (domains, sub-domains, infra subsystems, test suites). Hand-written: Purpose, design decisions, failure modes, tuning | overview-doc-maintainer |
 | TSDoc            | Inline on every public export in `*.ts` (canonical, gated by `pnpm tsdoc:check`) | tsdoc-export-guard |
 | Route schema     | Inline `schema.summary` / `schema.description` / `schema.tags` on every Fastify route (drives OpenAPI) | route-schema-doc-guard |
 
@@ -194,7 +194,7 @@ Always use `.js` extensions in import specifiers. CI gate: `src/tests/global/imp
 | From                                                                                                               | To                                                                                              | Use                                              | READ/WRITE        |
 | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------ | ----------------- |
 | organization.controller.ts                                                                                         | audit/audit.service.js                                                                          | Type-only `AuditService` for createOrganization  | WRITE (audit log) |
-| auth (auth.service, magic-link, oauth, auth-method, auth-mfa, auth-session)                                        | user/user.service.js                                                                            | UserService (findByEmail, createFromOAuth, etc.) | READ/WRITE        |
+| auth (auth.service, email verification-code, oauth, auth-method, auth-mfa, auth-session)                                        | user/user.service.js                                                                            | UserService (findByEmail, createFromOAuth, etc.) | READ/WRITE        |
 | tenancy/membership/member-invitation.service                                                                       | user/user.service.js                                                                            | UserService                                      | READ              |
 | billing (subscription) services                                       | tenancy/organization/organization.service.js                                                    | OrganizationService                              | READ              |
 | audit/audit.service                                                                                                | user/user.service.js, organization/organization.service.js                                      | UserService, OrganizationService                 | READ              |
@@ -206,7 +206,7 @@ Always use `.js` extensions in import specifiers. CI gate: `src/tests/global/imp
 
 ### Queues and email
 
-- `magic-link.service.ts` → `eventBus.emit()` → handler → `recordOutboxEmail()` (see Event bus)
+- `email-login.service.ts` → `eventBus.emit()` → handler → `recordOutboxEmail()` (see Event bus)
 - `auth-method.service.ts` → `eventBus.emit()` → handler → `recordOutboxEmail()`
 - `member-invitation.service.ts` → `eventBus.emit()` → handler → `recordOutboxEmail()` (see Event bus)
 

@@ -31,7 +31,7 @@ Hand-written guides grouped by **setup**, **CI/CD**, and **runbooks**.
 | Doc                                                              | Description                                                                        |
 | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | [setup-automation.md](setup/setup-automation.md)                 | `pnpm setup:infra` — provision, check, revert, export env (includes design notes). |
-| [setup-token-instructions.md](setup/setup-token-instructions.md) | Token sources and `.env.setup` variable names.                                     |
+| [setup-token-instructions.md](setup/setup-token-instructions.md) | Token sources and `.setup-credentials` variable names.                                     |
 | [railway-github-cli-setup.md](setup/railway-github-cli-setup.md) | Manual Railway + GitHub (no automated setup).                                      |
 
 ### [ci-cd/](ci-cd/)

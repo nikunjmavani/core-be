@@ -11,14 +11,13 @@ import type { ZodTypeAny } from 'zod';
 // ─── Auth ──────────────────────────────────────────────────────────────
 import {
   LoginDto,
-  MagicLinkSendDto,
-  MagicLinkVerifyDto,
+  EmailSendCodeDto,
+  EmailLoginDto,
   MfaVerifyDto,
   CreateAuthMethodDto,
   ForgotPasswordDto,
   ResetPasswordDto,
   ChangePasswordDto,
-  VerifyEmailDto,
   MfaEnrollDto,
   MfaLoginVerifyDto,
 } from '@/domains/auth/auth.dto.js';
@@ -61,7 +60,6 @@ import {
 } from '@/domains/tenancy/sub-domains/membership/membership.dto.js';
 
 import {
-  createMemberInvitationDto,
   acceptMemberInvitationDto,
   resendMemberInvitationDto,
 } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.dto.js';
@@ -97,15 +95,14 @@ import {
 export const routeSchemaMap: Record<string, ZodTypeAny> = {
   // ── Auth ──
   'POST /api/v1/auth/login': LoginDto,
-  'POST /api/v1/auth/magic-link/send': MagicLinkSendDto,
-  'POST /api/v1/auth/magic-link/verify': MagicLinkVerifyDto,
+  'POST /api/v1/auth/email/send-code': EmailSendCodeDto,
+  'POST /api/v1/auth/email/login': EmailLoginDto,
   'POST /api/v1/auth/me/mfa/verify': MfaVerifyDto,
   'POST /api/v1/auth/me/mfa/enroll': MfaEnrollDto,
   'POST /api/v1/auth/mfa/login': MfaLoginVerifyDto,
   'POST /api/v1/auth/password/forgot': ForgotPasswordDto,
   'POST /api/v1/auth/password/reset': ResetPasswordDto,
   'POST /api/v1/auth/password/change': ChangePasswordDto,
-  'POST /api/v1/auth/email/verify': VerifyEmailDto,
   'POST /api/v1/auth/webauthn/authenticate/options': webauthnAuthenticateOptionsDto,
   'POST /api/v1/auth/webauthn/authenticate/verify': webauthnAuthenticateVerifyDto,
   'POST /api/v1/auth/me/webauthn/register/verify': webauthnRegisterVerifyDto,
@@ -142,8 +139,7 @@ export const routeSchemaMap: Record<string, ZodTypeAny> = {
   'PATCH /api/v1/tenancy/organization/memberships/{membership_id}': updateMembershipDto,
   'POST /api/v1/tenancy/organization/transfer-ownership': transferOwnershipDto,
 
-  // ── Invitations ──
-  'POST /api/v1/tenancy/organization/invitations': createMemberInvitationDto,
+  // ── Invitations ── (add-member issues invitations via POST /organization/memberships, REQ-1)
   'POST /api/v1/tenancy/invitations/{invitation_id}/accept': acceptMemberInvitationDto,
   'POST /api/v1/tenancy/organization/invitations/{invitation_id}/resend': resendMemberInvitationDto,
 

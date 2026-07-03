@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { successResponse } from '@/shared/utils/http/response.util.js';
+import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
 import {
   getActingUserPublicId,
   getRequestIdentifier,
@@ -111,6 +111,43 @@ export function createSubscriptionController(service: SubscriptionService) {
         readIdempotencyKey(request),
       );
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
+    },
+    getPaymentSetup: async (
+      request: FastifyRequest<{ Params: { subscription_id: string } }>,
+      _reply: FastifyReply,
+    ) => {
+      requirePrincipal(request);
+      const data = await service.getPaymentSetup(
+        resolveActiveOrganizationId(request),
+        validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
+      );
+      return successResponse(data, getRequestIdentifier(request));
+    },
+    listInvoices: async (request: FastifyRequest, _reply: FastifyReply) => {
+      requirePrincipal(request);
+      const result = await service.listInvoices(
+        resolveActiveOrganizationId(request),
+        request.query,
+      );
+      return paginatedResponse(result.items, getRequestIdentifier(request), {
+        per_page: result.limit,
+        next: result.next_cursor,
+        has_more: result.has_more,
+        ...(result.total !== null ? { estimated_total: result.total } : {}),
+      });
+    },
+    listPaymentMethods: async (request: FastifyRequest, _reply: FastifyReply) => {
+      requirePrincipal(request);
+      const data = await service.listPaymentMethods(resolveActiveOrganizationId(request));
+      return successResponse(data, getRequestIdentifier(request));
+    },
+    createPaymentMethodSetup: async (request: FastifyRequest, _reply: FastifyReply) => {
+      requirePrincipal(request);
+      const data = await service.createPaymentMethodSetup(
+        resolveActiveOrganizationId(request),
+        readIdempotencyKey(request),
+      );
+      return successResponse(data, getRequestIdentifier(request));
     },
   };
 }
