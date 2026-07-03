@@ -5,7 +5,7 @@
 Please report security vulnerabilities **privately** so we can address them before public disclosure.
 
 - **Preferred:** Use GitHub **Security** → **Report a vulnerability** on this repository (private security advisory).
-- **Alternative:** Email **security@example.com** with the same details below.
+- **Alternative:** Email <security@example.com> with the same details below.
 
 Include, where possible:
 
