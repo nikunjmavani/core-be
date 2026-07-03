@@ -35,11 +35,9 @@ export const VERIFICATION_CODE_RESEND_COOLDOWN_SECONDS = 60;
  */
 let cachedPepper: Buffer | null = null;
 function verificationCodePepper(): Buffer {
-  if (!cachedPepper) {
-    cachedPepper = createHash('sha256')
-      .update(`verification-code-pepper:${env.SECRETS_ENCRYPTION_KEY}`)
-      .digest();
-  }
+  cachedPepper ??= createHash('sha256')
+    .update(`verification-code-pepper:${env.SECRETS_ENCRYPTION_KEY}`)
+    .digest();
   return cachedPepper;
 }
 
