@@ -256,6 +256,35 @@ jobs:
             done
           echo "Exported GitHub Environment to \$GITHUB_ENV for downstream steps."
 
+      - name: Warn on placeholder configuration values
+        # Non-blocking sweep for dev placeholders that survived into a deployed
+        # environment (localhost origins, example.com allowlists, test-mode Stripe
+        # keys). The env schema hard-fails the critical subset at boot; this makes
+        # the rest loud on the run page instead of surfacing weeks later. Variable
+        # VALUES are only pattern-tested (never printed for secrets — only the
+        # sk_test_ prefix of STRIPE_SECRET_KEY is checked, value never echoed).
+        if: needs.resolve-environment.outputs.environment == 'production' || needs.resolve-environment.outputs.environment == 'staging'
+        env:
+          GH_VARS_JSON: ${{ toJSON(vars) }}
+          DEPLOY_ENVIRONMENT: ${{ needs.resolve-environment.outputs.environment }}
+        run: |
+          set -euo pipefail
+          node -e '
+            const vars = JSON.parse(process.env.GH_VARS_JSON || "{}");
+            const placeholder = /(localhost|127\.0\.0\.1|example\.com|yourdomain|changeme|placeholder)/i;
+            const hits = Object.entries(vars)
+              .filter(([, value]) => typeof value === "string" && placeholder.test(value))
+              .map(([key]) => key)
+              .sort();
+            for (const key of hits) {
+              console.log("::warning title=Placeholder value in " + process.env.DEPLOY_ENVIRONMENT + " environment::Variable " + key + " looks like a dev placeholder — set a real value.");
+            }
+            if (hits.length === 0) console.log("No placeholder-looking variable values detected.");
+          '
+          if [ -n "${STRIPE_SECRET_KEY:-}" ] && [ "${STRIPE_SECRET_KEY:0:8}" = "sk_test_" ]; then
+            echo "::warning title=Test Stripe key in ${DEPLOY_ENVIRONMENT}::STRIPE_SECRET_KEY is a test-mode key — the env schema hard-fails production boot on this."
+          fi
+
       - name: Validate GitHub environment secrets
         # The validator (core-infra src/github/environments.ts) reads required keys from core-be's
         # Zod env schema (via CORE_BE_DIR) and checks `process.env` (runtime mode).
@@ -607,6 +636,28 @@ jobs:
             node -e "const health = require(process.argv[1]); if (health.status !== 'ok') { console.error('${label} health status is not ok:', health.status ?? 'unknown'); process.exit(1); }" "$output_file"
           }
 
+          # /readyz proves the process boots and reaches Postgres/Redis; it does NOT
+          # prove the HTTP stack works. Exercise routing + middleware + the error
+          # handler end to end: an unknown API route must come back as a JSON 404
+          # through the full plugin chain (helmet, error envelope, serialization).
+          verify_api_surface() {
+            local base_url="$1"
+            curl -sfS "${base_url}/livez" -o /dev/null \
+              || { echo "::error::API /livez failed after deploy"; exit 1; }
+            local status_code
+            status_code="$(curl -s -D /tmp/api-probe-headers.txt -o /tmp/api-probe-body.json \
+              -w '%{http_code}' "${base_url}/api/v1/__post_deploy_probe__")"
+            [ "$status_code" = "404" ] \
+              || { echo "::error::expected JSON 404 from unknown API route, got HTTP ${status_code}"; exit 1; }
+            grep -qi '^content-type: application/json' /tmp/api-probe-headers.txt \
+              || { echo "::error::unknown-route 404 is not JSON — error handler not active"; exit 1; }
+            grep -qi '^x-content-type-options: nosniff' /tmp/api-probe-headers.txt \
+              || { echo "::error::security headers missing on API responses — helmet not active"; exit 1; }
+            node -e "JSON.parse(require('fs').readFileSync('/tmp/api-probe-body.json', 'utf8'))" \
+              || { echo "::error::404 body is not valid JSON — error envelope broken"; exit 1; }
+            echo "API surface verified: /livez OK, JSON 404 envelope + security headers present."
+          }
+
           if [ -z "$RAILWAY_WORKER_SERVICE_ID" ]; then
             echo "::error::RAILWAY_WORKER_SERVICE_ID must be set in this GitHub environment."
             exit 1
@@ -616,6 +667,7 @@ jobs:
           api_base_url="$(resolve_service_base_url "$RAILWAY_SERVICE_ID")"
           echo "api_base_url=${api_base_url}" >> "$GITHUB_OUTPUT"
           wait_for_service_health "$api_base_url" "API" "/tmp/api-health.json"
+          verify_api_surface "$api_base_url"
 
           deploy_service_from_image "$RAILWAY_WORKER_SERVICE_ID" "$WORKER_IMAGE" "worker"
           echo "Worker deployment reached terminal SUCCESS (Railway only flips to SUCCESS once the in-pod HEALTHCHECK passes)."

@@ -512,6 +512,9 @@ jobs:
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Emit post-merge failure notice
         env:
@@ -524,3 +527,45 @@ jobs:
         run: |
           set -euo pipefail
           echo "::error title=Post-merge CI failed::docker=${DOCKER_RESULT} tests=${TESTS_RESULT} deploy=${DEPLOY_RESULT} backmerge=${BACKMERGE_RESULT} release=${RELEASE_RESULT} — ${WORKFLOW_URL}"
+
+      - name: Open or update ci-failure issue
+        # Run annotations only notify someone already looking at the Actions tab.
+        # An issue generates a real GitHub notification/email to the owner. One
+        # open issue per branch collects repeat failures as comments; closing it
+        # acknowledges the incident.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+          DOCKER_RESULT: ${{ needs.docker-build-push.result }}
+          TESTS_RESULT: ${{ needs.matrix-tests.result }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+          BACKMERGE_RESULT: ${{ needs.dispatch-post-release-backmerge.result }}
+          RELEASE_RESULT: ${{ needs.release-please.result }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create ci-failure --repo "$GH_REPOSITORY" \
+            --color D93F0B --description "Automated post-merge/guard failure notification" \
+            2>/dev/null || true
+          title="Post-merge CI failing on ${REF_NAME}"
+          body="$(printf '%s\n' \
+            "Run: ${WORKFLOW_URL}" \
+            "" \
+            "| job | result |" \
+            "| --- | --- |" \
+            "| docker | ${DOCKER_RESULT} |" \
+            "| matrix tests | ${TESTS_RESULT} |" \
+            "| release-please | ${RELEASE_RESULT} |" \
+            "| deploy | ${DEPLOY_RESULT} |" \
+            "| back-merge dispatch | ${BACKMERGE_RESULT} |" \
+            "" \
+            "Close this issue once the failure is resolved.")"
+          existing="$(gh issue list --repo "$GH_REPOSITORY" --state open --label ci-failure \
+            --search "in:title \"${title}\"" --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GH_REPOSITORY" --body "$body"
+            echo "Commented on existing ci-failure issue #${existing}."
+          else
+            gh issue create --repo "$GH_REPOSITORY" --title "$title" --label ci-failure --body "$body"
+          fi
