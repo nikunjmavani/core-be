@@ -2,7 +2,7 @@
 # successful production deploy in reusable-railway-deploy.yml) instead of building
 # anything. Turns a bad-release incident into a ~3-minute dispatch + approval.
 #
-# Scope and caveats:
+# Scope and caveats (see docs/deployment/runbooks/rollback-deploy.md):
 #   - Rolls back APPLICATION CODE only. Database migrations are forward-only and
 #     are NOT reverted — the previous image must tolerate the current schema
 #     (this repo's migration lint enforces additive/compatible migrations, which
@@ -26,6 +26,9 @@ on:
           - production
           - development
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
+
 permissions:
   contents: read
   packages: write
@@ -35,8 +38,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  resolve-image:
+    name: Resolve previous image ref
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      api_image: ${{ steps.identity.outputs.api_image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # Image names come from the generated project identity — never literals
+      # (enforced by project-identity.policy.unit.test.ts).
+      - name: Setup project identity
+        uses: ./.github/actions/setup-project-identity
+
+      - name: Expose API image name
+        id: identity
+        run: echo "api_image=${API_IMAGE}" >> "$GITHUB_OUTPUT"
+
   rollback:
     name: Rollback (${{ inputs.target }})
+    needs: resolve-image
     uses: ./.github/workflows/reusable-railway-deploy.yml
     secrets: inherit
     with:
@@ -44,4 +67,4 @@ jobs:
       # the reusable then selects the matching GitHub Environment + secrets.
       target_branch: ${{ inputs.target == 'production' && 'main' || 'dev' }}
       # The worker image ref is derived inside the reusable by name substitution.
-      image_override: ghcr.io/${{ github.repository }}/core-be-api:previous
+      image_override: ghcr.io/${{ github.repository }}/${{ needs.resolve-image.outputs.api_image }}:previous
