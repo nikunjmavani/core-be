@@ -623,14 +623,35 @@ jobs:
               --label "$label"
           }
 
+          # On a readyz timeout the runner only ever sees the Railway edge (a 502
+          # when the container never bound its port, a 503 when it booted but a
+          # dependency probe fails). The actual boot stack trace lives in the pod's
+          # deploy logs, so surface the last lines directly in Actions instead of
+          # leaving an opaque timeout. `--lines` switches the CLI to fetch mode
+          # (no streaming), and `timeout` guards against an unexpected hang.
+          dump_service_deploy_logs() {
+            local service="$1"
+            local label="$2"
+            [ -n "$service" ] || return 0
+            echo "::group::Railway deploy logs — ${label} service (last 200 lines)"
+            timeout 60 railway logs --service "$service" --lines 200 2>&1 \
+              || echo "Could not fetch Railway deploy logs for ${label} service '${service}'."
+            echo "::endgroup::"
+          }
+
           wait_for_service_health() {
             local base_url="$1"
             local label="$2"
             local output_file="$3"
+            local service="${4:-}"
             local health_url="${base_url}/readyz"
             local deadline=$(( $(date +%s) + 300 ))
             until curl -sfS "$health_url" -o "$output_file"; do
-              [ "$(date +%s)" -lt "$deadline" ] || { echo "::error::${label} /readyz timeout"; exit 1; }
+              if [ "$(date +%s)" -ge "$deadline" ]; then
+                echo "::error::${label} /readyz timeout"
+                dump_service_deploy_logs "$service" "$label"
+                exit 1
+              fi
               sleep 5
             done
             node -e "const health = require(process.argv[1]); if (health.status !== 'ok') { console.error('${label} health status is not ok:', health.status ?? 'unknown'); process.exit(1); }" "$output_file"
@@ -666,7 +687,7 @@ jobs:
           deploy_service_from_image "$RAILWAY_SERVICE_ID" "$API_IMAGE" "api"
           api_base_url="$(resolve_service_base_url "$RAILWAY_SERVICE_ID")"
           echo "api_base_url=${api_base_url}" >> "$GITHUB_OUTPUT"
-          wait_for_service_health "$api_base_url" "API" "/tmp/api-health.json"
+          wait_for_service_health "$api_base_url" "API" "/tmp/api-health.json" "$RAILWAY_SERVICE_ID"
           verify_api_surface "$api_base_url"
 
           deploy_service_from_image "$RAILWAY_WORKER_SERVICE_ID" "$WORKER_IMAGE" "worker"
