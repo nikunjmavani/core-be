@@ -6,6 +6,38 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.23](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.22...v4.10.0-dev.23) (2026-07-03)
+
+
+### Added
+
+* **auth:** replace magic-link with email verification-code login ([#814](https://github.com/nikunjmavani/core-be/issues/814)) ([cce59f3](https://github.com/nikunjmavani/core-be/commit/cce59f3e77befd181dc9dda45227cbc94e9b378b))
+* **billing:** paginate invoices via Stripe cursor (limit + starting_after + has_more) ([#824](https://github.com/nikunjmavani/core-be/issues/824)) ([761ca72](https://github.com/nikunjmavani/core-be/commit/761ca72f4427a73c1d6db3cfa3bb46c87ca8c204))
+* common server-side search/sort for org list endpoints (roles, api-keys) ([#823](https://github.com/nikunjmavani/core-be/issues/823)) ([d097af7](https://github.com/nikunjmavani/core-be/commit/d097af7876998f3075f96cf8539f301335e4c3d2))
+* **observability:** add PostHog analytics and sync env schema/config ([#815](https://github.com/nikunjmavani/core-be/issues/815)) ([7fca1b1](https://github.com/nikunjmavani/core-be/commit/7fca1b1a74296ae5b4c52d6f89911f2286c107da))
+* **tenancy:** server-side member search (q over email/name) ([#825](https://github.com/nikunjmavani/core-be/issues/825)) ([9c56489](https://github.com/nikunjmavani/core-be/commit/9c5648982dcad45022d12f5a155c6d32e44de264))
+
+
+### Fixed
+
+* **auth:** require verified email before MFA/WebAuthn enrollment (account pre-hijacking) ([dba4577](https://github.com/nikunjmavani/core-be/commit/dba4577a6e8d23d15f9865c984770ec8ef35eed4))
+* **auth:** require verified email before MFA/WebAuthn enrollment (account pre-hijacking) ([90c9bef](https://github.com/nikunjmavani/core-be/commit/90c9bef8089b37b4f82536d8bf4fc98657ce47df))
+* **ci:** call core-infra's validate:github-environments in Railway deploy ([26696f1](https://github.com/nikunjmavani/core-be/commit/26696f13d60e782eb3affad48d1232bc135fe343))
+* **ci:** correct core-infra validate script name in Railway deploy ([cab27b2](https://github.com/nikunjmavani/core-be/commit/cab27b26b81db286fff1bccb9c3109a8353b9781))
+* **load:** align k6 journey with idempotency and invitation API ([#813](https://github.com/nikunjmavani/core-be/issues/813)) ([4456a29](https://github.com/nikunjmavani/core-be/commit/4456a293861aed6b06f6091b718fb499d6828de8))
+* **tests:** seed full permission catalog + verified-email MFA fixture; fix fastify 5.9 drain regression ([#832](https://github.com/nikunjmavani/core-be/issues/832)) ([4a9fc73](https://github.com/nikunjmavani/core-be/commit/4a9fc73ab0c8963520b981d9bc690129c840053d))
+
+
+### Changed
+
+* **setup:** extract setup:infra into standalone core-infra repo ([#820](https://github.com/nikunjmavani/core-be/issues/820)) ([25083c3](https://github.com/nikunjmavani/core-be/commit/25083c37ba7a4e7624998f7fb11d0b8772a9bc71))
+
+
+### Documentation
+
+* **agent-os:** codify list search/sort/pagination + FORCE-RLS search conventions ([#826](https://github.com/nikunjmavani/core-be/issues/826)) ([0e12e36](https://github.com/nikunjmavani/core-be/commit/0e12e3699e6d954337807d50226cfb068b84cebb))
+* breaking (no unaccepted breaking changes). Third and final deferred follow-up. ([9c56489](https://github.com/nikunjmavani/core-be/commit/9c5648982dcad45022d12f5a155c6d32e44de264))
+
 ## [4.10.0-dev.22](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.21...v4.10.0-dev.22) (2026-06-26)
 
 
