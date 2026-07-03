@@ -138,7 +138,13 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+          # `github.event_name` propagates into reusable workflows: when a CALLER
+          # (post-merge-ci) is itself dispatched, EVENT_NAME is workflow_dispatch here
+          # even though `target` was never provided (the caller passes target_branch).
+          # Without the non-empty guard the environment resolves to '' and the deploy
+          # job runs with no GitHub Environment → env-scoped secrets missing
+          # (broke the 4.8.0 release-resume dispatch).
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$TARGET_INPUT" ]; then
             echo "environment=$TARGET_INPUT" >> "$GITHUB_OUTPUT"
           elif [ -n "$TARGET_BRANCH_INPUT" ]; then
             case "$TARGET_BRANCH_INPUT" in

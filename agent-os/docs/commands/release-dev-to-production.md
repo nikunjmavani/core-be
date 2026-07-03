@@ -135,10 +135,27 @@ bypasses them:
    git merge-base --is-ancestor origin/main origin/dev
    ```
 
-10. Find an existing open release PR from `dev` to `main`. If none exists, open
+10. Verify the comprehensive matrix is green on the `dev` HEAD being promoted
+    (post-merge CI runs `Matrix Tests` on every `dev` push):
+
+    ```bash
+    gh run list --branch dev --workflow "Post-merge CI" --limit 1 \
+      --json headSha,conclusion
+    ```
+
+    The run must match `origin/dev`'s HEAD and conclude `success` (or its only
+    failures must be outside `Matrix Tests`). Do **not** promote on a red
+    matrix: `release-please` on `main` is gated on the matrix result, so a red
+    matrix merges to `main` but then strands the release — no tag, no deploy,
+    no back-merge (this is what stalled the 4.8.0 release). The matrix cannot
+    be a `main` ruleset required check because it never runs on `pull_request`
+    events — hotfix and release-please PRs would block forever on a check that
+    never reports; this pre-promote gate is the enforcement instead.
+
+11. Find an existing open release PR from `dev` to `main`. If none exists, open
     one using the chosen release title.
 
-11. Check release PR governance:
+12. Check release PR governance:
 
     - PR Governance `Checks`
     - mergeability and conflict state
@@ -146,24 +163,24 @@ bypasses them:
     - required reviews
     - required status checks
 
-12. If the release PR is `BEHIND`, repeat the ancestry repair step. `main` may
+13. If the release PR is `BEHIND`, repeat the ancestry repair step. `main` may
     have advanced while the workflow was running.
 
-13. If the release PR has conflicts, resolve them on a short-lived branch and PR
+14. If the release PR has conflicts, resolve them on a short-lived branch and PR
     into `dev`. Take release-owned files from `main` unless the user explicitly
     requests a different release-version policy.
 
-14. Watch all release PR checks. For failures, inspect logs, identify the root
+15. Watch all release PR checks. For failures, inspect logs, identify the root
     cause, and fix only issues introduced by the release merge.
 
-15. When required checks are green and the PR is mergeable, **stop — do not
+16. When required checks are green and the PR is mergeable, **stop — do not
     merge.** Emit the [Handoff Summary](#handoff-summary) and ask the user to
     merge the release PR with a **merge commit**. The merge to `main` is the
     user's deliberate action — never merge it yourself, never use the admin
     bypass to merge on their behalf, never self-approve. If review is still
     pending, name the exact approval blocker in the summary.
 
-16. After the user confirms the merge, fetch `main` and verify the automatic
+17. After the user confirms the merge, fetch `main` and verify the automatic
     post-merge cascade, reporting each:
 
     - release-please cuts the stable tag + published GitHub Release (`vX.Y.Z`)
@@ -172,11 +189,11 @@ bypasses them:
     - the automatic `main → dev` back-merge PR opens and merges (reseeds the dev
       prerelease window)
 
-17. Produce the [Final Report](#final-report-format).
+18. Produce the [Final Report](#final-report-format).
 
 ## Handoff Summary
 
-When the release PR is merge-ready (Workflow step 15), emit this verbatim (with
+When the release PR is merge-ready (Workflow step 16), emit this verbatim (with
 `<…>` filled in) and hand off — do not merge:
 
 ```text
