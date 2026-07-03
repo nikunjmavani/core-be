@@ -1,0 +1,47 @@
+# One-click rollback: redeploy the `:previous` GHCR images (retagged by the last
+# successful production deploy in reusable-railway-deploy.yml) instead of building
+# anything. Turns a bad-release incident into a ~3-minute dispatch + approval.
+#
+# Scope and caveats:
+#   - Rolls back APPLICATION CODE only. Database migrations are forward-only and
+#     are NOT reverted — the previous image must tolerate the current schema
+#     (this repo's migration lint enforces additive/compatible migrations, which
+#     is what makes image rollback safe in the common case).
+#   - `:previous` exists only after at least one successful deploy retagged it.
+#   - The environment approval gate still applies — the required reviewer
+#     approves the rollback exactly like a deploy.
+#   - After rolling back, land a real fix or revert on the normal path; the next
+#     successful deploy overwrites `:previous` with the rolled-back-from image.
+
+name: Rollback deploy (previous image)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: GitHub Environment to roll back
+        required: true
+        type: choice
+        options:
+          - production
+          - development
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: rollback-deploy-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: Rollback (${{ inputs.target }})
+    uses: ./.github/workflows/reusable-railway-deploy.yml
+    secrets: inherit
+    with:
+      # Map the environment choice to the branch the reusable's resolver expects;
+      # the reusable then selects the matching GitHub Environment + secrets.
+      target_branch: ${{ inputs.target == 'production' && 'main' || 'dev' }}
+      # The worker image ref is derived inside the reusable by name substitution.
+      image_override: ghcr.io/${{ github.repository }}/core-be-api:previous

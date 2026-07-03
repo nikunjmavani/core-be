@@ -85,3 +85,52 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN || github.token }}
           CORE_BE_DIR: ${{ github.workspace }}
         run: pnpm --dir core-infra validate:github-environments
+
+  notify-failure:
+    name: Notify failure
+    needs: [branch-ancestry, environment-drift]
+    if: |
+      always() &&
+      (needs.branch-ancestry.result == 'failure' || needs.environment-drift.result == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open or update ci-failure issue
+        # A failed guard on a schedule is invisible unless someone checks the
+        # Actions tab; an issue produces a real notification. One open issue per
+        # guard collects repeats as comments; closing it acknowledges the drift.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          ANCESTRY_RESULT: ${{ needs.branch-ancestry.result }}
+          DRIFT_RESULT: ${{ needs.environment-drift.result }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create ci-failure --repo "$GH_REPOSITORY" \
+            --color D93F0B --description "Automated post-merge/guard failure notification" \
+            2>/dev/null || true
+          title="Release-flow guard failing"
+          body="$(printf '%s\n' \
+            "Run: ${WORKFLOW_URL}" \
+            "" \
+            "| guard | result |" \
+            "| --- | --- |" \
+            "| branch ancestry (main ⊆ dev) | ${ANCESTRY_RESULT} |" \
+            "| environment protection drift | ${DRIFT_RESULT} |" \
+            "" \
+            "Ancestry red → merge the open release/backmerge-v* PR or re-run the Post-release back-merge workflow." \
+            "Drift red → align GitHub environment settings with .github/environments/*.json." \
+            "" \
+            "Close this issue once the guard is green again.")"
+          existing="$(gh issue list --repo "$GH_REPOSITORY" --state open --label ci-failure \
+            --search "in:title \"${title}\"" --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GH_REPOSITORY" --body "$body"
+            echo "Commented on existing ci-failure issue #${existing}."
+          else
+            gh issue create --repo "$GH_REPOSITORY" --title "$title" --label ci-failure --body "$body"
+          fi
