@@ -4,10 +4,13 @@
 #      missed post-release back-merge silently diverges the branches; the next
 #      dev → main promote then needs a manual ancestry-repair PR. Fix by merging
 #      the open `release/backmerge-v*` PR or re-running "Post-release back-merge".
-#   2. GitHub environment protection drift (weekly): the committed
-#      `.github/environments/*.json` must match the GitHub UI. The Railway deploy
-#      validates this as a pre-flight and refuses to deploy on drift, so catching
-#      it here turns a failed production deploy into a Monday notification.
+#   2. GitHub environment protection + branch ruleset drift (weekly): the
+#      committed `.github/environments/*.json` must match the GitHub UI (the
+#      Railway deploy validates this as a pre-flight and refuses to deploy on
+#      drift, so catching it here turns a failed production deploy into a Monday
+#      notification), and every committed `.github/rulesets/*.json` must still
+#      EXIST on the remote (presence check — a deleted/renamed "Protect main"
+#      ruleset becomes a Monday ping instead of an unprotected branch).
 
 name: Release-flow guards
 
@@ -53,13 +56,35 @@ jobs:
           fi
 
   environment-drift:
-    name: GitHub environment protection drift
+    name: GitHub environment + ruleset drift
     if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 6 * * 1'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # Presence-only check (name match), independent of core-infra: catches a
+      # deleted or renamed ruleset. Parameter drift is validated locally via
+      # core-infra tooling. Ported from core-fe.
+      - name: Validate branch rulesets exist on remote (presence)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN || github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          remote_names="$(gh api "repos/${GH_REPOSITORY}/rulesets" --paginate --jq '.[].name')"
+          missing=0
+          for file in .github/rulesets/*.json; do
+            name="$(jq -r '.name' "${file}")"
+            if grep -Fxq "${name}" <<< "${remote_names}"; then
+              echo "OK: ruleset '${name}' (${file}) present on remote."
+            else
+              echo "::error::Committed ruleset '${name}' (${file}) is missing on the remote — the branch may be unprotected. Re-sync rulesets (core-infra) or recreate it in Settings → Rules."
+              missing=1
+            fi
+          done
+          exit "${missing}"
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
