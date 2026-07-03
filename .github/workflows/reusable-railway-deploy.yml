@@ -277,7 +277,7 @@ jobs:
               .map(([key]) => key)
               .sort();
             for (const key of hits) {
-              console.log(`::warning title=Placeholder value in ${process.env.DEPLOY_ENVIRONMENT} environment::Variable ${key} looks like a dev placeholder — set a real value.`);
+              console.log("::warning title=Placeholder value in " + process.env.DEPLOY_ENVIRONMENT + " environment::Variable " + key + " looks like a dev placeholder — set a real value.");
             }
             if (hits.length === 0) console.log("No placeholder-looking variable values detected.");
           '
