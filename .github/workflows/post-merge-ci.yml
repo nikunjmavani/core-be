@@ -266,7 +266,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${RELEASE_PLEASE_TOKEN:-}" ]; then
-            echo "::warning::RELEASE_PLEASE_TOKEN is not set in this GitHub Environment — falling back to github.token (release PRs work, Releases/tags cannot be created)."
+            echo "::warning::RELEASE_PLEASE_TOKEN is not set in this GitHub Environment — falling back to github.token. Releases/tags cannot be created, and release-PR merges performed with github.token do NOT re-trigger post-merge CI (no tag or Release on the merge commit). Provision the PAT via pnpm github:sync."
             exit 0
           fi
           status="$(curl -s -o /dev/null -w '%{http_code}' \

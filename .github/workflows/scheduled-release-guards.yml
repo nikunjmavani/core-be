@@ -104,7 +104,7 @@ jobs:
           GH_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          gh api "repos/${GH_REPOSITORY}/rulesets" \
+          gh api "repos/${GH_REPOSITORY}/rulesets" --paginate \
             --jq '[.[] | {name, enforcement}]' > /tmp/live-rulesets.json
           failures=0
           for ruleset_file in .github/rulesets/*.json; do
