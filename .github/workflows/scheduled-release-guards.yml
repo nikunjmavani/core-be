@@ -1,0 +1,87 @@
+# Release-flow guards — scheduled canaries that catch release-cycle drift while it
+# is still a notification, not a blocked release (both bit the 4.8.0 release):
+#   1. Branch ancestry (daily): `main` must be an ancestor of `dev`. A failed or
+#      missed post-release back-merge silently diverges the branches; the next
+#      dev → main promote then needs a manual ancestry-repair PR. Fix by merging
+#      the open `release/backmerge-v*` PR or re-running "Post-release back-merge".
+#   2. GitHub environment protection drift (weekly): the committed
+#      `.github/environments/*.json` must match the GitHub UI. The Railway deploy
+#      validates this as a pre-flight and refuses to deploy on drift, so catching
+#      it here turns a failed production deploy into a Monday notification.
+
+name: Release-flow guards
+
+on:
+  schedule:
+    - cron: '30 5 * * *' # daily — branch ancestry
+    - cron: '30 6 * * 1' # weekly (Monday) — environment protection drift
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-flow-guards
+  cancel-in-progress: false
+
+jobs:
+  branch-ancestry:
+    name: Branch ancestry (main contained in dev)
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 5 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Verify origin/main is an ancestor of origin/dev
+        run: |
+          set -euo pipefail
+          git fetch origin main dev
+          if git merge-base --is-ancestor origin/main origin/dev; then
+            echo "OK: origin/main is contained in origin/dev — no back-merge pending."
+          else
+            missing_count="$(git rev-list --count origin/dev..origin/main)"
+            echo "::error::origin/dev is missing ${missing_count} commit(s) from origin/main. A post-release back-merge did not complete — merge the open release/backmerge-v* PR (merge commit, never squash) or re-run the 'Post-release back-merge' workflow. Left unfixed, the next dev → main promote requires a manual ancestry-repair PR."
+            git log --oneline origin/dev..origin/main | head -10
+            exit 1
+          fi
+
+  environment-drift:
+    name: GitHub environment protection drift
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 6 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          install: 'false'
+
+      # Same pattern as reusable-railway-deploy.yml: the validator lives in the
+      # standalone core-infra repo and reads this checkout via CORE_BE_DIR.
+      - name: Checkout core-infra (provisioning tool)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ vars.CORE_INFRA_REPO || format('{0}/core-infra', github.repository_owner) }}
+          ref: ${{ vars.CORE_INFRA_REF || 'main' }}
+          token: ${{ secrets.CORE_INFRA_TOKEN || github.token }}
+          path: core-infra
+          fetch-depth: 1
+
+      - name: Install core-infra deps
+        run: pnpm --dir core-infra install --frozen-lockfile
+
+      - name: Validate GitHub environment protection (config vs UI)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN || github.token }}
+          CORE_BE_DIR: ${{ github.workspace }}
+        run: pnpm --dir core-infra validate:github-environments
