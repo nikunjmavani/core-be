@@ -257,7 +257,7 @@ jobs:
           echo "Exported GitHub Environment to \$GITHUB_ENV for downstream steps."
 
       - name: Validate GitHub environment secrets
-        # The validator (core-infra src/github/validate.ts) reads required keys from core-be's
+        # The validator (core-infra src/github/environments.ts) reads required keys from core-be's
         # Zod env schema (via CORE_BE_DIR) and checks `process.env` (runtime mode).
         # Everything is already in process.env from the previous step.
         env:
@@ -265,7 +265,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN || github.token }}
           GITHUB_ENV_VALIDATION_SOURCE: runtime
           CORE_BE_DIR: ${{ github.workspace }}
-        run: pnpm --dir core-infra validate:github-env
+        run: pnpm --dir core-infra validate:github-environments
 
       - name: Validate Railway deploy secrets
         if: inputs.debug == true
