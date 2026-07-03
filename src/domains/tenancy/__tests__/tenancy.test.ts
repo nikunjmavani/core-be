@@ -11,7 +11,7 @@ import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
 import {
-  seedPermissions,
+  seedAllPermissions,
   createRoleWithPermissions,
   createMembership,
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
@@ -35,7 +35,9 @@ describe('Tenancy Domain — Integration', () => {
 
   beforeEach(async () => {
     await cleanupDatabase();
-    await seedPermissions(ALL_TENANCY_PERMISSIONS);
+    // Full catalog, not the tenancy subset: POST /tenancy/organizations
+    // provisions a TEAM owner role that also grants billing codes.
+    await seedAllPermissions();
   });
 
   // ─── Helper: create user with full org permissions ────────────

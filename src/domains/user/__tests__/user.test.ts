@@ -106,7 +106,8 @@ describe('User Domain — Integration', () => {
     });
 
     it('should return is_mfa_enabled true after MFA enroll and false after revoke', async () => {
-      const user = await createTestUser();
+      // MFA enrollment requires a verified email (account pre-hijacking guard).
+      const user = await createTestUser({ isEmailVerified: true });
       const { token, sessionPublicId } = await generateTestTokenAndSession({
         userId: user.public_id,
       });
