@@ -6,6 +6,14 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.25](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.24...v4.10.0-dev.25) (2026-07-04)
+
+
+### Fixed
+
+* **cors:** allow X-Requested-With in preflight to restore silent auth refresh ([39edab8](https://github.com/nikunjmavani/core-be/commit/39edab831072a827fb35c5a865d027876cbfffec))
+* **cors:** allow X-Requested-With in preflight to restore silent auth refresh ([2eb29a0](https://github.com/nikunjmavani/core-be/commit/2eb29a0638fbc9cc192c743dfd932fb06245d5d0))
+
 ## [4.10.0-dev.24](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.23...v4.10.0-dev.24) (2026-07-04)
 
 
