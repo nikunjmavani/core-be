@@ -22,6 +22,10 @@ const corsMiddleware: FastifyPluginAsync = async (app) => {
       'X-Captcha-Token',
       'X-Idempotency-Key',
       'X-Request-Id',
+      // Browsers/XHR libraries set `X-Requested-With` on requests; without it in the
+      // preflight `Access-Control-Allow-Headers` the OPTIONS check fails, which blocked
+      // the silent auth-token refresh on the dev deploy.
+      'X-Requested-With',
     ],
     // sec-re-17: sec-CM #27 added the server-minted `X-Client-Request-Id`
     // response header but did not list it on `exposedHeaders`. Cross-origin
