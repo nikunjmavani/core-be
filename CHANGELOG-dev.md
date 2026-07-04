@@ -6,6 +6,19 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.24](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.23...v4.10.0-dev.24) (2026-07-04)
+
+
+### Added
+
+* **tenancy:** server-side sort of org memberships list by member name ([ead8d6c](https://github.com/nikunjmavani/core-be/commit/ead8d6c248409569cd63a4c79ca56dc743d417e5))
+* **tenancy:** server-side sort of org memberships list by member name ([6e679bf](https://github.com/nikunjmavani/core-be/commit/6e679bf91bf0b8c46c91c8e1f1a61d82cc938e3a))
+
+
+### Fixed
+
+* **sonar:** clear pre-existing quality-gate findings on the deployed surface ([8641ea2](https://github.com/nikunjmavani/core-be/commit/8641ea24b719d35c5ba03e3755761a83c7c22d85))
+
 ## [4.10.0-dev.23](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.22...v4.10.0-dev.23) (2026-07-03)
 
 
