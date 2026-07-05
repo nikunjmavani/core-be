@@ -25,13 +25,15 @@ WORKDIR /app
 #   - JWT_PRIVATE_KEY / JWT_PUBLIC_KEY are not PEMs; they would fail RS256
 #     signing at runtime if the runtime stage somehow inherited them.
 #   - SECRETS_ENCRYPTION_KEY is the all-zero key; the env schema rejects it under
-#     NODE_ENV=production / staging (sec-r4-C3), so a build-stage leak cannot
+#     NODE_ENV=production (sec-r4-C3), so a build-stage leak cannot
 #     accidentally become a real key.
 #
 # If you need to substitute real values at build time, pass them as `--build-arg`
 # instead so they appear only in build-time logs (not the persistent ENV metadata
 # of the final image), and confirm they never appear in the runtime stage.
-ENV NODE_ENV=test \
+# NODE_ENV is only development | production; the build stage uses `development` (a non-production
+# value) so the placeholder secrets above pass the schema (production-only refines reject them).
+ENV NODE_ENV=development \
   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/core \
   REDIS_URL=redis://localhost:6379 \
   JWT_PRIVATE_KEY=test-private-key \

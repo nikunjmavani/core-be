@@ -63,7 +63,7 @@ The contract lives in `src/scripts/seed/seed-contract.ts`.
 
 ## Production guard (required)
 
-- The bulk orchestrator calls `assertBulkSeedAllowed(env)` (`src/scripts/seed/production-guard.ts`) before any write. It refuses when `NODE_ENV=production` or `DATABASE_URL` resolves to a non-local host, unless `ALLOW_BULK_SEED=1` is set explicitly. Never weaken this guard.
+- The bulk orchestrator calls `assertBulkSeedAllowed(env)` (`src/scripts/seed/production-guard.ts`) before any write. It refuses when `DATABASE_URL` resolves to a non-local host, unless `ALLOW_BULK_SEED=1` is set explicitly (a remote DSN can never be bulk-seeded; no `NODE_ENV` check needed). Never weaken this guard.
 
 ## Tiers and config
 

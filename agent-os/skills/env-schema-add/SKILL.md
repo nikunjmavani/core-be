@@ -15,6 +15,34 @@ you place a key under in agreement with what `classifyKey` will do. Get the
 classification right **and** read it from the matching context in every workflow,
 and the rest of the toolchain (github:sync, deploy, Actions) just works.
 
+## Environment model — dev + prod only; NO NODE_ENV branching
+
+`NODE_ENV` is an enum of exactly **`development | production`** (no `test` / `staging` / `local`). The
+Vitest suite runs as `development`; test-only behaviour is driven by explicit flags the harness sets.
+
+**Runtime code NEVER compares or branches on `NODE_ENV`.** It is *compared* in exactly one file —
+`env-schema.ts` (the enum field and `.refine()` constraints on the parsed `data`, e.g.
+`data.NODE_ENV !== 'production' || FLAG === true`). The pre-schema `load-env-files.ts` loader *reads*
+`process.env.NODE_ENV` only to name the `.env.<NODE_ENV>` file — no comparison. Every
+environment-varying behaviour is an explicit env flag with a **STATIC default** (never
+`NODE_ENV`-derived). Enforced by `src/tests/global/no-nodeenv-branching.global.test.ts` and the
+`guard-edits.sh` R4 pre-edit hook.
+
+**To add an environment-varying behaviour** (e.g. "strict in prod, relaxed in dev"):
+
+1. Add a boolean flag via `booleanString('<static default>')` in `env-schema.ts` — the default is the
+   **production-safe** value (a deployed `.env` keeps it by omission).
+2. If it must not be weakened in production, add `.refine((data) => data.NODE_ENV !== 'production' ||
+   data.FLAG === <safe>, {...})` next to the others.
+3. Read `env.FLAG` in code — **never** `NODE_ENV`.
+4. Ship the **development** value ACTIVE (uncommented) in the `.env.example` Policy-flags section so
+   `pnpm dev` behaves like a dev box.
+5. If tests need a value, set it in `src/tests/setup.ts` (+ `bootstrap-env.ts` for chaos) with `??=`.
+
+Never reintroduce a removed `NODE_ENV` value (`test`/`staging`/`local`), `isProduction()` /
+`isDevelopment()`-style helpers, or a module-load `process.env.NODE_ENV` read to pick a default — the
+guard test fails the build.
+
 ## The two-half rule
 
 `.env.example` has exactly two top-level halves, marked by `# ###...###` banners:

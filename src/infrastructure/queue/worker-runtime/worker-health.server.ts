@@ -53,7 +53,7 @@ function authorizeMetricsRequest(authorizationHeader: string | string[] | undefi
   const resolvedAuthorizationHeader = resolveAuthorizationHeader(authorizationHeader);
   const environment = getEnv();
   const bearerToken = environment.METRICS_SCRAPE_TOKEN;
-  if (environment.NODE_ENV === 'production' && environment.METRICS_ENABLED) {
+  if (environment.METRICS_AUTH_REQUIRED && environment.METRICS_ENABLED) {
     return Boolean(bearerToken && isBearerTokenValid(resolvedAuthorizationHeader, bearerToken));
   }
   if (bearerToken) {

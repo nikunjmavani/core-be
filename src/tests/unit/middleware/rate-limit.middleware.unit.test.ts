@@ -12,7 +12,7 @@ vi.mock('@fastify/rate-limit', () => ({
 
 vi.mock('@/shared/config/env.config.js', () => ({
   env: {
-    NODE_ENV: 'test',
+    NODE_ENV: 'development',
     LOG_LEVEL: 'silent',
     RATE_LIMIT_MAX: 100,
     RATE_LIMIT_WINDOW_MS: 60_000,
@@ -50,7 +50,7 @@ describe('rate-limit.middleware', () => {
     vi.resetModules();
     vi.doMock('@/shared/config/env.config.js', () => ({
       env: {
-        NODE_ENV: 'test',
+        NODE_ENV: 'development',
         RATE_LIMIT_MAX: 100,
         RATE_LIMIT_WINDOW_MS: 60_000,
         REDIS_URL: 'redis://127.0.0.1:6379',
@@ -190,10 +190,11 @@ describe('rate-limit.middleware', () => {
     vi.resetModules();
     vi.doMock('@/shared/config/env.config.js', () => ({
       env: {
-        NODE_ENV: 'test',
+        NODE_ENV: 'development',
         RATE_LIMIT_MAX: 100,
         RATE_LIMIT_WINDOW_MS: 60_000,
         REDIS_URL: 'redis://127.0.0.1:6379',
+        RATE_LIMIT_IN_MEMORY_FALLBACK_ALLOWED: true,
       },
     }));
     const { default: testRateLimitMiddleware } = await import(

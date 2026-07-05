@@ -263,7 +263,7 @@ jobs:
         # the rest loud on the run page instead of surfacing weeks later. Variable
         # VALUES are only pattern-tested (never printed for secrets — only the
         # sk_test_ prefix of STRIPE_SECRET_KEY is checked, value never echoed).
-        if: needs.resolve-environment.outputs.environment == 'production' || needs.resolve-environment.outputs.environment == 'staging'
+        if: needs.resolve-environment.outputs.environment == 'production'
         env:
           GH_VARS_JSON: ${{ toJSON(vars) }}
           DEPLOY_ENVIRONMENT: ${{ needs.resolve-environment.outputs.environment }}

@@ -67,7 +67,7 @@ jobs:
     timeout-minutes: 20
     environment: ${{ inputs.github_environment }}
     env:
-      NODE_ENV: test
+      NODE_ENV: development
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/core
       REDIS_URL: redis://localhost:6379
     steps:

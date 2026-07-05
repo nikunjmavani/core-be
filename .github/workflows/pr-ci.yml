@@ -143,7 +143,7 @@ jobs:
 
       - name: OpenAPI specs in sync
         env:
-          NODE_ENV: test
+          NODE_ENV: development
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/core
           REDIS_URL: redis://localhost:6379
         run: pnpm docs:check
@@ -220,7 +220,7 @@ jobs:
           --health-timeout=5s
           --health-retries=20
     env:
-      NODE_ENV: test
+      NODE_ENV: development
       LOG_LEVEL: warn
       HOST: 0.0.0.0
       PORT: 3000
@@ -503,7 +503,7 @@ jobs:
     # requires DATABASE_URL/REDIS_URL to be present — point them at unused
     # localhost values; no Postgres/Redis service is started (keeps PR CI fast).
     env:
-      NODE_ENV: test
+      NODE_ENV: development
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/core
       REDIS_URL: redis://localhost:6379
     steps:

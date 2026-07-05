@@ -46,10 +46,11 @@ export function getBullMQConnectionOptions(): {
     // to ioredis `enableReadyCheck: true`. The test harness churns the producer-queue connections
     // across createTestApp instances; a reconnect's INFO ready-check then rejects against a closing
     // stream at Vitest worker teardown — a flaky unhandled rejection on an otherwise-green run.
-    // Disable the ready-check under test (local/CI Redis is ready immediately); production keeps it.
-    // Reads raw `process.env.NODE_ENV` (always current; the `env` const is frozen pre-`test`) so no
-    // env-config mock is required, matching the existing `process.env.RUN_REDIS_TESTS` test gate.
-    enableReadyCheck: process.env.NODE_ENV !== 'test',
+    // The harness sets REDIS_READY_CHECK_ENABLED=false to disable it under test (local/CI Redis is
+    // ready immediately); unset elsewhere keeps it on and the schema refine keeps it on in production.
+    // Reads raw `process.env` (always current; the `env` const is frozen pre-flags) so no env-config
+    // mock is required, matching the existing `process.env.RUN_REDIS_TESTS` test gate.
+    enableReadyCheck: process.env.REDIS_READY_CHECK_ENABLED !== 'false',
     prefix: resolveRedisKeyPrefix(),
   });
 }

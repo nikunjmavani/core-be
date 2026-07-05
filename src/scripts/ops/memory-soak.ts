@@ -19,11 +19,11 @@ function rssMegabytes(): number {
 async function main(): Promise<void> {
   const apiProcess = spawn('pnpm', ['dev'], {
     stdio: 'inherit',
-    env: { ...process.env, NODE_ENV: 'test' },
+    env: { ...process.env, NODE_ENV: 'development' },
   });
   const workerProcess = spawn('pnpm', ['dev:worker'], {
     stdio: 'inherit',
-    env: { ...process.env, NODE_ENV: 'test' },
+    env: { ...process.env, NODE_ENV: 'development' },
   });
 
   const endAt = Date.now() + SOAK_MINUTES * 60_000;

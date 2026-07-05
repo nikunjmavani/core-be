@@ -1,5 +1,4 @@
 import { sql } from '@/infrastructure/database/connection.js';
-import { isHostedDeployment } from '@/infrastructure/database/utils/hosted-deployment.util.js';
 import { computeWorkerPostgresPoolDemand } from '@/infrastructure/queue/worker-runtime/worker-connection-budget.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -83,7 +82,7 @@ function resolveDeploymentCounts(): ResolvedDeploymentCounts | undefined {
     return { kind: 'total', totalProcessCount: total };
   }
 
-  if (isHostedDeployment()) {
+  if (env.DATABASE_CONNECTION_BUDGET_ENFORCED) {
     return undefined;
   }
 
@@ -200,11 +199,11 @@ export async function assertPostgresConnectionBudget(
       },
       'database.connection_budget.ok',
     );
-  } else if (isHostedDeployment()) {
+  } else if (env.DATABASE_CONNECTION_BUDGET_ENFORCED) {
     throw new Error(
       'DEPLOYMENT_TOTAL_REPLICA_COUNT (or DEPLOYMENT_API_REPLICA_COUNT + DEPLOYMENT_WORKER_REPLICA_COUNT) ' +
-        'is required for hosted deployments (production, or any environment with RAILWAY_GIT_COMMIT_SHA / ' +
-        'KUBERNETES_SERVICE_HOST set) to validate Postgres connection budget. ' +
+        'is required when DATABASE_CONNECTION_BUDGET_ENFORCED is set (default on production) ' +
+        'to validate the Postgres connection budget. ' +
         'Set the secret in the GitHub Environment so reusable-railway-deploy.yml forwards it to the service. ' +
         'See docs/deployment/runbooks/resource-limits.md',
     );

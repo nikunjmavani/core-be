@@ -63,26 +63,19 @@ function isCaptchaEnforced(): boolean {
 }
 
 function isCaptchaFailOpen(): boolean {
-  const nodeEnvironment = getEnv().NODE_ENV;
-  // Staging intentionally fails open so that a missing CAPTCHA config does not block auth in
-  // non-production environments. Staging is also protected by the env-schema enforcement that
-  // requires CAPTCHA_PROVIDER=turnstile when NODE_ENV=staging, so the fail-open path is only
-  // reached when a staging instance is intentionally running without CAPTCHA.
-  return (
-    nodeEnvironment === 'local' ||
-    nodeEnvironment === 'test' ||
-    nodeEnvironment === 'development' ||
-    nodeEnvironment === 'staging'
-  );
+  // Fail OPEN (skip captcha when Turnstile is unconfigured) is driven by CAPTCHA_FAIL_OPEN, whose
+  // default is true off production. The env-schema enforcement still requires CAPTCHA_PROVIDER=
+  // turnstile in production, so the fail-open path is only reached when a deployed instance
+  // is intentionally running without CAPTCHA.
+  return getEnv().CAPTCHA_FAIL_OPEN;
 }
 
 function isCaptchaBypassAllowed(request: FastifyRequest): boolean {
   const environment = getEnv();
-  // sec-M3: previously only refused bypass in production; staging accepted it.
-  // If staging ever receives real traffic (DNS misconfig, blue/green slot
-  // mix-up) credential-stuffing protection collapses. Treat staging the same
-  // as production — bypass is a dev/test affordance only.
-  if (environment.NODE_ENV === 'production' || environment.NODE_ENV === 'staging') {
+  // sec-M3: bypass is a dev/test affordance only. CAPTCHA_BYPASS_ALLOWED defaults false on any
+  // deployed runtime and the env-schema refine rejects `true` in production, so a DNS
+  // misconfig / blue-green slot mix-up cannot collapse credential-stuffing protection.
+  if (!environment.CAPTCHA_BYPASS_ALLOWED) {
     return false;
   }
   const bypassHeaderName = environment.CAPTCHA_BYPASS_HEADER;

@@ -5,9 +5,9 @@ import { envSchema, envSchemaKeys } from '@/shared/config/env-schema.js';
 const DATABASE_URL_FIXTURE = 'postgres://localhost:5432/core';
 const REDIS_URL_FIXTURE = 'redis://localhost:6379';
 
-// audit #8: deployed runtimes (production/staging) now require real RSA PEMs ≥2048-bit, so the
-// production/staging fixtures need a genuine key pair. local/development/test still accept the
-// short placeholders below (the refine is gated to deployed runtimes).
+// audit #8: the deployed runtime (production) now requires real RSA PEMs ≥2048-bit, so the
+// production fixture needs a genuine key pair. development still accepts the short placeholders
+// below (the refine is gated to the deployed runtime).
 const REAL_RSA_KEY_PAIR = generateKeyPairSync('rsa', {
   modulusLength: 2048,
   publicKeyEncoding: { type: 'spki', format: 'pem' },
@@ -41,16 +41,6 @@ const productionRequiredBase = {
   ...productionRedisTopology,
 };
 
-// sec-r4-C1/C2/C3: staging is a deployed environment and shares the same
-// https-origins, secure-cookies, and high-entropy-key requirements as production.
-const stagingRequiredBase = {
-  ...commonRequiredBase,
-  NODE_ENV: 'staging',
-  ALLOWED_ORIGINS: 'https://staging.example.com',
-  CAPTCHA_PROVIDER: 'turnstile',
-  CAPTCHA_SECRET: 'turnstile-secret',
-};
-
 describe('env-schema', () => {
   it('exports schema keys for tooling sync', () => {
     expect(envSchemaKeys.length).toBeGreaterThan(0);
@@ -63,7 +53,7 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       AUDIT_RETENTION_DAYS: '30',
       AUTH_SESSION_RETENTION_DAYS: '30',
     });
@@ -82,7 +72,7 @@ describe('env-schema', () => {
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
       PORT: '4000',
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
     });
 
     expect(parsed.success).toBe(true);
@@ -97,7 +87,7 @@ describe('env-schema', () => {
   it('rejects AUTH_SESSION_MAX_AGE_DAYS above 365 (sec-r4-C4)', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       AUTH_SESSION_MAX_AGE_DAYS: '366',
     });
     expect(parsed.success).toBe(false);
@@ -111,7 +101,7 @@ describe('env-schema', () => {
   it('accepts AUTH_SESSION_MAX_AGE_DAYS at the 365 ceiling (sec-r4-C4)', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       AUTH_SESSION_MAX_AGE_DAYS: '365',
     });
     expect(parsed.success).toBe(true);
@@ -200,19 +190,6 @@ describe('env-schema', () => {
     expect(parsed.success).toBe(false);
   });
 
-  // sec-r4-C1: staging is a deployed environment and must enforce the same
-  // https-origins requirement as production.
-  it('rejects plaintext http ALLOWED_ORIGINS in staging (sec-r4-C1)', () => {
-    const parsed = envSchema.safeParse({
-      ...stagingRequiredBase,
-      ALLOWED_ORIGINS: 'http://staging.example.com',
-    });
-    expect(parsed.success).toBe(false);
-    if (!parsed.success) {
-      expect(parsed.error.issues.some((issue) => issue.path[0] === 'ALLOWED_ORIGINS')).toBe(true);
-    }
-  });
-
   it('accepts https ALLOWED_ORIGINS in production', () => {
     const parsed = envSchema.safeParse({
       ...productionRequiredBase,
@@ -221,12 +198,7 @@ describe('env-schema', () => {
     expect(parsed.success).toBe(true);
   });
 
-  it('accepts https ALLOWED_ORIGINS in staging (sec-r4-C1 no regression)', () => {
-    const parsed = envSchema.safeParse(stagingRequiredBase);
-    expect(parsed.success).toBe(true);
-  });
-
-  it('allows http localhost ALLOWED_ORIGINS outside production/staging', () => {
+  it('allows http localhost ALLOWED_ORIGINS outside production', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,
       NODE_ENV: 'development',
@@ -240,7 +212,7 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       AUDIT_RETENTION_DAYS: '30',
       AUTH_SESSION_RETENTION_DAYS: '30',
       TRUST_PROXY: '1',
@@ -257,7 +229,7 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       TRUST_PROXY: 'true',
     });
 
@@ -272,7 +244,7 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       TRUST_PROXY: '0',
     });
 
@@ -282,7 +254,7 @@ describe('env-schema', () => {
   it('coerces optional boolean-like env strings', () => {
     const disposableAllowed = envSchema.safeParse({
       ...commonRequiredBase,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       BLOCK_DISPOSABLE_EMAIL: 'false',
       SCHEDULER_ENABLED: '0',
     });
@@ -303,7 +275,7 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       JWT_PRIVATE_KEY: 'test-private-key',
       JWT_PUBLIC_KEY: 'test-public-key',
     });
@@ -316,7 +288,7 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       ENABLE_RESPONSE_ENCRYPTION: 'true',
       RESPONSE_ENCRYPTION_KEY: 'a'.repeat(64),
     });
@@ -324,7 +296,7 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       ENABLE_RESPONSE_ENCRYPTION: '0',
     });
 
@@ -337,7 +309,7 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       IDEMPOTENCY_CARDINALITY_WARN_THRESHOLD: '100',
       IDEMPOTENCY_CARDINALITY_CRITICAL_THRESHOLD: '10',
     });
@@ -363,7 +335,7 @@ describe('env-schema', () => {
     const parsed = envSchema.safeParse({
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
     });
 
     expect(parsed.success).toBe(false);
@@ -374,7 +346,7 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       AUDIT_RETENTION_DAYS: '30',
       AUTH_SESSION_RETENTION_DAYS: '30',
       ENABLE_MCP_SERVER: 'true',
@@ -427,10 +399,10 @@ describe('env-schema', () => {
     expect(invalidBullMqUrl.success).toBe(false);
   });
 
-  it('allows single Redis host when NODE_ENV is local', () => {
+  it('allows single Redis host when NODE_ENV is development', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,
-      NODE_ENV: 'local',
+      NODE_ENV: 'development',
     });
 
     expect(parsed.success).toBe(true);
@@ -473,25 +445,10 @@ describe('env-schema', () => {
     expect(singleChar.success).toBe(false);
   });
 
-  // sec-r4-C3: staging is a deployed environment and must enforce the same
-  // high-entropy key requirement as production.
-  it('rejects a low-entropy / placeholder SECRETS_ENCRYPTION_KEY in staging (sec-r4-C3)', () => {
-    const allZeros = envSchema.safeParse({
-      ...stagingRequiredBase,
-      SECRETS_ENCRYPTION_KEY: '0'.repeat(64),
-    });
-    expect(allZeros.success).toBe(false);
-    if (!allZeros.success) {
-      expect(
-        allZeros.error.issues.some((issue) => issue.path[0] === 'SECRETS_ENCRYPTION_KEY'),
-      ).toBe(true);
-    }
-  });
-
-  it('allows a low-entropy SECRETS_ENCRYPTION_KEY outside production/staging (ephemeral test/CI keys)', () => {
+  it('allows a low-entropy SECRETS_ENCRYPTION_KEY outside production (ephemeral test/CI keys)', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       SECRETS_ENCRYPTION_KEY: '0'.repeat(64),
     });
     expect(parsed.success).toBe(true);
@@ -517,17 +474,6 @@ describe('env-schema', () => {
       METRICS_SCRAPE_TOKEN: 'b'.repeat(32),
     });
     expect(withToken.success).toBe(true);
-  });
-
-  it('accepts NODE_ENV staging for secure cookies and staging deploys', () => {
-    // sec-r4-C1: staging now also requires https ALLOWED_ORIGINS (not just CAPTCHA).
-    // Use stagingRequiredBase which supplies https origins, CAPTCHA, and high-entropy key.
-    const parsed = envSchema.safeParse(stagingRequiredBase);
-
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect(parsed.data.NODE_ENV).toBe('staging');
-    }
   });
 
   it('accepts a public FRONTEND_URL across all NODE_ENV values (magic-link inline-token leak removed)', () => {
@@ -602,20 +548,7 @@ describe('env-schema', () => {
     }
   });
 
-  // sec-r4-C2: staging is a deployed environment; COOKIE_SECURE=false must be
-  // rejected in staging just as it is in production.
-  it('rejects staging boot when COOKIE_SECURE is disabled (sec-r4-C2)', () => {
-    const parsed = envSchema.safeParse({
-      ...stagingRequiredBase,
-      COOKIE_SECURE: 'false',
-    });
-    expect(parsed.success).toBe(false);
-    if (!parsed.success) {
-      expect(parsed.error.issues.some((issue) => issue.path[0] === 'COOKIE_SECURE')).toBe(true);
-    }
-  });
-
-  it('allows COOKIE_SECURE=false outside production/staging (local plaintext loops)', () => {
+  it('allows COOKIE_SECURE=false outside production (local plaintext loops)', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,
       NODE_ENV: 'development',
@@ -834,7 +767,7 @@ describe('env-schema', () => {
     ])('rejects an over-cap %s so a typo cannot disable cleanup', (key, value) => {
       const parsed = envSchema.safeParse({
         ...commonRequiredBase,
-        NODE_ENV: 'test',
+        NODE_ENV: 'development',
         [key]: value,
       });
       expect(parsed.success).toBe(false);
@@ -847,7 +780,7 @@ describe('env-schema', () => {
     it('accepts retention values within the new bounds', () => {
       const parsed = envSchema.safeParse({
         ...commonRequiredBase,
-        NODE_ENV: 'test',
+        NODE_ENV: 'development',
         NOTIFICATION_RETENTION_DAYS: '365',
         AUTH_SESSION_RETENTION_DAYS: '730',
         TOMBSTONE_RETENTION_DAYS: '730',
@@ -892,7 +825,7 @@ describe('env-schema', () => {
     it('still accepts short placeholder keys outside deployed runtimes (local/test/dev)', () => {
       const parsed = envSchema.safeParse({
         ...commonRequiredBase,
-        NODE_ENV: 'test',
+        NODE_ENV: 'development',
         JWT_PRIVATE_KEY: 'private',
         JWT_PUBLIC_KEY: 'public',
       });
@@ -904,7 +837,7 @@ describe('env-schema', () => {
     it('rejects RATE_LIMIT_MAX above the 100_000 ceiling (fat-finger guard)', () => {
       const parsed = envSchema.safeParse({
         ...commonRequiredBase,
-        NODE_ENV: 'test',
+        NODE_ENV: 'development',
         RATE_LIMIT_MAX: '1000000',
       });
       expect(parsed.success).toBe(false);
@@ -916,7 +849,7 @@ describe('env-schema', () => {
     it('accepts a sane RATE_LIMIT_MAX', () => {
       const parsed = envSchema.safeParse({
         ...commonRequiredBase,
-        NODE_ENV: 'test',
+        NODE_ENV: 'development',
         RATE_LIMIT_MAX: '500',
       });
       expect(parsed.success && parsed.data.RATE_LIMIT_MAX).toBe(500);
@@ -989,7 +922,7 @@ describe('env-schema', () => {
     it('rejects an over-broad single-label wildcard (`*.com`)', () => {
       const parsed = envSchema.safeParse({
         ...commonRequiredBase,
-        NODE_ENV: 'test',
+        NODE_ENV: 'development',
         WEBHOOK_URL_ALLOWLIST: '*.com',
       });
       expect(parsed.success).toBe(false);
@@ -1001,7 +934,7 @@ describe('env-schema', () => {
     it('rejects an over-broad wildcard mixed with valid entries', () => {
       const parsed = envSchema.safeParse({
         ...commonRequiredBase,
-        NODE_ENV: 'test',
+        NODE_ENV: 'development',
         WEBHOOK_URL_ALLOWLIST: 'hooks.example.com, *.io',
       });
       expect(parsed.success).toBe(false);
@@ -1010,7 +943,7 @@ describe('env-schema', () => {
     it('accepts a registrable-domain wildcard and exact hosts', () => {
       const parsed = envSchema.safeParse({
         ...commonRequiredBase,
-        NODE_ENV: 'test',
+        NODE_ENV: 'development',
         WEBHOOK_URL_ALLOWLIST: '*.example.com, hooks.partner.io',
       });
       expect(parsed.success).toBe(true);

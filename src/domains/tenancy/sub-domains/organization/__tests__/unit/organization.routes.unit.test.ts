@@ -4,8 +4,8 @@ import type { FastifyInstance, RouteOptions } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 
 vi.mock('@/shared/config/env.config.js', () => ({
-  env: { NODE_ENV: 'test' },
-  getEnv: vi.fn().mockReturnValue({ NODE_ENV: 'test' }),
+  env: { NODE_ENV: 'development' },
+  getEnv: vi.fn().mockReturnValue({ NODE_ENV: 'development' }),
 }));
 
 vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({

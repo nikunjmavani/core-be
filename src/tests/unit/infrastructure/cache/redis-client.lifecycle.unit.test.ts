@@ -75,7 +75,7 @@ describe('redis client lifecycle (mocked ioredis)', () => {
     await expect(connectRedis()).rejects.toThrow('ECONNREFUSED');
   });
 
-  it('redisConnection uses keyPrefix from env (defaults to core:test:)', async () => {
+  it('redisConnection uses keyPrefix from env (core:test: set by the test harness)', async () => {
     await importRedisClient();
 
     expect(redisConstructorCalls).toHaveLength(1);

@@ -106,9 +106,9 @@ const i18nMiddleware: FastifyPluginAsync = async (app) => {
     returnNull: false,
     returnEmptyString: false,
     parseMissingKeyHandler: (key, language) => {
-      if (env.NODE_ENV === 'production' && language !== DEFAULT_LOCALE) {
+      if (env.I18N_REPORT_MISSING_KEYS && language !== DEFAULT_LOCALE) {
         captureMessage(`i18n missing key: ${key} (${language})`, { level: 'warning' });
-      } else if (env.NODE_ENV !== 'production') {
+      } else if (!env.I18N_REPORT_MISSING_KEYS) {
         logger.debug({ key, language }, 'i18n.missing_key');
       }
       return key;

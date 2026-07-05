@@ -7,7 +7,8 @@ import {
 
 const envState = vi.hoisted(() => ({
   LOG_LEVEL: 'info',
-  NODE_ENV: 'test' as string,
+  NODE_ENV: 'development' as string,
+  LOG_PRETTY: false as boolean,
   TRUST_PROXY: false as boolean | number | undefined,
   FASTIFY_REQUEST_TIMEOUT_MS: undefined as number | undefined,
   FASTIFY_CONNECTION_TIMEOUT_MS: undefined as number | undefined,
@@ -126,7 +127,7 @@ describe('fastify-server.util', () => {
       '@/shared/utils/http/fastify-server.util.js'
     );
     expect(buildProductionOptions().trustProxy).toBe(false);
-    envState.NODE_ENV = 'test';
+    envState.NODE_ENV = 'development';
     envState.TRUST_PROXY = false;
     vi.resetModules();
   });
@@ -160,13 +161,13 @@ describe('fastify-server.util', () => {
       '@/shared/utils/http/fastify-server.util.js'
     );
     expect(buildProductionOptions().trustProxy).toBe(false);
-    envState.NODE_ENV = 'test';
+    envState.NODE_ENV = 'development';
     vi.resetModules();
   });
 
   it('does not enable unbounded trust proxy from a boolean true value', async () => {
     envState.TRUST_PROXY = true;
-    envState.NODE_ENV = 'test';
+    envState.NODE_ENV = 'development';
     vi.resetModules();
     const { buildFastifyServerOptions: buildTrustedProxyOptions } = await import(
       '@/shared/utils/http/fastify-server.util.js'
@@ -198,8 +199,8 @@ describe('fastify-server.util', () => {
     );
   });
 
-  it('uses pino-pretty transport in local environment', async () => {
-    envState.NODE_ENV = 'local';
+  it('uses pino-pretty transport when LOG_PRETTY is set', async () => {
+    envState.LOG_PRETTY = true;
     envState.TRUST_PROXY = false;
     vi.resetModules();
     const { buildFastifyServerOptions: buildLocalOptions } = await import(
@@ -209,7 +210,7 @@ describe('fastify-server.util', () => {
     expect(options.logger).toMatchObject({
       transport: expect.objectContaining({ target: 'pino-pretty' }),
     });
-    envState.NODE_ENV = 'test';
+    envState.LOG_PRETTY = false;
     vi.resetModules();
   });
 });

@@ -78,7 +78,7 @@ Sync with `.env.example`: `pnpm tool:sync-env-example`
 
 | Variable                                                           | Local / dev                                       | Production                                                                                  |
 | ------------------------------------------------------------------ | ------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `NODE_ENV`                                                         | `local` or `development`                          | `production`                                                                                |
+| `NODE_ENV`                                                         | `development`                                     | `production`                                                                                |
 | `ALLOWED_ORIGINS`                                                  | e.g. `http://localhost:3000`                      | **Required.** Comma-separated allowed frontend origins                                      |
 | `DATABASE_URL`                                                     | Compose or dev DB; SSL optional                   | Managed Postgres with TLS (`sslmode=require` or provider default)                           |
 | `REDIS_URL`                                                        | Compose or dev Redis                              | Managed Redis (queues, rate limits, idempotency, permission cache)                          |
@@ -207,12 +207,12 @@ Before go-live, confirm the managed Redis instance (Railway Redis database, Redi
 
 The worker samples each `*-dlq` queue every 15 minutes (configurable via `DLQ_DEPTH_CRON`). When **waiting + failed** jobs exceed `DLQ_DEPTH_WARN_THRESHOLD` (default **10**), logs emit `queue.dlq.depth.high` and Sentry receives a warning. Inspect queues in Bull Board — see [bull-board.md](../../reference/runtime/bull-board.md).
 
-## Staging deploy verification (shutdown + migrate)
+## Pre-production deploy verification (shutdown + migrate)
 
-Run once per release candidate on the staging environment:
+Run once per release candidate on the deployed `development` environment (the pre-production stage):
 
 1. **Migrate** — `DATABASE_MIGRATION_URL=... pnpm db:migrate` (or `pnpm db:migrate:dry-run` against a disposable DB restored from schema snapshot).
 2. **Deploy** API + worker; confirm `GET /readyz` returns `ok` for database, redis, and bullmq.
-3. **Smoke** — `pnpm test:api-smoke` against staging base URL (or minimal billing/auth checks).
+3. **Smoke** — `pnpm test:api-smoke` against the development base URL (or minimal billing/auth checks).
 4. **Drain** — send `SIGTERM` to API; confirm `/readyz` returns `503` with `status: "draining"` while `/livez` stays `200` until exit (see [resource-limits.md](resource-limits.md)).
 5. **Worker** — restart worker; confirm BullMQ schedulers register (stripe-webhook, DLQ depth, idempotency cardinality in logs).

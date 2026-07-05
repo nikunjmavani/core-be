@@ -33,7 +33,7 @@ pnpm chaos:down                          # tear down
 ## Fixtures and helpers
 
 - `chaos.constants.ts` — toxic profile names + thresholds.
-- `bootstrap-env.ts` — hard-forces `NODE_ENV=test` (so a developer's `.env.local` cannot leak through) and overrides DATABASE_URL / REDIS_URL to point at the Toxiproxy listeners.
+- `bootstrap-env.ts` — hard-forces `NODE_ENV=development` (so a developer's `.env.local` cannot leak through) and overrides DATABASE_URL / REDIS_URL to point at the Toxiproxy listeners.
 - `provision-proxies.ts` — registers the listener configurations on every chaos run.
 
 ## Dependencies

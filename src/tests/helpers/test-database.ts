@@ -1,26 +1,31 @@
 import { database } from '@/infrastructure/database/connection.js';
 import { sql } from '@/infrastructure/database/connection.js';
+import { env } from '@/shared/config/env.config.js';
 import { cleanupTestRedis } from '@/tests/helpers/test-redis.js';
 
 const MAX_CLEANUP_RETRIES = 3;
 const CLEANUP_RETRY_DELAY_MS = 100;
 
 /**
- * Environments where wiping all rows is acceptable: the ephemeral `test` database and a
- * developer's `local` Docker Compose database. The chaos suite runs with `NODE_ENV=local`
- * because `.env.local` is layered as an override (see `load-env-files`), so `local` must be
- * permitted here. `development`/`staging`/`production` are never allowed to be truncated.
+ * Whether wiping all rows is acceptable, read from the explicit `TEST_DATA_WIPE_ALLOWED` flag.
+ * Defaults true only under `test`; a schema refine forbids it on staging/production so a deployed
+ * data store can never be truncated. A developer sets it true in `.env.local` to wipe a local
+ * development database.
  */
-const DATA_WIPE_ALLOWED_ENVIRONMENTS = new Set(['test', 'local']);
+function isDataWipeAllowed(): boolean {
+  return env.TEST_DATA_WIPE_ALLOWED;
+}
 
 /**
  * Clean up all test data from the database.
  * Uses a single TRUNCATE ... CASCADE (built in PL/pgSQL) to reduce deadlock risk; retries on deadlock.
- * Only use in the `test` or `local` environment (see {@link DATA_WIPE_ALLOWED_ENVIRONMENTS}).
+ * Only use in `test` or a non-hosted `development` environment (see {@link isDataWipeAllowed}).
  */
 export async function cleanupDatabase(): Promise<void> {
-  if (!DATA_WIPE_ALLOWED_ENVIRONMENTS.has(process.env.NODE_ENV ?? '')) {
-    throw new Error('cleanupDatabase can only be called in the test or local environment');
+  if (!isDataWipeAllowed()) {
+    throw new Error(
+      'cleanupDatabase can only be called in test or a non-hosted development environment',
+    );
   }
 
   for (let attempt = 1; attempt <= MAX_CLEANUP_RETRIES; attempt++) {

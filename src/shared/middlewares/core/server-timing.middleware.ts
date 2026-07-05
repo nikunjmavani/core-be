@@ -12,22 +12,21 @@ import { env } from '@/shared/config/env.config.js';
  *   SLOs measured from a distant client otherwise conflate round-trip time with server work.
  * - **Scope:** wrapped in `fastify-plugin` so the `onSend` hook escapes plugin encapsulation and
  *   applies to every route (including `/livez` and `/readyz`).
- * - **Safety (sec-C/M finding #28):** in production / staging the header is coarsened to 5 ms
- *   granularity so it cannot serve as a precise side channel against the auth flows whose
- *   constant-time guarantees only hold above the 0.1 ms precision the prior code emitted. In
- *   non-prod the original 0.1 ms precision is retained so dev tools and load harnesses get the
- *   real signal. Setting `HTTP_SERVER_TIMING_ENABLED=false` suppresses the header entirely.
+ * - **Safety (sec-C/M finding #28):** when `SERVER_TIMING_COARSE` is set (default in production)
+ *   the header is coarsened to 5 ms granularity so it cannot serve as a precise side
+ *   channel against the auth flows whose constant-time guarantees only hold above the 0.1 ms
+ *   precision the prior code emitted. Otherwise the original 0.1 ms precision is retained so dev
+ *   tools and load harnesses get the real signal. Setting `HTTP_SERVER_TIMING_ENABLED=false`
+ *   suppresses the header entirely.
  */
 const SERVER_TIMING_PRODUCTION_GRANULARITY_MS = 5;
-
-const PRODUCTION_LIKE_NODE_ENVS = new Set(['production', 'staging']);
 
 const serverTimingMiddleware: FastifyPluginAsync = async (application) => {
   if (!env.HTTP_SERVER_TIMING_ENABLED) {
     return;
   }
 
-  const coarsen = PRODUCTION_LIKE_NODE_ENVS.has(env.NODE_ENV);
+  const coarsen = env.SERVER_TIMING_COARSE;
 
   application.addHook('onSend', async (_request, reply, payload) => {
     const elapsedMs = reply.elapsedTime;

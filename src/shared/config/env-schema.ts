@@ -18,10 +18,6 @@ import { z } from 'zod';
 /** Minimum accepted RSA modulus (bits) for the RS256 signing keys (audit #8). */
 const MIN_JWT_RSA_MODULUS_BITS = 2048;
 
-/** True for deployed runtimes (production/staging) where placeholder/ephemeral keys are unacceptable. */
-const isDeployedRuntime = (nodeEnv: string): boolean =>
-  nodeEnv === 'production' || nodeEnv === 'staging';
-
 /**
  * Returns true when `pem` parses as an RSA key (of `kind`) whose modulus is at
  * least {@link MIN_JWT_RSA_MODULUS_BITS} bits. Used by the boot-time refine so a
@@ -40,30 +36,18 @@ const isStrongRsaPem = (pem: string, kind: 'private' | 'public'): boolean => {
   }
 };
 
-const nodeEnvSchema = z
-  .enum(['local', 'development', 'staging', 'production', 'test'])
-  .default('local');
+const nodeEnvSchema = z.enum(['development', 'production']).default('development');
 
-/**
- * Whether to apply local-dev convenience defaults for otherwise-required config
- * (DATABASE_URL, REDIS_URL, ALLOWED_ORIGINS, AUTH_SESSION_RETENTION_DAYS). True only
- * for `local`/`development` (interactive dev + the cloud sandbox). `test` is excluded
- * so the suite keeps its strict required-vars contract (env.config.unit.test asserts
- * a throw when these are missing); `staging`/`production` are excluded so hosted
- * runtimes fail loudly when these are unset. Production containers set
- * `NODE_ENV=production` in the environment (Dockerfile), so the gate holds regardless
- * of env-file load order. Keep the default values in sync with `.env.example`.
- */
-const isLocalRuntime = ['local', 'development'].includes(process.env.NODE_ENV ?? 'local');
+// Every policy flag below has a STATIC default (a hardcoded 'true'/'false'). NODE_ENV is NOT read to
+// choose a default — the module never branches on it. Each flag defaults to its PRODUCTION-safe value;
+// development and the test harness set the relaxed values explicitly in `.env` (see `.env.example`).
+// NODE_ENV appears only in the enum above and in the `.refine()` constraints below (parsed `data`),
+// which forbid an unsafe flag value when `data.NODE_ENV === 'production'`. Every switch lives in env.
 
-/**
- * Zero-config local Postgres DSN used as the `DATABASE_URL` default under {@link isLocalRuntime}.
- * Mirrors the docker-compose role/password (`core` / `core`) but is assembled from parts so the
- * source never contains a hardcoded credential-bearing connection-string literal. Keep in sync
- * with `docker-compose.yml` and `.env.example`.
- */
-const LOCAL_POSTGRES_ROLE = 'core';
-const LOCAL_DATABASE_URL = `postgresql://${LOCAL_POSTGRES_ROLE}:${LOCAL_POSTGRES_ROLE}@localhost:5432/core`;
+// DATABASE_URL / REDIS_URL / ALLOWED_ORIGINS are required in every runtime (no NODE_ENV-derived
+// localhost default): each environment sets them in its own `.env` (`pnpm setup:local` scaffolds a
+// local `.env.local` with localhost values). This keeps the required-vars contract independent of
+// the module-load NODE_ENV, so an explicit `production` parse fails loudly when they are missing.
 
 const booleanString = (defaultValue: 'true' | 'false') =>
   z
@@ -143,13 +127,11 @@ const envSchemaBase = z.object({
   OVERLOAD_DB_POOL_SHED_RATIO: z.coerce.number().min(0).max(1).default(0.9),
 
   // Database (managed service)
-  DATABASE_URL: isLocalRuntime ? z.string().min(1).default(LOCAL_DATABASE_URL) : z.string().min(1),
+  DATABASE_URL: z.string().min(1),
   DATABASE_MIGRATION_URL: z.string().min(1).optional(), // elevated-privilege user for migrations
 
   // Redis (managed service)
-  REDIS_URL: isLocalRuntime
-    ? z.string().min(1).default('redis://localhost:6379')
-    : z.string().min(1),
+  REDIS_URL: z.string().min(1),
   /**
    * Dedicated Redis endpoint for BullMQ queues. Recommended in production so a queue
    * backlog (e.g. during a worker outage) cannot exhaust the write-critical cache /
@@ -207,6 +189,111 @@ const envSchemaBase = z.object({
   AUTH_SESSION_MAX_AGE_DAYS: z.coerce.number().int().min(1).max(365).default(7),
   /** Secure flag for session + CSRF cookies. Set false only for plaintext local loops. */
   COOKIE_SECURE: booleanString('true'),
+
+  // ── Policy flags (replace former `NODE_ENV === …` comparisons in runtime code) ──────────────
+  // Every runtime module reads one of these flags, never NODE_ENV. Two kinds:
+  //  • Category-A (behaviour): default selected per environment above; freely overridable.
+  //  • Category-B (security): default to the HARDENED value everywhere; a `.refine()` below rejects
+  //    an unsafe override in production. Relaxed dev/test values are set explicitly (env
+  //    file / test harness) so nothing silently weakens on a deployed environment.
+  /**
+   * Category-A. Captcha verification fails OPEN (skips) when Turnstile is unconfigured. Defaults
+   * false (fail closed, production-safe); development and the test harness set it true in `.env` so
+   * auth is not blocked when CAPTCHA_PROVIDER=disabled.
+   */
+  CAPTCHA_FAIL_OPEN: booleanString('false'),
+  /**
+   * Category-B. Permits the `CAPTCHA_BYPASS_HEADER` dev affordance. Defaults false (bypass off);
+   * the refine rejects `true` in production. Dev/test opt in explicitly.
+   */
+  CAPTCHA_BYPASS_ALLOWED: booleanString('false'),
+  /**
+   * Category-B. Require CSRF double-submit on cookie-session routes when the Origin header is
+   * absent (else fall back to Referer). Defaults true (hardened); the refine keeps it true in
+   * production. Dev may set false for Referer-fallback tooling.
+   */
+  SESSION_ORIGIN_CSRF_REQUIRED: booleanString('true'),
+  /**
+   * Category-B. Reject outbound webhook targets when `WEBHOOK_URL_ALLOWLIST` is empty (SSRF guard).
+   * Defaults true (hardened); the refine keeps it true in production. Dev may set false for testing.
+   */
+  WEBHOOK_ALLOWLIST_REQUIRED: booleanString('true'),
+  /**
+   * Category-B. Require a valid bearer token on the worker `/metrics` endpoint when metrics are
+   * enabled. Defaults true (hardened); the refine keeps it true in production.
+   */
+  METRICS_AUTH_REQUIRED: booleanString('true'),
+  /**
+   * Category-B. Test-harness-only: re-derive SUPER_ADMIN without the user domain (middleware
+   * harnesses). Defaults false (hardened); the refine rejects `true` in production. The test harness
+   * sets it true explicitly (it runs as NODE_ENV=development).
+   */
+  AUTH_TEST_SUPER_ADMIN_FALLBACK: booleanString('false'),
+  /**
+   * Category-A. Fail boot on scheduler/worker registry drift instead of warning. Defaults true
+   * (fail fast, production-safe); development sets it false in `.env` so split-worker dev/test does
+   * not trip on drift.
+   */
+  SCHEDULER_REGISTRY_AUDIT_STRICT: booleanString('true'),
+  /** Category-A. Coarsen the `Server-Timing` header to 5 ms (timing side-channel guard). Defaults true; development sets false in `.env`. */
+  SERVER_TIMING_COARSE: booleanString('true'),
+  /** Category-A. Apply the pre-close drain pause (for runtimes behind a load balancer). Defaults true; development sets false in `.env`. */
+  SHUTDOWN_DRAIN_ENABLED: booleanString('true'),
+  /** Category-A. Skip process-level shared-singleton teardown on app close (per-worker Vitest harness). */
+  SHUTDOWN_SKIP_SHARED_TEARDOWN: booleanString('false'),
+  /** Category-A. Report missing i18n keys for non-default locales to Sentry (else debug-log). Defaults true; development sets false in `.env`. */
+  I18N_REPORT_MISSING_KEYS: booleanString('true'),
+  /** Category-A. Pretty-print logs via pino-pretty. Defaults false (JSON, production-safe); development sets true in `.env`. */
+  LOG_PRETTY: booleanString('false'),
+  /** Category-A. Reduced Sentry sampling defaults (production volume) when SENTRY_*_SAMPLE_RATE unset. Defaults true; development sets false in `.env`. */
+  SENTRY_REDUCED_SAMPLING: booleanString('true'),
+  /** Category-A. Enable Sentry SDK debug logging. Defaults false (production-safe); development sets true in `.env`. */
+  SENTRY_DEBUG: booleanString('false'),
+
+  // ── Boot-time safety checks (former isHostedDeployment() gate → explicit per-check flags) ──────
+  // Each flag replaces the single auto-detected HOSTED_DEPLOYMENT signal. Defaults are HARDENED
+  // (enforced) everywhere, and a refine below locks each ENFORCED flag on in production so an explicit
+  // production PARSE always satisfies it by default. Development relaxes them via `.env` (see the
+  // Policy-flags section of `.env.example`); the test harness (src/tests/setup.ts) sets the relaxed
+  // values explicitly. A deployed environment keeps the hardened defaults unless it opts out in `.env`.
+  /** Category-B. Fail boot when the Postgres server TLS certificate is not verified. */
+  DATABASE_TLS_ENFORCED: booleanString('true'),
+  /** Category-B. Fail boot when DATABASE_URL connects as a superuser / BYPASSRLS role (collapses RLS). */
+  DATABASE_RLS_SAFETY_ENFORCED: booleanString('true'),
+  /** Category-B. Require explicit deployment replica counts to validate the Postgres connection budget. */
+  DATABASE_CONNECTION_BUDGET_ENFORCED: booleanString('true'),
+  /** Category-B. Fail boot on plaintext redis:// to a public host (private/internal hosts stay allowed). */
+  REDIS_TLS_ENFORCED: booleanString('true'),
+  /** Category-B. Fail boot when TRUST_PROXY is unset/false (behind a load balancer the client IP collapses). */
+  TRUST_PROXY_REQUIRED: booleanString('true'),
+  /**
+   * Category-B. Permit the destructive test-data wipe helpers (TRUNCATE all tables + flush Redis
+   * keys) used by the e2e suite. Defaults false (hardened); a refine forbids `true` on
+   * production. The test harness sets it true; a developer may set it true in `.env.local`
+   * to run cleanup against a local development database.
+   */
+  TEST_DATA_WIPE_ALLOWED: booleanString('false'),
+  /**
+   * Category-B. ioredis ready-check on the cache / BullMQ connections. Defaults true (on); the test
+   * harness sets `REDIS_READY_CHECK_ENABLED=false` (the per-worker singletons churn across
+   * createTestApp instances and a reconnect ready-check rejects against a closing stream). Read via
+   * raw `process.env` in the clients for load-order safety; a refine keeps it enabled in production.
+   */
+  REDIS_READY_CHECK_ENABLED: booleanString('true'),
+  /**
+   * Category-B. Lift the strict public/authenticated rate-limit caps to 5000 so loopback E2E and
+   * dev UX are not throttled. Defaults false (hardened); development sets it true in `.env` and the
+   * test harness sets it true; a refine forbids `true` in production where credential-stuffing
+   * protection must stay on.
+   */
+  RATE_LIMIT_RELAXED_CAPS: booleanString('false'),
+  /**
+   * Category-B. Allow the chaos suite's `RUN_REDIS_TESTS=0` to force the in-memory rate-limit store.
+   * Defaults false (hardened); the chaos harness sets it true; a refine forbids `true` in production
+   * so a stray RUN_REDIS_TESTS=0 can never silently downgrade the cluster-wide Redis limiter to
+   * per-process counting.
+   */
+  RATE_LIMIT_IN_MEMORY_FALLBACK_ALLOWED: booleanString('false'),
   /**
    * sec-M5: HSTS `preload` is operationally irreversible (weeks to remove
    * from the preload list). Default false so we never advertise preload
@@ -248,9 +335,7 @@ const envSchemaBase = z.object({
   PROCESS_RSS_WARN_THRESHOLD_MB: z.coerce.number().int().min(64).default(512),
 
   // CORS (comma-separated origins; required in every runtime)
-  ALLOWED_ORIGINS: isLocalRuntime
-    ? z.string().min(1).default('http://localhost:3000')
-    : z.string().min(1),
+  ALLOWED_ORIGINS: z.string().min(1),
 
   /** WebAuthn RP ID (hostname). Defaults to first ALLOWED_ORIGINS hostname or localhost. */
   WEBAUTHN_RP_ID: z.string().min(1).optional(),
@@ -412,7 +497,7 @@ const envSchemaBase = z.object({
   METRICS_SCRAPE_TOKEN: z.string().min(32).optional(),
   /** OTLP HTTP traces endpoint base URL (e.g. https://otel.example.com). Appends /v1/traces when omitted. */
   /**
-   * sec-C3: in production/staging the OTLP exporter MUST use https://. The
+   * sec-C3: in production the OTLP exporter MUST use https://. The
    * runtime accepts both http:// and https://; spans carry SQL fragments,
    * request paths, and request ids that should not traverse the network in
    * plaintext. Refine enforced below.
@@ -595,9 +680,7 @@ const envSchemaBase = z.object({
    * an arbitrary env value.
    */
   NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(90),
-  AUTH_SESSION_RETENTION_DAYS: isLocalRuntime
-    ? z.coerce.number().int().min(1).max(730).default(30)
-    : z.coerce.number().int().min(1).max(730),
+  AUTH_SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(30),
   /** Tombstoned-row TTL before purge workers hard-delete (default avoids mandatory deploy secret). */
   TOMBSTONE_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(90),
   /** Terminal Stripe webhook ledger rows older than this are purged (failed rows kept for replay). */
@@ -960,24 +1043,23 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
-      if (data.NODE_ENV !== 'production' && data.NODE_ENV !== 'staging') {
+      if (data.NODE_ENV !== 'production') {
         return true;
       }
       return data.CAPTCHA_PROVIDER === 'turnstile' && Boolean(data.CAPTCHA_SECRET);
     },
     {
       message:
-        'In production and staging, CAPTCHA_PROVIDER=turnstile and CAPTCHA_SECRET are required on public auth routes',
+        'In production, CAPTCHA_PROVIDER=turnstile and CAPTCHA_SECRET are required on public auth routes',
       path: ['CAPTCHA_PROVIDER'],
     },
   )
   .refine(
     (data) => {
-      // sec-r4-C3: staging shares production's encryption-at-rest requirement.
-      // A low-entropy key (e.g. the all-zero .env.example template) in staging
-      // would silently defeat encryption of MFA TOTP seeds and webhook signing
-      // secrets for a deployed environment.
-      if (data.NODE_ENV !== 'production' && data.NODE_ENV !== 'staging') {
+      // sec-r4-C3: production requires encryption-at-rest. A low-entropy key (e.g. the all-zero
+      // .env.example template) would silently defeat encryption of MFA TOTP seeds and webhook
+      // signing secrets for a deployed environment.
+      if (data.NODE_ENV !== 'production') {
         return true;
       }
       // Reject placeholder / low-entropy keys (e.g. the all-zero .env.example template) that
@@ -988,7 +1070,7 @@ export const envSchema = envSchemaBase
     },
     {
       message:
-        'In production and staging, SECRETS_ENCRYPTION_KEY must be a high-entropy 32-byte key (generate with `openssl rand -hex 32`); placeholder/low-entropy values are rejected',
+        'In production, SECRETS_ENCRYPTION_KEY must be a high-entropy 32-byte key (generate with `openssl rand -hex 32`); placeholder/low-entropy values are rejected',
       path: ['SECRETS_ENCRYPTION_KEY'],
     },
   )
@@ -1036,13 +1118,12 @@ export const envSchema = envSchemaBase
       if (origins.includes('*')) {
         return false;
       }
-      // sec-r4-C1: staging is a deployed environment and shares the same https
-      // requirement as production — plaintext http origins would weaken the
-      // session-cookie Origin defense in staging just as they would in production.
-      if (data.NODE_ENV !== 'production' && data.NODE_ENV !== 'staging') {
+      // sec-r4-C1: production requires absolute https origins — plaintext http origins would weaken
+      // the session-cookie Origin defense on a deployed environment.
+      if (data.NODE_ENV !== 'production') {
         return true;
       }
-      // In production and staging every origin must be an absolute https:// URL.
+      // In production every origin must be an absolute https:// URL.
       // Plaintext http origins would let cross-site requests ride over an
       // unencrypted channel and weaken the cookie-origin defenses that compare
       // against this allowlist.
@@ -1109,19 +1190,101 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
-      // sec-r4-C2: staging is a deployed environment; session + CSRF cookies
-      // must carry the Secure attribute in both production and staging so they
-      // are never transmitted over plaintext HTTP. COOKIE_SECURE=false is only
-      // valid for local plaintext loops (development/test/local).
-      if (data.NODE_ENV !== 'production' && data.NODE_ENV !== 'staging') {
+      // sec-r4-C2: in production, session + CSRF cookies must carry the Secure attribute so they
+      // are never transmitted over plaintext HTTP. COOKIE_SECURE=false is only valid for local
+      // plaintext loops (development).
+      if (data.NODE_ENV !== 'production') {
         return true;
       }
       return data.COOKIE_SECURE === true;
     },
     {
-      message:
-        'COOKIE_SECURE must be true in production and staging (cookies sent over HTTPS only).',
+      message: 'COOKIE_SECURE must be true in production (cookies sent over HTTPS only).',
       path: ['COOKIE_SECURE'],
+    },
+  )
+  // ── Category-B environment constraints for the policy flags ────────────────
+  // Runtime code no longer compares NODE_ENV; these refines are the single place that keeps a
+  // security-critical flag from being overridden to an unsafe value in the wrong environment.
+  .refine((data) => data.NODE_ENV !== 'production' || data.CAPTCHA_BYPASS_ALLOWED === false, {
+    message:
+      'CAPTCHA_BYPASS_ALLOWED must be false in production (captcha bypass is a dev/test affordance only).',
+    path: ['CAPTCHA_BYPASS_ALLOWED'],
+  })
+  .refine((data) => data.NODE_ENV !== 'production' || data.SESSION_ORIGIN_CSRF_REQUIRED === true, {
+    message:
+      'SESSION_ORIGIN_CSRF_REQUIRED must be true in production (CSRF double-submit is required when the Origin header is absent).',
+    path: ['SESSION_ORIGIN_CSRF_REQUIRED'],
+  })
+  .refine((data) => data.NODE_ENV !== 'production' || data.WEBHOOK_ALLOWLIST_REQUIRED === true, {
+    message:
+      'WEBHOOK_ALLOWLIST_REQUIRED must be true in production (an empty webhook allowlist would open an SSRF hole).',
+    path: ['WEBHOOK_ALLOWLIST_REQUIRED'],
+  })
+  .refine((data) => data.NODE_ENV !== 'production' || data.METRICS_AUTH_REQUIRED === true, {
+    message:
+      'METRICS_AUTH_REQUIRED must be true in production (the worker /metrics endpoint must require a bearer token).',
+    path: ['METRICS_AUTH_REQUIRED'],
+  })
+  .refine(
+    (data) => data.NODE_ENV !== 'production' || data.AUTH_TEST_SUPER_ADMIN_FALLBACK === false,
+    {
+      message:
+        'AUTH_TEST_SUPER_ADMIN_FALLBACK must be false in production (it bypasses the SUPER_ADMIN re-derivation guard; development/test-harness only).',
+      path: ['AUTH_TEST_SUPER_ADMIN_FALLBACK'],
+    },
+  )
+  // Boot-time safety checks: each must stay enforced in production (former isHostedDeployment gate).
+  .refine((data) => data.NODE_ENV !== 'production' || data.DATABASE_TLS_ENFORCED === true, {
+    message:
+      'DATABASE_TLS_ENFORCED must be true in production (the Postgres server certificate must be verified).',
+    path: ['DATABASE_TLS_ENFORCED'],
+  })
+  .refine((data) => data.NODE_ENV !== 'production' || data.DATABASE_RLS_SAFETY_ENFORCED === true, {
+    message:
+      'DATABASE_RLS_SAFETY_ENFORCED must be true in production (a superuser/BYPASSRLS role silently disables tenant RLS).',
+    path: ['DATABASE_RLS_SAFETY_ENFORCED'],
+  })
+  .refine(
+    (data) => data.NODE_ENV !== 'production' || data.DATABASE_CONNECTION_BUDGET_ENFORCED === true,
+    {
+      message:
+        'DATABASE_CONNECTION_BUDGET_ENFORCED must be true in production (deployment replica counts are required to validate the Postgres connection budget).',
+      path: ['DATABASE_CONNECTION_BUDGET_ENFORCED'],
+    },
+  )
+  .refine((data) => data.NODE_ENV !== 'production' || data.REDIS_TLS_ENFORCED === true, {
+    message:
+      'REDIS_TLS_ENFORCED must be true in production (plaintext redis:// to a public host must fail closed).',
+    path: ['REDIS_TLS_ENFORCED'],
+  })
+  .refine((data) => data.NODE_ENV !== 'production' || data.TRUST_PROXY_REQUIRED === true, {
+    message:
+      'TRUST_PROXY_REQUIRED must be true in production (without a trusted proxy hop every client collapses to the proxy IP).',
+    path: ['TRUST_PROXY_REQUIRED'],
+  })
+  .refine((data) => data.NODE_ENV !== 'production' || data.TEST_DATA_WIPE_ALLOWED === false, {
+    message:
+      'TEST_DATA_WIPE_ALLOWED must be false in production (the destructive wipe helpers must never target a deployed data store).',
+    path: ['TEST_DATA_WIPE_ALLOWED'],
+  })
+  .refine((data) => data.NODE_ENV !== 'production' || data.REDIS_READY_CHECK_ENABLED === true, {
+    message:
+      'REDIS_READY_CHECK_ENABLED must be true in production (the ready-check must stay on outside the test harness).',
+    path: ['REDIS_READY_CHECK_ENABLED'],
+  })
+  .refine((data) => data.NODE_ENV !== 'production' || data.RATE_LIMIT_RELAXED_CAPS === false, {
+    message:
+      'RATE_LIMIT_RELAXED_CAPS must be false in production (credential-stuffing rate caps must stay tight).',
+    path: ['RATE_LIMIT_RELAXED_CAPS'],
+  })
+  .refine(
+    (data) =>
+      data.NODE_ENV !== 'production' || data.RATE_LIMIT_IN_MEMORY_FALLBACK_ALLOWED === false,
+    {
+      message:
+        'RATE_LIMIT_IN_MEMORY_FALLBACK_ALLOWED must be false in production (a stray RUN_REDIS_TESTS=0 must never downgrade the Redis limiter to per-process counting).',
+      path: ['RATE_LIMIT_IN_MEMORY_FALLBACK_ALLOWED'],
     },
   )
   .refine(
@@ -1194,10 +1357,10 @@ export const envSchema = envSchemaBase
     (data) => {
       // sec-C3: OTLP traffic carries SQL fragments, request paths, request ids.
       // Allow plaintext http:// in dev/test (typical local collector), require
-      // https:// in production / staging — those environments must export over
+      // https:// in production — those environments must export over
       // an encrypted channel.
       if (data.OTEL_EXPORTER_OTLP_ENDPOINT === undefined) return true;
-      if (data.NODE_ENV !== 'production' && data.NODE_ENV !== 'staging') return true;
+      if (data.NODE_ENV !== 'production') return true;
       try {
         return new URL(data.OTEL_EXPORTER_OTLP_ENDPOINT).protocol === 'https:';
       } catch {
@@ -1206,7 +1369,7 @@ export const envSchema = envSchemaBase
     },
     {
       message:
-        'OTEL_EXPORTER_OTLP_ENDPOINT must be an https:// URL in production / staging (telemetry exporters cannot transmit SQL fragments / request paths in plaintext).',
+        'OTEL_EXPORTER_OTLP_ENDPOINT must be an https:// URL in production (telemetry exporters cannot transmit SQL fragments / request paths in plaintext).',
       path: ['OTEL_EXPORTER_OTLP_ENDPOINT'],
     },
   )
@@ -1324,17 +1487,17 @@ export const envSchema = envSchemaBase
   // audit #8: the RS256 signing keys were validated only by `min(1)`. A truncated PEM, a
   // non-RSA key, or an accidental sub-2048-bit key passed boot and either failed opaquely at
   // first sign/verify or (weak-but-valid) issued practically-forgeable tokens. Assert real RSA
-  // PEMs of adequate modulus in DEPLOYED runtimes (production/staging) — mirroring the entropy
+  // PEMs of adequate modulus in DEPLOYED runtimes (production) — mirroring the entropy
   // floor already gated on SECRETS_ENCRYPTION_KEY. local/development/test use ephemeral keys.
   .refine(
-    (data) => !isDeployedRuntime(data.NODE_ENV) || isStrongRsaPem(data.JWT_PRIVATE_KEY, 'private'),
+    (data) => data.NODE_ENV !== 'production' || isStrongRsaPem(data.JWT_PRIVATE_KEY, 'private'),
     {
       message: `JWT_PRIVATE_KEY must be a valid RSA private-key PEM of at least ${MIN_JWT_RSA_MODULUS_BITS} bits.`,
       path: ['JWT_PRIVATE_KEY'],
     },
   )
   .refine(
-    (data) => !isDeployedRuntime(data.NODE_ENV) || isStrongRsaPem(data.JWT_PUBLIC_KEY, 'public'),
+    (data) => data.NODE_ENV !== 'production' || isStrongRsaPem(data.JWT_PUBLIC_KEY, 'public'),
     {
       message: `JWT_PUBLIC_KEY must be a valid RSA public-key PEM of at least ${MIN_JWT_RSA_MODULUS_BITS} bits.`,
       path: ['JWT_PUBLIC_KEY'],

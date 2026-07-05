@@ -110,7 +110,7 @@ Production deploys are **forward-only**: we do not run automatic down migrations
 
 ### 1. Neon branch rehearsal (recommended)
 
-1. Create a disposable Neon branch from production (or staging) schema.
+1. Create a disposable Neon branch from the production schema.
 2. Apply the PR migration: `DATABASE_URL=<branch> pnpm db:migrate`.
 3. Run targeted Vitest integration tests and `pnpm test:api-smoke` against the branch.
 4. **Simulate rollback** by restoring the branch to a PITR timestamp **before** the migration (Neon console) or by creating a fresh branch from the old snapshot.

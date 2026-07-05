@@ -142,7 +142,7 @@ pnpm docker:smoke:logs     # optional
 pnpm docker:smoke:down
 ```
 
-`api-smoke` uses `NODE_ENV=test` and the same core env vars as CI. It does not start the BullMQ worker.
+`api-smoke` uses `NODE_ENV=development` and the same core env vars as CI. It does not start the BullMQ worker.
 
 ### Manual `docker run` (alternative)
 
@@ -151,7 +151,10 @@ export DOCKER_BUILDKIT=1
 docker build --target api -t core-be:local .
 pnpm compose:up
 docker run --rm -p 3000:3000 \
-  -e NODE_ENV=test \
+  -e NODE_ENV=development \
+  `# boot-time safety checks default hardened; relax them for the plaintext local Postgres/Redis:` \
+  -e DATABASE_TLS_ENFORCED=false -e DATABASE_RLS_SAFETY_ENFORCED=false \
+  -e DATABASE_CONNECTION_BUDGET_ENFORCED=false -e REDIS_TLS_ENFORCED=false -e TRUST_PROXY_REQUIRED=false \
   -e HOST=0.0.0.0 -e PORT=3000 \
   -e DATABASE_URL=postgresql://core:core@host.docker.internal:5432/core \
   -e REDIS_URL=redis://host.docker.internal:6379 \
@@ -175,7 +178,7 @@ On **every pull request and push**, the `docker-build` job:
 2. Builds `core-be:ci` (API) and `core-be-worker:ci` (`Dockerfile.worker`)
 3. Trivy-scans both images (CRITICAL/HIGH; fails the job on findings)
 4. Worker: `node --check` + native module imports
-5. API: boot container with `NODE_ENV=test`, verify `GET /readyz`
+5. API: run migrations in the container under `NODE_ENV=development`, verify the image boots
 
 On **push to `main`** (after scan), images are pushed to GHCR:
 

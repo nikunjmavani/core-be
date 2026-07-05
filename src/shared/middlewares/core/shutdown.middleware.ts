@@ -35,16 +35,9 @@ import { getShutdownWatchdogMs } from '@/infrastructure/queue/worker-runtime/shu
  */
 export const SHUTDOWN_DRAIN_DELAY_MS = THREE_SECONDS_MS;
 
-/**
- * Runtimes that sit behind a load balancer and therefore need the pre-close drain pause.
- * Local/development/test processes are reached directly, so the delay is skipped to keep
- * shutdowns (and test suites) fast.
- */
-const ENVIRONMENTS_BEHIND_LOAD_BALANCER = new Set(['staging', 'production']);
-
-/** Drain pause for the current runtime: {@link SHUTDOWN_DRAIN_DELAY_MS} behind a load balancer, otherwise 0. */
+/** Drain pause for the current runtime: {@link SHUTDOWN_DRAIN_DELAY_MS} when SHUTDOWN_DRAIN_ENABLED, else 0. */
 function getShutdownDrainDelayMs(): number {
-  return ENVIRONMENTS_BEHIND_LOAD_BALANCER.has(env.NODE_ENV) ? SHUTDOWN_DRAIN_DELAY_MS : 0;
+  return env.SHUTDOWN_DRAIN_ENABLED ? SHUTDOWN_DRAIN_DELAY_MS : 0;
 }
 
 const shutdownMiddleware: FastifyPluginAsync = async (app) => {
@@ -55,10 +48,11 @@ const shutdownMiddleware: FastifyPluginAsync = async (app) => {
     // whose re-init / reconnect INFO probe (BullMQ getRedisVersionAndType / ioredis readyCheck)
     // then rejects against a closing stream at worker teardown — a flaky unhandled rejection that
     // fails an otherwise-green run. The worker owns those singletons and reaps them at process
-    // exit, so skip the process-level teardown under test. Production/dev (one app per process)
-    // still tears everything down below. Reads raw `process.env.NODE_ENV` (always current; the
-    // `env` const is frozen before the harness sets NODE_ENV=test) so no env-config mock is needed.
-    if (process.env.NODE_ENV === 'test') {
+    // exit, so skip the process-level teardown when SHUTDOWN_SKIP_SHARED_TEARDOWN is set (default
+    // under the per-worker test harness). Production/dev (one app per process) still tears
+    // everything down below. Reads raw `process.env` (always current; the `env` const is frozen
+    // before the harness sets the flag) so no env-config mock is required.
+    if (process.env.SHUTDOWN_SKIP_SHARED_TEARDOWN === 'true') {
       return;
     }
     /**

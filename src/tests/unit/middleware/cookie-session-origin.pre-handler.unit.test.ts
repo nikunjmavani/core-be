@@ -109,6 +109,7 @@ describe('cookie-session-origin.pre-handler (production)', () => {
       env: {
         ALLOWED_ORIGINS: 'https://app.example.com',
         NODE_ENV: 'production',
+        SESSION_ORIGIN_CSRF_REQUIRED: true,
       },
     }));
     const { requireAllowedSourceOriginForCookieSessionRoute: requireSourceOrigin } = await import(
@@ -131,6 +132,7 @@ describe('cookie-session-origin.pre-handler (production)', () => {
       env: {
         ALLOWED_ORIGINS: 'https://app.example.com',
         NODE_ENV: 'production',
+        SESSION_ORIGIN_CSRF_REQUIRED: true,
       },
     }));
     const { requireAllowedSourceOriginForCookieSessionRoute: requireSourceOrigin } = await import(
@@ -153,6 +155,7 @@ describe('cookie-session-origin.pre-handler (production)', () => {
       env: {
         ALLOWED_ORIGINS: 'https://app.example.com',
         NODE_ENV: 'production',
+        SESSION_ORIGIN_CSRF_REQUIRED: true,
       },
     }));
     const { requireAllowedSourceOriginForCookieSessionRoute: requireSourceOrigin } = await import(

@@ -1,5 +1,6 @@
 import { resolveRedisKeyPrefix } from '@/infrastructure/cache/redis-prefix.util.js';
 import { connectRedis, redisConnection } from '@/infrastructure/cache/redis.client.js';
+import { env } from '@/shared/config/env.config.js';
 
 /** Redis key prefixes cleared between integration tests (Postgres truncate does not touch Redis). */
 /** Logical prefixes (ioredis `keyPrefix: 'core:'` is applied by redisConnection). */
@@ -19,11 +20,13 @@ const TEST_REDIS_PREFIXES = [
 ] as const;
 
 /**
- * Environments where flushing test-scoped Redis keys is acceptable: the ephemeral `test`
- * database and a developer's `local` Docker Compose stack. The chaos suite runs with
- * `NODE_ENV=local` (`.env.local` is layered as an override), so `local` must be permitted.
+ * Whether flushing test-scoped Redis keys is acceptable, read from the shared `TEST_DATA_WIPE_ALLOWED`
+ * flag (the same gate as the Postgres wipe). Defaults true only under `test`; a schema refine forbids
+ * it on staging/production so a deployed store is never flushed.
  */
-const REDIS_WIPE_ALLOWED_ENVIRONMENTS = new Set(['test', 'local']);
+function isRedisWipeAllowed(): boolean {
+  return env.TEST_DATA_WIPE_ALLOWED;
+}
 
 /**
  * `@fastify/rate-limit` stores counters under `<keyPrefix>fastify-rate-limit-<key>`. Every
@@ -62,8 +65,10 @@ async function clearRateLimitCounters(): Promise<void> {
  * do not leak across Vitest cases in the same worker process.
  */
 export async function cleanupTestRedis(): Promise<void> {
-  if (!REDIS_WIPE_ALLOWED_ENVIRONMENTS.has(process.env.NODE_ENV ?? '')) {
-    throw new Error('cleanupTestRedis can only be called in the test or local environment');
+  if (!isRedisWipeAllowed()) {
+    throw new Error(
+      'cleanupTestRedis can only be called in test or a non-hosted development environment',
+    );
   }
 
   try {

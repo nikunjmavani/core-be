@@ -1,7 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getEnvMock = vi.fn();
-const originalKubernetesServiceHost = process.env.KUBERNETES_SERVICE_HOST;
 
 vi.mock('@/shared/config/env.config.js', () => ({
   env: new Proxy(
@@ -23,20 +22,11 @@ describe('assertDatabaseTlsVerification', () => {
   beforeEach(() => {
     getEnvMock.mockReset();
     vi.resetModules();
-    delete process.env.KUBERNETES_SERVICE_HOST;
   });
 
-  afterEach(() => {
-    if (originalKubernetesServiceHost === undefined) {
-      delete process.env.KUBERNETES_SERVICE_HOST;
-    } else {
-      process.env.KUBERNETES_SERVICE_HOST = originalKubernetesServiceHost;
-    }
-  });
-
-  it('resolves and logs ok when sslmode=verify-full (any environment)', async () => {
+  it('resolves and logs ok when sslmode=verify-full (regardless of the enforcement flag)', async () => {
     getEnvMock.mockReturnValue({
-      NODE_ENV: 'production',
+      DATABASE_TLS_ENFORCED: true,
       DATABASE_URL: 'postgresql://u:p@host/db?sslmode=verify-full',
     });
     const { logger } = await import('@/shared/utils/infrastructure/logger.util.js');
@@ -53,7 +43,7 @@ describe('assertDatabaseTlsVerification', () => {
 
   it('resolves when DATABASE_SSL_REJECT_UNAUTHORIZED=true even with sslmode=require', async () => {
     getEnvMock.mockReturnValue({
-      NODE_ENV: 'production',
+      DATABASE_TLS_ENFORCED: true,
       DATABASE_URL: 'postgresql://u:p@host/db?sslmode=require',
       DATABASE_SSL_REJECT_UNAUTHORIZED: true,
     });
@@ -63,9 +53,9 @@ describe('assertDatabaseTlsVerification', () => {
     expect(() => assertDatabaseTlsVerification()).not.toThrow();
   });
 
-  it('throws in production when sslmode=require (encrypted but unverified)', async () => {
+  it('throws when DATABASE_TLS_ENFORCED and sslmode=require (encrypted but unverified)', async () => {
     getEnvMock.mockReturnValue({
-      NODE_ENV: 'production',
+      DATABASE_TLS_ENFORCED: true,
       DATABASE_URL: 'postgresql://u:p@host/db?sslmode=require',
     });
     const { assertDatabaseTlsVerification } = await import(
@@ -74,21 +64,9 @@ describe('assertDatabaseTlsVerification', () => {
     expect(() => assertDatabaseTlsVerification()).toThrow(/database\.tls_safety\.unverified/);
   });
 
-  it('throws on hosted Railway deployments (RAILWAY_GIT_COMMIT_SHA set)', async () => {
+  it('warns (without throwing) when DATABASE_TLS_ENFORCED is false and verification is off', async () => {
     getEnvMock.mockReturnValue({
-      NODE_ENV: 'development',
-      RAILWAY_GIT_COMMIT_SHA: 'deadbeef',
-      DATABASE_URL: 'postgresql://u:p@host/db?sslmode=require',
-    });
-    const { assertDatabaseTlsVerification } = await import(
-      '@/infrastructure/database/safety/assert-database-tls-safety.js'
-    );
-    expect(() => assertDatabaseTlsVerification()).toThrow(/database\.tls_safety\.unverified/);
-  });
-
-  it('warns (without throwing) on local/dev when verification is off', async () => {
-    getEnvMock.mockReturnValue({
-      NODE_ENV: 'local',
+      DATABASE_TLS_ENFORCED: false,
       DATABASE_URL: 'postgresql://u:p@localhost:5432/core',
     });
     const { logger } = await import('@/shared/utils/infrastructure/logger.util.js');

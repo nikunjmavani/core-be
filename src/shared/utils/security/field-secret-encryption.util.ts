@@ -69,11 +69,10 @@ function resolveFieldSecretEncryptionKey(version: FieldSecretKeyVersion): Buffer
     if (environment.SECRETS_ENCRYPTION_KEY) {
       return Buffer.from(environment.SECRETS_ENCRYPTION_KEY, 'hex');
     }
-    if (environment.NODE_ENV === 'production') {
-      throw new Error('SECRETS_ENCRYPTION_KEY is required in production');
-    }
+    // Missing key is fatal in every runtime — field-secret encryption cannot proceed without it.
+    // The env-schema high-entropy refine already enforces a strong key in production.
     throw new Error(
-      'SECRETS_ENCRYPTION_KEY must be set (64 hex chars) for field-secret encryption in non-production',
+      'SECRETS_ENCRYPTION_KEY must be set (64 hex chars) for field-secret encryption',
     );
   }
 

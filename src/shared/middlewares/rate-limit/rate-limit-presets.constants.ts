@@ -133,28 +133,17 @@ function buildRateLimitKeyFromOrganizationActorOrIpAddress(request: FastifyReque
   return `ip:${request.ip}`;
 }
 
-// Read from the validated env config (not raw process.env) so the cap derivation uses the
-// same schema-coerced NODE_ENV as the rest of the app.
-const NODE_ENV_FOR_RATE_LIMIT_CAPS = env.NODE_ENV;
+// Read from the validated env config: RATE_LIMIT_RELAXED_CAPS defaults false (hardened); development
+// sets it true in `.env` and the test harness sets it true (loopback E2E + dev UX are not throttled),
+// while a schema refine forbids overriding it to true in production so credential-stuffing protection stays on.
+const RATE_LIMIT_CAPS_RELAXED = env.RATE_LIMIT_RELAXED_CAPS;
 
 /**
- * Non-hosted runtimes where strict public-auth caps (5/min) cause flaky local E2E and dev UX.
- * Production and staging keep the tight cap — credential stuffing protection stays on there.
+ * Sensitive public endpoints use a tight cap in production so credentials cannot be brute-forced
+ * from a single IPv4 rapidly. Lift the ceiling when RATE_LIMIT_RELAXED_CAPS is set (development/test)
+ * so Playwright E2E and loopback integration suites do not trip Redis-backed 429s from parallel workers.
  */
-function isRelaxedPublicAuthRateLimitEnv(nodeEnv: string): boolean {
-  return nodeEnv === 'test' || nodeEnv === 'development' || nodeEnv === 'local';
-}
-
-/**
- * Sensitive public endpoints use a tight cap in production/staging so credentials cannot be brute-forced
- * from a single IPv4 rapidly. Lift the ceiling in test/development/local so Playwright E2E and
- * loopback integration suites do not trip Redis-backed 429s from parallel workers.
- */
-const STRICT_PUBLIC_ROUTE_MAX_REQUESTS_PER_WINDOW = isRelaxedPublicAuthRateLimitEnv(
-  NODE_ENV_FOR_RATE_LIMIT_CAPS,
-)
-  ? 5000
-  : 5;
+const STRICT_PUBLIC_ROUTE_MAX_REQUESTS_PER_WINDOW = RATE_LIMIT_CAPS_RELAXED ? 5000 : 5;
 
 /** Sensitive public auth-style endpoints — strict cap keyed by IP. */
 export const STRICT_PUBLIC_RATE_LIMIT = {
@@ -173,14 +162,10 @@ export const STRICT_PUBLIC_RATE_LIMIT = {
  * credential and outbound-email endpoints (login, magic-link request, password-reset request).
  * The IP-only {@link STRICT_PUBLIC_RATE_LIMIT} is spoofable, so this complements it by binding the
  * limit to the targeted account/email — blunting credential stuffing, account enumeration, and
- * mailbomb abuse on public auth routes. Lifted under test/development/local so loopback
- * suites that loop these routes do not produce flaky 429s.
+ * mailbomb abuse on public auth routes. Lifted when RATE_LIMIT_RELAXED_CAPS is set (development/test)
+ * so loopback suites that loop these routes do not produce flaky 429s.
  */
-const STRICT_PUBLIC_PER_EMAIL_MAX_REQUESTS_PER_WINDOW = isRelaxedPublicAuthRateLimitEnv(
-  NODE_ENV_FOR_RATE_LIMIT_CAPS,
-)
-  ? 5000
-  : 5;
+const STRICT_PUBLIC_PER_EMAIL_MAX_REQUESTS_PER_WINDOW = RATE_LIMIT_CAPS_RELAXED ? 5000 : 5;
 const STRICT_PUBLIC_PER_EMAIL_WINDOW_MS = 15 * MILLISECONDS_PER_MINUTE;
 
 /**
@@ -196,13 +181,13 @@ export const STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS: RateLimitOptions = {
   onExceeding: recordRouteRateLimitExceeded,
 };
 
-const STRICT_AUTHED_MAX_REQUESTS_PER_WINDOW = NODE_ENV_FOR_RATE_LIMIT_CAPS === 'test' ? 5000 : 10;
-const MODERATE_AUTHED_MAX_REQUESTS_PER_WINDOW = NODE_ENV_FOR_RATE_LIMIT_CAPS === 'test' ? 5000 : 30;
+const STRICT_AUTHED_MAX_REQUESTS_PER_WINDOW = RATE_LIMIT_CAPS_RELAXED ? 5000 : 10;
+const MODERATE_AUTHED_MAX_REQUESTS_PER_WINDOW = RATE_LIMIT_CAPS_RELAXED ? 5000 : 30;
 
 /**
  * Authenticated credential / abuse-sensitive mutations (10 req / 60s in production), keyed by
- * user when possible. The cap is lifted under NODE_ENV=test so suites that loop through password
- * change / MFA flows from a single loopback IP do not produce flaky 429s.
+ * user when possible. The cap is lifted when RATE_LIMIT_RELAXED_CAPS is set (development/test) so
+ * suites that loop through password change / MFA flows from a single loopback IP do not produce flaky 429s.
  */
 export const STRICT_AUTHED_RATE_LIMIT = {
   config: {
@@ -245,7 +230,7 @@ export const REFRESH_RATE_LIMIT = {
 export const WEBHOOK_RATE_LIMIT = {
   config: {
     rateLimit: {
-      max: NODE_ENV_FOR_RATE_LIMIT_CAPS === 'test' ? 5000 : 60,
+      max: RATE_LIMIT_CAPS_RELAXED ? 5000 : 60,
       timeWindow: MILLISECONDS_PER_MINUTE,
       keyGenerator: buildRateLimitKeyFromIpAddress,
       onExceeding: recordRouteRateLimitExceeded,

@@ -11,7 +11,7 @@ vi.mock('@fastify/cors', () => ({
 
 vi.mock('@/shared/config/env.config.js', () => ({
   env: {
-    NODE_ENV: 'test',
+    NODE_ENV: 'development',
     ALLOWED_ORIGINS: 'https://app.example.com,https://admin.example.com',
   },
 }));

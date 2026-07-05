@@ -43,8 +43,15 @@ echo "==> Load-test setup: VUS=$VUS, WORKERS=$WORKERS, DB pool=$POOL"
 
 echo "[1/7] back up .env.local + apply load-test env overrides"
 [ -f "$BAK" ] || cp .env.local "$BAK"
-setkv NODE_ENV test                       # captcha fail-open + per-route rate caps -> 5000
+setkv NODE_ENV development                       # non-production runtime (CAPTCHA_FAIL_OPEN defaults true)
+setkv RATE_LIMIT_RELAXED_CAPS true                # per-route rate caps -> 5000 (previously implied by the old test runtime)
 setkv CAPTCHA_PROVIDER disabled
+# Relax the boot-time safety checks for the local Docker Postgres/Redis (plaintext, no reverse proxy);
+# they default hardened under development (were warn-only pre-refactor via host auto-detection).
+setkv DATABASE_TLS_ENFORCED false
+setkv DATABASE_RLS_SAFETY_ENFORCED false
+setkv REDIS_TLS_ENFORCED false
+setkv TRUST_PROXY_REQUIRED false
 setkv PORT 3001
 setkv RATE_LIMIT_MAX 100000000            # global limiter never rejects (one source IP)
 setkv WEBHOOK_URL_ALLOWLIST example.com   # create-webhook host passes SSRF/allowlist

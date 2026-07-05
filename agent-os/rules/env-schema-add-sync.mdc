@@ -26,5 +26,12 @@ When you change any of the matched files:
    confirm the new key lands under the right `[secret]` / `[variable]` column.
 6. **Add** the "Environment variable changes" block printed by the sync tool
    to the PR description.
+7. **Never branch on `NODE_ENV`.** The enum is `development | production` only, read solely in
+   `env-schema.ts` (the enum field + `.refine()` constraints on parsed `data`). Environment-varying
+   behaviour is an explicit env flag with a **static production-safe default**; the dev value ships
+   ACTIVE in `.env.example` and the test harness sets test values. No `isProduction()`/`isDevelopment()`
+   helpers, no removed `NODE_ENV` values (`test`/`staging`/`local`). Enforced by
+   `no-nodeenv-branching.global.test.ts` and `guard-edits.sh` R4. See the env-schema-add skill's
+   "Environment model" section.
 
 See **`docs/deployment/runbooks/add-new-environment.md`** for the full hosted-environment workflow.

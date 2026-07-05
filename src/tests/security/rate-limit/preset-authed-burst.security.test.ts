@@ -26,7 +26,7 @@ import {
  *      app with the preset's own config, so a bucket-isolation regression
  *      (e.g. switching ORG_SCOPED back to user-only keying) fails CI
  *
- * NODE_ENV=test lifts production caps to 5000 (in
+ * RATE_LIMIT_RELAXED_CAPS (true under test) lifts production caps to 5000 (in
  * `rate-limit-presets.constants.ts`) to avoid CI flakes on shared loopback
  * IPs, so the burst tests below feed the preset's `keyGenerator` into a
  * fresh app with an explicitly tiny max — that gives behavioural coverage

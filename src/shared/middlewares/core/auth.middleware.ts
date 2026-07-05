@@ -45,7 +45,7 @@ async function rederiveSuperAdminRole(
 ): Promise<GlobalRole | undefined> {
   const userService = request.server.userDomain?.userService;
   if (!userService) {
-    if (env.NODE_ENV === 'test') {
+    if (env.AUTH_TEST_SUPER_ADMIN_FALLBACK) {
       return GLOBAL_ROLES.SUPER_ADMIN;
     }
     throw new ConfigurationError(

@@ -26,7 +26,7 @@ vi.mock('@/infrastructure/cache/redis-url.util.js', () => ({
 }));
 
 vi.mock('@/shared/config/env.config.js', () => ({
-  env: { NODE_ENV: 'test', LOG_LEVEL: 'silent', REDIS_URL: 'redis://127.0.0.1:6379' },
+  env: { NODE_ENV: 'development', LOG_LEVEL: 'silent', REDIS_URL: 'redis://127.0.0.1:6379' },
 }));
 
 vi.mock('@/infrastructure/queue/health.js', () => ({

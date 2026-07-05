@@ -45,9 +45,10 @@ function requireCsrfDoubleSubmit(request: FastifyRequest): void {
 
 /**
  * For routes that authenticate via httpOnly session cookies: when ALLOWED_ORIGINS is configured,
- * require a trusted source origin from the Origin header. In production, when Origin is absent,
- * require CSRF double-submit (X-CSRF-Token header matching csrf_token cookie). Non-production
- * may fall back to Referer origin validation. Empty allowlist skips the check (e.g. some dev setups).
+ * require a trusted source origin from the Origin header. When Origin is absent and
+ * SESSION_ORIGIN_CSRF_REQUIRED is set (default in production), require CSRF double-submit
+ * (X-CSRF-Token header matching csrf_token cookie); otherwise fall back to Referer origin
+ * validation. Empty allowlist skips the check (e.g. some dev setups).
  */
 export function requireAllowedSourceOriginForCookieSessionRoute(request: FastifyRequest): void {
   const allowedOriginsList = parseAllowedOriginsList(env.ALLOWED_ORIGINS);
@@ -61,7 +62,7 @@ export function requireAllowedSourceOriginForCookieSessionRoute(request: Fastify
     return;
   }
 
-  if (env.NODE_ENV === 'production') {
+  if (env.SESSION_ORIGIN_CSRF_REQUIRED) {
     requireCsrfDoubleSubmit(request);
     return;
   }

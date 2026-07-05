@@ -1,5 +1,5 @@
 import { sql } from '@/infrastructure/database/connection.js';
-import { isHostedDeployment } from '@/infrastructure/database/utils/hosted-deployment.util.js';
+import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
@@ -55,7 +55,7 @@ export async function assertDatabaseRoleRlsSafety(): Promise<void> {
     return;
   }
 
-  if (isHostedDeployment()) {
+  if (env.DATABASE_RLS_SAFETY_ENFORCED) {
     throw new Error(
       `database.rls_safety.unsafe_role: DATABASE_URL connects as "${rolname}" with ` +
         `rolsuper=${rolsuper} rolbypassrls=${rolbypassrls}. PostgreSQL skips Row Level Security ` +

@@ -29,11 +29,12 @@ blob CDN (`pkg-containers.githubusercontent.com`) is unreachable from some restr
 via a GitHub Actions service container (see below), so this local build affects `pnpm chaos:up` only.
 
 > **First-run prerequisites.** The Docker daemon must be running (`docker info`) before `pnpm chaos:up`.
-> `pnpm test:chaos` is self-contained: its `bootstrap-env.ts` hard-forces `NODE_ENV=test` and points
+> `pnpm test:chaos` is self-contained: its `bootstrap-env.ts` hard-forces `NODE_ENV=development` and points
 > `DATABASE_URL` / `REDIS_URL` at the proxied ports itself, so the manual overrides in step 2 are only
-> needed when you run the **API process** by hand against the proxies (not for the test suite). `NODE_ENV`
-> must resolve to `test` for the suite to pass — captcha is only bypassed for `test`/`development`/`staging`,
-> and `cleanupDatabase`/`cleanupTestRedis` only run in `test`/`local`.
+> needed when you run the **API process** by hand against the proxies (not for the test suite). The chaos
+> bootstrap forces `NODE_ENV=development` and sets the test-affordance flags — captcha bypass via
+> `CAPTCHA_BYPASS_ALLOWED`, and `TEST_DATA_WIPE_ALLOWED=true` for `cleanupDatabase`/`cleanupTestRedis` —
+> so the suite behaves the same locally and in CI.
 
 ## Continuous integration
 
