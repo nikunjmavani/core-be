@@ -6,6 +6,14 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.27](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.26...v4.10.0-dev.27) (2026-07-05)
+
+
+### Changed
+
+* **config:** drive all env behavior via flags; NODE_ENV=development|production only ([00d77f6](https://github.com/nikunjmavani/core-be/commit/00d77f6588828563b0c14807445e392f14864f4d))
+* **config:** drive all env behavior via flags; NODE_ENV=development|production only ([9de0a67](https://github.com/nikunjmavani/core-be/commit/9de0a678666aac4129a67ea2ae04c9e4642e48e2))
+
 ## [4.10.0-dev.26](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.25...v4.10.0-dev.26) (2026-07-05)
 
 
