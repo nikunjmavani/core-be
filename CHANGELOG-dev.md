@@ -6,6 +6,14 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.26](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.25...v4.10.0-dev.26) (2026-07-05)
+
+
+### Fixed
+
+* **config:** point development frontend + CORS origins at deployed Netlify FE ([be1da34](https://github.com/nikunjmavani/core-be/commit/be1da3437f4505a79632a39db3a9768aaf797b8c))
+* **config:** point development frontend + CORS origins at deployed Netlify FE ([8e451d7](https://github.com/nikunjmavani/core-be/commit/8e451d7290c87b76f7a1c731f9dc30c45e99809e))
+
 ## [4.10.0-dev.25](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.24...v4.10.0-dev.25) (2026-07-04)
 
 
