@@ -19,7 +19,7 @@
   "frontend": {
     "name": "core-fe",
     "url": {
-      "development": "http://localhost:5173",
+      "development": "https://dev--core-fe.netlify.app",
       "production": ""
     }
   },
@@ -126,11 +126,11 @@
     },
     "rateLimitWindowMs": 60000,
     "frontendUrl": {
-      "development": "http://localhost:3000",
+      "development": "https://dev--core-fe.netlify.app",
       "production": ""
     },
     "allowedOrigins": {
-      "development": "http://localhost:3000",
+      "development": "https://dev--core-fe.netlify.app",
       "production": ""
     }
   }
