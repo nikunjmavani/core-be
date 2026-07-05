@@ -116,11 +116,14 @@ pnpm dev                                # API; loads .env.development
 pnpm dev:worker                         # worker; same .env.development
 ```
 
-The loader (`src/shared/config/load-env-files.ts`) picks `.env.${NODE_ENV}` and
-strips empty values so optional Zod fields see `undefined`, not `""`. If
-`.env.${NODE_ENV}` is missing AND `NODE_ENV !== 'production'`, it falls back to
-`.env.development` — this is what lets `NODE_ENV=test` work without forcing
-every contributor to maintain a separate `.env.test`.
+The loader (`src/shared/config/load-env-files.ts`) picks `.env.${NODE_ENV}`, strips
+empty values so optional Zod fields see `undefined` not `""`, then layers the
+gitignored `.env.local` on top as a per-machine override. It reads `NODE_ENV` **only**
+to name the file — no comparison, no branch. The Vitest suite runs as `development`, so
+it shares the one `.env.development` file (plus any `.env.local`); there is no separate
+test env file. `.env.local` is gitignored and excluded from the Docker image
+(`.dockerignore`), and production config is platform-injected — so it is absent in
+production without needing a runtime guard.
 
 ## 3. Day-to-day local dev
 
@@ -297,13 +300,13 @@ The `local`, `test`, and load-test profiles deliberately **turn off** protection
 inherit **none** of those values. Three layers govern this — the first two are
 enforced for you; the third is entirely on the operator.
 
-### 11.1 Layer 1 — the schema refuses to boot in production/staging
+### 11.1 Layer 1 — the schema refuses to boot in production
 
 These `src/shared/config/env-schema.ts` refinements **throw at startup** in
-`production`/`staging`, so a deploy carrying a dev/placeholder value crashes fast
+`production`, so a deploy carrying a dev/placeholder value crashes fast
 instead of running insecure — you cannot ship the dev value:
 
-| Setting                               | dev / load-test value     | Enforced in production / staging                                                  |
+| Setting                               | dev / load-test value     | Enforced in production                                                  |
 | ------------------------------------- | ------------------------- | --------------------------------------------------------------------------------- |
 | `CAPTCHA_PROVIDER` + `CAPTCHA_SECRET` | `disabled`                | `turnstile` **and** `CAPTCHA_SECRET` required (public auth routes)                 |
 | `SECRETS_ENCRYPTION_KEY`              | all-zero placeholder      | high-entropy 32-byte key (`openssl rand -hex 32`); low-entropy rejected           |
@@ -319,16 +322,22 @@ instead of running insecure — you cannot ship the dev value:
 filled — boot fails loudly on any violation. `CONFIG=production pnpm validate:github-env`
 confirms the required keys exist in the GitHub Environment.
 
-### 11.2 Layer 2 — `NODE_ENV` is the master switch (hosted deploys force `production`)
+### 11.2 Layer 2 — `NODE_ENV` selects each policy flag's default (it is not itself a runtime switch)
 
-`NODE_ENV=test` is the single most dangerous value to leak into a deployed
-environment: it **lifts every per-route rate-limit cap to 5000**
-(`rate-limit-presets.constants.ts`, gated on `=== 'test'`) and makes **captcha
-fail open** (`captcha.middleware.ts`). `NODE_ENV=production` reverts both
-automatically. You normally cannot ship the wrong value — the Dockerfile sets
+Runtime code never branches on `NODE_ENV`; it reads explicit **policy flags**, and `NODE_ENV` only
+**selects each flag's default** in `env-schema.ts`. The two most safety-relevant flags —
+`RATE_LIMIT_RELAXED_CAPS` (lifts every per-route cap to 5000, `rate-limit-presets.constants.ts`) and
+`CAPTCHA_FAIL_OPEN` (captcha skips when Turnstile is unconfigured, `captcha.middleware.ts`) — default
+relaxed on a local `development` runtime, and a schema refine **rejects the relaxed value in
+production at boot**. So even a leaked `.env` cannot ship relaxed caps or fail-open captcha to
+a deployed environment — config validation fails closed. The boot-time safety checks
+(`DATABASE_TLS_ENFORCED`, `DATABASE_RLS_SAFETY_ENFORCED`, `REDIS_TLS_ENFORCED`, `TRUST_PROXY_REQUIRED`,
+`DATABASE_CONNECTION_BUDGET_ENFORCED`) follow the same rule: default enforced when deployed, locked on
+in production. You also normally cannot ship the wrong `NODE_ENV` — the Dockerfile sets
 `NODE_ENV=production`, and the branch ↔ GitHub-env ↔ `NODE_ENV` 1:1 invariant
-(`pnpm github:sync --check`, see [add-new-environment.md](./add-new-environment.md))
-blocks a mismatch. **Never hand-edit `NODE_ENV` to `test`/`development` in `.env.production`.**
+(`pnpm github:sync --check`, see [add-new-environment.md](./add-new-environment.md)) blocks a
+mismatch. **Never hand-edit `NODE_ENV` in `.env.production`; override an individual policy flag if you
+must change a default (a production refine still blocks any unsafe value).**
 
 ### 11.3 Layer 3 — valid-but-dangerous values the schema accepts (operator-owned)
 

@@ -23,7 +23,7 @@ vi.mock('@/shared/utils/auth/recent-step-up.util.js', () => ({
  */
 vi.mock('@/shared/config/env.config.js', () => {
   const env = {
-    NODE_ENV: 'test',
+    NODE_ENV: 'development',
     LOG_LEVEL: 'silent',
     AUTH_SESSION_MAX_AGE_DAYS: 7,
     COOKIE_SECURE: false,

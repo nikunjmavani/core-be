@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildGuardSteps,
   hasPackageScript,
+  shouldRunGlobalTests,
   shouldRunMigrationCheck,
   shouldRunOpenApiCheck,
   shouldRunSonarScan,
@@ -28,6 +29,20 @@ describe('run-pre-commit-guard conditionals', () => {
     expect(shouldRunStructureTreeCheck(['src/domains/auth/auth.routes.ts'])).toBe(true);
     expect(shouldRunStructureTreeCheck(['tooling/ci/run-named-step.sh'])).toBe(true);
     expect(shouldRunStructureTreeCheck(['docs/README.md'])).toBe(false);
+  });
+
+  it('runs the global suite for domains, env-schema, harness, workflows, and Docker changes', () => {
+    expect(shouldRunGlobalTests(['src/domains/auth/auth.service.ts'])).toBe(true);
+    // env-driven-config guard surfaces (no-nodeenv-branching.global.test.ts scans these).
+    expect(shouldRunGlobalTests(['src/shared/config/env-schema.ts'])).toBe(true);
+    expect(shouldRunGlobalTests(['src/tests/setup.ts'])).toBe(true);
+    expect(shouldRunGlobalTests(['src/tests/chaos/bootstrap-env.ts'])).toBe(true);
+    expect(shouldRunGlobalTests(['.github/workflows/pr-ci.yml'])).toBe(true);
+    expect(shouldRunGlobalTests(['Dockerfile'])).toBe(true);
+    expect(shouldRunGlobalTests(['docker-compose.yml'])).toBe(true);
+    // Unrelated files do not trigger the global suite.
+    expect(shouldRunGlobalTests(['docs/README.md'])).toBe(false);
+    expect(shouldRunGlobalTests(['src/shared/utils/text/slug.util.ts'])).toBe(false);
   });
 
   it('detects deployed-surface staged paths for the SonarQube gate', () => {

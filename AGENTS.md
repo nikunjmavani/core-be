@@ -57,7 +57,7 @@ can hang/fail at the compose step. To bring up the stack manually:
 - **Worker:** `pnpm dev:worker` fails the connection-budget guard with default `DATABASE_POOL_MAX=20`
   (monolithic worker demand is ~47). Start it as
   `DATABASE_POOL_MAX=60 POSTGRES_MAX_CONNECTIONS=500 pnpm dev:worker` (`.env.local` loads with
-  `override=false` under `NODE_ENV=local`, so shell env wins). The compose Postgres allows 500
+  `override=false` under `NODE_ENV=development`, so shell env wins). The compose Postgres allows 500
   connections. `pnpm dev` (API) runs fine with defaults.
 
 Health: `GET /livez`, `GET /readyz` on `:3000`. Sentry/OpenTelemetry "duplicate registration" lines

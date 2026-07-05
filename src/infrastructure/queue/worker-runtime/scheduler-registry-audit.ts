@@ -14,6 +14,7 @@
  * the build instead of silently never running.
  */
 
+import { env } from '@/shared/config/env.config.js';
 import { getScheduledJobs } from '@/infrastructure/queue/scheduler.js';
 import { getWorkerQueueRegistrationDefinitions } from '@/infrastructure/queue/worker-runtime/worker-registration.registry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -91,9 +92,9 @@ export function auditSchedulerRegistryConsistency(): void {
   if (mismatches.length === 0) {
     return;
   }
-  if (process.env.NODE_ENV === 'production') {
+  if (env.SCHEDULER_REGISTRY_AUDIT_STRICT) {
     throw new Error(
-      `worker.registry.scheduler_mismatch — refusing to boot in production with scheduler/worker registry drift: ${JSON.stringify(mismatches)}`,
+      `worker.registry.scheduler_mismatch — refusing to boot with scheduler/worker registry drift: ${JSON.stringify(mismatches)}`,
     );
   }
   logger.warn({ mismatches }, 'worker.registry.scheduler_mismatch');

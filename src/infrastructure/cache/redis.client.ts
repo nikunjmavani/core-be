@@ -32,12 +32,13 @@ export const redisConnection = new Redis(env.REDIS_URL, {
    * ready-check changes nothing the suites rely on while removing the only command ioredis emits at
    * reconnect (the source of the dangling rejection).
    *
-   * Reads raw `process.env.NODE_ENV` (not the `env` const): the const is frozen at the first
-   * env.config import — which happens via `load-env-files` before the test harness sets
-   * `NODE_ENV=test` — so it would still read `local` here. `process.env` is always current and needs
-   * no env-config mock (matching the existing `process.env.RUN_REDIS_TESTS` test gate).
+   * Reads raw `process.env.REDIS_READY_CHECK_ENABLED` (not the `env` const): the const is frozen at
+   * the first env.config import — which happens via `load-env-files` before the test harness sets its
+   * flags — so `process.env` is always current and needs no env-config mock (matching the existing
+   * `process.env.RUN_REDIS_TESTS` test gate). Unset outside test → ready-check stays on; the schema
+   * default is off under `test` and its refine keeps it on in production.
    */
-  enableReadyCheck: process.env.NODE_ENV !== 'test',
+  enableReadyCheck: process.env.REDIS_READY_CHECK_ENABLED !== 'false',
   /** Fail fast when disconnected — avoids hanging HTTP handlers and chaos tests during partitions. */
   enableOfflineQueue: false,
   /** Abort any command that has not received a reply within 3 s — guards against a connected-but-unresponsive Redis stalling HTTP request handlers indefinitely. */

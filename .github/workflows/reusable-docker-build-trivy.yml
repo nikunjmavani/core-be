@@ -328,7 +328,7 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm --network host \
-            -e NODE_ENV=test \
+            -e NODE_ENV=development \
             -e DATABASE_URL="$DATABASE_URL" \
             -e DATABASE_SSL_ENABLED="$DATABASE_SSL_ENABLED" \
             -e REDIS_URL="$REDIS_URL" \
@@ -341,7 +341,7 @@ jobs:
             -e SECRETS_ENCRYPTION_KEY="$SECRETS_ENCRYPTION_KEY" \
             ${{ env.DOCKER_LOCAL_API_TAG }}:ci node dist/src/infrastructure/database/migration/migrate.js
           docker run -d --name ${{ env.DOCKER_LOCAL_API_TAG }}-health --network host \
-            -e NODE_ENV=test \
+            -e NODE_ENV=development \
             -e HOST=0.0.0.0 \
             -e PORT=3000 \
             -e DATABASE_URL="$DATABASE_URL" \

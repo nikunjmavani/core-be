@@ -22,7 +22,7 @@ const REQUIRED_BASE = {
   ALLOWED_ORIGINS: 'http://localhost:3000',
   METRICS_SCRAPE_TOKEN: 'b'.repeat(32),
   SECRETS_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-  NODE_ENV: 'test' as const,
+  NODE_ENV: 'development' as const,
   AUDIT_RETENTION_DAYS: '30',
   AUTH_SESSION_RETENTION_DAYS: '30',
 };

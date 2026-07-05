@@ -5,13 +5,42 @@
  */
 import '../../shared/config/load-env-files.js';
 
-// Hard-force test mode (mirrors src/tests/setup.ts) so a developer's `.env.local` NODE_ENV
-// (e.g. `local`, which load-env-files layers on top as an override) cannot leak through. The
-// chaos suite must run as `test` so the captcha bypass, in-memory rate limiting, and the
-// cleanupDatabase/cleanupTestRedis guards behave exactly as they do in CI. A soft `||=` here
-// silently left the suite running as `local`, which fails public auth forms with 401 (captcha
-// is only bypassed for test/development/staging) and tripped the cleanup-guard environment check.
-process.env.NODE_ENV = 'test';
+// Force NODE_ENV=development (mirrors src/tests/setup.ts) so a developer's `.env.local` cannot leak a
+// different value through load-env-files. NODE_ENV is only `development` | `production`; the chaos
+// suite runs as `development` and drives test-only behaviour (captcha bypass, in-memory rate limiting,
+// cleanupDatabase/cleanupTestRedis guards) via the explicit flags below.
+process.env.NODE_ENV = 'development';
+// Isolate the chaos Redis keyspace from a running `pnpm dev` (both are NODE_ENV=development).
+process.env.REDIS_KEY_PREFIX ??= 'core:test:';
+// Skip process-level shared-singleton teardown under the per-worker Vitest harness.
+process.env.SHUTDOWN_SKIP_SHARED_TEARDOWN = 'true';
+// Disable the ioredis ready-check (read raw from process.env by the Redis/BullMQ clients).
+process.env.REDIS_READY_CHECK_ENABLED = 'false';
+// Category-B security flags default hardened; set the relaxed test values (see src/tests/setup.ts).
+process.env.AUTH_TEST_SUPER_ADMIN_FALLBACK ??= 'true';
+process.env.CAPTCHA_BYPASS_ALLOWED ??= 'true';
+process.env.SESSION_ORIGIN_CSRF_REQUIRED ??= 'false';
+process.env.WEBHOOK_ALLOWLIST_REQUIRED ??= 'false';
+process.env.METRICS_AUTH_REQUIRED ??= 'false';
+// Boot-time safety checks + wipe/rate-limit affordances (see src/tests/setup.ts). The chaos suite
+// forces the in-memory rate-limit store (RUN_REDIS_TESTS=0 below), which requires the fallback flag.
+process.env.DATABASE_TLS_ENFORCED ??= 'false';
+process.env.DATABASE_RLS_SAFETY_ENFORCED ??= 'false';
+process.env.DATABASE_CONNECTION_BUDGET_ENFORCED ??= 'false';
+process.env.REDIS_TLS_ENFORCED ??= 'false';
+process.env.TRUST_PROXY_REQUIRED ??= 'false';
+process.env.TEST_DATA_WIPE_ALLOWED ??= 'true';
+process.env.RATE_LIMIT_RELAXED_CAPS ??= 'true';
+process.env.RATE_LIMIT_IN_MEMORY_FALLBACK_ALLOWED ??= 'true';
+// Category-A behaviour flags now have static production-safe defaults; set the development values.
+process.env.CAPTCHA_FAIL_OPEN ??= 'true';
+process.env.SCHEDULER_REGISTRY_AUDIT_STRICT ??= 'false';
+process.env.SERVER_TIMING_COARSE ??= 'false';
+process.env.SHUTDOWN_DRAIN_ENABLED ??= 'false';
+process.env.I18N_REPORT_MISSING_KEYS ??= 'false';
+process.env.LOG_PRETTY ??= 'true';
+process.env.SENTRY_REDUCED_SAMPLING ??= 'false';
+process.env.SENTRY_DEBUG ??= 'true';
 process.env.VITEST_CHAOS_SUITE = 'true';
 /**
  * In-memory rate limiting only: `@fastify/rate-limit` otherwise shares `redisConnection` and can

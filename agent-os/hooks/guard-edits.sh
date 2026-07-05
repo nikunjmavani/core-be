@@ -10,6 +10,7 @@
 #   R1  getRequestDatabase() inside *.worker.ts | *.processor.ts
 #   R2  a `../` relative import/require added under src/
 #   R3  hand-editing a generated / do-not-edit file
+#   R4  NODE_ENV set/compared to a removed value (test|staging|local) — enum is development|production
 #
 # Fails OPEN: any parsing hiccup, or a missing `jq`, allows the edit. A hook bug
 # must never be able to brick a session.
@@ -55,6 +56,18 @@ case "$FILE" in
   */src/*.ts | */src/*.tsx | src/*.ts | src/*.tsx)
     if printf '%s' "$CONTENT" | grep -Eq "(from|require|import)[[:space:]]*\(?[[:space:]]*['\"]\.\./"; then
       deny "Relative parent import ('../') is banned under src/ — use the '@/' alias (import-paths.mdc; enforced by import-paths.global.test.ts)."
+    fi ;;
+esac
+
+# R4 — NODE_ENV is only `development` | `production`. Never set/compare it to a removed value
+# (test|staging|local): the enum rejects them and the Vitest suite runs as `development`. Requires an
+# actual `:`/`=` after NODE_ENV so prose isn't blocked. Docs (.md/.mdc/.txt) may quote the pattern to
+# explain the rule, so they are exempt (they are not scanned by the global guard either).
+case "$FILE" in
+  *.md | *.mdc | *.txt) : ;;
+  *)
+    if printf '%s' "$CONTENT" | grep -Eiq "NODE_ENV[[:space:]]*[:=]+[[:space:]]*['\"\`]?(test|staging|local)\b"; then
+      deny "NODE_ENV is only 'development' | 'production' (never 'test'/'staging'/'local' — the enum rejects them and tests run as development). Drive environment-varying behaviour via an explicit env flag with a static default + production .refine() (agent-os/skills/env-schema-add/SKILL.md; enforced by no-nodeenv-branching.global.test.ts)."
     fi ;;
 esac
 

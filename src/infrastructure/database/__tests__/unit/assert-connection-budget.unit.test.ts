@@ -1,10 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sqlMock = vi.fn();
 const getEnvMock = vi.fn();
 const computeWorkerPostgresPoolDemandMock = vi.fn();
 const loggerWarnMock = vi.fn();
-const originalKubernetesServiceHost = process.env.KUBERNETES_SERVICE_HOST;
 
 vi.mock('@/infrastructure/database/connection.js', () => ({
   sql: (...arguments_: unknown[]) => sqlMock(...arguments_),
@@ -38,21 +37,12 @@ describe('assertPostgresConnectionBudget', () => {
     computeWorkerPostgresPoolDemandMock.mockReset();
     loggerWarnMock.mockReset();
     vi.resetModules();
-    delete process.env.KUBERNETES_SERVICE_HOST;
     getEnvMock.mockReturnValue({
       LOG_LEVEL: 'silent',
       POSTGRES_RESERVED_CONNECTIONS: 10,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       WORKER_CONCURRENCY: 4,
     });
-  });
-
-  afterEach(() => {
-    if (originalKubernetesServiceHost === undefined) {
-      delete process.env.KUBERNETES_SERVICE_HOST;
-    } else {
-      process.env.KUBERNETES_SERVICE_HOST = originalKubernetesServiceHost;
-    }
   });
 
   it('throws when deployment process count exceeds allowed connections', async () => {
@@ -61,7 +51,7 @@ describe('assertPostgresConnectionBudget', () => {
       POSTGRES_RESERVED_CONNECTIONS: 10,
       POSTGRES_MAX_CONNECTIONS: 50,
       DEPLOYMENT_TOTAL_REPLICA_COUNT: 5,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       WORKER_CONCURRENCY: 4,
     });
 
@@ -79,7 +69,7 @@ describe('assertPostgresConnectionBudget', () => {
       POSTGRES_RESERVED_CONNECTIONS: 10,
       POSTGRES_MAX_CONNECTIONS: 100,
       DEPLOYMENT_TOTAL_REPLICA_COUNT: 2,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       WORKER_CONCURRENCY: 4,
     });
 
@@ -90,11 +80,12 @@ describe('assertPostgresConnectionBudget', () => {
     await expect(assertPostgresConnectionBudget()).resolves.toBeUndefined();
   });
 
-  it('requires deployment process count in production', async () => {
+  it('requires deployment process count when DATABASE_CONNECTION_BUDGET_ENFORCED', async () => {
     getEnvMock.mockReturnValue({
       DATABASE_POOL_MAX: 10,
       POSTGRES_RESERVED_CONNECTIONS: 10,
       POSTGRES_MAX_CONNECTIONS: 100,
+      DATABASE_CONNECTION_BUDGET_ENFORCED: true,
       NODE_ENV: 'production',
       WORKER_CONCURRENCY: 4,
     });
@@ -114,7 +105,7 @@ describe('assertPostgresConnectionBudget', () => {
       POSTGRES_RESERVED_CONNECTIONS: 10,
       POSTGRES_MAX_CONNECTIONS: 100,
       DEPLOYMENT_TOTAL_REPLICA_COUNT: 1,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
     });
     computeWorkerPostgresPoolDemandMock.mockReturnValue({
       selectedFamilies: ['webhook'],
@@ -138,7 +129,7 @@ describe('assertPostgresConnectionBudget', () => {
       POSTGRES_RESERVED_CONNECTIONS: 10,
       POSTGRES_MAX_CONNECTIONS: 100,
       DEPLOYMENT_TOTAL_REPLICA_COUNT: 1,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
     });
     computeWorkerPostgresPoolDemandMock.mockReturnValue({
       selectedFamilies: ['mail', 'notify', 'webhook', 'stripe', 'retention', 'observability'],
@@ -163,7 +154,7 @@ describe('assertPostgresConnectionBudget', () => {
       POSTGRES_RESERVED_CONNECTIONS: 10,
       POSTGRES_MAX_CONNECTIONS: 100,
       DEPLOYMENT_TOTAL_REPLICA_COUNT: 1,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
     });
     computeWorkerPostgresPoolDemandMock.mockReturnValue({
       selectedFamilies: ['mail', 'notify', 'webhook', 'stripe', 'retention', 'observability'],
@@ -197,7 +188,7 @@ describe('assertPostgresConnectionBudget', () => {
       POSTGRES_MAX_CONNECTIONS: 100,
       DEPLOYMENT_API_REPLICA_COUNT: 1,
       DEPLOYMENT_WORKER_REPLICA_COUNT: 1,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       WORKER_CONCURRENCY: 4,
     });
 
@@ -215,7 +206,7 @@ describe('assertPostgresConnectionBudget', () => {
       POSTGRES_MAX_CONNECTIONS: 50,
       DEPLOYMENT_API_REPLICA_COUNT: 4,
       DEPLOYMENT_WORKER_REPLICA_COUNT: 1,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       WORKER_CONCURRENCY: 4,
     });
 
@@ -232,7 +223,7 @@ describe('assertPostgresConnectionBudget', () => {
       POSTGRES_RESERVED_CONNECTIONS: 10,
       POSTGRES_MAX_CONNECTIONS: 100,
       DEPLOYMENT_API_REPLICA_COUNT: 2,
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       WORKER_CONCURRENCY: 4,
     });
 
@@ -260,41 +251,21 @@ describe('assertPostgresConnectionBudget', () => {
     expect(sqlMock).not.toHaveBeenCalled();
   });
 
-  it('requires deployment counts on hosted Railway deployments (RAILWAY_GIT_COMMIT_SHA set, NODE_ENV=development)', async () => {
+  it('uses local process defaults when DATABASE_CONNECTION_BUDGET_ENFORCED is false', async () => {
     getEnvMock.mockReturnValue({
       DATABASE_POOL_MAX: 10,
       POSTGRES_RESERVED_CONNECTIONS: 10,
       POSTGRES_MAX_CONNECTIONS: 100,
+      DATABASE_CONNECTION_BUDGET_ENFORCED: false,
       NODE_ENV: 'development',
       WORKER_CONCURRENCY: 4,
-      RAILWAY_GIT_COMMIT_SHA: 'deadbeef',
     });
 
     const { assertPostgresConnectionBudget } = await import(
       '@/infrastructure/database/safety/assert-connection-budget.js'
     );
 
-    await expect(assertPostgresConnectionBudget()).rejects.toThrow(
-      /DEPLOYMENT_TOTAL_REPLICA_COUNT/i,
-    );
-  });
-
-  it('requires deployment counts on hosted Kubernetes deployments (KUBERNETES_SERVICE_HOST set)', async () => {
-    process.env.KUBERNETES_SERVICE_HOST = '10.0.0.1';
-
-    getEnvMock.mockReturnValue({
-      DATABASE_POOL_MAX: 10,
-      POSTGRES_RESERVED_CONNECTIONS: 10,
-      POSTGRES_MAX_CONNECTIONS: 100,
-      NODE_ENV: 'staging',
-      WORKER_CONCURRENCY: 4,
-    });
-
-    const { assertPostgresConnectionBudget } = await import(
-      '@/infrastructure/database/safety/assert-connection-budget.js'
-    );
-    await expect(assertPostgresConnectionBudget()).rejects.toThrow(
-      /DEPLOYMENT_TOTAL_REPLICA_COUNT/i,
-    );
+    // 1 API + 1 worker × pool 10 = 20 required ≤ (100 − 10) allowed → passes on local defaults.
+    await expect(assertPostgresConnectionBudget()).resolves.toBeUndefined();
   });
 });

@@ -11,10 +11,10 @@ describe('assertBulkSeedAllowed', () => {
     ).not.toThrow();
   });
 
-  it('refuses NODE_ENV=production', () => {
+  it('allows a production NODE_ENV when DATABASE_URL is local (safety is host-based, not NODE_ENV)', () => {
     expect(() =>
       assertBulkSeedAllowed({ NODE_ENV: 'production', DATABASE_URL: LOCAL_URL }),
-    ).toThrow(/production/);
+    ).not.toThrow();
   });
 
   it('refuses a non-local DATABASE_URL host', () => {

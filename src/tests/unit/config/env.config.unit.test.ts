@@ -17,12 +17,12 @@ describe('env.config', () => {
   });
 
   it('resetEnvCacheForTests allows re-parsing after env changes', () => {
-    const originalNodeEnvironment = process.env.NODE_ENV;
+    const originalPort = process.env.PORT;
     getEnv();
-    process.env.NODE_ENV = 'test';
+    process.env.PORT = '4321';
     resetEnvCacheForTests();
-    expect(getEnv().NODE_ENV).toBe('test');
-    process.env.NODE_ENV = originalNodeEnvironment;
+    expect(getEnv().PORT).toBe(4321);
+    process.env.PORT = originalPort;
     resetEnvCacheForTests();
   });
 
@@ -53,13 +53,14 @@ describe('env.config', () => {
     resetEnvCacheForTests();
   });
 
-  it('throws when required environment variables are missing', () => {
-    const databaseUrl = process.env.DATABASE_URL;
-    delete process.env.DATABASE_URL;
-    resetEnvCacheForTests();
-    expect(() => getEnv()).toThrow(/Missing or invalid environment variables/);
-    process.env.DATABASE_URL = databaseUrl;
-    resetEnvCacheForTests();
+  it('requires DATABASE_URL in production (no local convenience default)', () => {
+    // Under `development` DATABASE_URL has a localhost default; the required-vars contract applies to
+    // the deployed runtime, so assert it against an explicit `production` parse of the schema.
+    const result = envSchema.safeParse({ NODE_ENV: 'production' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.includes('DATABASE_URL'))).toBe(true);
+    }
   });
 
   it('throws with a comma-separated list of invalid field names', () => {

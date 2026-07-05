@@ -57,7 +57,7 @@ worker cluster exceed 12 cores. The cluster has spare capacity; it just can't ge
 6. **Credential pool** with enough **usable** users — `data/credential-pool.json`; ~20% are MFA-blocked,
    so seed `≈ VUS / 0.8` (`pnpm db:seed:loadtest`).
 7. **Loadtest server reachable** on `:3001` (`/livez` → 200).
-8. **Captcha fail-open + login** — a password login returns a token (proves `NODE_ENV=test`, §1) and an
+8. **Captcha fail-open + login** — a password login returns a token (proves `NODE_ENV=development + RATE_LIMIT_RELAXED_CAPS=true`, §1) and an
    org-scoped read returns 200.
 9. **Rate limits lifted** — a token works and isn't 429'd.
 10. **Role-cap headroom** — `max(roles/org)` well under `MEMBER_ROLE_MAX_PER_ORG` (data hygiene, §3).
@@ -86,9 +86,9 @@ Run a **dedicated** loadtest server (leave any normal `:3000` dev server alone).
 
 Boot: single process `node dist/src/server.js` (after `pnpm build`); cluster via §4.
 
-## 2. Per-route caps & quotas (which `NODE_ENV=test` lifts vs not)
+## 2. Per-route caps & quotas (which `NODE_ENV=development + RATE_LIMIT_RELAXED_CAPS=true` lifts vs not)
 
-`rate-limit-presets.constants.ts` caps bump to **5000/min** under `NODE_ENV=test`. Prod values:
+`rate-limit-presets.constants.ts` caps bump to **5000/min** under `NODE_ENV=development + RATE_LIMIT_RELAXED_CAPS=true`. Prod values:
 `STRICT_AUTHED` 10 (`/auth/me/*`), `MODERATE_AUTHED` 30, `ORGANIZATION_SCOPED` 100, `WEBHOOK` 60,
 `EXPENSIVE_AUTHED` 5/5min (`data-export`). **Always-on quotas (not rate limits):**
 
@@ -207,7 +207,7 @@ The load-test overrides are local-only. To restore normal dev:
 
 ```bash
 cp /tmp/docker-compose.yml.bak docker-compose.yml   # if you scaled Postgres bigger
-# revert .env.local: NODE_ENV=local, PORT=3000, RATE_LIMIT_MAX=100, DATABASE_POOL_MAX=10,
+# revert .env.local: NODE_ENV=development, PORT=3000, RATE_LIMIT_MAX=100, DATABASE_POOL_MAX=10,
 #   remove POSTGRES_MAX_CONNECTIONS/DEPLOYMENT_*_REPLICA_COUNT/MEMBER_ROLE_MAX_PER_ORG overrides,
 #   restore WEBHOOK_URL_ALLOWLIST + SENTRY_DSN
 pkill -f cluster-run.mjs            # stop the cluster

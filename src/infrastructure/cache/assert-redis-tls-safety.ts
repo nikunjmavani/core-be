@@ -4,7 +4,6 @@ import {
   parseRedisUrl,
 } from '@/infrastructure/cache/redis-url.parse.util.js';
 import { resolveBullMqRedisUrl } from '@/infrastructure/cache/redis-url.util.js';
-import { isHostedDeployment } from '@/infrastructure/database/utils/hosted-deployment.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
@@ -53,7 +52,7 @@ function assertEndpointTls({ name, url }: RedisEndpoint): void {
  * @remarks
  * - **Algorithm:** for `REDIS_URL` (and `REDIS_BULLMQ_URL` when it differs), allow
  *   `rediss://`; allow plaintext only when {@link isPrivateOrInternalRedisHost}; otherwise
- *   throw when {@link isHostedDeployment} and log a warning on local/CI.
+ *   throw when `REDIS_TLS_ENFORCED` and log a warning otherwise (local/CI).
  * - **Failure modes:** throws `redis.tls_safety.unencrypted` on hosted deployments using
  *   plaintext Redis over a public host.
  * - **Side effects:** emits `redis.tls_safety.*` log lines; performs no network I/O.
@@ -65,7 +64,7 @@ export function assertRedisTlsVerification(): void {
     endpoints.push({ name: 'REDIS_BULLMQ_URL', url: bullMqRedisUrl });
   }
 
-  if (!isHostedDeployment()) {
+  if (!env.REDIS_TLS_ENFORCED) {
     for (const endpoint of endpoints) {
       if (isUnencryptedPublicEndpoint(endpoint.url)) {
         logger.warn(

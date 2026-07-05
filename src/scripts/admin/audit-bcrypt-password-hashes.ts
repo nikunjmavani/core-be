@@ -18,8 +18,20 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  if (process.env.NODE_ENV === 'production') {
-    logger.error('Refusing to run bcrypt audit against NODE_ENV=production');
+  // No NODE_ENV comparison: refuse a non-local DATABASE_URL (production read real password
+  // hashes) unless ALLOW_BCRYPT_AUDIT=1 is set to override deliberately.
+  const localDatabaseHosts = new Set(['localhost', '127.0.0.1', '::1']);
+  let databaseHost: string;
+  try {
+    databaseHost = new URL(databaseUrl).hostname.replace(/(?:^\[)|(?:\]$)/g, '');
+  } catch {
+    logger.error('DATABASE_URL is not a valid URL');
+    process.exit(1);
+  }
+  if (process.env.ALLOW_BCRYPT_AUDIT !== '1' && !localDatabaseHosts.has(databaseHost)) {
+    logger.error(
+      'Refusing to run bcrypt audit against a non-local DATABASE_URL. Set ALLOW_BCRYPT_AUDIT=1 to override deliberately.',
+    );
     process.exit(1);
   }
 

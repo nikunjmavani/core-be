@@ -39,7 +39,7 @@ vi.mock('@/shared/utils/security/anti-enumeration.util.js', () => ({
 
 vi.mock('@/shared/config/env.config.js', () => {
   const env = {
-    NODE_ENV: 'test',
+    NODE_ENV: 'development',
     AUTH_SESSION_MAX_AGE_DAYS: 7,
     PERSONAL_ORGANIZATION_ENABLED: false,
     SECRETS_ENCRYPTION_KEY: 'test-secret-encryption-key-for-verification-code-pepper',

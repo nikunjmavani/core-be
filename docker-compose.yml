@@ -50,7 +50,15 @@ services:
       redis:
         condition: service_healthy
     environment:
-      NODE_ENV: test
+      # NODE_ENV is only development | production. This local smoke stack runs as `development`;
+      # the boot-time safety checks default hardened, so relax them for the compose Postgres/Redis
+      # (plaintext, single replica, no reverse proxy).
+      NODE_ENV: development
+      DATABASE_TLS_ENFORCED: 'false'
+      DATABASE_RLS_SAFETY_ENFORCED: 'false'
+      DATABASE_CONNECTION_BUDGET_ENFORCED: 'false'
+      REDIS_TLS_ENFORCED: 'false'
+      TRUST_PROXY_REQUIRED: 'false'
       HOST: 0.0.0.0
       PORT: 3000
       DATABASE_URL: postgresql://core:core@postgres:5432/core

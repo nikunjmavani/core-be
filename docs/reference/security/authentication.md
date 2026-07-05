@@ -28,7 +28,7 @@ There is **no signup endpoint** — account creation is folded into the unified 
 
 **Disposable email:** `isDisposableEmailBlocked()` (package `disposable-email-domains-js`) runs on login, email verification-code send, password forgot, OAuth user creation, and member invitations. When blocked, the API returns **400** with `errors:disposableEmail`. Toggle with `BLOCK_DISPOSABLE_EMAIL` (default `true`).
 
-**Rate limits:** Public auth routes (`/login`, `/email/*`, `/oauth/*`, password reset, MFA challenge) use `STRICT_PUBLIC_RATE_LIMIT` — **5 requests per minute per IP** in production/staging (`5000` in `NODE_ENV=test` for Vitest). Excess traffic receives **429**.
+**Rate limits:** Public auth routes (`/login`, `/email/*`, `/oauth/*`, password reset, MFA challenge) use `STRICT_PUBLIC_RATE_LIMIT` — **5 requests per minute per IP** in production (`5000` when `RATE_LIMIT_RELAXED_CAPS` is set, as it is for local development and the test suite). Excess traffic receives **429**.
 
 **CAPTCHA (Cloudflare Turnstile):** When `CAPTCHA_PROVIDER=turnstile` and `CAPTCHA_SECRET` are set, public auth routes require `X-Captcha-Token` from the client widget:
 
@@ -40,16 +40,16 @@ There is **no signup endpoint** — account creation is folded into the unified 
 - `POST /api/v1/auth/mfa/login`
 - `GET /api/v1/auth/oauth/:provider` (OAuth initiation)
 
-Schema default is `CAPTCHA_PROVIDER=disabled`. In `development` / `test`, verification is skipped when Turnstile is not configured. Optional `CAPTCHA_BYPASS_HEADER` (non-production only) allows local testing. Failures return **401** with `errors:captchaRequired` or `errors:captchaInvalid`.
+Schema default is `CAPTCHA_PROVIDER=disabled`. In `development`, verification is skipped when Turnstile is not configured (via the `CAPTCHA_FAIL_OPEN` flag). Optional `CAPTCHA_BYPASS_HEADER` (non-production only) allows local testing. Failures return **401** with `errors:captchaRequired` or `errors:captchaInvalid`.
 
 **Production boot guard.** Because `captchaPreHandler` fail-closes when CAPTCHA is unconfigured, a production deploy with the default `CAPTCHA_PROVIDER=disabled` would turn login, email verification-code (send + login), password recovery, MFA challenge, and OAuth initiation into **401**s. Boot fails in production unless Turnstile is fully configured (see `src/shared/config/env-schema.ts`):
 
 | Posture                            | Required env                                    | Auth-route behavior                                                   |
 | ---------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------- |
 | **Production (required)**          | `CAPTCHA_PROVIDER=turnstile` + `CAPTCHA_SECRET` | Verify `X-Captcha-Token`; fail-closed on missing or invalid tokens.   |
-| **Development / test**             | Default `CAPTCHA_PROVIDER=disabled`             | Middleware fail-opens; optional `CAPTCHA_BYPASS_HEADER` for local UX. |
+| **Development**                    | Default `CAPTCHA_PROVIDER=disabled`             | Middleware fail-opens; optional `CAPTCHA_BYPASS_HEADER` for local UX. |
 
-Outside production (`development`, `test`), the middleware fail-opens by default when Turnstile is not configured.
+Outside production (`development`), the middleware fail-opens by default when Turnstile is not configured.
 
 ## Email verification-code environment safety
 
