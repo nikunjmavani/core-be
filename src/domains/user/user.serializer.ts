@@ -12,6 +12,7 @@ export const UserSerializer = {
     is_mfa_enabled: boolean;
     first_name: string | null;
     last_name: string | null;
+    job_title: string | null;
     avatar_url: string | null;
     status: string;
     created_at: Date;
@@ -24,6 +25,7 @@ export const UserSerializer = {
       is_mfa_enabled: row.is_mfa_enabled,
       first_name: row.first_name,
       last_name: row.last_name,
+      job_title: row.job_title,
       avatar_url: row.avatar_url,
       status: row.status,
       created_at: row.created_at.toISOString(),

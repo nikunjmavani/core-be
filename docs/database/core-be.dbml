@@ -281,6 +281,7 @@ Table auth.users {
   id bigint [pk, increment, not null]
   is_email_verified boolean [not null]
   is_mfa_enabled boolean [not null]
+  job_title varchar(150)
   last_active_at timestamptz
   last_active_organization_id bigint
   last_name varchar(100)

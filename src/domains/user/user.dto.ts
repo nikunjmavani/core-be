@@ -24,12 +24,14 @@ export const dataExportIdParamsDto = z
 /**
  * Zod schema for the `PATCH /api/v1/users/me` request body. The optional `avatar_key` is the S3
  * object key returned from a confirmed upload — it must live under the `avatars/` prefix and is
- * verified by the service against the user's owned key namespace before being persisted.
+ * verified by the service against the user's owned key namespace before being persisted. The
+ * optional free-text `job_title` is the caller's role captured during onboarding / profile edits.
  */
 export const UpdateMeDto = z
   .object({
     first_name: trimmedString().max(100).nullable().optional(),
     last_name: trimmedString().max(100).nullable().optional(),
+    job_title: trimmedString().max(150).nullable().optional(),
     avatar_key: trimmedString()
       .max(512)
       .refine((key) => key.startsWith('avatars/'), {
