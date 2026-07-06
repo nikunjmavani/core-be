@@ -4,39 +4,11 @@ globs: src/domains/**/__tests__/**/*.test.ts, src/tests/**/*.test.ts, src/domain
 alwaysApply: false
 ---
 
-## Testing layout (non-negotiable)
+# Testing conventions (core-be)
 
-| Location | Purpose |
-|----------|---------|
-| **`src/tests/`** | **Common** tests — helpers, factories, unit/integration/security/performance/global/chaos/contract; k6 load assets in **`src/tests/load/k6/`** (not Vitest) |
-| **`src/domains/<domain>/__tests__/`** | **Domain-specific** tests — bundled e2e (`<domain>.test.ts`), domain factories (e.g. `tenancy/__tests__/factories/`), domain-level **`unit/`** |
-| **`src/domains/<domain>/sub-domains/<r>/__tests__/`** | Top-level sub-domain **unit**, optional e2e, or parent’s **`__tests__/unit/events/`** |
-| **`src/domains/<domain>/sub-domains/<parent>/<child>/__tests__/`** | **Nested** sub-domain unit, e2e, or `__tests__/unit/events/` (aggregate children) |
+Owner: **[test-generator](../skills/test-generator/SKILL.md)** — the pyramid, full layout table, HTTP-inject stack, and checklist live there.
 
-Do **not** put a domain’s main API test suite under `src/tests/`. Do **not** put cross-cutting security tests inside a domain folder.
-
-When adding or updating a feature, read **`agent-os/skills/test-generator/SKILL.md`** for the pyramid, checklist, and commands.
-
-## HTTP test stack (Vitest + fastify.inject)
-
-| Tool | Role |
-|------|------|
-| **Vitest** | Test runner: `describe` / `it` / `expect`, discovery, coverage, all `pnpm test:*` commands |
-| **fastify.inject()** | In-process HTTP via `light-my-request`; use helpers in `src/tests/helpers/test-http-inject.helper.ts` |
-
-Domain route tests and most integration/security suites use **`createTestApp()`** then **`injectAuthenticated`**, **`injectUnauthenticated`**, **`injectAuthenticatedOrganizationMutation`**, or **`injectWithCookies`** as appropriate.
-
-For org-scoped **POST/PATCH/DELETE**, use **`injectAuthenticatedOrganizationMutation`** so the Drizzle transaction commit in `onResponse` completes before follow-up reads.
-
-## Conventions
-
-1. **Helpers**: `src/tests/helpers/` — `createTestApp`, `test-http-inject.helper`, `generateTestToken`, `cleanupDatabase`
-2. **Shared factories**: `src/tests/factories/`; **domain factories**: `src/domains/<domain>/__tests__/factories/`
-3. **Unit (common)**: `src/tests/unit/` for `shared/utils`, errors, and cross-cutting pure code
-4. **Unit (domain)**: `src/domains/<domain>/__tests__/unit/` for domain-level validators/serializers; `sub-domains/<r>/__tests__/unit/` or `sub-domains/<parent>/<child>/__tests__/unit/` for resource validators/serializers; `__tests__/unit/events/` for event handlers — never under `src/tests/unit/`
-5. **Domain e2e**: `src/domains/<domain>/__tests__/<domain>.test.ts` (bundled) or `sub-domains/<parent>/<child>/__tests__/<child>.test.ts` (nested resource suite) — 401, 403, 200/201, 400 per route
-6. **Tenancy factories**: `@/domains/tenancy/__tests__/factories/permission.factory.js` for permission seed helpers used across domains
-7. **HTTP inject**: `import { createTestApp } from '@/tests/helpers/test-app.js'` and inject helpers from `test-http-inject.helper.js`
-8. **Auth**: `import { generateTestToken } from '@/tests/helpers/test-auth.js'`
-9. **Teardown**: `await app.close()` in `afterAll`
-10. **Naming**: `<resource>.test.ts` or `<resource>.validator.test.ts` under the correct folder above
+- **Common** tests in `src/tests/` (helpers, factories, unit/integration/security/performance/global/chaos/contract; k6 under `src/tests/load/k6`). **Domain** tests co-located under `src/domains/<domain>/**/__tests__/`.
+- Never put a domain's API suite under `src/tests/`, nor cross-cutting security tests inside a domain folder.
+- HTTP via **Vitest + `fastify.inject()`** — `createTestApp()` + `injectAuthenticated*` helpers from `src/tests/helpers/test-http-inject.helper.ts`; org-scoped writes use `injectAuthenticatedOrganizationMutation`.
+- Detail + naming: `agent-os/skills/test-generator/SKILL.md` and CLAUDE.md › Testing.
