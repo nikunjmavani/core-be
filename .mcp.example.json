@@ -86,6 +86,27 @@
         "mcp/resend"
       ]
     },
+    "ast-grep": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "ast-grep-mcp",
+        "--package",
+        "ast-grep-mcp",
+        "run"
+      ]
+    },
+    "serena": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context",
+        "ide-assistant"
+      ]
+    },
     "codegraph": {
       "type": "stdio",
       "command": "codegraph",

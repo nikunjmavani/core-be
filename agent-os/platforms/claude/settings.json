@@ -94,6 +94,15 @@
             "command": "bash \"$CLAUDE_PROJECT_DIR/agent-os/hooks/skill-reminder.sh\""
           }
         ]
+      },
+      {
+        "matcher": "Read|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/agent-os/hooks/large-read-nudge.sh\""
+          }
+        ]
       }
     ],
     "PostToolUseFailure": [

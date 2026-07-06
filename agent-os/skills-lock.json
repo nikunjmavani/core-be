@@ -67,6 +67,12 @@
       "skillPath": "agent-os/skills/db-migration-maintainer/SKILL.md",
       "computedHash": "e3d70b593c0cfa0b4998dd9ca6955480673970335097f9f3ff35807500ed9843"
     },
+    "delegate-search": {
+      "source": "local",
+      "sourceType": "local",
+      "skillPath": "agent-os/skills/delegate-search/SKILL.md",
+      "computedHash": "17b4fe26ea274c7bd35a68c59928f4825f462990a43ef59a1254c792dd45fa94"
+    },
     "dependency-security": {
       "source": "local",
       "sourceType": "local",
@@ -203,7 +209,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/skill-index/SKILL.md",
-      "computedHash": "5393e342f45e7636034ccfed64930a30d7b21c3664f89b1f4147a895dc0ae4e2"
+      "computedHash": "c223e1eb55aedf6beb07c2bacf3c4baea5995c7d20c06de5c4bb000cbb91df31"
     },
     "split-to-prs": {
       "source": "local",
