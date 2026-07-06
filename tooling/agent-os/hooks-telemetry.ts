@@ -27,8 +27,8 @@ interface Stat {
 
 const declaredHookIds: string[] = existsSync(manifestPath)
   ? (
-      (JSON.parse(readFileSync(manifestPath, 'utf8')) as { hooks?: Array<{ id?: string }> }).hooks ??
-      []
+      (JSON.parse(readFileSync(manifestPath, 'utf8')) as { hooks?: Array<{ id?: string }> })
+        .hooks ?? []
     )
       .map((entry) => entry.id)
       .filter((id): id is string => typeof id === 'string')
@@ -87,7 +87,9 @@ if (pruningCandidates.length) {
   console.log(
     `⚠ pruning candidates (never fired, or silent 30+ days): ${pruningCandidates.join(', ')}`,
   );
-  console.log('  Review monthly — a hook that never fires is dead weight (agent-os/hooks/README.md).\n');
+  console.log(
+    '  Review monthly — a hook that never fires is dead weight (agent-os/hooks/README.md).\n',
+  );
 } else {
   console.log('✓ every declared hook has fired recently.\n');
 }
