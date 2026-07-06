@@ -7,6 +7,12 @@
       "skillPath": "agent-os/skills/api-contract-guard/SKILL.md",
       "computedHash": "aee14e7b8f5a0fb04fe6f195b9179c0e37b44231227d887527b4538f4ac02977"
     },
+    "auto-implement": {
+      "source": "local",
+      "sourceType": "local",
+      "skillPath": "agent-os/skills/auto-implement/SKILL.md",
+      "computedHash": "fbaca81b189c51cb3db916bf5790d6dc7f93ee959d42cc998d8a08ce2a1ceb17"
+    },
     "before-commit-guard": {
       "source": "local",
       "sourceType": "local",
@@ -197,7 +203,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/skill-index/SKILL.md",
-      "computedHash": "8d7a11a0f3b4b793a947c2d859a117d2708572a69ed507ce3f512bcdc2c6f26f"
+      "computedHash": "01c6c2fddcd39a9ab51b1e54467010ec9c183c234deb0ee2ee7bd7da1b4edf8e"
     },
     "split-to-prs": {
       "source": "local",

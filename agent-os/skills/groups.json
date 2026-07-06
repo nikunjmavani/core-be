@@ -38,6 +38,7 @@
     "infra-config": ["env-schema-add", "ide-productivity-guard"],
     "seed": ["seed-maintainer"],
     "workflow": [
+      "auto-implement",
       "ci-investigator",
       "pr-babysit",
       "split-to-prs",
