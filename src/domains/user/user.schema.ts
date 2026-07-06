@@ -33,6 +33,7 @@ export const users = authSchema
       is_email_verified: boolean('is_email_verified').notNull().default(false),
       first_name: varchar('first_name', { length: 100 }),
       last_name: varchar('last_name', { length: 100 }),
+      job_title: varchar('job_title', { length: 150 }),
       avatar_url: varchar('avatar_url', { length: 512 }),
       password_hash: varchar('password_hash', { length: 255 }),
       failed_login_count: integer('failed_login_count').notNull().default(0),

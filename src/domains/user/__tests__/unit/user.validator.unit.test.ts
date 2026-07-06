@@ -13,6 +13,18 @@ describe('user.validator', () => {
     expect(validateUpdateMe({ first_name: 'Jane' })).toEqual({ first_name: 'Jane' });
   });
 
+  it('validateUpdateMe accepts first_name, last_name and job_title together', () => {
+    expect(validateUpdateMe({ first_name: 'Nik', last_name: 'Patel', job_title: 'CEO' })).toEqual({
+      first_name: 'Nik',
+      last_name: 'Patel',
+      job_title: 'CEO',
+    });
+  });
+
+  it('validateUpdateMe rejects job_title longer than 150 characters', () => {
+    expect(() => validateUpdateMe({ job_title: 'a'.repeat(151) })).toThrow(ValidationError);
+  });
+
   it('validateUpdateMe rejects avatar_url (use avatar_key via upload flow)', () => {
     expect(() => validateUpdateMe({ avatar_url: 'https://example.com/a.png' })).toThrow(
       ValidationError,
