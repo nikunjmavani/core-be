@@ -6,6 +6,14 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.28](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.27...v4.10.0-dev.28) (2026-07-06)
+
+
+### Fixed
+
+* **ci:** relax hardened boot-safety flags in the docker smoke boot ([2fc586f](https://github.com/nikunjmavani/core-be/commit/2fc586f13b06f81af25964077c23f9f75e200a7b))
+* **ci:** relax hardened boot-safety flags in the docker smoke boot ([894f247](https://github.com/nikunjmavani/core-be/commit/894f247ef7df295226878e5044f2ae1556e9f8bb))
+
 ## [4.10.0-dev.27](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.26...v4.10.0-dev.27) (2026-07-05)
 
 
