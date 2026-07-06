@@ -63,8 +63,8 @@ and only then continue. Never run a later step over a red gate.
 When the chain's steps are green, run the **pre-merge-review** pipeline from `pipelines.json`
 (sql-design-reviewer → production-hardening-reviewer → verifier) and address blocking findings —
 each reviewer hands its finding to the procedural skill that fixes it (`pipelines.json` `handoff`).
-Then the change is done per **change-completeness-guard** (own tests + cross-cutting suites + docs
-+ rules + skills all moved with it).
+Then the change is done per **change-completeness-guard** (own tests, cross-cutting suites, docs,
+rules, and skills all moved with it).
 
 ## Contract
 
