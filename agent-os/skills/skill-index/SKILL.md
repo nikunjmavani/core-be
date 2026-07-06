@@ -358,3 +358,9 @@ When a **new skill is created**, add it to:
 3. The multi-skill scenarios order (if applicable)
 4. The auto-trigger rules section (if it has a `.mdc` auto-invoke rule)
 5. `CLAUDE.md` under "Keeping Docs and Skills in Sync"
+6. Assign it a group in `agent-os/skills/groups.json`
+
+Whenever a **skill's `SKILL.md` changes** (new skill or edit), run **`pnpm agent-os:lock`** to
+refresh its sha256 in [`agent-os/skills-lock.json`](../../skills-lock.json), then commit the
+SKILL.md and the lockfile together. `pnpm agent-os:check` recomputes each hash and fails on drift,
+a skill missing from the lockfile, or a stale lock entry (provenance is enforced, not hoped for).

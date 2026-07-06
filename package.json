@@ -152,6 +152,8 @@
     "agent-os:generate": "tsx tooling/agent-os/generate.ts --write",
     "agent-os:generate:check": "tsx tooling/agent-os/generate.ts --check",
     "agent-os:plan-skills": "tsx tooling/agent-os/plan-skills.ts",
+    "agent-os:lock": "tsx tooling/agent-os/skills-lock.ts --write",
+    "agent-os:lock:check": "tsx tooling/agent-os/skills-lock.ts --check",
     "tool:sync-env-example": "tsx src/scripts/validators/env/sync-env-example.ts",
     "tool:generate-project-identity": "tsx tooling/setup/codegen/generate-project-identity.ts",
     "tool:generate-project-identity:check": "tsx tooling/setup/codegen/generate-project-identity.ts --check",

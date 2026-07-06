@@ -27,6 +27,7 @@ pnpm agent-os:triggers:strict  # Tier 2 gate (CI) — exits 1 on a missing route
 | Check | Catches |
 | ----- | ------- |
 | Skill frontmatter & names | missing `name`/`description`, `name` ≠ directory |
+| Skills lockfile provenance | a skill edited without relocking, a new skill never locked, a lock entry for a deleted skill (`skills-lock.json` hash drift) |
 | Skill-index counts | "36 skills" when 37 exist |
 | Skill-index ↔ disk | a skill on disk missing from the index table, an index row with no directory, an index path that doesn't resolve |
 | Sync-rule count | "22 sync rules" when 24 `*-sync.mdc` exist |
@@ -36,6 +37,17 @@ pnpm agent-os:triggers:strict  # Tier 2 gate (CI) — exits 1 on a missing route
 | Referenced paths exist | a backticked `src/…` / `.github/…` path in any skill/rule/doc that doesn't exist |
 
 Warnings (non-blocking): thin skill descriptions (< 80 chars, weak auto-trigger) and agents pinning a non-`inherit` model.
+
+### Skills lockfile (`agent-os/skills-lock.json`)
+
+Every skill's `SKILL.md` is hashed (sha256) and recorded with its `source` — `local` for home-grown skills, a github `org/repo` for vendored ones (e.g. `ponytail`). Tier 1 recomputes each hash and fails on drift, a new skill missing from the lockfile, or a lock entry for a deleted skill, so silent upstream drift or local tampering is caught. Workflow:
+
+```bash
+# edit a skill, then:
+pnpm agent-os:lock         # recompute + rewrite hashes
+# commit the SKILL.md and skills-lock.json together
+pnpm agent-os:lock:check   # verify without rewriting (also part of agent-os:check)
+```
 
 ### `ignore.json`
 

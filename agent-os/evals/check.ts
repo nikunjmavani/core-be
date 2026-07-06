@@ -16,6 +16,7 @@
  *   tsx agent-os/evals/check.ts            # gate: exits 1 on any ERROR
  *   tsx agent-os/evals/check.ts --report   # verbose: list every check + WARNs
  */
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { basename, join, relative } from 'node:path'
 
@@ -113,6 +114,40 @@ if (existsSync(indexFile)) {
     if (!tableNames.has(skill)) error('skill-index-table', `skill "${skill}" exists on disk but is absent from the skill-index table`)
   for (const listed of tableNames)
     if (!skillNames.includes(listed)) error('skill-index-table', `skill-index table lists "${listed}" which has no directory`)
+}
+
+// ── Check 3b: skills-lock.json provenance — every skill locked, no hash drift ──
+// The lockfile records the sha256 of each skill's SKILL.md (and its source).
+// A skill edited without relocking, a new skill never locked, or a lock entry
+// for a deleted skill all fail here — provenance is a gate, not a hope.
+// Workflow: edit skill → `pnpm agent-os:lock` → commit SKILL.md + lockfile.
+const lockFile = join(agentOsDirectory, 'skills-lock.json')
+if (!existsSync(lockFile)) {
+  error('skills-lock', 'agent-os/skills-lock.json is missing — run `pnpm agent-os:lock`')
+} else {
+  try {
+    const lock = JSON.parse(readText(lockFile)) as {
+      skills?: Record<string, { computedHash?: string }>
+    }
+    const locked = lock.skills ?? {}
+    for (const skill of skillNames) {
+      const skillFile = join(agentOsDirectory, 'skills', skill, 'SKILL.md')
+      if (!existsSync(skillFile)) continue
+      const entry = locked[skill]
+      if (!entry) {
+        error('skills-lock', `skill "${skill}" is not in skills-lock.json — run \`pnpm agent-os:lock\``)
+        continue
+      }
+      const computedHash = createHash('sha256').update(readFileSync(skillFile)).digest('hex')
+      if (computedHash !== entry.computedHash)
+        error('skills-lock', `skill "${skill}" SKILL.md changed since it was locked — run \`pnpm agent-os:lock\``)
+    }
+    for (const lockedName of Object.keys(locked))
+      if (!skillNames.includes(lockedName))
+        error('skills-lock', `skills-lock.json lists "${lockedName}" which has no skill directory`)
+  } catch {
+    error('skills-lock', 'agent-os/skills-lock.json is not valid JSON')
+  }
 }
 
 // ── Check 4: the sync-rule count in skill-triggers.md matches reality ──
@@ -413,6 +448,7 @@ const checkLabels: Record<string, string> = {
   'skill-frontmatter': 'Skill frontmatter & names',
   'skill-index-count': 'Skill-index counts',
   'skill-index-table': 'Skill-index ↔ disk',
+  'skills-lock': 'Skills lockfile provenance',
   'sync-rule-count': 'Sync-rule count',
   'agent-catalog-count': 'Agent catalog count',
   'agent-catalog-coverage': 'Agent catalog coverage',
