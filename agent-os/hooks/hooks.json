@@ -58,6 +58,12 @@
       "claude": { "event": "PostToolUse", "matcher": "Edit|Write" }
     },
     {
+      "id": "large-read-nudge",
+      "runtime": "bash",
+      "script": "large-read-nudge.sh",
+      "claude": { "event": "PostToolUse", "matcher": "Read|Grep" }
+    },
+    {
       "id": "gate-failure-hint",
       "runtime": "bash",
       "script": "gate-failure-hint.sh",

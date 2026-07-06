@@ -1,6 +1,7 @@
 /**
  * Postgres / driver error helpers (postgres.js uses standard `code` for SQLSTATE).
  */
+import { DEFAULT_TRANSIENT_RETRY_ATTEMPTS } from '@/shared/constants/limits.constants.js';
 
 const POSTGRES_UNIQUE_VIOLATION = '23505';
 const POSTGRES_FOREIGN_KEY_VIOLATION = '23503';
@@ -29,7 +30,6 @@ const TRANSIENT_CONNECTION_ERROR_CODES = new Set<string>([
   'CONNECTION_CLOSED',
 ]);
 
-const DEFAULT_TRANSIENT_RETRY_ATTEMPTS = 3;
 const TRANSIENT_RETRY_BASE_DELAY_MS = 25;
 
 /**

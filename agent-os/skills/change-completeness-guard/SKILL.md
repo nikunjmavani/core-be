@@ -1,6 +1,9 @@
 ---
 name: change-completeness-guard
 description: Definition-of-done for any code change in core-be — propagate every edit to all the artifacts that mirror it: its own tests at the right layer, the cross-cutting suites (security, integration, load/k6, global, chaos, contract), docs (OVERVIEW, reference, TSDoc, .env.example), agent-os rules, and skills (counts, trigger maps, hardcoded route/constant sets). Use after editing any src/ code, middleware, config, route, constant, or shared count so nothing that describes or verifies the change is left stale.
+trigger: src/**/*.ts
+triggerNote: Finishing any code change — own tests + cross-cutting suites + docs + rules + skills move with it
+indexNote: definition-of-done — propagate a change to its tests, cross-cutting suites, docs, rules, skills
 ---
 
 # Change completeness guard (core-be)

@@ -43,15 +43,25 @@ Scaffold into `.mcp.json` with `pnpm mcp:setup <name>` (see
 | **dashboards** | Stack monitoring (`stack-monitor` subagent), load-test observability | `pnpm mcp:setup dashboards` then `pnpm dashboards:up` or `pnpm dashboards:proxy` |
 | **core-be:api** | Call live API tools from the agent | API running with `ENABLE_MCP_SERVER=true` — `pnpm mcp:setup core-be:api` |
 | **context7** | Up-to-date Fastify/Drizzle/BullMQ docs (if not platform-provided) | `CONTEXT7_API_KEY` — `pnpm mcp:setup context7` |
+| **serena** | Semantic code navigation on a large repo — go-to-def / find-refs / symbol bodies; returns **symbols, not files** (token-efficient) | `uvx` — `pnpm mcp:setup serena` |
+| **ast-grep** | Structural (AST) code search — returns **matches, not** text hits or whole files | `uvx` + `ast-grep` CLI — `pnpm mcp:setup ast-grep` |
 | **neon**, **sentry**, **railway**, **aws**, **stripe**, **semgrep**, **sonarqube**, **redis**, **postman**, **resend** | Hosted integration / ops tasks | Provider token + `pnpm mcp:setup <name>` |
 
 Full template: [`.mcp.example.json`](../../.mcp.example.json). List status: `pnpm mcp:setup:list`.
+
+**Serena onboarding (first use).** `serena` is LSP-backed semantic code retrieval — prefer it (and
+`codegraph`) over whole-file reads to keep context small (see
+[`agent-os/rules/token-efficient-navigation.mdc`](../../agent-os/rules/token-efficient-navigation.mdc)).
+After `pnpm mcp:setup serena`, on first use call the server's **`activate_project`** on this repo so it
+indexes the codebase; then use `find_symbol` / `find_referencing_symbols` / `get_symbols_overview`
+instead of reading files to answer "where / who / what". It complements `codegraph` (graph queries) and
+`ast-grep` (structural pattern matches).
 
 **Intentionally not in this project:** `github`, `composio`, `descript`, `slack` MCPs.
 
 ---
 
-## Project skills (42)
+## Project skills (43)
 
 All project skills live under [`agent-os/skills/`](../../agent-os/skills/). **Consult
 [`skill-index`](../../agent-os/skills/skill-index/SKILL.md) first** — it maps file patterns
@@ -59,7 +69,7 @@ to which skill(s) to run (no duplicate invocations).
 
 | Category | Skills | When in cloud |
 | -------- | ------ | ------------- |
-| **Meta / routing** | `skill-index`, `change-completeness-guard` | Every code change |
+| **Meta / routing** | `skill-index`, `change-completeness-guard`, `auto-implement`, `delegate-search` | Every code change; `auto-implement` drives a whole requirement, `delegate-search` keeps context small |
 | **Routes & API** | `api-contract-guard`, `route-schema-doc-guard`, `route-catalog`, `openapi-multilingual` | `*.routes.ts`, controllers, serializers |
 | **Domains & schema** | `domain-generator`, `schema-generator`, `sql-design-guard`, `db-migration-maintainer` | New domains, `migrations/*.sql`, Drizzle schema |
 | **Workers & events** | `workers-events` | Queues, workers, event handlers |

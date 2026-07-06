@@ -1,6 +1,7 @@
 ---
 name: split-to-prs
 description: Split current work into small reviewable PRs aligned with core-be domains and CI paths. Use when the user asks to split a branch, chat, or large PR.
+indexNote: split a branch/PR into small reviewable, CI-path-aligned PRs
 ---
 
 # Split to PRs (core-be)

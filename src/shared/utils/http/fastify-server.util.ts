@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyServerOptions } from 'fastify';
 import type { IncomingMessage } from 'node:http';
 import { env } from '@/shared/config/env.config.js';
+import { DEFAULT_BODY_LIMIT_BYTES } from '@/shared/constants/limits.constants.js';
 import { TEN_SECONDS_MS, THIRTY_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
 import {
   redactSensitive,
@@ -54,9 +55,6 @@ export function resolveTrustProxy(): boolean | number {
  * comfortably covers a canonical UUID (36 chars) plus common tracing token formats.
  */
 const MAX_INBOUND_REQUEST_IDENTIFIER_LENGTH = 128;
-
-/** Maximum inbound request body size (bytes) accepted by Fastify (1 MiB). */
-const DEFAULT_BODY_LIMIT_BYTES = 1_048_576;
 
 /**
  * Strict allow-list for inbound `x-request-id` values: a non-empty token of safe correlation-id

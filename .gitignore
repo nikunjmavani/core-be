@@ -93,6 +93,13 @@ TEST_REPORT.md
 .mcp.json
 agent-os/mcp/mcp.json
 
+# Hook telemetry — local runtime log (pnpm agent-os:hooks:report aggregates it)
+agent-os/hooks/.telemetry.log
+
+# Local, secret-bearing env backups live here (out of the repo root so they do not
+# pollute agent context). Never committed. See guardrails.mjs .env-backup warning.
+.backups/
+
 # Claude Code — ignore everything except tracked project config
 # Use .claude/* (not .claude/) so the !negations below actually re-include
 # these entries — git cannot re-include children of a wholly-excluded dir.

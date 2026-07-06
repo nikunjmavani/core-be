@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+source "$(dirname "${BASH_SOURCE[0]}")/_telemetry.sh"
+telemetry_init "guard-edits" "PreToolUse"
 # Claude Code PreToolUse hook (Edit | Write | MultiEdit).
 #
 # BLOCKS edits that introduce a hard-rule violation documented in CLAUDE.md and
@@ -29,6 +31,7 @@ CONTENT=$(printf '%s' "$INPUT" | jq -r '
 base=${FILE##*/}
 
 deny() {
+  telemetry_fired
   jq -cn --arg r "$1" \
     '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
   exit 0

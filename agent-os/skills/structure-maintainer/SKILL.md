@@ -1,6 +1,9 @@
 ---
 name: structure-maintainer
 description: Keeps core-be project structure standards up to date. Use after any directory/file naming changes, new layers, or moving code across domains/infrastructure/shared/tooling/tests.
+trigger: CLAUDE.md, AGENTS.md, agent-os/rules/**, agent-os/skills/**, agent-os/agents/**, agent-os/mcp/**, .mcp.example.json, .mcp.default.json
+triggerNote: Structure/naming; MCP template mirrors must stay identical (mcp-config test)
+indexNote: keep project structure/naming standards + docs/rules in sync
 ---
 
 # Structure maintainer (core-be)

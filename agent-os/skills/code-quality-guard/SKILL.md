@@ -1,6 +1,9 @@
 ---
 name: code-quality-guard
 description: Maintains the 3-layer code quality and security pipeline (editor Biome, Husky pre-commit hooks, CI security scanning). Use after changing Biome rules, pre-commit hooks, CI workflows, lint-staged config, or adding new security tooling.
+trigger: biome.json, .husky/pre-commit, .husky/pre-push
+triggerNote: Lint/format/pre-commit/pre-push + branch-name policy
+indexNote: 3-layer quality/security pipeline (editor Biome, husky pre-commit, CI scanning)
 ---
 
 # Code quality guard (core-be)

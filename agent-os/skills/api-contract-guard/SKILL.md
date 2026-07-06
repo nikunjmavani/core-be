@@ -1,6 +1,9 @@
 ---
 name: api-contract-guard
 description: Enforces the core-be public API contract conventions — snake_case route params, prefixed public ids, the uniform method→status policy, and the header naming matrix — across routes, validators, tests, OpenAPI/Postman docs, and the route-status gates. Use when adding or changing any route, param, header, public id, or response status.
+trigger: src/shared/utils/http/list-query.util.ts
+triggerNote: List endpoints (search/sort/pagination); also route params / public ids / statuses / headers. Status policy: docs/reference/api/response-codes.md
+indexNote: route params / public-ids / method→status policy / header matrix — any route, param, or header change
 ---
 
 # API contract guard
@@ -92,3 +95,7 @@ Every org-scoped list endpoint uses the **shared** helpers in `src/shared/utils/
 5. Gates: `validate:route-success-statuses`, `validate:route-success-coverage`, unit suites for the response map and examples fixture.
 6. Breaking changes: `pnpm docs:breaking` (local mirror of the CI oasdiff gate); intentional breaks get narrow entries in `.github/oasdiff/breaking-changes-ignore.txt`.
 7. Frontend client contract: when an auth **entry-flow** route or its response body changes (login, email verification-code send/login, oauth, webauthn, mfa/login, refresh, switch-to-organization/personal, or `GET /auth/me/context`), or a **client-sent header** requirement (the header matrix above) changes, update `docs/reference/api/frontend-auth-guide.md` — its entry-flow → calls-to-dashboard matrix and the typed `landOnDashboard()` client mirror those shapes. Server-internal sequences for the same journeys live in `src/FLOWS.md`.
+
+---
+
+**Related skills:** [route-schema-doc-guard](../route-schema-doc-guard/SKILL.md) · [route-catalog](../route-catalog/SKILL.md) · [seed-maintainer](../seed-maintainer/SKILL.md) · [idempotency-guard](../idempotency-guard/SKILL.md)

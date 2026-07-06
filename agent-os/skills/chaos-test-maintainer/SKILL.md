@@ -1,6 +1,9 @@
 ---
 name: chaos-test-maintainer
 description: Maintains Toxiproxy chaos tests under src/tests/chaos/. Use when adding fault-injection scenarios or changing chaos CI/provision scripts.
+trigger: src/tests/chaos/**
+triggerNote: Toxiproxy fault-injection suite
+indexNote: Toxiproxy fault-injection tests under src/tests/chaos
 ---
 
 # Chaos test maintainer (core-be)
@@ -75,3 +78,7 @@ Most chaos "failures" on a fresh machine are environment, not code. Check these 
 - **workers-events** — queue/worker behavior under faults
 - **production-hardening-guard** — circuit breakers, readiness
 - **ci-investigator** — chaos job failures
+
+---
+
+**Related skills:** [contract-test-maintainer](../contract-test-maintainer/SKILL.md) · [test-generator](../test-generator/SKILL.md)

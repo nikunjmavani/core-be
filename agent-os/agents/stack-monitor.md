@@ -2,6 +2,9 @@
 name: stack-monitor
 description: Monitors the running local core-be stack via the dashboards MCP data tools (never the human HTML dashboard) and returns a concise health verdict plus any anomalies. Use for periodic or continuous stack monitoring — invoke it each cycle (e.g. via /loop), passing the prior cycle's verdict so it can flag regressions.
 model: inherit
+modelRationale: interprets health signals + regressions — inherit
+wrapsSkill: "*(inline)*"
+useWhen: Periodic / continuous stack monitoring — health verdict + anomalies from the dashboards MCP data tools (never the HTML UI)
 tools:
   - mcp__dashboards__local_stack_status
   - mcp__dashboards__local_worker_health

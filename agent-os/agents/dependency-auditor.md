@@ -1,7 +1,10 @@
 ---
 name: dependency-auditor
 description: Runs pnpm audit, analyzes vulnerabilities, and returns a prioritized fix plan — severity, affected package, recommended action (patch/update/replace/accept). Read-only; produces a report for the user to act on, never edits package.json or lockfile.
-model: inherit
+model: haiku
+modelRationale: parses pnpm audit and maps severities — mechanical
+wrapsSkill: dependency-security
+useWhen: pnpm audit — vulnerabilities + prioritized fix plan
 tools:
   - Read
   - Grep

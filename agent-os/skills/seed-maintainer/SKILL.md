@@ -1,6 +1,9 @@
 ---
 name: seed-maintainer
 description: Keeps per-domain seed/ directories and the bulk seed orchestrator aligned with schemas and routes. Use after route, schema, or seed changes.
+trigger: src/domains/**/seed/**, src/scripts/seed/**
+triggerNote: Keep per-domain seeds aligned with schemas + routes
+indexNote: keep per-domain seed/ + bulk orchestrator aligned with schemas + routes
 ---
 
 # Seed maintainer (core-be)

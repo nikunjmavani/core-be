@@ -1,6 +1,7 @@
 ---
 name: route-catalog
 description: Generates a docs/routes.txt file listing every API route grouped by domain with HTTP method, full path, and access control (public, authenticated, global role, org permission). Use after adding, removing, or updating any route in src/domains/.
+indexNote: regenerate docs/routes.txt after any route change
 ---
 
 # Route catalog generator (core-be)
@@ -198,3 +199,7 @@ After updating `docs/routes.txt`:
 3. **seed-maintainer** — align seeds when routes were added or removed.
 4. **test-generator** — domain e2e tests for new/changed routes.
 5. **`pnpm tsdoc:check`** — confirm coverage budget not regressed by any new exports added with the routes.
+
+---
+
+**Related skills:** [route-schema-doc-guard](../route-schema-doc-guard/SKILL.md) · [api-contract-guard](../api-contract-guard/SKILL.md) · [seed-maintainer](../seed-maintainer/SKILL.md)

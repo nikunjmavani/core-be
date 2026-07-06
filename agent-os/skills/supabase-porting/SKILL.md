@@ -1,6 +1,7 @@
 ---
 name: supabase-porting
 description: Ports Supabase Edge Functions (Deno) into core-be (Node/Fastify/Drizzle/BullMQ). Manual invoke only. Not for SQL migrations in migrations/ — use db-migration-maintainer.
+indexNote: port Supabase Edge Functions (Deno) → Node/Fastify (manual invoke only)
 ---
 
 # Supabase porting (Edge Functions → core-be)

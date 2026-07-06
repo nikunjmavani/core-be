@@ -10,6 +10,8 @@
 # block — the command already ran). Fails OPEN: a missing jq, no command, or no
 # gate match exits 0 silently.
 set -uo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_telemetry.sh"
+telemetry_init "gate-failure-hint" "PostToolUseFailure"
 
 command -v jq >/dev/null 2>&1 || exit 0
 
@@ -60,6 +62,7 @@ for hint in "${HINTS[@]}"; do
 done
 context="${context}"$'\n'"Skill map: agent-os/docs/skill-triggers.md"
 
+telemetry_fired
 jq -cn --arg c "$context" \
   '{hookSpecificOutput:{hookEventName:"PostToolUseFailure",additionalContext:$c}}'
 exit 0

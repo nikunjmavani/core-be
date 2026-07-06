@@ -10,9 +10,21 @@
       "idempotency-guard",
       "i18n-message-guard"
     ],
-    "database": ["schema-generator", "sql-design-guard", "db-migration-maintainer"],
-    "domain": ["domain-generator", "workers-events", "supabase-porting"],
-    "testing": ["test-generator", "chaos-test-maintainer", "contract-test-maintainer"],
+    "database": [
+      "schema-generator",
+      "sql-design-guard",
+      "db-migration-maintainer"
+    ],
+    "domain": [
+      "domain-generator",
+      "workers-events",
+      "supabase-porting"
+    ],
+    "testing": [
+      "test-generator",
+      "chaos-test-maintainer",
+      "contract-test-maintainer"
+    ],
     "docs": [
       "tsdoc-export-guard",
       "docs-maintainer",
@@ -35,9 +47,16 @@
       "production-hardening-guard",
       "path-to-production-gate"
     ],
-    "infra-config": ["env-schema-add", "ide-productivity-guard"],
-    "seed": ["seed-maintainer"],
+    "infra-config": [
+      "env-schema-add",
+      "ide-productivity-guard"
+    ],
+    "seed": [
+      "seed-maintainer"
+    ],
     "workflow": [
+      "auto-implement",
+      "delegate-search",
       "ci-investigator",
       "pr-babysit",
       "split-to-prs",

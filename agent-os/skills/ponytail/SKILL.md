@@ -12,6 +12,7 @@ description: >
   dependencies.
 argument-hint: "[lite|full|ultra]"
 license: MIT
+indexNote: user-invoked; YAGNI/minimalism discipline — no file trigger
 ---
 
 # Ponytail

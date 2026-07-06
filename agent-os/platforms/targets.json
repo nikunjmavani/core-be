@@ -5,7 +5,7 @@
       "label": "Claude Code",
       "entrypoint": ".claude/",
       "consumes": ["skills", "agents", "commands", "hooks", "mcp", "docs"],
-      "hooksTarget": ".claude/settings.json",
+      "hooksTarget": "agent-os/platforms/claude/settings.json",
       "capabilities": {
         "skills": true,
         "subagents": true,

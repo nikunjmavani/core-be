@@ -9,6 +9,8 @@
 #
 # Fails OPEN: a missing jq exits 0, leaving the normal permission flow in charge.
 set -uo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_telemetry.sh"
+telemetry_init "no-unrequested-pr" "PreToolUse"
 
 command -v jq >/dev/null 2>&1 || exit 0
 
@@ -19,6 +21,7 @@ reason="core-be policy: open a PR only when the user explicitly asked for one."
 [[ -n "$title" ]] && reason="${reason} Proposed PR title: \"${title}\"."
 reason="${reason} Confirm this was requested before proceeding."
 
+telemetry_fired
 jq -cn --arg r "$reason" \
   '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"ask",permissionDecisionReason:$r}}'
 exit 0

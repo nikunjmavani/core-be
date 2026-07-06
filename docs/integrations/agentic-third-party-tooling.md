@@ -48,6 +48,8 @@ instinct is right — for code and CI/CD the CLI (or SDK) is the correct tool, n
 | **Docker** | — | `docker` (`compose`, `buildx bake`) | — gateway only (Docker MCP Toolkit proxies servers, not a peer) |
 | **Context7** (lib docs) | — | — | ✅ `@upstash/context7-mcp` |
 | **codegraph** (code index) | — | `codegraph` | ✅ `codegraph serve --mcp` |
+| **Serena** (semantic code nav) | — | — | ✅ `uvx --from git+https://github.com/oraios/serena serena start-mcp-server` (LSP-backed symbol retrieve/edit — returns symbols, not whole files; token-efficient on a large repo) |
+| **ast-grep** (structural search) | — | `ast-grep` CLI | ✅ `uvx --from ast-grep-mcp --package ast-grep-mcp run` (AST pattern search — returns matches, not files) |
 | **Headroom** (context compression) | — | — | ✅ `headroom mcp serve` (compress large tool output / logs / files before they reach the model) |
 | **dashboards** (local stack status) | — | — | ✅ `node tooling/dev/dashboards/mcp.mjs` (local-only — reads stack health / queue stats / metrics from the dashboards proxy on `:3010`; run `pnpm dashboards:up` first) |
 
