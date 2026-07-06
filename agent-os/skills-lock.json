@@ -197,7 +197,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/skill-index/SKILL.md",
-      "computedHash": "417196ebe38f43b3af7950c715630735d0d18da68becfeed3567527367892f01"
+      "computedHash": "8d7a11a0f3b4b793a947c2d859a117d2708572a69ed507ce3f512bcdc2c6f26f"
     },
     "split-to-prs": {
       "source": "local",
