@@ -54,11 +54,16 @@ can hang/fail at the compose step. To bring up the stack manually:
   `domain threaded`, so containers requesting the memory controller fail with `cannot enter cgroupv2
   ... threaded mode`. Bring up with an override that sets `network_mode: host`, `cgroup: host`,
   `mem_limit: 0` (postgres), and `ports: !reset []`, then `pnpm db:migrate && pnpm db:seed`.
-- **Worker:** `pnpm dev:worker` fails the connection-budget guard with default `DATABASE_POOL_MAX=20`
-  (monolithic worker demand is ~47). Start it as
-  `DATABASE_POOL_MAX=60 POSTGRES_MAX_CONNECTIONS=500 pnpm dev:worker` (`.env.local` loads with
-  `override=false` under `NODE_ENV=development`, so shell env wins). The compose Postgres allows 500
-  connections. `pnpm dev` (API) runs fine with defaults.
+- **Worker:** `pnpm dev:worker` fails the connection-budget guard with the `.env.local` default
+ `DATABASE_POOL_MAX=20` (monolithic worker demand is ~47), and then the cluster-budget guard with the
+ default `POSTGRES_MAX_CONNECTIONS=100`. `src/shared/config/load-env-files.ts` loads `.env.local` with
+ dotenv `override: true`, so a shell env var does **not** win for any key present in the file
+ (`DATABASE_POOL_MAX`, `POSTGRES_MAX_CONNECTIONS`, `WORKER_CONCURRENCY*` are all in `.env.local`). Set
+ them **in `.env.local`** (gitignored, machine-local): `DATABASE_POOL_MAX=60` and
+ `POSTGRES_MAX_CONNECTIONS=500` (matches the compose Postgres `max_connections=500`). Then
+ `pnpm dev:worker` starts ~33 workers + a health server on `:9090`. `pnpm dev` (API) runs fine with
+ defaults. Neither `DATABASE_CONNECTION_BUDGET_ENFORCED=false` nor lowering shell vars helps here —
+ the worker-demand and deployment-budget throws are not gated by that flag.
 
 Health: `GET /livez`, `GET /readyz` on `:3000`. Sentry/OpenTelemetry "duplicate registration" lines
 at API boot are benign (invalid placeholder DSN) and do not block startup.
