@@ -6,6 +6,14 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.29](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.28...v4.10.0-dev.29) (2026-07-06)
+
+
+### Fixed
+
+* **cors:** wrap cors middleware in fastify-plugin so actual responses carry CORS headers ([b744877](https://github.com/nikunjmavani/core-be/commit/b74487750e2a8ff02419be9573bdf78dc4920238))
+* **cors:** wrap cors middleware in fastify-plugin so actual responses carry CORS headers ([0b049ce](https://github.com/nikunjmavani/core-be/commit/0b049ce250cf781f299aa7ec13f69695cdcfa3b8))
+
 ## [4.10.0-dev.28](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.27...v4.10.0-dev.28) (2026-07-06)
 
 
