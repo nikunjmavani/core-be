@@ -3,6 +3,7 @@ name: db-migration-maintainer
 description: Keeps SQL migrations in migrations/ aligned with Drizzle schema changes. Use when adding or changing *.schema.ts or creating/editing migrations/*.sql. Not for Supabase Edge Function porting (see supabase-porting).
 trigger: migrations/*.sql
 triggerNote: Migration files (schema changes go via the schema-change chain)
+indexNote: keep migrations/*.sql aligned with Drizzle schema changes
 ---
 
 # DB migration maintainer (core-be)

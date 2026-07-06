@@ -3,6 +3,7 @@ name: ide-productivity-guard
 description: Keeps workspace extensions and settings backend-relevant and productive. Use when editing .vscode/extensions.json or .vscode/settings.json, when the user asks for IDE or productivity recommendations, or when adding/changing project tooling (test runner, linter, ORM, queue) that has a well-known VS Code extension.
 trigger: .vscode/extensions.json, .vscode/settings.json
 triggerNote: Backend-relevant IDE tooling
+indexNote: keep .vscode extensions/settings backend-relevant
 ---
 
 # IDE productivity guard (core-be)

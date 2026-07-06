@@ -1,6 +1,7 @@
 ---
 name: docs-audit
 description: On-request full pass over docs: index, naming, Mermaid, cross-links. Use when the user asks to review or audit documentation, or after large reorganizations.
+indexNote: on-request full docs/ audit (index, naming, Mermaid, cross-links)
 ---
 
 # Docs audit (core-be)

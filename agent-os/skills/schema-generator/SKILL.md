@@ -1,6 +1,7 @@
 ---
 name: schema-generator
 description: Scaffolds co-located Drizzle schema files for new domains or sub-domains (snake_case columns, pgSchema from pg-schemas.ts, standard id/public_id/timestamps/soft-delete). Use when creating a domain/sub-domain that needs database tables, adding tables to an existing domain, or when a *.schema.ts file changes.
+indexNote: scaffold co-located Drizzle schema files (snake_case, id/public_id/timestamps/soft-delete)
 ---
 
 # Schema generator (core-be)

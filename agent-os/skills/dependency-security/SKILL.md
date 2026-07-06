@@ -3,6 +3,7 @@ name: dependency-security
 description: Keeps pnpm dependencies non-vulnerable and avoids breaking changes when updating. Use when adding/updating dependencies, when CI audit fails, or when reviewing package.json / pnpm-lock.yaml.
 trigger: package.json, pnpm-lock.yaml
 triggerNote: Zero-vuln dependency updates
+indexNote: keep pnpm deps non-vulnerable; safe patch/minor updates
 ---
 
 # Dependency security (core-be)

@@ -1,6 +1,7 @@
 ---
 name: workers-events
 description: Implements and maintains core-be patterns for domain events, BullMQ queues, and worker processes (Redis-backed). Use when adding event emission in services, registering handlers, defining queues/jobs, implementing workers, or handling graceful shutdown and retries.
+indexNote: domain events + BullMQ queues/workers (Redis, retries, graceful shutdown)
 ---
 
 # Workers + events (EventBus + BullMQ)

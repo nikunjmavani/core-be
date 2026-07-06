@@ -3,6 +3,7 @@ name: api-contract-guard
 description: Enforces the core-be public API contract conventions — snake_case route params, prefixed public ids, the uniform method→status policy, and the header naming matrix — across routes, validators, tests, OpenAPI/Postman docs, and the route-status gates. Use when adding or changing any route, param, header, public id, or response status.
 trigger: src/shared/utils/http/list-query.util.ts
 triggerNote: List endpoints (search/sort/pagination); also route params / public ids / statuses / headers. Status policy: docs/reference/api/response-codes.md
+indexNote: route params / public-ids / method→status policy / header matrix — any route, param, or header change
 ---
 
 # API contract guard

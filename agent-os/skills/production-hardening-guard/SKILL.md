@@ -1,6 +1,7 @@
 ---
 name: production-hardening-guard
 description: Enforces production-readiness checks across the codebase — security headers, JWT/CORS/rate limits, DB pool and SSL, Redis, external-service circuit breakers, logging redaction, worker resource limits, and CI/CD scanning. Use before deploying to production or after changing middleware, infrastructure, or security-related code.
+indexNote: production-readiness across middleware / infra / security config
 ---
 
 # Production hardening guard (core-be)

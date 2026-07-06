@@ -3,6 +3,7 @@ name: domain-generator
 description: Scaffolds and extends domains in core-be using the domain → sub-domain (and nested sub-domain) layout under src/domains/<domain>/. Use when creating a new domain, adding a sub-domain (resource), or wiring routes and DI.
 trigger: src/routes.ts
 triggerNote: Check DI wiring / route registration (new domain scaffolds via the new-domain chain)
+indexNote: scaffold/extend domains + sub-domains and wire routes/DI
 ---
 
 # Domain generator (core-be)

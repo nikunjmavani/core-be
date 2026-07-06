@@ -1,6 +1,7 @@
 ---
 name: route-catalog
 description: Generates a docs/routes.txt file listing every API route grouped by domain with HTTP method, full path, and access control (public, authenticated, global role, org permission). Use after adding, removing, or updating any route in src/domains/.
+indexNote: regenerate docs/routes.txt after any route change
 ---
 
 # Route catalog generator (core-be)

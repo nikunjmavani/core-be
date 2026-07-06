@@ -3,6 +3,7 @@ name: idempotency-guard
 description: Keeps core-be request idempotency correct — the 13 idempotencyRequired writes (X-Idempotency-Key → 422 when missing/reused, 409 in-flight), the post-commit Redis replay write (never in onSend), secret-bearing response bodies excluded from caching, and the client X-Idempotency-Key forwarded as Stripe's idempotencyKey on customer/subscription mutations. Use when adding or changing a mutating money/state route, the idempotency middleware or utils, the Stripe client, or the subscription controller/service.
 trigger: src/shared/middlewares/core/idempotency.middleware.ts, src/infrastructure/payment/stripe.client.ts
 triggerNote: Idempotency engine + idempotencyRequired writes + Stripe mutations
+indexNote: X-Idempotency-Key writes, post-commit Redis replay, Stripe idempotencyKey
 ---
 
 # Idempotency guard

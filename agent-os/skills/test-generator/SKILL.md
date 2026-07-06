@@ -3,6 +3,7 @@ name: test-generator
 description: Decides which test layer to add and writes tests following core-be conventions — unit for pure layers (validators, serializers, shared/utils, errors) and domain e2e via fastify.inject. Use when adding or changing routes, controllers, services, workers, validators, or serializers, after creating a domain/sub-domain, or when tests are missing.
 trigger: src/domains/**/*.validator.ts, src/domains/**/*.serializer.ts
 triggerNote: Pure-layer units + domain e2e per the testing pyramid
+indexNote: pick the test layer + write unit / domain-e2e per the testing pyramid
 ---
 
 # Test generator (core-be)

@@ -3,6 +3,7 @@ name: docs-maintainer
 description: Keeps docs/ discoverable and consistent. Use when adding, renaming, or reorganizing docs; updates the index and cross-links so references stay correct.
 trigger: docs/**/*.md
 triggerNote: Hand-written docs — index + cross-links
+indexNote: keep docs/ index + cross-links consistent on add/rename/move
 ---
 
 # Docs maintainer (core-be)
