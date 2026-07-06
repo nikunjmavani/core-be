@@ -6,6 +6,8 @@
 # discarded when the container is reclaimed) and any in-progress autonomous
 # build under docs/builds/. Informational only; fail-open (always exits 0).
 set -uo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_telemetry.sh"
+telemetry_init "session-end" "SessionEnd"
 
 ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 cd "$ROOT" 2>/dev/null || exit 0
@@ -13,6 +15,7 @@ cd "$ROOT" 2>/dev/null || exit 0
 changed="$(git status --porcelain 2>/dev/null)" || changed=""
 echo ""
 if [ -n "$changed" ]; then
+  telemetry_fired
   count="$(printf '%s\n' "$changed" | wc -l | tr -d ' ')"
   echo "⚠ Session ending with ${count} uncommitted change(s). The cloud env is ephemeral —"
   echo "  commit + push to preserve: git add -A && git commit && git push -u origin \"\$(git branch --show-current)\"."

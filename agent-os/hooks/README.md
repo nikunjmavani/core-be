@@ -92,6 +92,27 @@ echo '{"tool_input":{"title":"Add feature"}}' | bash agent-os/hooks/no-unrequest
 echo '{"command":"git push --force"}' | node agent-os/hooks/cursor-shell-guard.mjs
 ```
 
+## Telemetry (measure, then prune)
+
+Every hook records one line per run — `timestamp,hook-id,event,fired|silent` — to the
+gitignored `agent-os/hooks/.telemetry.log` via the shared helpers
+[`_telemetry.sh`](_telemetry.sh) (bash) and [`_telemetry.mjs`](_telemetry.mjs) (node).
+A run is **fired** when the hook actually acts (emits routing/reminder context, blocks a
+command, formats a file); **silent** when it no-ops. Logging is fail-open — a telemetry
+error can never block or fail the hook.
+
+Aggregate it with:
+
+```bash
+pnpm agent-os:hooks:report   # runs / fired / silent / silent% / last-fired per hook
+```
+
+**Monthly ritual:** run the report and review the pruning candidates it flags — a hook
+that has **never fired** or has been **silent for 30+ days** is dead weight. Either delete
+it (remove the script, its `hooks.json` entry, and run `pnpm agent-os:generate`) or fix why
+it isn't firing. A high silent ratio is fine for guard hooks (they should mostly pass
+through); a *zero fired* count over a month is the real smell.
+
 ## Notes
 
 - The shell guards scan with quoted strings + heredoc bodies removed, so a

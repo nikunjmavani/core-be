@@ -7,6 +7,7 @@
 // Reads the PreToolUse payload on stdin. Fail-open by design: any parse/read
 // error allows the tool (exit 0) so a guardrail bug can never brick the agent.
 import { readFileSync } from "node:fs";
+import { recordTelemetry } from "./_telemetry.mjs";
 
 let raw = "";
 try {
@@ -49,6 +50,7 @@ const SECRET_READ_DENIAL =
   ".env.<environment> directly, or use core-infra's `pnpm setup:infra:output --copy <KEY>`.";
 
 function deny(reason) {
+  recordTelemetry("guardrails", "PreToolUse", "fired");
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {
@@ -156,4 +158,5 @@ if ((tool === "Write" || tool === "Edit") && /src\/domains\/[^/]+\/.*\.service\.
 if (warnings.length) {
   process.stdout.write(JSON.stringify({ systemMessage: "⚠️ core-be guardrail:\n- " + warnings.join("\n- ") }));
 }
+recordTelemetry("guardrails", "PreToolUse", warnings.length ? "fired" : "silent");
 process.exit(0);

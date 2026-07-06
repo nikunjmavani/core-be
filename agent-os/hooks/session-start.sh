@@ -10,6 +10,9 @@
 #
 #   stderr -> install logs / diagnostics (NOT added to context)
 set -uo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_telemetry.sh"
+telemetry_init "session-start" "SessionStart"
+telemetry_fired  # SessionStart always emits the session briefing
 
 ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 cd "$ROOT" || exit 0

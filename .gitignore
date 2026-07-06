@@ -93,6 +93,9 @@ TEST_REPORT.md
 .mcp.json
 agent-os/mcp/mcp.json
 
+# Hook telemetry — local runtime log (pnpm agent-os:hooks:report aggregates it)
+agent-os/hooks/.telemetry.log
+
 # Claude Code — ignore everything except tracked project config
 # Use .claude/* (not .claude/) so the !negations below actually re-include
 # these entries — git cannot re-include children of a wholly-excluded dir.
