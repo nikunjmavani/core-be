@@ -6,6 +6,14 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.30](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.29...v4.10.0-dev.30) (2026-07-06)
+
+
+### Added
+
+* **user:** add job_title to user profile update ([d916eb7](https://github.com/nikunjmavani/core-be/commit/d916eb7381d9a910275ae98cbf8ae56be6c7c0ba))
+* **user:** add job_title to user profile update ([739b109](https://github.com/nikunjmavani/core-be/commit/739b1099c845719a703a21e1beccc1a78da262c5))
+
 ## [4.10.0-dev.29](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.28...v4.10.0-dev.29) (2026-07-06)
 
 
