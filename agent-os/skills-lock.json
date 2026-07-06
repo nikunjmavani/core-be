@@ -5,7 +5,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/api-contract-guard/SKILL.md",
-      "computedHash": "e9811a83eaecd0916af6acf08237a8e6fbd1403b0838c2669fc2828bb19c5bed"
+      "computedHash": "e3669f905cfcae1027ae9e3ac48e7bc73c389ca49151f1211924f4a7740a7a37"
     },
     "auto-implement": {
       "source": "local",
@@ -29,7 +29,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/chaos-test-maintainer/SKILL.md",
-      "computedHash": "e0632ed0ab406f8b1d9dfd20e2838f1bf181f0e5ac0620b83c34877f8d3e2abc"
+      "computedHash": "4252cd18bc6a3329961fc172071b996e274bfebf5e2af5e334c5d859528d4f55"
     },
     "ci-investigator": {
       "source": "local",
@@ -53,7 +53,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/contract-test-maintainer/SKILL.md",
-      "computedHash": "fac36a4ecc7f910c1a1a76fbdafa307434605541212d3d63fa057d6986303b29"
+      "computedHash": "f9cb8dbf3b31f849a9cc171318725d82300b8aca7139e483b1f9257c22491ef7"
     },
     "cursor-global-skills": {
       "source": "local",
@@ -65,7 +65,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/db-migration-maintainer/SKILL.md",
-      "computedHash": "7dac8cef30b31a5f659061afd0104ec04f0b57ae0e41ea0091bfdff02e29b92c"
+      "computedHash": "e3d70b593c0cfa0b4998dd9ca6955480673970335097f9f3ff35807500ed9843"
     },
     "dependency-security": {
       "source": "local",
@@ -77,13 +77,13 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/docs-audit/SKILL.md",
-      "computedHash": "449325592409366deec620be329e379d7107df143657723fa3982ad4c5202645"
+      "computedHash": "22a3ea2f0bed1b85682ba9ebc66fd55cb50d67a2458b53d4c275ecc66bd4a459"
     },
     "docs-maintainer": {
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/docs-maintainer/SKILL.md",
-      "computedHash": "19b25fc1977f1dcec0c989b326f9075bd24ac9ca1b4f3bb486b23082bbe7a31c"
+      "computedHash": "44f2a2f34bf494ec5394502b3dbc8fcbae3780a80294f4a1361ddaaa70653695"
     },
     "domain-generator": {
       "source": "local",
@@ -137,7 +137,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/overview-doc-maintainer/SKILL.md",
-      "computedHash": "4a70da43b47f205f6b60509a60ee81281eb2a53464d0f8f6ddc9dcf255754f68"
+      "computedHash": "1295c58fb26498599e993407664b4aa22e475ff51d25434caaeb68f2b5a62dd7"
     },
     "path-to-production-gate": {
       "source": "local",
@@ -173,25 +173,25 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/rls-tenant-isolation-guard/SKILL.md",
-      "computedHash": "3f3c3c2b0745864ca98cb2991911c7873cc7219c8d3f342b0d5a18eda1c13b82"
+      "computedHash": "f0f359387c4b80016b40dcf21fa6110822e69705d11b4b3d124deb11bf75574b"
     },
     "route-catalog": {
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/route-catalog/SKILL.md",
-      "computedHash": "7f9d845f9c2176b6f1376d767a09b6d3f9693298904a4f74513f45c12f928289"
+      "computedHash": "169a4cc10eae1a997456eac9ed5db0eddb1d81e1997067ed96a777b303cedeba"
     },
     "route-schema-doc-guard": {
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/route-schema-doc-guard/SKILL.md",
-      "computedHash": "034c1313a9c5247d872a795d49d81b3ddedf6a056b955db4aef3a42cf667b04c"
+      "computedHash": "4fe64ce842c7e14857625070ee029c9324cb0e566fd0f59a9c2328c091cf0cc7"
     },
     "schema-generator": {
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/schema-generator/SKILL.md",
-      "computedHash": "d2f7c8b0307a9da046b3636b910b3adf6ffaf05f7cd1bbecc4af5a0904c891e8"
+      "computedHash": "8e797f6a1d0ddf8ac1b0b94c17d17d9b8319660b0405b83281e96ccb85809654"
     },
     "seed-maintainer": {
       "source": "local",
@@ -215,7 +215,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/sql-design-guard/SKILL.md",
-      "computedHash": "a8b1588596e0d72e5cc3e9e92a4339262f5a254a7245a72d1661a0c401b1583a"
+      "computedHash": "c34848f256aa53022af02e8f507ca06ed7c75a097d521a1e2b174b7e021edf03"
     },
     "structure-maintainer": {
       "source": "local",
@@ -233,13 +233,13 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/system-narrative-maintainer/SKILL.md",
-      "computedHash": "5870b91669d1f2dc4b4976d41bb620eb60984e981b77c44aa65e289014980856"
+      "computedHash": "eacfa246715d1259e496dfd7b173df89e432a973ba1ce3dfced5943697e2d602"
     },
     "test-generator": {
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/test-generator/SKILL.md",
-      "computedHash": "4bc65e92431832ce0a517d2cdc314f38fdac6f06ce603b88fb94210e40d8ec2a"
+      "computedHash": "64bdfca398782e4266e14b09d502b2dff3d2926431fc9ada9848c59edb719dd7"
     },
     "tsdoc-export-guard": {
       "source": "local",
