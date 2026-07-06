@@ -377,7 +377,6 @@ src/
     │   │   │       │   ├── subscription-happy.integration.test.ts
     │   │   │       │   └── subscription.integration.test.ts
     │   │   │       └── unit/
-    │   │   │       │   ├── workers/
     │   │   │       │   ├── payment-provider.port.unit.test.ts
     │   │   │       │   ├── stripe-payment-provider.email.unit.test.ts
     │   │   │       │   ├── subscription-routes-rate-limit.policy.unit.test.ts
