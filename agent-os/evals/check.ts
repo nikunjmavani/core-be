@@ -89,20 +89,14 @@ for (const skill of skillNames) {
     warn('skill-description', `skills/${skill}: description is ${description.length} chars — too thin to auto-trigger reliably`)
 }
 
-// ── Check 2: skill counts stated in the index match the directory count ──
+// ── Check 2: the index table lists exactly the skills on disk, and paths resolve ──
+// The `## Project skills (N)` count + table is generated (tooling/agent-os/generate-docs.ts)
+// between GENERATED markers, so a stale count is impossible — gated by
+// `agent-os:generate:check`, not re-counted here. This check stays as the
+// path-existence guard: every table row points at a real SKILL.md.
 const indexFile = join(agentOsDirectory, 'skills', 'skill-index', 'SKILL.md')
 if (existsSync(indexFile)) {
   const indexText = readText(indexFile)
-  const claimed = [
-    ...allNumbers(indexText, /(\d+)\s+project skills/g),
-    ...allNumbers(indexText, /project skills\s*\((\d+)\)/gi),
-    ...allNumbers(indexText, /skills\s*\((\d+)\)/g),
-  ]
-  for (const count of new Set(claimed))
-    if (count !== skillNames.length)
-      error('skill-index-count', `skill-index states ${count} skills; ${skillNames.length} exist on disk`)
-
-  // ── Check 3: the index table lists exactly the skills on disk, and paths resolve ──
   const tableNames = new Set<string>()
   for (const row of indexText.matchAll(/^\|\s*([a-z][a-z0-9-]+)\s*\|\s*`([^`]+)`/gm)) {
     tableNames.add(row[1])
@@ -164,14 +158,15 @@ if (existsSync(triggersFile)) {
       error('sync-rule-count', `skill-triggers.md states ${count} sync rules; ${syncRuleCount} *-sync.mdc files exist`)
 }
 
-// ── Check 5 + 6: agent catalog count + coverage ──
+// ── Check 5: agent catalog coverage ──
+// The catalog table (incl. its `All N agents` count) is generated between
+// GENERATED markers (tooling/agent-os/generate-docs.ts), gated by
+// `agent-os:generate:check` — so a stale count is impossible and no longer
+// re-counted here. This stays as the coverage guard: every agent file appears.
 const agentFiles = listFilesWithExtension(join(agentOsDirectory, 'agents'), '.md')
 const catalogFile = join(agentOsDirectory, 'docs', 'agents-catalog.md')
 if (existsSync(catalogFile)) {
   const catalogText = readText(catalogFile)
-  for (const count of new Set(allNumbers(catalogText, /[Aa]ll\s+(\d+)\s+(?:project\s+)?agents/g)))
-    if (count !== agentFiles.length)
-      error('agent-catalog-count', `agents-catalog states ${count} agents; ${agentFiles.length} agent files exist`)
   for (const file of agentFiles) {
     const agentName = basename(file, '.md')
     if (!catalogText.includes(agentName)) error('agent-catalog-coverage', `agent "${agentName}" is not referenced in agents-catalog.md`)
@@ -446,11 +441,9 @@ const warnings = findings.filter((finding) => finding.level === 'warn')
 
 const checkLabels: Record<string, string> = {
   'skill-frontmatter': 'Skill frontmatter & names',
-  'skill-index-count': 'Skill-index counts',
-  'skill-index-table': 'Skill-index ↔ disk',
+  'skill-index-table': 'Skill-index ↔ disk (path resolution)',
   'skills-lock': 'Skills lockfile provenance',
   'sync-rule-count': 'Sync-rule count',
-  'agent-catalog-count': 'Agent catalog count',
   'agent-catalog-coverage': 'Agent catalog coverage',
   'agent-frontmatter': 'Agent frontmatter',
   'agent-readonly': 'Read-only agents enforce tools',

@@ -7,6 +7,8 @@ description: >
   missing entries, wrong version bumps, and unreleased sections that are stale.
   Does NOT write commits or push — produces a gap report only.
 model: inherit
+wrapsSkill: "*(inline)*"
+useWhen: Verify CHANGELOG.md vs git log / merged PR titles — gap report
 tools:
   - Read
   - Bash

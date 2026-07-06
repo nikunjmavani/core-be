@@ -19,6 +19,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { generateDocs } from './generate-docs.js';
 
 const repositoryRoot = process.cwd();
 const agentOsDirectory = join(repositoryRoot, 'agent-os');
@@ -266,6 +267,11 @@ if (codexTarget?.capabilities.mcpFormat === 'toml') {
     }
   }
 }
+
+// ── Derived docs (skill-index table, agents-catalog, skill-triggers) ──
+// Regenerated from manifests + skill/agent frontmatter between GENERATED markers;
+// hand-written prose outside the markers survives verbatim.
+for (const message of generateDocs(writeMode)) report(message);
 
 // ── Report ──
 const drift = problems.filter(

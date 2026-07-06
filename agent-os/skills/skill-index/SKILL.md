@@ -5,56 +5,60 @@ description: Master index of all project skills with trigger conditions. Use thi
 
 # Skill index (core-be)
 
-Master directory of all **41 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
+Master directory of all project skills. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
 
 For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global-skills**.
 
+<!-- GENERATED:START -->
 ## Project skills (41)
 
-| Skill                          | Path                                                                      |
-| ------------------------------ | ------------------------------------------------------------------------- |
-| skill-index                    | `agent-os/skills/skill-index/SKILL.md`                                     |
-| test-generator                 | `agent-os/skills/test-generator/SKILL.md`                                  |
-| api-contract-guard             | `agent-os/skills/api-contract-guard/SKILL.md`                              |
-| route-catalog                  | `agent-os/skills/route-catalog/SKILL.md`                                   |
-| openapi-route-sync             | `agent-os/skills/openapi-route-sync/SKILL.md` (legacy — tag locale only; use route-schema-doc-guard for schema) |
-| route-schema-doc-guard         | `agent-os/skills/route-schema-doc-guard/SKILL.md`                          |
-| seed-maintainer                | `agent-os/skills/seed-maintainer/SKILL.md`                                 |
-| domain-generator               | `agent-os/skills/domain-generator/SKILL.md`                                |
-| schema-generator               | `agent-os/skills/schema-generator/SKILL.md`                                |
-| sql-design-guard               | `agent-os/skills/sql-design-guard/SKILL.md`                                |
-| db-migration-maintainer        | `agent-os/skills/db-migration-maintainer/SKILL.md`                         |
-| workers-events                 | `agent-os/skills/workers-events/SKILL.md`                                  |
-| supabase-porting               | `agent-os/skills/supabase-porting/SKILL.md`                                |
-| code-quality-guard             | `agent-os/skills/code-quality-guard/SKILL.md`                              |
-| code-smells-and-best-practices | `agent-os/skills/code-smells-and-best-practices/SKILL.md`                  |
-| lint-warnings-handler          | `agent-os/skills/lint-warnings-handler/SKILL.md` (detail; via code-smells) |
-| before-commit-guard            | `agent-os/skills/before-commit-guard/SKILL.md`                             |
-| dependency-security            | `agent-os/skills/dependency-security/SKILL.md`                             |
-| structure-maintainer           | `agent-os/skills/structure-maintainer/SKILL.md`                            |
-| production-hardening-guard     | `agent-os/skills/production-hardening-guard/SKILL.md`                      |
-| path-to-production-gate        | `agent-os/skills/path-to-production-gate/SKILL.md`                         |
-| i18n-message-guard             | `agent-os/skills/i18n-message-guard/SKILL.md`                              |
-| openapi-multilingual           | `agent-os/skills/openapi-multilingual/SKILL.md`                            |
-| env-schema-add                 | `agent-os/skills/env-schema-add/SKILL.md`                                  |
-| ide-productivity-guard         | `agent-os/skills/ide-productivity-guard/SKILL.md`                          |
-| docs-maintainer                | `agent-os/skills/docs-maintainer/SKILL.md`                                 |
-| docs-audit                     | `agent-os/skills/docs-audit/SKILL.md`                                      |
-| system-narrative-maintainer    | `agent-os/skills/system-narrative-maintainer/SKILL.md`                     |
-| overview-doc-maintainer        | `agent-os/skills/overview-doc-maintainer/SKILL.md`                         |
-| tsdoc-export-guard             | `agent-os/skills/tsdoc-export-guard/SKILL.md`                              |
-| pr-babysit                     | `agent-os/skills/pr-babysit/SKILL.md`                                      |
-| split-to-prs                   | `agent-os/skills/split-to-prs/SKILL.md`                                    |
-| ci-investigator                | `agent-os/skills/ci-investigator/SKILL.md`                                 |
-| contract-test-maintainer       | `agent-os/skills/contract-test-maintainer/SKILL.md`                        |
-| chaos-test-maintainer          | `agent-os/skills/chaos-test-maintainer/SKILL.md`                           |
-| cursor-global-skills           | `agent-os/skills/cursor-global-skills/SKILL.md` (reference only)           |
-| rls-tenant-isolation-guard     | `agent-os/skills/rls-tenant-isolation-guard/SKILL.md` |
-| idempotency-guard              | `agent-os/skills/idempotency-guard/SKILL.md` |
-| change-completeness-guard      | `agent-os/skills/change-completeness-guard/SKILL.md` |
-| ponytail                       | `agent-os/skills/ponytail/SKILL.md` (user-invoked; YAGNI/minimalism discipline — no file trigger) |
-| ponytail-audit                 | `agent-os/skills/ponytail-audit/SKILL.md` (user-invoked; repo-wide over-engineering scan — no file trigger) |
+Master directory of all project skills. **Consult this skill first** to determine which skill(s)
+to invoke based on what you just changed. Grouped by `agent-os/skills/groups.json`.
 
+| Skill | Path | Note |
+| ----- | ---- | ---- |
+| api-contract-guard | `agent-os/skills/api-contract-guard/SKILL.md` |  |
+| route-schema-doc-guard | `agent-os/skills/route-schema-doc-guard/SKILL.md` |  |
+| route-catalog | `agent-os/skills/route-catalog/SKILL.md` |  |
+| openapi-multilingual | `agent-os/skills/openapi-multilingual/SKILL.md` |  |
+| openapi-route-sync | `agent-os/skills/openapi-route-sync/SKILL.md` | legacy — tag locale only; use route-schema-doc-guard for schema |
+| idempotency-guard | `agent-os/skills/idempotency-guard/SKILL.md` |  |
+| i18n-message-guard | `agent-os/skills/i18n-message-guard/SKILL.md` |  |
+| schema-generator | `agent-os/skills/schema-generator/SKILL.md` |  |
+| sql-design-guard | `agent-os/skills/sql-design-guard/SKILL.md` |  |
+| db-migration-maintainer | `agent-os/skills/db-migration-maintainer/SKILL.md` |  |
+| domain-generator | `agent-os/skills/domain-generator/SKILL.md` |  |
+| workers-events | `agent-os/skills/workers-events/SKILL.md` |  |
+| supabase-porting | `agent-os/skills/supabase-porting/SKILL.md` |  |
+| test-generator | `agent-os/skills/test-generator/SKILL.md` |  |
+| chaos-test-maintainer | `agent-os/skills/chaos-test-maintainer/SKILL.md` |  |
+| contract-test-maintainer | `agent-os/skills/contract-test-maintainer/SKILL.md` |  |
+| tsdoc-export-guard | `agent-os/skills/tsdoc-export-guard/SKILL.md` |  |
+| docs-maintainer | `agent-os/skills/docs-maintainer/SKILL.md` |  |
+| docs-audit | `agent-os/skills/docs-audit/SKILL.md` |  |
+| overview-doc-maintainer | `agent-os/skills/overview-doc-maintainer/SKILL.md` |  |
+| system-narrative-maintainer | `agent-os/skills/system-narrative-maintainer/SKILL.md` |  |
+| code-quality-guard | `agent-os/skills/code-quality-guard/SKILL.md` |  |
+| code-smells-and-best-practices | `agent-os/skills/code-smells-and-best-practices/SKILL.md` |  |
+| lint-warnings-handler | `agent-os/skills/lint-warnings-handler/SKILL.md` | detail; via code-smells |
+| before-commit-guard | `agent-os/skills/before-commit-guard/SKILL.md` |  |
+| change-completeness-guard | `agent-os/skills/change-completeness-guard/SKILL.md` |  |
+| ponytail | `agent-os/skills/ponytail/SKILL.md` | user-invoked; YAGNI/minimalism discipline — no file trigger |
+| ponytail-audit | `agent-os/skills/ponytail-audit/SKILL.md` | user-invoked; repo-wide over-engineering scan — no file trigger |
+| rls-tenant-isolation-guard | `agent-os/skills/rls-tenant-isolation-guard/SKILL.md` |  |
+| dependency-security | `agent-os/skills/dependency-security/SKILL.md` |  |
+| production-hardening-guard | `agent-os/skills/production-hardening-guard/SKILL.md` |  |
+| path-to-production-gate | `agent-os/skills/path-to-production-gate/SKILL.md` |  |
+| env-schema-add | `agent-os/skills/env-schema-add/SKILL.md` |  |
+| ide-productivity-guard | `agent-os/skills/ide-productivity-guard/SKILL.md` |  |
+| seed-maintainer | `agent-os/skills/seed-maintainer/SKILL.md` |  |
+| ci-investigator | `agent-os/skills/ci-investigator/SKILL.md` |  |
+| pr-babysit | `agent-os/skills/pr-babysit/SKILL.md` |  |
+| split-to-prs | `agent-os/skills/split-to-prs/SKILL.md` |  |
+| skill-index | `agent-os/skills/skill-index/SKILL.md` |  |
+| cursor-global-skills | `agent-os/skills/cursor-global-skills/SKILL.md` | reference only |
+| structure-maintainer | `agent-os/skills/structure-maintainer/SKILL.md` |  |
+<!-- GENERATED:END -->
 ## Skill trigger map
 
 | What changed                                                                                                                                                                                                    | Skill to invoke                                                                                                    | Path                                                              |

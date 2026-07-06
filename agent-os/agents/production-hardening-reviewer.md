@@ -2,6 +2,8 @@
 name: production-hardening-reviewer
 description: Sweeps infrastructure, middleware, and config for production-hardening gaps — security headers, JWT/CORS/rate limits, DB pool/SSL, Redis, external-service resilience, logging redaction, worker limits, and CI scanning. Returns a prioritized gap list. Read-only; produces a report for the user to act on, never edits files.
 model: inherit
+wrapsSkill: production-hardening-guard
+useWhen: Targeted hardening sweep — security headers, DB/Redis/worker gaps
 tools:
   - Read
   - Grep

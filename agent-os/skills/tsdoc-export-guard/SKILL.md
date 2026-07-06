@@ -1,6 +1,8 @@
 ---
 name: tsdoc-export-guard
 description: Ensures every public TypeScript export under src/ has a TSDoc summary, and every public export in service/worker/processor/policy files has an additional @remarks block (Algorithm / Failure modes / Side effects / Notes). Use when adding or renaming exported symbols, when MISSING_DESCRIPTION or MISSING_REMARKS counts regress against `pnpm tsdoc:check`, or when authoring a policy constant.
+trigger: src/**/*.ts
+triggerNote: Public export added/renamed — TSDoc summary (+ @remarks on service/worker/policy)
 ---
 
 # TSDoc export guard (core-be)

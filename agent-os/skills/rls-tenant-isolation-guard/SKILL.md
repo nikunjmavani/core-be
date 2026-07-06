@@ -1,6 +1,8 @@
 ---
 name: rls-tenant-isolation-guard
 description: Enforces Postgres Row-Level Security and tenant-isolation correctness in core-be — every tenant-owned table ENABLE + FORCE RLS with an org-scoped policy carrying both USING and WITH CHECK, the app.current_organization_id GUC set on every query path, workers using context wrappers (never calling getRequestDatabase), and tenant jobs carrying organizationPublicId. Use when adding or changing a *.schema.ts table, a migration touching RLS, a database context wrapper, tenant middleware, or any worker/processor that reads tenant data.
+trigger: src/infrastructure/database/contexts/**, src/domains/**/*.worker.ts
+triggerNote: DB context wrappers, workers, and RLS migrations — tenant isolation
 ---
 
 # RLS / tenant-isolation guard

@@ -1,6 +1,8 @@
 ---
 name: env-schema-add
 description: Walk through adding, renaming, or removing an env var safely. Decides Secret vs Variable, picks the correct .env.example sub-section, keeps the schema, template, validators, and GitHub Environments in sync. Use when src/shared/config/env-schema.ts or .env.example changes.
+trigger: src/shared/config/env-schema.ts, .env.example
+triggerNote: Env var add/rename/remove
 ---
 
 # Env schema add (core-be)
