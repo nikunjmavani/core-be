@@ -340,6 +340,10 @@ jobs:
             -e METRICS_SCRAPE_TOKEN="$METRICS_SCRAPE_TOKEN" \
             -e SECRETS_ENCRYPTION_KEY="$SECRETS_ENCRYPTION_KEY" \
             ${{ env.DOCKER_LOCAL_API_TAG }}:ci node dist/src/infrastructure/database/migration/migrate.js
+          # Boot-time safety checks default HARDENED (see the Policy-flags section of
+          # .env.example); relax them here like local dev does — this smoke boot runs
+          # against the plaintext CI Postgres (superuser role, no TLS, no proxy, no
+          # replica counts) and would otherwise fail before binding the listener.
           docker run -d --name ${{ env.DOCKER_LOCAL_API_TAG }}-health --network host \
             -e NODE_ENV=development \
             -e HOST=0.0.0.0 \
@@ -347,6 +351,11 @@ jobs:
             -e DATABASE_URL="$DATABASE_URL" \
             -e REDIS_URL="$REDIS_URL" \
             -e DATABASE_SSL_ENABLED="$DATABASE_SSL_ENABLED" \
+            -e DATABASE_TLS_ENFORCED=false \
+            -e DATABASE_RLS_SAFETY_ENFORCED=false \
+            -e DATABASE_CONNECTION_BUDGET_ENFORCED=false \
+            -e REDIS_TLS_ENFORCED=false \
+            -e TRUST_PROXY_REQUIRED=false \
             -e JWT_PRIVATE_KEY="$JWT_PRIVATE_KEY" \
             -e JWT_PUBLIC_KEY="$JWT_PUBLIC_KEY" \
             -e ALLOWED_ORIGINS="$ALLOWED_ORIGINS" \
