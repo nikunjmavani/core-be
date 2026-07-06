@@ -32,3 +32,7 @@ Run a **full pass** over hand-written docs when the user asks to "review docs", 
 ## Output
 
 Report: (1) Index OK / gaps. (2) Naming OK / renames suggested. (3) Docs missing Mermaid. (4) Broken or stale links found and fixed (or listed for the user).
+
+---
+
+**Related skills:** [docs-maintainer](../docs-maintainer/SKILL.md)

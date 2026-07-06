@@ -128,3 +128,7 @@ First line: `` `src/` ``.
 
 - TSDoc coverage gate: [`tooling/tsdoc-coverage/`](../../../tooling/tsdoc-coverage/)
 - Architecture doc: [`docs/reference/architecture/documentation-system.md`](../../../docs/reference/architecture/documentation-system.md)
+
+---
+
+**Related skills:** [overview-doc-maintainer](../overview-doc-maintainer/SKILL.md) · [tsdoc-export-guard](../tsdoc-export-guard/SKILL.md)

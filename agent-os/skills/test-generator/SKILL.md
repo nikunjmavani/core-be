@@ -293,3 +293,7 @@ describe('example.validator', () => {
 - Adding Vitest files under `src/tests/load/` (k6-only)
 - Testing Pino/logger startup with no custom behavior
 - Skipping unit tests when only validators/serializers changed (route-only mindset)
+
+---
+
+**Related skills:** [chaos-test-maintainer](../chaos-test-maintainer/SKILL.md) · [contract-test-maintainer](../contract-test-maintainer/SKILL.md)

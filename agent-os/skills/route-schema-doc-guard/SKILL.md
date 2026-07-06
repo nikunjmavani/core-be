@@ -105,3 +105,7 @@ If you find yourself adding HTTP routes outside `*.routes.ts` and outside those 
 
 - OpenAPI extractor: [`tooling/openapi/extractors/route-schema-metadata.ts`](../../../tooling/openapi/extractors/route-schema-metadata.ts)
 - Existing skills that touched this contract: **openapi-route-sync**, **openapi-multilingual**, **route-catalog**.
+
+---
+
+**Related skills:** [api-contract-guard](../api-contract-guard/SKILL.md) · [route-catalog](../route-catalog/SKILL.md) · [openapi-multilingual](../openapi-multilingual/SKILL.md)

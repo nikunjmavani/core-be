@@ -58,3 +58,7 @@ Link to these from the index as needed; do not list them as hand-written docs in
 2. Search the repo for the old filename or path; update every reference.
 3. If the doc describes a step-by-step flow or architecture, add or update a Mermaid diagram so GitHub shows it rendered.
 4. Confirm no broken links: spot-check README, CLAUDE, and the doc index.
+
+---
+
+**Related skills:** [docs-audit](../docs-audit/SKILL.md) · [overview-doc-maintainer](../overview-doc-maintainer/SKILL.md) · [system-narrative-maintainer](../system-narrative-maintainer/SKILL.md)

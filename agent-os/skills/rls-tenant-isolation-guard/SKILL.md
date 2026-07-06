@@ -73,3 +73,7 @@ pnpm db:migrate:lint    # migration safety
 ```
 
 Related: [[workers-events]] (queue/worker patterns), [[sql-design-guard]] (schema design), [[db-migration-maintainer]] (migration authoring).
+
+---
+
+**Related skills:** [schema-generator](../schema-generator/SKILL.md) · [db-migration-maintainer](../db-migration-maintainer/SKILL.md) · [workers-events](../workers-events/SKILL.md)

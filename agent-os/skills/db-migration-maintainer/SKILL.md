@@ -108,3 +108,7 @@ These are enforced by `pnpm db:migrate:lint` and cannot be overridden by the `--
 - Confusing this skill with **supabase-porting** (Edge Functions → Fastify)
 - `SET row_security = off` / `RESET row_security` inside any migration (use `SECURITY DEFINER` + `GRANT EXECUTE` instead)
 - Verifying RLS-touching migrations against remote Neon dev (must use local Docker Postgres 17, which is the only env that grants `core_be_app` and matches CI)
+
+---
+
+**Related skills:** [schema-generator](../schema-generator/SKILL.md) · [sql-design-guard](../sql-design-guard/SKILL.md) · [rls-tenant-isolation-guard](../rls-tenant-isolation-guard/SKILL.md)

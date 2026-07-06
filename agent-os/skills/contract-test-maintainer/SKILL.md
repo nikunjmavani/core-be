@@ -46,3 +46,7 @@ Runs in **Quality** CI (`pnpm test:contract`). Default `pnpm test` **excludes** 
 
 - **production-hardening-guard** — circuit breakers on external clients
 - **ci-investigator** — when Quality job contract step fails
+
+---
+
+**Related skills:** [chaos-test-maintainer](../chaos-test-maintainer/SKILL.md) · [test-generator](../test-generator/SKILL.md)

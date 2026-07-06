@@ -434,3 +434,7 @@ ALTER TABLE ... ADD CONSTRAINT chk_...
 CREATE TRIGGER trg_...
 ​```
 ````
+
+---
+
+**Related skills:** [schema-generator](../schema-generator/SKILL.md) · [db-migration-maintainer](../db-migration-maintainer/SKILL.md)

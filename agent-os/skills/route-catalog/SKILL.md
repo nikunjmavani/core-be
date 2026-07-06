@@ -199,3 +199,7 @@ After updating `docs/routes.txt`:
 3. **seed-maintainer** — align seeds when routes were added or removed.
 4. **test-generator** — domain e2e tests for new/changed routes.
 5. **`pnpm tsdoc:check`** — confirm coverage budget not regressed by any new exports added with the routes.
+
+---
+
+**Related skills:** [route-schema-doc-guard](../route-schema-doc-guard/SKILL.md) · [api-contract-guard](../api-contract-guard/SKILL.md) · [seed-maintainer](../seed-maintainer/SKILL.md)

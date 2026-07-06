@@ -133,3 +133,7 @@ Recommended additional H2 sections:
 
 - Worked examples already in the repo: every `<folder>.overview.md` under `src/`.
 - Architecture overview: [`docs/reference/architecture/documentation-system.md`](../../../docs/reference/architecture/documentation-system.md)
+
+---
+
+**Related skills:** [system-narrative-maintainer](../system-narrative-maintainer/SKILL.md) · [docs-maintainer](../docs-maintainer/SKILL.md)
