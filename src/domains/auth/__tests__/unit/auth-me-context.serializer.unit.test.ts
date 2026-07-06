@@ -22,6 +22,7 @@ const baseData = (overrides: Partial<AuthMeContextData> = {}): AuthMeContextData
     is_mfa_enabled: false,
     first_name: 'A',
     last_name: 'B',
+    job_title: null,
     avatar_url: null,
     status: 'ACTIVE',
     created_at: '2026-01-01T00:00:00.000Z',

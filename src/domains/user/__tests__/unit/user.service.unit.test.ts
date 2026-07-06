@@ -53,6 +53,7 @@ const userRow = {
   email: 'user@example.com',
   first_name: 'Test',
   last_name: 'User',
+  job_title: null,
   avatar_url: null,
   deleted_at: null,
   password_hash: 'hash',

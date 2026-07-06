@@ -441,6 +441,45 @@ jobs:
           echo "API image: ${api_image}"
           echo "Worker image: ${worker_image}"
 
+      - name: Wait for GHCR images to be pullable
+        # A manually-dispatched deploy (workflow_dispatch) can start before the
+        # Post-merge CI Docker build has pushed the commit-SHA image to GHCR.
+        # Railway then accepts the deploy but the deployment fails within seconds
+        # with an opaque "image could not be found" pull error (INITIALIZING →
+        # FAILED). In the normal merge-triggered path the deploy job
+        # `needs: docker-build-push`, so the image already exists and this probe
+        # passes on the first attempt (no added latency). On a premature dispatch
+        # we poll until the manifest appears (bounded) — converting a confusing
+        # hard failure into a short wait, and a clear, actionable error if the
+        # image never shows up within the timeout.
+        env:
+          API_IMAGE_REF: ${{ steps.ghcr_images.outputs.api_image }}
+          WORKER_IMAGE_REF: ${{ steps.ghcr_images.outputs.worker_image }}
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          timeout_seconds=900
+          interval_seconds=15
+          echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_ACTOR}" --password-stdin >/dev/null 2>&1
+
+          wait_for_image() {
+            local ref="$1" label="$2" waited=0
+            while ! docker buildx imagetools inspect "$ref" >/dev/null 2>&1; do
+              if [ "$waited" -ge "$timeout_seconds" ]; then
+                echo "::error title=GHCR image not found::${label} image ${ref} was not pullable after ${timeout_seconds}s. This image is built and pushed by Post-merge CI's Docker build job; a deploy dispatched before that job completes cannot find it. Re-run this deploy once the Docker build for this commit has finished."
+                return 1
+              fi
+              echo "  ${label} image not present yet (${ref}); waited ${waited}s, retrying in ${interval_seconds}s…"
+              sleep "$interval_seconds"
+              waited=$((waited + interval_seconds))
+            done
+            echo "  ✓ ${label} image present: ${ref}"
+          }
+
+          wait_for_image "${API_IMAGE_REF}" "api"
+          wait_for_image "${WORKER_IMAGE_REF}" "worker"
+
       - name: Run database migrations
         # `pnpm db:migrate` only needs DATABASE_URL/DATABASE_MIGRATION_URL,
         # but the migrate script transitively imports `env.config.ts` which

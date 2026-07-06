@@ -182,6 +182,26 @@ describe('User Domain — Integration', () => {
       });
       expect(response.statusCode).toBe(200);
     });
+
+    it('should update name and job_title together (onboarding profile)', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const response = await injectAuthenticated(app, {
+        method: 'PATCH',
+        url: testApiPath('/users/me'),
+        token,
+        payload: { first_name: 'NIK', last_name: 'PATEL', job_title: 'CEO' },
+      });
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as {
+        data: { first_name: string | null; last_name: string | null; job_title: string | null };
+      };
+      expect(body.data).toMatchObject({
+        first_name: 'NIK',
+        last_name: 'PATEL',
+        job_title: 'CEO',
+      });
+    });
   });
 
   describe('DELETE /api/v1/users/me', () => {
