@@ -32,7 +32,7 @@ import {
   resolveDefaultActiveOrganizationPublicId,
   findUserActiveOrganizationByPublicId,
   findUserActiveOrganizationPublicIdByInternalId,
-  resolvePersonalOrganization,
+  ensurePersonalOrganization,
 } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 import type { UserAuthRecord } from '@/domains/user/user.types.js';
 
@@ -53,7 +53,11 @@ const IP_FAILED_LOGIN_KEY_PREFIX = 'auth:failed_login:ip:';
  * - **Notes:** the session is created server-side; clients use the session cookie for refresh.
  */
 export type LoginResult =
-  | { access_token: string; session_public_id: string; session_refresh_secret: string }
+  | {
+      access_token: string;
+      session_public_id: string;
+      session_refresh_secret: string;
+    }
   | { mfa_required: true; mfa_session_token: string };
 
 /**
@@ -203,7 +207,10 @@ export class AuthService {
     // First factor verified — refuse to issue (or escalate to MFA for) a session
     // for a suspended/locked/deleted account before any token is minted. Passing the row
     // (not just `status`) also rejects soft-deleted users (sec-U1 defense in depth).
-    assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
+    assertUserAccountActive({
+      status: user.status,
+      deleted_at: user.deleted_at,
+    });
 
     // Correct password clears the failure counter and lifts any active lock so the owner is
     // never held out by attacker-driven failed attempts.
@@ -252,7 +259,10 @@ export class AuthService {
   async resetPassword(body: unknown, ipAddress: string, userAgent?: string): Promise<LoginResult> {
     const user = await this.authMethodService.resetPassword(body);
     // The password was reset, but a suspended/locked/deleted account is never issued a session.
-    assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
+    assertUserAccountActive({
+      status: user.status,
+      deleted_at: user.deleted_at,
+    });
     return completeFirstFactorAuth({
       user: {
         id: user.id,
@@ -337,7 +347,10 @@ export class AuthService {
       nextAccessToken: jsonWebToken,
     });
 
-    return { access_token: jsonWebToken, refresh_secret: rotated.refresh_secret };
+    return {
+      access_token: jsonWebToken,
+      refresh_secret: rotated.refresh_secret,
+    };
   }
 
   /**
@@ -375,7 +388,10 @@ export class AuthService {
   }): Promise<{ access_token: string; organization_public_id: string }> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (user.status !== 'ACTIVE') throw new UnauthorizedError('errors:accountNotActive');
-    const personal = await resolvePersonalOrganization(user.id);
+    // Self-heal: provision the personal org on demand when personal is enabled but missing,
+    // so this can no longer 404 for a personal-enabled deployment. Returns undefined only when
+    // personal organizations are disabled → 404 as before.
+    const personal = await ensurePersonalOrganization(user.id);
     if (!personal) throw new NotFoundError('Personal organization');
     return this.mintForActiveOrganization(user, sessionPublicId, personal);
   }
@@ -404,6 +420,9 @@ export class AuthService {
       nextAccessToken: jsonWebToken,
       activeOrganizationId: organization.id,
     });
-    return { access_token: jsonWebToken, organization_public_id: organization.public_id };
+    return {
+      access_token: jsonWebToken,
+      organization_public_id: organization.public_id,
+    };
   }
 }

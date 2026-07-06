@@ -11,7 +11,7 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { buildUserAvatarKeyPrefix } from '@/domains/upload/upload.constants.js';
 import type { UserRepository } from './user.repository.js';
 import { env } from '@/shared/config/env.config.js';
-import { resolvePersonalOrganizationPublicId } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
+import { ensurePersonalOrganizationPublicId } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 import { UserSerializer } from './user.serializer.js';
 import { resolveStoredMediaReadUrl } from '@/shared/utils/infrastructure/media-url.util.js';
 import {
@@ -299,7 +299,10 @@ export class UserService {
   async findOrCreateInvitedByEmail(data: { email: string }): Promise<UserAuthRecord> {
     const existing = await this.findByEmail(data.email);
     if (existing && !existing.deleted_at) return existing;
-    return this.createFromOAuth({ email: data.email, is_email_verified: false });
+    return this.createFromOAuth({
+      email: data.email,
+      is_email_verified: false,
+    });
   }
 
   /**
@@ -313,7 +316,10 @@ export class UserService {
    * receives is the proof-of-email-control that flips `is_email_verified` on login.
    */
   async createForEmailCode(data: { email: string }): Promise<UserAuthRecord> {
-    return this.createFromOAuth({ email: data.email, is_email_verified: false });
+    return this.createFromOAuth({
+      email: data.email,
+      is_email_verified: false,
+    });
   }
 
   async updatePassword(public_id: string, password_hash: string): Promise<UserAuthRecord | null> {
@@ -447,8 +453,11 @@ export class UserService {
       this.repository.findByPublicId(publicId),
     );
     if (!user || user.deleted_at) throw new NotFoundError('User');
+    // Self-heal: when personal orgs are enabled, provision on demand if missing so
+    // `personal_organization_id` is reliably non-null (never dead-ends onboarding). When
+    // personal is disabled this returns undefined and we report null, unchanged.
     const personalOrganizationId = env.PERSONAL_ORGANIZATION_ENABLED
-      ? ((await resolvePersonalOrganizationPublicId(user.id)) ?? null)
+      ? ((await ensurePersonalOrganizationPublicId(user.id)) ?? null)
       : null;
     return {
       ...(await this.toUserOutput(user)),
