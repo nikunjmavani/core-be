@@ -173,7 +173,18 @@ if (existsSync(catalogFile)) {
   }
 }
 
-// ── Check 7: every agent file has valid frontmatter; model is inherit unless intentional ──
+// ── Check 7: every agent file has valid frontmatter; deep reasoners stay on inherit ──
+// Model routing is intentional (Task 6): mechanical checkers are pinned to a cheap
+// model (e.g. haiku) — that is fine and does NOT warn. Only a *deep reasoner* pinned
+// off `inherit` warns, since under-powering a reasoning-heavy review is the real risk.
+const deepReasoners = new Set([
+  'verifier',
+  'sql-design-reviewer',
+  'production-hardening-reviewer',
+  'production-reviewer',
+  'ci-investigator',
+  'stack-monitor',
+])
 for (const file of agentFiles) {
   const text = readText(join(agentOsDirectory, 'agents', file))
   const agentName = basename(file, '.md')
@@ -182,8 +193,8 @@ for (const file of agentFiles) {
   const model = frontmatterField(text, 'model')
   if (!name || name !== agentName) error('agent-frontmatter', `agents/${file} name "${name ?? '∅'}" != "${agentName}"`)
   if (!description) error('agent-frontmatter', `agents/${file} missing frontmatter \`description\``)
-  if (model && model !== 'inherit')
-    warn('agent-model', `agents/${file} pins model "${model}" — prefer \`inherit\` unless deliberately overridden`)
+  if (model && model !== 'inherit' && deepReasoners.has(agentName))
+    warn('agent-model', `agents/${file} pins model "${model}" but is a deep reasoner — prefer \`inherit\` so it keeps frontier reasoning`)
 }
 
 // ── Check 12: read-only agents must enforce read-only via a tools allowlist ──

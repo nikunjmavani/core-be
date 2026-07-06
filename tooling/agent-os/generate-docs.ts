@@ -17,7 +17,7 @@
  * Invoked by tooling/agent-os/generate.ts (so `pnpm agent-os:generate` /
  * `:generate:check` cover these docs alongside the hook/mcp derivations).
  */
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 const repositoryRoot = process.cwd();
@@ -177,18 +177,20 @@ function buildAgentsCatalog(): DocResult {
     const text = readText(join(agentsDirectory, file));
     const name = frontmatterField(text, 'name') ?? basename(file, '.md');
     const model = frontmatterField(text, 'model') ?? 'inherit';
+    const rationale = unquote(frontmatterField(text, 'modelRationale') ?? '');
+    const modelCell = rationale ? `\`${model}\` — ${rationale}` : `\`${model}\``;
     const wraps = unquote(frontmatterField(text, 'wrapsSkill') ?? '*(inline)*');
     const useWhen = unquote(frontmatterField(text, 'useWhen') ?? '');
     const inPipelines = pipelineOf(name);
     const pipelineCell = inPipelines.length ? inPipelines.join(', ') : '—';
-    return `| **${name}** | [\`agent-os/agents/${file}\`](../agents/${file}) | ${cell(wraps)} | \`${model}\` | ${pipelineCell} | ${cell(useWhen)} |`;
+    return `| **${name}** | [\`agent-os/agents/${file}\`](../agents/${file}) | ${cell(wraps)} | ${cell(modelCell)} | ${pipelineCell} | ${cell(useWhen)} |`;
   });
   const body = [
     `All ${files.length} project agents — each read-only. Generated from \`agents/*.md\` frontmatter`,
     'and `agents/pipelines.json`. See [platform-access.md](platform-access.md) for how to invoke on each platform.',
     '',
-    '| Agent | File | Wraps skill | Model | Pipelines | Use when |',
-    '| ----- | ---- | ----------- | ----- | --------- | -------- |',
+    '| Agent | File | Wraps skill | Model (routing rationale) | Pipelines | Use when |',
+    '| ----- | ---- | ----------- | ------------------------- | --------- | -------- |',
     ...rows,
   ].join('\n');
 
