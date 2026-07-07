@@ -1,107 +1,48 @@
 # Release versioning (conventional commits → release-please)
 
-How a version number is chosen and a release is cut in core-be. You never set the
-version by hand: the **conventional-commit prefix** on each commit decides the bump,
-and **[release-please](https://github.com/googleapis/release-please)** does the math
-and keeps a "Release PR" open. Merging that PR cuts the release.
+How a version number is chosen and a release is cut in core-be. You never set the version by hand: the
+**conventional-commit prefix** on each squash-merged PR decides the bump, and
+**[release-please](https://github.com/googleapis/release-please)** does the math and keeps one Release PR
+open. **Merging that PR cuts the release.**
 
-For branch naming and the PR flow see [git-workflow.md](git-workflow.md). For CI/CD
-see [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md).
+Single-trunk model: one stable channel on `main` (no `-dev.N` prereleases, no dual manifest). For
+branch naming and the PR flow see [git-workflow.md](git-workflow.md); for CI/CD see
+[cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md).
 
 ---
 
-## Cheat-sheet: commit prefix → version bump
+## The version bump
 
-Standard semantic versioning. Among all commits since the last release, the
-**highest** bump wins.
+Each squash commit's conventional prefix (the PR title) drives the next version:
 
-| Commit message | Bump | Example (from `4.6.0`) |
+| Prefix | Bump | Example |
 | --- | --- | --- |
-| `fix: …` | **patch** | `4.6.0 → 4.6.1` |
-| `feat: …` | **minor** | `4.6.0 → 4.7.0` |
-| `feat!: …` or a `BREAKING CHANGE:` footer | **major** | `4.6.0 → 5.0.0` |
-| `docs:` · `chore:` · `refactor:` · `perf:` · `ci:` · `test:` · `build:` · `style:` | none on its own | changelog entry only |
+| `fix:` | patch | 4.10.0 → 4.10.1 |
+| `feat:` | minor | 4.10.0 → 4.11.0 |
+| `feat!:` / `fix!:` / `BREAKING CHANGE:` footer | major | 4.10.0 → 5.0.0 |
+| `chore:` / `ci:` / `docs:` / `test:` / `build:` / `style:` | none | (rolls into the next release's changelog) |
 
-- **You never type a version number.** The prefix is the whole decision; release-please
-  computes the number and writes the changelog.
-- **Major is opt-in only.** A `!` after the type (`feat!: drop the v1 auth route`) **or**
-  a `BREAKING CHANGE: …` line in the commit body. Without one of those it never crosses a major.
-- **Force an exact version (rare).** Add a `Release-As: 5.0.0` footer to a commit.
+To force a specific version, put a `Release-As: X.Y.Z` footer in the PR body (the squash settings are
+`PR_TITLE` + `PR_BODY`, so the footer survives).
 
-> The repo is past `1.0`, so the `bump-minor-pre-major` / `bump-patch-for-minor-pre-major`
-> flags in the release-please config are no-ops (they only affect `0.x`).
+## The single config
 
----
-
-## Who decides what
-
-| Decision | Who | How |
-| --- | --- | --- |
-| Bump size (patch / minor / major) | the commit author | the `type:` prefix |
-| When to cut the release | whoever merges the Release PR | merge `chore(<channel>): release X.Y.Z` |
-
----
+| File | Role |
+| --- | --- |
+| [`.github/release-please/config.json`](../../.github/release-please/config.json) | stable channel (`prerelease: false`, `draft: false`) |
+| [`.github/release-please/manifest.json`](../../.github/release-please/manifest.json) | last released version (release-please's source of truth) |
+| [`CHANGELOG.md`](../../CHANGELOG.md) | the single changelog (the old `-dev.N` history is archived at the bottom) |
 
 ## The flow
 
-```mermaid
-flowchart TB
-  commit["a commit<br/>fix: / feat: / feat!:"] --> dev[merge to dev]
-  dev --> devRp[release-please reads prefixes on dev]
-  devRp --> devPr["dev Release PR<br/>chore(dev): release X.Y.Z-dev.N"]
-  devPr --> devRel["tag + prerelease<br/>vX.Y.Z-dev.N"]
-  devRel --> promote[merge dev to main]
-  promote --> mainRp[release-please reads prefixes on main]
-  mainRp --> mainPr["main Release PR<br/>chore(main): release X.Y.Z"]
-  mainPr --> mainRel["tag + published stable release<br/>vX.Y.Z"]
-  mainRel --> deploy[deploy production]
-  deploy --> backmerge["if deploy succeeds:<br/>back-merge main to dev + reseed"]
-```
+1. PRs squash-merge into `main`. On each merge, post-merge CI's `release-please` job (which reads its
+   PAT via the **development** GitHub Environment) refreshes one open **`chore: release X.Y.Z` Release
+   PR** whose diff previews the version bump + changelog. It is **not** auto-merged.
+2. **Merge the Release PR** — the ship button. release-please tags `vX.Y.Z`, publishes a GitHub Release
+   (created with the PAT so it triggers the next workflow), and attaches the SBOM.
+3. The published release fires [`release-deploy.yml`](../../.github/workflows/release-deploy.yml):
+   tag-SHA-pinned, it deploys production behind the environment reviewer approval and publishes
+   production docs.
 
-1. You merge `fix:` / `feat:` / `feat!:` commits to `dev`.
-2. release-please keeps **one dev Release PR** open with the computed prerelease version
-   and changelog; it updates as more commits land.
-3. Merging the dev Release PR cuts the prerelease tag + GitHub prerelease and deploys the
-   development environment.
-4. When `dev` is promoted to `main`, release-please keeps **one stable Release PR** open.
-5. Merging the stable Release PR immediately cuts the stable tag + published GitHub Release
-   because the release commit is already on `main`; deploy success does not decide whether
-   that version exists.
-6. Production deploy runs after the stable release commit is on `main`.
-7. If production deploy succeeds, the workflow back-merges `main` into `dev` and reseeds
-   `dev` to the next prerelease line. If deploy fails, the stable release remains the
-   release boundary and the back-merge waits until the deployment issue is fixed.
-
----
-
-## Two channels: dev (prerelease) and main (stable)
-
-| Channel | Branch | Versions | Config |
-| --- | --- | --- | --- |
-| Prerelease | `dev` | `X.Y.Z-dev.N` | [`config.dev.json`](../../.github/release-please/config.dev.json) (`prerelease: true`, `versioning: "prerelease"`) |
-| Stable | `main` | `X.Y.Z` | [`config.json`](../../.github/release-please/config.json) |
-
-- **dev** publishes a prerelease immediately on each Release-PR merge and advances the
-  active `-dev.N` line.
-- **main** publishes the stable release immediately on each Release-PR merge so
-  release-please can recognize the latest stable tag and will not re-count a draft
-  release into another release PR. The automated `main → dev` back-merge dispatch still
-  waits for production deploy success in
-  [`post-merge-ci.yml`](../../.github/workflows/post-merge-ci.yml).
-- After a stable `main` release, an automated back-merge reseeds `dev` to the next minor
-  (ship `4.7.0` → `dev` resumes at `4.8.0-dev.0`).
-
----
-
-## How it's wired
-
-- The **Release Please** job in
-  [`post-merge-ci.yml`](../../.github/workflows/post-merge-ci.yml) runs on every push to
-  `dev` / `main`.
-- It authenticates with a **`RELEASE_PLEASE_TOKEN`** PAT (`repo` + `workflow` scopes),
-  read from the matching GitHub Environment — the default `GITHUB_TOKEN` cannot create
-  releases. Provision it through `.env.<environment>` + `pnpm github:sync`; see
-  [environment-variables.md](../deployment/runbooks/environment-variables.md).
-- If a merged Release PR ever fails to release (e.g. the token is missing), the PR sticks
-  on the `autorelease: pending` label and retries every push. Fix the token, then either
-  re-run the job or relabel the PR `autorelease: tagged` once the release exists.
+There is no promotion and no back-merge — the version shape is `X.Y.Z` only; environments (not the
+version) distinguish development from production.

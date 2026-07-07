@@ -404,7 +404,7 @@ Local SonarQube quality gate (pre-commit): `pnpm sonar:up` / `sonar:scan` / `son
 - `pnpm docs:upload:scalar` — publish the OpenAPI document to the Scalar Registry (requires `SCALAR_API_KEY` + `SCALAR_NAMESPACE`; optional `SCALAR_SLUG`, default `core-be`)
 - `pnpm docs:upload:hosted` — run both hosted uploads (Postman workspace + Scalar Registry)
 - `pnpm docs:all` — generate OpenAPI spec + Postman Collection in one step
-- `pnpm docs:breaking` — local mirror of the CI oasdiff breaking-change gate (pinned checksum-verified binary in `.cache/oasdiff/`; base spec from `origin/dev` worktree; honors `.github/oasdiff/breaking-changes-ignore.txt`)
+- `pnpm docs:breaking` — local mirror of the CI oasdiff breaking-change gate (pinned checksum-verified binary in `.cache/oasdiff/`; base spec from `origin/main` worktree; honors `.github/oasdiff/breaking-changes-ignore.txt`)
 - `pnpm test` — run all Vitest tests (serial)
 - `pnpm test:unit` — unit only (`--project unit` in `tooling/vitest/projects.ts`: `src/tests/unit` + domain `__tests__/unit/`)
 - `pnpm test:integration` — `src/tests/integration`

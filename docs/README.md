@@ -70,8 +70,9 @@ flowchart TB
 
 | Doc                                                  | Description                                                                              |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| [process/git-workflow.md](process/git-workflow.md)   | Branch naming, PR flow, conventional commits.                                            |
-| [process/release-versioning.md](process/release-versioning.md) | Commit prefix → version bump (patch/minor/major), `Release-As` override, dev/main release channels. |
+| [process/git-workflow.md](process/git-workflow.md)   | Single-trunk branch model, squash-merge PR flow, conventional commits.                   |
+| [process/release-versioning.md](process/release-versioning.md) | Commit prefix → version bump (patch/minor/major), `Release-As` override, single stable channel; merge the Release PR to ship. |
+| [process/delivery-model-migration-plan.md](process/delivery-model-migration-plan.md) | The `dev`+`main` → single-`main` trunk migration: decisions, CI/CD lanes, phased execution. |
 | [process/pr-review.md](process/pr-review.md)         | Human + agent PR review checklist, severity legend, doc-sync map.                        |
 | [process/dr-runbook.md](process/dr-runbook.md)       | Disaster recovery — RTO 1h, RPO 15m, failover, quarterly review.                         |
 | [process/backup-drills.md](process/backup-drills.md) | Monthly restore drill — required automated RTO gate + optional manual evidence workflow. |
@@ -90,8 +91,9 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [deployment/setup/setup-token-instructions.md](deployment/setup/setup-token-instructions.md)                 | Token sources and `.setup-credentials` variable names.                                                    |
 | [deployment/setup/railway-github-cli-setup.md](deployment/setup/railway-github-cli-setup.md)                 | Manual Railway + GitHub CLI setup.                                                                |
 | [deployment/ci-cd/cicd-and-deployment.md](deployment/ci-cd/cicd-and-deployment.md)                           | CI pipeline, Railway deploy, GitHub secrets.                                                      |
-| [deployment/ci-cd/branch-protection.md](deployment/ci-cd/branch-protection.md)                               | Required CI checks for `main` / `dev`.                                                            |
-| [deployment/runbooks/runbook-dev-to-production.md](deployment/runbooks/runbook-dev-to-production.md)         | Local → production (gates, path-to-production skill, env, deploy, smoke).                         |
+| [deployment/ci-cd/branch-protection.md](deployment/ci-cd/branch-protection.md)                               | Required CI checks for `main` (single trunk); `release/*` hotfix ruleset.                         |
+| [deployment/runbooks/hotfix-release.md](deployment/runbooks/hotfix-release.md)                               | Ship an urgent fix (normal `fix:` release, or `release/*` patch for an older version).           |
+| [deployment/runbooks/runbook-dev-to-production.md](deployment/runbooks/runbook-dev-to-production.md)         | **Retired** (single-trunk) — pointer to the current release flow.                                |
 | [deployment/runbooks/environment-variables.md](deployment/runbooks/environment-variables.md)                 | Per-key lifecycle: bootstrap, add/rename/remove, sync to GitHub, troubleshoot.                    |
 | [deployment/runbooks/add-new-environment.md](deployment/runbooks/add-new-environment.md)                     | Per-environment plumbing: branch ↔ GitHub Environment ↔ `NODE_ENV` 1:1 invariant.                 |
 | [deployment/runbooks/resource-limits.md](deployment/runbooks/resource-limits.md)                             | Railway/K8s memory, `NODE_OPTIONS`, Postgres pool budget.                                         |
