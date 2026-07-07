@@ -110,7 +110,8 @@ on:
         default: false
 
 concurrency:
-  group: railway-deploy-${{ inputs.target_branch || github.ref_name }}-${{ inputs.merge_commit_sha || github.sha }}
+  # Keyed on the target ENVIRONMENT (single-trunk: environment ≠ branch), not the branch.
+  group: railway-deploy-${{ inputs.github_environment || inputs.target || 'deploy' }}-${{ inputs.merge_commit_sha || github.sha }}
   cancel-in-progress: false
 
 permissions:
@@ -127,54 +128,39 @@ jobs:
     outputs:
       environment: ${{ steps.map.outputs.environment }}
     steps:
-      - name: Map branch or input to environment
-        # Single-trunk model (see docs/deployment/runbooks/add-new-environment.md):
-        # the environment is chosen EXPLICITLY, never derived from the branch.
-        #   github_environment input → used verbatim (validated)   [precedence 1]
-        #   workflow_dispatch target → used verbatim               [precedence 2]
-        #   fallback: main → development (trunk default, D5); production is NEVER
-        #     implicit — release-deploy.yml passes github_environment=production.
+      - name: Resolve environment (explicit — never from the branch)
+        # Single-trunk: `main` is the only branch and it deploys to EACH environment —
+        # development on every merge, production on release. The environment is therefore
+        # ALWAYS chosen EXPLICITLY, never derived from the branch (no `github.ref_name ==
+        # 'main'` / `main)` case). Callers pass it directly:
+        #   github_environment input  → post-merge-ci (development), release-deploy (production)
+        #   workflow_dispatch target  → manual deploy / rollback
+        # If neither is supplied the deploy fails fast rather than guessing a branch default.
         #
-        # All `${{ ... }}` are forwarded via the env: block below so they
-        # arrive in the shell as opaque variables (no injection via crafted
-        # branch/input names). See GitHub security hardening docs:
+        # `${{ ... }}` are forwarded via env: so they arrive as opaque variables (no
+        # injection via crafted input names). See GitHub security hardening docs:
         # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
         id: map
         env:
           GITHUB_ENVIRONMENT_INPUT: ${{ inputs.github_environment }}
           EVENT_NAME: ${{ github.event_name }}
           TARGET_INPUT: ${{ inputs.target }}
-          TARGET_BRANCH_INPUT: ${{ inputs.target_branch }}
-          PULL_REQUEST_BASE_REF: ${{ github.event.pull_request.base.ref }}
-          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          # Precedence 1: explicit environment input (validated against the allow-list).
           if [ -n "$GITHUB_ENVIRONMENT_INPUT" ]; then
-            case "$GITHUB_ENVIRONMENT_INPUT" in
-              development|production) echo "environment=$GITHUB_ENVIRONMENT_INPUT" >> "$GITHUB_OUTPUT" ;;
-              *) echo "::error::Invalid github_environment: $GITHUB_ENVIRONMENT_INPUT (expected development|production)" && exit 1 ;;
-            esac
-          # Precedence 2: manual dispatch target. `github.event_name` propagates into
-          # reusable workflows, so a dispatched CALLER (post-merge-ci) reports
-          # workflow_dispatch here even without a `target` — hence the non-empty guard
-          # (its absence broke the 4.8.0 release-resume dispatch).
+            environment="$GITHUB_ENVIRONMENT_INPUT"
           elif [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$TARGET_INPUT" ]; then
-            case "$TARGET_INPUT" in
-              development|production) echo "environment=$TARGET_INPUT" >> "$GITHUB_OUTPUT" ;;
-              *) echo "::error::Invalid target: $TARGET_INPUT (expected development|production)" && exit 1 ;;
-            esac
-          # Fallback: main is the branch's canonical environment = production (matches
-          # the generated BRANCH_ENV_MAP and the env-consistency checker). This branch
-          # is INERT in practice — every caller passes github_environment explicitly
-          # (post-merge → development, release-deploy → production, rollback → its input),
-          # so a deploy never actually derives its environment from the branch.
+            # `github.event_name` propagates into reusable workflows, so a dispatched
+            # CALLER reports workflow_dispatch here even without a `target` — hence the
+            # non-empty guard (its absence broke the 4.8.0 release-resume dispatch).
+            environment="$TARGET_INPUT"
           else
-            case "${TARGET_BRANCH_INPUT:-${PULL_REQUEST_BASE_REF:-$REF_NAME}}" in
-              main) echo "environment=production" >> "$GITHUB_OUTPUT" ;;
-              *)    echo "::error::Unsupported branch for deploy; pass github_environment explicitly" && exit 1 ;;
-            esac
+            echo "::error::No deploy environment specified. Pass the github_environment input (development|production) or the workflow_dispatch target — the environment is never derived from the branch." && exit 1
           fi
+          case "$environment" in
+            development|production) echo "environment=$environment" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::Invalid environment: $environment (expected development|production)" && exit 1 ;;
+          esac
 
   deploy:
     name: Deploy (${{ needs.resolve-environment.outputs.environment }})
