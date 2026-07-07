@@ -1,6 +1,6 @@
 # Weekly lightweight restore smoke drill — catches restore/migrate regressions 4x faster
 # than the monthly RTO drill, without the full RTO overhead. Creates a throwaway Neon PITR
-# branch from the workflow ref (main/dev), runs migrate + auth integration smoke, then deletes
+# branch from the workflow ref (main), runs migrate + auth integration smoke, then deletes
 # the branch. No RTO assertion. See docs/process/backup-drills.md.
 
 name: Weekly restore smoke drill

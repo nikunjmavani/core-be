@@ -1,6 +1,6 @@
 # GitHub automation (core-be)
 
-Long-lived branches: **`dev`** (development), **`main`** (production).
+Long-lived branch: **`main`** (single trunk) — deploys to the development environment on every merge and to production on release.
 
 Workflow **file names** describe *what* runs; the YAML `name:` field is what appears in the GitHub Actions UI and in required status checks (`{workflow name} / {job name}`).
 
@@ -8,9 +8,9 @@ Workflow **file names** describe *what* runs; the YAML `name:` field is what app
 
 | What it does | File | GitHub UI name (`name:`) | When it runs | Required on PR? |
 | ------------ | ---- | ------------------------ | ------------ | --------------- |
-| PR merge gate (lint, typecheck, unit, build) | [pr-ci.yml](workflows/pr-ci.yml) | **PR CI** | `pull_request` → `main`, `dev` | Yes (7 parallel jobs) |
+| PR merge gate (lint, typecheck, unit, build) | [pr-ci.yml](workflows/pr-ci.yml) | **PR CI** | `pull_request` → `main` | Yes (`Quality gate` aggregate) |
 | PR title, labels, `.env` guard | [pr-governance.yml](workflows/pr-governance.yml) | **PR Governance** | Every PR event | Yes (`Checks`) |
-| Post-merge pipeline (Docker, deploy, release) | [post-merge-ci.yml](workflows/post-merge-ci.yml) | **Post-merge CI** | PR merged into `main`/`dev`; manual | No |
+| Post-merge pipeline (Docker, deploy, release) | [post-merge-ci.yml](workflows/post-merge-ci.yml) | **Post-merge CI** | PR merged into `main`; manual | No |
 | Docs lint + link check (markdown only) | [pr-docs-lane.yml](workflows/pr-docs-lane.yml) | **Docs lane** | PR that touches `*.md` | No |
 | Manual Railway deploy (emergency) | [reusable-railway-deploy.yml](workflows/reusable-railway-deploy.yml) | **Reusable — Railway deploy** | `workflow_dispatch` only | No |
 | Nightly k6 load + SLO gate | [scheduled-k6-load-slo.yml](workflows/scheduled-k6-load-slo.yml) | **Scheduled k6 API load & SLO** | Daily 02:00 UTC + manual | No |
@@ -44,11 +44,11 @@ Workflow **file names** describe *what* runs; the YAML `name:` field is what app
 - [workflows/dependabot-ci-triage.yml](workflows/dependabot-ci-triage.yml) — GitHub issue when PR CI fails on a Dependabot PR
 - [labeler.yml](labeler.yml) — path-based PR labels (attached by PR Governance)
 - [labels.yml](labels.yml) — manual reference for label definitions (name + pastel color + description)
-- [release-please/](release-please/) — release-please configs + manifests for `main` (stable) and `dev` (prerelease) channels
-- [rulesets/](rulesets/) — branch protection JSON for `main`, `dev`
+- [release-please/](release-please/) — release-please config + manifest for `main` (single stable channel)
+- [rulesets/](rulesets/) — branch protection JSON for `main`
 - [CODEOWNERS](CODEOWNERS) — review assignments
 
-See [docs/deployment/ci-cd/branch-protection.md](../docs/deployment/ci-cd/branch-protection.md) for required check names (must match `PR CI / …` and `PR Governance / …`).
+See [docs/deployment/ci-cd/branch-protection.md](../docs/deployment/ci-cd/branch-protection.md) for the required checks (`Quality gate` + `Checks`).
 
 ## Node.js 24 (Actions runtime + project)
 

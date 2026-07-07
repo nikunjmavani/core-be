@@ -36,7 +36,7 @@ flowchart LR
 | **RTO clock** | Starts at branch creation; ends after smoke passes |
 | **Cleanup** | Ephemeral branch deleted (also has `expires_at` TTL) |
 
-Neon branch names must match git long-lived branches (`main`, `dev`).
+Neon branch names must match the git long-lived branch (`main`).
 
 ---
 

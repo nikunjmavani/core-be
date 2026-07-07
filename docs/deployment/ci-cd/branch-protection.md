@@ -18,7 +18,7 @@ trunk), and how that maps to workflows and committed ruleset JSON under
 
 ## Branch model
 
-Long-lived branches **`main`** and **`dev`** align with Railway environments (production, development). Typical promotion path:
+`main` is the only long-lived branch (single trunk) and deploys to both Railway environments (development on merge, production on release). Feature, fix, and hotfix branches merge **directly** into `main` via squash-merged PRs — there is no `dev` branch and no promotion:
 
 ```mermaid
 flowchart LR
@@ -28,18 +28,14 @@ flowchart LR
     hotfixBranches["hotfix/*"]
   end
 
-  subgraph longlived [Long-lived branches]
-    devBranch[dev]
-    mainBranch[main]
-  end
+  mainBranch[main]
 
-  featureBranches --> devBranch
-  fixBranches --> devBranch
-  devBranch --> mainBranch
+  featureBranches --> mainBranch
+  fixBranches --> mainBranch
   hotfixBranches --> mainBranch
 ```
 
-Hotfixes merge **`hotfix/* → main`** first; then sync **`main → dev`** so long-lived branches stay aligned (see [Git workflow](../../process/git-workflow.md)).
+Hotfixes are ordinary `fix/*` (or `hotfix/*`) PRs that **fix-forward** to `main` (see [Git workflow](../../process/git-workflow.md)) — there is no `main → dev` sync.
 
 ---
 
@@ -108,23 +104,23 @@ Manual emergency redeploy: [reusable-railway-deploy.yml](../../../.github/workfl
 
 ---
 
-## Ruleset policy summary (by branch)
+## Ruleset policy summary
 
-These settings match the committed JSON files in [`.github/rulesets/`](../../../.github/rulesets/). Adjust there and re-import if policy changes.
+These settings match the committed [`main.json`](../../../.github/rulesets/main.json) — the only ruleset. Adjust there and re-sync (`pnpm github:sync`) if policy changes.
 
-| Rule | `main` | `dev` |
-| ---- | ------ | ----- |
-| Required approving reviews | 1 | 0 (solo maintainer — status checks still block merge) |
-| Require CODEOWNER review | Yes ([CODEOWNERS](../../../.github/CODEOWNERS)) | No |
-| Dismiss stale approvals on push | Yes | No |
-| Require approval on last push | Yes | No |
-| Require conversation resolution | Yes | Yes |
-| Allowed merge methods | Merge commit only | Squash only |
-| Require linear history | No | No |
-| Require signed commits | Yes | No |
-| Block force-push (`non_fast_forward`) | Yes | Yes |
-| Block branch deletion | Yes | Yes |
-| Required status checks | `Quality gate` (pr-ci aggregate) + `Checks` (pr-governance) | Same |
+| Rule | `main` |
+| ---- | ------ |
+| Required approving reviews | 0 (solo maintainer — status checks still block merge) |
+| Require CODEOWNER review | No |
+| Dismiss stale approvals on push | No |
+| Require approval on last push | No |
+| Require conversation resolution | Yes |
+| Allowed merge methods | Squash only |
+| Require linear history | Yes |
+| Require signed commits | Yes |
+| Block force-push (`non_fast_forward`) | Yes |
+| Block branch deletion | Yes |
+| Required status checks | `Quality gate` (pr-ci aggregate) + `Checks` (pr-governance), strict up-to-date |
 
 **Signed commits on `main`:** Contributors must use [verified signatures](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification). Teams without signing enabled should temporarily relax `required_signatures` in `main.json` until onboarding is complete.
 
@@ -133,7 +129,7 @@ These settings match the committed JSON files in [`.github/rulesets/`](../../../
 ## Apply rulesets (GitHub UI)
 
 1. Repository → **Settings** → **Rules** → **Rulesets** → **New ruleset** → **New branch ruleset**.
-2. Target branches: **`main`** (or **`dev`**).
+2. Target branch: **`main`**.
 3. Add rules matching the table above and the corresponding JSON file under [`.github/rulesets/`](../../../.github/rulesets/).
 4. Set enforcement to **Active** (use **Evaluate** on Enterprise first if you want dry-run insights).
 
@@ -166,10 +162,6 @@ Each **`POST`** creates a **new** ruleset. Do not run these repeatedly without d
 gh api --method POST repos/OWNER/REPO/rulesets \
   -H "Accept: application/vnd.github+json" \
   --input .github/rulesets/main.json
-
-gh api --method POST repos/OWNER/REPO/rulesets \
-  -H "Accept: application/vnd.github+json" \
-  --input .github/rulesets/dev.json
 ```
 
 **Updating an existing ruleset:** use `PATCH /repos/{owner}/{repo}/rulesets/{ruleset_id}` with the same JSON shape (omit fields you do not want to change), or edit in the UI. Listing IDs: `gh api repos/OWNER/REPO/rulesets`.

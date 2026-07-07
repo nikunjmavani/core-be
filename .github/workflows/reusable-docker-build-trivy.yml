@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       target_branch:
-        description: Protected branch that received the merge (main or dev)
+        description: Protected branch that received the merge (main)
         required: true
         type: string
     outputs:
@@ -26,12 +26,11 @@ on:
         type: string
         default: ''
       target_branch:
-        description: Branch context (main or dev)
+        description: Branch context (main)
         required: true
         type: choice
         options:
           - main
-          - dev
 
 permissions:
   contents: read
@@ -230,7 +229,7 @@ jobs:
         if: contains(fromJSON(env.PROTECTED_BRANCHES_JSON), env.TARGET_BRANCH)
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
-      - name: Push images to GHCR (main + dev)
+      - name: Push images to GHCR (main)
         id: push
         if: contains(fromJSON(env.PROTECTED_BRANCHES_JSON), env.TARGET_BRANCH)
         run: |
@@ -260,14 +259,6 @@ jobs:
             docker push "${WORKER_IMAGE}:latest"
             echo "Pushed ${API_IMAGE}:latest"
             echo "Pushed ${WORKER_IMAGE}:latest"
-          fi
-          if [ "${TARGET_BRANCH}" = "dev" ]; then
-            docker tag ${{ env.DOCKER_LOCAL_API_TAG }}:ci "${API_IMAGE}:dev"
-            docker tag ${{ env.WORKER_IMAGE }}:ci "${WORKER_IMAGE}:dev"
-            docker push "${API_IMAGE}:dev"
-            docker push "${WORKER_IMAGE}:dev"
-            echo "Pushed ${API_IMAGE}:dev"
-            echo "Pushed ${WORKER_IMAGE}:dev"
           fi
 
       - name: Sign API image

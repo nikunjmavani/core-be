@@ -1,5 +1,5 @@
-# oasdiff --err-ignore file: breaking API changes intentionally accepted for the
-# dev -> main promotion (PR #157 and future major promotions that carry these).
+# oasdiff --err-ignore file: breaking API changes intentionally accepted
+# (PR #157 and future major releases that carry these).
 #
 # Matching: oasdiff lower-cases each finding to a single line and ignores it when
 # a line below is a CONTIGUOUS SUBSTRING of that text. Keep every entry narrow
