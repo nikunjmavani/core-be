@@ -41,15 +41,16 @@ describe('project identity policy', () => {
     expect(violations).toEqual([]);
   });
 
-  it('reusable-railway-deploy maps branches from manifest', () => {
-    const config = loadConfig();
-    const snapshot = buildProjectIdentitySnapshot(config);
+  it('reusable-railway-deploy selects the environment explicitly (single-trunk: env != branch)', () => {
     const workflowPath = resolve(repositoryRoot, '.github/workflows/reusable-railway-deploy.yml');
     const workflow = readFileSync(workflowPath, 'utf-8');
-    for (const [branch, environment] of Object.entries(snapshot.branchEnvironmentMap)) {
-      expect(workflow).toContain(
-        `${branch}) echo "environment=${environment}"  >> "$GITHUB_OUTPUT"`,
-      );
-    }
+    // The explicit github_environment input takes precedence over any branch mapping —
+    // callers (post-merge-ci → development, release-deploy → production) choose the
+    // environment directly; it is never derived from the branch on a single trunk.
+    expect(workflow).toContain('github_environment:');
+    expect(workflow).toContain('GITHUB_ENVIRONMENT_INPUT');
+    // Both environments form the validated allow-list, and no dev-branch case survives.
+    expect(workflow).toContain('development|production');
+    expect(workflow).not.toContain('dev) echo "environment=development"');
   });
 });
