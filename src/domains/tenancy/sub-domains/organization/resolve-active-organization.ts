@@ -182,12 +182,35 @@ export async function ensurePersonalOrganization(
 }
 
 /**
- * `public_id`-only variant of {@link ensurePersonalOrganization} for callers that only need
- * the id (e.g. `getMe` → `personal_organization_id`). Returns `undefined` when personal
- * organizations are disabled for the deployment.
+ * `public_id`-only, **read-safe** variant of {@link ensurePersonalOrganization} for
+ * self-service read paths that must never fail because self-heal could not provision
+ * (e.g. `getMe` → `personal_organization_id`). Attempts the on-demand provision, but if it
+ * throws (a genuine provisioning failure — e.g. a missing reference row / transient DB error,
+ * NOT a lost idempotency race, which {@link ensurePersonalOrganization} already absorbs) it
+ * **degrades gracefully**: it logs and returns the pre-existing personal-org id, or
+ * `undefined` when there is still none. This guarantees a read like `GET /users/me` returns
+ * 200 with `personal_organization_id: null` rather than 500-ing on a self-heal hiccup; the
+ * user simply retries and the next read (or `switch-to-personal`) heals them once the
+ * underlying cause clears. Returns `undefined` when personal organizations are disabled.
+ *
+ * @remarks
+ * - **Side effects:** provisions on the happy path; on failure it is read-only (best-effort).
+ * - **Contract:** callers get a non-throwing resolution — never propagate the provisioning
+ *   error to the HTTP response.
  */
 export async function ensurePersonalOrganizationPublicId(
   ownerUserInternalId: number,
 ): Promise<string | undefined> {
-  return (await ensurePersonalOrganization(ownerUserInternalId))?.public_id;
+  try {
+    return (await ensurePersonalOrganization(ownerUserInternalId))?.public_id;
+  } catch (error) {
+    // Never let a self-heal failure break the read. Fall back to whatever already exists
+    // (typically none → undefined → the caller reports null). ensurePersonalOrganization
+    // already logged the failure at error level.
+    logger.warn(
+      { err: error, userInternalId: ownerUserInternalId },
+      'personal_organization.self_heal.read_degraded',
+    );
+    return (await resolvePersonalOrganization(ownerUserInternalId))?.public_id;
+  }
 }
