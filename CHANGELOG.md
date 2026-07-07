@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.10.0](https://github.com/nikunjmavani/core-be/compare/v4.8.1...v4.10.0) (2026-07-07)
+
+
+### Added
+
+* **tenancy:** server-side sort of org memberships list by member name ([ead8d6c](https://github.com/nikunjmavani/core-be/commit/ead8d6c248409569cd63a4c79ca56dc743d417e5))
+* **tenancy:** server-side sort of org memberships list by member name ([6e679bf](https://github.com/nikunjmavani/core-be/commit/6e679bf91bf0b8c46c91c8e1f1a61d82cc938e3a))
+* **user:** add job_title to user profile update ([d916eb7](https://github.com/nikunjmavani/core-be/commit/d916eb7381d9a910275ae98cbf8ae56be6c7c0ba))
+* **user:** add job_title to user profile update ([739b109](https://github.com/nikunjmavani/core-be/commit/739b1099c845719a703a21e1beccc1a78da262c5))
+
+
+### Fixed
+
+* **ci:** relax hardened boot-safety flags in the docker smoke boot ([2fc586f](https://github.com/nikunjmavani/core-be/commit/2fc586f13b06f81af25964077c23f9f75e200a7b))
+* **ci:** relax hardened boot-safety flags in the docker smoke boot ([894f247](https://github.com/nikunjmavani/core-be/commit/894f247ef7df295226878e5044f2ae1556e9f8bb))
+* **config:** point development frontend + CORS origins at deployed Netlify FE ([be1da34](https://github.com/nikunjmavani/core-be/commit/be1da3437f4505a79632a39db3a9768aaf797b8c))
+* **config:** point development frontend + CORS origins at deployed Netlify FE ([8e451d7](https://github.com/nikunjmavani/core-be/commit/8e451d7290c87b76f7a1c731f9dc30c45e99809e))
+* **cors:** allow X-Requested-With in preflight to restore silent auth refresh ([39edab8](https://github.com/nikunjmavani/core-be/commit/39edab831072a827fb35c5a865d027876cbfffec))
+* **cors:** allow X-Requested-With in preflight to restore silent auth refresh ([2eb29a0](https://github.com/nikunjmavani/core-be/commit/2eb29a0638fbc9cc192c743dfd932fb06245d5d0))
+* **cors:** wrap cors middleware in fastify-plugin so actual responses carry CORS headers ([b744877](https://github.com/nikunjmavani/core-be/commit/b74487750e2a8ff02419be9573bdf78dc4920238))
+* **cors:** wrap cors middleware in fastify-plugin so actual responses carry CORS headers ([0b049ce](https://github.com/nikunjmavani/core-be/commit/0b049ce250cf781f299aa7ec13f69695cdcfa3b8))
+* **sonar:** clear pre-existing quality-gate findings on the deployed surface ([8641ea2](https://github.com/nikunjmavani/core-be/commit/8641ea24b719d35c5ba03e3755761a83c7c22d85))
+* **tenancy:** make personal-org self-heal read-safe + seed permissions in e2e ([#867](https://github.com/nikunjmavani/core-be/issues/867)) ([8749a90](https://github.com/nikunjmavani/core-be/commit/8749a901c9ba011512eb5ffd030c728685680f1c))
+* **tenancy:** self-heal missing personal organization on read ([#865](https://github.com/nikunjmavani/core-be/issues/865)) ([ceb81a4](https://github.com/nikunjmavani/core-be/commit/ceb81a4ce56ab78123dc192d714f38cd81bda183))
+
+
+### Changed
+
+* **config:** drive all env behavior via flags; NODE_ENV=development|production only ([00d77f6](https://github.com/nikunjmavani/core-be/commit/00d77f6588828563b0c14807445e392f14864f4d))
+* **config:** drive all env behavior via flags; NODE_ENV=development|production only ([9de0a67](https://github.com/nikunjmavani/core-be/commit/9de0a678666aac4129a67ea2ae04c9e4642e48e2))
+
+
+### Documentation
+
+* **process:** add languages to plan fenced blocks; gitignore SESSION.md ([893b84d](https://github.com/nikunjmavani/core-be/commit/893b84dc0259136599badf17d5fdc314ebcea6a6))
+
+
+### Chores
+
+* set release baseline to 4.10.0 ([4de716e](https://github.com/nikunjmavani/core-be/commit/4de716e04392038226a040ba4ed10d6cdb22c29b))
+
 ## [4.8.1](https://github.com/nikunjmavani/core-be/compare/v4.8.0...v4.8.1) (2026-07-03)
 
 
