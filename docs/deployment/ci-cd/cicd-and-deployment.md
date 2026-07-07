@@ -41,8 +41,12 @@ flowchart TD
   PRCI --> SecSecrets[Security secrets]
   PRCI --> SecSAST[Security SAST]
   PRCI --> Contract[Contract + property]
+  PRCI --> RLS[RLS security non-superuser]
+  PRCI --> Matrix[Integration matrix]
 
-  Merge[PR merge into dev or main] --> PostMerge[Post-merge CI]
+  Lint & Typecheck & StaticSync & Unit & Matrix & MigLint & BuildVerify & SecAudit & SecSecrets & SecSAST & Contract & RLS --> QualityGate[Quality gate — the single required PR check]
+
+  Merge[PR merge into main] --> PostMerge[Post-merge CI]
 
   PostMerge --> Commitlint[Commitlint]
   PostMerge --> Docker[Docker Trivy GHCR]
@@ -62,7 +66,7 @@ flowchart TD
 
 ```
 
-- **PR CI** ([pr-ci.yml](../../../.github/workflows/pr-ci.yml)) runs on every **pull_request** to **main** and **dev**: parallel jobs for lint, typecheck, static sync checks, unit + global with `vitest --changed`, migration safety lint, TS + Docker build verify, split security checks, and contract + property. No Postgres/Redis and no GHCR push on PR.
+- **PR CI** ([pr-ci.yml](../../../.github/workflows/pr-ci.yml)) runs on every **pull_request** to **main**: parallel lanes for lint, typecheck, static sync checks, unit + global, the authoritative DB matrix, migration safety lint, TS + Docker build verify, split security checks, contract + property, and the non-superuser RLS suite. A single **`Quality gate`** job `needs:` every merge-gating lane and is the one required PR check (alongside governance **`Checks`**); branch protection never lists individual lanes. See [branch-protection.md](branch-protection.md) for the canonical required-check model.
 - **Post-merge CI** ([post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml)) runs when a PR **merges** into `dev` or `main`. Optimized chain: `gate → (commitlint, docker, sbom, api-docs in parallel) → release-please (after docker) → release-sbom (re-uses sbom artifact) → deploy`. It does **not** re-run PR CI jobs or full DB integration/chaos suites (those are local: `pnpm test:integration`, `pnpm test:chaos`). Manual `workflow_dispatch` remains for emergency reruns.
 - **Deploy** runs inside Post-merge CI via reusable [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml). Only the GitHub Environment differs: `dev` → **development**, `main` → **production**. Manual `workflow_dispatch` on CD remains for emergency redeploys. **When post-deploy API smoke passes, that environment is fully live** — the deploy job is the last gate before traffic.
 - Release-please runs inside Post-merge CI on both channels (`main` stable, `dev` prerelease). When it publishes a GitHub Release in the same run, **Release SBOM** attaches CycloneDX to that release.

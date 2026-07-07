@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { resolveGitMetadata } from '@tooling/setup/codegen/project-identity.util.js';
+import { loadConfig } from '@tooling/setup/common/config.js';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -12,6 +14,8 @@ import { describe, expect, it } from 'vitest';
  * or loses its database.
  */
 const prCiPath = join(process.cwd(), '.github/workflows/pr-ci.yml');
+// Trunk resolved from the canonical config (git.defaultBranch) — no static branch name.
+const DEFAULT_BRANCH = resolveGitMetadata(loadConfig()).defaultBranch;
 
 describe('PR CI runs the non-superuser RLS security suite against Postgres', () => {
   const prCi = readFileSync(prCiPath, 'utf8');
@@ -40,14 +44,17 @@ describe('PR CI runs the non-superuser RLS security suite against Postgres', () 
 });
 
 /**
- * The job is only a real gate if it is also a REQUIRED status check — otherwise auto-merge ignores
- * it. GitHub Actions report a status-check context as the bare check-run name (the job `name:`), NOT
- * prefixed by the workflow — so the ruleset context is `RLS security (non-superuser)`, matching the
- * job `name:` asserted above. (Prefixing it `PR CI / …` matches no real check and silently blocks
- * every merge — the bug this guard now pins against.) These assertions fail if a branch ruleset
- * drops the RLS context or a job rename desyncs the two.
+ * The RLS job is a real merge gate only if a REQUIRED status check depends on it — otherwise a red
+ * RLS run does not block the merge. Under the single-aggregate model that dependency is INDIRECT:
+ * branch protection requires just the bare `Quality gate` context (GitHub reports a check context as
+ * the bare job `name:`, never workflow-prefixed), and the `quality-gate` job `needs:` the
+ * `rls-security` lane — so a red RLS run fails the aggregate and blocks the merge. These assertions
+ * fail if the ruleset drops `Quality gate`, or the aggregator stops depending on `rls-security`
+ * (either would silently un-gate RLS). The generic ruleset ↔ needs invariant is pinned by
+ * pr-quality-gate.policy.unit.test.ts; this keeps a dedicated tripwire on the RLS lane specifically.
  */
-const REQUIRED_RLS_CONTEXT = 'RLS security (non-superuser)';
+const REQUIRED_AGGREGATE_CONTEXT = 'Quality gate';
+const RLS_LANE = 'rls-security';
 
 interface BranchRuleset {
   rules: {
@@ -56,8 +63,10 @@ interface BranchRuleset {
   }[];
 }
 
-describe.each(['main'])('the %s branch ruleset requires the RLS check', (branch) => {
-  it('lists the RLS context in required_status_checks', () => {
+describe.each([
+  DEFAULT_BRANCH,
+])('the %s ruleset gates RLS through the quality-gate aggregate', (branch) => {
+  it('requires the Quality gate aggregate context', () => {
     const ruleset = JSON.parse(
       readFileSync(join(process.cwd(), `.github/rulesets/${branch}.json`), 'utf8'),
     ) as BranchRuleset;
@@ -67,26 +76,35 @@ describe.each(['main'])('the %s branch ruleset requires the RLS check', (branch)
       ?.parameters?.required_status_checks?.map((check) => check.context);
 
     expect(requiredContexts, `${branch}.json must declare required_status_checks`).toBeDefined();
-    expect(requiredContexts).toContain(REQUIRED_RLS_CONTEXT);
+    expect(requiredContexts).toContain(REQUIRED_AGGREGATE_CONTEXT);
+  });
+
+  it('makes the quality-gate aggregate depend on the rls-security lane', () => {
+    // quality-gate is the final job in pr-ci.yml — slice from its header to EOF so
+    // the `- rls-security` match is scoped to the aggregate's `needs:` list.
+    const prCiText = readFileSync(prCiPath, 'utf8');
+    const start = prCiText.indexOf('\n  quality-gate:');
+    expect(start, 'pr-ci.yml must declare the quality-gate aggregate job').toBeGreaterThan(-1);
+    expect(prCiText.slice(start)).toContain(`- ${RLS_LANE}`);
   });
 });
 
 /**
- * Single-trunk: `main` is maintained solo, so its ruleset requires status checks but **0 approvals**
- * (D8) — a red check (incl. RLS) still blocks the merge, but the author isn't locked out waiting for
- * an approval they can't give (the pre-migration params — 1 approval + code-owner + last-push — were
- * promotion-gate settings that locked out solo merges). Guard against a silent regression to a
- * non-zero count. Change this deliberately if/when a second reviewer is added.
+ * Single-trunk: the trunk is maintained solo, so its ruleset requires status checks but
+ * **0 approvals** (D8) — a red check (incl. RLS) still blocks the merge, but the author isn't locked
+ * out waiting for an approval they can't give (the pre-migration params — 1 approval + code-owner +
+ * last-push — were promotion-gate settings that locked out solo merges). Guard against a silent
+ * regression to a non-zero count. Change this deliberately if/when a second reviewer is added.
  */
-it('the main ruleset requires 0 approvals (solo maintainer — checks still block merge)', () => {
-  const mainRuleset = JSON.parse(
-    readFileSync(join(process.cwd(), '.github/rulesets/main.json'), 'utf8'),
+it('the default-branch ruleset requires 0 approvals (solo maintainer — checks still block merge)', () => {
+  const ruleset = JSON.parse(
+    readFileSync(join(process.cwd(), `.github/rulesets/${DEFAULT_BRANCH}.json`), 'utf8'),
   ) as { rules: { type: string; parameters?: { required_approving_review_count?: number } }[] };
 
-  const pullRequestRule = mainRuleset.rules.find((rule) => rule.type === 'pull_request');
+  const pullRequestRule = ruleset.rules.find((rule) => rule.type === 'pull_request');
   expect(
     pullRequestRule,
-    'main.json must keep a pull_request rule (changes go via a PR)',
+    `${DEFAULT_BRANCH}.json must keep a pull_request rule (changes go via a PR)`,
   ).toBeDefined();
   expect(pullRequestRule?.parameters?.required_approving_review_count).toBe(0);
 });

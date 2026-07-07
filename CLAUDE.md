@@ -435,6 +435,6 @@ Local SonarQube quality gate (pre-commit): `pnpm sonar:up` / `sonar:scan` / `son
 - `pnpm db:seed` — seed minimal dev data (reference/bootstrap only)
 - `pnpm db:seed:full` — seed full demo data (fixed demo set)
 - `pnpm db:seed:bulk` — scaled bulk seed via the orchestrator; `BULK_PROFILE` (`demo`/`edge`/`load`), `SCALE`, per-knob `BULK_*` overrides (e.g. `BULK_PROFILE=load SCALE=5 pnpm db:seed:bulk`)
-- `pnpm github:sync` — consistency, scaffold, branches, rulesets, GitHub Environments, push `.env.<environment>` values; `--check` read-only; `--dry-run` preview
+- `pnpm github:sync` — consistency, scaffold, rulesets, GitHub Environments, push `.env.<environment>` values; `--check` read-only; `--dry-run` preview (single trunk: `main` is the repo default, so no branch is created)
 - `pnpm tool:sync-env-example` — report env schema vs .env.example diff and PR snippet; use `--fix` to append missing vars (legacy: `scripts:sync-env-example`, `validate:env-example`)
 - `pnpm tool:project-structure-tree` — print `src/` directory tree to stdout (see `docs/reference/architecture/project-structure-guide.md`)

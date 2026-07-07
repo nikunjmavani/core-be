@@ -40,7 +40,8 @@ Hand-written guides grouped by **setup**, **CI/CD**, and **runbooks**.
 | Doc                                                    | Description                                                                     |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------- |
 | [cicd-and-deployment.md](ci-cd/cicd-and-deployment.md) | **Single CI/CD reference** — CI jobs, deploy, release-please, tokens, diagrams. |
-| [branch-protection.md](ci-cd/branch-protection.md)     | Required checks for `main` / `dev`.                                             |
+| [branch-protection.md](ci-cd/branch-protection.md)     | Required checks for `main` (`Quality gate` + `Checks`).                         |
+| [deploy-artifact-and-secret-decisions.md](ci-cd/deploy-artifact-and-secret-decisions.md) | Why the release PAT is an environment secret + build-once-promote. |
 
 ### [runbooks/](runbooks/)
 

@@ -14,7 +14,6 @@ hides behind feature flags, not long-lived branches.
 | --- | --- | --- |
 | `main` | The trunk. Always releasable. Protected (squash-only, required checks). | permanent |
 | `<type>/<slug>` | Working branch for one change (`feat`/`fix`/`chore`/`refactor`/`docs`/`test`/`ci`/`build`/`perf`/`hotfix`). | short-lived, deleted on merge |
-| `release/X.Y` | Hotfix branch for an **older** release trunk has moved past. One-way (never merged back). | short-lived |
 | `claude/*` | Claude Code web session branches. | short-lived |
 
 Enforced by [`.husky/pre-push`](../../.husky/pre-push) and the `git-branch-naming` rule.
@@ -23,9 +22,10 @@ Enforced by [`.husky/pre-push`](../../.husky/pre-push) and the `git-branch-namin
 
 1. Branch off `main`: `git switch -c feat/my-change`.
 2. Commit; open a PR to **`main`** (`/open-pr` or `/ship`).
-3. **PR CI is the authoritative gate**: lint, typecheck, unit, the full DB-backed **matrix / Integration**
-   suite (e2e/integration/rls/performance), security, contract. It must be green — and the branch up to
-   date with `main` (strict checks) — before merge.
+3. **PR CI is the authoritative gate**: lint, typecheck, unit, the full DB-backed matrix
+   (e2e/integration/rls/performance), security, and contract lanes all roll up into the single
+   **`Quality gate`** required check (with **`Checks`** from pr-governance). It must be green — and the
+   branch up to date with `main` (strict checks) — before merge.
 4. **Squash-merge** into `main` (0 approvals required; the squash commit = the PR title + body). The
    branch auto-deletes.
 5. Post-merge CI on `main` runs the **adaptive lane**: a single-PR push takes the FAST lane (build →
@@ -41,8 +41,9 @@ environment reviewer approval). See [release-versioning.md](release-versioning.m
 
 ## Hotfixes
 
-A normal urgent fix is just a `fix:` PR merged and released immediately by merging the Release PR. To
-patch an older release, use a `release/X.Y` branch — see
+A hotfix is just a `fix:` PR merged and released immediately by merging the Release PR — **fix-forward
+on `main`**. There is no protected `release/*` branch; keep `main` releasable (flag unshippable work)
+so a hotfix is always safe to cut from trunk. See
 [hotfix-release.md](../deployment/runbooks/hotfix-release.md).
 
 ## Local clone migration (one-time, after cutover)

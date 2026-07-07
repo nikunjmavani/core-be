@@ -1929,6 +1929,7 @@ src/
     │   │   ├── openapi-drift-check.policy.unit.test.ts
     │   │   ├── password-hashing-dependency.policy.unit.test.ts
     │   │   ├── post-merge-ci.policy.unit.test.ts
+    │   │   ├── pr-quality-gate.policy.unit.test.ts
     │   │   ├── pr-rls-security-gate.policy.unit.test.ts
     │   │   ├── pr-unit-gate-full-suite.policy.unit.test.ts
     │   │   ├── redis-set-ttl.policy.unit.test.ts

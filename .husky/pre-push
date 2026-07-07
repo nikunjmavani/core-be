@@ -3,21 +3,22 @@
 
 # Branch-name policy — keep working branches under the documented prefixes
 # (docs/process/git-workflow.md). Single trunk: the only long-lived branch is
-# main; short-lived hotfix version branches (release/*) and Claude Code web
-# session branches (claude/*) are allowlisted (the cloud git proxy pins a web
-# session to push only its claude/* branch). Bypass once with:
+# main. Hotfixes are ordinary short-lived working branches (`fix/*` or `hotfix/*`
+# via BRANCH_TYPES) that fix-forward to main — there is no protected release/*
+# branch. Claude Code web session branches (claude/*) are allowlisted (the cloud
+# git proxy pins a web session to push only its claude/* branch). Bypass once with:
 #   SKIP_BRANCH_CHECK=1 git push
 BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)
 BRANCH_TYPES='feat|feature|fix|hotfix|refactor|docs|test|chore|ci|perf|build|style|revert'
 if [ "${SKIP_BRANCH_CHECK:-0}" = "1" ] || [ "$BRANCH_NAME" = "HEAD" ]; then
   echo "Skipping branch-name policy on pre-push."
-elif printf '%s' "$BRANCH_NAME" | grep -Eq "^(main|release/.+|claude/.+|(${BRANCH_TYPES})/.+)$"; then
+elif printf '%s' "$BRANCH_NAME" | grep -Eq "^(main|claude/.+|(${BRANCH_TYPES})/.+)$"; then
   : # branch name follows policy
 else
   echo "✗ Branch \"$BRANCH_NAME\" does not follow the naming policy."
   echo "  Use <type>/<short-description>, e.g. feature/ai-stream-response or fix/login-error."
   echo "  Allowed types: ${BRANCH_TYPES}"
-  echo "  Long-lived: main.  Hotfix version branches: release/*.  AI web sessions: claude/*."
+  echo "  Long-lived: main (only).  Hotfixes: fix/* or hotfix/* → main.  AI web sessions: claude/*."
   echo "  See docs/process/git-workflow.md.  Bypass once: SKIP_BRANCH_CHECK=1 git push"
   exit 1
 fi

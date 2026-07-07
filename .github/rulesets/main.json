@@ -45,40 +45,7 @@
         "strict_required_status_checks_policy": true,
         "required_status_checks": [
           {
-            "context": "Lint"
-          },
-          {
-            "context": "Typecheck"
-          },
-          {
-            "context": "Static sync"
-          },
-          {
-            "context": "unit / Unit + global"
-          },
-          {
-            "context": "matrix / Integration"
-          },
-          {
-            "context": "Migration lint"
-          },
-          {
-            "context": "Build verify"
-          },
-          {
-            "context": "Security audit"
-          },
-          {
-            "context": "Security secrets"
-          },
-          {
-            "context": "Security SAST"
-          },
-          {
-            "context": "Contract + property"
-          },
-          {
-            "context": "RLS security (non-superuser)"
+            "context": "Quality gate"
           },
           {
             "context": "Checks"

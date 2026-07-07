@@ -14,7 +14,7 @@ invariant. This runbook covers the **per-key lifecycle**.
 | ------------------------------------ | --------------------------------------------- |
 | Bootstrap local env files            | `pnpm github:sync` (reads `tooling/setup/setup.config.json` directly)                              |
 | Edit values                          | open `.env.<environment>` (gitignored)        |
-| Full GitHub sync (branches + rulesets + env values) | `pnpm github:sync`              |
+| Full GitHub sync (rulesets + environments + env values) | `pnpm github:sync`              |
 | Sync one environment                 | `pnpm github:sync <environment>`              |
 | Preview without pushing              | `pnpm github:sync <environment> --dry-run`    |
 | Add a hosted environment             | edit `tooling/setup/setup.config.json`, then `pnpm tool:generate-project-identity` and `pnpm github:sync` |
@@ -97,7 +97,7 @@ That command:
 1. Reads `tooling/setup/setup.config.json`.
 2. Creates any missing `.env.<environment>` files from `.env.example`.
 3. Creates any missing `.github/environments/<environment>.json` and `.github/rulesets/<branch>.json`.
-4. Applies branches, rulesets, and GitHub Environments.
+4. Applies rulesets and GitHub Environments (single trunk: `main` is the repo default, so no branch is created).
 5. Asks for confirmation before pushing values.
 
 Then edit `.env.development` (and `.env.production` if you have access to
@@ -269,7 +269,7 @@ A rename is atomic — delete + add in the **same PR**:
 | Validator                               | What it checks                                                                      | When it runs                         |
 | --------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------ |
 | `pnpm tool:sync-env-example`            | Schema ↔ `.env.example` parity; both halves present                                 | local, pre-commit, CI `ci:quality`   |
-| `pnpm github:sync --check`              | `NODE_ENV` enum ↔ config ↔ rulesets ↔ workflow ↔ GitHub env JSON; remote branch/ruleset/env drift | local before sync                    |
+| `pnpm github:sync --check`              | `NODE_ENV` enum ↔ config ↔ rulesets ↔ workflow ↔ GitHub env JSON; remote ruleset/env drift | local before sync                    |
 | `CONFIG=<env> pnpm validate:github-env` | Each `envSchemaRequiredKeys` key exists as a secret in GitHub Environment `<env>`   | local before deploy; deploy workflow |
 | `pnpm github:sync <env> --dry-run`      | Local `.env.<env>` → GitHub plan; surfaces typos and Secret/Variable column         | local before each sync               |
 
