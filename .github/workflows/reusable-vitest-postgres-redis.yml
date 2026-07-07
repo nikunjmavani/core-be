@@ -321,16 +321,19 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          # Shard-completeness guard: every shard that produced coverage must also
+          # Shard-completeness guard: every DB shard that produced coverage must also
           # have produced its route-status observation. A missing observation silently
           # undercounts coverage and reports false "uncovered" routes — the capture-based
           # flakiness that skipped release-please on the 2026-07-07 promotion. Fail loud
-          # and re-run instead of trusting an undercounted gate.
+          # and re-run instead of trusting an undercounted gate. Scoped to the `db-*`
+          # shards: those exercise routes (e2e/integration). The unit+global lane
+          # (coverage-unit) does not always capture routes, so it is intentionally
+          # excluded — it produces coverage without a matching route observation.
           shopt -s nullglob
-          coverage_shards=(coverage-shards/coverage-*)
-          observed_shards=(route-observed-shards/route-observed-*)
-          if [ "${#observed_shards[@]}" -lt "${#coverage_shards[@]}" ]; then
-            echo "::error title=Route-coverage shard artifact missing::Got ${#observed_shards[@]} route-observed shard(s) but ${#coverage_shards[@]} coverage shard(s). A shard's route-status observation was lost — re-run the matrix rather than trusting an undercounted coverage gate."
+          db_coverage_shards=(coverage-shards/coverage-db-*)
+          db_observed_shards=(route-observed-shards/route-observed-db-*)
+          if [ "${#db_observed_shards[@]}" -lt "${#db_coverage_shards[@]}" ]; then
+            echo "::error title=Route-coverage shard artifact missing::Got ${#db_observed_shards[@]} db route-observed shard(s) but ${#db_coverage_shards[@]} db coverage shard(s). A DB shard's route-status observation was lost — re-run the matrix rather than trusting an undercounted coverage gate."
             exit 1
           fi
           report_only_flag=""
