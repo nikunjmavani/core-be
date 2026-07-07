@@ -314,21 +314,14 @@ jobs:
         run: pnpm docs:generate
 
       - name: Route success-status coverage gate (merged shards)
-        env:
-          # Single-trunk (item 1.35): the PR is the AUTHORITATIVE gate and BLOCKS;
-          # post-merge (push) and manual dispatch only REPORT — a flaky or lost shard
-          # artifact must never skip release-please by failing the merged gate.
-          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           # Shard-completeness guard: every DB shard that produced coverage must also
           # have produced its route-status observation. A missing observation silently
-          # undercounts coverage and reports false "uncovered" routes — the capture-based
-          # flakiness that skipped release-please on the 2026-07-07 promotion. Fail loud
-          # and re-run instead of trusting an undercounted gate. Scoped to the `db-*`
-          # shards: those exercise routes (e2e/integration). The unit+global lane
-          # (coverage-unit) does not always capture routes, so it is intentionally
-          # excluded — it produces coverage without a matching route observation.
+          # undercounts coverage — fail loud and re-run instead of trusting an
+          # undercounted gate. Scoped to the `db-*` shards (they exercise routes via
+          # e2e/integration); the unit+global lane produces coverage without a matching
+          # route observation, so it is intentionally excluded.
           shopt -s nullglob
           db_coverage_shards=(coverage-shards/coverage-db-*)
           db_observed_shards=(route-observed-shards/route-observed-db-*)
@@ -336,11 +329,14 @@ jobs:
             echo "::error title=Route-coverage shard artifact missing::Got ${#db_observed_shards[@]} db route-observed shard(s) but ${#db_coverage_shards[@]} db coverage shard(s). A DB shard's route-status observation was lost — re-run the matrix rather than trusting an undercounted coverage gate."
             exit 1
           fi
-          report_only_flag=""
-          if [ "$EVENT_NAME" != "pull_request" ]; then
-            report_only_flag="--report-only"
-          fi
-          pnpm validate:route-success-coverage --observed-dir route-observed-shards ${report_only_flag}
+          # Route success-status coverage is an ADVISORY metric — it is capture-based
+          # and environment-inconsistent (the same tree observed 0 uncovered on one run
+          # and 3 on another). The AUTHORITATIVE gate is the e2e/integration tests
+          # themselves (the shards above), which block on the PR. This step always
+          # reports (never blocks) so a flaky observation can neither red a PR nor skip
+          # release-please post-merge. The uncovered list + budget file remain the
+          # tracked signal for cleanup. (item 1.35)
+          pnpm validate:route-success-coverage --observed-dir route-observed-shards --report-only
 
       - name: Merge coverage and check thresholds
         env:
