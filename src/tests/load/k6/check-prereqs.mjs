@@ -106,7 +106,7 @@ if (serverUp && pool.length) {
         fail(
           'captcha fail-open',
           'login blocked by captcha',
-          'Set NODE_ENV=test and CAPTCHA_PROVIDER=disabled, restart the server',
+          'Set NODE_ENV=development + RATE_LIMIT_RELAXED_CAPS=true and CAPTCHA_PROVIDER=disabled, restart the server',
         );
         break;
       }
@@ -140,7 +140,7 @@ if (serverUp && pool.length) {
       : fail(
           'captcha fail-open + login',
           'no sampled user got a token',
-          'Check NODE_ENV=test + credential pool passwords',
+          'Check NODE_ENV=development + RATE_LIMIT_RELAXED_CAPS=true + credential pool passwords',
         );
     scopedReadOk
       ? ok('org-scoped read', 'GET /tenancy/organization/memberships → 200')

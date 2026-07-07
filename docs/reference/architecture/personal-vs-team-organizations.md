@@ -11,9 +11,26 @@ organizations, and how the active organization is carried as a signed token clai
 - A user owns **exactly one** `PERSONAL` organization (auto-provisioned at signup, enforced by
   the `idx_org_one_personal_per_owner` partial unique index) and belongs to **N** `TEAM`
   organizations via `memberships`.
+- **Self-heal guarantee:** signup-time provisioning is best-effort (swallowed on failure and
+  gated on first-verification), so a user could historically be left personal-enabled but with
+  no `PERSONAL` row — dead-ending onboarding. The personal-org read path now **self-heals**:
+  `ensurePersonalOrganization(userId)` provisions the org on demand when
+  `PERSONAL_ORGANIZATION_ENABLED` is true and it is missing. Both `GET /users/me`
+  (`personal_organization_id`) and `POST /auth/switch-to-personal` go through it, so a
+  personal-enabled deployment can never leave a user without a personal org and
+  `switch-to-personal` can no longer 404 in hybrid/B2C mode. When personal is **disabled** the
+  helper creates nothing (id stays `null`, `switch-to-personal` still 404s). Idempotent — the
+  partial unique index absorbs any provision race and the helper re-resolves the winner.
+  **Read-safe:** the `getMe` path (`ensurePersonalOrganizationPublicId`) never lets a self-heal
+  failure break the read — if the on-demand provision throws (e.g. a transient DB error), it
+  degrades to the pre-existing value (usually `null`) and returns 200 rather than 500; the user
+  simply heals on a later read. The explicit `switch-to-personal` action still surfaces a genuine
+  provisioning failure (it cannot silently succeed). Provisioning depends on the seeded
+  `permissions` reference catalog (the owner role is granted every code); it is present in every
+  real environment.
 - The `PERSONAL` organization has a **null slug** (never user-facing — its app URL is `/`) and is
   **immutable**: it cannot be deleted or have its ownership transferred (`409
-  personalOrganizationImmutable`); it is removed only when the account is deleted (cascade).
+personalOrganizationImmutable`); it is removed only when the account is deleted (cascade).
 - Internal joins/FKs use the integer PK `organizations.id`; `public_id` (`org_…`) and `slug` are
   external-only identifiers.
 
@@ -24,11 +41,11 @@ PERSONAL_ORGANIZATION_ENABLED   (default true)
 TEAM_ORGANIZATION_ENABLED       (default true)   — at least one must be true
 ```
 
-| Mode | PERSONAL | TEAM | Signup | Login default |
-|------|----------|------|--------|---------------|
-| Hybrid | on | on | personal org auto-provisioned | personal org |
-| B2C | on | off | personal org auto-provisioned | personal org |
-| B2B | off | on | nothing provisioned | most-recent team, else **none** → frontend redirects to "create your own" |
+| Mode   | PERSONAL | TEAM | Signup                        | Login default                                                             |
+| ------ | -------- | ---- | ----------------------------- | ------------------------------------------------------------------------- |
+| Hybrid | on       | on   | personal org auto-provisioned | personal org                                                              |
+| B2C    | on       | off  | personal org auto-provisioned | personal org                                                              |
+| B2B    | off      | on   | nothing provisioned           | most-recent team, else **none** → frontend redirects to "create your own" |
 
 `GET /users/me` returns `capabilities { personal_organization, team_organizations }` and
 `personal_organization_id` so the frontend can render the switcher and hide the disabled kind.
@@ -39,10 +56,10 @@ The mode is set **per environment** via two flags — no code change, no migrati
 default to `true`, so **hybrid works out of the box**; set these only to opt into a
 single-kind product. At least one must be `true` or the API/worker refuses to boot.
 
-| Where | How |
-|-------|-----|
-| Local dev | Set them in `.env.local` (or `.env.<environment>`). |
-| Hosted | GitHub Environment **Variables** (not Secrets) — they are operational booleans, name-classified as Variables. Push with `pnpm github:sync <environment>`. |
+| Where     | How                                                                                                                                                       |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local dev | Set them in `.env.local` (or `.env.<environment>`).                                                                                                       |
+| Hosted    | GitHub Environment **Variables** (not Secrets) — they are operational booleans, name-classified as Variables. Push with `pnpm github:sync <environment>`. |
 
 ```dotenv
 # Hybrid (default) — personal workspace + teams
@@ -75,21 +92,21 @@ Two mechanisms change behavior: the **deployment flags** (403 / 404) and the **a
 type** matrix (`assertTeamOrganization` → 422 when the active org is PERSONAL). Every route
 not listed operates on the active org regardless of type.
 
-| Route | B2C (personal only) | Hybrid | B2B (team only) |
-|-------|---------------------|--------|-----------------|
-| `POST /auth/switch-to-personal` | 201 | 201 | **404** (no personal org) |
-| `POST /auth/switch-to-organization` | — (no teams) | 201 | 201 |
-| `POST /tenancy/organizations` (create team) | **403** `teamOrganizationsDisabled` | 201 | 201 |
-| `GET /tenancy/organizations` (list teams) | 200 (empty) | 200 | 200 |
-| `DELETE /tenancy/organization` | **422** | 204 team · **422** personal | 204 |
-| `POST /tenancy/organization/invitations` | **422** | 201 team · **422** personal | 201 |
-| `POST /tenancy/organization/memberships` | **422** | 201 team · **422** personal | 201 |
-| `POST /tenancy/organization/roles` | **422** | 201 team · **422** personal | 201 |
-| `POST /tenancy/organization/transfer-ownership` | **422** | 201 team · **422** personal | 201 |
-| `POST /billing/subscriptions` | **422** | 201 team · **422** personal | 201 |
-| `POST /billing/subscriptions/{subscription_id}/change-plan` | **422** | 201 team · **422** personal | 201 |
-| `POST /billing/subscriptions/{subscription_id}/cancel` | **422** | 201 team · **422** personal | 201 |
-| `POST /billing/subscriptions/{subscription_id}/resume` | **422** | 201 team · **422** personal | 201 |
+| Route                                                       | B2C (personal only)                 | Hybrid                      | B2B (team only)           |
+| ----------------------------------------------------------- | ----------------------------------- | --------------------------- | ------------------------- |
+| `POST /auth/switch-to-personal`                             | 201                                 | 201                         | **404** (no personal org) |
+| `POST /auth/switch-to-organization`                         | — (no teams)                        | 201                         | 201                       |
+| `POST /tenancy/organizations` (create team)                 | **403** `teamOrganizationsDisabled` | 201                         | 201                       |
+| `GET /tenancy/organizations` (list teams)                   | 200 (empty)                         | 200                         | 200                       |
+| `DELETE /tenancy/organization`                              | **422**                             | 204 team · **422** personal | 204                       |
+| `POST /tenancy/organization/invitations`                    | **422**                             | 201 team · **422** personal | 201                       |
+| `POST /tenancy/organization/memberships`                    | **422**                             | 201 team · **422** personal | 201                       |
+| `POST /tenancy/organization/roles`                          | **422**                             | 201 team · **422** personal | 201                       |
+| `POST /tenancy/organization/transfer-ownership`             | **422**                             | 201 team · **422** personal | 201                       |
+| `POST /billing/subscriptions`                               | **422**                             | 201 team · **422** personal | 201                       |
+| `POST /billing/subscriptions/{subscription_id}/change-plan` | **422**                             | 201 team · **422** personal | 201                       |
+| `POST /billing/subscriptions/{subscription_id}/cancel`      | **422**                             | 201 team · **422** personal | 201                       |
+| `POST /billing/subscriptions/{subscription_id}/resume`      | **422**                             | 201 team · **422** personal | 201                       |
 
 The 422s come from the org-type guard: `personalOrganizationNoMembers`
 (invitations / memberships), `personalOrganizationNoRoles` (roles),
@@ -103,8 +120,10 @@ catalog, subscription reads + PATCH update, Stripe webhook), `/notify/*`,
 
 ### Switching mode after launch
 
-- **`PERSONAL` off → on** (B2B → hybrid): existing users have no personal org — run
-  `pnpm tool:backfill-personal-orgs` to provision one for each (idempotent).
+- **`PERSONAL` off → on** (B2B → hybrid): existing users have no personal org. The read-path
+  self-heal provisions one lazily on each user's next `GET /users/me` / `switch-to-personal`,
+  so no backfill is strictly required; run `pnpm tool:backfill-personal-orgs` to provision them
+  all up front (idempotent) rather than on first access.
 - **`TEAM` on → off** (hybrid → B2C): `POST /tenancy/organizations` returns
   `403 teamOrganizationsDisabled`; existing team orgs are not deleted, only no longer
   creatable. The frontend hides team UI from the `/users/me` `capabilities` flags.
@@ -118,12 +137,12 @@ catalog, subscription reads + PATCH update, Stripe webhook), `/notify/*`,
 The active organization is a signed JWT claim (`org`), not a header or path parameter. It is
 **scope, not authority** — membership + RLS are re-checked per request.
 
-| Endpoint | Effect |
-|----------|--------|
-| `POST /auth/login` (and email verification-code / OAuth / WebAuthn) | mints the token with the default-organization `org` claim |
-| `POST /auth/refresh` | re-mints with the resolved `org` claim |
-| `POST /auth/switch-to-personal` | no body; re-mints + re-binds the session to the caller's personal org |
-| `POST /auth/switch-to-organization { organization_id }` | membership-validated (403 if not a member, 400 missing id); re-mints + re-binds |
+| Endpoint                                                            | Effect                                                                                                                            |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /auth/login` (and email verification-code / OAuth / WebAuthn) | mints the token with the default-organization `org` claim                                                                         |
+| `POST /auth/refresh`                                                | re-mints with the resolved `org` claim                                                                                            |
+| `POST /auth/switch-to-personal`                                     | no body; self-heals (provisions the personal org if missing when personal is enabled), then re-mints + re-binds the session to it |
+| `POST /auth/switch-to-organization { organization_id }`             | membership-validated (403 if not a member, 400 missing id); re-mints + re-binds                                                   |
 
 Switching re-mints the access token and re-binds the session's `token_hash` to it (no refresh
 rotation); the previously held token immediately fails `verifyActiveAccessToken` (hash drift).
@@ -135,8 +154,14 @@ account deletion (transfer or delete the team first); the personal org cascades 
 
 ## Operational
 
-- `pnpm tool:backfill-personal-orgs` — provisions the personal org for existing users lacking one
-  (idempotent), for when `PERSONAL_ORGANIZATION_ENABLED` is turned on after launch.
+- **Read-path self-heal** (`ensurePersonalOrganization`) is the durable guarantee: any
+  personal-enabled user lacking a personal org gets one provisioned on their next
+  `GET /users/me` / `POST /auth/switch-to-personal`. No operator action is required to
+  unstick existing users.
+- `pnpm tool:backfill-personal-orgs` — optionally provisions the personal org for **all**
+  existing users lacking one up front (idempotent), for when `PERSONAL_ORGANIZATION_ENABLED`
+  is turned on after launch. The self-heal covers the same gap lazily; the backfill just does
+  it eagerly.
 
 ## Route shape (active org = token claim)
 
@@ -155,7 +180,9 @@ Account-level routes stay **plural** because they are not scoped to one active o
 ## Implementation status
 
 Delivered: schema (`type`, nullable slug, partial index) · capability flags · personal-org
-auto-provisioning (OAuth signup) · deletion guard · `/users/me` capabilities +
+auto-provisioning (OAuth signup) · **read-path self-heal** (`ensurePersonalOrganization` —
+`/users/me` + `switch-to-personal` provision on demand when personal is enabled and missing) ·
+deletion guard · `/users/me` capabilities +
 `personal_organization_id` · personal-org immutability · backfill · JWT `org`/`sv` claims · login
 & refresh org-claim minting · `switch-to-personal` / `switch-to-organization` endpoints (e2e
 tested) · **route flatten** — org-scoped routes dropped the per-organization path

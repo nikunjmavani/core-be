@@ -11,7 +11,7 @@ vi.mock('@fastify/cors', () => ({
 
 vi.mock('@/shared/config/env.config.js', () => ({
   env: {
-    NODE_ENV: 'test',
+    NODE_ENV: 'development',
     ALLOWED_ORIGINS: 'https://app.example.com,https://admin.example.com',
   },
 }));
@@ -40,7 +40,7 @@ describe('cors.middleware', () => {
       expect.objectContaining({
         origin: ['https://app.example.com', 'https://admin.example.com'],
         credentials: true,
-        allowedHeaders: expect.arrayContaining(['X-Captcha-Token']),
+        allowedHeaders: expect.arrayContaining(['X-Captcha-Token', 'X-Requested-With']),
       }),
     );
   });

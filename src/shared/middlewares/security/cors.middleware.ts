@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import fp from 'fastify-plugin';
 import fastifyCors from '@fastify/cors';
 import { env } from '@/shared/config/env.config.js';
 import { CORS_PREFLIGHT_MAX_AGE_SECONDS } from '@/shared/constants/index.js';
@@ -22,6 +23,10 @@ const corsMiddleware: FastifyPluginAsync = async (app) => {
       'X-Captcha-Token',
       'X-Idempotency-Key',
       'X-Request-Id',
+      // Browsers/XHR libraries set `X-Requested-With` on requests; without it in the
+      // preflight `Access-Control-Allow-Headers` the OPTIONS check fails, which blocked
+      // the silent auth-token refresh on the dev deploy.
+      'X-Requested-With',
     ],
     // sec-re-17: sec-CM #27 added the server-minted `X-Client-Request-Id`
     // response header but did not list it on `exposedHeaders`. Cross-origin
@@ -37,4 +42,9 @@ const corsMiddleware: FastifyPluginAsync = async (app) => {
   });
 };
 
-export default corsMiddleware;
+// fp() breaks plugin encapsulation so the @fastify/cors onRequest hook that decorates
+// EVERY response with Access-Control-Allow-* reaches routes registered in sibling plugin
+// scopes. Without it only the plugin's global wildcard OPTIONS route worked: preflights
+// carried CORS headers but actual responses did not, so browsers surfaced a CORS error
+// on otherwise-successful (e.g. 201) cross-origin requests.
+export default fp(corsMiddleware, { name: 'cors-middleware' });

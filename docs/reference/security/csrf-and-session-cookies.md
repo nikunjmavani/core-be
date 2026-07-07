@@ -42,7 +42,7 @@ flowchart LR
 | **Name**     | `csrf_token`         | Random token mirrored by the SPA into `X-CSRF-Token` on cookie-auth routes in production when `Origin` is absent. |
 | **Path**     | `/api/v1/auth`       | Same scope as `session_id`.                                                                                     |
 | **HttpOnly** | `false`              | SPA reads the value and sends it as `X-CSRF-Token` (double-submit pattern).                                     |
-| **Secure**   | `true` in production | Sent only over HTTPS in production/staging.                                                                     |
+| **Secure**   | `true` in production | Sent only over HTTPS in production.                                                                     |
 | **SameSite** | `Strict`             | Not sent on cross-site requests.                                                                                |
 
 Implementation: [`src/domains/auth/auth.http.util.ts`](../../../src/domains/auth/auth.http.util.ts) (`getSessionCookieOptions`, `getCsrfCookieOptions`, `SESSION_COOKIE_NAME`, `CSRF_COOKIE_NAME`).

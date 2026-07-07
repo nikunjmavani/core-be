@@ -21,7 +21,7 @@ function buildRequest(headers: Record<string, string> = {}): FastifyRequest {
 describe('captchaPreHandler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.NODE_ENV = 'test';
+    process.env.NODE_ENV = 'development';
     process.env.CAPTCHA_PROVIDER = 'disabled';
     delete process.env.CAPTCHA_SECRET;
     resetEnvCacheForTests();
@@ -34,20 +34,23 @@ describe('captchaPreHandler', () => {
     resetEnvCacheForTests();
   });
 
-  it('skips verification when CAPTCHA is disabled in test', async () => {
+  it('skips verification (fail-open) when CAPTCHA is disabled', async () => {
     await expect(captchaPreHandler(buildRequest(), {} as FastifyReply)).resolves.toBeUndefined();
     expect(verifyTurnstileTokenMock).not.toHaveBeenCalled();
   });
 
-  it('fails open when CAPTCHA is disabled and NODE_ENV is local', async () => {
-    // Regression: NODE_ENV=local is the default local runtime (and the value scaffolded into
-    // .env.local). It must fail open like development/test — otherwise every public auth route
-    // 401s with captchaProviderUnavailable when CAPTCHA_PROVIDER=disabled.
-    process.env.NODE_ENV = 'local';
+  it('fails closed (throws) when CAPTCHA is disabled and CAPTCHA_FAIL_OPEN is false', async () => {
+    // Fail-open vs fail-closed is driven purely by the CAPTCHA_FAIL_OPEN flag (no NODE_ENV branch):
+    // with it false and no provider configured, the pre-handler rejects instead of skipping.
+    process.env.CAPTCHA_FAIL_OPEN = 'false';
     resetEnvCacheForTests();
 
-    await expect(captchaPreHandler(buildRequest(), {} as FastifyReply)).resolves.toBeUndefined();
-    expect(verifyTurnstileTokenMock).not.toHaveBeenCalled();
+    await expect(captchaPreHandler(buildRequest(), {} as FastifyReply)).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
+
+    delete process.env.CAPTCHA_FAIL_OPEN;
+    resetEnvCacheForTests();
   });
 
   it('throws captchaRequired when token missing and provider enabled', async () => {

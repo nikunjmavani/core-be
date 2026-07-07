@@ -18,6 +18,7 @@ Hand-written guides grouped by **setup**, **CI/CD**, and **runbooks**.
 | Manual Railway + GitHub CLI         | [setup/railway-github-cli-setup.md](setup/railway-github-cli-setup.md)                                            |
 | CI, deploy, tokens, release flow    | [ci-cd/cicd-and-deployment.md](ci-cd/cicd-and-deployment.md)                                                      |
 | Local → production runbook          | [runbooks/runbook-dev-to-production.md](runbooks/runbook-dev-to-production.md) (includes path-to-production gate) |
+| Roll back a bad release             | [runbooks/rollback-deploy.md](runbooks/rollback-deploy.md)                                                        |
 | Observability                       | [runbooks/observability.md](runbooks/observability.md)                                                            |
 | Memory / `NODE_OPTIONS`             | [runbooks/resource-limits.md](runbooks/resource-limits.md)                                                        |
 | Branch protection / required checks | [ci-cd/branch-protection.md](ci-cd/branch-protection.md)                                                          |

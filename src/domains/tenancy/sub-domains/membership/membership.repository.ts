@@ -10,18 +10,29 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import type { MembershipRow } from './membership.types.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { parseListCursor } from '@/shared/utils/http/pagination.util.js';
 import {
-  buildAscendingCreatedAtIdCursorCondition,
-  createOpaqueCursorFromRow,
-  parseListCursor,
-} from '@/shared/utils/http/pagination.util.js';
-import { buildContainsLikePattern } from '@/shared/utils/http/list-query.util.js';
+  buildContainsLikePattern,
+  computeListFilterFingerprint,
+  finishKeysetPage,
+  resolveKeysetSort,
+} from '@/shared/utils/http/list-query.util.js';
 
 interface MembershipListPagination {
   after?: string;
   limit: number;
   /** Optional free-text search over the member's email / first name / last name. */
   q?: string;
+  /** Sort field. `created_at` (default) uses a local `(created_at, id)` keyset; `name` orders by the member's `auth.users` display name via the SECURITY DEFINER resolver. */
+  sort?: 'name' | 'created_at';
+  /** Sort direction; defaults to ascending. */
+  order?: 'asc' | 'desc';
+}
+
+/** One ordered `(id, sort_value)` row from `tenancy.list_organization_membership_ids_by_name`. */
+interface OrderedMembershipIdRow {
+  id: number;
+  sort_value: string;
 }
 
 /** Row shape returned by {@link MembershipRepository.listOrganizationsForUserDataExport}. */
@@ -87,13 +98,28 @@ export class MembershipRepository extends BaseRepository {
       .limit(limit);
   }
 
+  /**
+   * Lists an organization's memberships with cursor pagination + optional `q` search and `sort` /
+   * `order`. `created_at` (the default) sorts on the local `(created_at, id)` keyset; `name` sorts by
+   * the member's `auth.users` display name, which — because that table is FORCE RLS — is resolved
+   * through the `tenancy.list_organization_membership_ids_by_name` SECURITY DEFINER function. Both
+   * paths mint the same opaque cursor (`sort_value` + `filter_fingerprint`) so `has_more`,
+   * `next_cursor`, and the sort/filter binding behave identically to the roles / api-key lists.
+   */
   async findByOrganizationId(organization_id: number, pagination: MembershipListPagination) {
-    const { after, limit, q } = pagination;
-    const cursor = parseListCursor(after);
-    // Search restricts to the membership ids whose member's user email/name matches `q`. That match
-    // needs a join to `auth.users` (FORCE RLS), which under org-only context can only be read through
-    // the SECURITY DEFINER resolver — see searchMembershipIds. With no match, short-circuit to an
-    // empty page; otherwise the normal typed keyset query below adds `id IN (...)`.
+    return pagination.sort === 'name'
+      ? this.listByNameSort(organization_id, pagination)
+      : this.listByCreatedAtSort(organization_id, pagination);
+  }
+
+  /**
+   * `created_at` sort path (default). `q` still resolves the matching membership ids through the
+   * SECURITY DEFINER search resolver (see {@link searchMembershipIds}) and adds `id IN (...)`; the
+   * `(created_at, id)` keyset + cursor come from the shared `resolveKeysetSort` / `finishKeysetPage`
+   * helpers, so `order` (asc/desc) and the `filter_fingerprint` binding work exactly as for roles.
+   */
+  private async listByCreatedAtSort(organization_id: number, pagination: MembershipListPagination) {
+    const { after, limit, q, order } = pagination;
     let searchIdFilter: SQL | undefined;
     if (q !== undefined) {
       const matchingIds = await this.searchMembershipIds(organization_id, q);
@@ -108,7 +134,17 @@ export class MembershipRepository extends BaseRepository {
       }
       searchIdFilter = inArray(memberships.id, matchingIds);
     }
-    const rows = await getRequestDatabase()
+    const { orderBy, cursorCondition, sortValueFor, filterFingerprint } =
+      resolveKeysetSort<MembershipRow>({
+        columns: { created_at: { column: memberships.created_at, kind: 'created_at' } },
+        idColumn: memberships.id,
+        defaultSort: 'created_at',
+        sort: 'created_at',
+        order,
+        q,
+        after,
+      });
+    const rows = (await getRequestDatabase()
       .select()
       .from(memberships)
       .where(
@@ -116,21 +152,114 @@ export class MembershipRepository extends BaseRepository {
           eq(memberships.organization_id, organization_id),
           isNull(memberships.deleted_at),
           searchIdFilter,
-          buildAscendingCreatedAtIdCursorCondition(memberships.created_at, memberships.id, cursor),
+          cursorCondition,
         ),
       )
-      .orderBy(asc(memberships.created_at), asc(memberships.id))
-      .limit(limit + 1);
-    const hasMore = rows.length > limit;
-    const items = (hasMore ? rows.slice(0, limit) : rows) as MembershipRow[];
-    const lastItem = items.at(-1);
-    return {
-      items,
-      total: null,
+      .orderBy(...orderBy)
+      .limit(limit + 1)) as MembershipRow[];
+    return finishKeysetPage(rows, { limit, sortValueFor, filterFingerprint });
+  }
+
+  /**
+   * `name` sort path. Ordering by the member's `auth.users` display name can't happen in a plain
+   * query under org-only context (FORCE RLS matches zero rows), so the definer function
+   * `tenancy.list_organization_membership_ids_by_name` does the ordering + keyset + `q` filter + limit
+   * and returns the page's `(id, sort_value)`. The typed `MembershipRow`s are then fetched by
+   * `id IN (...)` under the org RLS context and reordered to the function's order before the shared
+   * `finishKeysetPage` mints the cursor. A cursor whose `filter_fingerprint` no longer matches the
+   * current `{q, sort, order}` is ignored (resets to the first page) — never interleaving pages.
+   */
+  private async listByNameSort(organization_id: number, pagination: MembershipListPagination) {
+    const { after, limit, q, order } = pagination;
+    const effectiveOrder = order ?? 'asc';
+    const filterFingerprint = computeListFilterFingerprint({
+      q,
+      sort: 'name',
+      order: effectiveOrder,
+    });
+    let cursor = parseListCursor(after);
+    if (
+      cursor?.filter_fingerprint !== undefined &&
+      cursor.filter_fingerprint !== filterFingerprint
+    ) {
+      cursor = null;
+    }
+    const ordered = await this.listMembershipIdsByName({
+      organization_id,
+      searchPattern: q !== undefined ? buildContainsLikePattern(q) : null,
+      orderDesc: effectiveOrder === 'desc',
+      afterSortValue: cursor?.sort_value ?? null,
+      afterId: cursor?.id ?? null,
+      // Fetch one extra id so finishKeysetPage can compute has_more without a count.
+      limit: limit + 1,
+    });
+    if (ordered.length === 0) {
+      return {
+        items: [] as MembershipRow[],
+        total: null,
+        limit,
+        has_more: false,
+        next_cursor: null,
+      };
+    }
+    const sortValueById = new Map(ordered.map((row) => [row.id, row.sort_value]));
+    const idsInOrder = ordered.map((row) => row.id);
+    const rowsById = await this.findByIdsForOrganization(idsInOrder, organization_id);
+    // Preserve the definer function's ordering; drop any id the RLS-scoped fetch didn't return.
+    const rows = idsInOrder
+      .map((id) => rowsById.get(id))
+      .filter((row): row is MembershipRow => row !== undefined);
+    return finishKeysetPage(rows, {
       limit,
-      has_more: hasMore,
-      next_cursor: hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null,
-    };
+      sortValueFor: (row) => sortValueById.get(row.id),
+      filterFingerprint,
+    });
+  }
+
+  /**
+   * Executes the `tenancy.list_organization_membership_ids_by_name` SECURITY DEFINER function,
+   * returning the ordered `(id, sort_value)` page. `searchPattern` / `afterSortValue` / `afterId` are
+   * bound as NULL on the first page (or when no `q`); casts are explicit so drizzle binds the correct
+   * Postgres types.
+   */
+  private async listMembershipIdsByName(args: {
+    organization_id: number;
+    searchPattern: string | null;
+    orderDesc: boolean;
+    afterSortValue: string | null;
+    afterId: number | null;
+    limit: number;
+  }): Promise<OrderedMembershipIdRow[]> {
+    const result = await getRequestDatabase().execute(
+      sql`SELECT id, sort_value FROM tenancy.list_organization_membership_ids_by_name(${args.organization_id}::bigint, ${args.searchPattern}::text, ${args.orderDesc}::boolean, ${args.afterSortValue}::text, ${args.afterId}::bigint, ${args.limit}::int)`,
+    );
+    const rows = (
+      Array.isArray(result) ? result : ((result as { rows?: unknown[] }).rows ?? [])
+    ) as { id: number | string; sort_value: string }[];
+    return rows.map((row) => ({ id: Number(row.id), sort_value: row.sort_value }));
+  }
+
+  /**
+   * Batch-fetches typed `MembershipRow`s by internal id within an organization (active rows only),
+   * keyed by id so the caller can restore an externally-computed ordering. Runs under the org RLS
+   * context — `memberships` is org-scoped, so no resolver is needed.
+   */
+  private async findByIdsForOrganization(
+    ids: readonly number[],
+    organization_id: number,
+  ): Promise<Map<number, MembershipRow>> {
+    if (ids.length === 0) return new Map();
+    const rows = (await getRequestDatabase()
+      .select()
+      .from(memberships)
+      .where(
+        and(
+          inArray(memberships.id, [...ids]),
+          eq(memberships.organization_id, organization_id),
+          isNull(memberships.deleted_at),
+        ),
+      )) as MembershipRow[];
+    return new Map(rows.map((row) => [row.id, row]));
   }
 
   /**

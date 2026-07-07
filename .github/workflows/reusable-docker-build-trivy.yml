@@ -102,7 +102,7 @@ jobs:
         uses: ./.github/actions/test-env
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
       - name: Verify Dockerfile.worker sync
         run: node tooling/ci/check-dockerfile-sync.mjs
@@ -185,13 +185,13 @@ jobs:
           skip-files: /app/package.json,/app/pnpm-lock.yaml
 
       - name: Upload API Trivy SARIF
-        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v3
+        uses: github/codeql-action/upload-sarif@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v3
         with:
           sarif_file: trivy-api.sarif
           category: trivy-api
 
       - name: Upload worker Trivy SARIF
-        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v3
+        uses: github/codeql-action/upload-sarif@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v3
         with:
           sarif_file: trivy-worker.sarif
           category: trivy-worker
@@ -220,7 +220,7 @@ jobs:
 
       - name: Login to GitHub Container Registry
         if: contains(fromJSON(env.PROTECTED_BRANCHES_JSON), env.TARGET_BRANCH)
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -328,7 +328,7 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm --network host \
-            -e NODE_ENV=test \
+            -e NODE_ENV=development \
             -e DATABASE_URL="$DATABASE_URL" \
             -e DATABASE_SSL_ENABLED="$DATABASE_SSL_ENABLED" \
             -e REDIS_URL="$REDIS_URL" \
@@ -340,13 +340,22 @@ jobs:
             -e METRICS_SCRAPE_TOKEN="$METRICS_SCRAPE_TOKEN" \
             -e SECRETS_ENCRYPTION_KEY="$SECRETS_ENCRYPTION_KEY" \
             ${{ env.DOCKER_LOCAL_API_TAG }}:ci node dist/src/infrastructure/database/migration/migrate.js
+          # Boot-time safety checks default HARDENED (see the Policy-flags section of
+          # .env.example); relax them here like local dev does — this smoke boot runs
+          # against the plaintext CI Postgres (superuser role, no TLS, no proxy, no
+          # replica counts) and would otherwise fail before binding the listener.
           docker run -d --name ${{ env.DOCKER_LOCAL_API_TAG }}-health --network host \
-            -e NODE_ENV=test \
+            -e NODE_ENV=development \
             -e HOST=0.0.0.0 \
             -e PORT=3000 \
             -e DATABASE_URL="$DATABASE_URL" \
             -e REDIS_URL="$REDIS_URL" \
             -e DATABASE_SSL_ENABLED="$DATABASE_SSL_ENABLED" \
+            -e DATABASE_TLS_ENFORCED=false \
+            -e DATABASE_RLS_SAFETY_ENFORCED=false \
+            -e DATABASE_CONNECTION_BUDGET_ENFORCED=false \
+            -e REDIS_TLS_ENFORCED=false \
+            -e TRUST_PROXY_REQUIRED=false \
             -e JWT_PRIVATE_KEY="$JWT_PRIVATE_KEY" \
             -e JWT_PUBLIC_KEY="$JWT_PUBLIC_KEY" \
             -e ALLOWED_ORIGINS="$ALLOWED_ORIGINS" \

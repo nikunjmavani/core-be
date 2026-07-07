@@ -106,10 +106,12 @@ const rateLimitMiddleware: FastifyPluginAsync = async (app) => {
   };
 
   // Use Redis when configured; the chaos suite sets RUN_REDIS_TESTS=0 to force in-memory
-  // limiting. That switch is honored only outside production — a stray RUN_REDIS_TESTS=0 in a
-  // prod env must never silently downgrade the cluster-wide Redis limiter to per-process counting.
-  // The fallback store keeps counting in-process if Redis becomes unavailable at runtime.
-  const redisTestsForcedOff = env.NODE_ENV !== 'production' && process.env.RUN_REDIS_TESTS === '0';
+  // limiting. That switch is honored only where RATE_LIMIT_IN_MEMORY_FALLBACK_ALLOWED is true (a
+  // schema refine forbids it in production) — a stray RUN_REDIS_TESTS=0 in a prod env must never
+  // silently downgrade the cluster-wide Redis limiter to per-process counting. The fallback store
+  // keeps counting in-process if Redis becomes unavailable at runtime.
+  const redisTestsForcedOff =
+    env.RATE_LIMIT_IN_MEMORY_FALLBACK_ALLOWED && process.env.RUN_REDIS_TESTS === '0';
   if (env.REDIS_URL && !redisTestsForcedOff) {
     options.store = createRedisFallbackRateLimitStore(redisConnection) as unknown as NonNullable<
       RateLimitPluginOptions['store']

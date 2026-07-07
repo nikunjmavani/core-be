@@ -1,6 +1,9 @@
 ---
 name: openapi-multilingual
 description: Maintain and generate multilingual OpenAPI documentation. Use when adding a locale, changing OpenAPI copy (info, tags, responses), or adding routes that need translated operation text.
+trigger: src/shared/locales/*/openapi.json
+triggerNote: Multilingual OpenAPI copy
+indexNote: generate/maintain multilingual OpenAPI from locale openapi.json
 ---
 
 # OpenAPI multilingual (core-be)

@@ -1,8 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sqlMock = vi.fn();
 const getEnvMock = vi.fn();
-const originalKubernetesServiceHost = process.env.KUBERNETES_SERVICE_HOST;
 
 vi.mock('@/infrastructure/database/connection.js', () => ({
   sql: (...arguments_: unknown[]) => sqlMock(...arguments_),
@@ -29,26 +28,17 @@ describe('assertDatabaseRoleRlsSafety', () => {
     sqlMock.mockReset();
     getEnvMock.mockReset();
     vi.resetModules();
-    delete process.env.KUBERNETES_SERVICE_HOST;
     getEnvMock.mockReturnValue({
       LOG_LEVEL: 'silent',
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
     });
-  });
-
-  afterEach(() => {
-    if (originalKubernetesServiceHost === undefined) {
-      delete process.env.KUBERNETES_SERVICE_HOST;
-    } else {
-      process.env.KUBERNETES_SERVICE_HOST = originalKubernetesServiceHost;
-    }
   });
 
   it('resolves and logs info when the session role is non-superuser without BYPASSRLS', async () => {
     sqlMock.mockResolvedValue([
       { rolname: 'core_be_app_login', rolsuper: false, rolbypassrls: false },
     ]);
-    getEnvMock.mockReturnValue({ NODE_ENV: 'production' });
+    getEnvMock.mockReturnValue({ DATABASE_RLS_SAFETY_ENFORCED: true });
 
     const { logger } = await import('@/shared/utils/infrastructure/logger.util.js');
     const { assertDatabaseRoleRlsSafety } = await import(
@@ -66,9 +56,9 @@ describe('assertDatabaseRoleRlsSafety', () => {
     );
   });
 
-  it('throws in production when the session role is a superuser', async () => {
+  it('throws when DATABASE_RLS_SAFETY_ENFORCED and the session role is a superuser', async () => {
     sqlMock.mockResolvedValue([{ rolname: 'postgres', rolsuper: true, rolbypassrls: false }]);
-    getEnvMock.mockReturnValue({ NODE_ENV: 'production' });
+    getEnvMock.mockReturnValue({ DATABASE_RLS_SAFETY_ENFORCED: true });
 
     const { assertDatabaseRoleRlsSafety } = await import(
       '@/infrastructure/database/safety/assert-database-rls-safety.js'
@@ -79,11 +69,11 @@ describe('assertDatabaseRoleRlsSafety', () => {
     );
   });
 
-  it('throws in production when the session role has BYPASSRLS', async () => {
+  it('throws when DATABASE_RLS_SAFETY_ENFORCED and the session role has BYPASSRLS', async () => {
     sqlMock.mockResolvedValue([
       { rolname: 'replication_role', rolsuper: false, rolbypassrls: true },
     ]);
-    getEnvMock.mockReturnValue({ NODE_ENV: 'production' });
+    getEnvMock.mockReturnValue({ DATABASE_RLS_SAFETY_ENFORCED: true });
 
     const { assertDatabaseRoleRlsSafety } = await import(
       '@/infrastructure/database/safety/assert-database-rls-safety.js'
@@ -92,39 +82,9 @@ describe('assertDatabaseRoleRlsSafety', () => {
     await expect(assertDatabaseRoleRlsSafety()).rejects.toThrow(/rolbypassrls=true/);
   });
 
-  it('throws on hosted Railway deployments (RAILWAY_GIT_COMMIT_SHA set, NODE_ENV=development)', async () => {
+  it('warns (without throwing) for superuser when DATABASE_RLS_SAFETY_ENFORCED is false', async () => {
     sqlMock.mockResolvedValue([{ rolname: 'postgres', rolsuper: true, rolbypassrls: false }]);
-    getEnvMock.mockReturnValue({
-      NODE_ENV: 'development',
-      RAILWAY_GIT_COMMIT_SHA: 'deadbeef',
-    });
-
-    const { assertDatabaseRoleRlsSafety } = await import(
-      '@/infrastructure/database/safety/assert-database-rls-safety.js'
-    );
-
-    await expect(assertDatabaseRoleRlsSafety()).rejects.toThrow(
-      /database\.rls_safety\.unsafe_role/,
-    );
-  });
-
-  it('throws on hosted Kubernetes deployments (KUBERNETES_SERVICE_HOST set)', async () => {
-    process.env.KUBERNETES_SERVICE_HOST = '10.0.0.1';
-    sqlMock.mockResolvedValue([{ rolname: 'app_role', rolsuper: false, rolbypassrls: true }]);
-    getEnvMock.mockReturnValue({ NODE_ENV: 'staging' });
-
-    const { assertDatabaseRoleRlsSafety } = await import(
-      '@/infrastructure/database/safety/assert-database-rls-safety.js'
-    );
-
-    await expect(assertDatabaseRoleRlsSafety()).rejects.toThrow(
-      /database\.rls_safety\.unsafe_role/,
-    );
-  });
-
-  it('warns (without throwing) for superuser on local/dev when no hosted markers are set', async () => {
-    sqlMock.mockResolvedValue([{ rolname: 'postgres', rolsuper: true, rolbypassrls: false }]);
-    getEnvMock.mockReturnValue({ NODE_ENV: 'local' });
+    getEnvMock.mockReturnValue({ DATABASE_RLS_SAFETY_ENFORCED: false });
 
     const { logger } = await import('@/shared/utils/infrastructure/logger.util.js');
     const { assertDatabaseRoleRlsSafety } = await import(
@@ -138,9 +98,9 @@ describe('assertDatabaseRoleRlsSafety', () => {
     );
   });
 
-  it('warns (without throwing) for BYPASSRLS on test environment', async () => {
+  it('warns (without throwing) for BYPASSRLS when the flag is unset (relaxed)', async () => {
     sqlMock.mockResolvedValue([{ rolname: 'core', rolsuper: false, rolbypassrls: true }]);
-    getEnvMock.mockReturnValue({ NODE_ENV: 'test' });
+    getEnvMock.mockReturnValue({ NODE_ENV: 'development' });
 
     const { logger } = await import('@/shared/utils/infrastructure/logger.util.js');
     const { assertDatabaseRoleRlsSafety } = await import(
@@ -153,7 +113,7 @@ describe('assertDatabaseRoleRlsSafety', () => {
 
   it('throws when pg_roles returns no row for session_user', async () => {
     sqlMock.mockResolvedValue([]);
-    getEnvMock.mockReturnValue({ NODE_ENV: 'test' });
+    getEnvMock.mockReturnValue({ NODE_ENV: 'development' });
 
     const { assertDatabaseRoleRlsSafety } = await import(
       '@/infrastructure/database/safety/assert-database-rls-safety.js'

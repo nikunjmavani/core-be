@@ -9,6 +9,7 @@ import * as databaseConnection from '@/infrastructure/database/connection.js';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
 import * as redisClient from '@/infrastructure/cache/redis.client.js';
 import { resetApplicationDrainingForTests } from '@/shared/utils/infrastructure/application-lifecycle.util.js';
+import { buildFastifyServerOptions } from '@/shared/utils/http/fastify-server.util.js';
 
 function sendHttpGetRequestListeningForUrl(
   requestUrlListeningForObservation: string,
@@ -131,11 +132,26 @@ describe('graceful shutdown drain', () => {
         '@/shared/middlewares/core/shutdown.middleware.js'
       );
 
-      const applicationListeningForDrainObservation = Fastify({ logger: false });
+      // Use the REAL production server options so this test guards the deployed drain
+      // behavior: fastify 5.9.0 turned `forceCloseConnections: 'idle'` into a
+      // `closeAllConnections()` on native servers (fastify/fastify#6669), destroying ACTIVE
+      // sockets mid-request — the config must stay `false` for in-flight requests to drain.
+      const applicationListeningForDrainObservation = Fastify({
+        ...buildFastifyServerOptions(),
+        logger: false,
+      });
       let handlerCompletedAtMillisecondsListeningForObservation = 0;
+      // Deterministic in-flight signal: `close()` must not start until the slow
+      // handler has actually begun. A fixed sleep races TCP connect + HTTP parse
+      // on loaded CI runners and drops the request ("socket hang up").
+      let markSlowHandlerStartedListeningForObservation: () => void = () => {};
+      const slowHandlerStartedPromiseListeningForObservation = new Promise<void>((resolve) => {
+        markSlowHandlerStartedListeningForObservation = resolve;
+      });
 
       await applicationListeningForDrainObservation.register(async (instance) => {
         instance.get('/__test__/slow', async (_request, reply) => {
+          markSlowHandlerStartedListeningForObservation();
           await new Promise<void>((resolve) => setTimeout(resolve, 300));
           handlerCompletedAtMillisecondsListeningForObservation = Date.now();
           return reply.send({ done: true });
@@ -160,7 +176,7 @@ describe('graceful shutdown drain', () => {
       const httpResponsePromiseListeningForObservation = sendHttpGetRequestListeningForUrl(
         requestUrlListeningForObservation,
       );
-      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+      await slowHandlerStartedPromiseListeningForObservation;
 
       let applicationCloseResolvedAtMillisecondsListeningForObservation = 0;
       const applicationClosePromiseListeningForObservation = applicationListeningForDrainObservation

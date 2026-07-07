@@ -1,6 +1,7 @@
 ---
 name: schema-generator
 description: Scaffolds co-located Drizzle schema files for new domains or sub-domains (snake_case columns, pgSchema from pg-schemas.ts, standard id/public_id/timestamps/soft-delete). Use when creating a domain/sub-domain that needs database tables, adding tables to an existing domain, or when a *.schema.ts file changes.
+indexNote: scaffold co-located Drizzle schema files (snake_case, id/public_id/timestamps/soft-delete)
 ---
 
 # Schema generator (core-be)
@@ -81,3 +82,7 @@ export const <table_name> = <domain>Schema.table(
 - **seed-maintainer** — demo/reference data when routes need it
 - **tsdoc-export-guard** — TSDoc summary on every exported `pgTable`, type, and inferred row type in the new schema file
 - **tsdoc-export-guard** — TSDoc on every new exported schema/type, then `pnpm tsdoc:check`
+
+---
+
+**Related skills:** [sql-design-guard](../sql-design-guard/SKILL.md) · [db-migration-maintainer](../db-migration-maintainer/SKILL.md) · [rls-tenant-isolation-guard](../rls-tenant-isolation-guard/SKILL.md)

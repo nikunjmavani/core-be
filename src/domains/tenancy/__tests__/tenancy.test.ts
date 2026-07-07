@@ -11,7 +11,7 @@ import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
 import {
-  seedPermissions,
+  seedAllPermissions,
   createRoleWithPermissions,
   createMembership,
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
@@ -35,7 +35,9 @@ describe('Tenancy Domain — Integration', () => {
 
   beforeEach(async () => {
     await cleanupDatabase();
-    await seedPermissions(ALL_TENANCY_PERMISSIONS);
+    // Full catalog, not the tenancy subset: POST /tenancy/organizations
+    // provisions a TEAM owner role that also grants billing codes.
+    await seedAllPermissions();
   });
 
   // ─── Helper: create user with full org permissions ────────────
@@ -334,6 +336,113 @@ describe('Tenancy Domain — Integration', () => {
       });
       expect(empty.statusCode).toBe(200);
       expect((empty.json() as { data?: unknown[] }).data).toHaveLength(0);
+    });
+
+    it('accepts sort/order and genuinely orders members by name asc and desc', async () => {
+      const { organization, role, token } = await createAuthorizedUserAndOrganization();
+      // Owner already exists (ACTIVE). Add two members with names that bracket a typical owner name.
+      const alice = await createTestUser({
+        email: 'aaa.sortmember@example.com',
+        firstName: 'Aaron',
+        lastName: 'Aardvark',
+      });
+      await createMembership({
+        userId: alice.id,
+        organizationId: organization.id,
+        roleId: role.id,
+      });
+      const zoe = await createTestUser({
+        email: 'zzz.sortmember@example.com',
+        firstName: 'Zelda',
+        lastName: 'Zephyr',
+      });
+      await createMembership({ userId: zoe.id, organizationId: organization.id, roleId: role.id });
+
+      const nameOf = (row: { user?: { first_name: string | null; last_name: string | null } }) =>
+        `${row.user?.first_name ?? ''} ${row.user?.last_name ?? ''}`.trim().toLowerCase();
+
+      const asc = await injectAuthenticated(app, {
+        url: testApiPath('/tenancy/organization/memberships?sort=name&order=asc'),
+        token,
+      });
+      expect(asc.statusCode).toBe(200);
+      const ascNames = (
+        asc.json() as {
+          data: Array<{ user?: { first_name: string | null; last_name: string | null } }>;
+        }
+      ).data.map(nameOf);
+      expect(ascNames).toEqual([...ascNames].sort());
+      expect(ascNames[0]).toBe('aaron aardvark');
+
+      const desc = await injectAuthenticated(app, {
+        url: testApiPath('/tenancy/organization/memberships?sort=name&order=desc'),
+        token,
+      });
+      expect(desc.statusCode).toBe(200);
+      const descNames = (
+        desc.json() as {
+          data: Array<{ user?: { first_name: string | null; last_name: string | null } }>;
+        }
+      ).data.map(nameOf);
+      // Descending is the reverse of ascending — proves the param is honored, not accept-and-ignored.
+      expect(descNames).toEqual([...ascNames].reverse());
+    });
+
+    it('keyset-paginates the name sort across pages and resets on a filter change', async () => {
+      const { organization, role, token } = await createAuthorizedUserAndOrganization();
+      for (const [first, last] of [
+        ['Bella', 'Bright'],
+        ['Cara', 'Clark'],
+        ['Dana', 'Dixon'],
+      ] as const) {
+        const member = await createTestUser({
+          email: `${first}.${last}.page@example.com`.toLowerCase(),
+          firstName: first,
+          lastName: last,
+        });
+        await createMembership({
+          userId: member.id,
+          organizationId: organization.id,
+          roleId: role.id,
+        });
+      }
+
+      const page1 = await injectAuthenticated(app, {
+        url: testApiPath('/tenancy/organization/memberships?sort=name&order=asc&limit=2'),
+        token,
+      });
+      expect(page1.statusCode).toBe(200);
+      const body1 = page1.json() as {
+        data: Array<{ id: string }>;
+        meta: { pagination: { next?: string | null } };
+      };
+      expect(body1.data).toHaveLength(2);
+      const cursor = body1.meta.pagination.next;
+      expect(typeof cursor).toBe('string');
+
+      const page2 = await injectAuthenticated(app, {
+        url: testApiPath(
+          `/tenancy/organization/memberships?sort=name&order=asc&limit=2&after=${encodeURIComponent(cursor!)}`,
+        ),
+        token,
+      });
+      expect(page2.statusCode).toBe(200);
+      const body2 = page2.json() as { data: Array<{ id: string }> };
+      // No overlap between pages — the keyset advanced past the boundary row.
+      const page1Ids = new Set(body1.data.map((row) => row.id));
+      for (const row of body2.data) expect(page1Ids.has(row.id)).toBe(false);
+
+      // Reusing a name-asc cursor under order=desc must reset to the first page (fingerprint guard),
+      // not 400 and not interleave.
+      const reset = await injectAuthenticated(app, {
+        url: testApiPath(
+          `/tenancy/organization/memberships?sort=name&order=desc&limit=2&after=${encodeURIComponent(cursor!)}`,
+        ),
+        token,
+      });
+      expect(reset.statusCode).toBe(200);
+      const resetIds = (reset.json() as { data: Array<{ id: string }> }).data.map((row) => row.id);
+      expect(resetIds.length).toBeGreaterThan(0);
     });
   });
 

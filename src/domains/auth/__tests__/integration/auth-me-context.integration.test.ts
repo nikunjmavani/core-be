@@ -11,6 +11,7 @@ import { createTestOrganization } from '@/tests/factories/organization.factory.j
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
 import {
   seedPermissions,
+  seedAllPermissions,
   createRoleWithPermissions,
   createMembership,
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
@@ -43,6 +44,11 @@ describe('GET /api/v1/auth/me/context — Integration', () => {
 
   beforeEach(async () => {
     await cleanupDatabase();
+    // /auth/me/context → getMe self-heals a missing personal org; provisioning needs the full
+    // owner-permission catalog present (role_permissions → permissions FK). Seed all codes so
+    // the self-heal succeeds. This does NOT change my_permissions — those come from the role
+    // built with seedPermissions(PERMISSIONS)/createRoleWithPermissions below.
+    await seedAllPermissions();
     await seedPermissions(PERMISSIONS);
   });
 
@@ -53,7 +59,11 @@ describe('GET /api/v1/auth/me/context — Integration', () => {
       organizationId: organization.id,
       permissionCodes: PERMISSIONS,
     });
-    await createMembership({ userId: user.id, organizationId: organization.id, roleId: role.id });
+    await createMembership({
+      userId: user.id,
+      organizationId: organization.id,
+      roleId: role.id,
+    });
     const token = await generateTestToken({
       userId: user.public_id,
       organizationPublicId: organization.public_id,

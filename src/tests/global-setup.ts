@@ -34,7 +34,7 @@ function forceLocalDatabaseForNonCiTestRun(): void {
  * `*_TESTS_ONLY` / `VITEST_SKIP_DATABASE` env vars.
  */
 export default async function globalSetup(): Promise<void> {
-  process.env.NODE_ENV ??= 'test';
+  process.env.NODE_ENV ??= 'development';
   forceLocalDatabaseForNonCiTestRun();
 
   /** Contract tests mock outbound HTTP — skip Postgres churn (offline CI slice). See `pnpm test:contract`. */

@@ -11,21 +11,21 @@ End-to-end guide to get **core-be** running locally or on managed cloud infrastr
 
 ## Prerequisites
 
-| Requirement | Notes |
-| --- | --- |
-| **Node.js 24+** | Pinned in `package.json` → `engines.node` and `.nvmrc`. |
-| **pnpm 11+** | `corepack enable && corepack prepare pnpm@latest --activate` |
-| **Docker** | Required for local Postgres + Redis (`pnpm compose:up`). Start Docker Desktop / OrbStack before `setup:local`. |
-| **Git** | To clone the repository. |
+| Requirement     | Notes                                                                                                          |
+| --------------- | -------------------------------------------------------------------------------------------------------------- |
+| **Node.js 24+** | Pinned in `package.json` → `engines.node` and `.nvmrc`.                                                        |
+| **pnpm 11+**    | `corepack enable && corepack prepare pnpm@latest --activate`                                                   |
+| **Docker**      | Required for local Postgres + Redis (`pnpm compose:up`). Start Docker Desktop / OrbStack before `setup:local`. |
+| **Git**         | To clone the repository.                                                                                       |
 
 **Switch to Node 24** (the repo does not enforce one manager):
 
-| Tool | Command |
-| --- | --- |
-| **nvm** | `nvm install` then `nvm use` (reads `.nvmrc`) |
-| **fnm** | `fnm install` then `fnm use` (reads `.nvmrc` when `use-on-cd` is set) |
-| **n** | `n 24` — open a new terminal and verify `node -v`; `n auto` also works from the repo root |
-| **Volta** | `volta install node@24` |
+| Tool      | Command                                                                                   |
+| --------- | ----------------------------------------------------------------------------------------- |
+| **nvm**   | `nvm install` then `nvm use` (reads `.nvmrc`)                                             |
+| **fnm**   | `fnm install` then `fnm use` (reads `.nvmrc` when `use-on-cd` is set)                     |
+| **n**     | `n 24` — open a new terminal and verify `node -v`; `n auto` also works from the repo root |
+| **Volta** | `volta install node@24`                                                                   |
 
 ```mermaid
 flowchart LR
@@ -102,13 +102,13 @@ Optional env for the wait step: `WAIT_FOR_POSTGRES_ATTEMPTS` (default `60`), `WA
 
 Env files live at **project root only**. There is exactly one committed template — `.env.example` — and one gitignored file per environment.
 
-| File | Status | Purpose |
-| --- | --- | --- |
-| `.env.example` | committed | Single template; every schema key with its section and sub-section |
-| `.env.local.example` | committed | Template for the local override; copy to `.env.local` for Docker dev |
-| `.env.development` | **gitignored** | Local + dev-environment values; source of truth for `pnpm github:sync development` |
-| `.env.production` | **gitignored** | Production values; source of truth for `pnpm github:sync production` |
-| `.env.local` | **gitignored** | Machine-specific override; wins over `.env.<NODE_ENV>` for local dev only |
+| File                 | Status         | Purpose                                                                            |
+| -------------------- | -------------- | ---------------------------------------------------------------------------------- |
+| `.env.example`       | committed      | Single template; every schema key with its section and sub-section                 |
+| `.env.local.example` | committed      | Template for the local override; copy to `.env.local` for Docker dev               |
+| `.env.development`   | **gitignored** | Local + dev-environment values; source of truth for `pnpm github:sync development` |
+| `.env.production`    | **gitignored** | Production values; source of truth for `pnpm github:sync production`               |
+| `.env.local`         | **gitignored** | Machine-specific override; wins over `.env.<NODE_ENV>` for local dev only          |
 
 **Minimum required:** `DATABASE_URL`, `REDIS_URL`, `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` (RS256 PEM pair), `SECRETS_ENCRYPTION_KEY` (64 hex chars).
 
@@ -176,16 +176,16 @@ Full detail (branch naming, PR flow, hotfixes, protected branches): [git-workflo
 
 Tests live under `src/tests/` (cross-cutting) and co-located `__tests__/` inside each domain. See [CLAUDE.md](CLAUDE.md) § Testing for the full layout.
 
-| Category | Command | When to run |
-| --- | --- | --- |
-| **Unit** | `pnpm test:unit` | Fast feedback before commit; no DB needed |
-| **Integration** | `pnpm test:integration` | Before pushing; requires Postgres + Redis |
-| **E2E / domain** | `pnpm test:e2e` | Full domain flows; run with `pnpm test` |
-| **Contract (outbound)** | `pnpm test:contract` | Mocked Stripe / Resend / S3; runs in CI quality job |
-| **Security** | `pnpm test:security` | Auth, JWT, CORS, rate-limiting; before release |
-| **Performance** | `pnpm test:performance` | When changing queries or concurrency |
-| **Smoke (health)** | `pnpm load:health` | Quick sanity after deploy; no auth needed |
-| **Load (stress)** | `pnpm load:stress` | Before release or after infra changes |
+| Category                | Command                 | When to run                                         |
+| ----------------------- | ----------------------- | --------------------------------------------------- |
+| **Unit**                | `pnpm test:unit`        | Fast feedback before commit; no DB needed           |
+| **Integration**         | `pnpm test:integration` | Before pushing; requires Postgres + Redis           |
+| **E2E / domain**        | `pnpm test:e2e`         | Full domain flows; run with `pnpm test`             |
+| **Contract (outbound)** | `pnpm test:contract`    | Mocked Stripe / Resend / S3; runs in CI quality job |
+| **Security**            | `pnpm test:security`    | Auth, JWT, CORS, rate-limiting; before release      |
+| **Performance**         | `pnpm test:performance` | When changing queries or concurrency                |
+| **Smoke (health)**      | `pnpm load:health`      | Quick sanity after deploy; no auth needed           |
+| **Load (stress)**       | `pnpm load:stress`      | Before release or after infra changes               |
 
 **When to run:**
 
@@ -195,6 +195,53 @@ Tests live under `src/tests/` (cross-cutting) and co-located `__tests__/` inside
 - After deploy → `pnpm load:health` or `GET /readyz`
 
 Full k6 scenarios: [load-testing.md](docs/reference/testing/load-testing.md).
+
+### Running a live server for a frontend / loopback E2E suite
+
+The tiers above are **in-process** (`fastify.inject()`) and self-configure — the Vitest
+harness (`NODE_ENV=test`) already relaxes the hardened boot guards and rate-limit caps, and
+CI does the same, so **no manual env is needed for `pnpm test*` or CI**.
+
+A **live server** is different: when an external suite drives a real core-be over loopback —
+e.g. the **core-fe Playwright E2E** suite, which boots `pnpm dev` on `:3000` and hits it as
+a browser client — the process runs under `NODE_ENV=development` and enforces the production
+defaults unless told otherwise. Set these in **`.env.development`** (the gitignored dev file
+that `pnpm setup:local` scaffolds from `.env.example` — **not** a plain `.env`, **not**
+`.env.local`, **not** ad-hoc shell prefixes; keep the pair below with the values you need):
+
+| Env var (in `.env.development`)                               | Set to                                              | Why the live server needs it                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RATE_LIMIT_RELAXED_CAPS`                                     | `true`                                              | Public-auth routes (`send-code`, login) default to **5 req/min per IP** (`STRICT_PUBLIC_RATE_LIMIT` / `STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS` in `src/shared/middlewares/rate-limit/rate-limit-presets.constants.ts`). A loopback E2E suite floods that → `429 send-code failed` and every authenticated flow fails. `true` lifts each cap to 5000. A schema refine keeps it **false in production**. |
+| `DATABASE_TLS_ENFORCED`                                       | `false`                                             | Local Docker Postgres is plaintext; `assertDatabaseTlsVerification` is fail-closed for hosted deployments only (its warn-path explicitly accepts local Docker).                                                                                                                                                                                                                                            |
+| `DATABASE_RLS_SAFETY_ENFORCED`                                | `false`                                             | The Docker `core` role is a superuser / `BYPASSRLS`; `assertDatabaseRoleRlsSafety` is fail-closed for hosted deployments only.                                                                                                                                                                                                                                                                             |
+| `PERSONAL_ORGANIZATION_ENABLED` / `TEAM_ORGANIZATION_ENABLED` | match the mode under test (**at least one `true`**) | Selects the deployment mode (B2C / B2B / hybrid) the FE suite exercises. See [personal-vs-team-organizations.md](docs/reference/architecture/personal-vs-team-organizations.md).                                                                                                                                                                                                                           |
+
+The committed **[`.env.example`](.env.example)** already ships all four keys with these
+local values and the same production-safety notes — a fresh `.env.development` inherits them.
+This section only matters if you've hardened your local file or run the server outside
+`pnpm setup:local`. See also the rate-limit posture in
+[authentication.md](docs/reference/security/authentication.md) and the flag
+model in [environment-variables.md](docs/deployment/runbooks/environment-variables.md).
+
+#### Why these live in `.env.development`, not a shell prefix
+
+Set the flags in the file — **never** pass them inline on the command line
+(`DATABASE_TLS_ENFORCED=false … pnpm dev`) and never as a plain `.env` / `.env.local`:
+
+- **They are non-secret local-dev flags** (booleans, no keys or tokens), so they belong in
+  `.env.development` — the repo-owner-maintained dev file — where the local-safety decision is
+  made **once**, on the record, by a human. There is nothing sensitive to keep out of the file.
+- **An automated agent cannot boot the server with these flags on the command line.** A
+  coding agent's safety classifier reads an inline `DATABASE_TLS_ENFORCED=false
+DATABASE_RLS_SAFETY_ENFORCED=false pnpm dev` as "disarm TLS / RLS" and **blocks** it, and the
+  agent must not self-grant a permission rule to tunnel around that guard. Pre-setting the
+  flags in `.env.development` removes the bypass flags from the command entirely: boot is a
+  plain `pnpm dev` — nothing for the classifier to flag, no permission prompt, the agent just
+  runs. So do not ask an agent to boot core-be by passing these flags on the CLI.
+- **The production guardrail is unaffected.** `src/shared/config/env-schema.ts` pins
+  `RATE_LIMIT_RELAXED_CAPS=false` and keeps the DB TLS / RLS guards enforced in production via a
+  schema refine that rejects the loosened value there. Setting them false in `.env.development`
+  only loosens the **local Docker** stack; a deployed `.env` omits them and stays hardened.
 
 ---
 
@@ -208,14 +255,14 @@ Covers: what runs in CI, branch-to-environment mapping (`dev` → development, `
 
 ## 6. Common commands
 
-| Goal | Command |
-| --- | --- |
-| Local run (manual) | `pnpm compose:up` → `pnpm compose:wait` → `pnpm db:migrate` → `pnpm dev` + `pnpm dev:worker` |
-| Fast feedback | `pnpm test:unit` |
-| Before PR | `pnpm validate && pnpm test` (full gate: `pnpm ci:local`) |
-| Stop local stack | `pnpm compose:down` |
-| Load-test credentials | `pnpm tool:load-test-credentials` (server + full seed running) |
-| List every script | `pnpm run` |
+| Goal                  | Command                                                                                      |
+| --------------------- | -------------------------------------------------------------------------------------------- |
+| Local run (manual)    | `pnpm compose:up` → `pnpm compose:wait` → `pnpm db:migrate` → `pnpm dev` + `pnpm dev:worker` |
+| Fast feedback         | `pnpm test:unit`                                                                             |
+| Before PR             | `pnpm validate && pnpm test` (full gate: `pnpm ci:local`)                                    |
+| Stop local stack      | `pnpm compose:down`                                                                          |
+| Load-test credentials | `pnpm tool:load-test-credentials` (server + full seed running)                               |
+| List every script     | `pnpm run`                                                                                   |
 
 ---
 

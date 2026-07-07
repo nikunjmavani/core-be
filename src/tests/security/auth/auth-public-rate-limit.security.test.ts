@@ -3,7 +3,8 @@ import rateLimit from '@fastify/rate-limit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mockEnv = vi.hoisted(() => ({
-  NODE_ENV: 'production' as string,
+  // Production posture: caps are NOT relaxed, so STRICT_PUBLIC_RATE_LIMIT keeps the tight 5/min cap.
+  RATE_LIMIT_RELAXED_CAPS: false as boolean,
 }));
 
 vi.mock('@/shared/config/env.config.js', () => ({
@@ -34,7 +35,7 @@ describe('Security: Auth public rate limit burst (429)', () => {
   });
 
   async function createAuthStylePublicRouteApp() {
-    mockEnv.NODE_ENV = 'production';
+    mockEnv.RATE_LIMIT_RELAXED_CAPS = false;
     vi.resetModules();
     const { STRICT_PUBLIC_RATE_LIMIT } = await import(
       '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
@@ -130,7 +131,7 @@ describe('Security: Auth public rate limit burst (429)', () => {
   });
 
   async function createPerEmailRouteApp() {
-    mockEnv.NODE_ENV = 'production';
+    mockEnv.RATE_LIMIT_RELAXED_CAPS = false;
     vi.resetModules();
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
       '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'

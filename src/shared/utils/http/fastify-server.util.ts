@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyServerOptions } from 'fastify';
 import type { IncomingMessage } from 'node:http';
 import { env } from '@/shared/config/env.config.js';
+import { DEFAULT_BODY_LIMIT_BYTES } from '@/shared/constants/limits.constants.js';
 import { TEN_SECONDS_MS, THIRTY_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
 import {
   redactSensitive,
@@ -54,9 +55,6 @@ export function resolveTrustProxy(): boolean | number {
  * comfortably covers a canonical UUID (36 chars) plus common tracing token formats.
  */
 const MAX_INBOUND_REQUEST_IDENTIFIER_LENGTH = 128;
-
-/** Maximum inbound request body size (bytes) accepted by Fastify (1 MiB). */
-const DEFAULT_BODY_LIMIT_BYTES = 1_048_576;
 
 /**
  * Strict allow-list for inbound `x-request-id` values: a non-empty token of safe correlation-id
@@ -132,7 +130,7 @@ export function buildFastifyServerOptions(): FastifyServerOptions {
       formatters: {
         log: (object) => redactSensitive(object),
       },
-      ...(env.NODE_ENV === 'local'
+      ...(env.LOG_PRETTY
         ? {
             transport: {
               target: 'pino-pretty',
@@ -153,10 +151,12 @@ export function buildFastifyServerOptions(): FastifyServerOptions {
     bodyLimit: DEFAULT_BODY_LIMIT_BYTES,
     requestTimeout: env.FASTIFY_REQUEST_TIMEOUT_MS ?? THIRTY_SECONDS_MS,
     connectionTimeout: env.FASTIFY_CONNECTION_TIMEOUT_MS ?? TEN_SECONDS_MS,
-    // On shutdown, immediately close keep-alive sockets sitting idle between requests rather than
-    // waiting out their keep-alive timeout; in-flight requests still drain normally. Without this a
-    // rolling deploy can hang on idle-but-open client connections until the platform force-kills the
-    // process — a slower, less graceful drain.
-    forceCloseConnections: 'idle',
+    // On shutdown, keep-alive sockets sitting idle between requests are closed by Node itself
+    // (native `server.close()` reaps idle connections on Node >= 19), while in-flight requests
+    // drain normally. Must stay `false`: fastify 5.9.0 (fastify/fastify#6669) made the previous
+    // `'idle'` value fall through to `closeAllConnections()` on native servers, which destroys
+    // ACTIVE sockets mid-request — every in-flight request during a rolling deploy would die
+    // with a connection reset (caught by shutdown-drain.integration.test.ts).
+    forceCloseConnections: false,
   };
 }

@@ -2,6 +2,9 @@
 name: verifier
 description: Skeptical independent validator for core-be. Use after a task is marked done to confirm the implementation actually works — runs validate/tests, checks edge cases, and reports what passed vs what is incomplete or broken. Use proactively before claiming a feature complete.
 model: inherit
+modelRationale: adversarial validation across edge cases — frontier reasoning
+wrapsSkill: "*(inline)*"
+useWhen: After claiming work complete — scoped validate/tests + wiring check
 tools:
   - Read
   - Grep

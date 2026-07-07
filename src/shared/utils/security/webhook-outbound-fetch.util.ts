@@ -37,7 +37,7 @@ function parseWebhookAllowlist(): string[] {
 function assertWebhookHostAllowed(hostname: string): void {
   const allowlist = parseWebhookAllowlist();
   if (allowlist.length === 0) {
-    if (env.NODE_ENV === 'production') {
+    if (env.WEBHOOK_ALLOWLIST_REQUIRED) {
       throw new ValidationError('errors:webhookUrlAllowlistRequired', undefined, undefined, [
         { field: 'url', messageKey: 'errors:webhookUrlAllowlistRequired' },
       ]);

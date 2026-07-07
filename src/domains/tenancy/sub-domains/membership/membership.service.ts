@@ -314,6 +314,8 @@ export class MembershipService {
           after: parsed.after,
           limit: parsed.limit,
           q: parsed.q,
+          sort: parsed.sort,
+          order: parsed.order,
         }),
       );
       return {

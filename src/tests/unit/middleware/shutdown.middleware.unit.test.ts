@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockEnv = vi.hoisted(() => ({
   LOG_LEVEL: 'silent',
-  NODE_ENV: 'test' as string,
+  NODE_ENV: 'development' as string,
   SHUTDOWN_TIMEOUT_MS: undefined as number | undefined,
+  SHUTDOWN_DRAIN_ENABLED: false as boolean,
 }));
 
 vi.mock('@/shared/config/env.config.js', () => ({
@@ -64,7 +65,8 @@ describe('shutdown.middleware', () => {
 
   beforeEach(() => {
     mockEnv.SHUTDOWN_TIMEOUT_MS = undefined;
-    mockEnv.NODE_ENV = 'test';
+    mockEnv.NODE_ENV = 'development';
+    mockEnv.SHUTDOWN_DRAIN_ENABLED = false;
     processExitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
   });
 
@@ -142,7 +144,7 @@ describe('shutdown.middleware', () => {
       return originalSetTimeout(handler, timeout, ...arguments_);
     }) as typeof setTimeout);
 
-    mockEnv.NODE_ENV = 'test';
+    mockEnv.NODE_ENV = 'development';
 
     const applicationListeningForShutdown = Fastify({ logger: false });
     const applicationCloseSpy = vi.spyOn(applicationListeningForShutdown, 'close');
@@ -180,6 +182,7 @@ describe('shutdown.middleware', () => {
     }) as typeof setTimeout);
 
     mockEnv.NODE_ENV = 'production';
+    mockEnv.SHUTDOWN_DRAIN_ENABLED = true;
 
     await applicationListeningForShutdown.register(shutdownMiddleware);
     await applicationListeningForShutdown.ready();

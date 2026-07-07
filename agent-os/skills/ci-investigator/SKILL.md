@@ -1,6 +1,7 @@
 ---
 name: ci-investigator
 description: Investigate a single failing PR CI check in core-be and return a short root-cause summary with a fix plan. Use when the user asks why CI failed or to diagnose a specific GitHub Actions job.
+indexNote: diagnose one failing PR CI check → root cause + fix plan
 ---
 
 # CI investigator (core-be)

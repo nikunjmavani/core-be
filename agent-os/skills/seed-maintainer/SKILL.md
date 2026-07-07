@@ -1,6 +1,9 @@
 ---
 name: seed-maintainer
 description: Keeps per-domain seed/ directories and the bulk seed orchestrator aligned with schemas and routes. Use after route, schema, or seed changes.
+trigger: src/domains/**/seed/**, src/scripts/seed/**
+triggerNote: Keep per-domain seeds aligned with schemas + routes
+indexNote: keep per-domain seed/ + bulk orchestrator aligned with schemas + routes
 ---
 
 # Seed maintainer (core-be)
@@ -62,7 +65,7 @@ Canonical examples to copy: `src/domains/user/seed/` and `src/domains/tenancy/se
 
 - **`src/scripts/seed/bulk.ts`** — `orderModules` (topological by `dependsOn`), `runBulkSeed` (guard → resolve → all `seedReference`, then all `seedBulk`), `closeDatabase()` in `finally`. Domain modules are registered in **`src/scripts/seed/modules.ts`** (`SEED_MODULES` — one `DomainSeedModule` per domain).
 - **`src/scripts/seed/bulk-config.ts`** — `PROFILES` (`demo` / `edge` / `load`), `resolveCounts` (`BULK_PROFILE`, `SCALE`, per-knob `BULK_ORGS` / `BULK_USERS_PER_ORG` / `BULK_AUDIT_MONTHS` / `BULK_AUDIT_PER_ORG_PER_MONTH`), `HARD_CAP` (fatal if exceeded; COPY path out of scope).
-- **`src/scripts/seed/production-guard.ts`** — `assertBulkSeedAllowed`: refuses on `NODE_ENV=production` or a non-local `DATABASE_URL` unless `ALLOW_BULK_SEED=1`.
+- **`src/scripts/seed/production-guard.ts`** — `assertBulkSeedAllowed`: refuses on a non-local `DATABASE_URL` unless `ALLOW_BULK_SEED=1` (no `NODE_ENV` check).
 - **`src/scripts/seed/seed-registry.ts`** — in-memory `createSeedRegistry()`.
 - **`minimal.ts` / `full.ts`** — orchestration entry points for the reference-only and fixed-demo tiers; call domain seeds + cross-domain flows. No entity lists or insert helpers here.
 - **`helpers.ts`** — re-exports like `closeDatabase`. **`faker-data.ts`** — `initFakerSeed()` and shared faker helpers.

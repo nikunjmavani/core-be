@@ -13,6 +13,8 @@
 # Plain stdout, NON-blocking (never returns decision:block, so it cannot loop the
 # turn). Fails OPEN: any error exits 0.
 set -uo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_telemetry.sh"
+telemetry_init "stop-gate-reminder" "Stop"
 
 ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 cd "$ROOT" 2>/dev/null || exit 0
@@ -46,6 +48,7 @@ match '\.mdc$|^agent-os/|agent-os/|CLAUDE\.md$' && \
 
 echo ""
 if [[ "${#REMINDERS[@]}" -gt 0 ]]; then
+  telemetry_fired
   echo "📋 Before you finish — gates implied by your uncommitted changes:"
   for r in "${REMINDERS[@]}"; do
     echo "  • $r"

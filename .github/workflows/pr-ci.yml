@@ -40,7 +40,7 @@ jobs:
           fetch-depth: 1
 
       - name: Path filter
-        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter
         with:
           filters: |
@@ -143,7 +143,7 @@ jobs:
 
       - name: OpenAPI specs in sync
         env:
-          NODE_ENV: test
+          NODE_ENV: development
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/core
           REDIS_URL: redis://localhost:6379
         run: pnpm docs:check
@@ -220,7 +220,7 @@ jobs:
           --health-timeout=5s
           --health-retries=20
     env:
-      NODE_ENV: test
+      NODE_ENV: development
       LOG_LEVEL: warn
       HOST: 0.0.0.0
       PORT: 3000
@@ -275,7 +275,7 @@ jobs:
 
       - run: pnpm build
 
-      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
       - name: Verify Dockerfile.worker sync
         run: node tooling/ci/check-dockerfile-sync.mjs
@@ -433,7 +433,7 @@ jobs:
 
       - name: Upload IaC Trivy SARIF
         if: always() && hashFiles('trivy-config.sarif') != ''
-        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v3
+        uses: github/codeql-action/upload-sarif@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v3
         with:
           sarif_file: trivy-config.sarif
           category: trivy-config
@@ -503,7 +503,7 @@ jobs:
     # requires DATABASE_URL/REDIS_URL to be present — point them at unused
     # localhost values; no Postgres/Redis service is started (keeps PR CI fast).
     env:
-      NODE_ENV: test
+      NODE_ENV: development
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/core
       REDIS_URL: redis://localhost:6379
     steps:

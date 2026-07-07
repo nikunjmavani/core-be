@@ -405,6 +405,7 @@ export interface MeUser {
   is_mfa_enabled: boolean;
   first_name: string | null;
   last_name: string | null;
+  job_title: string | null;
   avatar_url: string | null;
   status: string;
   created_at: string;

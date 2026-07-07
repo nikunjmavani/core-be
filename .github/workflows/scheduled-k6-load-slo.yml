@@ -47,7 +47,7 @@ jobs:
           --health-retries=20
 
     env:
-      NODE_ENV: test
+      NODE_ENV: development
       LOG_LEVEL: warn
       HOST: 0.0.0.0
       PORT: 3000

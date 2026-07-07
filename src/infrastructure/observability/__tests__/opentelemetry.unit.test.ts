@@ -70,7 +70,7 @@ describe('initOpenTelemetry / shutdownOpenTelemetry', () => {
       OTEL_EXPORTER_OTLP_ENDPOINT: undefined,
       OTEL_SERVICE_NAME: undefined,
       SENTRY_ENVIRONMENT: 'test',
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
     });
 
     const { initOpenTelemetry, shutdownOpenTelemetry } = await import(
@@ -89,7 +89,7 @@ describe('initOpenTelemetry / shutdownOpenTelemetry', () => {
       OTEL_EXPORTER_OTLP_ENDPOINT: 'https://otel.example.com',
       OTEL_SERVICE_NAME: 'core-be-test',
       SENTRY_ENVIRONMENT: 'staging',
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
     });
 
     const { initOpenTelemetry } = await import('@/infrastructure/observability/tracing/otel.js');
@@ -106,7 +106,7 @@ describe('initOpenTelemetry / shutdownOpenTelemetry', () => {
       OTEL_EXPORTER_OTLP_ENDPOINT: 'https://otel.example.com/v1/traces',
       OTEL_SERVICE_NAME: undefined,
       SENTRY_ENVIRONMENT: 'test',
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
     });
 
     const { initOpenTelemetry, shutdownOpenTelemetry } = await import(

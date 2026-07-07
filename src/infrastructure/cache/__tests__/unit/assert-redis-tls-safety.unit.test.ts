@@ -1,7 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getEnvMock = vi.fn();
-const originalKubernetesServiceHost = process.env.KUBERNETES_SERVICE_HOST;
 
 vi.mock('@/shared/config/env.config.js', () => ({
   env: new Proxy(
@@ -28,52 +27,46 @@ describe('assertRedisTlsVerification', () => {
   beforeEach(() => {
     getEnvMock.mockReset();
     vi.resetModules();
-    delete process.env.KUBERNETES_SERVICE_HOST;
   });
 
-  afterEach(() => {
-    if (originalKubernetesServiceHost === undefined) {
-      delete process.env.KUBERNETES_SERVICE_HOST;
-    } else {
-      process.env.KUBERNETES_SERVICE_HOST = originalKubernetesServiceHost;
-    }
-  });
-
-  it('throws in a hosted deployment for plaintext redis:// on a public host', async () => {
+  it('throws when REDIS_TLS_ENFORCED for plaintext redis:// on a public host', async () => {
     getEnvMock.mockReturnValue({
-      NODE_ENV: 'production',
+      REDIS_TLS_ENFORCED: true,
       REDIS_URL: 'redis://cache.example.com:6379',
     });
     const assertRedisTlsVerification = await loadAssertion();
     expect(() => assertRedisTlsVerification()).toThrow(/redis\.tls_safety\.unencrypted/);
   });
 
-  it('allows rediss:// (TLS) in a hosted deployment', async () => {
+  it('allows rediss:// (TLS) when REDIS_TLS_ENFORCED', async () => {
     getEnvMock.mockReturnValue({
-      NODE_ENV: 'production',
+      REDIS_TLS_ENFORCED: true,
       REDIS_URL: 'rediss://cache.example.com:6379',
     });
     const assertRedisTlsVerification = await loadAssertion();
     expect(() => assertRedisTlsVerification()).not.toThrow();
   });
 
-  it('allows plaintext redis:// on Railway private networking in a hosted deployment', async () => {
+  it('allows plaintext redis:// on Railway private networking when REDIS_TLS_ENFORCED', async () => {
     getEnvMock.mockReturnValue({
-      NODE_ENV: 'production',
+      REDIS_TLS_ENFORCED: true,
       REDIS_URL: 'redis://core-redis.railway.internal:6379',
     });
     const assertRedisTlsVerification = await loadAssertion();
     expect(() => assertRedisTlsVerification()).not.toThrow();
   });
 
-  it('allows plaintext redis:// to localhost in a hosted deployment', async () => {
-    getEnvMock.mockReturnValue({ NODE_ENV: 'production', REDIS_URL: 'redis://localhost:6379' });
+  it('allows plaintext redis:// to localhost when REDIS_TLS_ENFORCED', async () => {
+    getEnvMock.mockReturnValue({ REDIS_TLS_ENFORCED: true, REDIS_URL: 'redis://localhost:6379' });
     const assertRedisTlsVerification = await loadAssertion();
     expect(() => assertRedisTlsVerification()).not.toThrow();
   });
 
-  it('does not throw on local/test for a plaintext public host (warns only)', async () => {
-    getEnvMock.mockReturnValue({ NODE_ENV: 'test', REDIS_URL: 'redis://cache.example.com:6379' });
+  it('does not throw when REDIS_TLS_ENFORCED is false for a plaintext public host (warns only)', async () => {
+    getEnvMock.mockReturnValue({
+      REDIS_TLS_ENFORCED: false,
+      REDIS_URL: 'redis://cache.example.com:6379',
+    });
     const { logger } = await import('@/shared/utils/infrastructure/logger.util.js');
     const assertRedisTlsVerification = await loadAssertion();
     expect(() => assertRedisTlsVerification()).not.toThrow();
@@ -83,9 +76,9 @@ describe('assertRedisTlsVerification', () => {
     );
   });
 
-  it('throws for a public REDIS_BULLMQ_URL override over plaintext in hosted', async () => {
+  it('throws for a public REDIS_BULLMQ_URL override over plaintext when REDIS_TLS_ENFORCED', async () => {
     getEnvMock.mockReturnValue({
-      NODE_ENV: 'production',
+      REDIS_TLS_ENFORCED: true,
       REDIS_URL: 'redis://core-redis.railway.internal:6379',
       REDIS_BULLMQ_URL: 'redis://bullmq.example.com:6379',
     });

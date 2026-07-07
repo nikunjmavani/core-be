@@ -27,7 +27,45 @@ function forceLocalDatabaseForNonCiTestRun(): void {
  * These are hard-overridden (not `??=`) so local test runs are deterministic regardless of
  * what each contributor has in their `.env.development`.
  */
-process.env.NODE_ENV = 'test';
+// NODE_ENV is only `development` | `production`. The Vitest suite runs as `development` (there is no
+// separate `test` runtime); test-only behaviour is driven by the explicit flags set below.
+process.env.NODE_ENV = 'development';
+// shutdown.middleware reads this raw (the frozen `env` const predates this override) to skip
+// process-level shared-singleton teardown under the per-worker Vitest harness.
+process.env.SHUTDOWN_SKIP_SHARED_TEARDOWN = 'true';
+// redis.client / bullmq-redis.client / queue/connection read this raw from process.env (the frozen
+// `env` const predates this override) to disable the ioredis ready-check under the churned test singletons.
+process.env.REDIS_READY_CHECK_ENABLED = 'false';
+// Category-B security flags now default to their HARDENED value everywhere; the harness sets the
+// relaxed values explicitly (previously implied by the non-production runtime) so e2e behaves as
+// before: auth-harness SUPER_ADMIN fallback, captcha bypass, Referer-fallback origin check, empty
+// webhook allowlist, and unauthenticated metrics all stay permissive under test.
+process.env.AUTH_TEST_SUPER_ADMIN_FALLBACK ??= 'true';
+process.env.CAPTCHA_BYPASS_ALLOWED ??= 'true';
+process.env.SESSION_ORIGIN_CSRF_REQUIRED ??= 'false';
+process.env.WEBHOOK_ALLOWLIST_REQUIRED ??= 'false';
+process.env.METRICS_AUTH_REQUIRED ??= 'false';
+// Boot-time safety checks default hardened (enforce) outside a local development runtime; the e2e
+// harness relaxes them so tests boot against the localhost Docker Postgres/Redis without TLS/RLS/
+// budget/proxy enforcement, and permits the destructive wipe helpers + relaxed rate-limit caps.
+process.env.DATABASE_TLS_ENFORCED ??= 'false';
+process.env.DATABASE_RLS_SAFETY_ENFORCED ??= 'false';
+process.env.DATABASE_CONNECTION_BUDGET_ENFORCED ??= 'false';
+process.env.REDIS_TLS_ENFORCED ??= 'false';
+process.env.TRUST_PROXY_REQUIRED ??= 'false';
+process.env.TEST_DATA_WIPE_ALLOWED ??= 'true';
+process.env.RATE_LIMIT_RELAXED_CAPS ??= 'true';
+// Category-A behaviour flags now have STATIC production-safe defaults (NODE_ENV no longer selects a
+// default); the harness sets the development values so test captcha/shutdown/log/timing behaviour is
+// unchanged. CAPTCHA_FAIL_OPEN + SHUTDOWN_DRAIN + SCHEDULER audit are the pass/fail-relevant ones.
+process.env.CAPTCHA_FAIL_OPEN ??= 'true';
+process.env.SCHEDULER_REGISTRY_AUDIT_STRICT ??= 'false';
+process.env.SERVER_TIMING_COARSE ??= 'false';
+process.env.SHUTDOWN_DRAIN_ENABLED ??= 'false';
+process.env.I18N_REPORT_MISSING_KEYS ??= 'false';
+process.env.LOG_PRETTY ??= 'true';
+process.env.SENTRY_REDUCED_SAMPLING ??= 'false';
+process.env.SENTRY_DEBUG ??= 'true';
 forceLocalDatabaseForNonCiTestRun();
 process.env.DATABASE_SSL_ENABLED = 'false';
 /**
@@ -72,7 +110,9 @@ process.env.OAUTH_GOOGLE_CLIENT_ID ??= 'test-google-client-id';
 process.env.OAUTH_GOOGLE_CLIENT_SECRET ??= 'test-google-client-secret';
 process.env.OAUTH_GITHUB_CLIENT_ID ??= 'test-github-client-id';
 process.env.OAUTH_GITHUB_CLIENT_SECRET ??= 'test-github-client-secret';
-delete process.env.REDIS_KEY_PREFIX;
+// Isolate the test Redis keyspace from a running `pnpm dev` (both are NODE_ENV=development); a hard
+// set (not the developer's `.env.local` value) keeps the test prefix deterministic and isolated.
+process.env.REDIS_KEY_PREFIX = 'core:test:';
 delete process.env.WEBHOOK_URL_ALLOWLIST;
 // CAPTCHA mirrors CI (`reusable-vitest-postgres-redis.yml` leaves CAPTCHA_PROVIDER unset →
 // schema default `disabled`). A developer `.env.local` that enables Cloudflare Turnstile
@@ -180,7 +220,6 @@ process.env.METRICS_SCRAPE_TOKEN ??= 'test-metrics-bearer-token-min-32-chars';
 process.env.COOKIE_SECURE ??= 'false';
 /** Local `.env` may set a short Stripe webhook signing secret — HMAC helpers require plausible length under test */
 if (
-  process.env.NODE_ENV === 'test' &&
   process.env.STRIPE_WEBHOOK_SECRET !== undefined &&
   process.env.STRIPE_WEBHOOK_SECRET.length > 0 &&
   process.env.STRIPE_WEBHOOK_SECRET.length < 32
@@ -220,7 +259,9 @@ process.env.S3_REGION ??= 'us-east-1';
 process.env.S3_ACCESS_KEY_ID ??= 'AKIAIOSFODNN7EXAMPLE';
 process.env.S3_SECRET_ACCESS_KEY ??= 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY';
 
-process.env.ALLOWED_ORIGINS ??= 'http://localhost:3000';
+// Hard-set (not `??=`) so a developer's `.env.local` ALLOWED_ORIGINS (e.g. a dashboards / core-fe
+// origin) cannot break the auth origin/CSRF e2e tests, which assert against `http://localhost:3000`.
+process.env.ALLOWED_ORIGINS = 'http://localhost:3000';
 process.env.RATE_LIMIT_MAX ??= '1000';
 process.env.RATE_LIMIT_WINDOW_MS ??= '60000';
 process.env.AUDIT_RETENTION_DAYS ??= '90';
@@ -228,9 +269,7 @@ process.env.AUTH_SESSION_RETENTION_DAYS ??= '30';
 process.env.ENABLE_QUEUE_DASHBOARD ??= 'true';
 process.env.ENABLE_MCP_SERVER ??= 'true';
 // Allow disposable emails in tests so flows using yopmail/mailinator etc. can run
-if (process.env.NODE_ENV === 'test') {
-  process.env.BLOCK_DISPOSABLE_EMAIL = 'false';
-}
+process.env.BLOCK_DISPOSABLE_EMAIL = 'false';
 const { resetEnvCacheForTests } = await import('@/shared/config/env.config.js');
 const { resetJwtCachesForTests } = await import('@/shared/utils/security/jwt.util.js');
 resetJwtCachesForTests();

@@ -53,8 +53,26 @@ describe('Security: CORS', () => {
       url: '/livez',
       headers: { origin: 'http://localhost:3000' },
     });
-    // Response should include CORS headers for allowed origin
     expect([200, 204]).toContain(response.statusCode);
+    // The ACTUAL response (not just the preflight) must carry the CORS headers — the
+    // browser discards an opaque 2xx without them. Regression: cors.middleware was not
+    // fastify-plugin-wrapped, so @fastify/cors's decoration hook stayed encapsulated and
+    // only the global wildcard OPTIONS route worked (preflight passed, real responses
+    // had no Access-Control-Allow-Origin → CORS failure on the deployed Netlify FE).
+    expect(response.headers['access-control-allow-origin']).toBe('http://localhost:3000');
+    expect(response.headers['access-control-allow-credentials']).toBe('true');
+  });
+
+  it('includes Access-Control-Allow-Origin on actual API route responses', async () => {
+    const response = await injectUnauthenticated(app, {
+      method: 'POST',
+      url: testApiPath('/auth/email/send-code'),
+      headers: { origin: 'http://localhost:3000', 'content-type': 'application/json' },
+      payload: {},
+    });
+    // Payload is invalid on purpose — the CORS decoration must be present on every
+    // response (including error responses), or the browser hides the body from the SPA.
+    expect(response.headers['access-control-allow-origin']).toBe('http://localhost:3000');
   });
 
   it('does not reflect a non-allowlisted origin', async () => {

@@ -7,8 +7,8 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateTestTokenAndSession } from '@/tests/helpers/test-auth.js';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
-import { seedPermissions } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
-import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
+import { seedAllPermissions } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
+import { env } from '@/shared/config/env.config.js';
 import {
   provisionPersonalOrganization,
   provisionOrganizationWithOwner,
@@ -32,13 +32,16 @@ describe('Auth e2e: organization switch', () => {
 
   beforeEach(async () => {
     await cleanupDatabase();
-    await seedPermissions(Object.values(TENANCY_PERMISSIONS));
+    // Full catalog: provisionOrganizationWithOwner grants billing codes for TEAM orgs.
+    await seedAllPermissions();
   });
 
   it('switch-to-personal re-mints the token and returns the active-org delta (201)', async () => {
     const user = await createTestUser();
     const { organization } = await provisionPersonalOrganization(user.id);
-    const { token } = await generateTestTokenAndSession({ userId: user.public_id });
+    const { token } = await generateTestTokenAndSession({
+      userId: user.public_id,
+    });
 
     const response = await injectAuthenticated(app, {
       method: 'POST',
@@ -66,9 +69,14 @@ describe('Auth e2e: organization switch', () => {
     expect(body.data).toHaveProperty('global_role');
   });
 
-  it('switch-to-personal returns 404 when the user has no personal organization', async () => {
+  it('switch-to-personal self-heals a missing personal org (201) when personal is enabled', async () => {
+    // A personal-enabled deployment must never leave a user without a personal org: the
+    // signup-time provision may have failed/been skipped, so switch-to-personal provisions
+    // one on demand instead of dead-ending at a 404. (Default env has personal enabled.)
     const user = await createTestUser();
-    const { token } = await generateTestTokenAndSession({ userId: user.public_id });
+    const { token } = await generateTestTokenAndSession({
+      userId: user.public_id,
+    });
 
     const response = await injectAuthenticated(app, {
       method: 'POST',
@@ -76,13 +84,41 @@ describe('Auth e2e: organization switch', () => {
       token,
     });
 
-    expect(response.statusCode).toBe(404);
+    expect(response.statusCode).toBe(201);
+    const body = response.json() as {
+      data: { active_organization: { id: string; type: string } };
+    };
+    expect(body.data.active_organization.id).toMatch(/^org_[a-z0-9]{21}$/);
+    expect(body.data.active_organization.type).toBe('PERSONAL');
+  });
+
+  it('switch-to-personal returns 404 when personal organizations are disabled', async () => {
+    const original = env.PERSONAL_ORGANIZATION_ENABLED;
+    env.PERSONAL_ORGANIZATION_ENABLED = false;
+    try {
+      const user = await createTestUser();
+      const { token } = await generateTestTokenAndSession({
+        userId: user.public_id,
+      });
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/switch-to-personal'),
+        token,
+      });
+
+      expect(response.statusCode).toBe(404);
+    } finally {
+      env.PERSONAL_ORGANIZATION_ENABLED = original;
+    }
   });
 
   it('switch-to-organization re-mints for an org the caller is a member of (201)', async () => {
     const user = await createTestUser();
     const { organization } = await provisionPersonalOrganization(user.id);
-    const { token } = await generateTestTokenAndSession({ userId: user.public_id });
+    const { token } = await generateTestTokenAndSession({
+      userId: user.public_id,
+    });
 
     const response = await injectAuthenticated(app, {
       method: 'POST',
@@ -93,7 +129,11 @@ describe('Auth e2e: organization switch', () => {
 
     expect(response.statusCode).toBe(201);
     const body = response.json() as {
-      data: { access_token: string; active_organization: { id: string }; my_permissions: string[] };
+      data: {
+        access_token: string;
+        active_organization: { id: string };
+        my_permissions: string[];
+      };
     };
     // Inline active-org delta (gate reduction: no follow-up GET /me/context needed).
     expect(body.data.access_token).toBeDefined();
@@ -105,7 +145,9 @@ describe('Auth e2e: organization switch', () => {
     const member = await createTestUser();
     const stranger = await createTestUser();
     const { organization } = await provisionPersonalOrganization(member.id);
-    const { token } = await generateTestTokenAndSession({ userId: stranger.public_id });
+    const { token } = await generateTestTokenAndSession({
+      userId: stranger.public_id,
+    });
 
     const response = await injectAuthenticated(app, {
       method: 'POST',
@@ -119,7 +161,9 @@ describe('Auth e2e: organization switch', () => {
 
   it('switch-to-organization returns 400 when organization_id is missing', async () => {
     const user = await createTestUser();
-    const { token } = await generateTestTokenAndSession({ userId: user.public_id });
+    const { token } = await generateTestTokenAndSession({
+      userId: user.public_id,
+    });
 
     const response = await injectAuthenticated(app, {
       method: 'POST',
@@ -236,7 +280,9 @@ describe('Auth e2e: organization switch', () => {
         joined_at: new Date(),
       });
 
-      const { token } = await generateTestTokenAndSession({ userId: user.public_id });
+      const { token } = await generateTestTokenAndSession({
+        userId: user.public_id,
+      });
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
@@ -266,7 +312,9 @@ describe('Auth e2e: organization switch', () => {
         .set({ deleted_at: new Date() })
         .where(eq(organizations.id, team.organization.id));
 
-      const { token } = await generateTestTokenAndSession({ userId: user.public_id });
+      const { token } = await generateTestTokenAndSession({
+        userId: user.public_id,
+      });
 
       const response = await injectAuthenticated(app, {
         method: 'POST',

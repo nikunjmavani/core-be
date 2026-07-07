@@ -2,7 +2,6 @@ import {
   isStrictDatabaseTlsVerification,
   parseSslMode,
 } from '@/infrastructure/database/utils/connection-url.util.js';
-import { isHostedDeployment } from '@/infrastructure/database/utils/hosted-deployment.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
@@ -16,7 +15,7 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
  * @remarks
  * - **Algorithm:** computes {@link isStrictDatabaseTlsVerification} from `DATABASE_URL` +
  *   `DATABASE_SSL_REJECT_UNAUTHORIZED`. When strict, logs `database.tls_safety.ok` and
- *   returns. When not strict and {@link isHostedDeployment} is true, throws. Otherwise
+ *   returns. When not strict and `DATABASE_TLS_ENFORCED` is true, throws. Otherwise
  *   (local/CI) logs a warning so plaintext/unverified local Docker databases keep working.
  * - **Failure modes:** throws `database.tls_safety.unverified` on hosted deployments
  *   without strict verification.
@@ -36,7 +35,7 @@ export function assertDatabaseTlsVerification(): void {
     return;
   }
 
-  if (isHostedDeployment()) {
+  if (env.DATABASE_TLS_ENFORCED) {
     throw new Error(
       `database.tls_safety.unverified: DATABASE_URL uses sslmode=${sslMode ?? 'unset'} which does ` +
         'not verify the Postgres server certificate, exposing the connection to man-in-the-middle ' +

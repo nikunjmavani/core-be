@@ -1,7 +1,6 @@
+import { BYTES_PER_MEGABYTE } from '@/shared/constants/limits.constants.js';
 import { THIRTY_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
-
-const BYTES_PER_MEGABYTE = 1024 * 1024;
 
 let memoryMonitorInterval: ReturnType<typeof setInterval> | null = null;
 

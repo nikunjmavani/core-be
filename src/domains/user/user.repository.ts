@@ -158,7 +158,12 @@ export class UserRepository {
 
   async update(
     public_id: string,
-    data: { first_name?: string | null; last_name?: string | null; avatar_url?: string | null },
+    data: {
+      first_name?: string | null;
+      last_name?: string | null;
+      job_title?: string | null;
+      avatar_url?: string | null;
+    },
   ) {
     return this.updateByPublicId(public_id, data as Record<string, unknown>);
   }

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mockEnv = vi.hoisted(() => ({
-  NODE_ENV: 'test' as string,
+  RATE_LIMIT_RELAXED_CAPS: true as boolean,
 }));
 
 vi.mock('@/shared/config/env.config.js', () => ({
@@ -18,16 +18,12 @@ vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
 
 describe('rate-limit-presets', () => {
   afterEach(() => {
-    mockEnv.NODE_ENV = 'test';
+    mockEnv.RATE_LIMIT_RELAXED_CAPS = true;
     vi.resetModules();
   });
 
-  it.each([
-    'test',
-    'development',
-    'local',
-  ] as const)('STRICT_PUBLIC_RATE_LIMIT allows 5000 req/min in %s NODE_ENV', async (nodeEnv) => {
-    mockEnv.NODE_ENV = nodeEnv;
+  it('STRICT_PUBLIC_RATE_LIMIT allows 5000 req/min when RATE_LIMIT_RELAXED_CAPS', async () => {
+    mockEnv.RATE_LIMIT_RELAXED_CAPS = true;
     const { STRICT_PUBLIC_RATE_LIMIT } = await import(
       '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
@@ -35,7 +31,7 @@ describe('rate-limit-presets', () => {
   });
 
   it('STRICT_PUBLIC_RATE_LIMIT caps public auth routes at 5 req/min outside test', async () => {
-    mockEnv.NODE_ENV = 'production';
+    mockEnv.RATE_LIMIT_RELAXED_CAPS = false;
     const { STRICT_PUBLIC_RATE_LIMIT } = await import(
       '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
@@ -44,7 +40,7 @@ describe('rate-limit-presets', () => {
   });
 
   it('STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS caps per email at 5 / 15 min on preHandler outside test', async () => {
-    mockEnv.NODE_ENV = 'production';
+    mockEnv.RATE_LIMIT_RELAXED_CAPS = false;
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
       '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
@@ -53,11 +49,8 @@ describe('rate-limit-presets', () => {
     expect(STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.hook).toBe('preHandler');
   });
 
-  it.each([
-    'test',
-    'development',
-  ] as const)('STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS lifts the cap under %s NODE_ENV', async (nodeEnv) => {
-    mockEnv.NODE_ENV = nodeEnv;
+  it('STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS lifts the cap when RATE_LIMIT_RELAXED_CAPS', async () => {
+    mockEnv.RATE_LIMIT_RELAXED_CAPS = true;
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
       '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
@@ -72,7 +65,7 @@ describe('rate-limit-presets', () => {
     // log/breadcrumb value opaque so a credential-stuffing run no longer
     // ships the targeted addresses to observability.
     const crypto = await import('node:crypto');
-    mockEnv.NODE_ENV = 'production';
+    mockEnv.RATE_LIMIT_RELAXED_CAPS = false;
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
       '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
@@ -95,7 +88,7 @@ describe('rate-limit-presets', () => {
   });
 
   it('sec-re-11: per-email key generator yields stable buckets per address (same email → same key)', async () => {
-    mockEnv.NODE_ENV = 'production';
+    mockEnv.RATE_LIMIT_RELAXED_CAPS = false;
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
       '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
@@ -119,7 +112,7 @@ describe('rate-limit-presets', () => {
   });
 
   it('per-email key generator falls back to IP when the body has no usable email', async () => {
-    mockEnv.NODE_ENV = 'production';
+    mockEnv.RATE_LIMIT_RELAXED_CAPS = false;
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
       '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );

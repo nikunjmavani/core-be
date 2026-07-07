@@ -4,7 +4,7 @@ Before changing this repository:
 
 1. Follow **[.cursor/rules/engineering-principles.mdc](.cursor/rules/engineering-principles.mdc)** for general engineering behavior (always applied in Cursor). Product slug, image names, and branch/env mapping: **[.cursor/rules/project-identity.mdc](.cursor/rules/project-identity.mdc)** (`tooling/setup/setup.config.json` → `project-identity.constants.ts`).
 2. Read **[CLAUDE.md](CLAUDE.md)** for architecture, domain layout, dependency rules, and commands. Import path policy: **[`.cursor/rules/import-paths.mdc`](.cursor/rules/import-paths.mdc)** (`@/` in `src/`, `@tooling/` in tooling; no `../`).
-3. For new domains, routes, workers, or schema work, follow **[docs/getting-started/requirement-intake.md](docs/getting-started/requirement-intake.md)** and consult **[skill-index](agent-os/skills/skill-index/SKILL.md)** first (41 project skills; Cursor built-ins: **cursor-global-skills**) — run only the skills that match your changes (no duplicate invocations).
+3. For new domains, routes, workers, or schema work, follow **[docs/getting-started/requirement-intake.md](docs/getting-started/requirement-intake.md)** and consult **[skill-index](agent-os/skills/skill-index/SKILL.md)** first (43 project skills; Cursor built-ins: **cursor-global-skills**) — run only the skills that match your changes (no duplicate invocations).
 4. For any change under `src/`, the **in-source documentation system** also applies — see **[docs/reference/architecture/documentation-system.md](docs/reference/architecture/documentation-system.md)**. TSDoc on every public export is canonical (gated by `pnpm tsdoc:check` against [`tooling/tsdoc-coverage/budget.json`](tooling/tsdoc-coverage/budget.json) — counts may decrease but may not increase); hand-written `<folder>.overview.md` files cover folder-level design decisions; `src/{OVERVIEW,PATTERNS,FLOWS,POLICIES}.md` carry the system narrative. There is no auto-generated `DOCS.md` aggregator.
 5. Human contributors — see **[CONTRIBUTING.md](CONTRIBUTING.md)** (setup summary, branching, **`SECURITY.md`**, **`CODE_OF_CONDUCT.md`**, **[`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md)**).
 6. Before opening a pull request, ensure these pass (pre-commit runs the same sync checks locally):
@@ -57,7 +57,7 @@ can hang/fail at the compose step. To bring up the stack manually:
 - **Worker:** `pnpm dev:worker` fails the connection-budget guard with default `DATABASE_POOL_MAX=20`
   (monolithic worker demand is ~47). Start it as
   `DATABASE_POOL_MAX=60 POSTGRES_MAX_CONNECTIONS=500 pnpm dev:worker` (`.env.local` loads with
-  `override=false` under `NODE_ENV=local`, so shell env wins). The compose Postgres allows 500
+  `override=false` under `NODE_ENV=development`, so shell env wins). The compose Postgres allows 500
   connections. `pnpm dev` (API) runs fine with defaults.
 
 Health: `GET /livez`, `GET /readyz` on `:3000`. Sentry/OpenTelemetry "duplicate registration" lines

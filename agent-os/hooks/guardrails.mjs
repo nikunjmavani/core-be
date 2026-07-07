@@ -7,6 +7,7 @@
 // Reads the PreToolUse payload on stdin. Fail-open by design: any parse/read
 // error allows the tool (exit 0) so a guardrail bug can never brick the agent.
 import { readFileSync } from "node:fs";
+import { recordTelemetry } from "./_telemetry.mjs";
 
 let raw = "";
 try {
@@ -49,6 +50,7 @@ const SECRET_READ_DENIAL =
   ".env.<environment> directly, or use core-infra's `pnpm setup:infra:output --copy <KEY>`.";
 
 function deny(reason) {
+  recordTelemetry("guardrails", "PreToolUse", "fired");
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {
@@ -137,6 +139,19 @@ if ((tool === "Write" || tool === "Edit") && filePath) {
   }
 }
 
+// --- WARN: env backups belong in .backups/, not the repo root ----------------
+// (Secret .env.<env> backups are already denied above; this catches the rest —
+// e.g. an example backup — and steers local backups into the gitignored .backups/.)
+if (
+  (tool === "Write" || tool === "Edit") &&
+  /(^|\/)\.?env[\w.-]*(bak|backup)[\w.-]*$/i.test(filePath) &&
+  !filePath.includes("/.backups/")
+) {
+  warnings.push(
+    `writing an env backup to "${filePath}" pollutes the repo root/context — keep local .env backups in .backups/ (gitignored).`,
+  );
+}
+
 // --- WARN: cross-domain imports in a service ---------------------------------
 if ((tool === "Write" || tool === "Edit") && /src\/domains\/[^/]+\/.*\.service\.ts$/.test(filePath) && content) {
   const own = (filePath.match(/src\/domains\/([^/]+)\//) || [])[1] || "";
@@ -156,4 +171,5 @@ if ((tool === "Write" || tool === "Edit") && /src\/domains\/[^/]+\/.*\.service\.
 if (warnings.length) {
   process.stdout.write(JSON.stringify({ systemMessage: "⚠️ core-be guardrail:\n- " + warnings.join("\n- ") }));
 }
+recordTelemetry("guardrails", "PreToolUse", warnings.length ? "fired" : "silent");
 process.exit(0);

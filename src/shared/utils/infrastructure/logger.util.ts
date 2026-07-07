@@ -28,7 +28,7 @@ export const logger = pino({
   formatters: {
     log: (object) => redactSensitive(object),
   },
-  ...(env.NODE_ENV === 'local'
+  ...(env.LOG_PRETTY
     ? {
         transport: {
           target: 'pino-pretty',

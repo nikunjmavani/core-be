@@ -1,5 +1,7 @@
 import { withGlobalAdminDatabaseContext } from '@/infrastructure/database/contexts/global-admin-database.context.js';
 import { env } from '@/shared/config/env.config.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { provisionPersonalOrganization } from '@/domains/tenancy/sub-domains/organization/organization-provisioning.js';
 import { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
 
 /**
@@ -119,4 +121,96 @@ export async function resolvePersonalOrganization(
     organizationRepository.findPersonalOrganization(ownerUserInternalId),
   );
   return resolved ?? undefined;
+}
+
+/**
+ * Resolve the caller's PERSONAL organization, **self-healing** on a miss: when
+ * `PERSONAL_ORGANIZATION_ENABLED` is true and the user has no personal organization,
+ * provision it on demand and return it. This closes the gap left by best-effort
+ * signup-time provisioning (email first-verification / OAuth new-user), where a swallowed
+ * failure or a flag flipped on after signup would otherwise leave a personal-enabled user
+ * permanently without a personal workspace — dead-ending onboarding.
+ *
+ * Returns `undefined` only when personal organizations are **disabled** for the deployment
+ * (`PERSONAL_ORGANIZATION_ENABLED=false`); in that mode we never create one, so callers
+ * (`getMe` → `personal_organization_id: null`, `switch-to-personal` → 404) behave as before.
+ *
+ * @remarks
+ * - **Idempotency:** `provisionPersonalOrganization` is guarded by the
+ *   `idx_org_one_personal_per_owner` partial unique index (at most one personal org per
+ *   owner). A concurrent provision that loses the race raises a unique violation; we absorb it
+ *   and re-resolve, so this function never creates a duplicate and never surfaces the race to
+ *   the caller.
+ * - **RLS:** provisioning runs inside its own `withGlobalAdminDatabaseContext` write
+ *   transaction (see {@link provisionPersonalOrganization}); the surrounding reads use the
+ *   same admin context, constrained to the caller's own `user_id`.
+ * - **Side effects:** provisions one organization (+ owner role, permissions, membership)
+ *   on the self-heal path; read-only when the personal org already exists or personal is
+ *   disabled.
+ */
+export async function ensurePersonalOrganization(
+  ownerUserInternalId: number,
+): Promise<{ id: number; public_id: string } | undefined> {
+  const existing = await resolvePersonalOrganization(ownerUserInternalId);
+  if (existing) return existing;
+  if (!env.PERSONAL_ORGANIZATION_ENABLED) return undefined;
+
+  try {
+    const provisioned = await provisionPersonalOrganization(ownerUserInternalId);
+    logger.info(
+      {
+        userInternalId: ownerUserInternalId,
+        organizationPublicId: provisioned.organization.public_id,
+      },
+      'personal_organization.self_heal.provisioned',
+    );
+    return {
+      id: provisioned.organization.id,
+      public_id: provisioned.organization.public_id,
+    };
+  } catch (error) {
+    // A concurrent self-heal (or signup-time provision) may have won the race; the partial
+    // unique index makes the second insert fail. Re-resolve and return the winner's row.
+    const afterRace = await resolvePersonalOrganization(ownerUserInternalId);
+    if (afterRace) return afterRace;
+    logger.error(
+      { err: error, userInternalId: ownerUserInternalId },
+      'personal_organization.self_heal.failed',
+    );
+    throw error;
+  }
+}
+
+/**
+ * `public_id`-only, **read-safe** variant of {@link ensurePersonalOrganization} for
+ * self-service read paths that must never fail because self-heal could not provision
+ * (e.g. `getMe` → `personal_organization_id`). Attempts the on-demand provision, but if it
+ * throws (a genuine provisioning failure — e.g. a missing reference row / transient DB error,
+ * NOT a lost idempotency race, which {@link ensurePersonalOrganization} already absorbs) it
+ * **degrades gracefully**: it logs and returns the pre-existing personal-org id, or
+ * `undefined` when there is still none. This guarantees a read like `GET /users/me` returns
+ * 200 with `personal_organization_id: null` rather than 500-ing on a self-heal hiccup; the
+ * user simply retries and the next read (or `switch-to-personal`) heals them once the
+ * underlying cause clears. Returns `undefined` when personal organizations are disabled.
+ *
+ * @remarks
+ * - **Side effects:** provisions on the happy path; on failure it is read-only (best-effort).
+ * - **Contract:** callers get a non-throwing resolution — never propagate the provisioning
+ *   error to the HTTP response.
+ */
+export async function ensurePersonalOrganizationPublicId(
+  ownerUserInternalId: number,
+): Promise<string | undefined> {
+  try {
+    return (await ensurePersonalOrganization(ownerUserInternalId))?.public_id;
+  } catch (error) {
+    // Never let a self-heal failure break the read. Fall back to whatever already exists
+    // (typically none → undefined → the caller reports null). ensurePersonalOrganization
+    // already logged the failure at error level.
+    logger.warn(
+      { err: error, userInternalId: ownerUserInternalId },
+      'personal_organization.self_heal.read_degraded',
+    );
+    return (await resolvePersonalOrganization(ownerUserInternalId))?.public_id;
+  }
 }

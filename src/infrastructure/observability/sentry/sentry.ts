@@ -99,11 +99,12 @@ export function initSentry(): void {
     return;
   }
 
-  const isProduction = env.NODE_ENV === 'production';
+  const reducedSampling = env.SENTRY_REDUCED_SAMPLING;
   const defaultTracesSampleRate =
-    env.SENTRY_TRACES_SAMPLE_RATE ?? (isProduction ? PRODUCTION_TRACES_SAMPLE_RATE : 1.0);
+    env.SENTRY_TRACES_SAMPLE_RATE ?? (reducedSampling ? PRODUCTION_TRACES_SAMPLE_RATE : 1.0);
   const profileSessionSampleRate =
-    env.SENTRY_PROFILE_SAMPLE_RATE ?? (isProduction ? PRODUCTION_PROFILE_SESSION_SAMPLE_RATE : 1.0);
+    env.SENTRY_PROFILE_SAMPLE_RATE ??
+    (reducedSampling ? PRODUCTION_PROFILE_SESSION_SAMPLE_RATE : 1.0);
   const slowTransactionThresholdMs = env.SENTRY_SLOW_TRANSACTION_MS;
   const release =
     env.RAILWAY_GIT_COMMIT_SHA ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA;
@@ -181,7 +182,7 @@ export function initSentry(): void {
     },
 
     // ── Debug (local only) ──────────────────────────────────────────
-    debug: env.NODE_ENV === 'local',
+    debug: env.SENTRY_DEBUG,
   });
 
   initialized = true;

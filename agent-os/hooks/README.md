@@ -15,6 +15,7 @@ referenced `.sh` script exists and that hook commands use `$CLAUDE_PROJECT_DIR`
 | [`session-start.sh`](session-start.sh) | Claude `SessionStart` | On the web, verifies Node/deps/codegraph, installs deps (switching to a new-enough Node via `$CLAUDE_ENV_FILE` when needed), and runs `pnpm agent-os:check` as the **only** startup gate (fail-open, web-only); self-heals **gitleaks** on web sessions whose cached image predates the Setup-script wiring, so the pre-commit secret scan can run (no-op when already present); on **local** sessions scaffolds `.mcp.json` with the **default auto-start pair** (codegraph + headroom) when absent — the other hosted servers are opt-in via `pnpm mcp:setup` — and reports the declared MCP-server count (web sessions load MCP from the platform environment settings, not this file); injects the skill-trigger routing map + an env/commands summary — led by an **environment-provisioned** verdict (Node ≥ required + deps) plus `gh` presence — as `additionalContext`. Heavy work (`compose:up`, migrate, seed, tests, `pnpm dev`) runs on demand per prompt, not at startup. Runs synchronously. |
 | [`prompt-skill-router.sh`](prompt-skill-router.sh) | Claude `UserPromptSubmit` | When a prompt describes a build/change task (a build verb + a domain noun), injects the matching skill chain + the "consult skill-index FIRST" rule + the requirement-intake link as `additionalContext` — the proactive, prompt-time complement to `skill-reminder.sh`. Conservative (silent on questions / read-only asks); fails open. |
 | [`skill-reminder.sh`](skill-reminder.sh) | Claude `PostToolUse` (Edit/Write) | After an edit, surfaces the skill(s) relevant to the changed file. |
+| [`large-read-nudge.sh`](large-read-nudge.sh) | Claude `PostToolUse` (Read/Grep) | **Token-efficiency nudge**: on a whole-file read of a large file, or a repo-wide content grep with no scope, reminds the agent to prefer codegraph / a ranged Read / a delegated Explore subagent and to compress large output with headroom (`token-efficient-navigation.mdc`). Fires only on the wasteful shapes; non-blocking; fails open. |
 | [`format-edits.sh`](format-edits.sh) | Claude `PostToolUse` (Edit/Write) | Runs `biome format --write` on the edited file so formatting never reaches the `pnpm validate` gate dirty. Scope matches `pnpm format` (`src/**`, `tooling/**`) and Biome-supported file types only; format-only (no lint autofix/import reorder). Fails open (no-op when deps/biome absent). |
 | [`gate-failure-hint.sh`](gate-failure-hint.sh) | Claude `PostToolUseFailure` (Bash) | When a known sync/validation gate fails (`validate:domain`, `routes:catalog`, `tsdoc:check`, `agent-os:check`, `db:migrate:lint`, env/route gates, lint/typecheck), injects the fix command + owning skill as `additionalContext`. Silent for ordinary command failures. Fails open. |
 | [`stop-gate-reminder.sh`](stop-gate-reminder.sh) | Claude `Stop` | At end of turn, maps the uncommitted working-tree changes to the specific gate(s) they imply (routes → catalog, schema → migration lint + RLS, env → sync, i18n, workers, …) and prints a targeted checklist; falls back to a generic quick-checks reminder when nothing relevant changed. Plain stdout, non-blocking; fails open. |
@@ -91,6 +92,27 @@ echo '{"tool_input":{"title":"Add feature"}}' | bash agent-os/hooks/no-unrequest
 # Cursor shell guard
 echo '{"command":"git push --force"}' | node agent-os/hooks/cursor-shell-guard.mjs
 ```
+
+## Telemetry (measure, then prune)
+
+Every hook records one line per run — `timestamp,hook-id,event,fired|silent` — to the
+gitignored `agent-os/hooks/.telemetry.log` via the shared helpers
+[`_telemetry.sh`](_telemetry.sh) (bash) and [`_telemetry.mjs`](_telemetry.mjs) (node).
+A run is **fired** when the hook actually acts (emits routing/reminder context, blocks a
+command, formats a file); **silent** when it no-ops. Logging is fail-open — a telemetry
+error can never block or fail the hook.
+
+Aggregate it with:
+
+```bash
+pnpm agent-os:hooks:report   # runs / fired / silent / silent% / last-fired per hook
+```
+
+**Monthly ritual:** run the report and review the pruning candidates it flags — a hook
+that has **never fired** or has been **silent for 30+ days** is dead weight. Either delete
+it (remove the script, its `hooks.json` entry, and run `pnpm agent-os:generate`) or fix why
+it isn't firing. A high silent ratio is fine for guard hooks (they should mostly pass
+through); a *zero fired* count over a month is the real smell.
 
 ## Notes
 

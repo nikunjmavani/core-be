@@ -46,6 +46,7 @@ export async function seedUsersBulk(context: SeedContext): Promise<void> {
       email: `${BULK_EMAIL_PREFIX}${index}${BULK_EMAIL_SUFFIX}`,
       first_name: profile.first_name,
       last_name: profile.last_name,
+      job_title: profile.job_title,
     });
   }
 

@@ -55,9 +55,9 @@ describe('logger.util', () => {
     expect(formatted.req.headers.authorization).toBe(SENSITIVE_REDACTION_PLACEHOLDER);
   });
 
-  it('enables pino-pretty transport when NODE_ENV is local', async () => {
+  it('enables pino-pretty transport when LOG_PRETTY is set', async () => {
     vi.doMock('@/shared/config/env.config.js', () => ({
-      env: { LOG_LEVEL: 'debug', NODE_ENV: 'local' },
+      env: { LOG_LEVEL: 'debug', LOG_PRETTY: true },
     }));
     const { logger: localLogger } = await import('@/shared/utils/infrastructure/logger.util.js');
     expect(localLogger).toBeDefined();

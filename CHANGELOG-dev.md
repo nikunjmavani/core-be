@@ -6,6 +6,107 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.31](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.30...v4.10.0-dev.31) (2026-07-07)
+
+
+### Fixed
+
+* **tenancy:** make personal-org self-heal read-safe + seed permissions in e2e ([#867](https://github.com/nikunjmavani/core-be/issues/867)) ([8749a90](https://github.com/nikunjmavani/core-be/commit/8749a901c9ba011512eb5ffd030c728685680f1c))
+* **tenancy:** self-heal missing personal organization on read ([#865](https://github.com/nikunjmavani/core-be/issues/865)) ([ceb81a4](https://github.com/nikunjmavani/core-be/commit/ceb81a4ce56ab78123dc192d714f38cd81bda183))
+
+## [4.10.0-dev.30](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.29...v4.10.0-dev.30) (2026-07-06)
+
+
+### Added
+
+* **user:** add job_title to user profile update ([d916eb7](https://github.com/nikunjmavani/core-be/commit/d916eb7381d9a910275ae98cbf8ae56be6c7c0ba))
+* **user:** add job_title to user profile update ([739b109](https://github.com/nikunjmavani/core-be/commit/739b1099c845719a703a21e1beccc1a78da262c5))
+
+## [4.10.0-dev.29](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.28...v4.10.0-dev.29) (2026-07-06)
+
+
+### Fixed
+
+* **cors:** wrap cors middleware in fastify-plugin so actual responses carry CORS headers ([b744877](https://github.com/nikunjmavani/core-be/commit/b74487750e2a8ff02419be9573bdf78dc4920238))
+* **cors:** wrap cors middleware in fastify-plugin so actual responses carry CORS headers ([0b049ce](https://github.com/nikunjmavani/core-be/commit/0b049ce250cf781f299aa7ec13f69695cdcfa3b8))
+
+## [4.10.0-dev.28](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.27...v4.10.0-dev.28) (2026-07-06)
+
+
+### Fixed
+
+* **ci:** relax hardened boot-safety flags in the docker smoke boot ([2fc586f](https://github.com/nikunjmavani/core-be/commit/2fc586f13b06f81af25964077c23f9f75e200a7b))
+* **ci:** relax hardened boot-safety flags in the docker smoke boot ([894f247](https://github.com/nikunjmavani/core-be/commit/894f247ef7df295226878e5044f2ae1556e9f8bb))
+
+## [4.10.0-dev.27](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.26...v4.10.0-dev.27) (2026-07-05)
+
+
+### Changed
+
+* **config:** drive all env behavior via flags; NODE_ENV=development|production only ([00d77f6](https://github.com/nikunjmavani/core-be/commit/00d77f6588828563b0c14807445e392f14864f4d))
+* **config:** drive all env behavior via flags; NODE_ENV=development|production only ([9de0a67](https://github.com/nikunjmavani/core-be/commit/9de0a678666aac4129a67ea2ae04c9e4642e48e2))
+
+## [4.10.0-dev.26](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.25...v4.10.0-dev.26) (2026-07-05)
+
+
+### Fixed
+
+* **config:** point development frontend + CORS origins at deployed Netlify FE ([be1da34](https://github.com/nikunjmavani/core-be/commit/be1da3437f4505a79632a39db3a9768aaf797b8c))
+* **config:** point development frontend + CORS origins at deployed Netlify FE ([8e451d7](https://github.com/nikunjmavani/core-be/commit/8e451d7290c87b76f7a1c731f9dc30c45e99809e))
+
+## [4.10.0-dev.25](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.24...v4.10.0-dev.25) (2026-07-04)
+
+
+### Fixed
+
+* **cors:** allow X-Requested-With in preflight to restore silent auth refresh ([39edab8](https://github.com/nikunjmavani/core-be/commit/39edab831072a827fb35c5a865d027876cbfffec))
+* **cors:** allow X-Requested-With in preflight to restore silent auth refresh ([2eb29a0](https://github.com/nikunjmavani/core-be/commit/2eb29a0638fbc9cc192c743dfd932fb06245d5d0))
+
+## [4.10.0-dev.24](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.23...v4.10.0-dev.24) (2026-07-04)
+
+
+### Added
+
+* **tenancy:** server-side sort of org memberships list by member name ([ead8d6c](https://github.com/nikunjmavani/core-be/commit/ead8d6c248409569cd63a4c79ca56dc743d417e5))
+* **tenancy:** server-side sort of org memberships list by member name ([6e679bf](https://github.com/nikunjmavani/core-be/commit/6e679bf91bf0b8c46c91c8e1f1a61d82cc938e3a))
+
+
+### Fixed
+
+* **sonar:** clear pre-existing quality-gate findings on the deployed surface ([8641ea2](https://github.com/nikunjmavani/core-be/commit/8641ea24b719d35c5ba03e3755761a83c7c22d85))
+
+## [4.10.0-dev.23](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.22...v4.10.0-dev.23) (2026-07-03)
+
+
+### Added
+
+* **auth:** replace magic-link with email verification-code login ([#814](https://github.com/nikunjmavani/core-be/issues/814)) ([cce59f3](https://github.com/nikunjmavani/core-be/commit/cce59f3e77befd181dc9dda45227cbc94e9b378b))
+* **billing:** paginate invoices via Stripe cursor (limit + starting_after + has_more) ([#824](https://github.com/nikunjmavani/core-be/issues/824)) ([761ca72](https://github.com/nikunjmavani/core-be/commit/761ca72f4427a73c1d6db3cfa3bb46c87ca8c204))
+* common server-side search/sort for org list endpoints (roles, api-keys) ([#823](https://github.com/nikunjmavani/core-be/issues/823)) ([d097af7](https://github.com/nikunjmavani/core-be/commit/d097af7876998f3075f96cf8539f301335e4c3d2))
+* **observability:** add PostHog analytics and sync env schema/config ([#815](https://github.com/nikunjmavani/core-be/issues/815)) ([7fca1b1](https://github.com/nikunjmavani/core-be/commit/7fca1b1a74296ae5b4c52d6f89911f2286c107da))
+* **tenancy:** server-side member search (q over email/name) ([#825](https://github.com/nikunjmavani/core-be/issues/825)) ([9c56489](https://github.com/nikunjmavani/core-be/commit/9c5648982dcad45022d12f5a155c6d32e44de264))
+
+
+### Fixed
+
+* **auth:** require verified email before MFA/WebAuthn enrollment (account pre-hijacking) ([dba4577](https://github.com/nikunjmavani/core-be/commit/dba4577a6e8d23d15f9865c984770ec8ef35eed4))
+* **auth:** require verified email before MFA/WebAuthn enrollment (account pre-hijacking) ([90c9bef](https://github.com/nikunjmavani/core-be/commit/90c9bef8089b37b4f82536d8bf4fc98657ce47df))
+* **ci:** call core-infra's validate:github-environments in Railway deploy ([26696f1](https://github.com/nikunjmavani/core-be/commit/26696f13d60e782eb3affad48d1232bc135fe343))
+* **ci:** correct core-infra validate script name in Railway deploy ([cab27b2](https://github.com/nikunjmavani/core-be/commit/cab27b26b81db286fff1bccb9c3109a8353b9781))
+* **load:** align k6 journey with idempotency and invitation API ([#813](https://github.com/nikunjmavani/core-be/issues/813)) ([4456a29](https://github.com/nikunjmavani/core-be/commit/4456a293861aed6b06f6091b718fb499d6828de8))
+* **tests:** seed full permission catalog + verified-email MFA fixture; fix fastify 5.9 drain regression ([#832](https://github.com/nikunjmavani/core-be/issues/832)) ([4a9fc73](https://github.com/nikunjmavani/core-be/commit/4a9fc73ab0c8963520b981d9bc690129c840053d))
+
+
+### Changed
+
+* **setup:** extract setup:infra into standalone core-infra repo ([#820](https://github.com/nikunjmavani/core-be/issues/820)) ([25083c3](https://github.com/nikunjmavani/core-be/commit/25083c37ba7a4e7624998f7fb11d0b8772a9bc71))
+
+
+### Documentation
+
+* **agent-os:** codify list search/sort/pagination + FORCE-RLS search conventions ([#826](https://github.com/nikunjmavani/core-be/issues/826)) ([0e12e36](https://github.com/nikunjmavani/core-be/commit/0e12e3699e6d954337807d50226cfb068b84cebb))
+* breaking (no unaccepted breaking changes). Third and final deferred follow-up. ([9c56489](https://github.com/nikunjmavani/core-be/commit/9c5648982dcad45022d12f5a155c6d32e44de264))
+
 ## [4.10.0-dev.22](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.21...v4.10.0-dev.22) (2026-06-26)
 
 

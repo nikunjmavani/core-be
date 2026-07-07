@@ -14,6 +14,7 @@ export interface SeedUserPayload {
   email: string;
   first_name: string;
   last_name: string;
+  job_title?: string | null;
   password_hash?: string | null;
   status?: string;
 }
@@ -22,7 +23,7 @@ export interface SeedUserPayload {
  * Insert a single user row for dev/demo seeding (`pnpm db:seed`, `pnpm db:seed:full`).
  * Sets `is_email_verified = true`, generates a fresh `public_id`, and computes the
  * lowercased SHA-256 `email_hash` so case-insensitive lookups work post-seed.
- * Idempotent: re-running updates `password_hash`, `first_name`, `last_name` on conflict.
+ * Idempotent: re-running updates `password_hash`, `first_name`, `last_name`, `job_title` on conflict.
  */
 export async function seedUser(payload: SeedUserPayload) {
   const emailHash = createHash('sha256').update(payload.email.toLowerCase()).digest('hex');
@@ -35,6 +36,7 @@ export async function seedUser(payload: SeedUserPayload) {
       is_email_verified: true,
       first_name: payload.first_name,
       last_name: payload.last_name,
+      job_title: payload.job_title ?? null,
       password_hash: payload.password_hash ?? null,
       status: payload.status ?? 'ACTIVE',
     })
@@ -45,6 +47,7 @@ export async function seedUser(payload: SeedUserPayload) {
         email_hash: emailHash,
         first_name: payload.first_name,
         last_name: payload.last_name,
+        job_title: payload.job_title ?? null,
         password_hash: payload.password_hash ?? null,
       },
     })

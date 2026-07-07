@@ -329,11 +329,11 @@ src/
     │   │   │   │   └── unit/
     │   │   │   │   │   ├── events/
     │   │   │   │   │       └── worker/
-    │   │   │   │   │       │   ├── stripe-webhook-event-catchup.processor.unit.test.ts
     │   │   │   │   │       │   ├── stripe-webhook-event-reclaim.worker.unit.test.ts
     │   │   │   │   │       │   ├── stripe-webhook-event-retention.worker.unit.test.ts
     │   │   │   │   │       │   └── stripe-webhook.worker.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-construct-event.unit.test.ts
+    │   │   │   │   │   ├── stripe-webhook-event-catchup.processor.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-event.repository.db.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-event.repository.ledger-immutability.db.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-ingress.plugin.unit.test.ts
@@ -377,11 +377,10 @@ src/
     │   │   │       │   ├── subscription-happy.integration.test.ts
     │   │   │       │   └── subscription.integration.test.ts
     │   │   │       └── unit/
-    │   │   │       │   ├── workers/
-    │   │   │       │       └── subscription-seat-sync.processor.unit.test.ts
     │   │   │       │   ├── payment-provider.port.unit.test.ts
     │   │   │       │   ├── stripe-payment-provider.email.unit.test.ts
     │   │   │       │   ├── subscription-routes-rate-limit.policy.unit.test.ts
+    │   │   │       │   ├── subscription-seat-sync.processor.unit.test.ts
     │   │   │       │   ├── subscription.controller.auth-matrix.unit.test.ts
     │   │   │       │   ├── subscription.controller.unit.test.ts
     │   │   │       │   ├── subscription.repository.db.unit.test.ts
@@ -1095,8 +1094,7 @@ src/
     │   │   ├── capped-count.util.ts
     │   │   ├── connection-url.util.ts
     │   │   ├── database-handle.types.ts
-    │   │   ├── force-rls-tables.constants.ts
-    │   │   └── hosted-deployment.util.ts
+    │   │   └── force-rls-tables.constants.ts
     │   ├── base-repository.ts
     │   ├── connection.ts
     │   ├── database.overview.md
@@ -1681,6 +1679,7 @@ src/
     │   ├── import-paths.global.test.ts
     │   ├── mcp-config.global.test.ts
     │   ├── no-direct-db-in-services.global.test.ts
+    │   ├── no-nodeenv-branching.global.test.ts
     │   ├── no-stripe-shaped-literals.global.test.ts
     │   ├── openapi-completeness.global.test.ts
     │   ├── openapi-cursor-pagination.global.test.ts
@@ -1885,6 +1884,7 @@ src/
     │   │   ├── billing-subscriptions-with-check.security.test.ts
     │   │   ├── bola-cross-tenant.security.test.ts
     │   │   ├── core-be-app-role-privileges.security.test.ts
+    │   │   ├── membership-name-sort-resolver.security.test.ts
     │   │   ├── membership-search-resolver.security.test.ts
     │   │   ├── organization-rls-session.security.test.ts
     │   │   ├── organization-settings-resolvers.security.test.ts
@@ -1923,6 +1923,7 @@ src/
     │   ├── ci/
     │   │   ├── dependabot-ci-triage.policy.unit.test.ts
     │   │   ├── github-actions-node24.policy.unit.test.ts
+    │   │   ├── github-actions-workflow-run-references.policy.unit.test.ts
     │   │   ├── hosted-docs-publish.policy.unit.test.ts
     │   │   ├── k6-coverage.policy.unit.test.ts
     │   │   ├── openapi-drift-check.policy.unit.test.ts

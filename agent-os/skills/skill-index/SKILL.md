@@ -1,60 +1,86 @@
 ---
 name: skill-index
 description: Master index of all project skills with trigger conditions. Use this skill FIRST to determine which other skill(s) to invoke based on what changed. Consult after any code change to check if a skill should run.
+indexNote: master index — consult FIRST to route a change to its skill(s)
 ---
 
 # Skill index (core-be)
 
-Master directory of all **41 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
+Master directory of all project skills. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
 
 For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global-skills**.
 
-## Project skills (41)
+## I want to… (decision tree)
 
-| Skill                          | Path                                                                      |
-| ------------------------------ | ------------------------------------------------------------------------- |
-| skill-index                    | `agent-os/skills/skill-index/SKILL.md`                                     |
-| test-generator                 | `agent-os/skills/test-generator/SKILL.md`                                  |
-| api-contract-guard             | `agent-os/skills/api-contract-guard/SKILL.md`                              |
-| route-catalog                  | `agent-os/skills/route-catalog/SKILL.md`                                   |
-| openapi-route-sync             | `agent-os/skills/openapi-route-sync/SKILL.md` (legacy — tag locale only; use route-schema-doc-guard for schema) |
-| route-schema-doc-guard         | `agent-os/skills/route-schema-doc-guard/SKILL.md`                          |
-| seed-maintainer                | `agent-os/skills/seed-maintainer/SKILL.md`                                 |
-| domain-generator               | `agent-os/skills/domain-generator/SKILL.md`                                |
-| schema-generator               | `agent-os/skills/schema-generator/SKILL.md`                                |
-| sql-design-guard               | `agent-os/skills/sql-design-guard/SKILL.md`                                |
-| db-migration-maintainer        | `agent-os/skills/db-migration-maintainer/SKILL.md`                         |
-| workers-events                 | `agent-os/skills/workers-events/SKILL.md`                                  |
-| supabase-porting               | `agent-os/skills/supabase-porting/SKILL.md`                                |
-| code-quality-guard             | `agent-os/skills/code-quality-guard/SKILL.md`                              |
-| code-smells-and-best-practices | `agent-os/skills/code-smells-and-best-practices/SKILL.md`                  |
-| lint-warnings-handler          | `agent-os/skills/lint-warnings-handler/SKILL.md` (detail; via code-smells) |
-| before-commit-guard            | `agent-os/skills/before-commit-guard/SKILL.md`                             |
-| dependency-security            | `agent-os/skills/dependency-security/SKILL.md`                             |
-| structure-maintainer           | `agent-os/skills/structure-maintainer/SKILL.md`                            |
-| production-hardening-guard     | `agent-os/skills/production-hardening-guard/SKILL.md`                      |
-| path-to-production-gate        | `agent-os/skills/path-to-production-gate/SKILL.md`                         |
-| i18n-message-guard             | `agent-os/skills/i18n-message-guard/SKILL.md`                              |
-| openapi-multilingual           | `agent-os/skills/openapi-multilingual/SKILL.md`                            |
-| env-schema-add                 | `agent-os/skills/env-schema-add/SKILL.md`                                  |
-| ide-productivity-guard         | `agent-os/skills/ide-productivity-guard/SKILL.md`                          |
-| docs-maintainer                | `agent-os/skills/docs-maintainer/SKILL.md`                                 |
-| docs-audit                     | `agent-os/skills/docs-audit/SKILL.md`                                      |
-| system-narrative-maintainer    | `agent-os/skills/system-narrative-maintainer/SKILL.md`                     |
-| overview-doc-maintainer        | `agent-os/skills/overview-doc-maintainer/SKILL.md`                         |
-| tsdoc-export-guard             | `agent-os/skills/tsdoc-export-guard/SKILL.md`                              |
-| pr-babysit                     | `agent-os/skills/pr-babysit/SKILL.md`                                      |
-| split-to-prs                   | `agent-os/skills/split-to-prs/SKILL.md`                                    |
-| ci-investigator                | `agent-os/skills/ci-investigator/SKILL.md`                                 |
-| contract-test-maintainer       | `agent-os/skills/contract-test-maintainer/SKILL.md`                        |
-| chaos-test-maintainer          | `agent-os/skills/chaos-test-maintainer/SKILL.md`                           |
-| cursor-global-skills           | `agent-os/skills/cursor-global-skills/SKILL.md` (reference only)           |
-| rls-tenant-isolation-guard     | `agent-os/skills/rls-tenant-isolation-guard/SKILL.md` |
-| idempotency-guard              | `agent-os/skills/idempotency-guard/SKILL.md` |
-| change-completeness-guard      | `agent-os/skills/change-completeness-guard/SKILL.md` |
-| ponytail                       | `agent-os/skills/ponytail/SKILL.md` (user-invoked; YAGNI/minimalism discipline — no file trigger) |
-| ponytail-audit                 | `agent-os/skills/ponytail-audit/SKILL.md` (user-invoked; repo-wide over-engineering scan — no file trigger) |
+Start here — map your intent to the skill or **chain** to run (chains are named sequences in
+`agent-os/skills/chains.json`; run them with `pnpm agent-os:plan-skills <file>` or the matching
+`/route-complete` · `/schema-complete` · `/worker-complete` · `/new-domain` command):
 
+- **Add a whole domain / sub-domain** → **new-domain** chain (domain-generator → … → test-generator)
+- **Add or change an API route** → **route-change** chain (api-contract-guard → route-schema-doc-guard → route-catalog → seed-maintainer)
+- **Change a Drizzle schema / table** → **schema-change** chain (schema-generator → sql-design-guard → db-migration-maintainer → rls-tenant-isolation-guard)
+- **Add an event / queue / worker** → **worker-change** chain (workers-events → test-generator → tsdoc-export-guard)
+- **Add / adjust seed data** → **seed-maintainer**
+- **Add / rename / remove an env var** → **env-schema-add**
+- **Write or reorganize `docs/**`** → **docs-maintainer** (audit-only pass → **docs-audit**)
+- **Bump or add a dependency** → **dependency-security**
+- **Finish any code change (definition-of-done)** → **change-completeness-guard**
+- **Review before merge** → **pre-merge-review** pipeline (sql-design-reviewer → production-hardening-reviewer → verifier)
+- **Release / production readiness** → **path-to-production-gate** (then **prod-readiness** pipeline)
+
+Full trigger detail is in the tables below and in [`agent-os/docs/skill-triggers.md`](../../docs/skill-triggers.md).
+
+<!-- GENERATED:START -->
+## Project skills (43)
+
+Grouped by `agent-os/skills/groups.json`. Regenerated by `pnpm agent-os:generate`.
+
+| Skill | Path | Note |
+| ----- | ---- | ---- |
+| api-contract-guard | `agent-os/skills/api-contract-guard/SKILL.md` | route params / public-ids / method→status policy / header matrix — any route, param, or header change |
+| route-schema-doc-guard | `agent-os/skills/route-schema-doc-guard/SKILL.md` | every route registration carries schema summary / description / tags |
+| route-catalog | `agent-os/skills/route-catalog/SKILL.md` | regenerate docs/routes.txt after any route change |
+| openapi-multilingual | `agent-os/skills/openapi-multilingual/SKILL.md` | generate/maintain multilingual OpenAPI from locale openapi.json |
+| openapi-route-sync | `agent-os/skills/openapi-route-sync/SKILL.md` | legacy — tag locale only; use route-schema-doc-guard for schema |
+| idempotency-guard | `agent-os/skills/idempotency-guard/SKILL.md` | X-Idempotency-Key writes, post-commit Redis replay, Stripe idempotencyKey |
+| i18n-message-guard | `agent-os/skills/i18n-message-guard/SKILL.md` | user-facing copy uses translation keys present in locales/en |
+| schema-generator | `agent-os/skills/schema-generator/SKILL.md` | scaffold co-located Drizzle schema files (snake_case, id/public_id/timestamps/soft-delete) |
+| sql-design-guard | `agent-os/skills/sql-design-guard/SKILL.md` | Postgres design review — indexes, partitioning, constraint names, formatting |
+| db-migration-maintainer | `agent-os/skills/db-migration-maintainer/SKILL.md` | keep migrations/*.sql aligned with Drizzle schema changes |
+| domain-generator | `agent-os/skills/domain-generator/SKILL.md` | scaffold/extend domains + sub-domains and wire routes/DI |
+| workers-events | `agent-os/skills/workers-events/SKILL.md` | domain events + BullMQ queues/workers (Redis, retries, graceful shutdown) |
+| supabase-porting | `agent-os/skills/supabase-porting/SKILL.md` | port Supabase Edge Functions (Deno) → Node/Fastify (manual invoke only) |
+| test-generator | `agent-os/skills/test-generator/SKILL.md` | pick the test layer + write unit / domain-e2e per the testing pyramid |
+| chaos-test-maintainer | `agent-os/skills/chaos-test-maintainer/SKILL.md` | Toxiproxy fault-injection tests under src/tests/chaos |
+| contract-test-maintainer | `agent-os/skills/contract-test-maintainer/SKILL.md` | outbound HTTP contract tests (Stripe / Resend / S3) |
+| tsdoc-export-guard | `agent-os/skills/tsdoc-export-guard/SKILL.md` | TSDoc summary (+ @remarks on service/worker/policy exports) on public exports |
+| docs-maintainer | `agent-os/skills/docs-maintainer/SKILL.md` | keep docs/ index + cross-links consistent on add/rename/move |
+| docs-audit | `agent-os/skills/docs-audit/SKILL.md` | on-request full docs/ audit (index, naming, Mermaid, cross-links) |
+| overview-doc-maintainer | `agent-os/skills/overview-doc-maintainer/SKILL.md` | author per-folder <folder>.overview.md (A.1–A.4 templates) |
+| system-narrative-maintainer | `agent-os/skills/system-narrative-maintainer/SKILL.md` | maintain src/ OVERVIEW / PATTERNS / FLOWS / POLICIES |
+| code-quality-guard | `agent-os/skills/code-quality-guard/SKILL.md` | 3-layer quality/security pipeline (editor Biome, husky pre-commit, CI scanning) |
+| code-smells-and-best-practices | `agent-os/skills/code-smells-and-best-practices/SKILL.md` | fix Biome issues in touched src/ files while implementing |
+| lint-warnings-handler | `agent-os/skills/lint-warnings-handler/SKILL.md` | detail; via code-smells |
+| before-commit-guard | `agent-os/skills/before-commit-guard/SKILL.md` | make code commit-ready; run when a pre-commit guard step fails |
+| change-completeness-guard | `agent-os/skills/change-completeness-guard/SKILL.md` | definition-of-done — propagate a change to its tests, cross-cutting suites, docs, rules, skills |
+| ponytail | `agent-os/skills/ponytail/SKILL.md` | user-invoked; YAGNI/minimalism discipline — no file trigger |
+| ponytail-audit | `agent-os/skills/ponytail-audit/SKILL.md` | user-invoked; repo-wide over-engineering scan — no file trigger |
+| rls-tenant-isolation-guard | `agent-os/skills/rls-tenant-isolation-guard/SKILL.md` | Postgres RLS + tenant isolation (FORCE RLS, org GUC, worker context wrappers) |
+| dependency-security | `agent-os/skills/dependency-security/SKILL.md` | keep pnpm deps non-vulnerable; safe patch/minor updates |
+| production-hardening-guard | `agent-os/skills/production-hardening-guard/SKILL.md` | production-readiness across middleware / infra / security config |
+| path-to-production-gate | `agent-os/skills/path-to-production-gate/SKILL.md` | pre-release/deploy review + plan; user must approve before prod actions |
+| env-schema-add | `agent-os/skills/env-schema-add/SKILL.md` | add/rename/remove an env var; keep schema + .env.example + GitHub envs in sync |
+| ide-productivity-guard | `agent-os/skills/ide-productivity-guard/SKILL.md` | keep .vscode extensions/settings backend-relevant |
+| seed-maintainer | `agent-os/skills/seed-maintainer/SKILL.md` | keep per-domain seed/ + bulk orchestrator aligned with schemas + routes |
+| auto-implement | `agent-os/skills/auto-implement/SKILL.md` | workflow orchestrator — runs a chain end-to-end with per-step gates |
+| delegate-search | `agent-os/skills/delegate-search/SKILL.md` | delegate broad multi-file searches to a read-only Explore subagent — only the conclusion returns to main context |
+| ci-investigator | `agent-os/skills/ci-investigator/SKILL.md` | diagnose one failing PR CI check → root cause + fix plan |
+| pr-babysit | `agent-os/skills/pr-babysit/SKILL.md` | keep a PR merge-ready — triage reviews, resolve conflicts, fix CI in a loop |
+| split-to-prs | `agent-os/skills/split-to-prs/SKILL.md` | split a branch/PR into small reviewable, CI-path-aligned PRs |
+| skill-index | `agent-os/skills/skill-index/SKILL.md` | master index — consult FIRST to route a change to its skill(s) |
+| cursor-global-skills | `agent-os/skills/cursor-global-skills/SKILL.md` | reference only |
+| structure-maintainer | `agent-os/skills/structure-maintainer/SKILL.md` | keep project structure/naming standards + docs/rules in sync |
+<!-- GENERATED:END -->
 ## Skill trigger map
 
 | What changed                                                                                                                                                                                                    | Skill to invoke                                                                                                    | Path                                                              |
@@ -358,3 +384,9 @@ When a **new skill is created**, add it to:
 3. The multi-skill scenarios order (if applicable)
 4. The auto-trigger rules section (if it has a `.mdc` auto-invoke rule)
 5. `CLAUDE.md` under "Keeping Docs and Skills in Sync"
+6. Assign it a group in `agent-os/skills/groups.json`
+
+Whenever a **skill's `SKILL.md` changes** (new skill or edit), run **`pnpm agent-os:lock`** to
+refresh its sha256 in [`agent-os/skills-lock.json`](../../skills-lock.json), then commit the
+SKILL.md and the lockfile together. `pnpm agent-os:check` recomputes each hash and fails on drift,
+a skill missing from the lockfile, or a stale lock entry (provenance is enforced, not hoped for).

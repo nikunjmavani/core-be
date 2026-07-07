@@ -6,8 +6,9 @@
  *
  * Single source: agent-os/hooks/hooks.json (hook wiring) + agent-os/platforms/
  * targets.json (capability registry). Derived artifacts: the `hooks` block of
- * .claude/settings.json, the `hooks` block of .cursor/hooks.json,
- * .codex/hooks.json, and the default Codex MCP config. Everything else in those
+ * agent-os/platforms/claude/settings.json (which .claude/settings.json symlinks
+ * to), the `hooks` block of .cursor/hooks.json, .codex/hooks.json, and the
+ * default Codex MCP config. Everything else in those
  * files (Claude `permissions`, Cursor `$schema`/`version`) is owned by hand and
  * preserved verbatim. --check compares semantically (parsed,
  * key-order-independent) so the existing hand-formatted files pass unchanged.
@@ -19,6 +20,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { generateDocs } from './generate-docs.js';
 
 const repositoryRoot = process.cwd();
 const agentOsDirectory = join(repositoryRoot, 'agent-os');
@@ -178,11 +180,12 @@ const claudeHooks = buildClaudeHooks();
 const cursorHooks = buildCursorHooks();
 const codexHooks = buildCodexHooks();
 
-// ── Claude: .claude/settings.json (hooks block only; permissions preserved) ──
-const claudeSettingsPath = join(
-  repositoryRoot,
-  claudeTarget?.hooksTarget ?? '.claude/settings.json',
-);
+// ── Claude settings (hooks block only; permissions preserved) ──
+// hooksTarget is agent-os/platforms/claude/settings.json — the canonical file
+// that .claude/settings.json symlinks to (so config lives under agent-os/, the
+// single source of truth). settings.local.json stays a real, gitignored file.
+const claudeSettingsTarget = claudeTarget?.hooksTarget ?? 'agent-os/platforms/claude/settings.json';
+const claudeSettingsPath = join(repositoryRoot, claudeSettingsTarget);
 if (existsSync(claudeSettingsPath)) {
   const settings = readJson<Record<string, unknown>>(claudeSettingsPath);
   if (writeMode) {
@@ -191,11 +194,11 @@ if (existsSync(claudeSettingsPath)) {
     if (!deepEqual(settings.hooks, claudeHooks)) {
       settings.hooks = claudeHooks;
       writeFileSync(claudeSettingsPath, `${JSON.stringify(settings, null, 2)}\n`);
-      report('wrote .claude/settings.json');
+      report(`wrote ${claudeSettingsTarget}`);
     }
   } else if (!deepEqual(settings.hooks, claudeHooks)) {
     report(
-      'drift: .claude/settings.json hooks differ from agent-os/hooks/hooks.json — run `pnpm agent-os:generate --write`',
+      `drift: ${claudeSettingsTarget} hooks differ from agent-os/hooks/hooks.json — run \`pnpm agent-os:generate --write\``,
     );
   }
 } else report(`missing: ${claudeSettingsPath}`);
@@ -266,6 +269,11 @@ if (codexTarget?.capabilities.mcpFormat === 'toml') {
     }
   }
 }
+
+// ── Derived docs (skill-index table, agents-catalog, skill-triggers) ──
+// Regenerated from manifests + skill/agent frontmatter between GENERATED markers;
+// hand-written prose outside the markers survives verbatim.
+for (const message of generateDocs(writeMode)) report(message);
 
 // ── Report ──
 const drift = problems.filter(

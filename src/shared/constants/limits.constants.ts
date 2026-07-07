@@ -23,3 +23,15 @@ export const ORGANIZATION_API_KEY_PREFIX_DISPLAY_LENGTH = 8;
 
 /** Raw secret byte length for generated organization API keys. */
 export const ORGANIZATION_API_KEY_RAW_SECRET_BYTE_LENGTH = 32;
+
+/** Resend send retry attempts for transient network failures. */
+export const MAIL_SEND_RETRY_MAX_ATTEMPTS = 3;
+
+/** Default max attempts when retrying a transient Postgres/connection error. */
+export const DEFAULT_TRANSIENT_RETRY_ATTEMPTS = 3;
+
+/** Maximum inbound request body size (bytes) accepted by Fastify (1 MiB). */
+export const DEFAULT_BODY_LIMIT_BYTES = 1_048_576;
+
+/** Bytes per mebibyte (1024 * 1024) — RSS / threshold byte math. */
+export const BYTES_PER_MEGABYTE = 1024 * 1024;

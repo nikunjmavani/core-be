@@ -79,7 +79,19 @@ export function shouldRunStructureTreeCheck(stagedFiles: string[]): boolean {
 
 /** Returns whether staged files include domain TypeScript files (controllers, services, workers, any domain layer). */
 export function shouldRunGlobalTests(stagedFiles: string[]): boolean {
-  return stagedFiles.some((file) => file.startsWith('src/domains/') && file.endsWith('.ts'));
+  return stagedFiles.some(
+    (file) =>
+      (file.startsWith('src/domains/') && file.endsWith('.ts')) ||
+      // env-driven-config guard (no-nodeenv-branching.global.test.ts) scans the schema, the test
+      // harness, the CI workflows, and the Docker files — trigger the global suite when they change.
+      file === 'src/shared/config/env-schema.ts' ||
+      file === 'src/tests/setup.ts' ||
+      file === 'src/tests/chaos/bootstrap-env.ts' ||
+      file.startsWith('.github/workflows/') ||
+      file === 'Dockerfile' ||
+      file === 'Dockerfile.worker' ||
+      file === 'docker-compose.yml',
+  );
 }
 
 /**
@@ -210,7 +222,7 @@ export function buildGuardSteps(options: {
       label: 'Architecture policy tests',
       when: shouldRunGlobalTests(stagedFiles) ? 'always' : 'conditional',
       description:
-        'pnpm test:global (service cross-domain boundary, no direct DB outside repos, import paths — when src/domains/**/*.ts staged)',
+        'pnpm test:global (service boundary, no direct DB, import paths, no NODE_ENV branching — when domains / env-schema / harness / workflows / Docker staged)',
     },
     {
       id: '4',

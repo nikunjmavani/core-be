@@ -1,6 +1,7 @@
 ---
 name: lint-warnings-handler
 description: Detail guide for resolving Biome lint warnings. Invoked by code-smells-and-best-practices only — not a separate auto-trigger. Handle warnings yourself; prefer fixing over disabling.
+indexNote: detail; via code-smells
 ---
 
 # Lint warnings handler (core-be)
