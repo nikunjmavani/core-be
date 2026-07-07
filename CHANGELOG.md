@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.10.1](https://github.com/nikunjmavani/core-be/compare/v4.10.0...v4.10.1) (2026-07-07)
+
+
+### Documentation
+
+* **process:** single-trunk docs + hotfix runbook + release/* ruleset ([1ffe7d7](https://github.com/nikunjmavani/core-be/commit/1ffe7d749842237b3eb8a5e0787e8359a3037508))
+
 ## [4.10.0](https://github.com/nikunjmavani/core-be/compare/v4.8.1...v4.10.0) (2026-07-07)
 
 
