@@ -6,6 +6,14 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.10.0-dev.31](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.30...v4.10.0-dev.31) (2026-07-07)
+
+
+### Fixed
+
+* **tenancy:** make personal-org self-heal read-safe + seed permissions in e2e ([#867](https://github.com/nikunjmavani/core-be/issues/867)) ([8749a90](https://github.com/nikunjmavani/core-be/commit/8749a901c9ba011512eb5ffd030c728685680f1c))
+* **tenancy:** self-heal missing personal organization on read ([#865](https://github.com/nikunjmavani/core-be/issues/865)) ([ceb81a4](https://github.com/nikunjmavani/core-be/commit/ceb81a4ce56ab78123dc192d714f38cd81bda183))
+
 ## [4.10.0-dev.30](https://github.com/nikunjmavani/core-be/compare/v4.10.0-dev.29...v4.10.0-dev.30) (2026-07-06)
 
 
