@@ -38,9 +38,9 @@ migration, rollback alone is not sufficient — treat it as a restore scenario
 
 ## After rolling back
 
-1. Land the real fix or a `revert:` commit through the normal path
-   (hotfix → `main`, or next promote from `dev`). Versions only move forward —
-   the fix ships as the **next** patch version, never by re-tagging.
+1. Land the real fix or a `revert:` commit through the normal path (a `fix:` PR to
+   `main`, then merge the Release PR). Versions only move forward — the fix ships as
+   the **next** patch version, never by re-tagging.
 2. Note: the next successful deploy overwrites `:previous` with the version you
    just rolled back **from**. Do not roll back twice expecting to go two
    versions back.
@@ -50,5 +50,5 @@ migration, rollback alone is not sufficient — treat it as a restore scenario
 
 - `:previous` tags exist only after at least one successful deploy of that
   environment has completed its retag step.
-- The dispatch can run from `dev` or `main`; the production deployment branch
-  policy accepts both (protected branches).
+- The dispatch runs from `main` (the single trunk); the environment's deployment
+  branch policy accepts `main` and `v*` release tags.

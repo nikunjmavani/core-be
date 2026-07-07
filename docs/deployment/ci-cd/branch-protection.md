@@ -1,8 +1,17 @@
 # Branch protection and required CI checks
 
-Canonical reference for **which GitHub checks must gate merges** into **`main`** and **`dev`**, and how that maps to workflows and committed ruleset JSON under [`.github/rulesets/`](../../../.github/rulesets/).
+Canonical reference for **which GitHub checks must gate merges** into **`main`** (the single protected
+trunk), and how that maps to workflows and committed ruleset JSON under
+[`.github/rulesets/`](../../../.github/rulesets/).
 
-**Related docs:** [CI/CD and deployment](cicd-and-deployment.md) (what runs in CI, deploy, and release flow), [Git workflow](../../process/git-workflow.md) (branch naming and promotion).
+> **Single-trunk model.** `main` is the only long-lived branch. Its ruleset
+> ([`main.json`](../../../.github/rulesets/main.json)) is **squash-only**, 0 approvals (D8), with
+> `required_linear_history` and strict up-to-date checks. The authoritative DB matrix is enforced via
+> the **`matrix / Integration`** required check (backed by the always-runs `reusable-matrix-gate.yml`).
+> Short-lived `release/*` hotfix branches are protected by
+> [`release.json`](../../../.github/rulesets/release.json). The former `dev` ruleset is retired.
+
+**Related docs:** [CI/CD and deployment](cicd-and-deployment.md) (what runs in CI, deploy, and release flow), [Git workflow](../../process/git-workflow.md) (branch naming and the single-trunk PR flow).
 
 ---
 
