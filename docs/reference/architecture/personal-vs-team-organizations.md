@@ -21,6 +21,13 @@ organizations, and how the active organization is carried as a signed token clai
   `switch-to-personal` can no longer 404 in hybrid/B2C mode. When personal is **disabled** the
   helper creates nothing (id stays `null`, `switch-to-personal` still 404s). Idempotent — the
   partial unique index absorbs any provision race and the helper re-resolves the winner.
+  **Read-safe:** the `getMe` path (`ensurePersonalOrganizationPublicId`) never lets a self-heal
+  failure break the read — if the on-demand provision throws (e.g. a transient DB error), it
+  degrades to the pre-existing value (usually `null`) and returns 200 rather than 500; the user
+  simply heals on a later read. The explicit `switch-to-personal` action still surfaces a genuine
+  provisioning failure (it cannot silently succeed). Provisioning depends on the seeded
+  `permissions` reference catalog (the owner role is granted every code); it is present in every
+  real environment.
 - The `PERSONAL` organization has a **null slug** (never user-facing — its app URL is `/`) and is
   **immutable**: it cannot be deleted or have its ownership transferred (`409
 personalOrganizationImmutable`); it is removed only when the account is deleted (cascade).

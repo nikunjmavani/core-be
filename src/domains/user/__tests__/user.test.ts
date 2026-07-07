@@ -8,6 +8,7 @@ import {
 } from '@/tests/helpers/test-http-inject.helper.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
+import { seedAllPermissions } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import {
   generateTestToken,
   generateTestTokenAndSession,
@@ -57,6 +58,11 @@ describe('User Domain — Integration', () => {
 
   beforeEach(async () => {
     await cleanupDatabase();
+    // GET /users/me self-heals a missing personal org (provisions on read when personal is
+    // enabled); provisioning grants the owner role every permission code, so the full catalog
+    // must exist or the role_permissions → permissions FK fails. Seed it so the self-heal
+    // succeeds and personal_organization_id is reliably non-null (mirrors the tenancy suites).
+    await seedAllPermissions();
   });
 
   // ─── Self-service: /me ────────────────────────────────────────
