@@ -1,9 +1,9 @@
 ---
-description: Git branch naming policy — working branches use <type>/<short-description>; dev/main are long-lived; claude/* is reserved for AI web sessions. Enforced by .husky/pre-push.
+description: Git branch naming policy — working branches use <type>/<short-description>; main is the only long-lived branch; release/* for hotfixes; claude/* is reserved for AI web sessions. Enforced by .husky/pre-push.
 globs:
 alwaysApply: true
 ---
 
 # Git branch naming
 
-Working branches: `<type>/<short-description>` (`feat`/`fix`/`chore`/`refactor`/`docs`/`test`/`ci`/`build`/`perf`). `dev` / `main` are long-lived; `claude/*` is reserved for AI web sessions. Enforced by `.husky/pre-push` (owner: **[code-quality-guard](../skills/code-quality-guard/SKILL.md)**).
+Working branches: `<type>/<short-description>` (`feat`/`fix`/`chore`/`refactor`/`docs`/`test`/`ci`/`build`/`perf`). Single trunk: `main` is the only long-lived branch; short-lived `release/*` version branches carry hotfixes for older releases; `claude/*` is reserved for AI web sessions. Enforced by `.husky/pre-push` (owner: **[code-quality-guard](../skills/code-quality-guard/SKILL.md)**).
