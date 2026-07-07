@@ -15,16 +15,15 @@
  * "Upgrade to GitHub Pro or make this repository public to enable this feature."
  * The script surfaces that message verbatim and exits non-zero.
  *
- * Usage:
- *   pnpm gh:rulesets:sync
- *   pnpm gh:rulesets:sync:dry-run
- *   pnpm gh:rulesets:check
+ * Entry point: this module is composed by `tooling/setup/github/init.ts`, run via
+ *   pnpm github:sync            # apply
+ *   pnpm github:sync --check    # read-only drift
+ *   pnpm github:sync --dry-run  # preview
  *
- * Importable surface (consumed by init-branches.ts):
+ * Importable surface (consumed by init.ts):
  *   - getRepositoryIdentifier()
  *   - loadLocalRulesets()
  *   - syncRulesets({ repository, locals, mode })
- *   - extractTargetBranchesFromRulesets()
  *   - explainPlanBlocker()
  */
 
@@ -158,30 +157,6 @@ export function loadLocalRulesets(directory: string = RULESETS_DIRECTORY): Local
     }
     return { fileName, filePath, payload, name };
   });
-}
-
-/**
- * Extract target branch short-names from `conditions.ref_name.include` entries
- * of the form `refs/heads/<branch>`. Wildcards (`refs/heads/*`, `~ALL`) are
- * skipped — only literal branch refs are returned.
- */
-export function extractTargetBranchesFromRulesets(locals: readonly LocalRuleset[]): string[] {
-  const branches = new Set<string>();
-  for (const local of locals) {
-    const conditions = local.payload.conditions as { ref_name?: { include?: unknown } } | undefined;
-    const include = conditions?.ref_name?.include;
-    if (!Array.isArray(include)) {
-      continue;
-    }
-    for (const entry of include) {
-      if (typeof entry !== 'string') continue;
-      if (!entry.startsWith('refs/heads/')) continue;
-      const branch = entry.slice('refs/heads/'.length);
-      if (!branch || branch.includes('*')) continue;
-      branches.add(branch);
-    }
-  }
-  return [...branches].sort();
 }
 
 function listRemoteRulesets(repository: string): RemoteRulesetSummary[] {
@@ -325,7 +300,7 @@ function parseArguments(): CliOptions {
   const argumentsList = process.argv.slice(2);
 
   if (argumentsList.includes('--help') || argumentsList.includes('-h')) {
-    console.log('Usage: pnpm gh:rulesets:sync [--check | --dry-run]');
+    console.log('Usage: pnpm github:sync [--check | --dry-run]');
     console.log('');
     console.log('  (default)   Create-or-update each .github/rulesets/*.json on the repo');
     console.log('  --check     Report drift between local files and remote rulesets');
@@ -378,7 +353,7 @@ export async function main(): Promise<void> {
       process.exit(1);
     }
     console.error(`Drift detected: ${result.drift} local ruleset(s) missing on remote.`);
-    console.error('Run `pnpm gh:rulesets:sync` to apply them.');
+    console.error('Run `pnpm github:sync` to apply them.');
     process.exit(1);
   }
 

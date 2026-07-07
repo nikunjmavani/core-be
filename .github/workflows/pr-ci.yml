@@ -605,3 +605,67 @@ jobs:
             exit 0
           fi
           exit "${oasdiff_exit:-1}"
+
+  quality-gate:
+    name: Quality gate
+    # ── Single aggregate required check ──────────────────────────────────────
+    # Branch protection (.github/rulesets/main.json) requires only "Quality gate"
+    # + "Checks" (from pr-governance.yml). This job rolls up every required PR-CI
+    # lane, so adding, removing, or renaming a lane changes ONLY this `needs:` list
+    # — never the ruleset, and never a `pnpm github:sync`. That removes the whole
+    # class of "a job rename silently disabled a required check" drift that the
+    # 13-explicit-context model was exposed to.
+    #
+    # A lane that is legitimately skipped (docs-only PR path filter) counts as a
+    # pass; a real failure or cancellation fails the gate. The ruleset ↔ needs
+    # invariant is pinned by src/tests/unit/ci/pr-quality-gate.policy.unit.test.ts.
+    #
+    # Advisory lanes (agent-os-gate, openapi-breaking) are intentionally NOT in
+    # `needs:` — they run and display on the PR but do not block: agent-os-gate is
+    # an internal tooling gate that only runs on agent-os/** changes, and
+    # openapi-breaking is expected to fail on deliberate major-version breaks (which
+    # are acknowledged via the err-ignore list, not a merge block). Promote a lane
+    # to blocking by adding it here AND to REQUIRED_LANES in the policy test.
+    needs:
+      - changes
+      - lint
+      - typecheck
+      - static-sync
+      - unit
+      - matrix
+      - migration-lint
+      - build-verify
+      - security-audit
+      - security-secrets
+      - security-sast
+      - security-iac
+      - dependency-review
+      - contract-property
+      - rls-security
+      - actionlint
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Aggregate required-lane results
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          {
+            echo "| lane | result |"
+            echo "| --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          failed=0
+          while IFS=$'\t' read -r lane result; do
+            echo "| ${lane} | ${result} |" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              echo "::error::Required lane '${lane}' did not pass (result: ${result})"
+              failed=1
+            fi
+          done < <(printf '%s' "$NEEDS_JSON" | jq -r 'to_entries[] | [.key, .value.result] | @tsv')
+          if [ "$failed" -ne 0 ]; then
+            echo "Quality gate FAILED — one or more required lanes did not pass."
+            exit 1
+          fi
+          echo "Quality gate PASSED — all required lanes succeeded or were skipped."

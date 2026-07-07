@@ -4,7 +4,9 @@
  * Order:
  *   1. Consistency check (NODE_ENV ↔ config ↔ rulesets ↔ workflow ↔ GitHub env JSON).
  *   2. Scaffold missing local files from tooling/setup/setup.config.json (sync mode only).
- *   3. Remote init (branches → rulesets → GitHub Environment shells).
+ *   3. Remote init (rulesets → GitHub Environment shells). Single trunk: `main` is
+ *      the only long-lived branch and it is the repository default, so no branch
+ *      is created here.
  *   4. Reconcile .env.<environment> → GitHub Environments (sync mode only):
  *        - Push all secrets and variables from each local file.
  *        - Delete any secret or variable on GitHub NOT in the local file.
@@ -25,7 +27,7 @@
  *
  * Adding or removing a hosted environment: edit tooling/setup/setup.config.json, NODE_ENV,
  * reusable-railway-deploy.yml, and related IaC by hand — then run setup:github. There is no
- * env:add / env:remove / branch:add script.
+ * env:add / env:remove script.
  */
 
 import { existsSync } from 'node:fs';
@@ -261,8 +263,8 @@ async function main(): Promise<void> {
   const initResult = await runGithubInit({
     mode,
     purpose: checkOnly
-      ? 'Read-only check: branches + rulesets + environments'
-      : 'GitHub sync: branches + rulesets + environments + values',
+      ? 'Read-only check: rulesets + environments'
+      : 'GitHub sync: rulesets + environments + values',
     scaffoldOnSync: false,
   });
 

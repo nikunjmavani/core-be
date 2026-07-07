@@ -6,10 +6,11 @@ trunk), and how that maps to workflows and committed ruleset JSON under
 
 > **Single-trunk model.** `main` is the only long-lived branch. Its ruleset
 > ([`main.json`](../../../.github/rulesets/main.json)) is **squash-only**, 0 approvals (D8), with
-> `required_linear_history` and strict up-to-date checks. The authoritative DB matrix is enforced via
-> the **`matrix / Integration`** required check (backed by the always-runs `reusable-matrix-gate.yml`).
-> Short-lived `release/*` hotfix branches are protected by
-> [`release.json`](../../../.github/rulesets/release.json). The former `dev` ruleset is retired.
+> `required_linear_history` and strict up-to-date checks. Branch protection requires exactly **two**
+> aggregate contexts — **`Quality gate`** (the pr-ci.yml aggregate that rolls up every merge-gating
+> lane, including the authoritative DB matrix) and **`Checks`** (pr-governance). `main.json` is the
+> **only** committed ruleset: hotfixes fix-forward to `main` via ordinary `fix/*` PRs, so there are
+> no protected release branches. The former `dev` ruleset is retired.
 
 **Related docs:** [CI/CD and deployment](cicd-and-deployment.md) (what runs in CI, deploy, and release flow), [Git workflow](../../process/git-workflow.md) (branch naming and the single-trunk PR flow).
 
@@ -44,48 +45,50 @@ Hotfixes merge **`hotfix/* → main`** first; then sync **`main → dev`** so lo
 
 ## Required status checks (pull requests)
 
-These are the **exact check names** to require in GitHub for every PR targeting **`main`** or **`dev`**.
+Branch protection requires exactly **two** check contexts on every PR into **`main`**:
 
-GitHub Actions reports a status-check context as the **bare job `name:`** — **not** prefixed by the workflow name. (The one exception here is the reusable unit workflow, which reports as `unit / Unit + global`.) Match **including spaces and punctuation**. A workflow-prefixed form like `PR CI / Lint` matches **no real check** and silently blocks every merge — use the exact strings in the "Required check string" column below.
+| Required check string | Workflow | What it covers |
+| --------------------- | -------- | -------------- |
+| `Quality gate` | [pr-ci.yml](../../../.github/workflows/pr-ci.yml) | **Aggregate** — rolls up every merge-gating PR-CI lane (see below) |
+| `Checks` | [pr-governance.yml](../../../.github/workflows/pr-governance.yml) | PR title (conventional commits), size label, `.env` guard, path labels |
 
-| Workflow file | Workflow `name:` | Job `name:` | Required check string |
-| ------------- | ---------------- | ----------- | --------------------- |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Lint` | `Lint` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Typecheck` | `Typecheck` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Static sync` | `Static sync` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Unit + global (pull_request)` | `unit / Unit + global` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Migration lint` | `Migration lint` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Build verify` | `Build verify` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security audit` | `Security audit` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security secrets` | `Security secrets` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security SAST` | `Security SAST` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Contract + property` | `Contract + property` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `RLS security (non-superuser)` | `RLS security (non-superuser)` |
-| [.github/workflows/pr-governance.yml](../../../.github/workflows/pr-governance.yml) | `PR Governance` | `Checks` | `Checks` |
+GitHub reports a status-check context as the **bare job `name:`** — never prefixed by the workflow. A workflow-prefixed form like `PR CI / Lint` matches **no real check** and silently blocks every merge; [`main.json`](../../../.github/rulesets/main.json) therefore lists the bare strings above.
 
-### Same checks on both branches
+### Why an aggregate
 
-Require **all twelve** rows above for **`main`** and **`dev`** PRs. [`.github/workflows/pr-ci.yml`](../../../.github/workflows/pr-ci.yml) runs on `pull_request` into each branch. Post-merge Docker (Trivy + GHCR), SBOM, API docs, deploy, and release automation run from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) when a PR merges (not required PR checks).
+The `quality-gate` job (in [pr-ci.yml](../../../.github/workflows/pr-ci.yml)) `needs:` every merge-gating lane and passes only when each one **succeeded or was legitimately skipped** (docs-only path filter); any real failure or cancellation fails the aggregate. Because the ruleset points at the single `Quality gate` context, **adding, removing, or renaming a lane changes only `quality-gate.needs` — never the ruleset, and never a `pnpm github:sync`.** That removes the "a job rename silently disabled a required check" drift the previous per-lane list was exposed to. The ruleset ↔ `needs` invariant is pinned by [`pr-quality-gate.policy.unit.test.ts`](../../../src/tests/unit/ci/pr-quality-gate.policy.unit.test.ts).
 
-> **`RLS security (non-superuser)` is the one DB-backed PR check.** Every other PR-CI job is DB-less, but the RLS suite must run as the non-superuser `core_be_app` role against a real Postgres — the local/CI superuser is RLS-exempt and hides FORCE-RLS bugs (this is how the org-mandated-MFA bypass shipped). It is scoped to `src/tests/security/rls` to stay fast; the rest of `--project security` and the full DB integration and chaos suites remain post-merge / local-only (`pnpm test:integration`, `pnpm test:chaos`).
+Lanes currently rolled up (**authoritative source: `quality-gate.needs` in pr-ci.yml** — this table is a convenience mirror):
+
+| Lane (`needs:` id) | Job `name:` |
+| ------------------ | ----------- |
+| `lint` | Lint |
+| `typecheck` | Typecheck |
+| `static-sync` | Static sync |
+| `unit` | Unit + global (via `reusable-unit-gate.yml`) |
+| `matrix` | Integration (via `reusable-matrix-gate.yml`) |
+| `migration-lint` | Migration lint |
+| `build-verify` | Build verify |
+| `security-audit` | Security audit |
+| `security-secrets` | Security secrets |
+| `security-sast` | Security SAST |
+| `security-iac` | Security IaC (Trivy config) |
+| `dependency-review` | Dependency review |
+| `contract-property` | Contract + property |
+| `rls-security` | RLS security (non-superuser) |
+| `actionlint` | Actionlint |
+
+Post-merge Docker (Trivy + GHCR), SBOM, API docs, deploy, and release automation run from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) when a PR merges (not required PR checks).
+
+> **`RLS security (non-superuser)` is the one DB-backed PR lane.** Every other PR-CI job is DB-less, but the RLS suite must run as the non-superuser `core_be_app` role against a real Postgres — the local/CI superuser is RLS-exempt and hides FORCE-RLS bugs (this is how the org-mandated-MFA bypass shipped). It is scoped to `src/tests/security/rls` to stay fast; the rest of `--project security` and the full DB integration and chaos suites remain post-merge / local-only (`pnpm test:integration`, `pnpm test:chaos`). It is gated the same as every other lane: `quality-gate` `needs: rls-security`, so a red RLS run fails `Quality gate` and blocks the merge (pinned by [`pr-rls-security-gate.policy.unit.test.ts`](../../../src/tests/unit/ci/pr-rls-security-gate.policy.unit.test.ts)).
+
+### Advisory PR jobs (run but not in the aggregate)
+
+These run on every non-docs-only PR and display on the PR, but are **not** in `quality-gate.needs`, so they do not block merge: `agent-os evals` (internal tooling gate, only runs on `agent-os/**` changes) and `OpenAPI breaking-change` (expected to fail on deliberate major-version breaks, which are acknowledged via the err-ignore list rather than a merge block). Promote one to blocking by adding its job id to `quality-gate.needs` **and** to `REQUIRED_LANES` in [`pr-quality-gate.policy.unit.test.ts`](../../../src/tests/unit/ci/pr-quality-gate.policy.unit.test.ts).
 
 ### Skipped PR CI jobs on docs-only pull requests
 
-When [pr-ci.yml](../../../.github/workflows/pr-ci.yml) path filters detect **docs-only markdown** (`docs-only-md`), all **PR CI** jobs are **skipped**. Skipped required checks do **not** block merge. The markdown lane lives in [pr-docs-lane.yml](../../../.github/workflows/pr-docs-lane.yml) and only triggers when a PR touches `*.md`.
-
-When the PR touches **src** but not only docs, these jobs may still skip individually:
-
-| Job `name:` | Skipped when |
-| ----------- | ------------ |
-| `Unit + global (pull_request)` | No `src-code` or `ci-config` paths |
-| `RLS security (non-superuser)` | No `src-code` or `ci-config` paths |
-| `Build verify` | No `src-code`, `docker`, or `ci-config` paths |
-
-`Lint`, `Typecheck`, `Static sync`, `Migration lint`, `Security audit`, `Security secrets`, `Security SAST`, and `Contract + property` run on every non-docs-only PR.
-
-### Advisory PR jobs (not in rulesets)
-
-*None — all merge-gating CI jobs are listed in the required table above.*
+When [pr-ci.yml](../../../.github/workflows/pr-ci.yml) path filters detect **docs-only markdown** (`docs-only-md`), the code lanes are **skipped** — the aggregate treats skipped as a pass, so `Quality gate` stays green and does not block the docs-only merge. The markdown lane lives in [pr-docs-lane.yml](../../../.github/workflows/pr-docs-lane.yml) and only triggers when a PR touches `*.md`. Individual lanes (`unit`, `rls-security`, `build-verify`) also skip on a non-docs PR that misses their path filter; each skip still counts as a pass for the aggregate.
 
 ### Post-merge-only jobs (do not add as PR required checks)
 
@@ -121,7 +124,7 @@ These settings match the committed JSON files in [`.github/rulesets/`](../../../
 | Require signed commits | Yes | No |
 | Block force-push (`non_fast_forward`) | Yes | Yes |
 | Block branch deletion | Yes | Yes |
-| Required status checks | PR CI (11 jobs incl. RLS security) + PR Governance | Same |
+| Required status checks | `Quality gate` (pr-ci aggregate) + `Checks` (pr-governance) | Same |
 
 **Signed commits on `main`:** Contributors must use [verified signatures](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification). Teams without signing enabled should temporarily relax `required_signatures` in `main.json` until onboarding is complete.
 
@@ -142,11 +145,11 @@ Requires [`gh`](https://cli.github.com/) authenticated with **`repo`** scope (an
 
 ### One-step init (recommended)
 
-Use [`tooling/setup/github/init.ts`](../../../tooling/setup/github/init.ts). It derives the target branches from the committed rulesets (`refs/heads/<branch>` entries in `conditions.ref_name.include`), ensures each branch exists on the remote (creating missing branches from the default branch's SHA via `POST /repos/{repo}/git/refs`), `POST`s / `PUT`s every ruleset, and idempotently creates the GitHub Environments declared in [`.github/environments/*.json`](../../../.github/environments/). Safe to run repeatedly.
+Use [`tooling/setup/github/init.ts`](../../../tooling/setup/github/init.ts). It `POST`s / `PUT`s every committed ruleset and idempotently creates the GitHub Environments declared in [`.github/environments/*.json`](../../../.github/environments/). Safe to run repeatedly. Single trunk: `main` is the only long-lived branch and it is the repository default (always present), so there is no branch-creation step.
 
 ```bash
-pnpm github:sync --check   # read-only: consistency + drift (missing branches, rulesets, environments)
-pnpm github:sync           # apply branches + rulesets + environments + push .env.<env> values
+pnpm github:sync --check   # read-only: consistency + drift (rulesets, environments)
+pnpm github:sync           # apply rulesets + environments + push .env.<environment> values
 ```
 
 Before any GitHub API call, `github:sync` runs a **gh auth preflight** that prints the currently active `gh` user and lets you confirm, abort, or switch to a different account (`gh auth switch`). The values push requires typing `sync` (or `--yes` in automation) and is non-reversible.
@@ -179,13 +182,14 @@ Repository rulesets on **private** repos require **GitHub Pro / Team / Enterpris
 
 The sync script surfaces this message verbatim and exits non-zero. Either upgrade the account/org plan or make the repository public to apply rulesets.
 
-**Verifying check names:** After at least one PR run, open the PR → **Checks** tab and confirm the names match the **bare check strings** in the table above (e.g. `Lint`, `RLS security (non-superuser)`, `unit / Unit + global`) — **not** a `PR CI / …` prefixed form. If GitHub shows a different label, align [`.github/rulesets/*.json`](../../../.github/rulesets/) and this doc.
+**Verifying check names:** After at least one PR run, open the PR → **Checks** tab and confirm the two required contexts appear as the **bare strings** `Quality gate` and `Checks` — **not** a `PR CI / …` prefixed form. If GitHub shows a different label, align [`.github/rulesets/main.json`](../../../.github/rulesets/main.json) and this doc.
 
 ---
 
 ## Maintenance
 
-- **Renaming or splitting CI jobs:** Update job `name:` values in workflows **and** sync **`required_status_checks`** contexts in **every** file under [`.github/rulesets/`](../../../.github/rulesets/), plus this document.
-- **Adding a new required workflow:** Prefer extending [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) or [.github/workflows/pr-governance.yml](../../../.github/workflows/pr-governance.yml) so checks stay consistent across branches.
+- **Renaming or splitting a rolled-up CI job:** Update the job `name:` and its `- <id>` entry in `quality-gate.needs` in [pr-ci.yml](../../../.github/workflows/pr-ci.yml). The ruleset does **not** change — it only ever requires `Quality gate` + `Checks`, so no `pnpm github:sync` is needed for lane changes.
+- **Adding a new required lane:** Add the job to [pr-ci.yml](../../../.github/workflows/pr-ci.yml), add its id to `quality-gate.needs`, and add it to `REQUIRED_LANES` in [`pr-quality-gate.policy.unit.test.ts`](../../../src/tests/unit/ci/pr-quality-gate.policy.unit.test.ts). (Promoting an advisory lane to blocking is the same two-line change.)
+- **Changing the required contexts themselves** (rare): edit [`main.json`](../../../.github/rulesets/main.json) and run `pnpm github:sync`; `pr-quality-gate.policy.unit.test.ts` pins the expected set, so update it in the same change.
 
 Consult [.cursor/skills/skill-index/SKILL.md](../../../.cursor/skills/skill-index/SKILL.md) after edits to `.github/rulesets/` or this file (**docs-maintainer**). Changes to [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) should still follow **code-quality-guard**.

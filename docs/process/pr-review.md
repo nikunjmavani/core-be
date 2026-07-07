@@ -18,9 +18,9 @@
 
 ```mermaid
 flowchart LR
-  Author[Author opens PR] --> CI[11 required checks]
+  Author[Author opens PR] --> CI[Quality gate + Checks]
   CI --> Review[Human or agent review]
-  Review --> Merge[Merge to dev or main]
+  Review --> Merge[Merge to main]
   Merge --> PostMerge[Post-merge CI deploy]
 ```
 
@@ -200,7 +200,7 @@ What stays in sync automatically vs what reviewers must verify.
 flowchart LR
   AgentLayer[Agent skills and mdc rules] --> Hooks[Husky pre-commit pre-push]
   Hooks --> CILayer[PR CI static sync]
-  CILayer --> MergeGate[11 required checks]
+  CILayer --> MergeGate[Quality gate + Checks]
 ```
 
 ### Hard-enforced (CI / hooks — trust green checks)

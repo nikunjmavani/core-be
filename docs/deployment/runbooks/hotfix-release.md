@@ -3,58 +3,45 @@
 How to ship an urgent fix under the single-`main` delivery model. See the
 [delivery-model migration plan](../../process/delivery-model-migration-plan.md) for the full model.
 
-There are two cases. **Prefer case A** — a normal fast fix on trunk. Only use case B when you must
-patch an **older** release that trunk has already moved past.
+Trunk-based: `main` is always releasable, and a hotfix **fixes forward** on `main` — it is just a
+`fix:` change you release immediately instead of waiting for the next cadence. There is **no
+protected `release/*` branch** and no off-trunk patching.
 
-## A. Normal urgent fix (the common case — no extra branch)
+## The flow (the only flow)
 
-1. Cut a `fix/<slug>` branch off `main`, make the fix, open a PR to `main`.
-2. CI runs the authoritative gate (lint, typecheck, unit, **matrix / Integration**, security). When
-   green, **squash-merge** it (0 approvals required — D8).
+1. Cut a `fix/<slug>` (or `hotfix/<slug>`) branch off `main`, make the fix, open a PR to `main`.
+2. CI runs the authoritative gate — the single **`Quality gate`** required check rolls up lint,
+   typecheck, unit, the DB **matrix**, security, and the non-superuser RLS suite (plus **`Checks`**).
+   When green, **squash-merge** it (0 approvals required — D8).
 3. The post-merge run refreshes the **`chore: release X.Y.Z` Release PR**. **Merge that Release PR** —
    that is the ship button: it tags the release, which fires `release-deploy.yml` to deploy production
-   (behind the environment reviewer approval).
+   (behind the environment reviewer approval), promoting the exact scanned image built for the merge
+   (build-once-promote — see [deploy-artifact-and-secret-decisions.md](../ci-cd/deploy-artifact-and-secret-decisions.md)).
 
-That's it — a hotfix is just a `fix:` change that you release immediately by merging the Release PR,
-instead of waiting for the next cadence release.
+That's it — a hotfix is a `fix:` PR you release straight away by merging the Release PR.
 
-## B. Patch an OLDER release (trunk has moved on)
+## Faster mitigations (prefer these when the fix isn't ready)
 
-Use when production runs `vX.Y.0` but `main` already contains unrelated unreleased work you cannot
-ship, and you must patch `vX.Y`.
+- **Rollback** the running image instead of coding a fix: `rollback-deploy.yml` redeploys the
+  previous production image (`:previous`) with no rebuild — see [rollback-deploy.md](rollback-deploy.md).
+  You can also re-deploy any prior release tag via `release-deploy.yml` → **Run workflow** with the
+  tag as input (pinned to that tag's SHA).
+- **Feature flags** are usually faster than a code hotfix — flipping a `FEATURE_*` variable is a
+  config-only redeploy, no release. (Flag model is deferred — Phase 3.)
 
-1. Branch from the release tag:
+## Keeping `main` releasable (why there is no release branch)
 
-   ```bash
-   git switch -c release/X.Y vX.Y.0
-   git push -u origin release/X.Y
-   ```
+Fix-forward only works if `main` is always shippable. Do not merge work that cannot go to production
+without gating it behind a `FEATURE_*` flag. That is the trunk-based trade: instead of maintaining a
+protected `release/*` branch to patch an older version off-trunk, you keep unreleased-but-unshippable
+work behind flags so the next release (including a hotfix) is always safe to cut from `main`.
 
-   `release/*` is protected by [`.github/rulesets/release.json`](../../../.github/rulesets/release.json)
-   (squash-only, the same required checks as `main` minus strict-up-to-date) and allowlisted in
-   `.husky/pre-push`.
-
-2. Land the fix on `release/X.Y` via a `fix/*` PR (cherry-pick from `main` if the fix already landed
-   there — **one-way only**; never merge `release/*` back into `main`).
-
-3. Cut the patch release on that branch by dispatching post-merge CI against it:
-
-   ```bash
-   gh workflow run post-merge-ci.yml --ref release/X.Y
-   ```
-
-   release-please (with `target-branch: release/X.Y`) cuts `X.Y.(Z+1)`. Merging its Release PR tags
-   `vX.Y.(Z+1)`; the tag matches the production environment's `v*` deploy policy, so
-   `release-deploy.yml` deploys it.
-
-4. **Forward-port**: make sure the same fix exists on `main` (cherry-pick if it originated on the
-   release branch). The `release/X.Y` branch is disposable once the patch ships — delete it.
+For the rare case where production must be patched **without** shipping newer `main` commits and a
+flag is not viable, the fix is an **ad-hoc, unprotected** operation (branch from the release tag with
+`SKIP_BRANCH_CHECK=1`, cherry-pick, deploy the tag) — there is no standing ruleset for it, and it
+should be forward-ported to `main` immediately.
 
 ## Notes
 
-- **Rollback** instead of hotfix when the fix isn't ready: `rollback-deploy.yml` redeploys the
-  previous production image (see [rollback-deploy.md](rollback-deploy.md)).
-- **Feature flags** are usually the faster mitigation than a code hotfix — flipping a
-  `FEATURE_*` variable is a config-only redeploy, no release. (Flag model is deferred — Phase 3.)
-- There is **no `dev` branch and no promotion** anymore; the old
-  `runbook-dev-to-production.md` is retired.
+- There is **no `dev` branch and no promotion**, and **no protected `release/*` branch** — `main.json`
+  is the only committed ruleset. The old `runbook-dev-to-production.md` is retired.

@@ -213,7 +213,7 @@ removed, otherwise every feature merge would instantly cut a production release.
 | `.github/rulesets/dev.json` | active ruleset (squash+merge, 0 approvals) | **delete** (+ remove live ruleset via sync) | 2 |
 | `.github/rulesets/main.json` | **merge-only**; 1 approval + code-owner + last-push approval; strict checks | **squash-only**; dev's review profile (D8); strict checks kept (D9); + linear-history | 2 |
 | `tooling/setup/github/sync-config.ts` | expects `allowed_merge_methods: ['squash','merge']` (~line 240) | expects `['squash']` — mirror of main.json | 2 |
-| `.github/rulesets/release.json` | — (new) | protect `release/*` so the production env's protected-branches deploy policy admits hotfix deploys | 4 |
+| `.github/rulesets/release.json` | — (new) | ~~protect `release/*` so the production env's protected-branches deploy policy admits hotfix deploys~~ **SUPERSEDED: removed — single-trunk hardening retired `release/*`; hotfixes fix-forward to `main`, `main.json` is the only ruleset** | 4 |
 | `tooling/openapi/breaking/check-breaking-changes.ts` | baseline spec from hard-coded `origin/dev` | `origin/main` (else `pnpm docs:breaking` breaks on dev deletion) | 1 |
 | `.github/actions/setup-project-identity/action.yml` | generated; bakes `PROTECTED_BRANCHES_JSON=["dev","main"]` | regenerated via `pnpm tool:generate-project-identity` after the setup.config.json edit | 2 |
 | `tooling/setup/setup.config.json` | `defaultBranch: dev`, `protectedBranches: [dev, main]`; development env `branch: dev` | `defaultBranch: main`, `protectedBranches: [main]`; development env `branch: main` | **1** (moved — test-coupled, 1.26) |

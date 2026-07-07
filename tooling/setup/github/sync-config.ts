@@ -212,11 +212,6 @@ export function getGithubSyncEnvironmentNames(config?: SetupConfig): string[] {
   return getEnvironmentNames(config ?? loadConfig()).sort();
 }
 
-export function getGithubSyncBranches(config?: SetupConfig): string[] {
-  const cfg = config ?? loadConfig();
-  return cfg.environments.map((e) => e.branch).sort();
-}
-
 function buildEnvironmentFile(environment: string, exampleContent: string): string {
   const lines = exampleContent.split('\n');
   const bodyStartIndex = lines.findIndex((line) => HALF_BANNER_LINE.test(line));
@@ -278,19 +273,14 @@ function buildBranchRuleset(branch: string): string {
         type: 'required_status_checks',
         parameters: {
           strict_required_status_checks_policy: true,
-          required_status_checks: [
-            { context: 'PR CI / Lint' },
-            { context: 'PR CI / Typecheck' },
-            { context: 'PR CI / Static sync' },
-            { context: 'PR CI / Unit + global (pull_request)' },
-            { context: 'PR CI / Migration lint' },
-            { context: 'PR CI / Build verify' },
-            { context: 'PR CI / Security audit' },
-            { context: 'PR CI / Security secrets' },
-            { context: 'PR CI / Security SAST' },
-            { context: 'PR CI / Contract + property' },
-            { context: 'PR Governance / Checks' },
-          ],
+          // Two aggregate contexts only. `Quality gate` (pr-ci.yml) rolls up every
+          // required PR-CI lane; `Checks` (pr-governance.yml) is the governance
+          // gate. GitHub reports a status-check context as the bare job `name:` —
+          // NEVER prefixed by the workflow — so these are bare, matching the
+          // committed `<branch>.json`. Adding a lane changes the aggregator's
+          // `needs:`, not this list. Scaffold-only (writeIfMissing): once the
+          // committed ruleset exists on disk it is the source of truth.
+          required_status_checks: [{ context: 'Quality gate' }, { context: 'Checks' }],
         },
       },
     ],
