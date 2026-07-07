@@ -1,5 +1,5 @@
 # Monthly disaster-recovery drill — fully automated RTO measurement.
-# Creates a throwaway Neon PITR branch from the workflow ref (main/dev), runs migrate +
+# Creates a throwaway Neon PITR branch from the workflow ref (main), runs migrate +
 # integration smoke, asserts RTO, then deletes the branch. See docs/process/backup-drills.md.
 
 name: Monthly backup restore & RTO drill
@@ -184,7 +184,7 @@ jobs:
       - name: Fail when automated restore did not complete
         if: needs.restore-integration.result != 'success'
         run: |
-          echo "::error title=Restore drill not measured::Configure MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY, ensure Neon project core-be and branch names match git refs (dev/main), and verify migrate + integration smoke pass."
+          echo "::error title=Restore drill not measured::Configure MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY, ensure Neon project core-be and branch names match git refs (main), and verify migrate + integration smoke pass."
           exit 1
 
       - name: Download automated RTO report

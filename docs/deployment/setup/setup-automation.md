@@ -8,7 +8,7 @@ One-command infrastructure setup that provisions Neon, Redis Cloud, AWS S3, Sent
 
 ## Infrastructure before auto-deploy
 
-**Auto-deploy needs this infra in place first.** Deploy workflows (push to dev/main) expect GitHub environment secrets, Railway services, Postgres, and Redis to exist. Run infrastructure setup before relying on CI/CD deploy.
+**Auto-deploy needs this infra in place first.** Deploy workflows (push to `main`) expect GitHub environment secrets, Railway services, Postgres, and Redis to exist. Run infrastructure setup before relying on CI/CD deploy.
 
 ```mermaid
 flowchart LR
@@ -18,7 +18,7 @@ flowchart LR
   end
 
   subgraph deploy [Then deploy works]
-    Push[Push to dev / main]
+    Push[Push to main]
     CI[Deploy workflow]
   end
 

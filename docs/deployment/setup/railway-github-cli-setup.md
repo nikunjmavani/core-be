@@ -16,7 +16,7 @@ flowchart LR
 1. Install CLIs (Railway + GitHub)
 2. Railway: login → create project + service → get service ID → get project token (dashboard)
 3. GitHub: create environments (development, production) → add secrets to each
-4. Done → push to dev/main to deploy
+4. Done → push to `main` to deploy
 
 ---
 

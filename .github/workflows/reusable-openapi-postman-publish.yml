@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       target_branch:
-        description: Protected branch that received the merge (main or dev)
+        description: Protected branch that received the merge (main)
         required: true
         type: string
       github_environment:
@@ -35,12 +35,11 @@ on:
         type: string
         default: ''
       target_branch:
-        description: Branch context (main or dev)
+        description: Branch context (main)
         required: true
         type: choice
         options:
           - main
-          - dev
       github_environment:
         description: GitHub Environment for Postman/Scalar secrets
         required: true

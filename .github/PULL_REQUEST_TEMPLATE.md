@@ -15,7 +15,7 @@
 ## Release type
 
 <!--
-  Pick exactly one. This drives release-please's bump on dev/main.
+  Pick exactly one. This drives release-please's bump on main.
   PR title prefix must match — `feat:` for minor, `fix:`/`perf:`/`refactor:` for patch,
   `<type>!:` (or `BREAKING CHANGE:` footer) for major.
   AI: feat=Minor, fix/perf/refactor=Patch, type!=Major, docs/ci/chore/test/style=No release

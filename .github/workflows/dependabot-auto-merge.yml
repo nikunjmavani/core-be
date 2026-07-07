@@ -2,8 +2,8 @@
 # once a maintainer APPROVES it — the approval is the manual gate. The PR then merges
 # automatically when the required PR CI checks pass.
 #
-# Why approval-triggered (and not a required approval): dev is solo-maintained with
-# 0 required approvals (.github/rulesets/dev.json) because an author can't approve
+# Why approval-triggered (and not a required approval): main is solo-maintained with
+# 0 required approvals (.github/rulesets/main.json) because an author can't approve
 # their own PRs. A maintainer CAN approve Dependabot's PRs, so we use that approval
 # as the opt-in signal to arm auto-merge — no branch-protection change needed.
 # Majors / security / github-actions / docker stay fully manual.

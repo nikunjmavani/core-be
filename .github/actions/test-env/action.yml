@@ -48,7 +48,7 @@ runs:
           # early-return and the auth middleware's `rederiveSuperAdminRole`
           # would downgrade the user to USER → unexpected 403 in audit / admin
           # routes. Surfaced as the audit.test.ts Post-merge Matrix Tests flake
-          # (4+ consecutive failures on dev pre-2026-06-08).
+          # (4+ consecutive failures on the post-merge matrix pre-2026-06-08).
           echo "GLOBAL_ADMIN_EMAILS=ops@example.com"
           echo "METRICS_SCRAPE_TOKEN=test-metrics-token-min-32-characters"
           echo "SECRETS_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000"

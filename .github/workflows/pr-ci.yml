@@ -417,7 +417,7 @@ jobs:
     # gap left by CodeQL/semgrep/pnpm audit, which don't inspect container
     # build configuration. Post-merge Trivy already scans built images for OS
     # CVEs; this job runs PR-time on Dockerfiles + compose for misconfigs
-    # (running as root, missing HEALTHCHECK, etc.) so they don't reach dev.
+    # (running as root, missing HEALTHCHECK, etc.) so they don't reach main.
     # Action + CLI versions match reusable-docker-build-trivy.yml.
     #
     # skip-files: Dockerfile.agent is intentionally excluded. It is a

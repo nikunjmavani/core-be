@@ -5,7 +5,7 @@ name: Reusable — Vitest unit (no DB)
 # when a source change breaks an EXISTING test whose linkage isn't detected (e.g. `.js`
 # path-alias imports resolving to the changed `.ts`), letting the break pass the PR gate and
 # only fail post-merge (this bit #327 and #311). Running the full suite makes the gate
-# authoritative — a regression to any existing unit/global test fails the PR, not dev.
+# authoritative — a regression to any existing unit/global test fails the PR, not post-merge.
 
 on:
   workflow_call:
