@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
+import { sql } from '@/infrastructure/database/connection.js';
 import { seedPermissions } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import { env } from '@/shared/config/env.config.js';
@@ -165,6 +166,43 @@ describe('personal organization provisioning (database)', () => {
       env.PERSONAL_ORGANIZATION_ENABLED = false;
       const disabledUser = await createTestUser();
       expect(await ensurePersonalOrganizationPublicId(disabledUser.id)).toBeUndefined();
+    });
+  });
+
+  // Regression for the #865 post-merge failure: on the "auth + user" e2e shard the
+  // tenancy.permissions reference catalog is empty, so the self-heal provision fails the
+  // role_permissions → permissions FK (23503). The READ path (getMe) must degrade gracefully
+  // to a 200 rather than 500; the EXPLICIT path (switch-to-personal) must still surface it.
+  describe('self-heal degradation when the permission catalog is absent', () => {
+    const originalPersonalEnabled = env.PERSONAL_ORGANIZATION_ENABLED;
+
+    beforeEach(async () => {
+      // Force the CI condition: empty the reference catalog that cleanupDatabase exempts.
+      await sql`DELETE FROM tenancy.role_permissions`;
+      await sql`DELETE FROM tenancy.permissions`;
+    });
+
+    afterEach(async () => {
+      env.PERSONAL_ORGANIZATION_ENABLED = originalPersonalEnabled;
+      // Restore the catalog so sibling suites relying on it are unaffected.
+      await seedPermissions(Object.values(TENANCY_PERMISSIONS));
+    });
+
+    it('READ path (ensurePersonalOrganizationPublicId) degrades to undefined, never throws', async () => {
+      env.PERSONAL_ORGANIZATION_ENABLED = true;
+      const user = await createTestUser();
+
+      // provisioning FK-fails, but the read-safe variant swallows it → undefined (→ null id).
+      await expect(ensurePersonalOrganizationPublicId(user.id)).resolves.toBeUndefined();
+      // No personal org was created (the provision genuinely failed).
+      expect(await resolvePersonalOrganizationPublicId(user.id)).toBeUndefined();
+    });
+
+    it('EXPLICIT path (ensurePersonalOrganization) still throws so switch-to-personal surfaces it', async () => {
+      env.PERSONAL_ORGANIZATION_ENABLED = true;
+      const user = await createTestUser();
+
+      await expect(ensurePersonalOrganization(user.id)).rejects.toThrow();
     });
   });
 });
