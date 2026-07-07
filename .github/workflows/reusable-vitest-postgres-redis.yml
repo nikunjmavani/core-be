@@ -314,16 +314,35 @@ jobs:
         run: pnpm docs:generate
 
       - name: Route success-status coverage gate (merged shards)
+        env:
+          # Single-trunk (item 1.35): the PR is the AUTHORITATIVE gate and BLOCKS;
+          # post-merge (push) and manual dispatch only REPORT — a flaky or lost shard
+          # artifact must never skip release-please by failing the merged gate.
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
+          # Shard-completeness guard: every shard that produced coverage must also
+          # have produced its route-status observation. A missing observation silently
+          # undercounts coverage and reports false "uncovered" routes — the capture-based
+          # flakiness that skipped release-please on the 2026-07-07 promotion. Fail loud
+          # and re-run instead of trusting an undercounted gate.
+          shopt -s nullglob
+          coverage_shards=(coverage-shards/coverage-*)
+          observed_shards=(route-observed-shards/route-observed-*)
+          if [ "${#observed_shards[@]}" -lt "${#coverage_shards[@]}" ]; then
+            echo "::error title=Route-coverage shard artifact missing::Got ${#observed_shards[@]} route-observed shard(s) but ${#coverage_shards[@]} coverage shard(s). A shard's route-status observation was lost — re-run the matrix rather than trusting an undercounted coverage gate."
+            exit 1
+          fi
           report_only_flag=""
-          if [ "${{ inputs.target_branch }}" = "main" ]; then
-            # Dev post-merge lane reports route success coverage but does not block.
+          if [ "$EVENT_NAME" != "pull_request" ]; then
             report_only_flag="--report-only"
           fi
           pnpm validate:route-success-coverage --observed-dir route-observed-shards ${report_only_flag}
 
       - name: Merge coverage and check thresholds
+        env:
+          # Item 1.35: PR blocks (authoritative), post-merge/dispatch report only.
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -338,8 +357,7 @@ jobs:
             exit 0
           fi
           report_only_flag=""
-          if [ "${{ inputs.target_branch }}" = "main" ]; then
-            # Dev post-merge lane reports merged shard coverage but does not block.
+          if [ "$EVENT_NAME" != "pull_request" ]; then
             report_only_flag="--report-only"
           fi
           node tooling/ci/merge-coverage-and-check-thresholds.mjs \
