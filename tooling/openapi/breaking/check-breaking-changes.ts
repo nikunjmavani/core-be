@@ -4,7 +4,7 @@
  * oasdiff is a Go binary with no npm distribution, so it cannot live in
  * package.json devDependencies — this script downloads the SAME pinned,
  * checksum-verified release CI uses (see `.github/workflows/pr-ci.yml`) into
- * `.cache/oasdiff/` on first run, generates the base spec from `origin/dev`
+ * `.cache/oasdiff/` on first run, generates the base spec from `origin/main`
  * in a temporary git worktree, regenerates the head spec from the working
  * tree, and diffs them with the committed err-ignore file:
  *
@@ -60,9 +60,9 @@ function ensureBinary(): void {
 function generateBaseSpec(): string {
   const worktreePath = join(tmpdir(), `core-be-oasdiff-base-${process.pid}`);
   const baseSpecPath = join(tmpdir(), `core-be-base-openapi-${process.pid}.json`);
-  console.log('Generating base spec from origin/dev (temporary worktree)…');
-  execFileSync('git', ['fetch', 'origin', 'dev', '--quiet'], { cwd: repoRoot });
-  execFileSync('git', ['worktree', 'add', '--detach', worktreePath, 'origin/dev', '--quiet'], {
+  console.log('Generating base spec from origin/main (temporary worktree)…');
+  execFileSync('git', ['fetch', 'origin', 'main', '--quiet'], { cwd: repoRoot });
+  execFileSync('git', ['worktree', 'add', '--detach', worktreePath, 'origin/main', '--quiet'], {
     cwd: repoRoot,
   });
   try {

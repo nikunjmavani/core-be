@@ -1,29 +1,37 @@
 name: Post-merge CI
 
-# Single post-merge pipeline on protected branch pushes (dev/main) or manual workflow_dispatch.
-# PR CI (pr-ci.yml) is the merge gate — same SHA already passed lint, typecheck, unit, build,
-# security, and contract/property. Post-merge runs publish/deploy automation only.
+# Single-trunk post-merge pipeline on pushes to main (or manual workflow_dispatch).
 #
-# Optimized flow (top to bottom dependencies):
-#   detect changes
-#       ├─ docker / build + trivy → matrix tests
-#       └─ sbom
-#   then release-please
-#       ├─ release sbom
-#       └─ api docs
-#   then deploy → API /readyz probe on deployed URL
+# The PR gate (pr-ci.yml) is AUTHORITATIVE: the same tree already passed lint,
+# typecheck, unit, build, security, contract/property AND the full DB-backed
+# matrix (e2e/integration/rls/performance) before merge. Because strict
+# up-to-date checks + squash mean the merge commit's tree == the tested PR tree,
+# post-merge does not re-test a single-PR push.
 #
-# Branch → GitHub Environment mapping for deploy (only difference between dev and main):
-#   dev  → development
-#   main → production
+# Adaptive lanes (D10 — migration item 1.32), keyed on N = commits in the push
+# (squash ⇒ N = number of PRs merged in this push):
+#   N == 1  FAST lane  → build image → release-please → deploy development
+#                        (no matrix — the PR already proved this exact tree)
+#   N >= 2  FULL lane   → matrix (the COMBINED tree of batched/merge-queue PRs
+#                        was never tested together) → build → release → deploy
+#
+# Deploy: every push deploys the DEVELOPMENT environment (D5). Production deploys
+# are NOT here — they run in release-deploy.yml on `release: published`, pinned to
+# the release tag SHA (D7). release-please only opens/refreshes ONE Release PR and
+# is NOT auto-merged (D1); merging that Release PR is the manual ship button.
 
 on:
   push:
-    branches: [dev, main]
+    branches: [main]
   workflow_dispatch:
     inputs:
       skip_tests:
-        description: Skip matrix integration tests
+        description: Skip matrix integration tests (full lane only)
+        required: false
+        type: boolean
+        default: false
+      force_full_lane:
+        description: Force the FULL lane (run the matrix even for a single-commit push)
         required: false
         type: boolean
         default: false
@@ -68,17 +76,48 @@ jobs:
       docker: ${{ steps.filter.outputs.docker }}
       ci-config: ${{ steps.filter.outputs.ci-config }}
       docs-artifacts: ${{ steps.filter.outputs.docs-artifacts }}
+      full-lane: ${{ steps.lane.outputs.full_lane }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.sha }}
-          # Full history avoids the dorny/paths-filter shallow-deepen race
-          # ("fatal: shallow file has changed since we read it") when it
-          # iteratively fetches to find the merge-base between main and dev.
-          # The PR-CI changes job stays at fetch-depth: 1 because it compares
-          # against the PR base SHA, not main, and never deepens.
+          # Full history: dorny/paths-filter deepens to find the merge-base, and
+          # the lane step below counts commits in the push range.
           fetch-depth: 0
+
+      - name: Compute lane (single-PR FAST vs batched FULL)
+        id: lane
+        # Squash-merge ⇒ one commit per PR, so N = commits in the push = number of
+        # PRs. N==1 trusts the authoritative PR gate (FAST); N>=2 re-runs the matrix
+        # because the combined tree was never tested together (FULL). A dispatch, a
+        # forced/new-branch push (no before SHA), or force_full_lane all pick FULL.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+          FORCE_FULL: ${{ inputs.force_full_lane }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "push" ] || [ "$FORCE_FULL" = "true" ]; then
+            echo "full_lane=true" >> "$GITHUB_OUTPUT"
+            echo "Lane: FULL (event=$EVENT_NAME force_full=$FORCE_FULL)"
+            exit 0
+          fi
+          if [ -z "${BEFORE_SHA:-}" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "full_lane=true" >> "$GITHUB_OUTPUT"
+            echo "Lane: FULL (no before SHA — new or forced push)"
+            exit 0
+          fi
+          count="$(git rev-list --count "${BEFORE_SHA}..${AFTER_SHA}" 2>/dev/null || echo 999)"
+          echo "Commits in push: ${count}"
+          if [ "$count" -ge 2 ]; then
+            echo "full_lane=true" >> "$GITHUB_OUTPUT"
+            echo "Lane: FULL (${count} commits batched — matrix re-run)"
+          else
+            echo "full_lane=false" >> "$GITHUB_OUTPUT"
+            echo "Lane: FAST (single PR — authoritative PR gate already ran the matrix)"
+          fi
 
       - name: Path filter
         uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
@@ -130,27 +169,28 @@ jobs:
     secrets: inherit
     with:
       merge_commit_sha: ${{ github.sha }}
-      target_branch: ${{ github.ref_name }}
+      target_branch: main
 
   matrix-tests:
     name: Matrix Tests
-    needs: [changes, sbom, docker-build-push]
+    # FULL lane only (N>=2). The PR gate is authoritative for single-PR pushes, so
+    # a FAST-lane merge skips this entirely. Un-serialized from docker/sbom (item
+    # 1.15): the suite boots its own Postgres/Redis and runs against source, never
+    # the image, so it starts immediately alongside the build.
+    needs: [changes]
     if: |
       always() &&
       inputs.skip_tests != true &&
+      needs.changes.outputs.full-lane == 'true' &&
       (
         needs.changes.outputs.src-code == 'true' ||
         needs.changes.outputs.ci-config == 'true'
-      ) &&
-      (
-        needs.docker-build-push.result == 'success' ||
-        needs.docker-build-push.result == 'skipped'
       )
     uses: ./.github/workflows/reusable-vitest-postgres-redis.yml
     secrets: inherit
     with:
       merge_commit_sha: ${{ github.sha }}
-      target_branch: ${{ github.ref_name }}
+      target_branch: main
 
   sbom:
     name: SBOM
@@ -193,11 +233,10 @@ jobs:
 
   api-docs:
     name: API docs
-    # API docs (OpenAPI + Postman + Scalar Registry) publish from the merged source at
-    # github.sha and are intentionally decoupled from release-please: a release-please
-    # failure (e.g. an expired RELEASE_PLEASE_TOKEN) must NOT skip docs publishing.
-    # release-please only opens a release PR — it does not bump package.json in this run,
-    # so there is nothing for the docs job to wait on.
+    # Publishes DEVELOPMENT docs (OpenAPI + Postman + Scalar) from the merged source
+    # every trunk merge. Production docs publish in release-deploy.yml on release
+    # (item 1.13). Decoupled from release-please: a release-please failure must NOT
+    # skip docs publishing, and release-please does not bump package.json in this run.
     needs: [changes]
     if: |
       always() &&
@@ -210,12 +249,15 @@ jobs:
     secrets: inherit
     with:
       merge_commit_sha: ${{ github.sha }}
-      target_branch: ${{ github.ref_name }}
-      github_environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+      target_branch: main
+      github_environment: development
       publish_hosted_docs: true
 
   release-please:
     name: Release Please
+    # Runs every merge (both lanes) to keep the single Release PR current. In the
+    # FAST lane the matrix is skipped (the PR already proved it); in the FULL lane
+    # the matrix must be green before a release can be cut.
     needs: [matrix-tests]
     if: |
       always() &&
@@ -223,29 +265,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # release-please creates GitHub Releases with RELEASE_PLEASE_TOKEN (a PAT with
-    # the `workflow` scope; the default GITHUB_TOKEN cannot create releases here —
-    # the create-a-release API path requires that scope). The token is a GitHub
-    # Environment secret synced via `pnpm github:sync`, so this job selects the
-    # matching environment to read it: dev → development, main → production. Both
-    # environments have no protection rules, so this does not gate the run.
-    environment: ${{ github.ref_name == 'dev' && 'development' || 'production' }}
+    # the `workflow` scope; the default GITHUB_TOKEN cannot create releases here).
+    # The PAT is a GitHub Environment secret synced via `pnpm github:sync`. It is
+    # read from the DEVELOPMENT environment (D2): the production environment has a
+    # required-reviewer gate that would block the Release-PR refresh on manual
+    # approval every merge. The weekly PAT canary already probes the development
+    # copy, so this reads exactly the copy in use.
+    environment: development
     permissions:
       contents: write
       pull-requests: write
       issues: write
-      # Some recent release-please-action paths invoke endpoints that the
-      # default `GITHUB_TOKEN` cannot reach unless `id-token: write` is also
-      # granted (OIDC-scoped octokit calls inside the action). Adding it here
-      # is a no-op for the actual release create/update but unblocks the
-      # underlying API call when the action falls into that path. Pair with
-      # `actions: write` so the action can update the run's own status when
-      # a release PR-creation step runs after release creation.
+      # Some release-please-action paths invoke OIDC-scoped octokit calls that the
+      # default GITHUB_TOKEN cannot reach without id-token: write; actions: write
+      # lets the action update the run status when a release-PR step runs.
       id-token: write
       actions: write
     outputs:
       releases_created: ${{ steps.release.outputs.releases_created == 'true' && 'true' || 'false' }}
-    env:
-      CHANNEL_SUFFIX: ${{ github.ref_name == 'dev' && '.dev' || '' }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -255,10 +293,10 @@ jobs:
 
       # PAT tripwire: `secrets.RELEASE_PLEASE_TOKEN || github.token` below makes an
       # EXPIRED PAT fail deep inside release-please as a cryptic "Bad credentials"
-      # (and an unset one silently degrade to a token that cannot create releases).
-      # Probe the PAT first so expiry fails THIS step with an actionable message —
-      # notify-failure then opens a ci-failure issue. Expired production PAT stalled
-      # the v4.8.0 release cascade.
+      # (and an unset one silently degrade to a token that cannot create releases —
+      # which also means release-deploy.yml never fires, since a github.token-created
+      # release does not trigger workflows). Probe the PAT first so expiry fails THIS
+      # step with an actionable message; notify-failure then opens a ci-failure issue.
       - name: Verify RELEASE_PLEASE_TOKEN validity
         env:
           RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
@@ -266,7 +304,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${RELEASE_PLEASE_TOKEN:-}" ]; then
-            echo "::warning::RELEASE_PLEASE_TOKEN is not set in this GitHub Environment — falling back to github.token. Releases/tags cannot be created, and release-PR merges performed with github.token do NOT re-trigger post-merge CI (no tag or Release on the merge commit). Provision the PAT via pnpm github:sync."
+            echo "::warning::RELEASE_PLEASE_TOKEN is not set in this GitHub Environment — falling back to github.token. Releases/tags cannot be created, and a github.token-created release does NOT trigger release-deploy.yml (no production deploy). Provision the PAT via pnpm github:sync."
             exit 0
           fi
           status="$(curl -s -o /dev/null -w '%{http_code}' \
@@ -274,7 +312,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${GH_REPOSITORY}")"
           if [ "$status" = "401" ]; then
-            echo "::error::RELEASE_PLEASE_TOKEN is expired or revoked (API returned 401). Rotate the PAT in this GitHub Environment (both development AND production copies) — do not rely on the github.token fallback, it cannot create releases."
+            echo "::error::RELEASE_PLEASE_TOKEN is expired or revoked (API returned 401). Rotate the PAT in this GitHub Environment (development AND production copies) — the github.token fallback cannot create releases."
             exit 1
           fi
           echo "RELEASE_PLEASE_TOKEN accepted by the API (HTTP ${status})."
@@ -283,20 +321,20 @@ jobs:
         id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
         with:
-          # PAT (repo + workflow scopes) read from the GitHub Environment secret
-          # selected by the job `environment:` above. Falls back to github.token
-          # until RELEASE_PLEASE_TOKEN is provisioned (github.token cannot create
-          # releases, but the fallback keeps release-PR creation working meanwhile).
+          # PAT (repo + workflow scopes) read from the development GitHub Environment
+          # secret. Falls back to github.token until RELEASE_PLEASE_TOKEN is
+          # provisioned (github.token cannot create releases, but the fallback keeps
+          # release-PR creation working meanwhile).
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
-          target-branch: ${{ github.ref_name }}
-          config-file: .github/release-please/config${{ env.CHANNEL_SUFFIX }}.json
-          manifest-file: .github/release-please/manifest${{ env.CHANNEL_SUFFIX }}.json
+          target-branch: main
+          config-file: .github/release-please/config.json
+          manifest-file: .github/release-please/manifest.json
 
-      - name: Lint-fix CHANGELOGs on release PR branches
+      - name: Lint-fix CHANGELOG on release PR branches
         if: steps.release.outputs.prs_created == 'true' || steps.release.outputs.pr != ''
         env:
           # PAT (not github.token) so the lint-fix commit pushed to the release PR
-          # branch re-triggers the PR checks that auto-merge waits on.
+          # branch re-triggers the PR checks the human reviewer waits on.
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           RELEASE_PRS: ${{ steps.release.outputs.prs }}
           RELEASE_PR: ${{ steps.release.outputs.pr }}
@@ -347,58 +385,9 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Enable auto-merge on release PRs
-        # Use the PAT (not github.token) so the eventual auto-merge of the release
-        # PR is attributed to the PAT and its push to dev/main RE-TRIGGERS this
-        # workflow. A merge performed with the default GITHUB_TOKEN does not start
-        # a new workflow run, so the Release Please job would never run on the
-        # merge commit and the tag / GitHub Release would never be created.
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
-          RELEASE_PR: ${{ steps.release.outputs.pr }}
-          RELEASE_PRS: ${{ steps.release.outputs.prs }}
-          TARGET_BRANCH: ${{ github.ref_name }}
-          GH_REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-
-          pr_numbers_from_outputs="$(
-            jq -rn --arg pr "${RELEASE_PR}" --arg prs "${RELEASE_PRS}" '
-              def parse_object($raw):
-                try ($raw | fromjson) catch null;
-              def parse_array($raw):
-                try ($raw | fromjson) catch [];
-              (
-                [parse_object($pr) | .number // empty] +
-                [parse_array($prs)[] | .number // empty]
-              )
-              | map(select(. != null))
-              | unique
-              | .[]
-            '
-          )"
-
-          pr_numbers_from_api="$(
-            gh pr list \
-              --repo "${GH_REPOSITORY}" \
-              --state open \
-              --base "${TARGET_BRANCH}" \
-              --search 'head:release-please--branches--' \
-              --json number \
-              --jq '.[].number'
-          )"
-
-          pr_numbers="$(printf '%s\n%s\n' "${pr_numbers_from_outputs}" "${pr_numbers_from_api}" | awk 'NF' | sort -u)"
-
-          if [ -z "${pr_numbers}" ]; then
-            echo "No open release PRs to auto-merge."
-            exit 0
-          fi
-
-          for pr_number in ${pr_numbers}; do
-            echo "Enabling auto-merge for release PR #${pr_number}"
-            gh pr merge "${pr_number}" --auto --merge --delete-branch=false
-          done
+      # NOTE: the Release PR is NOT auto-merged (D1). Merging it manually is the ship
+      # button: that merge (attributed to the PAT) re-triggers this workflow, whose
+      # release-please then cuts the tag + GitHub Release, which fires release-deploy.yml.
 
   release-sbom:
     name: Release SBOM
@@ -406,34 +395,13 @@ jobs:
     if: |
       always() &&
       needs.release-please.outputs.releases_created == 'true' &&
+      needs.release-please.outputs.tag_name != '' &&
       needs.sbom.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
     steps:
-      - name: Resolve release tag
-        id: tag
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          expected_prerelease="${{ github.ref_name == 'dev' && 'true' || 'false' }}"
-          tag_name="$(
-            gh release list \
-              --repo "${GH_REPOSITORY}" \
-              --limit 20 \
-              --json tagName,isPrerelease \
-              --jq "[.[] | select((.isPrerelease | tostring) == \"${expected_prerelease}\")][0].tagName // \"\""
-          )"
-          if [ -z "${tag_name}" ] || [ "${tag_name}" = "null" ]; then
-            echo "::error::No GitHub Release found after release-please."
-            exit 1
-          fi
-          echo "tag_name=${tag_name}" >> "$GITHUB_OUTPUT"
-          echo "Attaching SBOM to release ${tag_name}"
-
       - name: Download SBOM artifact from sbom job
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -441,83 +409,41 @@ jobs:
           path: .
 
       - name: Upload SBOM to GitHub Release
+        # Resolved by the exact release-please tag_name output (item 1.14) — no
+        # gh release list ordering / isPrerelease filter (single stable channel now).
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
         with:
-          tag_name: ${{ steps.tag.outputs.tag_name }}
+          tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: sbom.cyclonedx.json
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-  dispatch-post-release-backmerge:
-    name: Dispatch post-release back-merge
-    needs: [release-please, deploy]
-    if: |
-      always() &&
-      github.ref_name == 'main' &&
-      needs.release-please.outputs.releases_created == 'true' &&
-      needs.deploy.result == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      actions: write
-      contents: read
-    steps:
-      - name: Resolve stable release version
-        id: release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          tag_name="$(
-            gh release list \
-              --repo "${GH_REPOSITORY}" \
-              --limit 20 \
-              --json tagName,isPrerelease \
-              --jq '[.[] | select(.isPrerelease == false)][0].tagName // ""'
-          )"
-          if [ -z "${tag_name}" ] || [ "${tag_name}" = "null" ]; then
-            echo "::error::No stable GitHub Release found after release-please."
-            exit 1
-          fi
-          version="${tag_name#v}"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "Dispatching post-release back-merge for ${tag_name}"
-
-      - name: Dispatch back-merge workflow
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPOSITORY: ${{ github.repository }}
-          VERSION: ${{ steps.release.outputs.version }}
-        run: |
-          set -euo pipefail
-          gh workflow run post-release-backmerge.yml \
-            --repo "${GH_REPOSITORY}" \
-            --ref main \
-            --field "version=${VERSION}"
-
   deploy:
-    name: Deploy
+    name: Deploy (development)
+    # Every trunk merge deploys the DEVELOPMENT environment (D5). Production deploys
+    # run in release-deploy.yml on release (D7) — not here. Gated on a green build
+    # and, in the FULL lane, a green matrix (skipped counts as pass in the FAST lane).
     needs:
       - changes
       - docker-build-push
       - api-docs
-      - release-sbom
+      - matrix-tests
     permissions:
       contents: read
       packages: write
     if: |
       always() &&
       inputs.skip_deploy != true &&
+      needs.docker-build-push.result == 'success' &&
       (needs.api-docs.result == 'success' || needs.api-docs.result == 'skipped') &&
-      (needs.release-sbom.result == 'success' || needs.release-sbom.result == 'skipped') &&
-      needs.docker-build-push.result == 'success'
+      (needs.matrix-tests.result == 'success' || needs.matrix-tests.result == 'skipped')
     uses: ./.github/workflows/reusable-railway-deploy.yml
     secrets: inherit
     with:
       merge_commit_sha: ${{ github.sha }}
-      target_branch: ${{ github.ref_name }}
+      target_branch: main
+      github_environment: development
 
   notify-failure:
     name: Notify failure
@@ -525,7 +451,6 @@ jobs:
       - docker-build-push
       - matrix-tests
       - deploy
-      - dispatch-post-release-backmerge
       - release-please
     if: |
       always() &&
@@ -533,7 +458,6 @@ jobs:
         needs.docker-build-push.result == 'failure' ||
         needs.matrix-tests.result == 'failure' ||
         needs.deploy.result == 'failure' ||
-        needs.dispatch-post-release-backmerge.result == 'failure' ||
         needs.release-please.result == 'failure'
       )
     runs-on: ubuntu-latest
@@ -547,12 +471,11 @@ jobs:
           DOCKER_RESULT: ${{ needs.docker-build-push.result }}
           TESTS_RESULT: ${{ needs.matrix-tests.result }}
           DEPLOY_RESULT: ${{ needs.deploy.result }}
-          BACKMERGE_RESULT: ${{ needs.dispatch-post-release-backmerge.result }}
           RELEASE_RESULT: ${{ needs.release-please.result }}
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          echo "::error title=Post-merge CI failed::docker=${DOCKER_RESULT} tests=${TESTS_RESULT} deploy=${DEPLOY_RESULT} backmerge=${BACKMERGE_RESULT} release=${RELEASE_RESULT} — ${WORKFLOW_URL}"
+          echo "::error title=Post-merge CI failed::docker=${DOCKER_RESULT} tests=${TESTS_RESULT} deploy=${DEPLOY_RESULT} release=${RELEASE_RESULT} — ${WORKFLOW_URL}"
 
       - name: Open or update ci-failure issue
         # Run annotations only notify someone already looking at the Actions tab.
@@ -566,7 +489,6 @@ jobs:
           DOCKER_RESULT: ${{ needs.docker-build-push.result }}
           TESTS_RESULT: ${{ needs.matrix-tests.result }}
           DEPLOY_RESULT: ${{ needs.deploy.result }}
-          BACKMERGE_RESULT: ${{ needs.dispatch-post-release-backmerge.result }}
           RELEASE_RESULT: ${{ needs.release-please.result }}
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
@@ -583,8 +505,7 @@ jobs:
             "| docker | ${DOCKER_RESULT} |" \
             "| matrix tests | ${TESTS_RESULT} |" \
             "| release-please | ${RELEASE_RESULT} |" \
-            "| deploy | ${DEPLOY_RESULT} |" \
-            "| back-merge dispatch | ${BACKMERGE_RESULT} |" \
+            "| deploy (development) | ${DEPLOY_RESULT} |" \
             "" \
             "Close this issue once the failure is resolved.")"
           existing="$(gh issue list --repo "$GH_REPOSITORY" --state open --label ci-failure \

@@ -9,7 +9,7 @@ name: PR CI
 
 on:
   pull_request:
-    branches: [dev, main]
+    branches: [main]
 
 concurrency:
   group: pr-ci-${{ github.event.pull_request.number }}
@@ -169,6 +169,24 @@ jobs:
     with:
       unit-tests-result: ${{ needs.unit-tests.result }}
 
+  # Authoritative DB-backed matrix ON THE PR (D10 — migration item 1.31): the full
+  # e2e / integration / unit-db / performance / security suite runs here so the
+  # post-merge FAST lane can trust a single-PR merge without re-testing. The same
+  # reusable runs post-merge only in the FULL (batched) lane. Tests the PR head tree
+  # that squash-lands (strict up-to-date ⇒ that tree == the merge-commit tree).
+  # NOTE: the "Matrix Tests / *" checks must be added to main.json's required status
+  # checks in Phase 2 so a red matrix blocks merge (that is what makes it authoritative).
+  matrix-tests:
+    needs: [changes]
+    if: |
+      needs.changes.outputs.docs-only-md != 'true' &&
+      (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.ci-config == 'true')
+    uses: ./.github/workflows/reusable-vitest-postgres-redis.yml
+    secrets: inherit
+    with:
+      merge_commit_sha: ${{ github.event.pull_request.head.sha }}
+      target_branch: main
+
   migration-lint:
     name: Migration lint
     needs: [changes]
@@ -292,8 +310,10 @@ jobs:
             GENERATE_MCP_DOCS=true
             BUILD_REVISION=${{ github.sha }}
             IMAGE_SOURCE=${{ github.server_url }}/${{ github.repository }}
-          cache-from: type=gha,scope=${{ env.GHCR_CACHE_SCOPE_API }}-pr
-          cache-to: type=gha,mode=max,scope=${{ env.GHCR_CACHE_SCOPE_API }}-pr
+          # Shared cache scope with post-merge (no -pr suffix) so the post-merge
+          # build is a warm cache hit instead of a cold rebuild (item C4/1.34).
+          cache-from: type=gha,scope=${{ env.GHCR_CACHE_SCOPE_API }}
+          cache-to: type=gha,mode=max,scope=${{ env.GHCR_CACHE_SCOPE_API }}
 
       - name: Build worker Docker image (load only)
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
@@ -306,8 +326,8 @@ jobs:
           build-args: |
             BUILD_REVISION=${{ github.sha }}
             IMAGE_SOURCE=${{ github.server_url }}/${{ github.repository }}
-          cache-from: type=gha,scope=${{ env.GHCR_CACHE_SCOPE_WORKER }}-pr
-          cache-to: type=gha,mode=max,scope=${{ env.GHCR_CACHE_SCOPE_WORKER }}-pr
+          cache-from: type=gha,scope=${{ env.GHCR_CACHE_SCOPE_WORKER }}
+          cache-to: type=gha,mode=max,scope=${{ env.GHCR_CACHE_SCOPE_WORKER }}
 
   security-audit:
     name: Security audit

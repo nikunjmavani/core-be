@@ -5,14 +5,15 @@ name: CodeQL
 # dangerous sinks (SQL, exec, redirects) that pattern-based SAST can miss.
 # Results land in the repository Security tab.
 
+# Single-trunk model: analyze once per change on the PR (the authoritative gate),
+# plus a weekly full scan. The former `push` trigger re-analyzed the merge commit —
+# redundant with the PR run under PR-only merges — so it is dropped (item C1).
 on:
-  push:
-    branches: [dev, main]
   pull_request:
-    branches: [dev, main]
+    branches: [main]
   schedule:
-    # Weekly full scan (Monday 04:27 UTC) so advisories that land between pushes
-    # are still surfaced.
+    # Weekly full scan (Monday 04:27 UTC) so advisories that land between merges
+    # are still surfaced (direct-push backstop under PR-only merges).
     - cron: '27 4 * * 1'
 
 concurrency:
