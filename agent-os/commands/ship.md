@@ -1,12 +1,12 @@
 ---
-description: Ship the current branch — push, open a PR to dev, then watch to green
+description: Ship the current branch — push, open a PR to main, then watch to green
 argument-hint: [optional PR title]
 allowed-tools: Bash(git*), Bash(pnpm*)
 ---
 
 Ship the current work as one flow (push → PR → watch → merge):
 
-1. **/open-pr** — push the branch and open the PR to **dev** (title: **$ARGUMENTS** if given).
+1. **/open-pr** — push the branch and open the PR to **main** (title: **$ARGUMENTS** if given).
 2. **/watch-pr** — subscribe to PR activity; triage CI failures and review comments in a loop.
 3. When CI is green and approvals are in, **/merge-pr** (squash) — or stop and report if anything is blocking.
 

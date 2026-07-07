@@ -24,7 +24,7 @@ The user normally gives a direct task, not the whole form. Build the document fo
 - **i18n / seed** — messages (AI proposes · specify) · seed (none · reference · bulk/faker count)
 - **Tests** (multi-select) — unit · integration · e2e · smoke · contract · chaos
 - **Non-functionals** — performance budget (default · p95 target) · security (standard RLS/tenant · specify PII/encryption/secrets)
-- **Delivery** — target branch (dev · hotfix/production) · PR after build (no · yes → `/ship`)
+- **Delivery** — target branch (main · hotfix release/*) · PR after build (no · yes → `/ship`)
 
 Anything not ★ you may infer and tag `[assumed]`. This catalog is curatable — trim or extend it freely.
 

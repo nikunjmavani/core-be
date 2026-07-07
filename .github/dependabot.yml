@@ -7,8 +7,8 @@
 #   - `security-updates` — manual review + merge.
 # github-actions and docker bumps are reviewed and merged manually.
 #
-# All ecosystems open PRs against the repository default branch (dev) — no
-# target-branch override needed now that dev is the default.
+# All ecosystems open PRs against the repository default branch (main) — no
+# target-branch override needed (single trunk: main is the only long-lived branch).
 
 version: 2
 
