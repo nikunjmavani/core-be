@@ -28,7 +28,6 @@
       "name": "development",
       "label": "Development",
       "nodeEnvironment": "development",
-      "branch": "main",
       "protected": true,
       "isDefault": true
     },
@@ -36,7 +35,6 @@
       "name": "production",
       "label": "Production",
       "nodeEnvironment": "production",
-      "branch": "main",
       "protected": true
     }
   ],

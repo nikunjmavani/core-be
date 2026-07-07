@@ -234,7 +234,7 @@ ingests exactly the three subscription lifecycle events — `customer.subscripti
 
 **Used for:** [Monthly backup restore & RTO drill](../process/backup-drills.md) workflow ([scheduled-monthly-restore-rto.yml](../../.github/workflows/scheduled-monthly-restore-rto.yml)).
 
-These are **GitHub Environment secrets** (not API/worker runtime vars). Add them to `.env.development` / `.env.production` under the GitHub Secrets half and push with `pnpm github:sync`. The scheduled workflow uses the Neon API to create a PITR child branch from the parent branch named **`github.ref_name`** (`main` on schedule → `production` env; `dev` on manual dispatch → `development` env).
+These are **GitHub Environment secrets** (not API/worker runtime vars). Add them to `.env.development` / `.env.production` under the GitHub Secrets half and push with `pnpm github:sync`. The scheduled workflow uses the Neon API to create a PITR child branch from the parent branch named **`github.ref_name`** (`main`).
 
 | Secret | Where to get it |
 | --- | --- |

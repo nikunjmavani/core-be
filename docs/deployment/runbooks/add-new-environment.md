@@ -16,15 +16,15 @@ Example manifest excerpt:
 ```json
 {
   "environments": [
-    { "name": "development", "branch": "dev", "nodeEnvironment": "development", "isDefault": true },
-    { "name": "production", "branch": "main", "nodeEnvironment": "production" }
+    { "name": "development", "label": "Development", "nodeEnvironment": "development", "protected": true, "isDefault": true },
+    { "name": "production", "label": "Production", "nodeEnvironment": "production", "protected": true }
   ]
 }
 ```
 
-The `name` is both the GitHub Environment and `NODE_ENV` value. The `branch` is
-the protected branch that deploys to that environment. Plus the operator-local
-artefact:
+The `name` is both the GitHub Environment and `NODE_ENV` value. Single trunk:
+every environment deploys from `git.defaultBranch` (`main`), so there is **no**
+per-environment `branch` field. Plus the operator-local artefact:
 
 ```text
 .env.<environment>   (gitignored; created by `pnpm github:sync`, pushed by `pnpm github:sync`)

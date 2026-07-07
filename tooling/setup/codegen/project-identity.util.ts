@@ -44,36 +44,32 @@ export function resolveArtifacts(config: SetupConfig): ProjectArtifacts {
 }
 
 export function buildBranchEnvironmentMap(config: SetupConfig): BranchEnvironmentMap {
+  // Single trunk: every environment deploys from the default branch, so the map has a
+  // single entry keyed on it, mapping to the production environment's name (preserving
+  // the historical `{ <branch>: production }` shape).
+  const { defaultBranch } = resolveGitMetadata(config);
+  const productionEnvironment =
+    config.environments.find(
+      (environment) =>
+        environment.name === 'production' || environment.nodeEnvironment === 'production',
+    ) ?? config.environments[0];
   const map: BranchEnvironmentMap = {};
-  for (const environment of config.environments) {
-    map[environment.branch] = environment.name;
+  if (productionEnvironment) {
+    map[defaultBranch] = productionEnvironment.name;
   }
   return map;
 }
 
 export function resolveGitMetadata(config: SetupConfig): ProjectGitMetadata {
-  const protectedBranches =
-    config.git?.protectedBranches ?? config.environments.map((environment) => environment.branch);
-  const defaultBranch =
-    config.git?.defaultBranch ??
-    config.environments.find((environment) => environment.isDefault)?.branch ??
-    config.environments[0]?.branch ??
-    'main';
-  const productionEnvironment = config.environments.find(
-    (environment) =>
-      environment.name === 'production' || environment.nodeEnvironment === 'production',
-  );
-  const nonProductionEnvironment = config.environments.find(
-    (environment) => environment.name !== productionEnvironment?.name,
-  );
-  const productionBranch = productionEnvironment?.branch ?? 'main';
-  const nonProductionBranch = nonProductionEnvironment?.branch ?? 'dev';
-
+  const defaultBranch = config.git?.defaultBranch ?? 'main';
+  const protectedBranches = config.git?.protectedBranches ?? [defaultBranch];
+  // Single trunk: every environment deploys from the default branch, so the production
+  // and non-production "branches" are both the trunk (nothing is derived from a branch).
   return {
     protectedBranches,
     defaultBranch,
-    nonProductionBranch,
-    productionBranch,
+    nonProductionBranch: defaultBranch,
+    productionBranch: defaultBranch,
   };
 }
 
