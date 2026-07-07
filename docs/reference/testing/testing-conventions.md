@@ -22,9 +22,9 @@ Use `injectWithCookies` when session cookies matter.
 
 **With routes vs without routes decides HTTP registration only — not test placement.**
 
-| Sub-domain kind | Routes | Tests live at |
-| --------------- | ------ | ------------- |
-| **With routes** | Own `<resource>.routes.ts` | `sub-domains/<resource>/__tests__/` |
+| Sub-domain kind    | Routes                      | Tests live at                              |
+| ------------------ | --------------------------- | ------------------------------------------ |
+| **With routes**    | Own `<resource>.routes.ts`  | `sub-domains/<resource>/__tests__/`        |
 | **Without routes** | Parent/domain `*.routes.ts` | `sub-domains/<resource>/__tests__/` (same) |
 
 Bundled suites (`billing/__tests__/integration/`) and parent **e2e** (`tenancy/__tests__/e2e/`) are additive — they do not replace sub-domain `__tests__/`.
@@ -78,28 +78,28 @@ src/domains/<domain>/sub-domains/<resource>/__tests__/
 
 ## Testing pyramid
 
-| Layer | Command | Use for |
-| ----- | ------- | ------- |
-| **Unit** | `pnpm test:unit` | Pure logic, no DB/Redis |
-| **Integration** | `pnpm test:integration` | Cross-domain in-process contracts |
-| **Domain integration** | `pnpm test:e2e` | `src/domains/**/__tests__/integration/**` |
-| **Security** | `pnpm test:security` | Auth, CORS, JWT, RLS |
-| **Performance** | `pnpm test:performance` | N+1, concurrency |
-| **Load** | `pnpm load:*` | k6 against running API |
-| **Smoke** | `pnpm test:api-smoke` | Live API after seed |
-| **Global** | `pnpm test:global` | Route catalog, consistency |
-| **Coverage** | `pnpm test:coverage` | Full suite + Stage 5 thresholds |
+| Layer                  | Command                 | Use for                                   |
+| ---------------------- | ----------------------- | ----------------------------------------- |
+| **Unit**               | `pnpm test:unit`        | Pure logic, no DB/Redis                   |
+| **Integration**        | `pnpm test:integration` | Cross-domain in-process contracts         |
+| **Domain integration** | `pnpm test:e2e`         | `src/domains/**/__tests__/integration/**` |
+| **Security**           | `pnpm test:security`    | Auth, CORS, JWT, RLS                      |
+| **Performance**        | `pnpm test:performance` | N+1, concurrency                          |
+| **Load**               | `pnpm load:*`           | k6 against running API                    |
+| **Smoke**              | `pnpm test:api-smoke`   | Live API after seed                       |
+| **Global**             | `pnpm test:global`      | Route catalog, consistency                |
+| **Coverage**           | `pnpm test:coverage`    | Full suite + Stage 5 thresholds           |
 
 ---
 
 ## Filename suffixes (CI: `pnpm validate:test-naming`)
 
-| Suffix | Example |
-| ------ | ------- |
-| `*.unit.test.ts` | `subscription.validator.unit.test.ts` |
-| `*.integration.test.ts` | `auth.integration.test.ts` |
-| `*.e2e.test.ts` | `email-login-flow.e2e.test.ts` |
-| `*.smoke.test.ts` | `health.smoke.test.ts` |
+| Suffix                  | Example                               |
+| ----------------------- | ------------------------------------- |
+| `*.unit.test.ts`        | `subscription.validator.unit.test.ts` |
+| `*.integration.test.ts` | `auth.integration.test.ts`            |
+| `*.e2e.test.ts`         | `email-login-flow.e2e.test.ts`        |
+| `*.smoke.test.ts`       | `health.smoke.test.ts`                |
 
 ---
 
@@ -107,19 +107,21 @@ src/domains/<domain>/sub-domains/<resource>/__tests__/
 
 Vitest `inject()` URLs must not hardcode `/api/v1/` (or any `/api/vN/`). Use `testApiPath()` from `src/tests/helpers/test-api-prefix.helper.ts`, which builds paths from `buildPublicApiPrefix()` / `PUBLIC_API_VERSION_SEGMENT_V1` (same as production routing).
 
-| Location | Literal `/api/v1/...` |
-| -------- | --------------------- |
-| `inject({ url: ... })` and inject helpers | **No** — use `testApiPath('/users/me')` |
-| `describe` / `it` titles | **Yes** — labels only |
-| Route registration in unit tests (`app.get('/api/v1/...')`) | **Yes** — mirrors real plugin paths |
-| Smoke `fetch()` / manual curl in docs | **Yes** — external callers use full URLs |
+| Location                                                    | Literal `/api/v1/...`                    |
+| ----------------------------------------------------------- | ---------------------------------------- |
+| `inject({ url: ... })` and inject helpers                   | **No** — use `testApiPath('/users/me')`  |
+| `describe` / `it` titles                                    | **Yes** — labels only                    |
+| Route registration in unit tests (`app.get('/api/v1/...')`) | **Yes** — mirrors real plugin paths      |
+| Smoke `fetch()` / manual curl in docs                       | **Yes** — external callers use full URLs |
 
 ```typescript
-import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
+import { testApiPath } from "@/tests/helpers/test-api-prefix.helper.js";
 
 await injectAuthenticated(app, {
-  method: 'GET',
-  url: testApiPath(`/tenancy/organizations/${organizationPublicId}/memberships`),
+  method: "GET",
+  url: testApiPath(
+    `/tenancy/organizations/${organizationPublicId}/memberships`,
+  ),
   token,
   organizationPublicId,
 });
@@ -133,20 +135,20 @@ See also [api-versioning.md](../api/api-versioning.md).
 
 ### Always unit-test when adding/changing
 
-| Artifact | Location |
-| -------- | -------- |
-| `*.validator.ts` | Domain or sub-domain `__tests__/unit/` |
-| `*.serializer.ts` | Same |
-| `shared/utils/**` | `src/tests/unit/utils/` |
-| `shared/errors/**` | `src/tests/unit/errors/` |
+| Artifact           | Location                               |
+| ------------------ | -------------------------------------- |
+| `*.validator.ts`   | Domain or sub-domain `__tests__/unit/` |
+| `*.serializer.ts`  | Same                                   |
+| `shared/utils/**`  | `src/tests/unit/utils/`                |
+| `shared/errors/**` | `src/tests/unit/errors/`               |
 
 ### Prefer integration (not unit) for
 
-| Artifact | Why |
-| -------- | --- |
-| Services | DB, RLS, cross-domain |
-| Repositories | Drizzle + Postgres |
-| Controllers | Covered by route tests |
+| Artifact     | Why                    |
+| ------------ | ---------------------- |
+| Services     | DB, RLS, cross-domain  |
+| Repositories | Drizzle + Postgres     |
+| Controllers  | Covered by route tests |
 
 ### Workers
 
@@ -176,11 +178,11 @@ All tiers share one root **`vitest.config.ts`**. Named projects live in **`tooli
 
 ## Coverage reports
 
-| Rule | Detail |
-| ---- | ------ |
-| Output | Repo root `coverage/` (gitignored) |
-| Created by | `pnpm test:coverage` only |
-| Browse | `pnpm coverage:open` |
+| Rule       | Detail                                       |
+| ---------- | -------------------------------------------- |
+| Output     | Repo root `coverage/` (gitignored)           |
+| Created by | `pnpm test:coverage` only                    |
+| Browse     | `pnpm coverage:open`                         |
 | Thresholds | Stage 5 in `vitest.config.ts`; see AGENTS.md |
 
 ---
@@ -190,13 +192,13 @@ All tiers share one root **`vitest.config.ts`**. Named projects live in **`tooli
 ### Domain route integration (`fastify.inject`)
 
 ```typescript
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { createTestApp } from '@/tests/helpers/test-app.js';
-import { injectAuthenticated } from '@/tests/helpers/test-http-inject.helper.js';
-import { cleanupDatabase } from '@/tests/helpers/test-database.js';
-import type { FastifyInstance } from 'fastify';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { createTestApp } from "@/tests/helpers/test-app.js";
+import { injectAuthenticated } from "@/tests/helpers/test-http-inject.helper.js";
+import { cleanupDatabase } from "@/tests/helpers/test-database.js";
+import type { FastifyInstance } from "fastify";
 
-describe('<Domain> — integration', () => {
+describe("<Domain> — integration", () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
@@ -212,11 +214,11 @@ describe('<Domain> — integration', () => {
     await cleanupDatabase();
   });
 
-  it('returns 401 without auth', async () => {
+  it("returns 401 without auth", async () => {
     const response = await injectAuthenticated(app, {
-      method: 'GET',
-      url: '/api/v1/...',
-      token: '', // or omit auth per helper API
+      method: "GET",
+      url: "/api/v1/...",
+      token: "", // or omit auth per helper API
     });
     expect(response.statusCode).toBe(401);
   });
@@ -226,16 +228,16 @@ describe('<Domain> — integration', () => {
 ### Validator unit
 
 ```typescript
-import { describe, expect, it } from 'vitest';
-import { ValidationError } from '@/shared/errors/index.js';
-import { validateExample } from '@/domains/<domain>/sub-domains/<resource>/<resource>.validator.js';
+import { describe, expect, it } from "vitest";
+import { ValidationError } from "@/shared/errors/index.js";
+import { validateExample } from "@/domains/<domain>/sub-domains/<resource>/<resource>.validator.js";
 
-describe('example.validator', () => {
-  it('accepts valid input', () => {
-    expect(validateExample({ /* valid */ })).toMatchObject({ /* expected */ });
+describe("example.validator", () => {
+  it("accepts valid input", () => {
+    expect(validateExample({/* valid */})).toMatchObject({/* expected */});
   });
 
-  it('throws ValidationError for invalid input', () => {
+  it("throws ValidationError for invalid input", () => {
     expect(() => validateExample({})).toThrow(ValidationError);
   });
 });
@@ -258,6 +260,7 @@ describe('example.validator', () => {
 
 ## Related
 
+- [SETUP.md](../../../SETUP.md) § 4 Testing → **Running a live server for a frontend / loopback E2E suite** — the `.env.development` env a real `pnpm dev` server needs when an external suite (e.g. core-fe Playwright) hits it over loopback (`RATE_LIMIT_RELAXED_CAPS`, `DATABASE_TLS_ENFORCED`, `DATABASE_RLS_SAFETY_ENFORCED`, org-mode flags). In-process Vitest tiers and CI self-configure and need none of it.
 - [sub-domains-layout.md](../architecture/sub-domains-layout.md) — test placement vs with/without routes
 - [api-testing.md](../../getting-started/api-testing.md) — manual smoke checklist
 - [documentation-system.md](../architecture/documentation-system.md) — layered docs ownership map

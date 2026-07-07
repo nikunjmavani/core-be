@@ -63,7 +63,9 @@ describe('User Domain — Integration', () => {
 
   describe('GET /api/v1/users/me', () => {
     it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, { url: testApiPath('/users/me') });
+      const response = await injectUnauthenticated(app, {
+        url: testApiPath('/users/me'),
+      });
       expect(response.statusCode).toBe(401);
     });
 
@@ -92,7 +94,10 @@ describe('User Domain — Integration', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json() as {
         data: {
-          capabilities: { personal_organization: boolean; team_organizations: boolean };
+          capabilities: {
+            personal_organization: boolean;
+            team_organizations: boolean;
+          };
           personal_organization_id: string | null;
         };
       };
@@ -101,8 +106,10 @@ describe('User Domain — Integration', () => {
         personal_organization: true,
         team_organizations: true,
       });
-      // A bare createTestUser has no personal organization provisioned → null.
-      expect(body.data.personal_organization_id).toBeNull();
+      // Self-heal: a bare createTestUser has no personal org, but with personal enabled
+      // getMe provisions one on demand so personal_organization_id is reliably non-null
+      // (a user can never dead-end onboarding for lack of a personal workspace).
+      expect(body.data.personal_organization_id).toMatch(/^org_[a-z0-9]{21}$/);
     });
 
     it('should return is_mfa_enabled true after MFA enroll and false after revoke', async () => {
@@ -115,7 +122,9 @@ describe('User Domain — Integration', () => {
 
       const meBefore = await getMeWithRetry(app, token);
       expect(meBefore.statusCode).toBe(200);
-      const meBeforeBody = meBefore.json() as { data: { is_mfa_enabled: boolean } };
+      const meBeforeBody = meBefore.json() as {
+        data: { is_mfa_enabled: boolean };
+      };
       expect(meBeforeBody.data.is_mfa_enabled).toBe(false);
 
       const enrollResponse = await injectAuthenticated(app, {
@@ -130,19 +139,25 @@ describe('User Domain — Integration', () => {
         method: 'POST',
         url: testApiPath('/auth/me/mfa/enroll/confirm'),
         token,
-        payload: { code: await generateTotp({ secret: enrollBody.data.secret }) },
+        payload: {
+          code: await generateTotp({ secret: enrollBody.data.secret }),
+        },
       });
       expect(confirmResponse.statusCode).toBe(201);
       // route-#10: the serializer returns `mfa_method_id` and DELETE /auth/me/mfa/{mfa_method_id}
       // now accepts that opaque public id directly (the bigserial id is never exposed).
-      const confirmBody = confirmResponse.json() as { data: { mfa_method_id: string } };
+      const confirmBody = confirmResponse.json() as {
+        data: { mfa_method_id: string };
+      };
       const methodPublicId = confirmBody.data.mfa_method_id;
       expect(typeof methodPublicId).toBe('string');
       expect(methodPublicId).toMatch(/^am_[a-z0-9]{21}$/);
 
       const meAfterEnroll = await getMeWithRetry(app, token);
       expect(meAfterEnroll.statusCode).toBe(200);
-      const meAfterEnrollBody = meAfterEnroll.json() as { data: { is_mfa_enabled: boolean } };
+      const meAfterEnrollBody = meAfterEnroll.json() as {
+        data: { is_mfa_enabled: boolean };
+      };
       expect(meAfterEnrollBody.data.is_mfa_enabled).toBe(true);
 
       await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
@@ -156,7 +171,9 @@ describe('User Domain — Integration', () => {
 
       const meAfterRevoke = await getMeWithRetry(app, token);
       expect(meAfterRevoke.statusCode).toBe(200);
-      const meAfterRevokeBody = meAfterRevoke.json() as { data: { is_mfa_enabled: boolean } };
+      const meAfterRevokeBody = meAfterRevoke.json() as {
+        data: { is_mfa_enabled: boolean };
+      };
       expect(meAfterRevokeBody.data.is_mfa_enabled).toBe(false);
     });
   });
@@ -194,7 +211,11 @@ describe('User Domain — Integration', () => {
       });
       expect(response.statusCode).toBe(200);
       const body = response.json() as {
-        data: { first_name: string | null; last_name: string | null; job_title: string | null };
+        data: {
+          first_name: string | null;
+          last_name: string | null;
+          job_title: string | null;
+        };
       };
       expect(body.data).toMatchObject({
         first_name: 'NIK',
@@ -236,7 +257,9 @@ describe('User Domain — Integration', () => {
 
   describe('GET /api/v1/users/me/settings', () => {
     it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, { url: testApiPath('/users/me/settings') });
+      const response = await injectUnauthenticated(app, {
+        url: testApiPath('/users/me/settings'),
+      });
       expect(response.statusCode).toBe(401);
     });
 
@@ -310,21 +333,32 @@ describe('User Domain — Integration', () => {
 
   describe('GET /api/v1/users/', () => {
     it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, { url: testApiPath('/users/') });
+      const response = await injectUnauthenticated(app, {
+        url: testApiPath('/users/'),
+      });
       expect(response.statusCode).toBe(401);
     });
 
     it('should return 403 for non-admin user', async () => {
       const user = await createTestUser();
-      const token = await generateTestToken({ userId: user.public_id, role: 'user' });
-      const response = await injectAuthenticated(app, { url: testApiPath('/users/'), token });
+      const token = await generateTestToken({
+        userId: user.public_id,
+        role: 'user',
+      });
+      const response = await injectAuthenticated(app, {
+        url: testApiPath('/users/'),
+        token,
+      });
       expect(response.statusCode).toBe(403);
     });
 
     it('should return users for super admin', async () => {
       const user = await createTestUser();
       const token = await generateSuperAdminToken(user.public_id);
-      const response = await injectAuthenticated(app, { url: testApiPath('/users/'), token });
+      const response = await injectAuthenticated(app, {
+        url: testApiPath('/users/'),
+        token,
+      });
       expect(response.statusCode).toBe(200);
       const body = response.json() as { data?: unknown };
       expect(body.data).toBeDefined();
@@ -334,7 +368,10 @@ describe('User Domain — Integration', () => {
   describe('GET /api/v1/users/:user_id', () => {
     it('should return 403 for non-admin user', async () => {
       const user = await createTestUser();
-      const token = await generateTestToken({ userId: user.public_id, role: 'user' });
+      const token = await generateTestToken({
+        userId: user.public_id,
+        role: 'user',
+      });
       const response = await injectAuthenticated(app, {
         url: testApiPath(`/users/${user.public_id}`),
         token,
@@ -346,7 +383,10 @@ describe('User Domain — Integration', () => {
   describe('POST /api/v1/users/:user_id/suspend', () => {
     it('should return 403 for non-admin', async () => {
       const user = await createTestUser();
-      const token = await generateTestToken({ userId: user.public_id, role: 'user' });
+      const token = await generateTestToken({
+        userId: user.public_id,
+        role: 'user',
+      });
       const response = await injectAuthenticated(app, {
         method: 'POST',
         url: testApiPath(`/users/${user.public_id}/suspend`),
@@ -359,7 +399,10 @@ describe('User Domain — Integration', () => {
   describe('POST /api/v1/users/:user_id/unsuspend', () => {
     it('should return 403 for non-admin', async () => {
       const user = await createTestUser();
-      const token = await generateTestToken({ userId: user.public_id, role: 'user' });
+      const token = await generateTestToken({
+        userId: user.public_id,
+        role: 'user',
+      });
       const response = await injectAuthenticated(app, {
         method: 'POST',
         url: testApiPath(`/users/${user.public_id}/unsuspend`),
