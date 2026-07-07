@@ -164,11 +164,14 @@ jobs:
               development|production) echo "environment=$TARGET_INPUT" >> "$GITHUB_OUTPUT" ;;
               *) echo "::error::Invalid target: $TARGET_INPUT (expected development|production)" && exit 1 ;;
             esac
-          # Fallback: the only long-lived branch is main → the development environment.
-          # Production is never implicit; it must arrive via github_environment above.
+          # Fallback: main is the branch's canonical environment = production (matches
+          # the generated BRANCH_ENV_MAP and the env-consistency checker). This branch
+          # is INERT in practice — every caller passes github_environment explicitly
+          # (post-merge → development, release-deploy → production, rollback → its input),
+          # so a deploy never actually derives its environment from the branch.
           else
             case "${TARGET_BRANCH_INPUT:-${PULL_REQUEST_BASE_REF:-$REF_NAME}}" in
-              main) echo "environment=development" >> "$GITHUB_OUTPUT" ;;
+              main) echo "environment=production" >> "$GITHUB_OUTPUT" ;;
               *)    echo "::error::Unsupported branch for deploy; pass github_environment explicitly" && exit 1 ;;
             esac
           fi
