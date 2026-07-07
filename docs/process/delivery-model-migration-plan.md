@@ -25,7 +25,7 @@ Related: [git-workflow.md](git-workflow.md) · [release-versioning.md](release-v
 **We merge `dev` into `main` one final time, and from that merge onward `main` is the only
 long-lived branch — everything goes directly to `main`.**
 
-```
+```text
   ── the switch ──────────────────────────────────────────────────────────────
    1.  FINAL PROMOTION   merge dev → main once more, the existing way          (Phase 0.2)
                          · main now contains everything dev had
@@ -51,7 +51,7 @@ the release channel, the deploy governance, or the repo's own CI-config tests al
 
 ## 0. What changes at a glance
 
-```
+```text
   BEFORE (dual-channel)                        AFTER (trunk)
   ─────────────────────                        ─────────────
   feature PR → dev ──────────────┐             feature PR → main  (squash, tiny)
@@ -119,7 +119,7 @@ removed, otherwise every feature merge would instantly cut a production release.
 
 ## 3. Target CI/CD lanes
 
-```
+```text
 ┌ LANE 1 — PR (merge gate, unchanged jobs) ──────────────────────────────────┐
 │ on: pull_request → [main]                                                  │
 │ concurrency: per-PR, cancel-in-progress ✓ (already)                        │
@@ -408,7 +408,7 @@ merges to main via squash only.
 
 ## 6. Cutover order (each step reversible)
 
-```
+```text
  ⓪  PRE-STAGE  build + review the Phase 1 branch DAYS BEFORE the freeze     [v1.4 ⚡]
                (it is the big PR: workflows + config + identity + policy tests;
                 rebase onto main after the promotion — the freeze then only
@@ -473,7 +473,7 @@ dependencies and no new services** — one JSON file, one global test, one doc.
 
 ### 8.2 Taxonomy — the prefix is the classification
 
-```
+```text
 FEATURE_<NAME>_ENABLED          RELEASE FLAG   short-lived · booleanString('false')
                                                registry entry REQUIRED · expiry ENFORCED
 everything else                 OPS / POLICY / MODE FLAG   permanent · exempt
@@ -492,7 +492,7 @@ to know what it governs, and the 42 existing flags generate zero false positives
 
 ### 8.3 The value chain (how a flag value reaches a running service — all existing rails)
 
-```
+```text
  src/shared/config/env-schema.ts      FEATURE_X_ENABLED: booleanString('false')
         │  gate: pnpm tool:sync-env-example (schema ⇄ template drift fails CI)
  .env.example                         dev value ACTIVE:  FEATURE_X_ENABLED=true
@@ -515,7 +515,7 @@ Two properties fall out of this chain:
 
 ### 8.4 Lifecycle — stages, exact mechanics, and who clicks what
 
-```
+```text
  CREATE ──► DARK SHIP ──► BAKE dev ──► FLIP PROD ──► BAKE prod ──► DELETE
  (in the    (merge PR;    (dev env ON   (config-only  (1–2          (removal PR
  feature    prod OFF by   via trunk     redeploy +    releases;     before
