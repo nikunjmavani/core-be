@@ -40,7 +40,6 @@ const WORKFLOW_FILES_TO_PATCH = [
   'cleanup-cache.yml',
   'cleanup-ghcr.yml',
   'bootstrap-railway-service.yml',
-  'post-release-backmerge.yml',
   'reusable-vitest-postgres-redis.yml',
 ] as const;
 
@@ -401,9 +400,6 @@ function patchWorkflowFile(
       /if \[ "\$\{\{ inputs\.target_branch \}\}" = "dev" \]; then/g,
       `if [ "\${{ inputs.target_branch }}" = "${snapshot.git.nonProductionBranch}" ]; then`,
     );
-  }
-  if (relativePath === 'post-release-backmerge.yml') {
-    contents = contents.replace(/\bref: dev\b/g, `ref: ${snapshot.git.nonProductionBranch}`);
   }
   if (relativePath === 'scheduled-monthly-restore-rto.yml') {
     contents = contents.replace(

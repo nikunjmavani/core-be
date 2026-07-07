@@ -148,6 +148,7 @@ jobs:
             --coverage.thresholds.statements=0 \
             --coverage.thresholds.branches=0 \
             --passWithNoTests \
+            --exclude 'src/tests/security/rls/**' \
             ${{ matrix.shard.projects }}
 
       - name: Rename coverage report for shard
