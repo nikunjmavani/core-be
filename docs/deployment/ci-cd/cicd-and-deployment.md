@@ -265,7 +265,7 @@ Use **workflow_dispatch** when you need to run part of the pipeline without a fu
 | Workflow | When to use | Key inputs |
 | --- | --- | --- |
 | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | Re-run publish/deploy/docs after a partial failure | `skip_tests`, `skip_security`, `skip_docker`, `skip_deploy`, `skip_docs` |
-| [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) | Redeploy a known GHCR image without rebuilding | `target`, `target_branch`, `image_override` (`:sha`, `:previous`, `:latest`), `debug` |
+| [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) | Redeploy a known GHCR image without rebuilding | `target`, `target_branch`, `image_override` (`:sha`, `:previous`, `:latest`, `:vX.Y.Z`), `debug` |
 | [bootstrap-railway-service.yml](../../../.github/workflows/bootstrap-railway-service.yml) | One-time or recovery Railway service setup | `environment`, `service` (`api` / `worker` / `both`), `dry_run` (default `true`) |
 | Reusable test/docker workflows | Ad-hoc validation on a branch tip | `merge_commit_sha`, `target_branch` on `reusable-vitest-postgres-redis.yml`, `reusable-docker-build-trivy.yml`, `reusable-chaos-toxiproxy.yml`, `reusable-openapi-postman-publish.yml` |
 
@@ -273,7 +273,7 @@ Use **workflow_dispatch** when you need to run part of the pipeline without a fu
 
 **Rollback:** Dispatch **Reusable — Railway deploy** with `image_override=ghcr.io/<owner>/<repo>/core-be-api:previous` (and the worker ref derived automatically when the override contains `core-be-api`).
 
-**Cleanup:** [cleanup-cache.yml](../../../.github/workflows/cleanup-cache.yml) prunes Actions caches (outcome-aware LRU; daily safety net on `main`). [cleanup-ghcr.yml](../../../.github/workflows/cleanup-ghcr.yml) prunes stale GHCR manifests weekly while preserving `:latest`, `:previous`, and recent SHA tags.
+**Cleanup:** [cleanup-cache.yml](../../../.github/workflows/cleanup-cache.yml) prunes Actions caches (outcome-aware LRU; daily safety net on `main`). [cleanup-ghcr.yml](../../../.github/workflows/cleanup-ghcr.yml) prunes stale GHCR manifests weekly while preserving `:latest`, `:previous`, `:vX.Y.Z` release tags, and recent SHA tags.
 
 ---
 
