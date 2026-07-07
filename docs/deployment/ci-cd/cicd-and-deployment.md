@@ -1,6 +1,6 @@
 # CI/CD and Deployment
 
-Single reference for what runs in CI, how deployment to Railway works, and **which tokens you need where**. Includes all deployment **Mermaid diagrams** (push → CI → deploy, release-please, secrets). Secrets are stored in **GitHub Environments** (development, production). See [SETUP.md](../../../SETUP.md) for local dev; [git-workflow.md](../../process/git-workflow.md) for branches and PRs.
+Single reference for what runs in CI, how deployment to Railway works, and **which tokens you need where**. Includes all deployment **Mermaid diagrams** (push → CI → deploy, release-please, secrets). Secrets are stored in **GitHub Environments** (development, production). See [SETUP.md](../../../SETUP.md) for local dev; [trunk-based-workflow.md](../../process/trunk-based-workflow.md) for branches and PRs.
 
 **Single-trunk delivery.** `main` is the only long-lived branch:
 **PR → squash-merge to `main` → post-merge adaptive lane** (FAST for a single PR: build → release-please →

@@ -5,7 +5,7 @@ development environment on every merge and to production on release.
 
 **How shipping to production works:**
 
-- Every change squash-merges into `main` via a PR ([git-workflow.md](../../process/git-workflow.md)),
+- Every change squash-merges into `main` via a PR ([trunk-based-workflow.md](../../process/trunk-based-workflow.md)),
   behind the `Quality gate` + `Checks` required checks.
 - `release-please` keeps one `chore: release X.Y.Z` Release PR open. **Merging it is the ship button** —
   it tags the release and fires `release-deploy.yml` to deploy production (behind the environment

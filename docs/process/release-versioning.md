@@ -6,7 +6,7 @@ How a version number is chosen and a release is cut in core-be. You never set th
 open. **Merging that PR cuts the release.**
 
 Single-trunk model: one stable channel on `main` (no `-dev.N` prereleases, no dual manifest). For
-branch naming and the PR flow see [git-workflow.md](git-workflow.md); for CI/CD see
+branch naming and the PR flow see [trunk-based-workflow.md](trunk-based-workflow.md); for CI/CD see
 [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md).
 
 ---

@@ -2,7 +2,7 @@
 # Fast gate before push — full suite runs in CI (pnpm ci:local / pnpm test).
 
 # Branch-name policy — keep working branches under the documented prefixes
-# (docs/process/git-workflow.md). Single trunk: the only long-lived branch is
+# (docs/process/trunk-based-workflow.md). Single trunk: the only long-lived branch is
 # main. Hotfixes are ordinary short-lived working branches (`fix/*` or `hotfix/*`
 # via BRANCH_TYPES) that fix-forward to main — there is no protected release/*
 # branch. Claude Code web session branches (claude/*) are allowlisted (the cloud
@@ -19,7 +19,7 @@ else
   echo "  Use <type>/<short-description>, e.g. feature/ai-stream-response or fix/login-error."
   echo "  Allowed types: ${BRANCH_TYPES}"
   echo "  Long-lived: main (only).  Hotfixes: fix/* or hotfix/* → main.  AI web sessions: claude/*."
-  echo "  See docs/process/git-workflow.md.  Bypass once: SKIP_BRANCH_CHECK=1 git push"
+  echo "  See docs/process/trunk-based-workflow.md.  Bypass once: SKIP_BRANCH_CHECK=1 git push"
   exit 1
 fi
 

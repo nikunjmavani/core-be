@@ -70,7 +70,7 @@ flowchart TB
 
 | Doc                                                  | Description                                                                              |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| [process/git-workflow.md](process/git-workflow.md)   | Single-trunk branch model, squash-merge PR flow, conventional commits.                   |
+| [process/trunk-based-workflow.md](process/trunk-based-workflow.md)   | Single-trunk branch model, squash-merge PR flow, conventional commits.                   |
 | [process/release-versioning.md](process/release-versioning.md) | Commit prefix → version bump (patch/minor/major), `Release-As` override, single stable channel; merge the Release PR to ship. |
 | [process/pr-review.md](process/pr-review.md)         | Human + agent PR review checklist, severity legend, doc-sync map.                        |
 | [process/dr-runbook.md](process/dr-runbook.md)       | Disaster recovery — RTO 1h, RPO 15m, failover, quarterly review.                         |

@@ -1,4 +1,4 @@
-# Git workflow
+# Trunk-based workflow
 
 **Single-trunk model.** `main` is the only long-lived branch. Every change lands on `main` through a
 squash-merged pull request. Incomplete work hides behind feature flags, not long-lived branches.

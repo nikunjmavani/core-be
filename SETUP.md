@@ -120,7 +120,7 @@ The runtime loader reads `.env.${NODE_ENV}` (defaults to `.env.development`) the
 
 ## Cloud infrastructure (`setup:infra`)
 
-Use this to provision managed providers for a shared or hosted environment. Auto-deploy on push to `dev` / `main` expects this infrastructure to already exist.
+Use this to provision managed providers for a shared or hosted environment. Auto-deploy on push to `main` expects this infrastructure to already exist.
 
 ```bash
 pnpm setup --init              # optional: interactive config → setup.config.json + .setup/.setup-credentials template
@@ -166,9 +166,9 @@ For manual API checks after full seed see [api-testing.md](docs/getting-started/
 
 ## 3. Git workflow
 
-Long-lived branches: **`dev`** → **`main`**. Short-lived branches use `feature/`, `fix/`, `hotfix/` prefixes (from `dev`, except hotfixes from `main`).
+Long-lived branch: **`main`** (single trunk). Short-lived branches use `feature/`, `fix/`, `hotfix/` prefixes off `main`.
 
-Full detail (branch naming, PR flow, hotfixes, protected branches): [git-workflow.md](docs/process/git-workflow.md).
+Full detail (branch naming, PR flow, hotfixes, protected branches): [trunk-based-workflow.md](docs/process/trunk-based-workflow.md).
 
 ---
 
