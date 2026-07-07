@@ -75,6 +75,15 @@ function parseWorkflowBranchEnvironmentMap(): Map<string, string> {
   return map;
 }
 
+// Single-trunk: one branch (main) deploys to MULTIPLE environments — development on
+// every merge and production on release — chosen EXPLICITLY by the caller via the
+// `github_environment` workflow_call input, not derived from the branch. The 1:1
+// branch→environment assertion below is relaxed for such branches when the deploy
+// workflow accepts that input.
+function deployWorkflowSupportsExplicitEnvironment(): boolean {
+  return readFileSync(deployWorkflowPath, 'utf-8').includes('github_environment:');
+}
+
 export function validateGithubSyncConsistency(config: SetupConfig): GitHubSyncConsistencyIssue[] {
   const syncEnvironments = environmentsFromConfig(config);
   const nodeEnvironmentValues = new Set(extractNodeEnvironmentValues());
@@ -148,11 +157,31 @@ export function validateGithubSyncConsistency(config: SetupConfig): GitHubSyncCo
     }
   }
 
+  const environmentsByBranch = new Map<string, string[]>();
   for (const env of syncEnvironments) {
-    if (workflowMap.get(env.branch) !== env.name) {
+    environmentsByBranch.set(env.branch, [
+      ...(environmentsByBranch.get(env.branch) ?? []),
+      env.name,
+    ]);
+  }
+  const workflowSupportsExplicitEnvironment = deployWorkflowSupportsExplicitEnvironment();
+  for (const [branch, envNames] of environmentsByBranch) {
+    if (envNames.length > 1) {
+      // Multi-environment branch (single-trunk): the workflow must select the
+      // environment explicitly instead of deriving it from the branch.
+      if (!workflowSupportsExplicitEnvironment) {
+        issues.push({
+          dimension: 'setup.config.json ↔ reusable-railway-deploy.yml',
+          detail: `Branch "${branch}" maps to multiple environments (${envNames.join(', ')}); reusable-railway-deploy.yml must accept a github_environment input to select one explicitly.`,
+        });
+      }
+      continue;
+    }
+    const [only] = envNames;
+    if (only !== undefined && workflowMap.get(branch) !== only) {
       issues.push({
         dimension: 'setup.config.json ↔ reusable-railway-deploy.yml',
-        detail: `Configured branch "${env.branch}" must map to environment "${env.name}" in reusable-railway-deploy.yml.`,
+        detail: `Configured branch "${branch}" must map to environment "${only}" in reusable-railway-deploy.yml.`,
       });
     }
   }
