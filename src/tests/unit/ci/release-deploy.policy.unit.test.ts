@@ -43,4 +43,32 @@ describe('release-deploy production policy', () => {
     expect(workflow).toMatch(/concurrency:\s*[\s\S]*?group:\s*release-deploy-production/);
     expect(workflow).toMatch(/cancel-in-progress:\s*false/);
   });
+
+  it('retags the deployed image as :vX.Y.Z only after a successful production deploy', () => {
+    // The retag job gates on deploy success, so the version tag never points at a build that
+    // failed to deploy; it retags via imagetools (same manifest, no pull), api + worker.
+    expect(workflow).toMatch(/retag:[\s\S]*?needs:\s*\[resolve,\s*deploy\]/);
+    expect(workflow).toMatch(/retag:[\s\S]*?if:\s*success\(\)/);
+    expect(workflow).toContain('docker buildx imagetools create --tag "${api_base}:${TAG}"');
+    expect(workflow).toContain('docker buildx imagetools create --tag "${worker_base}:${TAG}"');
+  });
+});
+
+// The reusable deploy serializes per ENVIRONMENT (single-trunk: env != branch). The
+// concurrency group is keyed on the environment ONLY (no sha), so two dispatches of different
+// shas to the same Railway environment queue instead of racing on the live service.
+describe('reusable railway deploy concurrency', () => {
+  const reusable = readFileSync(
+    join(ROOT, '.github/workflows/reusable-railway-deploy.yml'),
+    'utf8',
+  );
+
+  it('keys the concurrency group on the environment only — never the sha', () => {
+    expect(reusable).toContain(
+      "group: railway-deploy-${{ inputs.github_environment || inputs.target || 'deploy' }}",
+    );
+    // no sha suffix on the group (would let different-sha deploys to one environment race)
+    expect(reusable).not.toMatch(/railway-deploy-\$\{\{[^\n]*\}\}-\$\{\{/);
+    expect(reusable).toContain('cancel-in-progress: false');
+  });
 });

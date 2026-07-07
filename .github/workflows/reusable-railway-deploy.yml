@@ -110,8 +110,12 @@ on:
         default: false
 
 concurrency:
-  # Keyed on the target ENVIRONMENT (single-trunk: environment ≠ branch), not the branch.
-  group: railway-deploy-${{ inputs.github_environment || inputs.target || 'deploy' }}-${{ inputs.merge_commit_sha || github.sha }}
+  # Keyed on the target ENVIRONMENT only (single-trunk: environment ≠ branch) — NOT the sha
+  # Dropping the sha serializes every deploy to a given Railway environment: two
+  # dispatches of different shas to `production` (or `development`) now queue instead of
+  # racing on the same live service. Post-merge runs are already serialized per-ref, so this
+  # closes the manual-dispatch race. cancel-in-progress: false → queue, never cancel a deploy.
+  group: railway-deploy-${{ inputs.github_environment || inputs.target || 'deploy' }}
   cancel-in-progress: false
 
 permissions:

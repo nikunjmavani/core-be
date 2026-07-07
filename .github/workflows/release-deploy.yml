@@ -154,3 +154,50 @@ jobs:
       github_environment: production
       # Deploy the exact scanned tag-sha image (D3 build-once, promote).
       image_override: ${{ needs.resolve.outputs.api_image }}
+
+  retag:
+    name: Retag release image (:vX.Y.Z)
+    # Release traceability alias. After a SUCCESSFUL production deploy, retag the exact
+    # scanned+deployed sha image as `:vX.Y.Z` (api + worker). Runs ONLY here (the production
+    # release flow), gated on deploy success, so the version tag always points at the image
+    # that is live in production — never a build that failed to deploy. Development /
+    # post-merge deploys are untouched (they keep `:sha` + `:latest`). `imagetools create`
+    # adds a tag pointing at the SAME manifest (no pull, multi-arch safe).
+    needs: [resolve, deploy]
+    if: success()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
+          fetch-depth: 1
+
+      - name: Project identity
+        uses: ./.github/actions/setup-project-identity
+
+      - name: Login to GHCR
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Retag api + worker images as the release tag
+        env:
+          API_IMAGE_REF: ${{ needs.resolve.outputs.api_image }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ needs.resolve.outputs.sha }}
+        run: |
+          set -euo pipefail
+          api_base="${API_IMAGE_REF%:*}"
+          worker_ref="ghcr.io/${REPO}/${WORKER_IMAGE}:${SHA}"
+          worker_base="ghcr.io/${REPO}/${WORKER_IMAGE}"
+          docker buildx imagetools create --tag "${api_base}:${TAG}" "${API_IMAGE_REF}"
+          docker buildx imagetools create --tag "${worker_base}:${TAG}" "${worker_ref}"
+          echo "::notice title=Release image retagged::${api_base}:${TAG} and ${worker_base}:${TAG}"
