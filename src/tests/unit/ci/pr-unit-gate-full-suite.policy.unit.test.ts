@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 /**
  * Regression guard for the PR-gate under-selection bug.
  *
- * The PR unit lane (`reusable-vitest-unit-only.yml`) used to run `vitest --changed origin/dev`,
+ * The PR unit lane (`reusable-vitest-unit-only.yml`) used to run `vitest --changed origin/main`,
  * which selects only tests the import graph links to changed files. When a source change broke an
  * EXISTING test whose linkage wasn't detected (e.g. `.js` path-alias imports not resolving to the
  * changed `.ts`), the break passed the PR gate and only failed post-merge — this is exactly how a

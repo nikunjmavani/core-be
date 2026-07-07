@@ -164,7 +164,7 @@ For manual API checks after full seed see [api-testing.md](docs/getting-started/
 
 ---
 
-## 3. Git workflow
+## 3. Trunk-based workflow
 
 Long-lived branch: **`main`** (single trunk). Short-lived branches use `feature/`, `fix/`, `hotfix/` prefixes off `main`.
 
