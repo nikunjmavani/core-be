@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.10.2](https://github.com/nikunjmavani/core-be/compare/v4.10.1...v4.10.2) (2026-07-07)
+
+
+### Changed
+
+* **setup:** drop per-environment branch; source trunk from git.defaultBranch ([#881](https://github.com/nikunjmavani/core-be/issues/881)) ([a291e61](https://github.com/nikunjmavani/core-be/commit/a291e61db202e303b8553067ed476923afc6439f))
+
 ## [4.10.1](https://github.com/nikunjmavani/core-be/compare/v4.10.0...v4.10.1) (2026-07-07)
 
 
