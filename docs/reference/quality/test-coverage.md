@@ -64,9 +64,12 @@ Two lanes run tests, split for speed:
   job downloads every `coverage-*` shard artifact — DB-bound shards and the
   `coverage-unit` artifact — merges them, and checks thresholds.
 
-The merged gate is **`--report-only` on `dev`** (prints the result, never
-fails the build) and **blocking** when the target branch is not `dev` (the
-`dev → main` release path).
+Single-trunk model: the gate keys on the **event**, not the branch. It is
+**blocking on the PR** (`pull_request` — the authoritative gate) and
+**`--report-only` post-merge** (`push` — so a flaky observation can never skip
+release-please). The route-success-coverage sub-gate is advisory (report-only)
+everywhere while its capture flakiness is addressed — the DB matrix tests remain
+the authoritative gate.
 
 ### CI now measures the true merge
 
@@ -92,7 +95,7 @@ measured surface, and enforces a stricter threshold (default **90%**).
 pnpm test:coverage            # writes coverage/coverage-final.json
 
 # 2. check the coverage of your branch's changes vs the base
-pnpm coverage:patch                       # base defaults to origin/dev
+pnpm coverage:patch                       # base defaults to origin/main
 PATCH_COVERAGE_BASE=origin/main pnpm coverage:patch
 ```
 
@@ -137,7 +140,7 @@ security-critical domains — over a blanket 90/95.
    93.03% lines / 92.27% statements / 96.11% functions / 83.25% branches, the
    floor in `tooling/ci/coverage-thresholds.json` was raised to
    `lines 90, statements 90, functions 94, branches 80` (a 2–3pt buffer under the
-   real numbers so a normal dip does not block the `dev → main` release gate).
+   real numbers so a normal dip does not block the PR merge gate).
 3. **Make patch coverage a blocking PR check.** Run `pnpm coverage:patch`
    against the merged report on PRs and fail under 90% on new code. Needs the
    merged report available on the PR lane (the `coverage-unit` artifact wiring

@@ -2,6 +2,15 @@
 
 Single reference for what runs in CI, how deployment to Railway works, and **which tokens you need where**. Includes all deployment **Mermaid diagrams** (push → CI → deploy, release-please, secrets). Secrets are stored in **GitHub Environments** (development, production). See [SETUP.md](../../../SETUP.md) for local dev; [git-workflow.md](../../process/git-workflow.md) for branches and PRs.
 
+⚠️ **Single-trunk update (in progress).** core-be migrated from the `dev`+`main` dual-channel model
+to single-`main` trunk delivery ([delivery-model-migration-plan.md](../../process/delivery-model-migration-plan.md)).
+The current model, authoritative where this page still says otherwise:
+**PR → squash-merge to `main` → post-merge adaptive lane** (FAST for a single PR: build → release-please →
+deploy **development**; FULL for a batched push: also the matrix) **→ merge the `release-please` Release PR
+(the ship button) → `release-deploy.yml` deploys production** on the published tag (reviewer-gated). There is
+no `dev` branch, no promotion, and no back-merge; versions are stable `X.Y.Z` only. Sections below that
+describe the dual-channel flow are being rewritten.
+
 > **Prerequisite:** Infrastructure must be set up before auto-deploy works. Use [setup-automation.md](../setup/setup-automation.md) (`pnpm setup:infra`) to provision Neon, Redis, Railway, GitHub secrets first.
 
 ### Project identity (branches, images, slug)

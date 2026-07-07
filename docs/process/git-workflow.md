@@ -1,170 +1,60 @@
-# Git Branch Naming and PR Workflow
+# Git workflow
 
-Professional branch strategy and pull-request flow for core-be. For the full setup guide see [SETUP.md](../../SETUP.md). For CI/CD and deployment (including which tokens you need), see [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md).
+**Single-trunk model.** `main` is the only long-lived branch. Every change lands on `main` through a
+squash-merged pull request; there is no `dev` branch, no promotion, and no back-merge. Incomplete work
+hides behind feature flags, not long-lived branches.
 
----
+> Migrated from the former `dev`+`main` dual-channel model — see
+> [delivery-model-migration-plan.md](delivery-model-migration-plan.md). For CI/CD and deployment see
+> [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md).
 
-## Primary long-lived branches
+## Branches
 
-These branches represent environments and use simple, standard names.
+| Branch | Purpose | Lifetime |
+| --- | --- | --- |
+| `main` | The trunk. Always releasable. Protected (squash-only, required checks). | permanent |
+| `<type>/<slug>` | Working branch for one change (`feat`/`fix`/`chore`/`refactor`/`docs`/`test`/`ci`/`build`/`perf`/`hotfix`). | short-lived, deleted on merge |
+| `release/X.Y` | Hotfix branch for an **older** release trunk has moved past. One-way (never merged back). | short-lived |
+| `claude/*` | Claude Code web session branches. | short-lived |
 
-| Branch   | Purpose                           | Contains                     |
-| -------- | --------------------------------- | ---------------------------- |
-| **main** | Production-ready code             | Stable, fully tested code    |
-| **dev**  | Integration branch for developers | Latest development changes   |
+Enforced by [`.husky/pre-push`](../../.husky/pre-push) and the `git-branch-naming` rule.
 
----
+## The loop
 
-## Short-lived working branches (created from dev)
+1. Branch off `main`: `git switch -c feat/my-change`.
+2. Commit; open a PR to **`main`** (`/open-pr` or `/ship`).
+3. **PR CI is the authoritative gate**: lint, typecheck, unit, the full DB-backed **matrix / Integration**
+   suite (e2e/integration/rls/performance), security, contract. It must be green — and the branch up to
+   date with `main` (strict checks) — before merge.
+4. **Squash-merge** into `main` (0 approvals required; the squash commit = the PR title + body). The
+   branch auto-deletes.
+5. Post-merge CI on `main` runs the **adaptive lane**: a single-PR push takes the FAST lane (build →
+   release-please → deploy development, no re-test — the PR already proved the tree); a batched push
+   (≥2 commits, e.g. a merge queue) takes the FULL lane and re-runs the matrix.
 
-Use the format: **type/short-description**
+## Releasing
 
-### Branch type prefixes
+`release-please` keeps exactly one **`chore: release X.Y.Z` Release PR** open on `main`, updated on
+every merge. **Merging that Release PR is the ship button** — it tags `vX.Y.Z` + a GitHub Release, which
+fires [`release-deploy.yml`](../../.github/workflows/release-deploy.yml) to deploy production (behind the
+environment reviewer approval). See [release-versioning.md](release-versioning.md).
 
-| Type     | Use for               | Example                    |
-| -------- | --------------------- | -------------------------- |
-| feature  | New feature           | feature/ai-stream-response |
-| fix      | Bug fix               | fix/login-error            |
-| refactor | Code improvement      | refactor/auth-module       |
-| docs     | Documentation         | docs/readme-update         |
-| test     | Adding tests          | test/user-service          |
-| chore    | Maintenance           | chore/update-dependencies  |
-| hotfix   | Urgent production fix | hotfix/payment-crash       |
+## Hotfixes
 
-### Examples
+A normal urgent fix is just a `fix:` PR merged and released immediately by merging the Release PR. To
+patch an older release, use a `release/X.Y` branch — see
+[hotfix-release.md](../deployment/runbooks/hotfix-release.md).
 
-- feature/user-authentication
-- feature/ai-stream-response
-- fix/token-expiry
-- refactor/user-service
-- docs/api-documentation
+## Local clone migration (one-time, after cutover)
 
-### Enterprise format (with ticket ID)
-
-type/ticket-description
-
-- feature/AI-101-stream-response
-- fix/API-205-login-error
-- refactor/SYS-88-clean-architecture
-
-### Accepted type prefixes (enforced)
-
-`feature` · `feat` · `fix` · `hotfix` · `refactor` · `docs` · `test` · `chore` · `ci` · `perf` · `build` · `style` · `revert` (`feat` and `feature` are both accepted; the set mirrors the conventional-commit types).
-
-[`.husky/pre-push`](../../.husky/pre-push) rejects any branch whose name is not `dev`, `main`, `claude/*`, or `<type>/<description>` using a type above. Bypass a single push with `SKIP_BRANCH_CHECK=1 git push` (prefer renaming the branch instead). Canonical AI rule: [`agent-os/rules/git-branch-naming.mdc`](../../agent-os/rules/git-branch-naming.mdc).
-
-### AI / automation branches (`claude/*`)
-
-Claude Code **web/cloud** sessions run on platform-assigned task branches, not necessarily `feature/`/`fix/` branches. The name is created by the platform **before** the sandbox starts, and the cloud git proxy can restrict each session to pushing only that working branch, so repo skills, rules, and hooks cannot rename it. `claude/*` is therefore allowlisted by the pre-push policy by design. To land that work under a `feature/`/`fix/` name, rename at the PR/merge layer or teleport the session to a local checkout — do not switch branches from inside the session without explicit permission.
-
----
-
-## Full workflow: merge flow
-
-```mermaid
-flowchart TB
-  subgraph prod [Production]
-    main[main]
-  end
-
-  subgraph dev_env [Development]
-    dev[dev]
-  end
-
-  subgraph work [Working branches]
-    feature[feature/...]
-    fix[fix/...]
-    hotfix[hotfix/...]
-  end
-
-  feature --> dev
-  fix --> dev
-  dev --> main
-  hotfix --> main
-```
-
-**Merge order:** feature/... → dev → main
-
----
-
-## Step-by-step PR workflow
-
-### 1. Create feature branch from dev
+If you still have a local `dev`:
 
 ```bash
-git checkout dev
-git pull origin dev
-git checkout -b feature/ai-stream-response
+git fetch --prune
+git remote set-head origin -a
+git switch main
+git branch -D dev   # stale local dev; it no longer exists upstream
 ```
 
-### 2. Work and commit
-
-Use [Conventional Commits](https://www.conventionalcommits.org/) for commit messages (enforced in PR checks):
-
-```bash
-git add .
-git commit -m "feat: add AI streaming response"
-```
-
-> The commit **type** also drives the release version — `fix:` → patch, `feat:` → minor, `feat!:` (or a `BREAKING CHANGE:` footer) → major. See [release-versioning.md](release-versioning.md) for the full cheat-sheet.
-
-### 3. Push branch
-
-```bash
-git push origin feature/ai-stream-response
-```
-
-### 4. Open pull request
-
-- **Target branch:** `dev` (for feature/fix/refactor branches).
-- PR title must follow conventional commits (e.g. `feat: add AI streaming response`).
-- CI runs automatically (quality, tests, security, Docker build). All must pass.
-- **Protected branches:** Required checks and merge rules for `main` and `dev` are documented in [branch-protection.md](../deployment/ci-cd/branch-protection.md).
-
-### 5. Watch CI to green, then merge
-
-Opening the PR is not the finish line — drive it to merged:
-
-- **Watch CI to completion.** Never merge on a partial or red run.
-- If the branch falls **behind `dev`** (protection requires up-to-date branches), update it (merge/rebase `dev`); this re-runs CI.
-- For a **transient** infra failure (e.g. a registry/image-pull timeout), re-run the failed job or re-trigger CI rather than editing code. Fix **real** failures in scope.
-- **Merge only when every required check is green and the PR is mergeable** (`mergeable_state: clean`), after review/approval. Prefer **squash** so `dev` gets one conventional commit (release-please derives the version bump from it).
-- AI sessions: keep watching until the PR is **merged or closed**. Webhooks do not deliver CI *success*, so re-check on a timer / self check-in rather than assuming green.
-
-### 6. Promote to production
-
-- Open a PR **dev → main** when changes are ready for production.
-- After merge, production deploys (Railway). Ensure migrations and runbook steps are done.
-
-### Hotfix (production fix)
-
-- Branch from **main**: `git checkout main && git pull && git checkout -b hotfix/payment-crash`.
-- Fix, commit, push. Open PR **hotfix/... → main**.
-- After merge, deploy to production. Then merge **main → dev** to keep long-lived branches in sync.
-
----
-
-## Golden rules
-
-**DO:**
-
-- Use lowercase
-- Use hyphens in branch names
-- Keep names short and clear
-- Use prefixes (feature/, fix/, refactor/, docs/, test/, chore/, hotfix/)
-
-**DO NOT:**
-
-- Use spaces in branch names
-- Use very long sentences
-- Use random or personal branch names
-
----
-
-## Summary
-
-**Long-lived branches:** main, dev
-
-**Short-lived branches:** feature/short-description, fix/short-description, refactor/short-description, docs/..., test/..., chore/..., hotfix/...
-
-**PR flow:** feature → dev → main. CI runs on every PR; deployments to Railway trigger on push to dev (development) and main (production).
+Rebase any in-flight feature branch that was cut from `dev` onto `main`:
+`git rebase --onto origin/main origin/dev <branch>`.
