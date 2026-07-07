@@ -109,6 +109,6 @@ Review this runbook at the start of each calendar quarter (January, April, July,
 - [backup-drills.md](backup-drills.md) — monthly automated restore drill (`MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY`; Neon project `core-be` by name; parent branch = workflow ref)
 - [restore-drill.md](../deployment/restore-drill.md) — workflow secrets and CI artifact names
 - [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md) — deploy and secrets
-- [runbook-dev-to-production.md](../deployment/runbooks/runbook-dev-to-production.md) — production promotion
+- [production-go-live.md](../deployment/runbooks/production-go-live.md) — production promotion
 - [observability.md](../deployment/runbooks/observability.md) — Sentry and health signals
 - [dlq-runbook.md](dlq-runbook.md) — queue recovery after Redis/worker outage

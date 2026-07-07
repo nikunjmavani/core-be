@@ -121,4 +121,4 @@ When adding a new BullMQ queue, append its constant to `SOURCE_QUEUE_NAMES` in `
 
 ## Production
 
-Leave `ENABLE_QUEUE_DASHBOARD` unset or `false` in production unless you need the UI; see [runbook-dev-to-production.md](../../deployment/runbooks/runbook-dev-to-production.md).
+Leave `ENABLE_QUEUE_DASHBOARD` unset or `false` in production unless you need the UI; see [production-go-live.md](../../deployment/runbooks/production-go-live.md).

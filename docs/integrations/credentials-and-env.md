@@ -242,7 +242,7 @@ These are **GitHub Environment secrets** (not API/worker runtime vars). Add them
 
 Project ID is **not** a separate secret — the workflow lists Neon projects via API and selects **`core-be`** (override with `RESTORE_DRILL_NEON_PROJECT_NAME` only if your Neon project name differs).
 
-Neon branch names must match git refs (`main`, `dev`). Without both secrets, the monthly workflow **fails**.
+Neon branch names must match the git ref (`main`). Without both secrets, the monthly workflow **fails**.
 
 ---
 

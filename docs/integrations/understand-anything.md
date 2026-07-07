@@ -149,7 +149,7 @@ Compares changed files to graph nodes and surfaces affected components and risks
 
 | Event | Action |
 | --- | --- |
-| Daily feature work | Incremental `/understand` (default) after merging `dev` |
+| Daily feature work | Incremental `/understand` (default) after merging to `main` |
 | New domain or large move | `/understand --full` |
 | Pre-PR review on risky areas | `/understand-diff` |
 | Release / audit prep | Regenerate graph, then re-run `/understand-onboard` if `docs/ONBOARDING.md` is maintained |
@@ -187,7 +187,7 @@ CI does not run Understand Anything today; analysis is developer-local.
 | `No knowledge graph found` | Run `/understand` from repo root |
 | Plugin root not found | Reinstall Understand Anything; ensure `~/.understand-anything-plugin` or `CLAUDE_PLUGIN_ROOT` is set per platform docs |
 | Analysis very slow | Narrow `.understandignore`; avoid `--review` unless needed |
-| Graph out of date | `/understand --full` after merging latest `dev` |
+| Graph out of date | `/understand --full` after merging latest `main` |
 | Worktree graph missing | Re-run from main checkout or disable redirect with `UNDERSTAND_NO_WORKTREE_REDIRECT=1` |
 
 ---

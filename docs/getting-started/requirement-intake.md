@@ -37,7 +37,7 @@ The AI fills these unless your message says otherwise. List overrides in your fi
 | **Object params** | Single options object for 2+ inputs (repository methods keep positional params) |
 | **Validation** | Zod DTO in `*.dto.ts` + function validator with `.safeParse()` in `*.validator.ts` |
 | **API version** | `/api/v1` prefix for public HTTP routes |
-| **Target branch** | Feature work merges to `dev` unless you say hotfix/production |
+| **Target branch** | Feature work merges to `main` |
 | **In-source docs** | TSDoc on every public export, `@remarks` on services / workers / processors / policy files, hand-written `<folder>.overview.md` for new folders, `schema: { summary, description, tags }` on every Fastify route, `pnpm tsdoc:check` must pass |
 
 ---

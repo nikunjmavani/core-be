@@ -49,7 +49,7 @@ fi
 
 For each approved slice: branch from the right base → stage planned files → commit → push → `gh pr create`.
 
-> **Note:** this repo **disables merge commits** — `gh pr merge` must use `--squash` (e.g. `gh pr merge --squash --auto`). A 405 "Merge commits are not allowed on this repository" means a merge commit was requested; switch to squash. Merges into `dev`/`main` also require all branch-protection status checks to pass first, so prefer `--auto` (or enable auto-merge) rather than waiting interactively.
+> **Note:** this repo **disables merge commits** — `gh pr merge` must use `--squash` (e.g. `gh pr merge --squash --auto`). A 405 "Merge commits are not allowed on this repository" means a merge commit was requested; switch to squash. Merges into `main` also require all branch-protection status checks to pass first, so prefer `--auto` (or enable auto-merge) rather than waiting interactively.
 
 After each product PR, note which **skill-index** skills apply (route-catalog, db-migration-maintainer, etc.).
 

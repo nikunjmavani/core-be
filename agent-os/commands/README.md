@@ -65,11 +65,10 @@ Granular procedures live in **skills** (invoked by name); these commands are **w
 
 | Command | Purpose |
 | ------- | ------- |
-| `/open-pr [title]` | Push the branch + open a PR to `dev` (the explicit PR opt-in). |
+| `/open-pr [title]` | Push the branch + open a PR to `main` (the explicit PR opt-in). |
 | `/watch-pr <n>` | Subscribe to a PR; triage CI + review comments until green. |
 | `/merge-pr <n>` | Merge once CI is green and approvals are in. |
 | `/ship [title]` | The full flow: open-pr → watch-pr → merge-pr. |
-| `/release-dev-to-production` | **Retired** (single-trunk). There is no dev→main promotion — shipping is **merging the `release-please` Release PR**, which tags the release and fires `release-deploy.yml`. |
 
 **Maintenance**
 

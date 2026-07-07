@@ -6,12 +6,12 @@ How **production** deploys are gated in GitHub Actions when using [reusable-rail
 
 ## Environments
 
-| GitHub Environment | Branch trigger (`workflow_run` after CI) | Railway target                   |
-| ------------------ | ---------------------------------------- | -------------------------------- |
-| `production`       | `main`                                   | Production API + worker services |
-| `dev`              | `dev`                                    | Development stack                |
+| GitHub Environment | Trigger                            | Railway target                   |
+| ------------------ | ---------------------------------- | -------------------------------- |
+| `development`      | push to `main` (every merge)       | Development stack                |
+| `production`       | release tag (`release-deploy.yml`) | Production API + worker services |
 
-Manual dispatch (`workflow_dispatch`) can target any of the three via the `target` input.
+Both environments deploy from `main`; the target GitHub Environment is chosen explicitly, not derived from the branch. Manual dispatch (`workflow_dispatch`) can target either environment via the `target` input.
 
 ---
 
@@ -63,4 +63,4 @@ Infrastructure (Neon, Railway Redis database, Railway) is provisioned via `pnpm 
 
 - [branch-protection.md](ci-cd/branch-protection.md) — required CI checks before merge
 - [cicd-and-deployment.md](ci-cd/cicd-and-deployment.md) — full pipeline diagram
-- [runbook-dev-to-production.md](runbooks/runbook-dev-to-production.md) — release checklist
+- [production-go-live.md](runbooks/production-go-live.md) — release checklist

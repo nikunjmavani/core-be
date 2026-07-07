@@ -129,4 +129,4 @@ Unit tests: `src/infrastructure/observability/__tests__/sentry.unit.test.ts`.
 
 - [resource-limits.md](resource-limits.md) — memory, `NODE_OPTIONS`, worker RSS warnings
 - [ci-cd/cicd-and-deployment.md](../ci-cd/cicd-and-deployment.md) — `SENTRY_*` and deploy env sync
-- [runbook-dev-to-production.md](runbook-dev-to-production.md) — go-live steps
+- [production-go-live.md](production-go-live.md) — go-live steps

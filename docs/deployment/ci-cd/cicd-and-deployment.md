@@ -2,12 +2,11 @@
 
 Single reference for what runs in CI, how deployment to Railway works, and **which tokens you need where**. Includes all deployment **Mermaid diagrams** (push → CI → deploy, release-please, secrets). Secrets are stored in **GitHub Environments** (development, production). See [SETUP.md](../../../SETUP.md) for local dev; [git-workflow.md](../../process/git-workflow.md) for branches and PRs.
 
-**Single-trunk delivery.** core-be migrated from the `dev`+`main` dual-channel model to single-`main`
-trunk delivery ([delivery-model-migration-plan.md](../../process/delivery-model-migration-plan.md)):
+**Single-trunk delivery.** `main` is the only long-lived branch:
 **PR → squash-merge to `main` → post-merge adaptive lane** (FAST for a single PR: build → release-please →
 deploy **development**; FULL for a batched push: also the matrix) **→ merge the `release-please` Release PR
-(the ship button) → `release-deploy.yml` deploys production** on the published tag (reviewer-gated). There is
-no `dev` branch, no promotion, and no back-merge; versions are stable `X.Y.Z` only.
+(the ship button) → `release-deploy.yml` deploys production** on the published tag (reviewer-gated).
+Versions are stable `X.Y.Z` only.
 
 > **Prerequisite:** Infrastructure must be set up before auto-deploy works. Use [setup-automation.md](../setup/setup-automation.md) (`pnpm setup:infra`) to provision Neon, Redis, Railway, GitHub secrets first.
 
@@ -147,7 +146,7 @@ Both environments run the **same scanned image**, promoted by SHA (build-once-pr
 
 Release-please turns **conventional commits** into a standing **Release PR** (`chore: release X.Y.Z` — CHANGELOG + version bump in `package.json`). **Merging that Release PR is the ship button**: it creates the **GitHub Release** and tag `vX.Y.Z`, which fires [release-deploy.yml](../../../.github/workflows/release-deploy.yml) to deploy production. No npm publish (the package is private). We use the maintained [googleapis/release-please](https://github.com/googleapis/release-please) action.
 
-**Single stable channel** — one config + one manifest, no prerelease/`dev` channel:
+**Single stable channel** — one config + one manifest, no prerelease channel:
 
 | Channel | Branch | Tag | Config | Manifest | Changelog |
 | ------- | ------ | --- | ------ | -------- | --------- |
@@ -180,7 +179,7 @@ flowchart TB
 1. **Feature → PR → gate:** every PR runs the `Quality gate` aggregate + `Checks`; the PR title must follow conventional commits.
 2. **Squash-merge to `main`:** post-merge CI builds + pushes the SHA-tagged image and deploys the **development** environment; release-please refreshes the standing Release PR (`chore: release X.Y.Z`).
 3. **Merge the Release PR (ship):** tags `vX.Y.Z` + publishes the GitHub Release, which fires [release-deploy.yml](../../../.github/workflows/release-deploy.yml) to deploy **production** — pinned to the tag SHA, behind the environment reviewer approval, promoting the exact scanned image (build-once-promote). The release SBOM is attached on publish.
-4. **Hotfix:** an ordinary `fix/*` PR to `main`, released immediately by merging the Release PR — **fix-forward** (see [hotfix-release.md](../runbooks/hotfix-release.md)). There is **no** `dev` branch, promotion PR, or back-merge.
+4. **Hotfix:** an ordinary `fix/*` PR to `main`, released immediately by merging the Release PR — **fix-forward** (see [hotfix-release.md](../runbooks/hotfix-release.md)). There is no promotion PR or back-merge.
 
 ### Verify release-please
 

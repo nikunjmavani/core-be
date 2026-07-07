@@ -10,7 +10,7 @@ indexNote: pre-release/deploy review + plan; user must approve before prod actio
 
 Before any **path to production** action (release, deployment, or "ready for production" sign-off), run a full code review for production readiness, **write a plan**, and **ask the user to review that plan**. Do not proceed with production steps until the user has reviewed and confirmed.
 
-**Workflow doc:** [docs/deployment/runbooks/runbook-dev-to-production.md](../../../docs/deployment/runbooks/runbook-dev-to-production.md) (§2 local gates, §3 this skill, §4–§7 deploy).
+**Workflow doc:** [docs/deployment/runbooks/production-go-live.md](../../../docs/deployment/runbooks/production-go-live.md).
 
 ## When to Use
 

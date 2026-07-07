@@ -1,7 +1,6 @@
 # Runbook: Hotfix release (single-trunk)
 
-How to ship an urgent fix under the single-`main` delivery model. See the
-[delivery-model migration plan](../../process/delivery-model-migration-plan.md) for the full model.
+How to ship an urgent fix under the single-`main` delivery model.
 
 Trunk-based: `main` is always releasable, and a hotfix **fixes forward** on `main` — it is just a
 `fix:` change you release immediately instead of waiting for the next cadence. There is **no
@@ -43,5 +42,5 @@ should be forward-ported to `main` immediately.
 
 ## Notes
 
-- There is **no `dev` branch and no promotion**, and **no protected `release/*` branch** — `main.json`
-  is the only committed ruleset. The old `runbook-dev-to-production.md` is retired.
+- There is **no promotion** and **no protected `release/*` branch** — `main.json`
+  is the only committed ruleset. The old `production-go-live.md` is retired.

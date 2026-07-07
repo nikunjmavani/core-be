@@ -41,7 +41,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/code-quality-guard/SKILL.md",
-      "computedHash": "9c97105e506757675b02489e13c7c0c57b0e9ecdc2a59297dc538390eab720cc"
+      "computedHash": "3922c6ee2ee60324c2052bc7e08346d40f8a187e09719c24ac2f5ec5f6bb4b3a"
     },
     "code-smells-and-best-practices": {
       "source": "local",
@@ -149,7 +149,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/path-to-production-gate/SKILL.md",
-      "computedHash": "efa2bdce4c4f53907d6ee4cc99330f937a6df1e6d0e1e67f3dbf84400944e88a"
+      "computedHash": "8059333bc7cc3d9fc40f1db64a1d95d80f9f7619603d93504989b501e586c8be"
     },
     "ponytail": {
       "source": "DietrichGebert/ponytail",
@@ -167,7 +167,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/pr-babysit/SKILL.md",
-      "computedHash": "15d4a94072234e1c069c4cafdce86610c91166092771b85960144dbf2658c3bf"
+      "computedHash": "a3eccaf3ba882100d54fc4fc17b17cb78b318e602826196428baa440e4bb466b"
     },
     "production-hardening-guard": {
       "source": "local",
@@ -209,13 +209,13 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/skill-index/SKILL.md",
-      "computedHash": "c223e1eb55aedf6beb07c2bacf3c4baea5995c7d20c06de5c4bb000cbb91df31"
+      "computedHash": "7dda24d9441b78d7c744fcbeb55101b218eabf33b2d50916727e4c559a6c2f43"
     },
     "split-to-prs": {
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/split-to-prs/SKILL.md",
-      "computedHash": "e8348f3789939ef480327287e27a96fe95da83b3cdb7856741fba82029146290"
+      "computedHash": "3d8f9b2038ffd3f39a44fcc99e6d1523e2d4e1e59e9141c431ff95d478f4f541"
     },
     "sql-design-guard": {
       "source": "local",
