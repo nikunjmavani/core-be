@@ -1,6 +1,9 @@
 ---
 name: system-narrative-maintainer
 description: Maintains the four system-level documentation files at src/ root — src/OVERVIEW.md (platform overview), src/PATTERNS.md (cross-cutting patterns), src/FLOWS.md (end-to-end feature flows), src/POLICIES.md (platform policy constants). Use when adding a new domain, a new cross-cutting pattern, a new end-to-end flow, or a new policy constant in src/shared/constants/.
+trigger: src/OVERVIEW.md, src/PATTERNS.md, src/FLOWS.md, src/POLICIES.md
+triggerNote: System-level narratives
+indexNote: maintain src/ OVERVIEW / PATTERNS / FLOWS / POLICIES
 ---
 
 # System narrative maintainer (core-be)
@@ -125,3 +128,7 @@ First line: `` `src/` ``.
 
 - TSDoc coverage gate: [`tooling/tsdoc-coverage/`](../../../tooling/tsdoc-coverage/)
 - Architecture doc: [`docs/reference/architecture/documentation-system.md`](../../../docs/reference/architecture/documentation-system.md)
+
+---
+
+**Related skills:** [overview-doc-maintainer](../overview-doc-maintainer/SKILL.md) · [tsdoc-export-guard](../tsdoc-export-guard/SKILL.md)

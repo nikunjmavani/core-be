@@ -1,6 +1,9 @@
 ---
 name: contract-test-maintainer
 description: Maintains outbound HTTP contract tests (Stripe, Resend, S3) under src/tests/contract/. Use when changing payment/mail/storage clients or adding nock fixtures.
+trigger: src/tests/contract/**
+triggerNote: Outbound HTTP contracts (Stripe/Resend/S3)
+indexNote: outbound HTTP contract tests (Stripe / Resend / S3)
 ---
 
 # Contract test maintainer (core-be)
@@ -43,3 +46,7 @@ Runs in **Quality** CI (`pnpm test:contract`). Default `pnpm test` **excludes** 
 
 - **production-hardening-guard** — circuit breakers on external clients
 - **ci-investigator** — when Quality job contract step fails
+
+---
+
+**Related skills:** [chaos-test-maintainer](../chaos-test-maintainer/SKILL.md) · [test-generator](../test-generator/SKILL.md)

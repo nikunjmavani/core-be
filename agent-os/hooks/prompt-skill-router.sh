@@ -13,6 +13,8 @@
 # and never nag. Adds context via hookSpecificOutput.additionalContext. Fails
 # OPEN: a missing jq, no prompt, or no match exits 0 silently.
 set -uo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_telemetry.sh"
+telemetry_init "prompt-skill-router" "UserPromptSubmit"
 
 command -v jq >/dev/null 2>&1 || exit 0
 
@@ -61,6 +63,7 @@ for h in "${HINTS[@]}"; do
 done
 context="${context}"$'\n'"New requirement? docs/getting-started/requirement-intake.md · Full map: agent-os/docs/skill-triggers.md"
 
+telemetry_fired
 jq -cn --arg c "$context" \
   '{hookSpecificOutput:{hookEventName:"UserPromptSubmit",additionalContext:$c}}'
 exit 0

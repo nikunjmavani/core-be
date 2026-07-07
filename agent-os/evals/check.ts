@@ -16,6 +16,7 @@
  *   tsx agent-os/evals/check.ts            # gate: exits 1 on any ERROR
  *   tsx agent-os/evals/check.ts --report   # verbose: list every check + WARNs
  */
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { basename, join, relative } from 'node:path'
 
@@ -88,20 +89,14 @@ for (const skill of skillNames) {
     warn('skill-description', `skills/${skill}: description is ${description.length} chars — too thin to auto-trigger reliably`)
 }
 
-// ── Check 2: skill counts stated in the index match the directory count ──
+// ── Check 2: the index table lists exactly the skills on disk, and paths resolve ──
+// The `## Project skills (N)` count + table is generated (tooling/agent-os/generate-docs.ts)
+// between GENERATED markers, so a stale count is impossible — gated by
+// `agent-os:generate:check`, not re-counted here. This check stays as the
+// path-existence guard: every table row points at a real SKILL.md.
 const indexFile = join(agentOsDirectory, 'skills', 'skill-index', 'SKILL.md')
 if (existsSync(indexFile)) {
   const indexText = readText(indexFile)
-  const claimed = [
-    ...allNumbers(indexText, /(\d+)\s+project skills/g),
-    ...allNumbers(indexText, /project skills\s*\((\d+)\)/gi),
-    ...allNumbers(indexText, /skills\s*\((\d+)\)/g),
-  ]
-  for (const count of new Set(claimed))
-    if (count !== skillNames.length)
-      error('skill-index-count', `skill-index states ${count} skills; ${skillNames.length} exist on disk`)
-
-  // ── Check 3: the index table lists exactly the skills on disk, and paths resolve ──
   const tableNames = new Set<string>()
   for (const row of indexText.matchAll(/^\|\s*([a-z][a-z0-9-]+)\s*\|\s*`([^`]+)`/gm)) {
     tableNames.add(row[1])
@@ -113,6 +108,40 @@ if (existsSync(indexFile)) {
     if (!tableNames.has(skill)) error('skill-index-table', `skill "${skill}" exists on disk but is absent from the skill-index table`)
   for (const listed of tableNames)
     if (!skillNames.includes(listed)) error('skill-index-table', `skill-index table lists "${listed}" which has no directory`)
+}
+
+// ── Check 3b: skills-lock.json provenance — every skill locked, no hash drift ──
+// The lockfile records the sha256 of each skill's SKILL.md (and its source).
+// A skill edited without relocking, a new skill never locked, or a lock entry
+// for a deleted skill all fail here — provenance is a gate, not a hope.
+// Workflow: edit skill → `pnpm agent-os:lock` → commit SKILL.md + lockfile.
+const lockFile = join(agentOsDirectory, 'skills-lock.json')
+if (!existsSync(lockFile)) {
+  error('skills-lock', 'agent-os/skills-lock.json is missing — run `pnpm agent-os:lock`')
+} else {
+  try {
+    const lock = JSON.parse(readText(lockFile)) as {
+      skills?: Record<string, { computedHash?: string }>
+    }
+    const locked = lock.skills ?? {}
+    for (const skill of skillNames) {
+      const skillFile = join(agentOsDirectory, 'skills', skill, 'SKILL.md')
+      if (!existsSync(skillFile)) continue
+      const entry = locked[skill]
+      if (!entry) {
+        error('skills-lock', `skill "${skill}" is not in skills-lock.json — run \`pnpm agent-os:lock\``)
+        continue
+      }
+      const computedHash = createHash('sha256').update(readFileSync(skillFile)).digest('hex')
+      if (computedHash !== entry.computedHash)
+        error('skills-lock', `skill "${skill}" SKILL.md changed since it was locked — run \`pnpm agent-os:lock\``)
+    }
+    for (const lockedName of Object.keys(locked))
+      if (!skillNames.includes(lockedName))
+        error('skills-lock', `skills-lock.json lists "${lockedName}" which has no skill directory`)
+  } catch {
+    error('skills-lock', 'agent-os/skills-lock.json is not valid JSON')
+  }
 }
 
 // ── Check 4: the sync-rule count in skill-triggers.md matches reality ──
@@ -129,21 +158,33 @@ if (existsSync(triggersFile)) {
       error('sync-rule-count', `skill-triggers.md states ${count} sync rules; ${syncRuleCount} *-sync.mdc files exist`)
 }
 
-// ── Check 5 + 6: agent catalog count + coverage ──
+// ── Check 5: agent catalog coverage ──
+// The catalog table (incl. its `All N agents` count) is generated between
+// GENERATED markers (tooling/agent-os/generate-docs.ts), gated by
+// `agent-os:generate:check` — so a stale count is impossible and no longer
+// re-counted here. This stays as the coverage guard: every agent file appears.
 const agentFiles = listFilesWithExtension(join(agentOsDirectory, 'agents'), '.md')
 const catalogFile = join(agentOsDirectory, 'docs', 'agents-catalog.md')
 if (existsSync(catalogFile)) {
   const catalogText = readText(catalogFile)
-  for (const count of new Set(allNumbers(catalogText, /[Aa]ll\s+(\d+)\s+(?:project\s+)?agents/g)))
-    if (count !== agentFiles.length)
-      error('agent-catalog-count', `agents-catalog states ${count} agents; ${agentFiles.length} agent files exist`)
   for (const file of agentFiles) {
     const agentName = basename(file, '.md')
     if (!catalogText.includes(agentName)) error('agent-catalog-coverage', `agent "${agentName}" is not referenced in agents-catalog.md`)
   }
 }
 
-// ── Check 7: every agent file has valid frontmatter; model is inherit unless intentional ──
+// ── Check 7: every agent file has valid frontmatter; deep reasoners stay on inherit ──
+// Model routing is intentional (Task 6): mechanical checkers are pinned to a cheap
+// model (e.g. haiku) — that is fine and does NOT warn. Only a *deep reasoner* pinned
+// off `inherit` warns, since under-powering a reasoning-heavy review is the real risk.
+const deepReasoners = new Set([
+  'verifier',
+  'sql-design-reviewer',
+  'production-hardening-reviewer',
+  'production-reviewer',
+  'ci-investigator',
+  'stack-monitor',
+])
 for (const file of agentFiles) {
   const text = readText(join(agentOsDirectory, 'agents', file))
   const agentName = basename(file, '.md')
@@ -152,8 +193,8 @@ for (const file of agentFiles) {
   const model = frontmatterField(text, 'model')
   if (!name || name !== agentName) error('agent-frontmatter', `agents/${file} name "${name ?? '∅'}" != "${agentName}"`)
   if (!description) error('agent-frontmatter', `agents/${file} missing frontmatter \`description\``)
-  if (model && model !== 'inherit')
-    warn('agent-model', `agents/${file} pins model "${model}" — prefer \`inherit\` unless deliberately overridden`)
+  if (model && model !== 'inherit' && deepReasoners.has(agentName))
+    warn('agent-model', `agents/${file} pins model "${model}" but is a deep reasoner — prefer \`inherit\` so it keeps frontier reasoning`)
 }
 
 // ── Check 12: read-only agents must enforce read-only via a tools allowlist ──
@@ -411,10 +452,9 @@ const warnings = findings.filter((finding) => finding.level === 'warn')
 
 const checkLabels: Record<string, string> = {
   'skill-frontmatter': 'Skill frontmatter & names',
-  'skill-index-count': 'Skill-index counts',
-  'skill-index-table': 'Skill-index ↔ disk',
+  'skill-index-table': 'Skill-index ↔ disk (path resolution)',
+  'skills-lock': 'Skills lockfile provenance',
   'sync-rule-count': 'Sync-rule count',
-  'agent-catalog-count': 'Agent catalog count',
   'agent-catalog-coverage': 'Agent catalog coverage',
   'agent-frontmatter': 'Agent frontmatter',
   'agent-readonly': 'Read-only agents enforce tools',

@@ -329,11 +329,11 @@ src/
     │   │   │   │   └── unit/
     │   │   │   │   │   ├── events/
     │   │   │   │   │       └── worker/
-    │   │   │   │   │       │   ├── stripe-webhook-event-catchup.processor.unit.test.ts
     │   │   │   │   │       │   ├── stripe-webhook-event-reclaim.worker.unit.test.ts
     │   │   │   │   │       │   ├── stripe-webhook-event-retention.worker.unit.test.ts
     │   │   │   │   │       │   └── stripe-webhook.worker.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-construct-event.unit.test.ts
+    │   │   │   │   │   ├── stripe-webhook-event-catchup.processor.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-event.repository.db.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-event.repository.ledger-immutability.db.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-ingress.plugin.unit.test.ts
@@ -377,11 +377,10 @@ src/
     │   │   │       │   ├── subscription-happy.integration.test.ts
     │   │   │       │   └── subscription.integration.test.ts
     │   │   │       └── unit/
-    │   │   │       │   ├── workers/
-    │   │   │       │       └── subscription-seat-sync.processor.unit.test.ts
     │   │   │       │   ├── payment-provider.port.unit.test.ts
     │   │   │       │   ├── stripe-payment-provider.email.unit.test.ts
     │   │   │       │   ├── subscription-routes-rate-limit.policy.unit.test.ts
+    │   │   │       │   ├── subscription-seat-sync.processor.unit.test.ts
     │   │   │       │   ├── subscription.controller.auth-matrix.unit.test.ts
     │   │   │       │   ├── subscription.controller.unit.test.ts
     │   │   │       │   ├── subscription.repository.db.unit.test.ts
@@ -1770,6 +1769,7 @@ src/
     ├── load/
     │   ├── k6/
     │   │   ├── data/
+    │   │   │   └── credential-pool.json
     │   │   ├── helpers/
     │   │   │   ├── auth.js
     │   │   │   ├── checks.js

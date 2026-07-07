@@ -1,6 +1,7 @@
 ---
 name: openapi-route-sync
 description: Keeps OpenAPI tag locale workflows in sync when routes change. Legacy — for route schema authoring use route-schema-doc-guard instead. Do not add new references from sync rules or intake docs.
+indexNote: legacy — tag locale only; use route-schema-doc-guard for schema
 ---
 
 # OpenAPI route sync (core-be)

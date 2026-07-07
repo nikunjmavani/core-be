@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+source "$(dirname "${BASH_SOURCE[0]}")/_telemetry.sh"
+telemetry_init "skill-reminder" "PostToolUse"
 # Claude Code PostToolUse hook.
 # Reads Edit/Write tool JSON from stdin, extracts the edited file path,
 # prints relevant skill reminders based on file pattern matching.
@@ -41,6 +43,7 @@ REMINDERS=()
   REMINDERS+=("container → domain-generator (check DI wiring)")
 
 if [[ "${#REMINDERS[@]}" -gt 0 ]]; then
+  telemetry_fired
   echo ""
   echo "⚡ Skill reminders for $(basename "$FILE"):"
   for r in "${REMINDERS[@]}"; do

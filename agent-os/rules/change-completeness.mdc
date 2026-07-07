@@ -3,42 +3,16 @@ description: Change-completeness definition-of-done for core-be — every code c
 alwaysApply: true
 ---
 
-> **Source:** [`agent-os/skills/change-completeness-guard/SKILL.md`](../skills/change-completeness-guard/SKILL.md) — the full checklist and trace-the-change table live there; this rule is the always-active reminder for Cursor auto-inject.
-
 # Change completeness (core-be)
 
-A change is **not done** when the code compiles and one test passes. It is done when
-**every artifact that mirrors the change has moved with it.** A single fact in this repo
-is often stated in code, its own test, a cross-cutting test, a doc, and a skill at once —
-edit only the code and the other four go stale, invisibly, until CI or a human trips over it.
+Owner: **[change-completeness-guard](../skills/change-completeness-guard/SKILL.md)** — the full five-layer trace-the-change checklist lives there.
 
-## Before you call a change done, walk the five layers
+A change is done only when **every artifact that mirrors it has moved with it**, not when the code compiles and one test passes. Before calling it done, walk the five layers:
 
-1. **Its own tests — at the right layer.** Add/update/delete the directly-covering test in the
-   layer the pyramid dictates (pure → `src/tests/unit/` or co-located `__tests__/unit/`;
-   route/DB → domain `__tests__/*.test.ts`). No test delta is a red flag — name why (pure
-   rename, comment-only, or an existing assertion that already covers it). Skill: **test-generator**.
-2. **Cross-cutting tests.** Check whether a shared suite also asserts the change and update it
-   (or confirm it stays green by design): `src/tests/security/`, `src/tests/integration/`,
-   `src/tests/global/` (repo-wide invariants), `src/tests/contract/`, `src/tests/chaos/`,
-   `src/tests/load/k6/scenarios/`, `src/tests/performance/`. Test the mechanism **once** at the
-   layer that owns it on a representative case — do not fan the same assertion across every suite.
-3. **Docs.** Update the nearest `src/**/*.overview.md`, the relevant `docs/reference/**`, TSDoc on
-   any added/renamed export (`pnpm tsdoc:check`), route `schema` blocks, and `.env.example` for new env vars.
-4. **Rules.** If the change alters a convention or an enforced count, update the relevant
-   `agent-os/rules/*.mdc`. Skill: **structure-maintainer**.
-5. **Skills.** If you added/renamed a skill, or a skill hardcodes a fact you changed (a count, a
-   route set, a path list), update it and the indexes: `agent-os/skills/skill-index/SKILL.md`
-   (count + table), `agent-os/skills/groups.json`, `agent-os/docs/skill-triggers.md`, and the
-   `N project skills` count in `CLAUDE.md` / `AGENTS.md`. Gate: `pnpm agent-os:check`.
+1. **Its own tests** at the right layer (test-generator).
+2. **Cross-cutting suites** — security / integration / global / contract / chaos / load — asserted once at the owning layer.
+3. **Docs** — `*.overview.md`, `docs/reference`, TSDoc (`pnpm tsdoc:check`), route `schema`, `.env.example`.
+4. **Rules** — the relevant `agent-os/rules` file (structure-maintainer).
+5. **Skills** — skill-index count + table, `groups.json`, `skill-triggers.md`, the `N project skills` count in `CLAUDE.md` / `AGENTS.md` (`pnpm agent-os:check`).
 
-## Find every mirror
-
-When a single fact (a count, a route path, a constant, an env key, a header) moves, **grep the
-literal repo-wide** across `src/`, `docs/`, and `agent-os/` and fix every stale duplicate — this
-is the most common miss. Consult **[skill-index](../skills/skill-index/SKILL.md)** first to route
-the files you touched to their owner skill(s), then let the gates catch the rest: `pnpm validate`,
-`pnpm test:global`, `pnpm routes:catalog:check`, `pnpm tsdoc:check`, `pnpm agent-os:check`,
-`pnpm guard:pre-commit`. Treat a gate failure as a mirror you missed, not noise.
-
-Full detail: **[change-completeness-guard](../skills/change-completeness-guard/SKILL.md)**.
+When a single fact moves, **grep the literal across `src/`, `docs/`, `agent-os/`** and fix every stale mirror. Treat a gate failure as a mirror you missed.

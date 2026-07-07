@@ -13,6 +13,8 @@
 # Fails OPEN: a missing jq / biome, a non-repo path, or any error leaves the file
 # untouched and exits 0. A formatter hook must never block or fail an edit.
 set -uo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_telemetry.sh"
+telemetry_init "format-edits" "PostToolUse"
 
 ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 
@@ -45,5 +47,6 @@ biome_bin="$ROOT/node_modules/.bin/biome"
 [[ -x "$biome_bin" ]] || exit 0
 
 # Format in place, quietly. Never let a formatter hiccup fail the edit.
+telemetry_fired
 "$biome_bin" format --write "$ABS" >/dev/null 2>&1 || true
 exit 0

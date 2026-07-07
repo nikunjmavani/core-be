@@ -6,9 +6,8 @@ import { ResendApiError } from '@/infrastructure/mail/resend-api.error.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { isTransientNetworkError } from '@/infrastructure/resilience/retry-with-backoff.util.js';
+import { MAIL_SEND_RETRY_MAX_ATTEMPTS } from '@/shared/constants/limits.constants.js';
 
-/** Resend send retry attempts for transient network failures. */
-const MAIL_SEND_RETRY_MAX_ATTEMPTS = 3;
 /** Base delay (ms) for the Resend send retry backoff. */
 const MAIL_SEND_RETRY_BASE_DELAY_MS = 500;
 

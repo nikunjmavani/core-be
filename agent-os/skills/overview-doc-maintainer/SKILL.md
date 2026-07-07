@@ -1,6 +1,9 @@
 ---
 name: overview-doc-maintainer
 description: Authors and maintains per-folder <folder>.overview.md files following one of four templates (A.1 domain, A.2 sub-domain, A.3 infrastructure/shared module, A.4 test suite). Use when adding a new domain, sub-domain, infrastructure module, or test suite folder, or when an existing <folder>.overview.md is stale.
+trigger: src/**/*.overview.md
+triggerNote: Per-folder overview docs
+indexNote: author per-folder <folder>.overview.md (A.1–A.4 templates)
 ---
 
 # Overview doc maintainer (core-be)
@@ -130,3 +133,7 @@ Recommended additional H2 sections:
 
 - Worked examples already in the repo: every `<folder>.overview.md` under `src/`.
 - Architecture overview: [`docs/reference/architecture/documentation-system.md`](../../../docs/reference/architecture/documentation-system.md)
+
+---
+
+**Related skills:** [system-narrative-maintainer](../system-narrative-maintainer/SKILL.md) · [docs-maintainer](../docs-maintainer/SKILL.md)

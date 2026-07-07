@@ -1,6 +1,7 @@
 ---
 name: before-commit-guard
 description: Ensures code is commit-ready. Invoked when the user runs git commit (enforced by Husky pre-commit) or when the user asks to fix a failed commit. Run the guard checks and fix any failures before committing.
+indexNote: make code commit-ready; run when a pre-commit guard step fails
 ---
 
 # Before-commit guard (core-be)

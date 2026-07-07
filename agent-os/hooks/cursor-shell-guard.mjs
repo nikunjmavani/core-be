@@ -7,12 +7,15 @@
 //
 // Reads the hook payload on stdin; prints { "permission": "allow" | "deny", ... }.
 import { readFileSync } from "node:fs";
+import { recordTelemetry } from "./_telemetry.mjs";
 
 function allow() {
+  recordTelemetry("cursor-shell-guard", "beforeShellExecution", "silent");
   process.stdout.write(JSON.stringify({ continue: true, permission: "allow" }));
   process.exit(0);
 }
 function deny(message) {
+  recordTelemetry("cursor-shell-guard", "beforeShellExecution", "fired");
   process.stdout.write(JSON.stringify({ continue: true, permission: "deny", userMessage: message, agentMessage: message }));
   process.exit(0);
 }
