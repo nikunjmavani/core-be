@@ -157,7 +157,7 @@ jobs:
 
   retag:
     name: Retag release image (:vX.Y.Z)
-    # 6.2 — traceability alias. After a SUCCESSFUL production deploy, retag the exact
+    # Release traceability alias. After a SUCCESSFUL production deploy, retag the exact
     # scanned+deployed sha image as `:vX.Y.Z` (api + worker). Runs ONLY here (the production
     # release flow), gated on deploy success, so the version tag always points at the image
     # that is live in production — never a build that failed to deploy. Development /

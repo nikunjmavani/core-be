@@ -111,7 +111,7 @@ on:
 
 concurrency:
   # Keyed on the target ENVIRONMENT only (single-trunk: environment ≠ branch) — NOT the sha
-  # (6.7). Dropping the sha serializes every deploy to a given Railway environment: two
+  # Dropping the sha serializes every deploy to a given Railway environment: two
   # dispatches of different shas to `production` (or `development`) now queue instead of
   # racing on the same live service. Post-merge runs are already serialized per-ref, so this
   # closes the manual-dispatch race. cancel-in-progress: false → queue, never cancel a deploy.

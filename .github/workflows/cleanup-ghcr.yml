@@ -1,7 +1,7 @@
 name: Cleanup GHCR images
 
 # Weekly prune of stale GHCR manifests. Preserves floating convenience tags
-# (:latest, :previous), the immutable release tags (:vX.Y.Z — the 6.2 traceability
+# (:latest, :previous), the immutable release tags (:vX.Y.Z — the release traceability
 # alias for released production images), and the most recent SHA-tagged images.
 
 on:
@@ -63,7 +63,7 @@ jobs:
             exit 0
           fi
 
-          # Never prune release tags (:vX.Y.Z — the 6.2 immutable traceability alias) or the
+          # Never prune release tags (:vX.Y.Z — the immutable release traceability alias) or the
           # :latest/:previous/:deploy-failed-* convenience tags.
           protected_regex='(^|,)(latest|previous|v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?|deploy-failed-[^,]+)(,|$)'
           deleted=0

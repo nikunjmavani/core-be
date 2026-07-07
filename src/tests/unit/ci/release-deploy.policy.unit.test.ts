@@ -44,7 +44,7 @@ describe('release-deploy production policy', () => {
     expect(workflow).toMatch(/cancel-in-progress:\s*false/);
   });
 
-  it('retags the deployed image as :vX.Y.Z only after a successful production deploy (6.2)', () => {
+  it('retags the deployed image as :vX.Y.Z only after a successful production deploy', () => {
     // The retag job gates on deploy success, so the version tag never points at a build that
     // failed to deploy; it retags via imagetools (same manifest, no pull), api + worker.
     expect(workflow).toMatch(/retag:[\s\S]*?needs:\s*\[resolve,\s*deploy\]/);
@@ -54,10 +54,10 @@ describe('release-deploy production policy', () => {
   });
 });
 
-// 6.7 — the reusable deploy serializes per ENVIRONMENT (single-trunk: env != branch). The
+// The reusable deploy serializes per ENVIRONMENT (single-trunk: env != branch). The
 // concurrency group is keyed on the environment ONLY (no sha), so two dispatches of different
 // shas to the same Railway environment queue instead of racing on the live service.
-describe('reusable railway deploy concurrency (6.7)', () => {
+describe('reusable railway deploy concurrency', () => {
   const reusable = readFileSync(
     join(ROOT, '.github/workflows/reusable-railway-deploy.yml'),
     'utf8',

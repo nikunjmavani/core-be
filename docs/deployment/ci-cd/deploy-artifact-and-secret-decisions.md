@@ -59,11 +59,11 @@ The container image is built **once**, tagged by commit SHA, scanned once (Trivy
   deploys the identical image to **production** via `image_override`. Only a queue-cancelled
   build (no image for the tag SHA) triggers a rebuild of the same SHA.
 - After a **successful** production deploy, `release-deploy.yml` **retags** the deployed image
-  `…/api:vX.Y.Z` + `…/worker:vX.Y.Z` (6.2) — an immutable traceability alias that only ever
+  `…/api:vX.Y.Z` + `…/worker:vX.Y.Z` — an immutable traceability alias that only ever
   points at an image that actually reached production (`imagetools create`, same manifest, no
   rebuild). `cleanup-ghcr.yml` protects `:vX.Y.Z` from the weekly prune.
 - Deploys are **serialized per environment** ([reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml)
-  concurrency group `railway-deploy-<environment>`, `cancel-in-progress: false` — 6.7): two
+  concurrency group `railway-deploy-<environment>`, `cancel-in-progress: false`): two
   dispatches to the same Railway environment queue instead of racing on the live service.
 
 **Contrast (why this is a backend property):** a Vite frontend bakes `VITE_*` values into the
