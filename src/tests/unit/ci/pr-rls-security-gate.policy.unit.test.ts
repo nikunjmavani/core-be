@@ -56,7 +56,7 @@ interface BranchRuleset {
   }[];
 }
 
-describe.each(['dev', 'main'])('the %s branch ruleset requires the RLS check', (branch) => {
+describe.each(['main'])('the %s branch ruleset requires the RLS check', (branch) => {
   it('lists the RLS context in required_status_checks', () => {
     const ruleset = JSON.parse(
       readFileSync(join(process.cwd(), `.github/rulesets/${branch}.json`), 'utf8'),
@@ -72,20 +72,21 @@ describe.each(['dev', 'main'])('the %s branch ruleset requires the RLS check', (
 });
 
 /**
- * `dev` is maintained solo, so its ruleset requires status checks but **0 approvals** — a red check
- * (incl. RLS) still blocks the merge, but the author isn't locked out waiting for an approval they
- * can't give. Guard against a silent regression to a non-zero count (which would lock out solo
- * merges to dev). Change this deliberately if/when a second reviewer is added.
+ * Single-trunk: `main` is maintained solo, so its ruleset requires status checks but **0 approvals**
+ * (D8) — a red check (incl. RLS) still blocks the merge, but the author isn't locked out waiting for
+ * an approval they can't give (the pre-migration params — 1 approval + code-owner + last-push — were
+ * promotion-gate settings that locked out solo merges). Guard against a silent regression to a
+ * non-zero count. Change this deliberately if/when a second reviewer is added.
  */
-it('the dev ruleset requires 0 approvals (solo maintainer — checks still block merge)', () => {
-  const devRuleset = JSON.parse(
-    readFileSync(join(process.cwd(), '.github/rulesets/dev.json'), 'utf8'),
+it('the main ruleset requires 0 approvals (solo maintainer — checks still block merge)', () => {
+  const mainRuleset = JSON.parse(
+    readFileSync(join(process.cwd(), '.github/rulesets/main.json'), 'utf8'),
   ) as { rules: { type: string; parameters?: { required_approving_review_count?: number } }[] };
 
-  const pullRequestRule = devRuleset.rules.find((rule) => rule.type === 'pull_request');
+  const pullRequestRule = mainRuleset.rules.find((rule) => rule.type === 'pull_request');
   expect(
     pullRequestRule,
-    'dev.json must keep a pull_request rule (changes go via a PR)',
+    'main.json must keep a pull_request rule (changes go via a PR)',
   ).toBeDefined();
   expect(pullRequestRule?.parameters?.required_approving_review_count).toBe(0);
 });

@@ -237,11 +237,11 @@ function buildBranchRuleset(branch: string): string {
       {
         type: 'pull_request',
         parameters: {
-          allowed_merge_methods: ['squash', 'merge'],
+          allowed_merge_methods: ['squash'],
           dismiss_stale_reviews_on_push: false,
           require_code_owner_review: false,
           require_last_push_approval: false,
-          required_approving_review_count: 1,
+          required_approving_review_count: 0,
           required_review_thread_resolution: true,
         },
       },

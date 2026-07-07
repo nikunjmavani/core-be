@@ -1,0 +1,43 @@
+# Gate job that satisfies the required status check "matrix / Integration" for
+# every PR — including docs-only PRs where the actual matrix-tests job is skipped.
+#
+# The DB-backed matrix (e2e/integration/rls/performance) is the AUTHORITATIVE PR
+# gate under the single-trunk model (D10): a single-PR post-merge trusts it and
+# skips re-testing. For that trust to hold the matrix must be a REQUIRED check —
+# but the matrix job is path-filtered (skipped on docs-only PRs), and a required
+# check that never reports would block those merges. This reusable is called by
+# the `matrix` gate job in pr-ci.yml with `if: always()`: it passes when the
+# matrix succeeded or was legitimately skipped, and fails when it actually failed
+# or was cancelled.
+name: Reusable — matrix gate
+
+on:
+  workflow_call:
+    inputs:
+      matrix-tests-result:
+        description: Result of the upstream matrix-tests job (success | skipped | failure | cancelled)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
+
+jobs:
+  run:
+    name: Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Evaluate matrix-tests result
+        env:
+          RESULT: ${{ inputs.matrix-tests-result }}
+        run: |
+          if [ "$RESULT" = "success" ] || [ "$RESULT" = "skipped" ]; then
+            echo "matrix-tests: $RESULT — gate passes"
+          else
+            echo "matrix-tests: $RESULT — gate fails"
+            exit 1
+          fi
