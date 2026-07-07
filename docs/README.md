@@ -70,9 +70,8 @@ flowchart TB
 
 | Doc                                                  | Description                                                                              |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| [process/git-workflow.md](process/git-workflow.md)   | Single-trunk branch model, squash-merge PR flow, conventional commits.                   |
+| [process/trunk-based-workflow.md](process/trunk-based-workflow.md)   | Single-trunk branch model, squash-merge PR flow, conventional commits.                   |
 | [process/release-versioning.md](process/release-versioning.md) | Commit prefix → version bump (patch/minor/major), `Release-As` override, single stable channel; merge the Release PR to ship. |
-| [process/delivery-model-migration-plan.md](process/delivery-model-migration-plan.md) | The `dev`+`main` → single-`main` trunk migration: decisions, CI/CD lanes, phased execution. |
 | [process/pr-review.md](process/pr-review.md)         | Human + agent PR review checklist, severity legend, doc-sync map.                        |
 | [process/dr-runbook.md](process/dr-runbook.md)       | Disaster recovery — RTO 1h, RPO 15m, failover, quarterly review.                         |
 | [process/backup-drills.md](process/backup-drills.md) | Monthly restore drill — required automated RTO gate + optional manual evidence workflow. |
@@ -93,7 +92,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [deployment/ci-cd/cicd-and-deployment.md](deployment/ci-cd/cicd-and-deployment.md)                           | CI pipeline, Railway deploy, GitHub secrets.                                                      |
 | [deployment/ci-cd/branch-protection.md](deployment/ci-cd/branch-protection.md)                               | Required CI checks for `main` (single trunk; `main.json` is the only ruleset).                    |
 | [deployment/runbooks/hotfix-release.md](deployment/runbooks/hotfix-release.md)                               | Ship an urgent fix (fast-tracked `fix:` PR to `main`, fix-forward).                               |
-| [deployment/runbooks/runbook-dev-to-production.md](deployment/runbooks/runbook-dev-to-production.md)         | **Retired** (single-trunk) — pointer to the current release flow.                                |
+| [deployment/runbooks/production-go-live.md](deployment/runbooks/production-go-live.md)         | **Retired** (single-trunk) — pointer to the current release flow.                                |
 | [deployment/runbooks/environment-variables.md](deployment/runbooks/environment-variables.md)                 | Per-key lifecycle: bootstrap, add/rename/remove, sync to GitHub, troubleshoot.                    |
 | [deployment/runbooks/add-new-environment.md](deployment/runbooks/add-new-environment.md)                     | Per-environment plumbing: branch ↔ GitHub Environment ↔ `NODE_ENV` 1:1 invariant.                 |
 | [deployment/runbooks/resource-limits.md](deployment/runbooks/resource-limits.md)                             | Railway/K8s memory, `NODE_OPTIONS`, Postgres pool budget.                                         |

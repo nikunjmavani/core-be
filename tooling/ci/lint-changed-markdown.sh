@@ -7,7 +7,7 @@
 # script when the push contains markdown changes.
 #
 # Usage:
-#   tooling/ci/lint-changed-markdown.sh                # vs origin/dev (default)
+#   tooling/ci/lint-changed-markdown.sh                # vs origin/main (default)
 #   LINT_BASE=origin/main tooling/ci/lint-changed-markdown.sh
 #
 # Exits 0 when no markdown files changed or all changed files lint clean.
@@ -15,7 +15,7 @@
 
 set -eu
 
-target="${LINT_BASE:-origin/dev}"
+target="${LINT_BASE:-origin/main}"
 base_ref="${target#origin/}"
 
 if ! git rev-parse --verify --quiet "${target}" >/dev/null; then

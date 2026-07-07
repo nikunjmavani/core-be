@@ -357,7 +357,7 @@ hand on every `.env.production`:**
 
 The full set of **required** production variables (replicas, retention, JWT,
 managed URLs, admin emails) is the go-live checklist in
-[runbook-dev-to-production.md §4.2](./runbook-dev-to-production.md#42-production-go-live-checklist).
+[production-go-live.md](./production-go-live.md).
 This section is specifically the **dev / load-test → production delta**.
 
 > The exact load-test overrides are tabulated in

@@ -17,7 +17,7 @@ Hand-written guides grouped by **setup**, **CI/CD**, and **runbooks**.
 | One-command infra                   | [setup/setup-automation.md](setup/setup-automation.md)                                                            |
 | Manual Railway + GitHub CLI         | [setup/railway-github-cli-setup.md](setup/railway-github-cli-setup.md)                                            |
 | CI, deploy, tokens, release flow    | [ci-cd/cicd-and-deployment.md](ci-cd/cicd-and-deployment.md)                                                      |
-| Local → production runbook          | [runbooks/runbook-dev-to-production.md](runbooks/runbook-dev-to-production.md) (includes path-to-production gate) |
+| Local → production runbook          | [runbooks/production-go-live.md](runbooks/production-go-live.md) (includes path-to-production gate) |
 | Roll back a bad release             | [runbooks/rollback-deploy.md](runbooks/rollback-deploy.md)                                                        |
 | Observability                       | [runbooks/observability.md](runbooks/observability.md)                                                            |
 | Memory / `NODE_OPTIONS`             | [runbooks/resource-limits.md](runbooks/resource-limits.md)                                                        |
@@ -47,7 +47,7 @@ Hand-written guides grouped by **setup**, **CI/CD**, and **runbooks**.
 
 | Doc                                                                   | Description                                                                |
 | --------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| [runbook-dev-to-production.md](runbooks/runbook-dev-to-production.md) | Local gates, path-to-production gate, env checklist, build, deploy, smoke. |
+| [production-go-live.md](runbooks/production-go-live.md) | Local gates, path-to-production gate, env checklist, build, deploy, smoke. |
 | [resource-limits.md](runbooks/resource-limits.md)                     | Railway/K8s memory and `NODE_OPTIONS`.                                     |
 | [observability.md](runbooks/observability.md)                         | Sentry, logs, health; Prometheus re-enable checklist.                      |
 | [jwt-key-rotation.md](runbooks/jwt-key-rotation.md)                   | JWT PEM rotation; deferred `kid` multi-key verify.                         |

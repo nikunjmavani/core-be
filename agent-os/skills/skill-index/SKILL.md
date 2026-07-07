@@ -199,7 +199,7 @@ After completing any task, scan the changes and invoke matching skills:
 
 ### Path to production gate
 
-- **Trigger**: user requests "path to production", "pre-production review", "ready for production", or similar; or references `docs/deployment/runbooks/runbook-dev-to-production.md`
+- **Trigger**: user requests "path to production", "pre-production review", "ready for production", or similar; or references `docs/deployment/runbooks/production-go-live.md`
 - **Action**: read and follow `path-to-production-gate` — run full production-hardening and extra checks, produce a plan, ask the user to review the plan, and do not proceed with production actions until the user confirms
 
 ### Before commit guard
@@ -325,7 +325,7 @@ The following `agent-os/rules/*.mdc` files auto-invoke skills based on file glob
 | `system-narrative-maintainer-sync.mdc`    | `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md`                                                                                                             | system-narrative-maintainer                                                |
 | `i18n-message-guard-sync.mdc`             | `src/shared/errors/**`, `error-handler.middleware.ts`, `src/domains/**/*.validator.ts`, `**/*.service.ts`, `**/*.controller.ts`, `src/shared/constants/**`, `src/shared/locales/**` | i18n-message-guard                                                         |
 | `new-requirement-intake.mdc`              | `docs/getting-started/requirement-intake.md`                                                                                                                                        | skill-index + intake doc (run skills per requirement type)                 |
-| `path-to-production-gate.mdc`             | `docs/deployment/runbooks/runbook-dev-to-production.md`                                                                                                                             | path-to-production-gate (full review, plan, user review before production) |
+| `path-to-production-gate.mdc`             | `docs/deployment/runbooks/production-go-live.md`                                                                                                                             | path-to-production-gate (full review, plan, user review before production) |
 | `before-commit-guard-sync.mdc`            | `.husky/pre-commit`, `package.json`; or user reports failed commit / fix pre-commit                                                                                                 | before-commit-guard (guard runs on git commit; fix failing steps)          |
 | `env-schema-add-sync.mdc`                 | `src/shared/config/env-schema.ts`, `.env.example`                                                                                                                                   | env-schema-add                                                             |
 | `project-identity-sync.mdc`               | manifest, identity codegen, workflows, constants, locale openapi                                                                                                                    | regenerate identity artifacts                                              |

@@ -62,7 +62,7 @@ Use only when you choose not to run a keyring.
 ## Related
 
 - [credentials-and-env.md](../../integrations/credentials-and-env.md) — `JWT_*` variables
-- [runbook-dev-to-production.md](runbook-dev-to-production.md) — production go-live checklist
+- [production-go-live.md](production-go-live.md) — production go-live checklist
 - [`src/domains/auth/sub-domains/auth-session/auth-session.overview.md`](../../../src/domains/auth/sub-domains/auth-session/auth-session.overview.md) — JWT-per-session invariant, bounded revocation propagation
 - [`src/POLICIES.md`](../../../src/POLICIES.md) — `JWT_ACCESS_TOKEN_TTL_MINUTES`, signing kid policy
 - [secrets-management.md](../../reference/security/secrets-management.md) — field-secret encryption key rotation (separate keyring)

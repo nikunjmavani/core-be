@@ -99,7 +99,7 @@ Pre-commit mirrors a **subset** of the static checks in [`.github/workflows/pr-c
 
 | Step | Command            | What it catches                    |
 | ---- | ------------------ | ---------------------------------- |
-| 0    | branch-name policy | Branch names outside the allowed prefixes (`dev`/`main`/`claude/*` + `<type>/…`) — runs first, fail-fast; bypass: `SKIP_BRANCH_CHECK=1 git push` (see `agent-os/rules/git-branch-naming.mdc`) |
+| 0    | branch-name policy | Branch names outside the allowed prefixes (`main`/`claude/*` + `<type>/…`) — runs first, fail-fast; bypass: `SKIP_BRANCH_CHECK=1 git push` (see `agent-os/rules/git-branch-naming.mdc`) |
 | 1    | `pnpm typecheck`   | Type errors before push            |
 | 2    | `pnpm build`       | Compile failures                   |
 | 3    | `pnpm build:check` | Unresolved `@/` aliases in `dist/` |

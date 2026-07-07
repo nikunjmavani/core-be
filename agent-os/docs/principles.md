@@ -155,9 +155,9 @@ Import from `@/shared/constants/project-identity.constants.js`:
 | OTEL tracer scope | `OTEL_TRACER_NAME` | slug literal |
 | Local Docker tags (scripts/docs only) | `DOCKER_LOCAL_API_TAG`, `DOCKER_LOCAL_WORKER_TAG` | `core-be`, `core-be-worker` |
 | GHCR image repo names (reference) | `GHCR_API_IMAGE_NAME`, `GHCR_WORKER_IMAGE_NAME` | `core-be-api`, … |
-| Protected git branches | `PROTECTED_GIT_BRANCHES` | `['dev','main']` in app logic |
-| Default / prod / non-prod branch | `GIT_DEFAULT_BRANCH`, `GIT_PRODUCTION_BRANCH`, `GIT_NON_PRODUCTION_BRANCH` | `'dev'`, `'main'` |
-| Branch → hosted environment | `BRANCH_TO_ENVIRONMENT_MAP` | ad-hoc `main` → `production` maps |
+| Protected git branches | `PROTECTED_GIT_BRANCHES` | `['main']` |
+| Default / prod / non-prod branch | `GIT_DEFAULT_BRANCH`, `GIT_PRODUCTION_BRANCH`, `GIT_NON_PRODUCTION_BRANCH` | `'main'` (single trunk) |
+| Branch → hosted environment | `BRANCH_TO_ENVIRONMENT_MAP` | `main` → `production` |
 
 **Tests:** assert against the same constants (e.g. `JWT_ISSUER`), not copied literals.
 

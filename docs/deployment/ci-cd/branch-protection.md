@@ -10,9 +10,9 @@ trunk), and how that maps to workflows and committed ruleset JSON under
 > aggregate contexts — **`Quality gate`** (the pr-ci.yml aggregate that rolls up every merge-gating
 > lane, including the authoritative DB matrix) and **`Checks`** (pr-governance). `main.json` is the
 > **only** committed ruleset: hotfixes fix-forward to `main` via ordinary `fix/*` PRs, so there are
-> no protected release branches. The former `dev` ruleset is retired.
+> no protected release branches.
 
-**Related docs:** [CI/CD and deployment](cicd-and-deployment.md) (what runs in CI, deploy, and release flow), [Git workflow](../../process/git-workflow.md) (branch naming and the single-trunk PR flow).
+**Related docs:** [CI/CD and deployment](cicd-and-deployment.md) (what runs in CI, deploy, and release flow), [Trunk-based workflow](../../process/trunk-based-workflow.md) (branch naming and the single-trunk PR flow).
 
 ---
 
@@ -35,7 +35,7 @@ flowchart LR
   hotfixBranches --> mainBranch
 ```
 
-Hotfixes are ordinary `fix/*` (or `hotfix/*`) PRs that **fix-forward** to `main` (see [Git workflow](../../process/git-workflow.md)) — there is no `main → dev` sync.
+Hotfixes are ordinary `fix/*` (or `hotfix/*`) PRs that **fix-forward** to `main` (see [Trunk-based workflow](../../process/trunk-based-workflow.md)).
 
 ---
 

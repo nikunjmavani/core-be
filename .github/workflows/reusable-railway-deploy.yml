@@ -361,7 +361,7 @@ jobs:
 
           if [ "${#missing[@]}" -gt 0 ]; then
             echo "::error::Missing required Railway deploy secrets in GitHub Environment '${ENVIRONMENT}': ${missing[*]}"
-            echo "::error::Set these in GitHub → Settings → Environments → ${ENVIRONMENT}. See docs/deployment/runbooks/runbook-dev-to-production.md and docs/deployment/setup/railway-github-cli-setup.md."
+            echo "::error::Set these in GitHub → Settings → Environments → ${ENVIRONMENT}. See docs/deployment/runbooks/production-go-live.md and docs/deployment/setup/railway-github-cli-setup.md."
             exit 1
           fi
           railway_token_length="${#RAILWAY_TOKEN}"

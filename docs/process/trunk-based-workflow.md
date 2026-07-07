@@ -1,11 +1,9 @@
-# Git workflow
+# Trunk-based workflow
 
 **Single-trunk model.** `main` is the only long-lived branch. Every change lands on `main` through a
-squash-merged pull request; there is no `dev` branch, no promotion, and no back-merge. Incomplete work
-hides behind feature flags, not long-lived branches.
+squash-merged pull request. Incomplete work hides behind feature flags, not long-lived branches.
 
-> Migrated from the former `dev`+`main` dual-channel model — see
-> [delivery-model-migration-plan.md](delivery-model-migration-plan.md). For CI/CD and deployment see
+> For CI/CD and deployment see
 > [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md).
 
 ## Branches
@@ -45,17 +43,3 @@ A hotfix is just a `fix:` PR merged and released immediately by merging the Rele
 on `main`**. There is no protected `release/*` branch; keep `main` releasable (flag unshippable work)
 so a hotfix is always safe to cut from trunk. See
 [hotfix-release.md](../deployment/runbooks/hotfix-release.md).
-
-## Local clone migration (one-time, after cutover)
-
-If you still have a local `dev`:
-
-```bash
-git fetch --prune
-git remote set-head origin -a
-git switch main
-git branch -D dev   # stale local dev; it no longer exists upstream
-```
-
-Rebase any in-flight feature branch that was cut from `dev` onto `main`:
-`git rebase --onto origin/main origin/dev <branch>`.

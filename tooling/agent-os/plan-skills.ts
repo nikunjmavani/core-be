@@ -8,7 +8,7 @@
  *
  * Usage:
  *   tsx tooling/agent-os/plan-skills.ts <file> [<file> ...]
- *   tsx tooling/agent-os/plan-skills.ts --diff [base]   # base default: origin/dev
+ *   tsx tooling/agent-os/plan-skills.ts --diff [base]   # base default: origin/main
  */
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -58,7 +58,7 @@ const args = process.argv.slice(2);
 let files: string[];
 if (args.includes('--diff')) {
   const after = args[args.indexOf('--diff') + 1];
-  const base = after && !after.startsWith('-') ? after : 'origin/dev';
+  const base = after && !after.startsWith('-') ? after : 'origin/main';
   files = changedFromGit(base);
 } else {
   files = args.filter((argument) => !argument.startsWith('-'));

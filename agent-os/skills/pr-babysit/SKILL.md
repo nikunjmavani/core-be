@@ -11,7 +11,7 @@ Get the current PR to **mergeable + green CI + review comments addressed**, then
 ## Preconditions
 
 - Use `gh` for PR status, checks, and comments.
-- Default branch: `main` (also `dev` for CI — see `.github/workflows/pr-ci.yml`).
+- Default branch: `main` (see `.github/workflows/pr-ci.yml`).
 - Review rubric: **`docs/process/pr-review.md`** (human + agent checklist, severity legend).
 
 ## Workflow

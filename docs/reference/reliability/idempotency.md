@@ -53,7 +53,7 @@ configured.
 ## Operations
 
 - Monitor Redis cardinality via the repeatable `idempotency-cardinality` worker ([observability runbook](../../deployment/runbooks/observability.md)).
-- Ensure production Redis uses `maxmemory-policy noeviction` so idempotency keys are not evicted early ([runbook-dev-to-production](../../deployment/runbooks/runbook-dev-to-production.md)).
+- Ensure production Redis uses `maxmemory-policy noeviction` so idempotency keys are not evicted early ([production-go-live](../../deployment/runbooks/production-go-live.md)).
 
 ## Related
 

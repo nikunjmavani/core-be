@@ -247,7 +247,7 @@ flowchart LR
 
 | Doc | Purpose |
 | --- | ------- |
-| [git-workflow.md](git-workflow.md) | Branch naming and promotion |
+| [trunk-based-workflow.md](trunk-based-workflow.md) | Branch naming and promotion |
 | [branch-protection.md](../deployment/ci-cd/branch-protection.md) | Exact required check names |
 | [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md) | Full CI/CD pipeline |
 | [requirement-intake.md](../getting-started/requirement-intake.md) | New work before coding |

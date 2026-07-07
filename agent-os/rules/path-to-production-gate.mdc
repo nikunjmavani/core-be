@@ -1,6 +1,6 @@
 ---
 description: Before any path-to-production action (release, deploy, "ready for production"), invoke the path-to-production-gate skill. The skill runs a full code review, produces a plan, and requires user review before proceeding.
-globs: docs/deployment/runbooks/runbook-dev-to-production.md
+globs: docs/deployment/runbooks/production-go-live.md
 alwaysApply: false
 ---
 
@@ -14,4 +14,4 @@ When the user requests **path to production**, **pre-production review**, **read
 4. **Ask the user to review the plan** and confirm before any production action (deploy, release, sign-off).
 5. Do **not** proceed with path-to-production steps until the user has reviewed and confirmed.
 
-Refer to **`docs/deployment/runbooks/runbook-dev-to-production.md`** (§3 gate, §4 env) for the workflow. The skill ensures a consistent, reviewable gate before each production path.
+Refer to **`docs/deployment/runbooks/production-go-live.md`** for the workflow. The skill ensures a consistent, reviewable gate before each production path.

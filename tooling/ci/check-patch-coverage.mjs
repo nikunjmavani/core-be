@@ -16,14 +16,14 @@
  * Usage:
  *   node tooling/ci/check-patch-coverage.mjs \
  *     --coverage coverage-merged/coverage-final.json \
- *     --base origin/dev \
+ *     --base origin/main \
  *     [--threshold 90] \
  *     [--report-only]
  *
  * Inputs:
  *   --coverage  Path to an istanbul-format `coverage-final.json` (the merged
  *               report is preferred so integration/e2e hits are included).
- *   --base      Git ref to diff against (the PR base, e.g. `origin/dev`).
+ *   --base      Git ref to diff against (the PR base, e.g. `origin/main`).
  *               The added/modified lines are taken from `git diff <base>...HEAD`.
  *   --threshold Minimum percentage of changed coverable lines that must be
  *               covered. Default 90.
