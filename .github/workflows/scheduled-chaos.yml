@@ -35,8 +35,8 @@ jobs:
           set -euo pipefail
           branch="${{ github.ref_name }}"
           case "$branch" in
-            dev|main) ;;
-            *) branch="dev" ;;
+            main) ;;
+            *) branch="main" ;;
           esac
           git fetch origin "${branch}" --depth=1
           sha="$(git rev-parse "origin/${branch}")"

@@ -12,8 +12,8 @@
     }
   },
   "git": {
-    "protectedBranches": ["dev", "main"],
-    "defaultBranch": "dev"
+    "protectedBranches": ["main"],
+    "defaultBranch": "main"
   },
   "product": { "name": "core" },
   "frontend": {
@@ -28,7 +28,7 @@
       "name": "development",
       "label": "Development",
       "nodeEnvironment": "development",
-      "branch": "dev",
+      "branch": "main",
       "protected": true,
       "isDefault": true
     },

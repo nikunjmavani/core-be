@@ -316,7 +316,7 @@ jobs:
         run: |
           set -euo pipefail
           report_only_flag=""
-          if [ "${{ inputs.target_branch }}" = "dev" ]; then
+          if [ "${{ inputs.target_branch }}" = "main" ]; then
             # Dev post-merge lane reports route success coverage but does not block.
             report_only_flag="--report-only"
           fi
@@ -337,7 +337,7 @@ jobs:
             exit 0
           fi
           report_only_flag=""
-          if [ "${{ inputs.target_branch }}" = "dev" ]; then
+          if [ "${{ inputs.target_branch }}" = "main" ]; then
             # Dev post-merge lane reports merged shard coverage but does not block.
             report_only_flag="--report-only"
           fi

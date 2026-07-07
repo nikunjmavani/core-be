@@ -5,7 +5,6 @@ set -euo pipefail
 map_branch_to_environment() {
   local branch="${1:?branch required}"
   case "$branch" in
-    dev) echo "development" ;;
     main) echo "production" ;;
     *)
       echo "::error::Unsupported branch for environment mapping: $branch" >&2

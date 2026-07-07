@@ -63,8 +63,9 @@ jobs:
     uses: ./.github/workflows/reusable-railway-deploy.yml
     secrets: inherit
     with:
-      # Map the environment choice to the branch the reusable's resolver expects;
-      # the reusable then selects the matching GitHub Environment + secrets.
-      target_branch: ${{ inputs.target == 'production' && 'main' || 'dev' }}
+      # Single-trunk: pass the environment explicitly (both environments deploy
+      # from main); the reusable selects the matching GitHub Environment + secrets.
+      github_environment: ${{ inputs.target }}
+      target_branch: main
       # The worker image ref is derived inside the reusable by name substitution.
       image_override: ghcr.io/${{ github.repository }}/${{ needs.resolve-image.outputs.api_image }}:previous

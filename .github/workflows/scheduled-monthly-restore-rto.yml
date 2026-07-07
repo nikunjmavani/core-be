@@ -28,16 +28,14 @@ jobs:
       environment: ${{ steps.map.outputs.environment }}
     steps:
       - name: Map branch to GitHub Environment
-        # Canonical mapping (see docs/deployment/runbooks/add-new-environment.md):
-        #   main → production
-        #   dev  → development
+        # Single-trunk model (see docs/deployment/runbooks/add-new-environment.md):
+        #   main → production   (the only long-lived branch; environment ≠ branch)
         id: map
         run: |
           set -euo pipefail
           case "${{ github.ref_name }}" in
             main) echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
-            dev)  echo "environment=development" >> "$GITHUB_OUTPUT" ;;
-            *)    echo "::error::Unsupported branch for restore drill: ${{ github.ref_name }} (Neon parent must be main or dev)" && exit 1 ;;
+            *)    echo "::error::Unsupported branch for restore drill: ${{ github.ref_name }} (single-trunk: Neon parent must be main)" && exit 1 ;;
           esac
 
   checklist:
