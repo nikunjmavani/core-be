@@ -32,7 +32,6 @@ function filterTypeScriptForBiome(paths) {
 
 const PROJECT_IDENTITY_GENERATED_PATHS = [
   'src/shared/constants/project-identity.constants.ts',
-  '.github/sync.config.json',
   '.github/project-identity.env',
   '.github/generated/branch-environment-map.sh',
   'docker-bake.hcl',

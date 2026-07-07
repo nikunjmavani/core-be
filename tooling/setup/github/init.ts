@@ -34,6 +34,7 @@
 
 import { execSync } from 'node:child_process';
 
+import { resolveGitMetadata } from '@tooling/setup/codegen/project-identity.util.js';
 import { loadConfig } from '@tooling/setup/common/config.js';
 import { runGhAuthPreflight } from './auth-preflight.js';
 import { getGithubSyncEnvironmentNames, scaffoldGithubSyncFiles } from './sync-config.js';
@@ -214,17 +215,11 @@ export async function runGithubInit(args: {
   const allEnvironments = getGithubSyncEnvironmentNames(config);
 
   // Per-environment scope: narrow rulesets / GitHub Environments to the requested environment(s).
-  // Each environment maps 1:1 to a committed ruleset file `<branch>.json` (via
-  // `config.environments[].branch`), so filtering by env cleanly separates the work. Single trunk:
-  // `main` is the only long-lived branch and it is the repository default (always present), so there
-  // is no branch-creation step — only rulesets and GitHub Environments are reconciled here.
+  // Single trunk: every environment deploys from `git.defaultBranch` and the trunk's committed
+  // ruleset is `<defaultBranch>.json` (main.json — always present), so there is no branch-creation
+  // step; only rulesets and GitHub Environments are reconciled here.
   const scopeEnvironments = args.environmentNames;
-  const scopedBranches = new Set(
-    (scopeEnvironments
-      ? config.environments.filter((environment) => scopeEnvironments.includes(environment.name))
-      : config.environments
-    ).map((environment) => environment.branch),
-  );
+  const scopedBranches = new Set([resolveGitMetadata(config).defaultBranch]);
   const environments = scopeEnvironments
     ? allEnvironments.filter((environment) => scopeEnvironments.includes(environment))
     : allEnvironments;

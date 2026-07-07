@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { resolveGitMetadata } from '@tooling/setup/codegen/project-identity.util.js';
 import { loadConfig, getEnvironmentNames } from '@tooling/setup/common/config.js';
 import type { SetupConfig } from '@tooling/setup/common/types.js';
 
@@ -31,7 +32,10 @@ const HALF_BANNER_LINE = /^#\s#{3,}\s*$/;
 const NODE_ENV_LINE = /^NODE_ENV=.*$/m;
 
 function environmentsFromConfig(config: SetupConfig): SyncEnvironment[] {
-  return config.environments.map((e) => ({ name: e.name, branch: e.branch }));
+  // Single trunk: every environment deploys from the default branch — there is no
+  // per-environment branch, so the ruleset/branch scoping keys on the single trunk.
+  const { defaultBranch } = resolveGitMetadata(config);
+  return config.environments.map((e) => ({ name: e.name, branch: defaultBranch }));
 }
 
 function extractNodeEnvironmentValues(): string[] {

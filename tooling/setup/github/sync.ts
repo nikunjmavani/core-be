@@ -233,11 +233,7 @@ async function main(): Promise<void> {
   const config = loadConfig();
 
   console.log('Sync config: tooling/setup/setup.config.json');
-  console.log(
-    `Configured environments: ${config.environments
-      .map((e) => `${e.name}:${e.branch}`)
-      .join(', ')}`,
-  );
+  console.log(`Configured environments: ${config.environments.map((e) => e.name).join(', ')}`);
   console.log('');
 
   printGithubSyncConsistencyReport(config);

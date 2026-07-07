@@ -177,10 +177,9 @@ export function validateWorkflowLiteralsAgainstManifest(options: {
     return [];
   }
 
-  const allowedBranches = new Set<string>([
-    ...options.snapshot.git.protectedBranches,
-    ...options.snapshot.environments.map((environment) => environment.branch),
-  ]);
+  // Single trunk: every environment deploys from the default branch, so the protected
+  // branches already cover the trunk — there is no per-environment branch to add.
+  const allowedBranches = new Set<string>(options.snapshot.git.protectedBranches);
   const workflowImageNames = [
     options.snapshot.artifacts.apiImage,
     options.snapshot.artifacts.workerImage,

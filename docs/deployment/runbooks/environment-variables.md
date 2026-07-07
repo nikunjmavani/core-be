@@ -77,7 +77,7 @@ context. (Related gotcha: a step's own `env:` is not available to that step's
 ```mermaid
 flowchart LR
   S[src/shared/config/env-schema.ts] -- "key names + Zod types" --> T[.env.example]
-  Cfg["tooling/setup/setup.config.json"] -- "branch + environment mapping" --> D[".env.&lt;environment&gt; (gitignored)"]
+  Cfg["tooling/setup/setup.config.json"] -- "environment mapping" --> D[".env.&lt;environment&gt; (gitignored)"]
   T -- "template copied when missing" --> D
   D -- pnpm github:sync --> G["GitHub Environment\n(Secrets + Variables)"]
   G -- pulled at deploy --> R[Railway runtime]
