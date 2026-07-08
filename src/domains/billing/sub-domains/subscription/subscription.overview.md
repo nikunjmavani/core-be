@@ -39,7 +39,7 @@ stateDiagram-v2
 
 ## Events
 
-- Emits: *(planned, not yet implemented)* `BILLING_EVENT.SUBSCRIPTION_*`. When wired, listeners under [notify/events/](src/domains/notify/events/) would translate these into in-app notifications + outbound webhook deliveries + email; today no `BILLING_EVENT` is emitted or consumed.
+- Emits: none — subscription state transitions are persisted directly from Stripe webhook events; no in-process domain events are published.
 
 ## External integrations
 

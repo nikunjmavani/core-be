@@ -63,7 +63,7 @@ stateDiagram-v2
 
 ## Events
 
-- Emits: *(planned, not yet implemented)* `BILLING_EVENT.SUBSCRIPTION_CREATED` / `_UPDATED` / `_PAST_DUE` / `_ACTIVE` / `_CANCELED` — no `BILLING_EVENT` is emitted in code today.
+- Emits: none — subscription state changes are persisted directly from verified Stripe webhooks; no in-process domain events are published.
 - Consumes: Stripe webhook events (verified, deduplicated, persisted, then dispatched to the appropriate `subscription` sub-domain method).
 
 Listeners for billing events live under [notify/events/](src/domains/notify/events/) — that's what produces the notification + email side effects.

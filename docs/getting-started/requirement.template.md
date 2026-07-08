@@ -72,7 +72,7 @@ it. Either way the final, approved document looks like the form below.
 - Transactions / cross-domain (via services, never repositories): <... | none>
   # e.g. createInvoice wraps the insert in withTransaction; reads billing.subscription service for the active plan
 - Events / workers: <event, queue, payload, behavior | none>
-  # e.g. emit BILLING_EVENT.INVOICE_CREATED -> notify webhook delivery; queue invoice-delivery; payload { invoicePublicId, organizationPublicId }
+  # e.g. on createInvoice, enqueue an outbound webhook delivery via the notify webhook path (webhook_delivery row + NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED on commit); queue invoice-delivery; payload { invoicePublicId, organizationPublicId }
 - Idempotency / caching / rate limits: <which writes | none>
   # e.g. POST create is idempotencyRequired (X-Idempotency-Key); no caching; default rate limit
 

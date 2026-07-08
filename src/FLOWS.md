@@ -217,16 +217,14 @@ sequenceDiagram
 
 ## subscription-change-flow
 
-> **Status:** The Stripe → webhook → subscription-state-sync + audit portion is **live**. The notification/email fan-out (`BILLING_EVENT.SUBSCRIPTION_*` emission → `Bus`/`Notify`/`Mail` steps below) is **planned, not yet implemented** — no `BILLING_EVENT` is emitted or consumed in code today.
-
 ### Trigger
 
 Two paths:
 
 - **Inbound (authoritative)**: Stripe sends `customer.subscription.updated` → `POST /api/v1/billing/webhook`.
-- **User-initiated**: organization admin calls `POST /api/v1/billing/organizations/:id/subscriptions/:subscription_id/change-plan`. The service calls Stripe; the inbound webhook lands shortly after and reconciles state.
+- **User-initiated**: organization admin calls `POST /api/v1/billing/subscriptions/:subscription_id/change-plan` (active org from the JWT `org` claim). The service calls Stripe; the inbound webhook lands shortly after and reconciles state.
 
-State changes always flow Stripe webhook → service → DB → emit event. We never write subscription state to DB without a Stripe-confirmed event behind it.
+State changes always flow Stripe webhook → service → DB. We never write subscription state to DB without a Stripe-confirmed webhook behind it.
 
 ### Sequence
 
@@ -237,9 +235,6 @@ sequenceDiagram
   participant SWS as StripeWebhookService
   participant Sub as SubscriptionService
   participant DB as Postgres (RLS scoped to org)
-  participant Bus as event-bus
-  participant Notify as notify worker
-  participant Mail as mail.processor
 
   Stripe->>Ingest: POST /api/v1/billing/webhook (Stripe-Signature)
   Ingest->>SWS: verifySignatureAndPersist (raw body)
@@ -249,24 +244,17 @@ sequenceDiagram
     Sub->>DB: BEGIN; SET LOCAL app.current_organization_id
     Sub->>DB: UPDATE subscriptions SET ... WHERE provider_subscription_id=$1
     Sub->>DB: COMMIT
-    Sub->>Bus: emit BILLING_EVENT.SUBSCRIPTION_UPDATED
     SWS->>DB: UPDATE stripe_webhook_events SET status=processed
   else duplicate event_id
     Note over SWS: insert returns no rows; idempotent no-op
   end
   Ingest-->>Stripe: 200
-
-  Bus->>Notify: notification fan-out (in-app + email)
-  Notify->>Mail: recordOutboxEmail + dispatchOutboxEmail
 ```
 
 ### Side effects
 
 - `stripe_webhook_events` row keyed by Stripe `event.id` (idempotent inbound).
 - `subscriptions` table updated with the latest Stripe state.
-- `BILLING_EVENT.SUBSCRIPTION_UPDATED` (or `_CREATED`, `_CANCELED`) emitted. *(planned — not yet wired)*
-- Notification fan-out: in-app notification row + email through the mail outbox. *(planned — depends on the event emission above)*
-- Audit log row for the state transition.
 
 ### Failure modes
 
@@ -277,8 +265,6 @@ sequenceDiagram
 - **Stale event** (timestamp older than current row) → service rejects the update so out-of-order webhooks don't roll state backwards.
 
 ## dunning-flow
-
-> **Status:** The Stripe → webhook → `subscriptions.status` transitions + audit are **live**. The `BILLING_EVENT.SUBSCRIPTION_*` emission and the notification/email fan-out (`Bus`/`Notify`/`Mail` steps) are **planned, not yet implemented** — no `BILLING_EVENT` is emitted or consumed in code today.
 
 ### Trigger
 
@@ -292,19 +278,10 @@ sequenceDiagram
   participant Ingest as stripe-webhook.routes
   participant Sub as SubscriptionService
   participant DB as Postgres
-  participant Bus as event-bus
-  participant Notify as notify worker
-  participant Mail as mail.processor
-  participant Org as organization owner
 
   Stripe->>Ingest: invoice.payment_failed
   Ingest->>Sub: syncFromStripeProviderSubscription(state=past_due)
   Sub->>DB: UPDATE subscriptions SET status=past_due
-  Sub->>Bus: emit BILLING_EVENT.SUBSCRIPTION_PAST_DUE
-  Bus->>Notify: enqueue notification (in-app)
-  Bus->>Mail: recordOutboxEmail (payment-failed template)
-  Notify-->>Org: in-app banner
-  Mail-->>Org: payment-failed email (with hosted billing link)
 
   loop while past_due
     Stripe->>Ingest: subsequent dunning attempts (Stripe smart retries)
@@ -313,24 +290,19 @@ sequenceDiagram
   alt Stripe gives up
     Stripe->>Ingest: customer.subscription.deleted
     Ingest->>Sub: markCanceledByStripeProviderSubscriptionId
-    Sub->>Bus: emit BILLING_EVENT.SUBSCRIPTION_CANCELED
-    Bus->>Notify: enqueue cancellation notification + email
+    Sub->>DB: UPDATE subscriptions SET status=canceled
   else customer pays
     Stripe->>Ingest: invoice.paid + subscription.updated(active)
     Ingest->>Sub: syncFromStripeProviderSubscription(state=active)
-    Sub->>Bus: emit BILLING_EVENT.SUBSCRIPTION_ACTIVE
+    Sub->>DB: UPDATE subscriptions SET status=active
   end
 ```
 
 ### Side effects
 
 - `subscriptions.status` transitions: `active` → `past_due` (and back, or onward to `canceled`).
-- `BILLING_EVENT.SUBSCRIPTION_PAST_DUE` / `..._CANCELED` / `..._ACTIVE` events emitted. *(planned — not yet wired)*
-- Notification + email per state transition. *(planned — depends on the event emission above)*
-- Audit log row for every state transition.
 
 ### Failure modes
 
 - **All standard subscription-change-flow failure modes apply** (signature, duplicate event id, stale events, worker crash).
-- **Notification delivery failure** → does not fail webhook processing; webhook delivery worker retries with backoff and lands in DLQ after exhausted retries.
 - **Customer ignores the dunning emails** → Stripe-driven cancellation eventually fires; the platform does not unilaterally cancel.
