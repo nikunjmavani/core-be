@@ -11,7 +11,7 @@ What it owns:
 - The `notify.notifications` table and its delivery worker.
 - The `notify.webhooks`, `notify.webhook_delivery`, and `notify.webhook_delivery_attempt` tables (the outbound webhook outbox + retry log).
 - The webhook delivery worker, retry policy, DLQ, and request-id forwarding.
-- The cross-domain event listeners that turn `BILLING_EVENT.*`, `MEMBER_INVITATION_EVENT.*`, etc., into notifications and webhook deliveries.
+- The in-process listener that turns `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` into BullMQ webhook-delivery jobs. *(Planned, not yet implemented: cross-domain listeners that turn `BILLING_EVENT.*` into notifications and webhook deliveries.)*
 
 What it does not own: outbound email — that belongs to the [src/infrastructure/mail/](src/infrastructure/mail/) module. Notify enqueues mail jobs but does not send them itself.
 
@@ -69,9 +69,9 @@ stateDiagram-v2
 ## Events
 
 - Emits: `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` (internal — used by the outbox dispatcher).
-- Consumes: `BILLING_EVENT.SUBSCRIPTION_CREATED`, `_UPDATED`, `_PAST_DUE`, `_ACTIVE`, `_CANCELED`, `MEMBER_INVITATION_EVENT.*`, and any future domain events that should produce a notification or webhook.
+- Consumes: `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` (wired). *Planned, not yet implemented:* `BILLING_EVENT.SUBSCRIPTION_*` → in-app notifications / outbound webhooks — no billing-event listener is registered today.
 
-The cross-domain handlers register through the `domainContainersPlugin` path (in [src/domains/notify/events/](src/domains/notify/events/)) because they need `WebhookRepository` from DI — see [CLAUDE.md "Domain events"](CLAUDE.md).
+The notify event handlers register through the `domainContainersPlugin` path (in [src/domains/notify/events/](src/domains/notify/events/)) after the DI container is composed — see [CLAUDE.md "Domain events"](CLAUDE.md).
 
 ## External integrations
 

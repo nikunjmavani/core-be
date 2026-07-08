@@ -40,8 +40,8 @@ stateDiagram-v2
 
 ## Events
 
-- Consumes: `BILLING_EVENT.SUBSCRIPTION_*`, `MEMBER_INVITATION_EVENT.*`, etc. The events are translated by the cross-domain listeners in [notify/events/](src/domains/notify/events/).
-- Internal: `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` is emitted by the dispatcher and consumed by the delivery enqueuer.
+- Consumes: *(planned, not yet implemented)* `BILLING_EVENT.SUBSCRIPTION_*` → outbound webhook deliveries, translated by cross-domain listeners in [notify/events/](src/domains/notify/events/) — no billing-event listener exists today.
+- Internal: `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` is emitted by the dispatcher and consumed by the delivery enqueuer (wired).
 
 ## External integrations
 

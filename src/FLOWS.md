@@ -217,6 +217,8 @@ sequenceDiagram
 
 ## subscription-change-flow
 
+> **Status:** The Stripe → webhook → subscription-state-sync + audit portion is **live**. The notification/email fan-out (`BILLING_EVENT.SUBSCRIPTION_*` emission → `Bus`/`Notify`/`Mail` steps below) is **planned, not yet implemented** — no `BILLING_EVENT` is emitted or consumed in code today.
+
 ### Trigger
 
 Two paths:
@@ -262,8 +264,8 @@ sequenceDiagram
 
 - `stripe_webhook_events` row keyed by Stripe `event.id` (idempotent inbound).
 - `subscriptions` table updated with the latest Stripe state.
-- `BILLING_EVENT.SUBSCRIPTION_UPDATED` (or `_CREATED`, `_CANCELED`) emitted.
-- Notification fan-out: in-app notification row + email through the mail outbox.
+- `BILLING_EVENT.SUBSCRIPTION_UPDATED` (or `_CREATED`, `_CANCELED`) emitted. *(planned — not yet wired)*
+- Notification fan-out: in-app notification row + email through the mail outbox. *(planned — depends on the event emission above)*
 - Audit log row for the state transition.
 
 ### Failure modes
@@ -275,6 +277,8 @@ sequenceDiagram
 - **Stale event** (timestamp older than current row) → service rejects the update so out-of-order webhooks don't roll state backwards.
 
 ## dunning-flow
+
+> **Status:** The Stripe → webhook → `subscriptions.status` transitions + audit are **live**. The `BILLING_EVENT.SUBSCRIPTION_*` emission and the notification/email fan-out (`Bus`/`Notify`/`Mail` steps) are **planned, not yet implemented** — no `BILLING_EVENT` is emitted or consumed in code today.
 
 ### Trigger
 
@@ -321,8 +325,8 @@ sequenceDiagram
 ### Side effects
 
 - `subscriptions.status` transitions: `active` → `past_due` (and back, or onward to `canceled`).
-- `BILLING_EVENT.SUBSCRIPTION_PAST_DUE` / `..._CANCELED` / `..._ACTIVE` events emitted.
-- Notification + email per state transition.
+- `BILLING_EVENT.SUBSCRIPTION_PAST_DUE` / `..._CANCELED` / `..._ACTIVE` events emitted. *(planned — not yet wired)*
+- Notification + email per state transition. *(planned — depends on the event emission above)*
 - Audit log row for every state transition.
 
 ### Failure modes

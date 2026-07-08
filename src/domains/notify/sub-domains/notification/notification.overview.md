@@ -32,7 +32,7 @@ stateDiagram-v2
 
 ## Events
 
-- Consumes: `BILLING_EVENT.SUBSCRIPTION_PAST_DUE`, `BILLING_EVENT.SUBSCRIPTION_CANCELED`, `MEMBER_INVITATION_EVENT.*`, etc.
+- Consumes: *(planned, not yet implemented)* `BILLING_EVENT.SUBSCRIPTION_PAST_DUE` / `_CANCELED` → in-app notifications — no notification listener is wired to domain events today (notifications are created via the notification service/API).
 
 ## Failure modes
 

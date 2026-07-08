@@ -259,18 +259,18 @@ Typical flow: `service` → `eventBus.emit` → handler → `recordOutboxEmail()
 
 - **Registration (two paths)** — bootstrap order matters:
   1. `buildApp()` → `registerEventHandlers()` ([`register-event-handlers.ts`](src/core/events/register-event-handlers.ts)) **before** routes — auth + tenancy email handlers only.
-  2. `registerRoutes()` → [`domain-containers.plugin.ts`](src/domains/domain-containers.plugin.ts) → `registerNotifyContainer()` — notify handlers that need `WebhookRepository` from DI.
+  2. `registerRoutes()` → [`domain-containers.plugin.ts`](src/domains/domain-containers.plugin.ts) → `registerNotifyContainer()` → `registerNotifyEventHandlers()` — notify handlers registered after the DI container is composed.
 - **Rule:** Handlers that only enqueue mail (`recordOutboxEmail()`) or have no container deps → register via `register-event-handlers.ts`. Handlers that need repositories from the composition root → register in the domain’s `register*Container()` (notify today).
 - **Example (core path):** `tenancy/sub-domains/membership/member-invitation/` — service emits; handler calls `recordOutboxEmail()`.
-- **Example (container path):** `notify/events/notify.event-handlers.ts` — `registerBillingWebhookEventHandlers({ webhookRepository })`, webhook delivery enqueue, billing subscription notifications.
+- **Example (container path):** `notify/events/notify.event-handlers.ts` → `registerWebhookDeliveryEventHandlers()` — subscribes to `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` and enqueues outbound webhook delivery. (Billing subscription → notification/webhook wiring via `BILLING_EVENT.*` is **planned, not yet implemented**.)
 
 | Registrar                               | Event types (examples)                                                    | Side effect                            |
 | --------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------- |
 | `registerAuthMethodEventHandlers`       | `AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED`, `AUTH_EVENT.PASSWORD_RESET_REQUESTED`  | Mail queue                             |
 | `registerMemberInvitationEventHandlers` | `MEMBER_INVITATION_EVENT.CREATED`, `RESENT`                               | Mail queue                             |
-| `registerNotifyEventHandlers`           | `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED`, `BILLING_EVENT.SUBSCRIPTION_*` | BullMQ notification / webhook delivery |
+| `registerNotifyEventHandlers`           | `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED`                                 | BullMQ webhook delivery                |
 
-Billing event helpers and types live with the billing sub-domains that emit them — listeners live under notify.
+Billing subscription events (`BILLING_EVENT.SUBSCRIPTION_*`) are **planned but not yet wired**: no billing service emits them and no notify listener consumes them today. The generic webhook-delivery path (`NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` → BullMQ) and the `subscription.*` webhook-event catalog are already in place for when that wiring lands.
 
 ## Key Patterns
 
