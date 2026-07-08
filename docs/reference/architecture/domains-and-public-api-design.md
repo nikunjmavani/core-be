@@ -123,7 +123,7 @@ app.get(
 | Domain bundled e2e        | `<domain>/__tests__/<domain>.test.ts`                                               | `billing.test.ts`, `auth.test.ts`                                                |
 | Domain unit / policy      | `<domain>/__tests__/unit/`                                                          | `billing-ledger-immutability.test.ts`                                            |
 | Domain test factories     | `<domain>/__tests__/factories/`                                                     | `tenancy/__tests__/factories/permission.factory.ts`                              |
-| Sub-domain unit           | `sub-domains/<r>/__tests__/unit/` or `sub-domains/<parent>/<child>/__tests__/unit/` | `plan.validator.test.ts`, `organization-api-key.validator.test.ts`               |
+| Sub-domain unit           | `sub-domains/<r>/__tests__/unit/` or `sub-domains/<parent>/<child>/__tests__/unit/` | `plan.validator.unit.test.ts`, `organization-api-key.validator.unit.test.ts`               |
 | Sub-domain e2e (optional) | `sub-domains/<parent>/<child>/__tests__/<child>.test.ts`                            | `organization-api-key.test.ts`                                                   |
 | Event handlers / emit     | `sub-domains/<r>/__tests__/unit/events/`                                                 | `auth-method.event-handlers.unit.test.ts`, `member-invitation.event-handlers.unit.test.ts` |
 
