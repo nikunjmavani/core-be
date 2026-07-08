@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.10.3](https://github.com/nikunjmavani/core-be/compare/v4.10.2...v4.10.3) (2026-07-08)
+
+
+### Documentation
+
+* align event-test-location docs with enforced layout (Cluster A) ([#885](https://github.com/nikunjmavani/core-be/issues/885)) ([893c16d](https://github.com/nikunjmavani/core-be/commit/893c16d127b3627b6b501c1cfe069dc106c5ade6))
+
 ## [4.10.2](https://github.com/nikunjmavani/core-be/compare/v4.10.1...v4.10.2) (2026-07-07)
 
 
