@@ -90,8 +90,10 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [deployment/setup/setup-token-instructions.md](deployment/setup/setup-token-instructions.md)                 | Token sources and `.setup-credentials` variable names.                                                    |
 | [deployment/setup/railway-github-cli-setup.md](deployment/setup/railway-github-cli-setup.md)                 | Manual Railway + GitHub CLI setup.                                                                |
 | [deployment/ci-cd/cicd-and-deployment.md](deployment/ci-cd/cicd-and-deployment.md)                           | CI pipeline, Railway deploy, GitHub secrets.                                                      |
+| [deployment/ci-cd/deploy-artifact-and-secret-decisions.md](deployment/ci-cd/deploy-artifact-and-secret-decisions.md) | Standing decisions on how core-be ships: deploy artifact + secret handling (the *why*).   |
 | [deployment/ci-cd/branch-protection.md](deployment/ci-cd/branch-protection.md)                               | Required CI checks for `main` (single trunk; `main.json` is the only ruleset).                    |
 | [deployment/runbooks/hotfix-release.md](deployment/runbooks/hotfix-release.md)                               | Ship an urgent fix (fast-tracked `fix:` PR to `main`, fix-forward).                               |
+| [deployment/runbooks/rollback-deploy.md](deployment/runbooks/rollback-deploy.md)                             | One-click rollback of a bad release: redeploy the `:previous` GHCR images.                        |
 | [deployment/runbooks/production-go-live.md](deployment/runbooks/production-go-live.md)         | **Retired** (single-trunk) — pointer to the current release flow.                                |
 | [deployment/runbooks/environment-variables.md](deployment/runbooks/environment-variables.md)                 | Per-key lifecycle: bootstrap, add/rename/remove, sync to GitHub, troubleshoot.                    |
 | [deployment/runbooks/add-new-environment.md](deployment/runbooks/add-new-environment.md)                     | Per-environment plumbing: branch ↔ GitHub Environment ↔ `NODE_ENV` 1:1 invariant.                 |
@@ -162,6 +164,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [reference/security/system-tables-without-tenant-rls.md](reference/security/system-tables-without-tenant-rls.md) | System/shared tables intentionally outside tenant RLS. |
 | [reference/security/authorization-matrix-review.md](reference/security/authorization-matrix-review.md) | Authorization matrix review. |
 | [reference/security/authorization-coverage-gaps.md](reference/security/authorization-coverage-gaps.md) | Authorization coverage gaps tracker. |
+| [reference/security/adversarial-audit-report.md](reference/security/adversarial-audit-report.md) | Adversarial security & scalability audit findings (2026-05-31). |
 | [reference/security/authorization-testing-plan.md](reference/security/authorization-testing-plan.md) | Authorization testing plan. |
 | [reference/reliability/chaos-testing.md](reference/reliability/chaos-testing.md)                                   | Toxiproxy chaos suite (`pnpm test:chaos`).                                             |
 | [reference/testing/contract-tests.md](reference/testing/contract-tests.md)                                         | Outbound contracts for Stripe, Resend, S3.                                             |
