@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.10.4](https://github.com/nikunjmavani/core-be/compare/v4.10.3...v4.10.4) (2026-07-08)
+
+
+### Documentation
+
+* correct validator/serializer unit-test filename convention (Cluster B) ([#887](https://github.com/nikunjmavani/core-be/issues/887)) ([da65939](https://github.com/nikunjmavani/core-be/commit/da659390ffdca2e1735c8850282cedd17201c0ba))
+
 ## [4.10.3](https://github.com/nikunjmavani/core-be/compare/v4.10.2...v4.10.3) (2026-07-08)
 
 
