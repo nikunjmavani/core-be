@@ -95,7 +95,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/domain-generator/SKILL.md",
-      "computedHash": "bf8266b94bea979880021f2babd3daddfe7551fc1277c6dfc7d183bef7458352"
+      "computedHash": "f5c7ae72c0526ca5b1c9554ee120d6d2e82d11d485aa6e466cbb62eb0e1d2893"
     },
     "env-schema-add": {
       "source": "local",
@@ -245,7 +245,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/test-generator/SKILL.md",
-      "computedHash": "64bdfca398782e4266e14b09d502b2dff3d2926431fc9ada9848c59edb719dd7"
+      "computedHash": "b4369952fadb84911b47cc9c6907dd3c9fbea17564b4444b36d268b0cbb2e018"
     },
     "tsdoc-export-guard": {
       "source": "local",

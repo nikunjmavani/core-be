@@ -370,7 +370,7 @@ See [docs/reference/architecture/documentation-system.md](docs/reference/archite
   - **Bundled e2e**: `src/domains/<domain>/__tests__/<domain>.test.ts` (auth, billing, notify, user, tenancy, audit, upload)
   - **Domain unit / policy scans**: `src/domains/<domain>/__tests__/unit/` (e.g. ledger immutability, tombstone reads)
   - **Domain factories**: `src/domains/<domain>/__tests__/factories/` when helpers span sub-domains (e.g. `tenancy/__tests__/factories/permission.factory.ts`)
-  - **Sub-domain unit**: `sub-domains/<resource>/__tests__/unit/*.validator.test.ts` (or nested: `sub-domains/<parent>/<child>/__tests__/unit/`)
+  - **Sub-domain unit**: `sub-domains/<resource>/__tests__/unit/*.validator.unit.test.ts` (or nested: `sub-domains/<parent>/<child>/__tests__/unit/`)
   - **Sub-domain e2e** (when split from monolith): `sub-domains/<parent>/<child>/__tests__/<child>.test.ts` (e.g. organization-api-key)
   - **Event handlers / emit**: `sub-domains/<resource>/__tests__/unit/events/` (register leaf handlers only in tests; never `events/__tests__/`)
 - **Commands**: `pnpm test:unit` (unit + `__tests__/unit/events/`), `pnpm test:e2e` (excludes `__tests__/unit/`), `pnpm test` (all)

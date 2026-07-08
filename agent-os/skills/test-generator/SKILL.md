@@ -80,13 +80,13 @@ src/domains/<domain>/sub-domains/<resource>/     # top-level sub-domain
 
 src/domains/<domain>/sub-domains/<parent>/<nested>/   # nested sub-domain (aggregate child)
   __tests__/
-    unit/                       # e.g. organization-api-key.validator.test.ts
+    unit/                       # e.g. organization-api-key.validator.unit.test.ts
     <nested>.test.ts            # optional e2e (organization-api-key.test.ts)
   events/
     __tests__/                  # when nested resource emits/handles events
 ```
 
-Examples: `auth/__tests__/auth.test.ts` (bundled e2e), `billing/sub-domains/subscription/__tests__/unit/subscription.validator.test.ts`, `notify/sub-domains/webhook/webhook-event/` (nested), `tenancy/sub-domains/organization/organization-api-key/__tests__/organization-api-key.test.ts`, `auth/sub-domains/auth-method/__tests__/unit/events/auth-method.event-handlers.unit.test.ts`, `tenancy/__tests__/factories/permission.factory.ts`.
+Examples: `auth/__tests__/auth.test.ts` (bundled e2e), `billing/sub-domains/subscription/__tests__/unit/subscription.validator.unit.test.ts`, `notify/sub-domains/webhook/webhook-event/` (nested), `tenancy/sub-domains/organization/organization-api-key/__tests__/organization-api-key.test.ts`, `auth/sub-domains/auth-method/__tests__/unit/events/auth-method.event-handlers.unit.test.ts`, `tenancy/__tests__/factories/permission.factory.ts`.
 
 **Bundled domain e2e (intentional):** `auth.test.ts`, `billing.test.ts`, `notify.test.ts`, `user.test.ts` cover many sub-domain routes in one file. Billing sub-domains without dedicated e2e (plan, stripe-webhook) are covered there; add sub-domain unit tests for validators/serializers instead of splitting e2e unless routes are extracted.
 
@@ -276,7 +276,7 @@ describe('example.validator', () => {
 ## Naming convention
 
 - Domain e2e: `src/domains/<domain>/__tests__/<domain>.test.ts`
-- Domain unit: `src/domains/<domain>/__tests__/unit/<resource>.validator.test.ts` (or sub-domain path)
+- Domain unit: `src/domains/<domain>/__tests__/unit/<resource>.validator.unit.test.ts` (or sub-domain path)
 - Common unit util: `src/tests/unit/utils/<name>.util.test.ts`
 - Domain factory: `src/domains/<domain>/__tests__/factories/<entity>.factory.ts`
 - Shared factory: `src/tests/factories/<entity>.factory.ts`
