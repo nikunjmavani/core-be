@@ -384,7 +384,7 @@ flowchart LR
 
 | Skill                          | Path                                                     | When to invoke                                            |
 | ------------------------------ | -------------------------------------------------------- | --------------------------------------------------------- |
-| **skill-index**                | `.cursor/skills/skill-index/SKILL.md`                    | **First** — full catalog and triggers (42 project skills) |
+| **skill-index**                | `.cursor/skills/skill-index/SKILL.md`                    | **First** — full catalog and triggers (43 project skills) |
 | domain-generator               | `.cursor/skills/domain-generator/SKILL.md`               | New domain/sub-domain scaffold                            |
 | route-catalog                  | `.cursor/skills/route-catalog/SKILL.md`                  | Any change to `*.routes.ts`                               |
 | route-schema-doc-guard         | `.cursor/skills/route-schema-doc-guard/SKILL.md`         | Route `schema: { summary, description, tags }`          |
@@ -428,7 +428,7 @@ flowchart LR
 
 **Canonical inventory:** [skill-index → Always-applied rules, Policy rules, and Auto-trigger rules](../../.cursor/skills/skill-index/SKILL.md#auto-trigger-rules).
 
-Rules auto-attach by file glob when you edit matching paths. Always-on: **engineering-principles.mdc**, **project-identity.mdc**. All others are scoped — see skill-index for the full table (37 rules).
+Rules auto-attach by file glob when you edit matching paths. Always-on: **engineering-principles.mdc**, **project-identity.mdc**. All others are scoped — see skill-index for the full table (44 rules).
 
 ---
 

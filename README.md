@@ -4,7 +4,7 @@
 
 [![Node](https://img.shields.io/badge/Node-%3E%3D24-43853d?logo=node.js)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript)](https://www.typescriptlang.org/)
-[![pnpm](https://img.shields.io/badge/pnpm-10-f69220?logo=pnpm)](https://pnpm.io/)
+[![pnpm](https://img.shields.io/badge/pnpm-11-f69220?logo=pnpm)](https://pnpm.io/)
 [![Fastify](https://img.shields.io/badge/Fastify-5-000000?logo=fastify)](https://fastify.dev/)
 [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
@@ -36,7 +36,7 @@
 | **Auth / Security** | [jose 6](https://github.com/panva/jose), [argon2id](https://github.com/ranisalt/node-argon2), [otplib](https://github.com/yeojz/otplib), [@simplewebauthn/server](https://simplewebauthn.dev), [opossum](https://nodeshift.dev/opossum/) |
 | **Integrations** | [Stripe 22](https://stripe.com), [Resend 6](https://resend.com), AWS SDK v3 S3 |
 | **Observability** | [Pino 10](https://getpino.io), [Sentry 10](https://sentry.io), [OpenTelemetry](https://opentelemetry.io), [prom-client](https://github.com/siimon/prom-client) |
-| **Testing / Tooling** | [Vitest 4](https://vitest.dev), [k6](https://k6.io), [Toxiproxy](https://github.com/Shopify/toxiproxy), [Biome](https://biomejs.dev), [pnpm 10](https://pnpm.io), [Husky](https://typicode.github.io/husky/) |
+| **Testing / Tooling** | [Vitest 4](https://vitest.dev), [k6](https://k6.io), [Toxiproxy](https://github.com/Shopify/toxiproxy), [Biome](https://biomejs.dev), [pnpm 11](https://pnpm.io), [Husky](https://typicode.github.io/husky/) |
 
 ---
 
