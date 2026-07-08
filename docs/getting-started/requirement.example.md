@@ -43,7 +43,7 @@ added" list up top, so you can change them before the document is finalized like
 ## 4. Business logic
 - Service intent per operation: listInvoices({ organizationId, cursor }); getInvoice({ organizationId, invoiceId }); createInvoice({ organizationId, input })
 - Transactions / cross-domain: createInvoice wraps the insert in withTransaction and allocates the next per-org number; reads billing.subscription service for the active plan
-- Events / workers: emit BILLING_EVENT.INVOICE_CREATED -> notify webhook delivery; queue invoice-delivery; payload { invoicePublicId, organizationPublicId }
+- Events / workers: on createInvoice, enqueue an outbound webhook delivery via the notify webhook path (write a webhook_delivery row + emit NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED on commit); queue invoice-delivery; payload { invoicePublicId, organizationPublicId }
 - Idempotency / caching / rate limits: POST create is idempotencyRequired (X-Idempotency-Key); no caching; default rate limit
 
 ## 5. i18n

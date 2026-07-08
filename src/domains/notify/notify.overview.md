@@ -4,14 +4,14 @@
 
 ## Purpose
 
-Two delivery surfaces: **in-app notifications** (rows users see in the UI) and **outbound webhook delivery** (HTTPS calls from this platform to customer-configured webhook endpoints). The cross-domain glue that turns billing/membership domain events into notifications and webhook payloads is **planned, not yet wired** — today only the internal `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` listener is active.
+Two delivery surfaces: **in-app notifications** (rows users see in the UI) and **outbound webhook delivery** (HTTPS calls from this platform to customer-configured webhook endpoints).
 
 What it owns:
 
 - The `notify.notifications` table and its delivery worker.
 - The `notify.webhooks`, `notify.webhook_delivery`, and `notify.webhook_delivery_attempt` tables (the outbound webhook outbox + retry log).
 - The webhook delivery worker, retry policy, DLQ, and request-id forwarding.
-- The in-process listener that turns `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` into BullMQ webhook-delivery jobs. *(Planned, not yet implemented: cross-domain listeners that turn `BILLING_EVENT.*` into notifications and webhook deliveries.)*
+- The in-process listener that turns `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` into BullMQ webhook-delivery jobs.
 
 What it does not own: outbound email — that belongs to the [src/infrastructure/mail/](src/infrastructure/mail/) module. Notify enqueues mail jobs but does not send them itself.
 
@@ -42,17 +42,18 @@ This domain implements the contracts documented in [src/PATTERNS.md](src/PATTERN
 
 ## Cross-domain flows
 
-The notify domain is the **listener** at the end of every cross-domain flow that produces user-visible side effects:
+The notify domain does **not** subscribe to other domains' events. Its two surfaces are driven directly:
 
-- `subscription-change-flow`, `dunning-flow` — billing events → in-app notifications + outbound webhook deliveries. *(planned — not yet wired; see Events below.)*
-- `organization-invitation-flow` — invitation create/resend events send email via the mail outbox today; in-app/webhook notification of org admins is planned.
-- `signup-flow`, `login-flow` — auth events do **not** flow through notify (mail is direct via the mail outbox).
+- **In-app notifications** — created by callers of `NotificationService.dispatchNotification` (service/API), then delivered asynchronously by the `notification` worker.
+- **Outbound webhook delivery** — a `webhook_delivery` row is written inside the originating transaction; the internal `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` listener enqueues the BullMQ delivery job on commit.
+
+For reference, adjacent flows do **not** route through notify today: `signup-flow` / `login-flow` / `organization-invitation-flow` send email **directly via the mail outbox** ([src/infrastructure/mail/](src/infrastructure/mail/)); `subscription-change-flow` / `dunning-flow` persist Stripe state + audit only.
 
 ## Lifecycle
 
 ```mermaid
 stateDiagram-v2
-  [*] --> notification_created: domain event handler
+  [*] --> notification_created: NotificationService.dispatchNotification
   notification_created --> seen: user views in app
   seen --> dismissed: user dismisses
   dismissed --> [*]
@@ -69,7 +70,7 @@ stateDiagram-v2
 ## Events
 
 - Emits: `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` (internal — used by the outbox dispatcher).
-- Consumes: `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` (wired). *Planned, not yet implemented:* `BILLING_EVENT.SUBSCRIPTION_*` → in-app notifications / outbound webhooks — no billing-event listener is registered today.
+- Consumes: `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` — the internal webhook-delivery listener (the only event this domain subscribes to).
 
 The notify event handlers register through the `domainContainersPlugin` path (in [src/domains/notify/events/](src/domains/notify/events/)) after the DI container is composed — see [CLAUDE.md "Domain events"](CLAUDE.md).
 

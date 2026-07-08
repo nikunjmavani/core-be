@@ -32,7 +32,7 @@ stateDiagram-v2
 
 ## Events
 
-- Consumes: *(planned, not yet implemented)* `BILLING_EVENT.SUBSCRIPTION_PAST_DUE` / `_CANCELED` → in-app notifications — no notification listener is wired to domain events today (notifications are created via the notification service/API).
+- Consumes: no domain events — notification rows are created directly via `NotificationService.dispatchNotification` (service/API), then delivered asynchronously by the `notification` BullMQ worker.
 
 ## Failure modes
 
