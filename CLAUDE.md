@@ -112,7 +112,7 @@ Flat domains (`audit`, `upload`) keep layers at domain root (no `sub-domains/`).
 | **user**        | user-settings, user-notification-preferences, user-data-export                                                                                                                  |
 | **tenancy**     | organization (organization-settings, organization-notification-policy, organization-api-key), membership (member-invitation), member-roles (member-role-permission), permission |
 | **billing**     | plan, subscription, stripe-webhook                                                                                                                                              |
-| **notify**      | notification, webhook (webhook-event)                                                                                                                                           |
+| **notify**      | notification, webhook (webhook-event, webhook-delivery)                                                                                                                         |
 | **upload**      | (single domain, no sub-domains)                                                                                                                                                 |
 
 **Permission resolution** (tenancy domain, not under `shared/`):
@@ -159,7 +159,7 @@ src/infrastructure/
     contexts/                 # DB context wrappers (request / organization / user / retention / worker / system-audit) that set the RLS GUC
     pool/                     # Pool instrumentation (organization-rls-checkout-counter.ts)
     safety/                   # Boot guards: assert-database-rls-safety.ts, assert-database-tls-safety.ts
-    utils/                    # batch-delete, capped-count, force-rls-tables.constants, hosted-deployment, database-handle.types
+    utils/                    # batch-delete, capped-count, connection-url, force-rls-tables.constants, database-handle.types
   cache/
     redis.client.ts           # Redis connection (managed service)
     bullmq-redis.client.ts    # Separate BullMQ Redis client (logical DB) + redis-url / redis-prefix utils
@@ -188,6 +188,8 @@ src/infrastructure/
     storage.service.ts        # S3 storage service (presigned URLs, head object)
     s3-adapter.ts             # S3 adapter behind object-storage.port.ts
   outbound/                   # Hardened outbound HTTP (outbound-fetch.ts: timeouts, redaction) for third-party calls
+  resilience/                 # Circuit breaker + retry-with-backoff for outbound/third-party calls (circuit-breaker.ts, retry-with-backoff.util.ts, lua/)
+  api-reference/              # Scalar API-reference wiring (scalar-api-reference.ts)
   observability/
     sentry/sentry.ts          # Sentry: errors, tracing, continuous profiling (V8 CpuProfiler), structured logs (+ sentry-sampling.util.ts)
     tracing/                  # OpenTelemetry: otel.ts, trace-context.util.ts, trace-context-job-fields.schema.ts
@@ -195,6 +197,7 @@ src/infrastructure/
     idempotency-cardinality/  # Bounded SCAN of idempotency keys → threshold log / Sentry (constants, service, worker; scheduled in queue/scheduler.ts)
     dlq-depth/                # DLQ depth + DB-pool alert sampling (service, worker, constants)
     redis-saturation/         # Redis used_memory/maxmemory ratio + BullMQ waiting-depth sampling (sampled by dlq-depth worker)
+    posthog/                  # PostHog product-analytics client (posthog.ts)
     unhandled-rejection.handler.ts  # Burst-tolerant unhandledRejection policy
   mcp/
     mcp-server.ts             # MCP (ENABLE_MCP_SERVER, dynamic import; @modelcontextprotocol/sdk optionalDependency): POST /api/v1/mcp
@@ -368,6 +371,8 @@ See [docs/reference/architecture/documentation-system.md](docs/reference/archite
 - **Cross-cutting tests**: `src/tests/` — helpers, shared factories, security, performance, chaos, contract; k6 under `src/tests/load/k6/`
 - **Domain tests** (co-located with code):
   - **Bundled e2e**: `src/domains/<domain>/__tests__/<domain>.test.ts` (auth, billing, notify, user, tenancy, audit, upload)
+  - **Domain integration**: `src/domains/<domain>/__tests__/integration/*.integration.test.ts` — **required** for routed domains (`validate:domain` gate); route smoke + focused in-process HTTP contracts
+  - **Domain flow e2e** (optional): `src/domains/<domain>/__tests__/e2e/*.e2e.test.ts` — multi-step end-to-end flows (e.g. login, organization onboarding, webhook delivery)
   - **Domain unit / policy scans**: `src/domains/<domain>/__tests__/unit/` (e.g. ledger immutability, tombstone reads)
   - **Domain factories**: `src/domains/<domain>/__tests__/factories/` when helpers span sub-domains (e.g. `tenancy/__tests__/factories/permission.factory.ts`)
   - **Sub-domain unit**: `sub-domains/<resource>/__tests__/unit/*.validator.unit.test.ts` (or nested: `sub-domains/<parent>/<child>/__tests__/unit/`)
@@ -381,7 +386,7 @@ See [docs/reference/architecture/documentation-system.md](docs/reference/archite
 
 ## Commands
 
-Script namespaces: `ci:*`, `compose:*`, `test:*`, `db:*`, `docs:*`, `routes:*`, `load:*`, `chaos:*`, `tool:*`, `setup:infra:*`, `mcp:*`, `security:*`, `sonar:*`, `deps:*`. Legacy: `route-catalog`, `scripts:*`. List all: `pnpm run`.
+Script namespaces: `ci:*`, `compose:*`, `test:*`, `db:*`, `docs:*`, `routes:*`, `load:*`, `chaos:*`, `tool:*`, `setup:*`, `mcp:*`, `security:*`, `sonar:*`, `deps:*`. Legacy: `route-catalog`, `scripts:*`. List all: `pnpm run`.
 
 Local SonarQube quality gate (pre-commit): `pnpm sonar:up` / `sonar:scan` / `sonar:down` / `sonar:reset`. The pre-commit hook (`pnpm guard:pre-commit`, step 16) blocks a commit when SonarQube has any open issue on the deployed-app surface; the gate is mandatory — there is no bypass, every issue must be resolved. See **`docs/reference/quality/sonarqube-local.md`**.
 
