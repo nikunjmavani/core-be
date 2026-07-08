@@ -106,7 +106,7 @@ Pre-commit mirrors a **subset** of the static checks in [`.github/workflows/pr-c
 | 4    | `pnpm test:unit`   | Failing shared unit tests          |
 | 5    | `pnpm docs:lint:changed` | Markdown lint (changed files only) — conditional on pushed markdown file changes |
 
-> The SonarQube quality gate runs at **pre-commit** (`pnpm guard:pre-commit`, step 16), not pre-push. It is mandatory and has no bypass.
+> The SonarQube quality gate runs at **pre-commit** (`pnpm guard:pre-commit`, the final guard step), not pre-push. It is mandatory and has no bypass.
 
 ### Commit message hook (`.husky/commit-msg`)
 

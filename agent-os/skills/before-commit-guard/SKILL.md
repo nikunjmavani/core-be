@@ -57,7 +57,7 @@ Runs before `git push` (fast compile gate; full suite is CI):
 | 4    | `pnpm test:unit`   | Fix failing unit tests under `src/tests/unit/`. |
 | 5    | Markdown lint: `pnpm docs:lint:changed` (conditional) | runs when pushed commits include `*.md` changes |
 
-> The SonarQube quality gate runs at **pre-commit** (step 16 above), not pre-push. It is mandatory and has no bypass.
+> The SonarQube quality gate runs at **pre-commit** (the final guard step, `SonarQube quality gate`), not pre-push. It is mandatory and has no bypass.
 
 Full PR gate: `pnpm ci:local` or wait for CI (`quality` + `test` + `api-smoke` + …).
 
@@ -81,7 +81,7 @@ pnpm docs:lint:fix             # auto-fix the markdown nits markdownlint can rep
 pnpm db:migrate:lint           # when editing migrations/*.sql (CI always runs full migrations/)
 pnpm tool:generate-project-identity:check  # manifest ↔ constants ↔ workflows
 pnpm tool:sync-env-example     # .env.example vs env schema
-pnpm sonar:up && pnpm sonar:scan  # SonarQube gate (hook step 16; when deployed-surface src/**/*.ts staged) — mandatory, no bypass
+pnpm sonar:up && pnpm sonar:scan  # SonarQube gate (final pre-commit guard step; when deployed-surface src/**/*.ts staged) — mandatory, no bypass
 pnpm deps:audit                # optional; CI runs this (may have known moderate in dev deps)
 ```
 

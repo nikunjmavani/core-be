@@ -27,11 +27,11 @@ Source of truth = the `config: { idempotencyRequired: true }` flag on each route
 | 1 | `POST /tenancy/organizations` | `tenancy/sub-domains/organization/organization.routes.ts` |
 | 2 | `POST /tenancy/organization/memberships` | `tenancy/sub-domains/membership/membership.routes.ts` |
 | 3 | `POST /tenancy/organization/transfer-ownership` | `…/membership/membership.routes.ts` |
-| 4 | `POST /tenancy/organization/invitations` | `…/membership/membership.routes.ts` |
-| 5 | `POST /billing/subscriptions` | `billing/sub-domains/subscription/subscription.routes.ts` |
-| 6 | `POST /billing/subscriptions/:subscription_id/change-plan` | `…/subscription/subscription.routes.ts` |
-| 7 | `POST /billing/subscriptions/:subscription_id/cancel` | `…/subscription/subscription.routes.ts` |
-| 8 | `POST /billing/subscriptions/:subscription_id/resume` | `…/subscription/subscription.routes.ts` |
+| 4 | `POST /billing/subscriptions` | `billing/sub-domains/subscription/subscription.routes.ts` |
+| 5 | `POST /billing/subscriptions/:subscription_id/change-plan` | `…/subscription/subscription.routes.ts` |
+| 6 | `POST /billing/subscriptions/:subscription_id/cancel` | `…/subscription/subscription.routes.ts` |
+| 7 | `POST /billing/subscriptions/:subscription_id/resume` | `…/subscription/subscription.routes.ts` |
+| 8 | `POST /billing/payment-methods/setup` | `…/subscription/subscription.routes.ts` |
 | 9 | `POST /notify/webhooks` | `notify/sub-domains/webhook/webhook.routes.ts` |
 | 10 | `POST /tenancy/organization/api-keys` | `tenancy/sub-domains/organization/organization.routes.ts` |
 | 11 | `POST /tenancy/organization/notification-policies` | `tenancy/sub-domains/organization/organization.routes.ts` |
