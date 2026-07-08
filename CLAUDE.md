@@ -87,10 +87,9 @@ src/domains/<domain>/
         <sub-domain>.bulk.seed.ts
         <sub-domain>.faker.ts
       __tests__/              # Sub-domain unit, nested e2e (see Testing)
-        unit/
+        unit/                 # incl. events/ — leaf event-handler suites (never events/__tests__/)
         <sub-domain>.test.ts  # Optional: dedicated route suite (tenancy org children)
       events/                 # Optional: types, handlers, *-emit.ts
-        __tests__/            # Event-handler / emit unit tests
       queues/                 # Optional: BullMQ enqueue helpers
       workers/                # Optional: BullMQ processors
       <nested-sub-domain>/    # Optional: aggregate child (lifecycle tied to parent)

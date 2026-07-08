@@ -5,7 +5,7 @@
  * Checks:
  * - Routes file or container file exists
  * - __tests__ directory exists; routed domains have __tests__/integration/*.test.ts
- * - Vitest specs only under __tests__/unit/, __tests__/integration/, or events/__tests__/
+ * - Vitest specs only under __tests__/{unit,integration,e2e}/; events/__tests__/ is forbidden (use __tests__/unit/events/)
  * - Multi-sub-domain domains: sub-domains/ + at least one *.service.ts in tree
  * - Domain root dirs limited to reserved names (multi-resource domains)
  * - Optional warnings: schema, depth, empty factories, routes without controllers
