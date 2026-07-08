@@ -102,7 +102,7 @@ Examples: `auth/__tests__/auth.test.ts` (bundled e2e), `billing/sub-domains/subs
 | Validator/serializer (top-level sub-domain)           | `src/domains/<domain>/sub-domains/<resource>/__tests__/unit/`                 |
 | Validator/serializer (nested sub-domain)              | `src/domains/<domain>/sub-domains/<parent>/<nested>/__tests__/unit/`          |
 | Domain-level validator (auth.login, user profile)     | `src/domains/<domain>/__tests__/unit/`                                        |
-| Event handlers / emit helpers                         | `src/domains/<domain>/sub-domains/<resource>/events/__tests__/`                    |
+| Event handlers / emit helpers                         | `src/domains/<domain>/sub-domains/<resource>/__tests__/unit/events/`          |
 | Cross-sub-domain policy scan (ledger immutability)    | `src/domains/<domain>/__tests__/unit/` with file comment                      |
 | Shared tenancy permission test data                   | `@/domains/tenancy/__tests__/factories/permission.factory.js`                 |
 | Cross-domain flow (health, multi-domain contract)     | `src/tests/integration/`                                                      |

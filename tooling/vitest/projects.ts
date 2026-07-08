@@ -109,11 +109,7 @@ export const vitestProjects = [
     extends: true,
     test: {
       name: 'unit',
-      include: [
-        'src/**/__tests__/unit/**/*.test.ts',
-        'src/**/events/__tests__/*.test.ts',
-        'src/tests/unit/**/*.test.ts',
-      ],
+      include: ['src/**/__tests__/unit/**/*.test.ts', 'src/tests/unit/**/*.test.ts'],
       exclude: ['**/*.db.unit.test.ts', '**/*.property.unit.test.ts'],
       pool: 'forks',
     },
