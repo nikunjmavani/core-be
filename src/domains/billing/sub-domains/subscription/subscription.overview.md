@@ -39,7 +39,7 @@ stateDiagram-v2
 
 ## Events
 
-- Emits: `BILLING_EVENT.SUBSCRIPTION_CREATED`, `_UPDATED`, `_PAST_DUE`, `_ACTIVE`, `_CANCELED`. Listeners under [notify/events/](src/domains/notify/events/) translate these into in-app notifications + outbound webhook deliveries + email.
+- Emits: *(planned, not yet implemented)* `BILLING_EVENT.SUBSCRIPTION_*`. When wired, listeners under [notify/events/](src/domains/notify/events/) would translate these into in-app notifications + outbound webhook deliveries + email; today no `BILLING_EVENT` is emitted or consumed.
 
 ## External integrations
 
