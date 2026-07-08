@@ -150,7 +150,7 @@ Security, chaos, contract, and load testing: [docs/reference/testing/](docs/refe
 CI runs on GitHub Actions; API and worker deploy to Railway on push to **main** (environment mapping in GitHub Environments).
 
 - [CI/CD and deployment](docs/deployment/ci-cd/cicd-and-deployment.md) — pipeline, secrets, branch mapping
-- [Production go-live runbook](docs/deployment/runbooks/production-go-live.md) — gates, build, migrate, smoke
+- [Production release flow](docs/deployment/runbooks/production-go-live.md) — how single-trunk shipping to production works (development on merge, production on release)
 
 ---
 
