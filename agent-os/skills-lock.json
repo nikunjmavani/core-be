@@ -17,7 +17,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/before-commit-guard/SKILL.md",
-      "computedHash": "a8c9231bcb57cad3fc18194a7be0eab28bd42c07535d5e9ae0b858449ba70de0"
+      "computedHash": "e88ac8b28a141c301a1e24bf305783d4cc6e485637dcd8b6d26ba36490a1a319"
     },
     "change-completeness-guard": {
       "source": "local",
@@ -41,7 +41,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/code-quality-guard/SKILL.md",
-      "computedHash": "3922c6ee2ee60324c2052bc7e08346d40f8a187e09719c24ac2f5ec5f6bb4b3a"
+      "computedHash": "5c25c70da03ba5e1fe67561bd9c5190eb8755b1969ae3a5f5b4a3e45bc6992fe"
     },
     "code-smells-and-best-practices": {
       "source": "local",
@@ -119,7 +119,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/idempotency-guard/SKILL.md",
-      "computedHash": "8c4fcb1da2d435a357aeb1c4794a0d21a238eb6153fda0b3a8ccfef6d2efd13e"
+      "computedHash": "632a385bad85fdf52384d22dc6126477056afd39c09142bf2e8c22bcfd02faf9"
     },
     "lint-warnings-handler": {
       "source": "local",
@@ -149,7 +149,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/path-to-production-gate/SKILL.md",
-      "computedHash": "8059333bc7cc3d9fc40f1db64a1d95d80f9f7619603d93504989b501e586c8be"
+      "computedHash": "ff10c291abfed92706cb61b291c3c1bbf766c776c0076ffa5bed9b00ceabfce3"
     },
     "ponytail": {
       "source": "DietrichGebert/ponytail",
@@ -209,7 +209,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/skill-index/SKILL.md",
-      "computedHash": "7dda24d9441b78d7c744fcbeb55101b218eabf33b2d50916727e4c559a6c2f43"
+      "computedHash": "098a901e07b5b4a5d4c19e168f1edbd81a9be9054d765910cccd24bcc240f157"
     },
     "split-to-prs": {
       "source": "local",
