@@ -160,6 +160,8 @@
     "tool:sync-env-example": "tsx src/scripts/validators/env/sync-env-example.ts",
     "tool:generate-project-identity": "tsx tooling/setup/codegen/generate-project-identity.ts",
     "tool:generate-project-identity:check": "tsx tooling/setup/codegen/generate-project-identity.ts --check",
+    "tool:governance-mode": "tsx tooling/setup/github/governance-mode.ts",
+    "tool:governance-mode:check": "tsx tooling/setup/github/governance-mode.ts --check",
     "tool:load-test-credentials": "tsx src/scripts/admin/load-test-credentials.ts",
     "tool:load-test-credential-pool": "tsx src/scripts/admin/load-test-credential-pool.ts",
     "tool:backfill-personal-orgs": "tsx src/scripts/admin/backfill-personal-organizations.ts",

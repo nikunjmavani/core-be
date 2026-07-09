@@ -122,7 +122,44 @@ These settings match the committed [`main.json`](../../../.github/rulesets/main.
 | Block branch deletion | Yes |
 | Required status checks | `Quality gate` (pr-ci aggregate) + `Checks` (pr-governance), strict up-to-date |
 
+> **Enforced peer review is off by design** while CODEOWNERS is single-owner. This is the **personal** governance mode; switch to **team** with one command once the roster grows — see [Governance mode — personal ↔ team](#governance-mode--personal--team-one-switch) below.
+
 **Signed commits on `main`:** Contributors must use [verified signatures](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification). Teams without signing enabled should temporarily relax `required_signatures` in `main.json` until onboarding is complete.
+
+---
+
+## Governance mode — personal ↔ team (one switch)
+
+The repository runs in one of two **governance modes**, and you switch between them with a single command rather than hand-editing JSON:
+
+| Mode | Merge gate (`main.json`) | Production-deploy gate (`production.json`) |
+| ---- | ------------------------ | ----------------------------------------- |
+| **personal** *(current)* | 0 required approvals, no CODEOWNER review, no last-push approval | single reviewer, self-review allowed |
+| **team** | 1 CODEOWNER approval, last-push approval, stale approvals dismissed | ≥2 reviewers (from CODEOWNERS), self-review prevented |
+
+In **both** modes the automated gates (`Quality gate` + `Checks`, including the authoritative DB matrix) still block every merge — the mode only governs the **human** review requirement.
+
+Today the repo is in **personal** mode **by design, not by oversight**: [`.github/CODEOWNERS`](../../../.github/CODEOWNERS) lists a **single** owner (`@nikunjmavani`), so requiring a (code-owner) review would make that owner's own PRs unmergeable (GitHub forbids self-approval) and every merge would fall back to the Admin bypass — strictly worse than leaving the gate off. The mode fields are **coupled** (e.g. `preventSelfReview` needs ≥2 reviewers; `require_code_owner_review` needs ≥2 owners), which is exactly why they move together through the tool.
+
+### Switch modes
+
+```bash
+pnpm tool:governance-mode                 # status: current mode, CODEOWNERS roster, next step
+pnpm tool:governance-mode team            # apply four-eyes mode (needs ≥2 CODEOWNERS owners)
+pnpm tool:governance-mode personal        # apply solo-maintainer mode
+pnpm github:sync                          # push the updated ruleset + environment to GitHub
+```
+
+The tool ([`tooling/setup/github/governance-mode.ts`](../../../tooling/setup/github/governance-mode.ts)) flips **all** coupled fields in [`main.json`](../../../.github/rulesets/main.json) and [`production.json`](../../../.github/environments/production.json) atomically, derives the team reviewer roster from [`.github/CODEOWNERS`](../../../.github/CODEOWNERS) (individual users only), and **refuses `team` mode** when the roster has fewer than two users — so the repo can never land in a deadlocking configuration. After switching, update the **Ruleset policy summary** table above so it keeps matching `main.json`.
+
+### To move to team mode
+
+1. Add owner(s) to [`.github/CODEOWNERS`](../../../.github/CODEOWNERS) so it lists **≥2 individual users** with write+ access. (Team handles like `@org/team` resolve only on **organization** repos — the `@core/dev` TODO in CODEOWNERS requires transferring the repo into an org first; a personal repo lists individual handles only.)
+2. Run `pnpm tool:governance-mode team` then `pnpm github:sync`.
+
+> **Invariant guard.** `pnpm tool:governance-mode:check` (and the unit test [`governance-mode.policy.unit.test.ts`](../../../src/tests/unit/ci/governance-mode.policy.unit.test.ts), which runs in the `unit` lane of `Quality gate`) fails if the two committed files ever drift into an inconsistent or deadlocking combination.
+>
+> **Break-glass unchanged.** The Admin bypass (`bypass_actors` → RepositoryRole `5`, `bypass_mode: pull_request` in [`main.json`](../../../.github/rulesets/main.json)) still lets an admin merge without the review in a genuine emergency. Four-eyes is the default path, not an absolute lock.
 
 ---
 
