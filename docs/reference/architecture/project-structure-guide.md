@@ -43,7 +43,7 @@ The full `src/` file tree is **not** duplicated here (it drifts from code quickl
 
 | Suffix / pattern                                                    | Inferred purpose                                                                      |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `.permissions.ts`                                                   | Permission code constants for the domain (used by `permissions.ts` and authorization) |
+| `.permissions.ts`                                                   | Permission code constants for the domain (consumed by permission seeding and authorization) |
 | `.constants.ts`                                                     | Domain-specific constants (e.g. upload)                                               |
 | `.seed.ts`                                                          | Seed data and reference data for the domain                                           |
 | `*.queue.ts`                                                        | BullMQ queue definition and enqueue helpers (under `queues/`)                         |

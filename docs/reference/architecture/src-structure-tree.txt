@@ -36,7 +36,6 @@ src/
     │   ├── seed/
     │   │   ├── audit.bulk.seed.ts
     │   │   ├── audit.faker.ts
-    │   │   ├── audit.seed.ts
     │   │   └── index.ts
     │   ├── workers/
     │   │   ├── __tests__/
@@ -134,8 +133,7 @@ src/
     │   │   │   │   │   └── verification-code.unit.test.ts
     │   │   │   ├── events/
     │   │   │   │   ├── auth.event-handlers.ts
-    │   │   │   │   ├── auth.events.ts
-    │   │   │   │   └── index.ts
+    │   │   │   │   └── auth.events.ts
     │   │   │   ├── oauth/
     │   │   │   │   ├── __tests__/
     │   │   │   │   │   └── unit/
@@ -282,7 +280,6 @@ src/
     │   │   │   ├── billing-payment-methods.e2e.test.ts
     │   │   │   └── subscription-lifecycle.e2e.test.ts
     │   │   ├── factories/
-    │   │   │   ├── index.ts
     │   │   │   └── subscription.factory.ts
     │   │   ├── integration/
     │   │   │   ├── billing-route-smoke.integration.test.ts
@@ -292,7 +289,6 @@ src/
     │   │   │   └── billing-ledger-immutability.unit.test.ts
     │   │   └── billing.test.ts
     │   ├── seed/
-    │   │   ├── billing.seed.ts
     │   │   └── index.ts
     │   ├── sub-domains/
     │   │   ├── plan/
@@ -430,11 +426,9 @@ src/
     │   │   │   └── notify.integration.test.ts
     │   │   └── notify.test.ts
     │   ├── events/
-    │   │   ├── index.ts
     │   │   └── notify.event-handlers.ts
     │   ├── seed/
-    │   │   ├── index.ts
-    │   │   └── notify.seed.ts
+    │   │   └── index.ts
     │   ├── sub-domains/
     │   │   ├── notification/
     │   │   │   ├── __tests__/
@@ -478,7 +472,6 @@ src/
     │   │   │   ├── notification.schema.ts
     │   │   │   ├── notification.serializer.ts
     │   │   │   ├── notification.service.ts
-    │   │   │   ├── notification.types.ts
     │   │   │   └── notification.validator.ts
     │   │   └── webhook/
     │   │   │   ├── __tests__/
@@ -504,7 +497,6 @@ src/
     │   │   │       │   ├── webhook.service.unit.test.ts
     │   │   │       │   └── webhook.validator.unit.test.ts
     │   │   │   ├── events/
-    │   │   │       ├── index.ts
     │   │   │       └── notify.events.ts
     │   │   │   ├── seed/
     │   │   │       ├── index.ts
@@ -1556,13 +1548,12 @@ src/
     │   ├── text/
     │   │   ├── email.util.ts
     │   │   └── html-escape.util.ts
-    │   ├── validation/
+    │   └── validation/
     │   │   ├── bullmq-job-validation.util.ts
     │   │   ├── file-magic.util.ts
     │   │   ├── omit-undefined.util.ts
     │   │   ├── parse-with-schema.util.ts
     │   │   └── validation.util.ts
-    │   └── index.ts
     └── shared.overview.md
 ├── tests/
     ├── bench/
@@ -2156,7 +2147,6 @@ src/
 ├── FLOWS.md
 ├── OVERVIEW.md
 ├── PATTERNS.md
-├── permissions.ts
 ├── POLICIES.md
 ├── routes.ts
 ├── server.ts

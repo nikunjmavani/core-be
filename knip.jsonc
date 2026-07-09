@@ -1,0 +1,65 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // Entry points knip treats as reachable roots. Everything transitively used
+  // from here is "used"; anything under `project` but not reached is reported.
+  // src/server.ts, src/worker.ts, and the migrate runner are auto-detected from
+  // the package.json start/db scripts, so they are intentionally omitted here.
+  "entry": [
+    // tsx-run scripts (validators, codegen, ops, seed, admin) — each is its own root.
+    "src/scripts/**/*.ts",
+    // Tooling scripts run by package.json / CI (not imported by src).
+    "tooling/**/*.{ts,mjs}",
+    // Test suites are entry roots (co-located domain tests + cross-cutting).
+    "src/**/*.test.ts",
+    "src/tests/**/*.ts"
+  ],
+  "project": ["src/**/*.ts", "tooling/**/*.{ts,mjs}"],
+  "ignore": [
+    // Required to EXIST by the route-dto-presence policy (a co-located
+    // <resource>.dto.ts for every routes file — src/tests/unit/api/route-dto-presence.policy.unit.test.ts),
+    // but the permission list route takes no query params, so its empty query DTO is
+    // intentionally unwired. knip would otherwise flag the file as unused.
+    "src/domains/tenancy/sub-domains/permission/permission.dto.ts"
+  ],
+  // Rule severities. This gate ships BLOCKING on the categories knip is reliable
+  // for in this codebase — unused files, dependencies, binaries, duplicates — and
+  // defers the noisy cross-file `exports`/`types` analysis (191 findings, mostly
+  // false positives from DI/dynamic-registration and the barrel-avoidance import
+  // style) to a dedicated burn-down. Flip these to "error" once that lands.
+  "rules": {
+    "files": "error",
+    "dependencies": "error",
+    "devDependencies": "error",
+    "unlisted": "error",
+    "binaries": "error",
+    "unresolved": "error",
+    // OFF by design: knip flags exports that resolve to the same value as
+    // "duplicates", but this repo's constants-centralization rule intentionally
+    // gives coincident values distinct semantic names (JWT_ISSUER = PROJECT_SLUG,
+    // PRESIGNED_URL_EXPIRY_SECONDS = ACCESS_TOKEN_EXPIRY_SECONDS, TTLs = SECONDS_PER_DAY).
+    "duplicates": "off",
+    "exports": "off",
+    "nsExports": "off",
+    "types": "off",
+    "nsTypes": "off",
+    "enumMembers": "off"
+  },
+  "ignoreDependencies": [
+    // Invoked as a binary by .husky/pre-commit (pnpm lint-staged + lint-staged.config.mjs),
+    // never imported — knip's static graph misses it.
+    "lint-staged",
+    // Used as a pino transport target (a module-name string resolved by pino at
+    // runtime), not a static import.
+    "pino-pretty"
+  ],
+  "ignoreBinaries": [
+    // Shell tools invoked from scripts / CI, not npm dependencies.
+    "gitleaks",
+    "gh",
+    "semgrep",
+    // Load-test runner invoked by load:* scripts.
+    "k6",
+    // Windows counterpart of `which`, probed in tooling/setup/common/exec.ts.
+    "where"
+  ]
+}

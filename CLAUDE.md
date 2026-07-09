@@ -394,6 +394,8 @@ Local SonarQube quality gate (pre-commit): `pnpm sonar:up` / `sonar:scan` / `son
 - `pnpm lint` — run Biome (lint + format check on `src/` and `tooling/`)
 - `pnpm format` — run Biome formatter (`biome format --write`)
 - `pnpm typecheck` — TypeScript type check
+- `pnpm knip` — dead-code gate (unused files / dependencies / binaries; config `knip.jsonc`). Blocking on those high-signal categories; the noisy `exports`/`types` analysis is deferred. Own PR-CI lane, folded into the `quality-gate` aggregate.
+- `pnpm health` / `pnpm health:fix` — phased local health orchestrator (`tooling/validate/health-check.sh`): runs every gate, **continues through failures**, prints a PASS/FAIL table; `--fix` auto-repairs lint + format first. Complements the fail-fast `pnpm ci:local`. `pnpm quality` = `health` + `sonar:scan`.
 - `pnpm compose:up` / `pnpm compose:down` — start/stop Postgres + Redis (Docker Compose)
 - `pnpm compose:wait` — wait until Compose Postgres accepts connections (fails fast if service not running)
 - `pnpm db:migrate` — run SQL migrations from `migrations/`

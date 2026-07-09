@@ -39,6 +39,7 @@ const REQUIRED_LANES = [
   'unit',
   'matrix',
   'migration-lint',
+  'knip',
   'build-verify',
   'security-audit',
   'security-secrets',
