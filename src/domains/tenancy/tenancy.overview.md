@@ -8,7 +8,7 @@ Multi-tenant primitives for the platform: organizations, memberships, member rol
 
 What it owns:
 
-- The `tenancy.organizations`, `tenancy.memberships`, `tenancy.member_roles`, `tenancy.permissions`, `tenancy.member_invitations`, and `tenancy.organization_api_keys` tables (plus settings + notification policy children).
+- The `tenancy.organizations`, `tenancy.memberships`, `tenancy.roles`, `tenancy.permissions`, `tenancy.member_invitations`, and `tenancy.api_keys` tables (plus settings + notification policy children).
 - Organization slug uniqueness, x-organization-id format (URL-safe public ids).
 - The Redis-backed permission cache (`PERMISSION_CACHE_DEFAULT_TTL_SECONDS = 300`) and the `requireOrganizationPermission` Fastify preHandler.
 - The invitation token issuance (parallel construction to email verification-code tokens).
