@@ -8,10 +8,10 @@ Append-only audit log of every security- and governance-relevant action that hap
 
 What it owns:
 
-- The `audit.logs` table, its schema, and its retention policy, plus the `audit.audit_outbox` transactional-outbox table and its drain worker (`audit-outbox-drain`).
-- The single `AuditService.record()` write entry-point that all other domains call (directly or through `recordAuditEvent` helper).
+- The `audit.logs` table, its schema, and its retention policy, plus the `audit.outbox` transactional-outbox table and its drain worker (`audit-outbox-drain`).
+- The write entry-point all other domains call: `recordScopedAuditEvent(request, …)` stages a row in `audit.outbox`; the drain worker resolves internal ids and inserts into `audit.logs` (the underlying `recordAuditEvent` wrapper swallows + logs failures).
 - `GET /api/v1/audit/logs` — cross-tenant cursor-paginated listing (global `SUPER_ADMIN` / `ADMIN` only).
-- Org-scoped listing is exposed from tenancy as `GET /api/v1/tenancy/organizations/:id/audit-logs` (`audit-log:read`); implemented by `AuditService.listForOrganization`.
+- Org-scoped listing is exposed from tenancy as `GET /api/v1/tenancy/organization/audit-logs` (`audit-log:read`); implemented by `AuditService.listForOrganization`.
 
 What it does not own: deciding **when** to emit an audit event — that's the responsibility of each calling domain. Audit only enforces the shape, the durability, and the read contract.
 

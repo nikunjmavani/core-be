@@ -6,13 +6,13 @@ Parent: [notify](../../notify.overview.md)
 
 ## Purpose
 
-Customer-configured outbound webhook endpoints + the entire delivery pipeline: per-organization webhook configurations (URL, secret, event filter), the `webhook_delivery` outbox, the delivery worker with exponential backoff and DLQ, and the per-attempt audit log (`webhook_delivery_attempt`). The nested [webhook-event](src/domains/notify/sub-domains/webhook/webhook-event/) resource models the catalog of event types customers can subscribe to.
+Customer-configured outbound webhook endpoints + the entire delivery pipeline: per-organization webhook configurations (URL, secret, event filter), the `webhook_delivery_attempts` table (both the PENDING outbox row and the delivery/attempt record), and the delivery worker with exponential backoff and DLQ. The nested [webhook-event](src/domains/notify/sub-domains/webhook/webhook-event/) resource models the catalog of event types customers can subscribe to.
 
 ## Key invariants
 
-- **At-least-once delivery**: `webhook_delivery` is an outbox row written inside the originating transaction. The worker claims it atomically and retries on failure.
+- **At-least-once delivery**: a PENDING `webhook_delivery_attempts` row is written inside the originating transaction (the outbox). The worker claims it atomically and retries on failure.
 - **Enqueue after commit**: the `WEBHOOK_DELIVERY_REQUESTED` handler calls `runEnqueueAfterCommit` so BullMQ jobs are not published until `eventBus.flushOnCommit` runs (HTTP `onResponse` after the request transaction commits). Workers and scripts without an HTTP onCommit scope enqueue immediately.
-- **Per-attempt audit**: every HTTP attempt produces a `webhook_delivery_attempt` row capturing status, latency, error class, response headers (truncated). The full attempt history is forensically queryable.
+- **Delivery record**: the `webhook_delivery_attempts` row records status, HTTP status code, response body, and `attempt_count` (capped at 5); the delivery history is forensically queryable.
 - **Request-id propagation**: outbound deliveries carry the originating `X-Request-Id` so customers can correlate their server logs with our audit.
 - **HMAC signature on every payload**: each delivery is signed with the per-webhook secret; customers verify signature in their handler.
 - **Exponential backoff**: BullMQ-managed; final failure → DLQ + Sentry. Attempts capped per the policy in [src/POLICIES.md](src/POLICIES.md).

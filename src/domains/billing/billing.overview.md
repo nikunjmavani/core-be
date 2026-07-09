@@ -8,12 +8,12 @@ Owns plan catalog, subscription lifecycle, and the Stripe webhook integration. S
 
 What it owns:
 
-- The `billing.plans`, `billing.subscriptions`, and `billing.stripe_webhook_events` tables.
+- The `billing.plans`, `billing.subscriptions`, `billing.stripe_webhook_events`, and `billing.stripe_subscription_tombstones` tables.
 - The Stripe client wrapper and webhook signature verification.
 - Idempotent inbound webhook ingestion (the `transactional-outbox` pattern, applied inbound).
-- The user-facing subscription HTTP API (`POST/PATCH/DELETE`) that proxies to Stripe.
+- The user-facing subscription HTTP API (`POST`/`PATCH`; cancellation is `POST .../cancel`, there is no DELETE) that proxies to Stripe.
 
-What it does not own: invoicing UI, dunning emails (those flow through `notify`), audit trail (those flow through `audit`).
+What it does not own: invoicing UI; customer dunning emails (Stripe's own dunning handles the retries and emails); an audit trail (billing emits no audit events today).
 
 ## Key invariants
 
@@ -39,13 +39,12 @@ This domain implements the contracts documented in [src/PATTERNS.md](src/PATTERN
 - `tenant-isolation` / `rls-context` — subscriptions are organization-scoped; reads/writes run inside `withOrganizationDatabaseContext`. The `subscriptions_tenant_isolation` policy carries an explicit `WITH CHECK` pinned to the active-org GUC (the `USING` arm keeps the retention bypass for SELECT/DELETE), so no write — including a retention-context one — can land a foreign `organization_id`. Stripe webhook side effects resolve their tenant from the **database mapping** (subscription id, then customer id) whenever one exists, overriding attacker-influencable Stripe metadata; metadata is only the last-resort binding for a first-contact Dashboard-origin subscription, backstopped by the WITH CHECK.
 - `idempotency` — every mutating subscription endpoint requires `X-Idempotency-Key`; the same key is forwarded to Stripe.
 - `transactional-outbox` — applied **inbound** to Stripe webhooks (claim row, process, mark processed; reclaim if stuck).
-- `audit-emission` — every state transition records an audit row.
 - `soft-delete` does **not** apply to subscriptions or plans (immutable billing ledger).
 
 ## Cross-domain flows
 
 - `subscription-change-flow` — Stripe-driven reconciliation of subscription state.
-- `dunning-flow` — `past_due` → notification + email → recovery or cancellation.
+- `dunning-flow` — Stripe-driven `past_due` → recovery or cancellation (Stripe handles the dunning emails).
 
 ## Lifecycle
 
@@ -65,8 +64,6 @@ stateDiagram-v2
 
 - Emits: none — subscription state changes are persisted directly from verified Stripe webhooks; no in-process domain events are published.
 - Consumes: Stripe webhook events (verified, deduplicated, persisted, then dispatched to the appropriate `subscription` sub-domain method).
-
-Listeners for billing events live under [notify/events/](src/domains/notify/events/) — that's what produces the notification + email side effects.
 
 ## External integrations
 

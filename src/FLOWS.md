@@ -84,7 +84,7 @@ Returning user submits credentials: `POST /api/v1/auth/login`.
 sequenceDiagram
   participant Client
   participant Auth as auth.controller
-  participant Login as LoginService
+  participant Login as AuthService
   participant US as UserService
   participant AM as AuthMethodService
   participant MFA as MfaService
@@ -94,16 +94,16 @@ sequenceDiagram
   Login->>US: findByEmail
   Login->>AM: verify password (argon2id)
   alt MFA enabled
-    Login->>MFA: createChallenge → mfa_session_token (Redis, 5m)
-    Login-->>Auth: {requires_mfa: true, mfa_session_token}
-    Auth-->>Client: 200
+    Login->>MFA: createMfaSession → mfa_session_token (Redis, 5m)
+    Login-->>Auth: {mfa_required: true, mfa_session_token}
+    Auth-->>Client: 201
     Client->>Auth: POST /auth/mfa/login {mfa_session_token, totp_code|recovery_code}
     Auth->>MFA: verifyLoginMfa (validate session token, then TOTP/recovery)
     MFA->>Login: issue access token + session
   end
   Login->>DB: INSERT auth_sessions
   Login-->>Auth: {access_token, session_public_id}
-  Auth-->>Client: 200 + Set-Cookie session_id
+  Auth-->>Client: 201 + Set-Cookie session_id
 ```
 
 ### Side effects
@@ -231,24 +231,31 @@ State changes always flow Stripe webhook → service → DB. We never write subs
 ```mermaid
 sequenceDiagram
   participant Stripe
-  participant Ingest as stripe-webhook.routes
+  participant Ingest as stripe-webhook (ingress + controller)
   participant SWS as StripeWebhookService
+  participant Queue as stripe-webhook queue (BullMQ)
+  participant Worker as stripe-webhook worker
   participant Sub as SubscriptionService
   participant DB as Postgres (RLS scoped to org)
 
+  Note over Stripe,Ingest: signature verified in the ingress plugin, before the handler
   Stripe->>Ingest: POST /api/v1/billing/webhook (Stripe-Signature)
-  Ingest->>SWS: verifySignatureAndPersist (raw body)
+  Ingest->>SWS: ingestEvent(event)
   SWS->>DB: insert stripe_webhook_events (status=processing) ON CONFLICT (event_id) DO NOTHING
   alt new event
-    SWS->>Sub: syncFromStripeProviderSubscription(provider_id, data, event.created_at)
-    Sub->>DB: BEGIN; SET LOCAL app.current_organization_id
-    Sub->>DB: UPDATE subscriptions SET ... WHERE provider_subscription_id=$1
-    Sub->>DB: COMMIT
-    SWS->>DB: UPDATE stripe_webhook_events SET status=processed
+    SWS->>Queue: enqueue stripe-webhook job
   else duplicate event_id
     Note over SWS: insert returns no rows; idempotent no-op
   end
   Ingest-->>Stripe: 200
+
+  Queue->>Worker: deliver job (async, separate process)
+  Worker->>SWS: handleEvent → dispatchEvent
+  SWS->>Sub: syncFromStripeProviderSubscription(provider_id, data, event.created_at)
+  Sub->>DB: BEGIN; SET LOCAL app.current_organization_id
+  Sub->>DB: UPDATE subscriptions SET ... WHERE provider_subscription_id=$1
+  Sub->>DB: COMMIT
+  Worker->>DB: UPDATE stripe_webhook_events SET status=processed
 ```
 
 ### Side effects
@@ -271,6 +278,8 @@ sequenceDiagram
 Stripe sends a billing-failure webhook (`invoice.payment_failed`, `customer.subscription.updated` with `past_due`) → `POST /api/v1/billing/webhook`.
 
 ### Sequence
+
+> Ingestion uses the same async claim → enqueue → worker path as `subscription-change-flow`; the diagram below collapses that plumbing to focus on the `subscriptions.status` state machine.
 
 ```mermaid
 sequenceDiagram

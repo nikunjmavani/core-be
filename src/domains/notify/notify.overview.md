@@ -9,7 +9,7 @@ Two delivery surfaces: **in-app notifications** (rows users see in the UI) and *
 What it owns:
 
 - The `notify.notifications` table and its delivery worker.
-- The `notify.webhooks`, `notify.webhook_delivery`, and `notify.webhook_delivery_attempt` tables (the outbound webhook outbox + retry log).
+- The `notify.webhooks` and `notify.webhook_delivery_attempts` tables (the outbound webhook config + its delivery/attempt records — one table is both the PENDING outbox row and the attempt record).
 - The webhook delivery worker, retry policy, DLQ, and request-id forwarding.
 - The in-process listener that turns `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` into BullMQ webhook-delivery jobs.
 
@@ -17,8 +17,8 @@ What it does not own: outbound email — that belongs to the [src/infrastructure
 
 ## Key invariants
 
-- **At-least-once outbound webhook delivery**: each webhook configuration produces a `webhook_delivery` row inside the originating transaction. The delivery worker claims it atomically, retries with exponential backoff, and lands final failures in DLQ.
-- **Per-attempt audit**: every HTTP attempt produces a `webhook_delivery_attempt` row capturing status, latency, response headers (truncated), and error class. The full attempt history is queryable.
+- **At-least-once outbound webhook delivery**: each pending delivery is a `webhook_delivery_attempts` row (status `PENDING`, unique per `(webhook_id, event_key)`) written inside the originating transaction. The delivery worker claims it atomically, retries with exponential backoff (`attempt_count` capped at 5), and lands final failures in DLQ.
+- **Delivery record**: the `webhook_delivery_attempts` row tracks status (`PENDING → SENDING → SENT|FAILED`), HTTP status code, response body, and `attempt_count`; delivery history is queryable per webhook.
 - **Request-id forwarding**: outbound deliveries include the originating `X-Request-Id` so customers can correlate their server logs with our audit log.
 - **Tenant-scoped**: webhook configurations belong to organizations; deliveries fire only to URLs that organization owns.
 - **No payload injection from other tenants**: the event payload always derives from the originating organization's data, never merged across tenants.
@@ -34,26 +34,25 @@ What it does not own: outbound email — that belongs to the [src/infrastructure
 
 This domain implements the contracts documented in [src/PATTERNS.md](src/PATTERNS.md):
 
-- `transactional-outbox` — `webhook_delivery` is the outbox; the delivery worker is the dispatcher.
+- `transactional-outbox` — the PENDING `webhook_delivery_attempts` row is the outbox; the delivery worker is the dispatcher.
 - `tenant-isolation` / `rls-context` — every read and write scoped to the active organization (or the worker's pinned org context).
 - `idempotency` — webhook configuration writes accept `X-Idempotency-Key`.
-- `audit-emission` — webhook configuration changes record audit rows.
-- `soft-delete` — webhook configurations and delivery rows tombstone with `deleted_at` (subject to retention windows).
+- `soft-delete` — webhook configurations tombstone with `deleted_at` (subject to retention windows).
 
 ## Cross-domain flows
 
 The notify domain does **not** subscribe to other domains' events. Its two surfaces are driven directly:
 
-- **In-app notifications** — created by callers of `NotificationService.dispatchNotification` (service/API), then delivered asynchronously by the `notification` worker.
-- **Outbound webhook delivery** — a `webhook_delivery` row is written inside the originating transaction; the internal `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` listener enqueues the BullMQ delivery job on commit.
+- **In-app notifications** — created via `createAndDispatchNotification` (persist the row + enqueue channel dispatch), then delivered asynchronously by the `notification` worker.
+- **Outbound webhook delivery** — a `webhook_delivery_attempts` row (status `PENDING`) is written inside the originating transaction; the internal `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` listener enqueues the BullMQ delivery job on commit.
 
-For reference, adjacent flows do **not** route through notify today: `signup-flow` / `login-flow` / `organization-invitation-flow` send email **directly via the mail outbox** ([src/infrastructure/mail/](src/infrastructure/mail/)); `subscription-change-flow` / `dunning-flow` persist Stripe state + audit only.
+For reference, adjacent flows do **not** route through notify today: `signup-flow` / `login-flow` / `organization-invitation-flow` send email **directly via the mail outbox** ([src/infrastructure/mail/](src/infrastructure/mail/)); `subscription-change-flow` / `dunning-flow` persist Stripe state only.
 
 ## Lifecycle
 
 ```mermaid
 stateDiagram-v2
-  [*] --> notification_created: NotificationService.dispatchNotification
+  [*] --> notification_created: createAndDispatchNotification
   notification_created --> seen: user views in app
   seen --> dismissed: user dismisses
   dismissed --> [*]

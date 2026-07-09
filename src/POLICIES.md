@@ -9,7 +9,7 @@ The canonical exports live under [src/shared/constants/](src/shared/constants/) 
 ## VERIFICATION_CODE_TTL_MINUTES
 
 - **Value**: 15 minutes
-- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Source**: [src/domains/auth/sub-domains/auth-method/verification-code.ts](src/domains/auth/sub-domains/auth-method/verification-code.ts) (domain-local constant, not under `shared/constants/`)
 - **Rationale**: Balances security (limited replay window) and UX (a user must have time to switch from the login form → email client → read and type the code).
 - **Consequences of change**:
   - Decreasing → tighter replay window; users on slow devices or pulling email through corporate spam filtering may miss the window and have to retry.
@@ -214,13 +214,13 @@ The canonical exports live under [src/shared/constants/](src/shared/constants/) 
 
 ## USER_DATA_EXPORT_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS
 
-- **Value**: 86 400 seconds (24 hours)
+- **Value**: 900 seconds (15 minutes)
 - **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
-- **Rationale**: GDPR export download URL lifetime. The legal cap is 24 hours; we run at the cap so users have one full day to retrieve their data without needing to re-trigger the worker.
+- **Rationale**: GDPR export download URL lifetime. sec-U6 shortened this from 24 h to 15 min: an exfiltrated session token used to be able to mint a URL that stayed valid for a full day and replay it. 15 min still gives the legitimate browser pull ample headroom (a single gzip download) while collapsing the stolen-token replay window. Every mint is recorded to `audit.logs` so forensics survive even after the URL expires.
 - **Consequences of change**:
-  - Decreasing → more users have to re-export; worker load increases.
-  - Increasing past 24 h → not allowed by S3 SigV4 anyway and would breach our published privacy posture.
-- **Last reviewed**: 2026-05-28
+  - Decreasing → a slow download or interrupted pull may need a re-export; worker load increases.
+  - Increasing → widens the stolen-token replay window; review with security before moving past 15 min (hard S3 SigV4 cap is 7 days, but the privacy posture is the binding limit).
+- **Last reviewed**: 2026-07-09 (sec-U6)
 
 ## PRESIGNED_URL_EXPIRY_SECONDS
 
