@@ -113,15 +113,41 @@ jobs:
             echo "::error::RELEASE_PLEASE_TOKEN is not set in the development environment — release automation is silently degraded (Releases/tags cannot be created)."
             exit 1
           fi
-          status="$(curl -s -o /dev/null -w '%{http_code}' \
+          # Dump the response headers: a fine-grained PAT returns its expiry in the
+          # `github-authentication-token-expiration` header on any authenticated
+          # request, so we can warn a fortnight BEFORE it lapses — instead of only
+          # discovering it dead (401) on the day a release needs it.
+          status="$(curl -sS -D /tmp/pat-headers -o /dev/null -w '%{http_code}' \
             -H "Authorization: Bearer ${RELEASE_PLEASE_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GH_REPOSITORY}")"
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GH_REPOSITORY}" || echo 000)"
           if [ "$status" = "401" ]; then
             echo "::error::RELEASE_PLEASE_TOKEN (development copy) is expired or revoked. Rotate the PAT and update BOTH environment copies (pnpm github:sync) before the next release needs it."
             exit 1
           fi
-          echo "RELEASE_PLEASE_TOKEN accepted by the API (HTTP ${status})."
+          if [ "$status" != "200" ]; then
+            echo "::warning title=RELEASE_PLEASE_TOKEN probe inconclusive::GitHub API returned HTTP ${status} (transient?). Not failing the canary."
+            exit 0
+          fi
+          # Classic / non-expiring PATs omit the header — nothing to warn about.
+          expiry="$(grep -i '^github-authentication-token-expiration:' /tmp/pat-headers \
+            | sed -E 's/^[^:]+:[[:space:]]*//; s/[[:space:]]*$//' || true)"
+          if [ -z "$expiry" ]; then
+            echo "RELEASE_PLEASE_TOKEN valid (HTTP 200); no expiry header (classic or non-expiring PAT)."
+            exit 0
+          fi
+          expiry_epoch="$(date -u -d "$expiry" +%s 2>/dev/null || echo 0)"
+          now_epoch="$(date -u +%s)"
+          if [ "$expiry_epoch" -gt 0 ]; then
+            days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
+            echo "RELEASE_PLEASE_TOKEN valid; expires ${expiry} (${days_left} days left)."
+            if [ "$days_left" -lt 14 ]; then
+              echo "::warning title=RELEASE_PLEASE_TOKEN expiring soon::The PAT expires in ${days_left} day(s) (${expiry}). Rotate it and update BOTH environment copies (pnpm github:sync) before it lapses to avoid a stuck release."
+            fi
+          else
+            echo "RELEASE_PLEASE_TOKEN valid; expiry header present but unparseable: ${expiry}"
+          fi
 
   notify-failure:
     name: Notify failure

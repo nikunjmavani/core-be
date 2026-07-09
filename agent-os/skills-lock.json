@@ -103,6 +103,12 @@
       "skillPath": "agent-os/skills/env-schema-add/SKILL.md",
       "computedHash": "a82dbdb2c90f3b234017e939d3f3320153ec18780de93122dd7dc6f9f287d9bd"
     },
+    "find-skills": {
+      "source": "local",
+      "sourceType": "local",
+      "skillPath": "agent-os/skills/find-skills/SKILL.md",
+      "computedHash": "567bef968d45f857c981f77528855ee7dc730f5c44a39868b3088908a0aff141"
+    },
     "i18n-message-guard": {
       "source": "local",
       "sourceType": "local",
@@ -209,7 +215,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/skill-index/SKILL.md",
-      "computedHash": "c2506d5dbd94e6e283a8d4fdd4bffefd2060d6362f30fca1f99d13d14adf3814"
+      "computedHash": "816c94704dda08ab4617c10c1b36a6c62acf68327fc6b59c0c3af8559bf6b324"
     },
     "split-to-prs": {
       "source": "local",

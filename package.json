@@ -28,6 +28,7 @@
     "validate:domain:coverage": "tsx src/scripts/validators/domain/validate-domain-coverage.ts --strict",
     "validate:scripts-layout": "tsx src/scripts/validators/code/validate-scripts-layout.ts && tsx src/scripts/validators/code/validate-mcp-optional-dependency.ts",
     "validate:mcp-optional-dependency": "tsx src/scripts/validators/code/validate-mcp-optional-dependency.ts",
+    "validate:lockfile": "./tooling/validate/lockfile-sync.sh",
     "docs:check": "tsx src/scripts/codegen/check-api-docs-sync.ts",
     "docs:lint": "markdownlint-cli2",
     "docs:lint:fix": "markdownlint-cli2 --fix",
