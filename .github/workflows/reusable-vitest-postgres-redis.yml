@@ -291,6 +291,9 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ inputs.merge_commit_sha || github.sha }}
+          # Full history so the patch-coverage gate can diff changed lines against
+          # the PR base merge-base (git diff origin/<target>...HEAD).
+          fetch-depth: 0
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -362,6 +365,28 @@ jobs:
             "${inputs[@]}" \
             --output coverage-merged/coverage-final.json \
             ${report_only_flag}
+
+      - name: Patch coverage (changed lines ≥ 90%)
+        # Complements the slow global merged-coverage ratchet: holds the lines a PR
+        # ADDED/MODIFIED to a strict bar (90% of changed, coverable lines), measured
+        # against the merged report (unit + global + DB e2e/integration union), so a
+        # service line covered only by integration tests still counts. PR-only — a
+        # post-merge HEAD is its own base, so there is no patch to measure. Blocks the
+        # PR: the changed-line delta must clear the bar even while the global ratchet
+        # moves slowly. Zero changed coverable lines → 100%, so docs/CI/script-only
+        # PRs pass trivially.
+        if: github.event_name == 'pull_request' && hashFiles('coverage-merged/coverage-final.json') != ''
+        env:
+          # inputs.target_branch is the controlled PR base name (e.g. main); passed
+          # via env + quoted rather than interpolated into the run script.
+          BASE_REF: ${{ inputs.target_branch }}
+        run: |
+          set -euo pipefail
+          git fetch origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}" --quiet
+          node tooling/ci/check-patch-coverage.mjs \
+            --coverage coverage-merged/coverage-final.json \
+            --base "origin/${BASE_REF}" \
+            --threshold 90
 
       - name: Upload merged coverage artifact
         if: always() && hashFiles('coverage-merged/**') != ''

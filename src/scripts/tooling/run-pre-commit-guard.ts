@@ -72,6 +72,18 @@ export function shouldRunMigrationCheck(stagedFiles: string[]): boolean {
   return stagedFiles.some((file) => /^migrations\/.*\.sql$/.test(file));
 }
 
+/**
+ * Returns whether staged files touch the dependency manifest or lockfile — a
+ * change to `package.json` deps or `pnpm-workspace.yaml` overrides that skips a
+ * lockfile regen desyncs `pnpm-lock.yaml` and reds every frozen-install CI job.
+ */
+export function shouldRunLockfileCheck(stagedFiles: string[]): boolean {
+  return stagedFiles.some(
+    (file) =>
+      file === 'package.json' || file === 'pnpm-lock.yaml' || file === 'pnpm-workspace.yaml',
+  );
+}
+
 /** Returns whether staged files touch `src/` or `tooling/` (structure tree drift). */
 export function shouldRunStructureTreeCheck(stagedFiles: string[]): boolean {
   return stagedFiles.some((file) => file.startsWith('src/') || file.startsWith('tooling/'));
@@ -209,6 +221,13 @@ export function buildGuardSteps(options: {
       label: 'lint-staged (Biome + markdownlint)',
       when: 'always',
       description: 'pnpm lint-staged',
+    },
+    {
+      id: '1b',
+      label: 'Lockfile in sync',
+      when: shouldRunLockfileCheck(stagedFiles) ? 'always' : 'conditional',
+      description:
+        'pnpm validate:lockfile (when package.json / pnpm-lock.yaml / pnpm-workspace.yaml staged)',
     },
     { id: '2', label: 'TypeScript typecheck', when: 'always', description: 'pnpm typecheck' },
     {
@@ -383,6 +402,10 @@ export function runPreCommitGuard(options: RunGuardOptions = {}): number {
     {
       label: 'lint-staged (Biome + markdownlint)',
       run: () => runPnpm('lint-staged', ['--no-stash']),
+    },
+    {
+      label: 'Lockfile in sync',
+      run: () => (shouldRunLockfileCheck(stagedFiles) ? runPnpm('validate:lockfile') : 0),
     },
     { label: 'TypeScript typecheck', run: () => runPnpm('typecheck') },
     { label: 'Domain structure (strict)', run: () => runPnpm('validate:domain:strict') },

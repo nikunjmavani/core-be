@@ -3,6 +3,7 @@ import {
   buildGuardSteps,
   hasPackageScript,
   shouldRunGlobalTests,
+  shouldRunLockfileCheck,
   shouldRunMigrationCheck,
   shouldRunOpenApiCheck,
   shouldRunSonarScan,
@@ -29,6 +30,29 @@ describe('run-pre-commit-guard conditionals', () => {
     expect(shouldRunStructureTreeCheck(['src/domains/auth/auth.routes.ts'])).toBe(true);
     expect(shouldRunStructureTreeCheck(['tooling/ci/run-named-step.sh'])).toBe(true);
     expect(shouldRunStructureTreeCheck(['docs/README.md'])).toBe(false);
+  });
+
+  it('detects dependency-manifest / lockfile staged paths', () => {
+    expect(shouldRunLockfileCheck(['package.json'])).toBe(true);
+    expect(shouldRunLockfileCheck(['pnpm-lock.yaml'])).toBe(true);
+    expect(shouldRunLockfileCheck(['pnpm-workspace.yaml'])).toBe(true);
+    // Nested/unrelated files do not trigger the frozen-install check.
+    expect(shouldRunLockfileCheck(['tooling/setup/package.json'])).toBe(false);
+    expect(shouldRunLockfileCheck(['src/domains/auth/auth.service.ts'])).toBe(false);
+  });
+
+  it('marks the lockfile step always/conditional based on staged manifest/lockfile', () => {
+    const withManifest = buildGuardSteps({
+      stagedFiles: ['package.json'],
+      scripts: baseScripts,
+    });
+    expect(withManifest.find((step) => step.id === '1b')?.when).toBe('always');
+
+    const withoutManifest = buildGuardSteps({
+      stagedFiles: ['docs/README.md'],
+      scripts: baseScripts,
+    });
+    expect(withoutManifest.find((step) => step.id === '1b')?.when).toBe('conditional');
   });
 
   it('runs the global suite for domains, env-schema, harness, workflows, and Docker changes', () => {
