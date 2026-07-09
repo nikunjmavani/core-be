@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.10.5](https://github.com/nikunjmavani/core-be/compare/v4.10.4...v4.10.5) (2026-07-09)
+
+
+### Documentation
+
+* **CLAUDE:** fix structural drift — domain table, infra tree, commands, testing (Cluster D) ([#891](https://github.com/nikunjmavani/core-be/issues/891)) ([c0f34cc](https://github.com/nikunjmavani/core-be/commit/c0f34cc27875ccefe27301f10ecd644e71d0d95d))
+* mark billing→notification event flow as planned/not-implemented (Cluster E) ([#892](https://github.com/nikunjmavani/core-be/issues/892)) ([3343803](https://github.com/nikunjmavani/core-be/commit/33438031984bb60ab121635c8362e8f54f673274))
+* seat_limit_reached + 503 in response-codes; index 3 missing docs (Cluster G) ([#894](https://github.com/nikunjmavani/core-be/issues/894)) ([c959266](https://github.com/nikunjmavani/core-be/commit/c959266f9d20d74236e9ce3e29fc2d159b154ef3))
+* **skills:** fix idempotency route table, SonarQube step ref, skill-index trigger (Cluster F) ([#893](https://github.com/nikunjmavani/core-be/issues/893)) ([a1fda2d](https://github.com/nikunjmavani/core-be/commit/a1fda2d653a5214bc58b7e5da1d17726aa9534d8))
+* strip the dead billing-event concept entirely (not "planned") ([#895](https://github.com/nikunjmavani/core-be/issues/895)) ([f0ca473](https://github.com/nikunjmavani/core-be/commit/f0ca4732c796bc270f7ffe3c4d5fc8e9bb7eca92))
+* sync narrative docs to code (final verification pass) ([#896](https://github.com/nikunjmavani/core-be/issues/896)) ([767904b](https://github.com/nikunjmavani/core-be/commit/767904bc04db6aa9dd554f044366b2cb30304ed7))
+* sync stale counts + pnpm version (Cluster C) ([#889](https://github.com/nikunjmavani/core-be/issues/889)) ([5283b12](https://github.com/nikunjmavani/core-be/commit/5283b12271f6df167671c29b6f157ce722e7e22d))
+
 ## [4.10.4](https://github.com/nikunjmavani/core-be/compare/v4.10.3...v4.10.4) (2026-07-08)
 
 
