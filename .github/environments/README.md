@@ -53,6 +53,6 @@ See [docs/deployment/runbooks/add-new-environment.md](../../docs/deployment/runb
 
 **Drift check:** `pnpm github:sync --check` (consistency + branches/rulesets/environments). `pnpm validate:github-environments` compares protection JSON vs GitHub API (requires `gh auth login`).
 
-**When reviewers change:** update GitHub UI and the matching `users` / `teams` in `production.json` in the same PR.
+**When reviewers change:** prefer `pnpm github:tool:governance-mode` (`personal` / `team`) — it sets `production.json` `requiredReviewers.users` + `preventSelfReview` from CODEOWNERS and refuses a deadlocking combo — then `pnpm github:sync`. If you hand-edit `production.json`, run `pnpm github:tool:governance-mode:check` to catch an inconsistent/deadlocking state, and keep the GitHub UI in sync. See [docs/deployment/ci-cd/branch-protection.md](../../docs/deployment/ci-cd/branch-protection.md#governance-mode--personal--team-one-switch).
 
 See [docs/deployment/github-production-environment.md](../../docs/deployment/github-production-environment.md).

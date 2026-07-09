@@ -2,10 +2,12 @@
 # once a maintainer APPROVES it — the approval is the manual gate. The PR then merges
 # automatically when the required PR CI checks pass.
 #
-# Why approval-triggered (and not a required approval): main is solo-maintained with
-# 0 required approvals (.github/rulesets/main.json) because an author can't approve
-# their own PRs. A maintainer CAN approve Dependabot's PRs, so we use that approval
-# as the opt-in signal to arm auto-merge — no branch-protection change needed.
+# Why approval-triggered: a maintainer's approval is the opt-in signal that arms
+# auto-merge, and this works in BOTH governance modes (see
+# docs/deployment/ci-cd/branch-protection.md). In personal mode (0 required approvals)
+# it is the only human gate; in team mode (1 required CODEOWNER approval) the same
+# approval doubles as the required review. Either way the PR merges automatically once
+# the required PR CI checks pass — no per-mode change to this workflow is needed.
 # Majors / security / github-actions / docker stay fully manual.
 #
 # Prerequisite: the repo setting "Allow auto-merge" must be enabled
