@@ -199,7 +199,8 @@ Full k6 scenarios: [load-testing.md](docs/reference/testing/load-testing.md).
 ### Running a live server for a frontend / loopback E2E suite
 
 The tiers above are **in-process** (`fastify.inject()`) and self-configure — the Vitest
-harness (`NODE_ENV=test`) already relaxes the hardened boot guards and rate-limit caps, and
+harness (`src/tests/setup.ts`, running as `NODE_ENV=development` — there is no `test` env)
+already relaxes the hardened boot guards and rate-limit caps via explicit env flags, and
 CI does the same, so **no manual env is needed for `pnpm test*` or CI**.
 
 A **live server** is different: when an external suite drives a real core-be over loopback —
