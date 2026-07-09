@@ -558,7 +558,10 @@ idempotencyKeyRequired` / `idempotencyKeyInvalid` without it):
 1. Create team organization — `POST /tenancy/organizations`
 2. Create membership — `POST /tenancy/organization/memberships`
 3. Transfer organization ownership — `POST /tenancy/organization/transfer-ownership`
-4.–7. Subscription writes — create / change-plan / cancel / resume under `/billing/subscriptions`
+4. Create subscription — `POST /billing/subscriptions`
+5. Change subscription plan — `POST /billing/subscriptions/{subscription_id}/change-plan`
+6. Cancel subscription — `POST /billing/subscriptions/{subscription_id}/cancel`
+7. Resume subscription — `POST /billing/subscriptions/{subscription_id}/resume`
 8. Create payment method setup — `POST /billing/payment-methods/setup`
 9. Create webhook — `POST /notify/webhooks`
 10. Create organization API key — `POST /tenancy/organization/api-keys`
