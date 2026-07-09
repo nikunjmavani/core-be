@@ -144,9 +144,9 @@ Today the repo is in **personal** mode **by design, not by oversight**: [`.githu
 ### Switch modes
 
 ```bash
-pnpm tool:governance-mode                 # status: current mode, CODEOWNERS roster, next step
-pnpm tool:governance-mode team            # apply four-eyes mode (needs ≥2 CODEOWNERS owners)
-pnpm tool:governance-mode personal        # apply solo-maintainer mode
+pnpm github:tool:governance-mode                 # status: current mode, CODEOWNERS roster, next step
+pnpm github:tool:governance-mode team            # apply four-eyes mode (needs ≥2 CODEOWNERS owners)
+pnpm github:tool:governance-mode personal        # apply solo-maintainer mode
 pnpm github:sync                          # push the updated ruleset + environment to GitHub
 ```
 
@@ -155,9 +155,9 @@ The tool ([`tooling/setup/github/governance-mode.ts`](../../../tooling/setup/git
 ### To move to team mode
 
 1. Add owner(s) to [`.github/CODEOWNERS`](../../../.github/CODEOWNERS) so it lists **≥2 individual users** with write+ access. (Team handles like `@org/team` resolve only on **organization** repos — the `@core/dev` TODO in CODEOWNERS requires transferring the repo into an org first; a personal repo lists individual handles only.)
-2. Run `pnpm tool:governance-mode team` then `pnpm github:sync`.
+2. Run `pnpm github:tool:governance-mode team` then `pnpm github:sync`.
 
-> **Invariant guard.** `pnpm tool:governance-mode:check` (and the unit test [`governance-mode.policy.unit.test.ts`](../../../src/tests/unit/ci/governance-mode.policy.unit.test.ts), which runs in the `unit` lane of `Quality gate`) fails if the two committed files ever drift into an inconsistent or deadlocking combination.
+> **Invariant guard.** `pnpm github:tool:governance-mode:check` (and the unit test [`governance-mode.policy.unit.test.ts`](../../../src/tests/unit/ci/governance-mode.policy.unit.test.ts), which runs in the `unit` lane of `Quality gate`) fails if the two committed files ever drift into an inconsistent or deadlocking combination.
 >
 > **Break-glass unchanged.** The Admin bypass (`bypass_actors` → RepositoryRole `5`, `bypass_mode: pull_request` in [`main.json`](../../../.github/rulesets/main.json)) still lets an admin merge without the review in a genuine emergency. Four-eyes is the default path, not an absolute lock.
 

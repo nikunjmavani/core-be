@@ -22,10 +22,10 @@
  *   - .github/CODEOWNERS                         (the reviewer roster — read only)
  *
  * Usage:
- *   pnpm tool:governance-mode                  # print current mode + roster + next step
- *   pnpm tool:governance-mode personal         # apply personal mode
- *   pnpm tool:governance-mode team             # apply team mode (needs ≥2 CODEOWNERS owners)
- *   pnpm tool:governance-mode --check          # fail if the committed files are inconsistent
+ *   pnpm github:tool:governance-mode                  # print current mode + roster + next step
+ *   pnpm github:tool:governance-mode personal         # apply personal mode
+ *   pnpm github:tool:governance-mode team             # apply team mode (needs ≥2 CODEOWNERS owners)
+ *   pnpm github:tool:governance-mode --check          # fail if the committed files are inconsistent
  *
  * After applying a mode, run `pnpm github:sync` to push the ruleset + environment
  * protection to GitHub. The `--check` mode is a read-only invariant guard pinned
@@ -212,7 +212,7 @@ export function findGovernanceIssues(inputs: GovernanceInputs): GovernanceIssue[
     issues.push({
       dimension: 'main.json',
       detail:
-        'pull_request rule parameters match neither the personal nor the team preset — run `pnpm tool:governance-mode <personal|team>`.',
+        'pull_request rule parameters match neither the personal nor the team preset — run `pnpm github:tool:governance-mode <personal|team>`.',
     });
   }
 
@@ -223,7 +223,7 @@ export function findGovernanceIssues(inputs: GovernanceInputs): GovernanceIssue[
   if (rulesetMode !== 'inconsistent' && rulesetMode !== productionMode) {
     issues.push({
       dimension: 'main.json ↔ production.json',
-      detail: `ruleset mode "${rulesetMode}" disagrees with production environment mode "${productionMode}" — reapply with \`pnpm tool:governance-mode ${rulesetMode}\`.`,
+      detail: `ruleset mode "${rulesetMode}" disagrees with production environment mode "${productionMode}" — reapply with \`pnpm github:tool:governance-mode ${rulesetMode}\`.`,
     });
   }
 
@@ -358,7 +358,7 @@ function printStatus(inputs: GovernanceInputs): void {
     for (const issue of issues) console.log(`  - [${issue.dimension}] ${issue.detail}`);
     console.log('');
   }
-  console.log('Switch:  pnpm tool:governance-mode <personal|team>   then   pnpm github:sync');
+  console.log('Switch:  pnpm github:tool:governance-mode <personal|team>   then   pnpm github:sync');
 }
 
 function runApply(mode: GovernanceMode, inputs: GovernanceInputs): void {
@@ -390,7 +390,7 @@ function runCheck(inputs: GovernanceInputs): never {
   }
   console.error('Governance files are inconsistent:');
   for (const issue of issues) console.error(`  - [${issue.dimension}] ${issue.detail}`);
-  console.error('\nReapply a mode with `pnpm tool:governance-mode <personal|team>`.');
+  console.error('\nReapply a mode with `pnpm github:tool:governance-mode <personal|team>`.');
   process.exit(1);
 }
 
@@ -399,7 +399,7 @@ export function main(): void {
   const argumentsList = process.argv.slice(2);
 
   if (argumentsList.includes('--help') || argumentsList.includes('-h')) {
-    console.log('Usage: pnpm tool:governance-mode [personal | team | --check]');
+    console.log('Usage: pnpm github:tool:governance-mode [personal | team | --check]');
     console.log('');
     console.log('  (no args)   Print the current mode, CODEOWNERS roster, and next step');
     console.log('  personal    Apply solo-maintainer governance (0 approvals, self-review ok)');

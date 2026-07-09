@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest';
  * `.github/rulesets/main.json` (merge gate) and `.github/environments/production.json`
  * (production-deploy reviewer gate) carry COUPLED fields: turning on four-eyes
  * review while CODEOWNERS has a single owner, or `preventSelfReview` with a single
- * production reviewer, deadlocks that owner's own PRs / deploys. `pnpm tool:governance-mode`
+ * production reviewer, deadlocks that owner's own PRs / deploys. `pnpm github:tool:governance-mode`
  * flips every coupled field atomically; this test pins the invariant so a hand-edit
  * cannot land the repo in an inconsistent or deadlocking configuration.
  */
