@@ -6,11 +6,11 @@ Parent: [notify](../../notify.overview.md)
 
 ## Purpose
 
-In-app notification rows: the user-visible feed that surfaces "subscription went past due", "you were invited to organization X", etc. Cross-domain event handlers create rows here; users mark them read or dismiss them via the API.
+In-app notification rows: the user-visible feed. Rows are created via `createAndDispatchNotification` (persist the row + enqueue channel dispatch); users mark them read or dismiss them via the API. There is no cross-domain event handler creating notifications today.
 
 ## Key invariants
 
-- **No insert-time dedupe key**: a cross-domain handler inserts one in-app row per emitted event — the `notifications` table has no `source_event_id` column and no `(user, …)` uniqueness, so a handler that emits the same event twice creates two rows. Idempotency is enforced **downstream** (dispatch + email), not at insert.
+- **No insert-time dedupe key**: the `notifications` table has no `source_event_id` column and no `(user, …)` uniqueness, so creating the same logical notification twice yields two rows. Idempotency is enforced **downstream** (dispatch + email), not at insert.
 - **Idempotent dispatch enqueue**: the dispatch job uses `jobId = notification-<id>`, so a recovery/redelivery re-enqueue of the same persisted notification is a BullMQ no-op within the retention window — one notification row never fans out (or emails) twice.
 - **Bounded mark-all-read**: `markAllReadForUser` marks the unread backlog in `NOTIFICATION_MARK_ALL_READ_BATCH_SIZE`-row batches (looping until drained), so a huge backlog cannot become one unbounded, long-held write that stalls concurrent inserts for that user; the returned count is summed from each statement's `RETURNING` (never a separate pre-count).
 - **Email outcome is honest**: the worker reports `email:outbox_pending` (not `email:queued`) when the mail-outbox row persisted but its BullMQ enqueue failed — the mail-outbox sweeper re-enqueues it and the `mail_outbox_pending` gauge tracks the depth.
@@ -22,7 +22,7 @@ In-app notification rows: the user-visible feed that surfaces "subscription went
 
 ```mermaid
 stateDiagram-v2
-  [*] --> unread: handler created notification
+  [*] --> unread: notification created
   unread --> read: user opens notification
   read --> dismissed: user dismisses
   unread --> dismissed: user dismisses without reading
@@ -32,7 +32,7 @@ stateDiagram-v2
 
 ## Events
 
-- Consumes: no domain events — notification rows are created directly via `NotificationService.dispatchNotification` (service/API), then delivered asynchronously by the `notification` BullMQ worker.
+- Consumes: no domain events — notification rows are created via `createAndDispatchNotification` (persist + enqueue channel dispatch), then delivered asynchronously by the `notification` BullMQ worker.
 
 ## Failure modes
 

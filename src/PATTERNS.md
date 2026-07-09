@@ -14,7 +14,7 @@ Prevent cross-tenant data leaks. Every read and write performed under an organiz
 
 ### Where it lives
 
-- HTTP layer: [src/shared/middlewares/tenant/tenant.middleware.ts](src/shared/middlewares/tenant/tenant.middleware.ts) — reads `X-Organization-Id` (or parses `/organizations/:id/` from the URL) and decorates `request.organizationId`. Header and path are cross-checked; mismatch → `400`.
+- HTTP layer: [src/shared/middlewares/tenant/tenant.middleware.ts](src/shared/middlewares/tenant/tenant.middleware.ts) — reads `X-Organization-Id`, validates its format, and decorates `request.organizationId`. The **authoritative** active organization is the signed `org` JWT claim; routes carry no `{organization_id}` path segment.
 - Database layer: [src/infrastructure/database/contexts/tenant-database.context.ts](src/infrastructure/database/contexts/tenant-database.context.ts) and [organization-database.context.ts](src/infrastructure/database/contexts/organization-database.context.ts) — open a Drizzle transaction and `SET LOCAL app.current_organization_id = $1`. RLS policies on org-scoped tables read that GUC.
 - Worker layer: [src/infrastructure/queue/worker-runtime/worker-processor.util.ts](src/infrastructure/queue/worker-runtime/worker-processor.util.ts) — `runTenantScopedWorkerJob` requires `organizationPublicId` in the job payload and wraps the processor body in `withOrganizationContext` so RLS sees the same GUC the HTTP layer would have set.
 
@@ -28,7 +28,7 @@ sequenceDiagram
   participant Ctx as withOrganizationDatabaseContext
   participant DB as Postgres (RLS)
   Client->>Mw: HTTP request with X-Organization-Id
-  Mw->>Mw: validate header == path :id
+  Mw->>Mw: validate X-Organization-Id format
   Mw->>Svc: request.organizationId
   Svc->>Ctx: withOrganizationDatabaseContext(orgId, fn)
   Ctx->>DB: BEGIN; SET LOCAL app.current_organization_id = orgId
@@ -44,30 +44,29 @@ The same context is reused if a worker is already running inside one (no nested 
 - New tenant-scoped repository: extend `BaseRepository`, scope every query by `organization_id`. Any RLS-eligible table also needs an RLS policy in its migration.
 - New tenant-scoped service method: wrap database I/O in `withOrganizationDatabaseContext(organizationPublicId, fn)`. **Network I/O (Stripe, S3, Resend) MUST stay outside** the wrapper to avoid holding a pool checkout across remote round trips — enforced by `pnpm test:global` (`rls-context-network-isolation.global.test.ts`).
 - New worker job: use `runTenantScopedWorkerJob`; never call `getRequestDatabase()` from a `*.worker.ts` / `*.processor.ts` (enforced by global tests).
-- New endpoint at `/organizations/:id/...`: nothing extra; the middleware infers `organizationId` from the path even if the client omits the header.
+- New tenant-scoped endpoint: the active organization comes from the `org` JWT claim (no `{organization_id}` path segment); pass the resolved `organizationPublicId` into `withOrganizationDatabaseContext`.
 
 ## audit-emission
 
 ### Purpose
 
-Every security- or governance-relevant write produces a row in `audit_logs.audit_log` so post-hoc investigation always has a non-repudiable trail. Audit failures must never fail the originating request — the user-visible operation is the source of truth and the audit row is best-effort.
+Every security- or governance-relevant write stages a row in the `audit.outbox` table inside the caller's transaction; the audit drain worker later inserts it into `audit.logs` so post-hoc investigation always has a non-repudiable trail. Audit failures must never fail the originating request — the user-visible operation is the source of truth and the audit row is best-effort.
 
 ### Where it lives
 
-- Domain: [src/domains/audit/](src/domains/audit/) owns the `AuditService.record()` write path.
-- Helper: [src/shared/utils/infrastructure/audit-record.util.ts](src/shared/utils/infrastructure/audit-record.util.ts) — `recordAuditEvent(auditService, input, log)` swallows + logs failures so callers don't need a try/catch.
-- Request context: [src/shared/utils/infrastructure/audit-request-context.util.ts](src/shared/utils/infrastructure/audit-request-context.util.ts) extracts `actorUserPublicId`, IP, user-agent, and request id from the Fastify request.
+- Domain: [src/domains/audit/](src/domains/audit/) owns the audit write path and the `audit.outbox` → `audit.logs` drain worker.
+- Caller helper: [src/shared/utils/infrastructure/audit-request-context.util.ts](src/shared/utils/infrastructure/audit-request-context.util.ts) — `recordScopedAuditEvent(request, input)` fills in IP / user-agent / actor fields and stages the outbox row. It wraps [audit-record.util.ts](src/shared/utils/infrastructure/audit-record.util.ts)'s `recordAuditEvent`, which swallows + logs failures so callers don't need a try/catch.
 
 ### Implementation
 
-1. Service performs its primary write (e.g. `subscription.create`).
-2. Controller (or service, where the actor is unambiguous) calls `recordAuditEvent(auditService, { actorUserPublicId, action, resource_type, resource_id, organization_id, ip_address, user_agent, severity, metadata }, request.log)`.
-3. `AuditService.record()` resolves the actor's internal `user_id` from the public id, then writes inside `withUserDatabaseContext` so RLS sees the actor's organization scope.
+1. Handler performs its primary write (e.g. an organization or auth-method mutation).
+2. The handler calls `recordScopedAuditEvent(request, { actorUserPublicId | actorApiKeyPublicId, action, resource_type, resource_id, organization_public_id, severity, metadata })` — network context (IP, user-agent, request id) is filled in by the helper.
+3. The row is staged in `audit.outbox` inside the caller's transaction (no synchronous id lookup). The audit drain worker later resolves internal ids and inserts into `audit.logs`.
 4. Errors are caught and logged at `warn`; the originating request still returns success.
 
 ### How to apply
 
-- Adding a security-relevant route: identify the action constant (or add one in [src/domains/audit/audit.types.ts](src/domains/audit/audit.types.ts)), call `recordAuditEvent` after the primary write, populate `metadata` with the diff or operation parameters that future investigators will need.
+- Adding a security-relevant route: identify the action constant (or add one in [src/domains/audit/audit.types.ts](src/domains/audit/audit.types.ts)), call `recordScopedAuditEvent(request, {...})` after the primary write, populate `metadata` with the diff or operation parameters that future investigators will need.
 - Severity defaults to `INFO`. Use `WARNING` for failed-but-recorded actions (e.g. permission denied) and `CRITICAL` for global-admin lifecycle events.
 
 ## idempotency

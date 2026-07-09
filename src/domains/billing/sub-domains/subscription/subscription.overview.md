@@ -6,7 +6,7 @@ Parent: [billing](../../billing.overview.md)
 
 ## Purpose
 
-The organization's active subscription record. One row per organization, bound to a Stripe customer and Stripe subscription. State changes always flow Stripe webhook → service → DB → emit event; we never write subscription state to DB without a Stripe-confirmed event behind it.
+The organization's active subscription record. One row per organization, bound to a Stripe customer and Stripe subscription. State changes always flow Stripe webhook → service → DB; we never write subscription state to DB without a Stripe-confirmed webhook behind it.
 
 ## Key invariants
 
