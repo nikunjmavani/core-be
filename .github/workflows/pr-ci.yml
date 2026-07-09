@@ -211,6 +211,22 @@ jobs:
       - uses: ./.github/actions/setup-node-pnpm
       - run: pnpm db:migrate:lint
 
+  knip:
+    name: Knip (dead code)
+    needs: [changes]
+    if: needs.changes.outputs.docs-only-md != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 1
+      - uses: ./.github/actions/setup-node-pnpm
+      # Dead-code / unused-export / unused-dependency gate. Scoped to the high-signal
+      # rules (files, dependencies, binaries, duplicates); the noisy cross-file
+      # exports/types analysis is deferred (see knip.jsonc).
+      - run: pnpm knip
+
   rls-security:
     name: RLS security (non-superuser)
     needs: [changes]
@@ -634,6 +650,7 @@ jobs:
       - unit
       - matrix
       - migration-lint
+      - knip
       - build-verify
       - security-audit
       - security-secrets
