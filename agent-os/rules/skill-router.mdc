@@ -7,7 +7,7 @@ alwaysApply: true
 
 When a task matches a pattern below, **read the corresponding `SKILL.md` before starting** and complete the steps it defines (including the tests, route/OpenAPI registration, docs, and lint it lists) as part of the same change — see `agent-os/rules/change-completeness.mdc`. This table is the fast path; the authoritative catalog and decision tree live in `agent-os/skills/skill-index/SKILL.md` (consult it first for anything not listed here), and the file-pattern → skill map is `agent-os/docs/skill-triggers.md`.
 
-Behaviour: infer sensible defaults from the codebase rather than asking, and run the whole matched chain. The **one** confirmation checkpoint is the new-requirement plan gate in `agent-os/rules/new-requirement-intake.mdc` ("propose a Plan once, wait for **go**"); outside that, proceed without stopping to ask.
+Behaviour: infer sensible defaults from the codebase rather than asking, and run the whole matched chain — see `agent-os/rules/agent-behavior.mdc` for the full-completion policy. The **one** confirmation checkpoint is the new-requirement plan gate in `agent-os/rules/new-requirement-intake.mdc` ("propose a Plan once, wait for **go**"); outside that, proceed without stopping to ask.
 
 ## Task → skill
 
