@@ -11,7 +11,7 @@ indexNote: route params / public-ids / method→status policy / header matrix �
 ## Route params — snake_case, semantic, entity-typed
 
 - Every path param is snake_case and semantic: `{plan_id}`, `{subscription_id}`, `{session_id}`, `{upload_id}`, `{auth_method_id}`, … — never `{id}` or camelCase. The active organization is NOT a path param — it is carried by the signed `org` JWT claim; the active-org resource is the singular `/tenancy/organization` (sub-resources like settings/memberships/roles/api-keys nest under it).
-- Param names must exist in `PARAM_NAME_TO_ENTITY` (src/shared/utils/identity/public-id.util.ts) so validators, test materializers, and OpenAPI docs derive the entity automatically.
+- Entity-id param names must exist in `PARAM_NAME_TO_ENTITY` (src/shared/utils/identity/public-id.util.ts) so validators, test materializers, and OpenAPI docs derive the entity automatically. The only non-entity params are `{provider}` (OAuth provider name) and `{slug}` (organization slug) — unregistered by design.
 - Zod params-DTO object keys must equal the route param name exactly.
 
 ## Public ids — Paddle-style prefixed
@@ -77,7 +77,7 @@ Every org-scoped list endpoint uses the **shared** helpers in `src/shared/utils/
 - `Authorization: Bearer <ACCESS_TOKEN>` — every authed route (OpenAPI security scheme; Postman collection-level bearer `{{ACCESS_TOKEN}}`).
 - `Content-Type: application/json` — any body.
 - `X-Organization-Id` — legacy header read directly by a few consumers (e.g. the upload domain); org-scoped routes resolve the active organization from the signed `org` JWT claim, NOT this header. Switch the active org via `/auth/switch-to-personal` / `/auth/switch-to-organization` (which re-mint the access token).
-- `X-Idempotency-Key` — all mutating routes (optional, auto-generate in clients); REQUIRED on the 13 writes registered with `config.idempotencyRequired: true` (org create, memberships, transfer-ownership, invitations, subscription create/change-plan/cancel/resume, webhooks, api-keys, notification-policies, roles, uploads). Live list = the `I` (`req`) column in `docs/routes.txt`.
+- `X-Idempotency-Key` — all mutating routes (optional, auto-generate in clients); REQUIRED on the 13 writes registered with `config.idempotencyRequired: true` (org create, memberships, transfer-ownership, subscription create/change-plan/cancel/resume, payment-method setup, webhooks, api-keys, notification-policies, roles, uploads). Live list = the `I` (`req`) column in `docs/routes.txt`.
 - `X-Captcha-Token` — public auth forms only (login, email verification-code send + login, password forgot/reset, mfa/login, webauthn authenticate options, oauth authorize).
 - `X-CSRF-Token` — POST /auth/refresh only (double-submit of the csrf_token cookie). Keeps the X- form (frontend-framework default).
 - `Stripe-Signature` — sent BY Stripe to the webhook routes; the app never sends it.

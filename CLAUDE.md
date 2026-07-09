@@ -26,10 +26,10 @@ Claude Code reads `agent-os/` directly via `.claude/` symlinks (`agents`, `skill
 
 See **`agent-os/skills/api-contract-guard/SKILL.md`** (rule: `agent-os/rules/api-contract.mdc`):
 
-- Route params: snake_case + semantic (`{plan_id}`, `{subscription_id}`, never `{id}`); registered in `PARAM_NAME_TO_ENTITY`. The active organization is the signed `org` JWT claim — routes carry NO `{organization_id}` path segment; the active-org resource is singular `/tenancy/organization` (sub-resources nest under it); switch active org via `/auth/switch-to-personal` / `/auth/switch-to-organization`
+- Route params: snake_case + semantic (`{plan_id}`, `{subscription_id}`, never `{id}`); entity-id params registered in `PARAM_NAME_TO_ENTITY` (non-entity params — `{provider}`, `{slug}` — are the only exemptions). The active organization is the signed `org` JWT claim — routes carry NO `{organization_id}` path segment; the active-org resource is singular `/tenancy/organization` (sub-resources nest under it); switch active org via `/auth/switch-to-personal` / `/auth/switch-to-organization`
 - Public ids: Paddle-style `<prefix>_<21 [a-z0-9]>` via `generatePublicId(entity)`; external field is always `id`
 - Body field casing: request body (`*.dto.ts`) and response body (`*.serializer.ts`) property keys are **snake_case** (`file_name`, `created_at`); the external id stays `id`; validation `errors[].field` values are snake_case too. Internal TS identifiers may stay camelCase. Exceptions passed through verbatim: third-party/browser-native payloads (Stripe webhooks, OAuth, WebAuthn W3C JSON) and JWT claims. Enforced by `src/tests/unit/api/snake-case-body-keys.policy.unit.test.ts`
-- Method→status policy (middleware-enforced): GET 200 · POST 201 · PUT/PATCH 200 · DELETE 204; webhooks + MCP stay 200
+- Method→status policy: GET 200 · POST 201 · PUT/PATCH 200 · DELETE 204; webhooks + MCP stay 200. POST is middleware-enforced (`method-status-policy.middleware.ts` rewrites POST 200/202/204 → 201); the other methods are enforced by the `validate:route-success-coverage` gate
 - Error codes: when to set 400/401/403/404/406/409/413/415/422/429 — see **`docs/reference/api/response-codes.md`** (400 on all POST/PATCH/PUT, omitted only when truly nothing to validate; 409/422 mutating only; never invent statuses)
 - Headers: `Authorization: Bearer`, `X-Organization-Id`, `X-Idempotency-Key` (required on the `idempotencyRequired` writes; see the `I` column in `docs/routes.txt`), `X-Captcha-Token` (public auth forms), `X-CSRF-Token` (refresh only), `Stripe-Signature` (Stripe-sent); ecosystem X- forms kept (`X-Request-Id`, `X-Api-Key`, `X-RateLimit-*`, …)
 
@@ -108,7 +108,7 @@ Flat domains (`audit`, `upload`) keep layers at domain root (no `sub-domains/`).
 | Domain (folder) | Sub-domains (folders)                                                                                                                                                           |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **audit**       | (single domain, no sub-domains)                                                                                                                                                 |
-| **auth**        | auth-method (email verification-code, oauth as services in auth-method/), auth-session, auth-mfa, auth-mfa-session (Redis MFA challenge-ticket store shared by auth-mfa/auth-webauthn), auth-webauthn |
+| **auth**        | auth-method (email verification-code, oauth as services in auth-method/; verification-token/ nested persistence module — service/repository/schema, no routes), auth-session, auth-mfa, auth-mfa-session (Redis MFA challenge-ticket store shared by auth-mfa/auth-webauthn), auth-webauthn |
 | **user**        | user-settings, user-notification-preferences, user-data-export                                                                                                                  |
 | **tenancy**     | organization (organization-settings, organization-notification-policy, organization-api-key), membership (member-invitation), member-roles (member-role-permission), permission |
 | **billing**     | plan, subscription, stripe-webhook                                                                                                                                              |
@@ -156,13 +156,14 @@ src/infrastructure/
     resource-quota-lock.util.ts # Advisory-lock guard for resource caps (per-scope count+insert serialization)
     pg-schemas.ts             # Shared pgSchema definitions (auth, tenancy, billing, notify, audit, upload)
     migration/migrate.ts      # Migration runner (+ migration-version.ts, migration-execution-mode.ts)
-    contexts/                 # DB context wrappers (request / organization / user / retention / worker / system-audit) that set the RLS GUC
+    contexts/                 # DB context wrappers (request / organization / tenant / user / retention / worker / system-audit-insert / global-admin / audit-outbox-drain) that set the RLS GUC
     pool/                     # Pool instrumentation (organization-rls-checkout-counter.ts)
-    safety/                   # Boot guards: assert-database-rls-safety.ts, assert-database-tls-safety.ts
+    safety/                   # Boot guards: assert-database-rls-safety.ts, assert-database-tls-safety.ts, assert-connection-budget.ts
     utils/                    # batch-delete, capped-count, connection-url, force-rls-tables.constants, database-handle.types
   cache/
     redis.client.ts           # Redis connection (managed service)
     bullmq-redis.client.ts    # Separate BullMQ Redis client (logical DB) + redis-url / redis-prefix utils
+                              # + redis.constants.ts, assert-redis-tls-safety.ts (boot guard), redis-topology-warn.util.ts
   queue/
     connection.ts             # Re-exports Redis for BullMQ + getBullMQConnectionOptions()
     health.ts                  # BullMQ readiness helper (notification queue client ping)
@@ -186,7 +187,7 @@ src/infrastructure/
     stripe.client.ts          # Stripe SDK client + helpers (customer, subscription, webhook)
   storage/
     storage.service.ts        # S3 storage service (presigned URLs, head object)
-    s3-adapter.ts             # S3 adapter behind object-storage.port.ts
+    s3-adapter.ts             # S3 adapter behind object-storage.port.ts (+ public-media-url.util.ts, s3-error.util.ts)
   outbound/                   # Hardened outbound HTTP (outbound-fetch.ts: timeouts, redaction) for third-party calls
   resilience/                 # Circuit breaker + retry-with-backoff for outbound/third-party calls (circuit-breaker.ts, retry-with-backoff.util.ts, lua/)
   api-reference/              # Scalar API-reference wiring (scalar-api-reference.ts)
@@ -314,7 +315,7 @@ See **[import-paths.mdc](.cursor/rules/import-paths.mdc)** — `@/` in `src/`, `
 
 - **Per-domain `seed/` dir**: Every folder that owns tables (domain, sub-domain, nested sub-domain) gets a co-located `seed/` directory holding `<name>.reference.seed.ts` (idempotent reference data), `<name>.bulk.seed.ts` (scaled rows for that level's tables), `<name>.faker.ts` (level-specific generators), and `index.ts`. Each domain still seeds **only its own tables** — no cross-domain insert logic inside domains.
 - **Seed contract** (`src/scripts/seed/seed-contract.ts`): Each `seed/index.ts` exports a `SeedContribution` (`seedReference?` / `seedBulk?` hooks) **except** a top-level domain's, which exports a `DomainSeedModule` (`SeedContribution` plus `name` + `dependsOn`). Parents fold their children up with `composeContributions(...)` (nested sub-domain → sub-domain → domain). Cross-domain parent ids (orgs/users) flow through a `SeedRegistry` on the `SeedContext`: the user/tenancy seeders append created parents; downstream domains read them. This preserves "no cross-domain insert logic inside domains" — cross-domain wiring lives only in the orchestrator/context.
-- **Orchestrator** (`src/scripts/seed/bulk.ts` + `bulk-config.ts`): Registers one `DomainSeedModule` per domain (`MODULES`), topologically orders them by `dependsOn` (`orderModules`), runs every `seedReference` first, then every `seedBulk`. Behind a production guard (`production-guard.ts`, `assertBulkSeedAllowed`); reproducible via `SEED`; idempotent (count-and-resume or `onConflictDoNothing`).
+- **Orchestrator** (`src/scripts/seed/bulk.ts` + `bulk-config.ts`): Registers one `DomainSeedModule` per domain (`SEED_MODULES` in `src/scripts/seed/modules.ts`), topologically orders them by `dependsOn` (`orderModules` in `seed-contract.ts`), runs every `seedReference` first, then every `seedBulk`. Behind a production guard (`production-guard.ts`, `assertBulkSeedAllowed`); reproducible via `SEED`; idempotent (count-and-resume or `onConflictDoNothing`).
 - **Three tiers** (all share the contract/seeders): `pnpm db:seed` (minimal/reference only), `pnpm db:seed:full` (fixed demo data), `pnpm db:seed:bulk` (scaled volume via profiles). Profiles `demo` / `edge` / `load` set base counts; `SCALE` multiplies volume-bearing counts (bounded by `HARD_CAP`); per-knob env overrides `BULK_ORGS`, `BULK_USERS_PER_ORG`, `BULK_AUDIT_MONTHS`, `BULK_AUDIT_PER_ORG_PER_MONTH`. Example: `BULK_PROFILE=load SCALE=5 pnpm db:seed:bulk`.
 - **Route alignment**: Seed data should support what the API exposes. When routes are added, removed, or updated, run **route-catalog** skill (`pnpm routes:catalog`) and **seed-maintainer** so seeds stay aligned with routes.
 - **Conventions and detail**: scoped rule `.cursor/rules/seed-conventions.mdc` (auto-attaches under `src/domains/**` and `src/scripts/seed/**`); skill `.cursor/skills/seed-maintainer/SKILL.md`; overview `src/scripts/seed/seed.overview.md`. The domain-structure validator allows `seed/` at domain root.
@@ -359,7 +360,7 @@ Every directory under `src/` participates in the in-source documentation system.
 | TSDoc on exports (canonical) | every `*.ts` file's `export <kind> <name>` declaration | **tsdoc-export-guard** |
 | Route schema (drives OpenAPI) | `schema: { summary, description, tags }` on Fastify route registrations | **route-schema-doc-guard** |
 
-The hard gate is `pnpm tsdoc:check` — a **budget-driven ratchet** at [`tooling/tsdoc-coverage/budget.json`](tooling/tsdoc-coverage/budget.json). Counts of `MISSING_DESCRIPTION` and `MISSING_REMARKS` may decrease but may not increase; the eventual target is 0/0. Runs on pre-commit (step 8) and CI (`ci:local`, `ci:quality`).
+The hard gate is `pnpm tsdoc:check` — a **budget-driven ratchet** at [`tooling/tsdoc-coverage/budget.json`](tooling/tsdoc-coverage/budget.json). Counts of `MISSING_DESCRIPTION` and `MISSING_REMARKS` may decrease but may not increase; the budget is at 0/0, so the gate now holds full coverage — any new undocumented export fails. Runs on pre-commit (step 8) and CI (`ci:local`, `ci:quality`).
 
 See [docs/reference/architecture/documentation-system.md](docs/reference/architecture/documentation-system.md) for the full system, including why the auto-generated DOCS.md aggregator was retired.
 
@@ -369,7 +370,7 @@ See [docs/reference/architecture/documentation-system.md](docs/reference/archite
 - **Cross-cutting tests**: `src/tests/` — helpers, shared factories, security, performance, chaos, contract; k6 under `src/tests/load/k6/`
 - **Domain tests** (co-located with code):
   - **Bundled e2e**: `src/domains/<domain>/__tests__/<domain>.test.ts` (auth, billing, notify, user, tenancy, audit, upload)
-  - **Domain integration**: `src/domains/<domain>/__tests__/integration/*.integration.test.ts` — **required** for routed domains (`validate:domain` gate); route smoke + focused in-process HTTP contracts
+  - **Domain integration**: `src/domains/<domain>/__tests__/integration/*.integration.test.ts` — **required** for routed domains (`validate:domain` requires a `.test.ts` under `__tests__/integration/`; the `.integration.test.ts` suffix is enforced by `validate:test-naming`); route smoke + focused in-process HTTP contracts
   - **Domain flow e2e** (optional): `src/domains/<domain>/__tests__/e2e/*.e2e.test.ts` — multi-step end-to-end flows (e.g. login, organization onboarding, webhook delivery)
   - **Domain unit / policy scans**: `src/domains/<domain>/__tests__/unit/` (e.g. ledger immutability, tombstone reads)
   - **Domain factories**: `src/domains/<domain>/__tests__/factories/` when helpers span sub-domains (e.g. `tenancy/__tests__/factories/permission.factory.ts`)
@@ -386,7 +387,7 @@ See [docs/reference/architecture/documentation-system.md](docs/reference/archite
 
 Script namespaces: `ci:*`, `compose:*`, `test:*`, `db:*`, `docs:*`, `routes:*`, `load:*`, `chaos:*`, `tool:*`, `setup:*`, `mcp:*`, `security:*`, `sonar:*`, `deps:*`. Legacy: `route-catalog`, `scripts:*`. List all: `pnpm run`.
 
-Local SonarQube quality gate (pre-commit): `pnpm sonar:up` / `sonar:scan` / `sonar:down` / `sonar:reset`. The pre-commit hook (`pnpm guard:pre-commit`, step 16) blocks a commit when SonarQube has any open issue on the deployed-app surface; the gate is mandatory — there is no bypass, every issue must be resolved. See **`docs/reference/quality/sonarqube-local.md`**.
+Local SonarQube quality gate (pre-commit): `pnpm sonar:up` / `sonar:scan` / `sonar:down` / `sonar:reset`. The pre-commit hook (`pnpm guard:pre-commit`, step 17) blocks a commit when SonarQube has any open issue on the deployed-app surface; the gate is mandatory — there is no bypass, every issue must be resolved. See **`docs/reference/quality/sonarqube-local.md`**.
 
 - `pnpm build` — compile to `dist/` (`tsc` + `tsc-alias`); `pnpm build:check` fails if `@/` aliases remain
 - `pnpm dev` — run Fastify server (tsx watch)
@@ -431,7 +432,7 @@ Local SonarQube quality gate (pre-commit): `pnpm sonar:up` / `sonar:scan` / `son
 - `pnpm routes:examples` — refresh `tooling/openapi/route-examples/route-examples.json` (sanitized request/response samples per route+status, embedded in OpenAPI as `captured` examples) from a capture run: `ROUTE_EXAMPLE_CAPTURE=1 pnpm test && pnpm routes:examples`
 - `pnpm ci:local` — PR gate: validate + domain + routes + migrate lint + env example + full test
 - `pnpm ci:quality` — static CI quality slice (audit, validate, domain, contract tests, routes, env example, migrate lint)
-- `pnpm validate` — lint + format:check + typecheck
+- `pnpm validate` — lint + typecheck (`biome check` covers lint + formatting; no separate format:check step)
 - `pnpm test:bench` — autocannon single-endpoint benchmark
 - `pnpm validate:domain` — validate domain structure (CI gate)
 - `pnpm deps:audit` — run `pnpm audit` (must pass; CI fails on any vulnerability)

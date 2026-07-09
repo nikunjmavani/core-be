@@ -33,7 +33,7 @@ stored in `.env.local` as `SONAR_ADMIN_PASSWORD` / `SONAR_TOKEN`.
 
 ## How the pre-commit gate works
 
-The `pnpm guard:pre-commit` hook (`.husky/pre-commit`, step 16) runs the gate **only when the
+The `pnpm guard:pre-commit` hook (`.husky/pre-commit`, step 17) runs the gate **only when the
 staged changes include deployed-surface code** — `src/**/*.ts` excluding tests, `src/scripts/**`,
 and `__tests__/`. Commits that touch only tests, tooling, docs, or migrations skip the scan (Sonar
 excludes those anyway — see [Scope](#what-sonarqube-analyzes)).

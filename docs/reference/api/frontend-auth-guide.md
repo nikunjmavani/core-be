@@ -558,13 +558,13 @@ idempotencyKeyRequired` / `idempotencyKeyInvalid` without it):
 1. Create team organization — `POST /tenancy/organizations`
 2. Create membership — `POST /tenancy/organization/memberships`
 3. Transfer organization ownership — `POST /tenancy/organization/transfer-ownership`
-4. Create invitation — `POST /tenancy/organization/invitations`
-5–8. Subscription writes — create / cancel / resume / change-plan under `/billing/subscriptions`
-5. Create webhook — `POST /notify/webhooks`
-6. Create organization API key — `POST /tenancy/organization/api-keys`
-7. Create notification policy — `POST /tenancy/organization/notification-policies`
-8. Create member role — `POST /tenancy/organization/roles`
-9. Create upload — `POST /uploads`
+4.–7. Subscription writes — create / change-plan / cancel / resume under `/billing/subscriptions`
+8. Create payment method setup — `POST /billing/payment-methods/setup`
+9. Create webhook — `POST /notify/webhooks`
+10. Create organization API key — `POST /tenancy/organization/api-keys`
+11. Create notification policy — `POST /tenancy/organization/notification-policies`
+12. Create member role — `POST /tenancy/organization/roles`
+13. Create upload — `POST /uploads`
 
 On any other route, an `X-Idempotency-Key` is **optional**: if you send one, the response is cached and
 replayed for that key; if you don't, nothing happens. The wrapper above sends a **fresh** UUID on
