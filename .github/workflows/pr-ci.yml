@@ -81,6 +81,10 @@ jobs:
         run: pnpm agent-os:check
       - name: Trigger evals (routing map)
         run: pnpm agent-os:triggers:strict
+      - name: Platform wiring drift gate (generated adapters in sync with source)
+        # A contributor who skips the local gate cannot land drifted
+        # .cursor/.claude/.codex adapters — they must match agent-os/ source.
+        run: pnpm agent-os:generate:check
 
   lint:
     name: Lint
@@ -636,17 +640,19 @@ jobs:
     # pass; a real failure or cancellation fails the gate. The ruleset ↔ needs
     # invariant is pinned by src/tests/unit/ci/pr-quality-gate.policy.unit.test.ts.
     #
-    # Advisory lanes (agent-os-gate, openapi-breaking) are intentionally NOT in
-    # `needs:` — they run and display on the PR but do not block: agent-os-gate is
-    # an internal tooling gate that only runs on agent-os/** changes, and
-    # openapi-breaking is expected to fail on deliberate major-version breaks (which
-    # are acknowledged via the err-ignore list, not a merge block). Promote a lane
-    # to blocking by adding it here AND to REQUIRED_LANES in the policy test.
+    # The remaining advisory lane, openapi-breaking, is intentionally NOT in
+    # `needs:` — it runs and displays on the PR but does not block, because it is
+    # expected to fail on deliberate major-version breaks (acknowledged via the
+    # err-ignore list, not a merge block). agent-os-gate IS required: it only runs
+    # on agent-os/** changes (skip → pass otherwise) and blocks a broken routing map
+    # or drifted .cursor/.claude/.codex adapters. Promote a lane to blocking by
+    # adding it here AND to REQUIRED_LANES in the policy test.
     needs:
       - changes
       - lint
       - typecheck
       - static-sync
+      - agent-os-gate
       - unit
       - matrix
       - migration-lint
