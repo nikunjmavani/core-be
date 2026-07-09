@@ -29,13 +29,15 @@ const rulesetPath = join(process.cwd(), `.github/rulesets/${DEFAULT_BRANCH}.json
 /**
  * The merge-gating PR-CI lanes the aggregate must depend on. Job ids (not display names) — these are
  * the `- <id>` entries under `quality-gate.needs`. `unit` and `matrix` are the always-runs wrapper
- * gates that normalise a skipped suite to a pass. Promote a remaining advisory lane (agent-os-gate,
- * openapi-breaking) to blocking by adding it to the aggregate's `needs:` AND to this list.
+ * gates that normalise a skipped suite to a pass. `agent-os-gate` only runs on agent-os/** changes and
+ * skip-counts as a pass otherwise. Promote the remaining advisory lane (openapi-breaking) to blocking
+ * by adding it to the aggregate's `needs:` AND to this list.
  */
 const REQUIRED_LANES = [
   'lint',
   'typecheck',
   'static-sync',
+  'agent-os-gate',
   'unit',
   'matrix',
   'migration-lint',
