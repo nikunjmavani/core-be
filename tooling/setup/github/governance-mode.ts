@@ -358,7 +358,9 @@ function printStatus(inputs: GovernanceInputs): void {
     for (const issue of issues) console.log(`  - [${issue.dimension}] ${issue.detail}`);
     console.log('');
   }
-  console.log('Switch:  pnpm github:tool:governance-mode <personal|team>   then   pnpm github:sync');
+  console.log(
+    'Switch:  pnpm github:tool:governance-mode <personal|team>   then   pnpm github:sync',
+  );
 }
 
 function runApply(mode: GovernanceMode, inputs: GovernanceInputs): void {
