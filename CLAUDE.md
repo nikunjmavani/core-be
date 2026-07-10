@@ -10,18 +10,18 @@ For **any new requirement** (new domain, routes, worker, schema, etc.), use the 
 Cursor reads agents/skills/rules via symlinks (`.cursor/agents → agent-os/agents`, etc.).
 Claude Code reads `agent-os/` directly via `.claude/` symlinks (`agents`, `skills`, `commands`, `hooks`) — there is intentionally **no** `.claude/rules`: Claude Code follows `CLAUDE.md`, while the `.mdc` rule files are Cursor's glob auto-attach (`.cursor/rules`).
 
-| File | Purpose |
-| ---- | ------- |
-| [`REVIEW.md`](REVIEW.md) | Review-time severity + skip-path instructions for `/code-review`, `/pre-merge-review`, and review agents |
-| [`agent-os/docs/principles.md`](agent-os/docs/principles.md) | Engineering principles + project identity (full detail) |
-| [`agent-os/docs/skill-triggers.md`](agent-os/docs/skill-triggers.md) | File pattern → skill map (replaces reading 25 sync rules) |
-| [`agent-os/docs/agents-catalog.md`](agent-os/docs/agents-catalog.md) | All 10 agents with descriptions and use-when |
-| [`agent-os/docs/platform-access.md`](agent-os/docs/platform-access.md) | How to invoke agents on Cursor, Claude Code, Codex |
-| [`agent-os/agents/`](agent-os/agents/) | Agent definition files |
-| [`agent-os/skills/`](agent-os/skills/) | Skill definition files |
-| [`agent-os/rules/`](agent-os/rules/) | Cursor rule files (also accessible via `.cursor/rules/` symlink) |
-| [`agent-os/hooks/`](agent-os/hooks/) | Claude Code hook scripts |
-| [`agent-os/commands/`](agent-os/commands/) | Cross-platform custom slash commands (Claude `.claude/commands`, Cursor `.cursor/commands`, Codex `~/.codex/prompts`) |
+| File                                                                   | Purpose                                                                                                               |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| [`REVIEW.md`](REVIEW.md)                                               | Review-time severity + skip-path instructions for `/code-review`, `/pre-merge-review`, and review agents              |
+| [`agent-os/docs/principles.md`](agent-os/docs/principles.md)           | Engineering principles + project identity (full detail)                                                               |
+| [`agent-os/docs/skill-triggers.md`](agent-os/docs/skill-triggers.md)   | File pattern → skill map (replaces reading 25 sync rules)                                                             |
+| [`agent-os/docs/agents-catalog.md`](agent-os/docs/agents-catalog.md)   | All 11 agents with descriptions and use-when                                                                          |
+| [`agent-os/docs/platform-access.md`](agent-os/docs/platform-access.md) | How to invoke agents on Cursor, Claude Code, Codex                                                                    |
+| [`agent-os/agents/`](agent-os/agents/)                                 | Agent definition files                                                                                                |
+| [`agent-os/skills/`](agent-os/skills/)                                 | Skill definition files                                                                                                |
+| [`agent-os/rules/`](agent-os/rules/)                                   | Cursor rule files (also accessible via `.cursor/rules/` symlink)                                                      |
+| [`agent-os/hooks/`](agent-os/hooks/)                                   | Claude Code hook scripts                                                                                              |
+| [`agent-os/commands/`](agent-os/commands/)                             | Cross-platform custom slash commands (Claude `.claude/commands`, Cursor `.cursor/commands`, Codex `~/.codex/prompts`) |
 
 ## API Contract (Non-Negotiable)
 
@@ -106,15 +106,15 @@ Flat domains (`audit`, `upload`) keep layers at domain root (no `sub-domains/`).
 
 ### Domain and sub-domain mapping
 
-| Domain (folder) | Sub-domains (folders)                                                                                                                                                           |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **audit**       | (single domain, no sub-domains)                                                                                                                                                 |
+| Domain (folder) | Sub-domains (folders)                                                                                                                                                                                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **audit**       | (single domain, no sub-domains)                                                                                                                                                                                                                                                             |
 | **auth**        | auth-method (email verification-code, oauth as services in auth-method/; verification-token/ nested persistence module — service/repository/schema, no routes), auth-session, auth-mfa, auth-mfa-session (Redis MFA challenge-ticket store shared by auth-mfa/auth-webauthn), auth-webauthn |
-| **user**        | user-settings, user-notification-preferences, user-data-export                                                                                                                  |
-| **tenancy**     | organization (organization-settings, organization-notification-policy, organization-api-key), membership (member-invitation), member-roles (member-role-permission), permission |
-| **billing**     | plan, subscription, stripe-webhook                                                                                                                                              |
-| **notify**      | notification, webhook (webhook-event, webhook-delivery)                                                                                                                         |
-| **upload**      | (single domain, no sub-domains)                                                                                                                                                 |
+| **user**        | user-settings, user-notification-preferences, user-data-export                                                                                                                                                                                                                              |
+| **tenancy**     | organization (organization-settings, organization-notification-policy, organization-api-key), membership (member-invitation), member-roles (member-role-permission), permission                                                                                                             |
+| **billing**     | plan, subscription, stripe-webhook                                                                                                                                                                                                                                                          |
+| **notify**      | notification, webhook (webhook-event, webhook-delivery)                                                                                                                                                                                                                                     |
+| **upload**      | (single domain, no sub-domains)                                                                                                                                                                                                                                                             |
 
 **Permission resolution** (tenancy domain, not under `shared/`):
 
@@ -139,7 +139,7 @@ A **top-level sub-domain** is a direct child of `sub-domains/<name>/`. A **neste
 | **Organization children** nest under `organization/`                                      | `sub-domains/organization/organization-api-key/`, `organization-settings/`          |
 | **Membership / member-roles children** nest under parent                                  | `sub-domains/membership/member-invitation/`, `member-roles/member-role-permission/` |
 | **Prefix** multi-word names with domain/resource name                                     | `organization-settings`, `member-invitation`, `webhook-event`                       |
-| **Implementation modules** (not separate API resources) stay as services in parent folder | `auth-method/email-login.service.ts`, `oauth/` under `auth-method/`                  |
+| **Implementation modules** (not separate API resources) stay as services in parent folder | `auth-method/email-login.service.ts`, `oauth/` under `auth-method/`                 |
 | Prefer depth ≤ 4 under `domains/<domain>/` for new work                                   | Flatten if a nested folder has no distinct routes or tests                          |
 
 Nested resources use the **same layer files** (controller, service, repository, validator, serializer, dto, types, schema) and the **same optional** `events/`, `queues/`, `workers/`, `__tests__/` as top-level sub-domains.
@@ -266,11 +266,11 @@ Typical flow: `service` → `eventBus.emit` → handler → `recordOutboxEmail()
 - **Example (core path):** `tenancy/sub-domains/membership/member-invitation/` — service emits; handler calls `recordOutboxEmail()`.
 - **Example (container path):** `notify/events/notify.event-handlers.ts` → `registerWebhookDeliveryEventHandlers()` — subscribes to `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` and enqueues outbound webhook delivery.
 
-| Registrar                               | Event types (examples)                                                    | Side effect                            |
-| --------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------- |
-| `registerAuthMethodEventHandlers`       | `AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED`, `AUTH_EVENT.PASSWORD_RESET_REQUESTED`  | Mail queue                             |
-| `registerMemberInvitationEventHandlers` | `MEMBER_INVITATION_EVENT.CREATED`, `RESENT`                               | Mail queue                             |
-| `registerNotifyEventHandlers`           | `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED`                                 | BullMQ webhook delivery                |
+| Registrar                               | Event types (examples)                                                                | Side effect             |
+| --------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------- |
+| `registerAuthMethodEventHandlers`       | `AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED`, `AUTH_EVENT.PASSWORD_RESET_REQUESTED` | Mail queue              |
+| `registerMemberInvitationEventHandlers` | `MEMBER_INVITATION_EVENT.CREATED`, `RESENT`                                           | Mail queue              |
+| `registerNotifyEventHandlers`           | `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED`                                             | BullMQ webhook delivery |
 
 ## Key Patterns
 
@@ -354,12 +354,12 @@ All skills live under `.cursor/skills/`; the skill-index trigger map and auto-tr
 
 Every directory under `src/` participates in the in-source documentation system. There are four layers, each with a single source of truth — there is intentionally no auto-generated `DOCS.md` aggregator.
 
-| Layer | File | Owner skill |
-| --- | --- | --- |
-| System narratives | `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` | **system-narrative-maintainer** |
-| Per-folder overviews (hand-written) | `src/<folder>/<folder>.overview.md` at meaningful boundaries | **overview-doc-maintainer** |
-| TSDoc on exports (canonical) | every `*.ts` file's `export <kind> <name>` declaration | **tsdoc-export-guard** |
-| Route schema (drives OpenAPI) | `schema: { summary, description, tags }` on Fastify route registrations | **route-schema-doc-guard** |
+| Layer                               | File                                                                    | Owner skill                     |
+| ----------------------------------- | ----------------------------------------------------------------------- | ------------------------------- |
+| System narratives                   | `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` | **system-narrative-maintainer** |
+| Per-folder overviews (hand-written) | `src/<folder>/<folder>.overview.md` at meaningful boundaries            | **overview-doc-maintainer**     |
+| TSDoc on exports (canonical)        | every `*.ts` file's `export <kind> <name>` declaration                  | **tsdoc-export-guard**          |
+| Route schema (drives OpenAPI)       | `schema: { summary, description, tags }` on Fastify route registrations | **route-schema-doc-guard**      |
 
 The hard gate is `pnpm tsdoc:check` — a **budget-driven ratchet** at [`tooling/tsdoc-coverage/budget.json`](tooling/tsdoc-coverage/budget.json). Counts of `MISSING_DESCRIPTION` and `MISSING_REMARKS` may decrease but may not increase; the budget is at 0/0, so the gate now holds full coverage — any new undocumented export fails. Runs on pre-commit (step 8) and CI (`ci:local`, `ci:quality`).
 

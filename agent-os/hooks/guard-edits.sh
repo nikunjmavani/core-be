@@ -49,7 +49,7 @@ ask() {
 
 # R3 — generated / do-not-edit files (change the source + run the generator instead).
 case "$FILE" in
-  *pnpm-lock.yaml | *docs/routes.txt | *docs/openapi/openapi*.json | *docs/postman-collection.json | *project-identity.constants.ts | *docs/database/core-be.dbml | *.codex/hooks.json)
+  *pnpm-lock.yaml | *docs/routes.txt | *docs/openapi/openapi*.json | *docs/postman-collection.json | *project-identity.constants.ts | *docs/database/core-be.dbml | *.codex/hooks.json | *agent-os/platforms/codex/hooks.json)
     deny "'$base' is generated — do not hand-edit it. Change the source and run the generator (see agent-os/docs/skill-triggers.md / CLAUDE.md)." ;;
 esac
 
@@ -59,7 +59,7 @@ esac
 # guard in one edit. Escalate to an explicit user confirmation instead of deny,
 # so legitimate hook work proceeds with the user's eyes on it.
 case "$FILE" in
-  *agent-os/hooks/hooks.json | *agent-os/platforms/targets.json | *agent-os/platforms/claude/settings.json | *.claude/settings.json | *.claude/settings.local.json | *.cursor/hooks.json | *agent-os/hooks/guard-edits.sh | *agent-os/hooks/guardrails.mjs | *agent-os/hooks/cursor-shell-guard.mjs | *agent-os/hooks/cursor-edit-guard.mjs | *agent-os/hooks/cursor-read-guard.mjs | *agent-os/hooks/cursor-mcp-guard.mjs | *agent-os/hooks/injection-scan.mjs)
+  *agent-os/hooks/hooks.json | *agent-os/platforms/targets.json | *agent-os/platforms/claude/settings.json | *.claude/settings.json | *.claude/settings.local.json | *.cursor/hooks.json | *agent-os/platforms/cursor/hooks.json | *agent-os/hooks/guard-edits.sh | *agent-os/hooks/guardrails.mjs | *agent-os/hooks/cursor-shell-guard.mjs | *agent-os/hooks/cursor-edit-guard.mjs | *agent-os/hooks/cursor-read-guard.mjs | *agent-os/hooks/cursor-mcp-guard.mjs | *agent-os/hooks/injection-scan.mjs)
     ask "'$base' is part of the agent-guard enforcement wiring. Confirm this change is user-requested — hooks/guards must never be weakened or disabled without explicit approval (agent-os/hooks/README.md)." ;;
 esac
 

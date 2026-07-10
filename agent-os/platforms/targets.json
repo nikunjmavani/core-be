@@ -23,14 +23,18 @@
           "PreCompact",
           "SubagentStop"
         ],
-        "agentsMd": { "linkFollow": true, "maxBytes": null, "overrideFile": null }
+        "agentsMd": {
+          "linkFollow": true,
+          "maxBytes": null,
+          "overrideFile": null
+        }
       }
     },
     "cursor": {
       "label": "Cursor",
       "entrypoint": ".cursor/",
       "consumes": ["skills", "agents", "rules", "commands", "hooks", "mcp"],
-      "hooksTarget": ".cursor/hooks.json",
+      "hooksTarget": "agent-os/platforms/cursor/hooks.json",
       "capabilities": {
         "skills": true,
         "subagents": true,
@@ -45,14 +49,18 @@
           "beforeSubmitPrompt",
           "stop"
         ],
-        "agentsMd": { "linkFollow": true, "maxBytes": null, "overrideFile": null }
+        "agentsMd": {
+          "linkFollow": true,
+          "maxBytes": null,
+          "overrideFile": null
+        }
       }
     },
     "codex": {
       "label": "Codex",
       "entrypoint": "AGENTS.md",
       "consumes": ["skills", "commands", "hooks", "mcp", "docs"],
-      "hooksTarget": ".codex/hooks.json",
+      "hooksTarget": "agent-os/platforms/codex/hooks.json",
       "capabilities": {
         "skills": true,
         "subagents": false,
@@ -66,7 +74,11 @@
           "PostToolUse",
           "Stop"
         ],
-        "agentsMd": { "linkFollow": false, "maxBytes": 32768, "overrideFile": "AGENTS.override.md" }
+        "agentsMd": {
+          "linkFollow": false,
+          "maxBytes": 32768,
+          "overrideFile": "AGENTS.override.md"
+        }
       }
     }
   }

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dashboards-proxy",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tooling/dev/dashboards/proxy.mjs"],
+      "port": 3010,
+      "autoPort": true
+    }
+  ]
+}
