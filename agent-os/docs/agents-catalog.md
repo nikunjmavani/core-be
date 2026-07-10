@@ -1,7 +1,7 @@
 # Agent catalog (core-be)
 
 <!-- GENERATED:START -->
-All 10 project agents — each read-only. Generated from `agents/*.md` frontmatter
+All 11 project agents — each read-only. Generated from `agents/*.md` frontmatter
 and `agents/pipelines.json`. See [platform-access.md](platform-access.md) for how to invoke on each platform.
 
 | Agent | File | Wraps skill | Model (routing rationale) | Pipelines | Use when |
@@ -10,6 +10,7 @@ and `agents/pipelines.json`. See [platform-access.md](platform-access.md) for ho
 | **ci-investigator** | [`agent-os/agents/ci-investigator.md`](../agents/ci-investigator.md) | ci-investigator | `inherit` — root-cause diagnosis from noisy CI logs — frontier reasoning | — | One failing CI job — root-cause summary without log noise |
 | **dependency-auditor** | [`agent-os/agents/dependency-auditor.md`](../agents/dependency-auditor.md) | dependency-security | `haiku` — parses pnpm audit and maps severities — mechanical | prod-readiness | pnpm audit — vulnerabilities + prioritized fix plan |
 | **docs-auditor** | [`agent-os/agents/docs-auditor.md`](../agents/docs-auditor.md) | docs-audit | `haiku` — mechanical index/link/naming/Mermaid scan | — | Full docs/ audit — stale links, index gaps, Mermaid issues |
+| **i18n-auditor** | [`agent-os/agents/i18n-auditor.md`](../agents/i18n-auditor.md) | i18n-message-guard | `inherit` — i18n classification (is this string user-facing?) + locale key-graph judgement — frontier reasoning | — | i18n audit — untranslated payload strings, locale key parity and drift |
 | **production-hardening-reviewer** | [`agent-os/agents/production-hardening-reviewer.md`](../agents/production-hardening-reviewer.md) | production-hardening-guard | `inherit` — infra/security judgement across the stack — frontier reasoning | pre-merge-review, prod-readiness | Targeted hardening sweep — security headers, DB/Redis/worker gaps |
 | **production-reviewer** | [`agent-os/agents/production-reviewer.md`](../agents/production-reviewer.md) | path-to-production-gate + production-hardening-guard | `inherit` — full production-readiness synthesis — frontier reasoning | prod-readiness | Pre-release / deploy sign-off — full readiness plan |
 | **sql-design-reviewer** | [`agent-os/agents/sql-design-reviewer.md`](../agents/sql-design-reviewer.md) | sql-design-guard | `inherit` — schema design trade-offs (indexes/partitioning) — frontier reasoning | pre-merge-review | Schema design review — indexes, constraints, column conventions |

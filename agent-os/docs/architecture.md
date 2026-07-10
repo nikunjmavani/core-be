@@ -18,7 +18,7 @@ agent-os/cloud-environment/  install.sh, environment.json, agents-cloud.md  ─�
 
 - **Common** dirs are authored once, in open formats (`SKILL.md`, `*.md`, `*.mdc`, JSON). Their locations never move — every tool reads them where they are today.
 - **The registry** — [`agent-os/platforms/targets.json`](../platforms/targets.json) — declares one row per agent: entrypoints, which common dirs it consumes, and capability flags (`skills`, `subagents`, `plugins`, `hookEvents`, `mcpFormat`, `agentsMd` traits).
-- **The generator** — [`tooling/agent-os/generate.ts`](../../tooling/agent-os/generate.ts) — derives each agent's native wiring from common. `--check` (wired into `ci:local` + `ci:quality`) fails on drift; `--write` regenerates and is idempotent (it never rewrites an unchanged file). It reproduces today's `.claude/settings.json` + `.cursor/hooks.json` exactly, so adoption changed nothing.
+- **The generator** — [`tooling/agent-os/generate.ts`](../../tooling/agent-os/generate.ts) — derives each agent's native wiring from common, writing the platform hook configs under `agent-os/platforms/` (`claude/settings.json`, `cursor/hooks.json`, `codex/hooks.json`) that `.claude/settings.json`, `.cursor/hooks.json`, and `.codex/hooks.json` symlink to. `--check` (wired into `ci:local` + `ci:quality`) fails on drift; `--write` regenerates and is idempotent (it never rewrites an unchanged file).
 
 ## Hook wiring
 

@@ -5,10 +5,11 @@
  * has drifted from that single source.
  *
  * Single source: agent-os/hooks/hooks.json (hook wiring) + agent-os/platforms/
- * targets.json (capability registry). Derived artifacts: the `hooks` block of
- * agent-os/platforms/claude/settings.json (which .claude/settings.json symlinks
- * to), the `hooks` block of .cursor/hooks.json, .codex/hooks.json, and the
- * default Codex MCP config. Everything else in those
+ * targets.json (capability registry). Derived artifacts (all under agent-os/
+ * platforms/, symlinked from the app dirs): the `hooks` block of
+ * claude/settings.json (.claude/settings.json symlinks to it), the `hooks`
+ * block of cursor/hooks.json (.cursor/hooks.json), codex/hooks.json
+ * (.codex/hooks.json), and the default Codex MCP config. Everything else in those
  * files (Claude `permissions`, Cursor `$schema`/`version`) is owned by hand and
  * preserved verbatim. --check compares semantically (parsed,
  * key-order-independent) so the existing hand-formatted files pass unchanged.
@@ -68,7 +69,10 @@ const cursorCommand = (entry: HookManifestEntry): string =>
 const codexCommand = (entry: HookManifestEntry): string =>
   `CLAUDE_PROJECT_DIR="$(git rev-parse --show-toplevel)" ${entry.runtime} "$(git rev-parse --show-toplevel)/agent-os/hooks/${entry.script}"`;
 
-type ClaudeHookEntry = { matcher?: string; hooks: Array<{ type: 'command'; command: string }> };
+type ClaudeHookEntry = {
+  matcher?: string;
+  hooks: Array<{ type: 'command'; command: string }>;
+};
 type CodexHookEntry = {
   matcher?: string;
   hooks: Array<{ type: 'command'; command: string; statusMessage?: string }>;
@@ -203,8 +207,10 @@ if (existsSync(claudeSettingsPath)) {
   }
 } else report(`missing: ${claudeSettingsPath}`);
 
-// ── Cursor: .cursor/hooks.json (hooks block only; $schema/version preserved) ──
-const cursorHooksPath = join(repositoryRoot, cursorTarget?.hooksTarget ?? '.cursor/hooks.json');
+// ── Cursor: platforms/cursor/hooks.json, symlinked from .cursor/hooks.json ──
+// (hooks block only; $schema/version preserved)
+const cursorHooksTarget = cursorTarget?.hooksTarget ?? 'agent-os/platforms/cursor/hooks.json';
+const cursorHooksPath = join(repositoryRoot, cursorHooksTarget);
 if (existsSync(cursorHooksPath)) {
   const cursorConfig = readJson<Record<string, unknown>>(cursorHooksPath);
   if (writeMode) {
@@ -213,17 +219,19 @@ if (existsSync(cursorHooksPath)) {
     if (!deepEqual(cursorConfig.hooks, cursorHooks)) {
       cursorConfig.hooks = cursorHooks;
       writeFileSync(cursorHooksPath, `${JSON.stringify(cursorConfig, null, 2)}\n`);
-      report('wrote .cursor/hooks.json');
+      report(`wrote ${cursorHooksTarget}`);
     }
   } else if (!deepEqual(cursorConfig.hooks, cursorHooks)) {
     report(
-      'drift: .cursor/hooks.json hooks differ from agent-os/hooks/hooks.json — run `pnpm agent-os:generate --write`',
+      `drift: ${cursorHooksTarget} hooks differ from agent-os/hooks/hooks.json — run \`pnpm agent-os:generate --write\``,
     );
   }
 } else report(`missing: ${cursorHooksPath}`);
 
-// ── Codex: .codex/hooks.json (generated from common compatible hook entries) ──
-const codexHooksPath = join(repositoryRoot, codexTarget?.hooksTarget ?? '.codex/hooks.json');
+// ── Codex: platforms/codex/hooks.json, symlinked from .codex/hooks.json ──
+// (generated from common compatible hook entries)
+const codexHooksTarget = codexTarget?.hooksTarget ?? 'agent-os/platforms/codex/hooks.json';
+const codexHooksPath = join(repositoryRoot, codexHooksTarget);
 const codexHooksFile = { hooks: codexHooks };
 if (writeMode) {
   const current = existsSync(codexHooksPath)
@@ -232,7 +240,7 @@ if (writeMode) {
   if (!deepEqual(current, codexHooksFile)) {
     mkdirSync(dirname(codexHooksPath), { recursive: true });
     writeFileSync(codexHooksPath, `${JSON.stringify(codexHooksFile, null, 2)}\n`);
-    report('wrote .codex/hooks.json');
+    report(`wrote ${codexHooksTarget}`);
   }
 } else if (!existsSync(codexHooksPath)) {
   report(`missing: ${codexHooksPath}`);
@@ -240,7 +248,7 @@ if (writeMode) {
   const current = readJson<Record<string, unknown>>(codexHooksPath);
   if (!deepEqual(current, codexHooksFile)) {
     report(
-      'drift: .codex/hooks.json differs from agent-os/hooks/hooks.json — run `pnpm agent-os:generate --write`',
+      `drift: ${codexHooksTarget} differs from agent-os/hooks/hooks.json — run \`pnpm agent-os:generate --write\``,
     );
   }
 }
@@ -251,9 +259,9 @@ if (codexTarget?.capabilities.mcpFormat === 'toml') {
   const codexConfigPath = join(agentOsDirectory, 'platforms', 'codex', 'config.toml');
   if (existsSync(mcpDefaultPath)) {
     const servers =
-      readJson<{ mcpServers?: Record<string, { command?: string; args?: string[] }> }>(
-        mcpDefaultPath,
-      ).mcpServers ?? {};
+      readJson<{
+        mcpServers?: Record<string, { command?: string; args?: string[] }>;
+      }>(mcpDefaultPath).mcpServers ?? {};
     const toml = toCodexToml(servers);
     const current = existsSync(codexConfigPath) ? readFileSync(codexConfigPath, 'utf8') : null;
     if (writeMode) {

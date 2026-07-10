@@ -114,9 +114,12 @@ elif [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && [ -f tooling/setup/agent/install-
 fi
 
 # --- MCP config: declare the default server pair before the first prompt ------
-# Claude Code reads `.mcp.json` at startup. On local sessions, scaffold it from the
-# committed `.mcp.default.json` (the default auto-start pair — codegraph + headroom,
-# zero-config, no token) when it is absent, mirroring how setup:local does. The other
+# Claude Code reads `.mcp.json` at startup (a tracked symlink → the gitignored
+# agent-os/mcp/mcp.json, shared with .cursor/mcp.json). On local sessions, scaffold
+# the canonical target from the committed `.mcp.default.json` (the default auto-start
+# pair — codegraph + headroom, zero-config, no token) when it is absent, mirroring how
+# setup:local does. Write the target directly — GNU cp refuses to write through a
+# dangling symlink, so `cp … .mcp.json` would fail on a fresh Linux clone. The other
 # hosted servers (in `.mcp.example.json`) are opt-in via `pnpm mcp:setup` (most need a
 # provider token). Web sessions load MCP from the platform environment settings (web
 # UI), NOT this file, so we only report there. Best-effort and fail-open.
@@ -128,7 +131,7 @@ if [ -f .mcp.json ]; then
     mcp_status="declared"
   fi
 elif [ "${CLAUDE_CODE_REMOTE:-}" != "true" ] && [ -f .mcp.default.json ]; then
-  if cp .mcp.default.json .mcp.json 2>/dev/null; then
+  if cp .mcp.default.json agent-os/mcp/mcp.json 2>/dev/null; then
     mcp_status="scaffolded default pair (codegraph + headroom)"
     echo "session-start: scaffolded .mcp.json from .mcp.default.json (codegraph + headroom); add the rest with \`pnpm mcp:setup\`." >&2
   else
