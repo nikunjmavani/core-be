@@ -6,13 +6,29 @@ squash-merged pull request. Incomplete work hides behind feature flags, not long
 > For CI/CD and deployment see
 > [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md).
 
+```mermaid
+flowchart TB
+  subgraph work [Working branches]
+    feature[feat/...]
+    fix[fix/...]
+  end
+  subgraph trunk [Trunk]
+    main[main]
+  end
+  releasepr["Release PR (chore: release X.Y.Z)"]
+  feature -->|squash-merge| main
+  fix -->|squash-merge| main
+  main -->|release-please refreshes| releasepr
+  releasepr -->|merge = ship ★| main
+```
+
 ## Branches
 
-| Branch | Purpose | Lifetime |
-| --- | --- | --- |
-| `main` | The trunk. Always releasable. Protected (squash-only, required checks). | permanent |
+| Branch          | Purpose                                                                                                     | Lifetime                      |
+| --------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `main`          | The trunk. Always releasable. Protected (squash-only, required checks).                                     | permanent                     |
 | `<type>/<slug>` | Working branch for one change (`feat`/`fix`/`chore`/`refactor`/`docs`/`test`/`ci`/`build`/`perf`/`hotfix`). | short-lived, deleted on merge |
-| `claude/*` | Claude Code web session branches. | short-lived |
+| `claude/*`      | Claude Code web session branches.                                                                           | short-lived                   |
 
 Enforced by [`.husky/pre-push`](../../.husky/pre-push) and the `git-branch-naming` rule.
 

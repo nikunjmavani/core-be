@@ -39,7 +39,9 @@ function readPackageScripts(): Record<string, string> {
 /** Returns paths currently staged for commit (`git diff --cached --name-only`). */
 export function getStagedFiles(): string[] {
   try {
-    const output = execSync('git diff --cached --name-only', { encoding: 'utf8' });
+    const output = execSync('git diff --cached --name-only', {
+      encoding: 'utf8',
+    });
     return output
       .split('\n')
       .map((line) => line.trim())
@@ -120,7 +122,10 @@ export function shouldRunSonarScan(stagedFiles: string[]): boolean {
 }
 
 function runPnpm(scriptName: string, scriptArgs: string[] = []): number {
-  const result = spawnSync('pnpm', [scriptName, ...scriptArgs], { stdio: 'inherit', shell: false });
+  const result = spawnSync('pnpm', [scriptName, ...scriptArgs], {
+    stdio: 'inherit',
+    shell: false,
+  });
   return result.status ?? 1;
 }
 
@@ -135,7 +140,10 @@ function gitAdd(paths: string[]): void {
 }
 
 function gitleaksInstalled(): boolean {
-  const result = spawnSync('gitleaks', ['version'], { stdio: 'ignore', shell: false });
+  const result = spawnSync('gitleaks', ['version'], {
+    stdio: 'ignore',
+    shell: false,
+  });
   return result.status === 0;
 }
 
@@ -184,14 +192,18 @@ function checkConflictMarkers(stagedFiles: string[]): number {
 function checkLargeStagedFiles(stagedFiles: string[]): number {
   const largeFiles: string[] = [];
   for (const file of stagedFiles) {
-    try {
-      const sizeOutput = execSync(`git cat-file -s ":${file}"`, { encoding: 'utf8' }).trim();
-      const size = Number.parseInt(sizeOutput, 10);
-      if (Number.isFinite(size) && size > ONE_MEGABYTE) {
-        largeFiles.push(`  ${file} (${Math.floor(size / 1024)}KB)`);
-      }
-    } catch {
-      // Skip files git cannot resolve (e.g. deleted-only staging edge cases).
+    // argv form (no shell) — filenames need no quoting, and stderr is piped so
+    // an unresolvable path (rename/delete staging edge cases) stays silent
+    // instead of leaking a `fatal:` line into the guard output.
+    const result = spawnSync('git', ['cat-file', '-s', `:${file}`], {
+      encoding: 'utf8',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    if (result.status !== 0) continue; // skip files git cannot resolve
+    const size = Number.parseInt(result.stdout.trim(), 10);
+    if (Number.isFinite(size) && size > ONE_MEGABYTE) {
+      largeFiles.push(`  ${file} (${Math.floor(size / 1024)}KB)`);
     }
   }
   if (largeFiles.length > 0) {
@@ -202,7 +214,10 @@ function checkLargeStagedFiles(stagedFiles: string[]): number {
 }
 
 function checkEnvExampleSync(): number {
-  const result = spawnSync('pnpm', ['tool:sync-env-example'], { stdio: 'inherit', shell: false });
+  const result = spawnSync('pnpm', ['tool:sync-env-example'], {
+    stdio: 'inherit',
+    shell: false,
+  });
   if (result.status === 0) return 0;
   console.error('ERROR: .env.example is out of sync with env schema.');
   console.error('Run: pnpm tool:sync-env-example --fix  (then add descriptions)');
@@ -229,7 +244,12 @@ export function buildGuardSteps(options: {
       description:
         'pnpm validate:lockfile (when package.json / pnpm-lock.yaml / pnpm-workspace.yaml staged)',
     },
-    { id: '2', label: 'TypeScript typecheck', when: 'always', description: 'pnpm typecheck' },
+    {
+      id: '2',
+      label: 'TypeScript typecheck',
+      when: 'always',
+      description: 'pnpm typecheck',
+    },
     {
       id: '3',
       label: 'Domain structure (strict)',
@@ -288,7 +308,12 @@ export function buildGuardSteps(options: {
       when: shouldRunOpenApiCheck(stagedFiles) ? 'always' : 'conditional',
       description: 'pnpm docs:check (when OpenAPI inputs staged)',
     },
-    { id: '8', label: 'TSDoc coverage gate', when: 'always', description: 'pnpm tsdoc:check' },
+    {
+      id: '8',
+      label: 'TSDoc coverage gate',
+      when: 'always',
+      description: 'pnpm tsdoc:check',
+    },
   );
 
   if (hasPackageScript(scripts, 'validate:test-naming')) {
@@ -408,7 +433,10 @@ export function runPreCommitGuard(options: RunGuardOptions = {}): number {
       run: () => (shouldRunLockfileCheck(stagedFiles) ? runPnpm('validate:lockfile') : 0),
     },
     { label: 'TypeScript typecheck', run: () => runPnpm('typecheck') },
-    { label: 'Domain structure (strict)', run: () => runPnpm('validate:domain:strict') },
+    {
+      label: 'Domain structure (strict)',
+      run: () => runPnpm('validate:domain:strict'),
+    },
     {
       label: 'Architecture policy tests',
       run: () => (shouldRunGlobalTests(stagedFiles) ? runPnpm('test:global') : 0),
@@ -423,7 +451,10 @@ export function runPreCommitGuard(options: RunGuardOptions = {}): number {
         return 0;
       },
     },
-    { label: 'Route catalog drift check', run: () => runPnpm('routes:catalog:check') },
+    {
+      label: 'Route catalog drift check',
+      run: () => runPnpm('routes:catalog:check'),
+    },
   ];
 
   if (hasPackageScript(scripts, 'tool:project-structure-tree')) {

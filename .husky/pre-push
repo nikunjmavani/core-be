@@ -9,16 +9,19 @@
 # git proxy pins a web session to push only its claude/* branch). Bypass once with:
 #   SKIP_BRANCH_CHECK=1 git push
 BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)
+# The trunk is resolved from tooling/setup/setup.config.json (git.defaultBranch),
+# never hardcoded, so a renamed trunk stays exempt automatically (parity with core-fe).
+DEFAULT_BRANCH=$(node -e "const fs=require('fs');try{const c=JSON.parse(fs.readFileSync('tooling/setup/setup.config.json','utf8'));process.stdout.write((c.git&&c.git.defaultBranch)||'main')}catch(e){process.stdout.write('main')}" 2>/dev/null || echo main)
 BRANCH_TYPES='feat|feature|fix|hotfix|refactor|docs|test|chore|ci|perf|build|style|revert'
-if [ "${SKIP_BRANCH_CHECK:-0}" = "1" ] || [ "$BRANCH_NAME" = "HEAD" ]; then
+if [ "${SKIP_BRANCH_CHECK:-0}" = "1" ] || [ "$BRANCH_NAME" = "HEAD" ] || [ "$BRANCH_NAME" = "$DEFAULT_BRANCH" ]; then
   echo "Skipping branch-name policy on pre-push."
-elif printf '%s' "$BRANCH_NAME" | grep -Eq "^(main|claude/.+|(${BRANCH_TYPES})/.+)$"; then
+elif printf '%s' "$BRANCH_NAME" | grep -Eq "^(claude/.+|(${BRANCH_TYPES})/.+)$"; then
   : # branch name follows policy
 else
   echo "✗ Branch \"$BRANCH_NAME\" does not follow the naming policy."
   echo "  Use <type>/<short-description>, e.g. feature/ai-stream-response or fix/login-error."
   echo "  Allowed types: ${BRANCH_TYPES}"
-  echo "  Long-lived: main (only).  Hotfixes: fix/* or hotfix/* → main.  AI web sessions: claude/*."
+  echo "  Long-lived: ${DEFAULT_BRANCH} (only).  Hotfixes: fix/* or hotfix/* → ${DEFAULT_BRANCH}.  AI web sessions: claude/*."
   echo "  See docs/process/trunk-based-workflow.md.  Bypass once: SKIP_BRANCH_CHECK=1 git push"
   exit 1
 fi
@@ -30,8 +33,10 @@ pnpm build:check
 # Markdown lint on the PR diff (mirrors pr-docs-lane.yml). lint-staged only
 # touches staged files, but CI lints every changed markdown file in the PR
 # (e.g. release-please-generated CHANGELOG-dev.md inherited from a rebase).
-# Default base is origin/main; override with LINT_BASE=origin/main.
-PUSHED_MD=$(git diff --name-only @{u}...HEAD 2>/dev/null | grep -E '\.md$' || true)
+# Base falls back to origin/main when the branch has no upstream yet (first
+# push of a new branch) — otherwise the diff is empty and the gate is skipped.
+PUSH_BASE=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo origin/main)
+PUSHED_MD=$(git diff --name-only "$PUSH_BASE"...HEAD 2>/dev/null | grep -E '\.md$' || true)
 if [ -n "$PUSHED_MD" ]; then
   pnpm docs:lint:changed
 else
@@ -40,7 +45,8 @@ fi
 
 # Unit tests (matches PR CI unit lane; excludes DB project)
 # Run only when pushed commits include unit-relevant files.
-PUSHED_UNIT_RELEVANT=$(git diff --name-only @{u}...HEAD 2>/dev/null | rg \
+# grep -E (not rg) — POSIX-portable so a machine without ripgrep still gates.
+PUSHED_UNIT_RELEVANT=$(git diff --name-only "$PUSH_BASE"...HEAD 2>/dev/null | grep -E \
   '^(src/|tooling/vitest/|vitest\.config\.ts$|package\.json$|pnpm-lock\.yaml$)' || true)
 if [ -n "$PUSHED_UNIT_RELEVANT" ]; then
   pnpm test:unit
