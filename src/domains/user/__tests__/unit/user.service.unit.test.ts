@@ -91,6 +91,7 @@ describe('UserService', () => {
     adminUpdate: vi.fn().mockResolvedValue(userRow),
     suspend: vi.fn().mockResolvedValue({ ...userRow, suspended_at: new Date() }),
     unsuspend: vi.fn().mockResolvedValue(userRow),
+    markOnboardingComplete: vi.fn().mockResolvedValue(userRow),
   } as unknown as UserRepository;
 
   const objectStorage = createObjectStoragePortMock();
@@ -155,6 +156,12 @@ describe('UserService', () => {
     expect(me.id).toBe(userRow.public_id);
     await service.updateMe(userRow.public_id, { first_name: 'Updated' });
     expect(repository.update).toHaveBeenCalled();
+  });
+
+  it('completeOnboarding stamps the flag and returns the fresh self profile', async () => {
+    const me = await service.completeOnboarding(userRow.public_id);
+    expect(repository.markOnboardingComplete).toHaveBeenCalledWith(userRow.public_id);
+    expect(me.id).toBe(userRow.public_id);
   });
 
   it('uploadAvatar stores the key and returns a signed read URL (USER-10)', async () => {

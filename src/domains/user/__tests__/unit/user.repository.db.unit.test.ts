@@ -34,6 +34,15 @@ describe('UserRepository (database)', () => {
     const verified = await repository.findByPublicId(user.public_id);
     expect(verified?.is_email_verified).toBe(true);
 
+    await repository.markOnboardingComplete(user.public_id);
+    const onboarded = await repository.findByPublicId(user.public_id);
+    expect(onboarded?.onboarding_completed_at).not.toBeNull();
+    // Idempotent: a second call preserves the original timestamp.
+    const firstStamp = onboarded?.onboarding_completed_at;
+    await repository.markOnboardingComplete(user.public_id);
+    const reonboarded = await repository.findByPublicId(user.public_id);
+    expect(reonboarded?.onboarding_completed_at).toEqual(firstStamp);
+
     const listed = await repository.findMany({ limit: 20, search: 'repo-user' });
     expect(listed.items.some((row) => row.public_id === user.public_id)).toBe(true);
     expect(listed.total).toBeNull();

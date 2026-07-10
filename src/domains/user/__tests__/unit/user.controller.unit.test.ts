@@ -27,6 +27,7 @@ describe('createUserController', () => {
   const userService = {
     getMe: vi.fn().mockResolvedValue({ id: userPublicId }),
     updateMe: vi.fn().mockResolvedValue({ id: userPublicId }),
+    completeOnboarding: vi.fn().mockResolvedValue({ id: userPublicId }),
     deleteMe: vi.fn().mockResolvedValue(undefined),
     listUsers: vi.fn().mockResolvedValue({
       items: [],
@@ -68,6 +69,11 @@ describe('createUserController', () => {
   it('patchMe updates profile', async () => {
     await controller.patchMe(mockRequest({ body: { first_name: 'A' } }), {} as FastifyReply);
     expect(userService.updateMe).toHaveBeenCalled();
+  });
+
+  it('completeOnboardingMe delegates to the service', async () => {
+    await controller.completeOnboardingMe(mockRequest(), {} as FastifyReply);
+    expect(userService.completeOnboarding).toHaveBeenCalled();
   });
 
   it('deleteMe returns 204', async () => {
