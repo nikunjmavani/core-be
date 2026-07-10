@@ -154,6 +154,22 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
     },
     controller.patchMe,
   );
+  zodApplication.post(
+    '/me/onboarding/complete',
+    {
+      onRequest: [app.authenticate],
+      // Idempotent one-shot stamp on wizard finish; moderate-authed tier matches
+      // the other self-service mutations.
+      ...MODERATE_AUTHED_RATE_LIMIT,
+      schema: {
+        summary: 'Mark onboarding complete',
+        description:
+          "Stamps the authenticated user's onboarding as finished (idempotent) and returns the refreshed self profile. Called when the onboarding wizard is completed so subsequent sign-ins route to the dashboard.",
+        tags: ['User'],
+      },
+    },
+    controller.completeOnboardingMe,
+  );
   zodApplication.delete(
     '/me',
     {

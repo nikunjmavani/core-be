@@ -25,6 +25,7 @@ const baseData = (overrides: Partial<AuthMeContextData> = {}): AuthMeContextData
     job_title: null,
     avatar_url: null,
     status: 'ACTIVE',
+    onboarding_completed: true,
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
   },

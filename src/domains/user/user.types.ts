@@ -33,6 +33,12 @@ export interface UserOutput {
   job_title: string | null;
   avatar_url: string | null;
   status: string;
+  /**
+   * Whether the caller has finished the onboarding wizard. Drives the frontend's
+   * post-login routing: `false` sends every fresh user (personal or team) through
+   * onboarding once; `true` goes straight to the dashboard.
+   */
+  onboarding_completed: boolean;
   created_at: string;
   updated_at: string;
   /**

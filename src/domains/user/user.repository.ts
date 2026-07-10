@@ -141,6 +141,29 @@ export class UserRepository {
     return rows[0] ?? null;
   }
 
+  /**
+   * Stamps `onboarding_completed_at` on first completion. Idempotent: the
+   * `IS NULL` guard means a repeat call (double-submit, retry) is a no-op that
+   * preserves the original timestamp rather than moving it forward.
+   */
+  async markOnboardingComplete(publicId: string) {
+    const rows = await getRequestDatabase()
+      .update(users)
+      .set({
+        onboarding_completed_at: databaseNowTimestamp,
+        updated_at: databaseNowTimestamp,
+      })
+      .where(
+        and(
+          eq(users.public_id, publicId),
+          isNull(users.deleted_at),
+          isNull(users.onboarding_completed_at),
+        ),
+      )
+      .returning();
+    return rows[0] ?? null;
+  }
+
   private async updateByPublicId(
     public_id: string,
     data: Record<string, unknown>,

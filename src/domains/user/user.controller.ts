@@ -59,6 +59,12 @@ export function createUserController({
       return successResponse(data, getRequestIdentifier(request));
     },
 
+    completeOnboardingMe: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      const data = await userService.completeOnboarding(auth.userId);
+      return successResponse(data, getRequestIdentifier(request));
+    },
+
     deleteMe: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);
       await userService.deleteMe(auth.userId);

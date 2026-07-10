@@ -11,6 +11,7 @@ const sampleRow = {
   job_title: 'Engineer',
   avatar_url: null,
   status: 'ACTIVE',
+  onboarding_completed_at: new Date('2026-01-15T10:05:00.000Z'),
   created_at: new Date('2026-01-15T10:00:00.000Z'),
   updated_at: new Date('2026-01-16T10:00:00.000Z'),
 };
@@ -27,8 +28,15 @@ describe('UserSerializer', () => {
       job_title: 'Engineer',
       avatar_url: null,
       status: 'ACTIVE',
+      onboarding_completed: true,
       created_at: '2026-01-15T10:00:00.000Z',
       updated_at: '2026-01-16T10:00:00.000Z',
+    });
+  });
+
+  it('projects a null onboarding timestamp to onboarding_completed=false', () => {
+    expect(UserSerializer.one({ ...sampleRow, onboarding_completed_at: null })).toMatchObject({
+      onboarding_completed: false,
     });
   });
 });

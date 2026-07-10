@@ -286,6 +286,7 @@ Table auth.users {
   last_active_organization_id bigint
   last_name varchar(100)
   last_password_change_at timestamptz
+  onboarding_completed_at timestamptz
   password_hash varchar(255)
   public_id varchar(28) [not null]
   status varchar(20) [not null]
