@@ -23,6 +23,8 @@ interface Stat {
   silent: number;
   lastFired: string | null;
   lastRun: string | null;
+  /** Sum of `bytes=N` details (5th CSV column) — volume the hook flagged. */
+  flaggedBytes: number;
 }
 
 const declaredHookIds: string[] = existsSync(manifestPath)
@@ -38,7 +40,14 @@ const stats = new Map<string, Stat>();
 const ensure = (id: string): Stat => {
   const existing = stats.get(id);
   if (existing) return existing;
-  const fresh: Stat = { total: 0, fired: 0, silent: 0, lastFired: null, lastRun: null };
+  const fresh: Stat = {
+    total: 0,
+    fired: 0,
+    silent: 0,
+    lastFired: null,
+    lastRun: null,
+    flaggedBytes: 0,
+  };
   stats.set(id, fresh);
   return fresh;
 };
@@ -48,7 +57,7 @@ if (existsSync(logPath)) {
   for (const line of readFileSync(logPath, 'utf8').split('\n')) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    const [timestamp, hookId, , status] = trimmed.split(',');
+    const [timestamp, hookId, , status, detail] = trimmed.split(',');
     if (!hookId) continue;
     const stat = ensure(hookId);
     stat.total++;
@@ -56,6 +65,10 @@ if (existsSync(logPath)) {
       stat.fired++;
       if (timestamp && (!stat.lastFired || timestamp > stat.lastFired)) stat.lastFired = timestamp;
     } else stat.silent++;
+    if (detail?.startsWith('bytes=')) {
+      const bytes = Number(detail.slice('bytes='.length));
+      if (Number.isFinite(bytes) && bytes > 0) stat.flaggedBytes += bytes;
+    }
     if (timestamp && (!stat.lastRun || timestamp > stat.lastRun)) stat.lastRun = timestamp;
   }
 }
@@ -80,6 +93,13 @@ for (const [id, stat] of rows) {
   );
   if (stat.fired === 0 || (firedDays !== null && firedDays >= 30)) pruningCandidates.push(id);
   else if (firedDays === null && stat.total === 0) pruningCandidates.push(id);
+}
+
+const totalFlaggedBytes = [...stats.values()].reduce((sum, stat) => sum + stat.flaggedBytes, 0);
+if (totalFlaggedBytes > 0) {
+  console.log(
+    `\n  flagged read volume (large-read-nudge \`bytes=\` details): ${(totalFlaggedBytes / 1024).toFixed(0)} KiB — candidate savings via ranged Reads / codegraph / headroom_compress`,
+  );
 }
 
 console.log('');

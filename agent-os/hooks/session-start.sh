@@ -138,6 +138,33 @@ else
   mcp_status="platform-managed on web (configure in the environment MCP settings); local: pnpm mcp:setup"
 fi
 
+# --- Hook-health: surface pruning candidates from telemetry ------------------
+# The README's "monthly ritual" (prune hooks silent 30+ days) previously relied
+# on someone remembering to run `pnpm agent-os:hooks:report`. Enforce it
+# passively instead: at session start, name any hook with recorded runs whose
+# last `fired` entry is >30 days old (or that has NEVER fired across 50+ runs).
+# Best-effort + fail-open; empty when telemetry is absent (fresh clone).
+hook_health=""
+telemetry_log="$ROOT/agent-os/hooks/.telemetry.log"
+if [ -f "$telemetry_log" ]; then
+  # ISO-8601 timestamps sort lexicographically, so "last fired before the
+  # 30-day cutoff" is a plain string compare — portable across BSD/GNU awk.
+  cutoff="$(date -u -v-30d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '30 days ago' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo '')"
+  hook_health="$(awk -F, -v cutoff="$cutoff" '
+    NF >= 4 {
+      runs[$2]++
+      if ($4 == "fired" && $1 > lastFired[$2]) lastFired[$2] = $1
+    }
+    END {
+      for (hook in runs) {
+        if (lastFired[hook] == "" && runs[hook] >= 50) printf "%s (never fired, %d runs) ", hook, runs[hook]
+        else if (cutoff != "" && lastFired[hook] != "" && lastFired[hook] < cutoff) printf "%s (silent >30d) ", hook
+      }
+    }' "$telemetry_log" 2>/dev/null || echo "")"
+fi
+[ -n "$hook_health" ] && hook_health="
+- Hook pruning candidates (silent 30+ days / never fired): ${hook_health}— review with \`pnpm agent-os:hooks:report\` (agent-os/hooks/README.md)"
+
 # --- Build session context: skill routing map + env/commands summary --------
 node_version="$(node -v 2>/dev/null || echo unknown)"
 deps="missing"; [ -x node_modules/.bin/biome ] && deps="installed"
@@ -152,8 +179,8 @@ map_file="$ROOT/agent-os/docs/skill-triggers.md"
 map_section=""
 [ -f "$map_file" ] && map_section="$(cat "$map_file")"
 
-context="$(printf 'core-be session ready — environment provisioned: %s.\n- Node %s (need >=%s) · deps %s · gh %s · codegraph %s · mcp %s · gitleaks %s · agent-os %s · docker %s%s\n- Startup is light: Node + deps + agent-os:check + (web) Docker daemon — run compose:up / db:migrate / db:seed / tests on demand per prompt.\n- Gates: pnpm validate · pnpm ci:local   (pre-commit: pnpm guard:pre-commit)\n- Custom commands: /validate · /ci-local · /new-domain · /routes-sync\n\nagent-os skill routing — consult skill-index FIRST, then run the listed skill(s) for the files you change:\n\n%s' \
-  "$provisioned" "$node_version" "$required_major" "$deps" "$gh_cli" "$codegraph" "$mcp_status" "$gitleaks_status" "$agent_os_status" "$docker_status" "$node_note" "$map_section")"
+context="$(printf 'core-be session ready — environment provisioned: %s.\n- Node %s (need >=%s) · deps %s · gh %s · codegraph %s · mcp %s · gitleaks %s · agent-os %s · docker %s%s%s\n- Startup is light: Node + deps + agent-os:check + (web) Docker daemon — run compose:up / db:migrate / db:seed / tests on demand per prompt.\n- Gates: pnpm validate · pnpm ci:local   (pre-commit: pnpm guard:pre-commit)\n- Custom commands: /validate · /ci-local · /new-domain · /routes-sync\n\nagent-os skill routing — consult skill-index FIRST, then run the listed skill(s) for the files you change:\n\n%s' \
+  "$provisioned" "$node_version" "$required_major" "$deps" "$gh_cli" "$codegraph" "$mcp_status" "$gitleaks_status" "$agent_os_status" "$docker_status" "$node_note" "$hook_health" "$map_section")"
 
 # Prefer the structured additionalContext envelope; fall back to plain stdout
 # (also injected as context) when jq is unavailable. Fail-open either way.

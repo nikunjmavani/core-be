@@ -4,6 +4,8 @@ argument-hint: (no arguments — reviews the current diff)
 allowed-tools: Bash(git diff*), Bash(pnpm*)
 ---
 
+Read `REVIEW.md` (repo root) first — it defines the severity ladder, the repo-specific checks in priority order, and the skip paths every reviewer in this pipeline must honor.
+
 Run the **pre-merge review** pipeline as read-only agents over the current diff, then aggregate one report:
 
 1. **sql-design-reviewer** — Drizzle schema design (if schemas changed).

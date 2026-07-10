@@ -12,6 +12,7 @@ Claude Code reads `agent-os/` directly via `.claude/` symlinks (`agents`, `skill
 
 | File | Purpose |
 | ---- | ------- |
+| [`REVIEW.md`](REVIEW.md) | Review-time severity + skip-path instructions for `/code-review`, `/pre-merge-review`, and review agents |
 | [`agent-os/docs/principles.md`](agent-os/docs/principles.md) | Engineering principles + project identity (full detail) |
 | [`agent-os/docs/skill-triggers.md`](agent-os/docs/skill-triggers.md) | File pattern → skill map (replaces reading 25 sync rules) |
 | [`agent-os/docs/agents-catalog.md`](agent-os/docs/agents-catalog.md) | All 10 agents with descriptions and use-when |

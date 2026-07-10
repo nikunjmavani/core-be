@@ -365,6 +365,74 @@ if (existsSync(chainsFile)) {
   }
 }
 
+// ── Check 18: every skill chain has at least one Tier-3 outcome fixture ──
+// A chain without an outcome case is routing that is never behaviourally
+// verified — the coverage rule is "new chain ⇒ new cases/outcomes/<chain>-*.jsonl
+// fixture (+ .expected.json)". Fixture count may grow, never shrink to zero
+// per chain (the outcome analogue of the tsdoc ratchet).
+const outcomesDirectory = join(agentOsDirectory, 'evals', 'cases', 'outcomes')
+if (existsSync(chainsFile) && existsSync(outcomesDirectory)) {
+  const outcomeFixtures = listFilesWithExtension(outcomesDirectory, '.jsonl')
+  try {
+    const chainNames = Object.keys(
+      (JSON.parse(readText(chainsFile)) as { chains?: Record<string, unknown> }).chains ?? {},
+    )
+    for (const chain of chainNames)
+      if (!outcomeFixtures.some((fixture) => fixture.startsWith(`${chain}-`)))
+        error(
+          'outcome-coverage',
+          `chain "${chain}" has no outcome fixture — add agent-os/evals/cases/outcomes/${chain}-<case>.jsonl (+ .expected.json)`,
+        )
+    for (const fixture of outcomeFixtures) {
+      const expected = fixture.replace(/\.jsonl$/, '.expected.json')
+      if (!existsSync(join(outcomesDirectory, expected)))
+        error('outcome-coverage', `outcome fixture ${fixture} has no ${expected}`)
+    }
+  } catch {
+    /* chains.json parse errors are reported by Check 13 */
+  }
+}
+
+// ── Check 19: sync rules mirror real skills, and their globs appear in the routing map ──
+// The 25+ `<skill>-sync.mdc` files are Cursor's auto-attach mirror of the
+// generated skill-triggers.md table — two surfaces for one fact. A sync rule
+// whose skill was renamed/deleted, or whose glob no longer appears in the
+// generated map, is silent drift between what Cursor attaches and what every
+// other platform is told. (project-identity-sync is the one command-driven
+// sync rule with no backing skill — exempt by design.)
+const syncRuleSkillExemptions = new Set(['project-identity'])
+const triggersTableText = existsSync(triggersFile) ? readText(triggersFile) : ''
+for (const ruleFile of listFilesWithExtension(join(agentOsDirectory, 'rules'), '-sync.mdc')) {
+  const ruleSkill = basename(ruleFile, '.mdc').replace(/-sync$/, '')
+  if (syncRuleSkillExemptions.has(ruleSkill)) continue
+  if (!skillNames.includes(ruleSkill)) {
+    error('sync-rule-drift', `rules/${ruleFile} has no matching skill "${ruleSkill}" — rename the rule or restore the skill`)
+    continue
+  }
+  const ruleText = readText(join(agentOsDirectory, 'rules', ruleFile))
+  const globsLine = frontmatterField(ruleText, 'globs')
+  if (!globsLine) {
+    warn('sync-rule-drift', `rules/${ruleFile} declares no globs — it will never auto-attach in Cursor`)
+    continue
+  }
+  if (triggersTableText) {
+    // Sync rules deliberately attach on a wider net than the routing map, so
+    // per-glob matching is noise. The drift signal is a rule whose globs are
+    // ALL absent from the map (after normalising `/**/*.ts` ↔ `/**` suffixes)
+    // AND whose skill name is absent too — a fully disconnected mirror.
+    const globs = globsLine.split(',').map((token) => token.trim()).filter(Boolean)
+    const appearsInMap = (glob: string): boolean =>
+      [glob, glob.replace(/\/\*\*\/\*\.ts$/, '/**'), glob.replace(/\/\*\.ts$/, ''), glob.replace(/\/\*\*$/, '')].some(
+        (candidate) => candidate && triggersTableText.includes(candidate),
+      )
+    if (!globs.some(appearsInMap) && !triggersTableText.includes(ruleSkill))
+      warn(
+        'sync-rule-drift',
+        `rules/${ruleFile}: none of its globs (or its skill name) appear in docs/skill-triggers.md — Cursor auto-attach and the cross-platform map have fully diverged`,
+      )
+  }
+}
+
 // ── Check 14: command names are unique and never collide with a skill name ──
 // Commands are workflows; skills are the granular procedures. A command must not
 // shadow a skill (or another command), so routing stays unambiguous across tools.
@@ -466,6 +534,8 @@ const checkLabels: Record<string, string> = {
   'targets-registry': 'Capability registry valid',
   'skill-groups': 'Skill groups ↔ disk',
   'skill-chains': 'Skill chains ↔ disk',
+  'outcome-coverage': 'Chains have outcome fixtures',
+  'sync-rule-drift': 'Sync rules ↔ skills/routing map',
   'command-uniqueness': 'Command names unique',
   'agent-pipelines': 'Agent pipelines ↔ disk',
   'plugin-refs': 'Plugin manifest refs exist',
