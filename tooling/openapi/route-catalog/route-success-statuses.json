@@ -125,6 +125,7 @@
   "POST /api/v1/users/:user_id/suspend": 201,
   "POST /api/v1/users/:user_id/unsuspend": 201,
   "POST /api/v1/users/me/data-export": 201,
+  "POST /api/v1/users/me/onboarding/complete": 201,
   "POST /internal/ops/circuit-breakers/:circuit_name/reset": 201,
   "PUT /api/v1/tenancy/organization/logo": 200,
   "PUT /api/v1/tenancy/organization/roles/:role_id/permissions": 200,
