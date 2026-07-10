@@ -30,15 +30,27 @@ telemetry_init() {
 }
 
 # Mark this run as having acted (produced output / blocked / formatted).
-telemetry_fired() { TELEMETRY_STATUS="fired"; }
+# Optional $1: a short measurement detail (e.g. "bytes=31204") appended as a 5th
+# CSV column so reports can quantify what the hook flagged. Commas/newlines are
+# stripped to keep the CSV shape; readers that only take 4 columns ignore it.
+telemetry_fired() {
+  TELEMETRY_STATUS="fired"
+  [ -n "${1:-}" ] && TELEMETRY_DETAIL="$(printf '%s' "$1" | tr -d ',\n')"
+}
 
 # Append the CSV row. Never errors (all failures swallowed).
 agent_os_record_telemetry() {
   {
     local timestamp
     timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo '?')"
-    printf '%s,%s,%s,%s\n' \
-      "$timestamp" "${TELEMETRY_HOOK_ID:-unknown}" "${TELEMETRY_EVENT:-unknown}" "${TELEMETRY_STATUS:-silent}" \
-      >>"${TELEMETRY_LOG:-/dev/null}"
+    if [ -n "${TELEMETRY_DETAIL:-}" ]; then
+      printf '%s,%s,%s,%s,%s\n' \
+        "$timestamp" "${TELEMETRY_HOOK_ID:-unknown}" "${TELEMETRY_EVENT:-unknown}" "${TELEMETRY_STATUS:-silent}" "$TELEMETRY_DETAIL" \
+        >>"${TELEMETRY_LOG:-/dev/null}"
+    else
+      printf '%s,%s,%s,%s\n' \
+        "$timestamp" "${TELEMETRY_HOOK_ID:-unknown}" "${TELEMETRY_EVENT:-unknown}" "${TELEMETRY_STATUS:-silent}" \
+        >>"${TELEMETRY_LOG:-/dev/null}"
+    fi
   } 2>/dev/null || true
 }

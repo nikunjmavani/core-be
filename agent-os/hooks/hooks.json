@@ -64,6 +64,23 @@
       "claude": { "event": "PostToolUse", "matcher": "Read|Grep" }
     },
     {
+      "id": "injection-scan",
+      "runtime": "node",
+      "script": "injection-scan.mjs",
+      "claude": { "event": "PostToolUse", "matcher": "WebFetch|WebSearch|mcp__.*" },
+      "codex": {
+        "event": "PostToolUse",
+        "matcher": "web|fetch|search|mcp",
+        "statusMessage": "Scanning external content for prompt injection"
+      }
+    },
+    {
+      "id": "subagent-verify",
+      "runtime": "bash",
+      "script": "subagent-verify.sh",
+      "claude": { "event": "SubagentStop" }
+    },
+    {
       "id": "gate-failure-hint",
       "runtime": "bash",
       "script": "gate-failure-hint.sh",
@@ -96,6 +113,24 @@
       "runtime": "node",
       "script": "cursor-shell-guard.mjs",
       "cursor": { "event": "beforeShellExecution" }
+    },
+    {
+      "id": "cursor-edit-guard",
+      "runtime": "node",
+      "script": "cursor-edit-guard.mjs",
+      "cursor": { "event": "afterFileEdit" }
+    },
+    {
+      "id": "cursor-read-guard",
+      "runtime": "node",
+      "script": "cursor-read-guard.mjs",
+      "cursor": { "event": "beforeReadFile" }
+    },
+    {
+      "id": "cursor-mcp-guard",
+      "runtime": "node",
+      "script": "cursor-mcp-guard.mjs",
+      "cursor": { "event": "beforeMCPExecution" }
     }
   ]
 }

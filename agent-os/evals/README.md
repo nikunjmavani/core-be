@@ -4,13 +4,14 @@ Treats the `agent-os/` bundle (skills, rules, agents, docs, hooks) as **tested c
 
 > **Why this exists:** a June 2026 audit found 7 of 37 skills had silently drifted (wrong counts, a dead `.github/sync.config.json` reference, a hook hardcoded to one developer's home path, `schema-generator` missing from the trigger map) with zero detection. This harness is the closed loop: **author → enforce → measure** instead of author → hope.
 
-## Three tiers
+## Four tiers
 
 | Tier | File | Question | CI |
 | ---- | ---- | -------- | -- |
 | **1 — integrity** | [`check.ts`](check.ts) | Is the bundle internally consistent? (deterministic, zero-token) | **Gates** — exits 1 on any error |
 | **2 — triggers** | [`trigger-eval.ts`](trigger-eval.ts) | When file X changes, does the routing map surface the right skill(s)? | **Gates** — `agent-os:triggers:strict` in CI |
 | **3 — outcomes** | [`outcome-eval.ts`](outcome-eval.ts) | In a real session, did the agent actually consult/invoke the skills it should have? | **Gates** — `agent-os:outcomes` (fixtures) in CI |
+| **4 — guards** | [`guard-eval.ts`](guard-eval.ts) | Do the guard hooks actually block/escalate/flag what they claim — and fail open on garbage input? | **Gates** — `agent-os:guards` in CI |
 
 ## Run
 
@@ -21,9 +22,10 @@ pnpm agent-os:triggers         # Tier 2 report (local)
 pnpm agent-os:triggers:strict  # Tier 2 gate (CI) — exits 1 on a missing route
 pnpm agent-os:outcomes         # Tier 3 gate (CI) — score recorded session fixtures
 pnpm agent-os:outcomes:live <transcript.jsonl>   # Tier 3 ad hoc — score one real session
+pnpm agent-os:guards           # Tier 4 gate (CI) — adversarial guard cases + fail-open smokes
 ```
 
-`pnpm agent-os:check`, `pnpm agent-os:triggers:strict`, and `pnpm agent-os:outcomes` are wired into `ci:local` and `ci:quality`.
+`pnpm agent-os:check`, `pnpm agent-os:triggers:strict`, `pnpm agent-os:outcomes`, and `pnpm agent-os:guards` are wired into `ci:local` and `ci:quality`.
 
 ## Tier 1 checks (`check.ts`)
 
@@ -38,6 +40,8 @@ pnpm agent-os:outcomes:live <transcript.jsonl>   # Tier 3 ad hoc — score one r
 | Agent frontmatter | missing `name`/`description`; `model` pinned off `inherit` (warn) |
 | Hook portability | `.claude/settings.json` hook hardcoding `/Users/…` instead of `$CLAUDE_PROJECT_DIR` |
 | Referenced paths exist | a backticked `src/…` / `.github/…` path in any skill/rule/doc that doesn't exist |
+| Chains have outcome fixtures | a chain in `chains.json` with no `cases/outcomes/<chain>-*.jsonl` fixture, or a fixture missing its `.expected.json` — the coverage rule is **new chain ⇒ new outcome case** |
+| Sync rules ↔ skills/routing map | a `<skill>-sync.mdc` whose skill was renamed/deleted (error); a rule with no `globs`, or whose globs *and* skill name are all absent from `skill-triggers.md` (warn) |
 
 Warnings (non-blocking): thin skill descriptions (< 80 chars, weak auto-trigger) and agents pinning a non-`inherit` model.
 
@@ -74,6 +78,7 @@ Tier 2 proves the *map* is right; Tier 3 proves the routing **actually worked in
 - **Target hit rate for real sessions: ≥ 90%.** `agent-os:outcomes:live <transcript>` prints the scorecard and warns below target — run it on a real session to spot-check routing.
 - **Fixtures gate CI deterministically.** Each `cases/outcomes/<name>.jsonl` is a recorded (sanitized) session; its `<name>.expected.json` declares the `hitRate` and precise `misses`. `agent-os:outcomes` asserts every fixture's computed scorecard matches its declaration — so a regression in routing behaviour (or in the scorer) fails CI. One fixture (`route-change-skipped-seed`) deliberately omits `seed-maintainer`: it scores 83% and names `seed-maintainer` as the miss, proving the scorer catches a skipped skill precisely.
 - **Add a fixture** whenever you want to lock in a routing outcome: drop the transcript JSONL + an `.expected.json` next to it.
+- **Coverage policy (gated by Tier 1):** every chain in `chains.json` must have at least one outcome fixture named `<chain>-*.jsonl`. Adding a chain without a fixture fails `agent-os:check`.
 
 **Monthly ritual:** score a handful of recent real sessions with `agent-os:outcomes:live`; if the aggregate dips below 90%, the routing map or a skill description needs work (pair with the hook telemetry report and skill trigger-rate data).
 

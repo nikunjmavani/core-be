@@ -103,6 +103,25 @@
             "command": "bash \"$CLAUDE_PROJECT_DIR/agent-os/hooks/large-read-nudge.sh\""
           }
         ]
+      },
+      {
+        "matcher": "WebFetch|WebSearch|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/agent-os/hooks/injection-scan.mjs\""
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/agent-os/hooks/subagent-verify.sh\""
+          }
+        ]
       }
     ],
     "PostToolUseFailure": [

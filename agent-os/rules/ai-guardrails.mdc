@@ -5,9 +5,10 @@ alwaysApply: true
 
 # core-be guardrails (advisory)
 
-These complement the executable hooks (Claude `PreToolUse`, Cursor
-`beforeShellExecution`). Cursor cannot block file writes, so treat the
-file-level rules below as hard policy.
+These complement the executable hooks (Claude `PreToolUse`; Cursor
+`beforeShellExecution` + `beforeReadFile` + `beforeMCPExecution` blocking, and
+`afterFileEdit` advising after an edit lands). Cursor cannot veto a file write
+pre-flight, so still treat the file-level rules below as hard policy.
 
 ## Never
 - **Secrets** — never write real secrets to source. `.env*` files (except

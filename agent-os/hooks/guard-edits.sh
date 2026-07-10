@@ -13,6 +13,9 @@ telemetry_init "guard-edits" "PreToolUse"
 #   R2  a `../` relative import/require added under src/
 #   R3  hand-editing a generated / do-not-edit file
 #   R4  NODE_ENV set/compared to a removed value (test|staging|local) — enum is development|production
+#   R5  editing the enforcement wiring itself (hook manifest / platform hook
+#       configs / guard scripts) escalates to explicit user confirmation
+#       ("ask") — the guard layer must not be silently disarmable by a session
 #
 # Fails OPEN: any parsing hiccup, or a missing `jq`, allows the edit. A hook bug
 # must never be able to brick a session.
@@ -37,10 +40,27 @@ deny() {
   exit 0
 }
 
+ask() {
+  telemetry_fired
+  jq -cn --arg r "$1" \
+    '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"ask",permissionDecisionReason:$r}}'
+  exit 0
+}
+
 # R3 — generated / do-not-edit files (change the source + run the generator instead).
 case "$FILE" in
-  *pnpm-lock.yaml | */docs/routes.txt | */docs/openapi/openapi*.json | */docs/postman-collection.json | *project-identity.constants.ts | */docs/database/core-be.dbml)
+  *pnpm-lock.yaml | *docs/routes.txt | *docs/openapi/openapi*.json | *docs/postman-collection.json | *project-identity.constants.ts | *docs/database/core-be.dbml | *.codex/hooks.json)
     deny "'$base' is generated — do not hand-edit it. Change the source and run the generator (see agent-os/docs/skill-triggers.md / CLAUDE.md)." ;;
+esac
+
+# R5 — config self-protection: the enforcement wiring (hook manifest, platform
+# hook configs, capability registry, guard scripts) must not be silently
+# rewritten by a session — a compromised or confused agent could disarm every
+# guard in one edit. Escalate to an explicit user confirmation instead of deny,
+# so legitimate hook work proceeds with the user's eyes on it.
+case "$FILE" in
+  *agent-os/hooks/hooks.json | *agent-os/platforms/targets.json | *agent-os/platforms/claude/settings.json | *.claude/settings.json | *.claude/settings.local.json | *.cursor/hooks.json | *agent-os/hooks/guard-edits.sh | *agent-os/hooks/guardrails.mjs | *agent-os/hooks/cursor-shell-guard.mjs | *agent-os/hooks/cursor-edit-guard.mjs | *agent-os/hooks/cursor-read-guard.mjs | *agent-os/hooks/cursor-mcp-guard.mjs | *agent-os/hooks/injection-scan.mjs)
+    ask "'$base' is part of the agent-guard enforcement wiring. Confirm this change is user-requested — hooks/guards must never be weakened or disabled without explicit approval (agent-os/hooks/README.md)." ;;
 esac
 
 # R1 — workers/processors must not call getRequestDatabase() (it returns the GUC-less pool and

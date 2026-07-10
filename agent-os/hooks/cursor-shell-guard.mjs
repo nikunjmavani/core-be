@@ -2,8 +2,10 @@
 // Cursor `beforeShellExecution` guardrail for core-be (Cursor agent hooks, beta).
 //
 // Blocks the same destructive shell commands as the Claude PreToolUse guardrail.
-// Cursor cannot block file writes, so secret/protected-path/cross-domain rules
-// are advisory in .cursor/rules/ai-guardrails.mdc.
+// Companions: cursor-read-guard.mjs (beforeReadFile secrets block),
+// cursor-mcp-guard.mjs (beforeMCPExecution), cursor-edit-guard.mjs (afterFileEdit,
+// advisory — Cursor cannot veto writes pre-flight; hard policy stays in
+// .cursor/rules/ai-guardrails.mdc).
 //
 // Reads the hook payload on stdin; prints { "permission": "allow" | "deny", ... }.
 import { readFileSync } from "node:fs";

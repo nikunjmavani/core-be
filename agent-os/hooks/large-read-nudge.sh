@@ -47,7 +47,12 @@ esac
 
 [[ -z "$hint" ]] && exit 0
 
-telemetry_fired
+# Record what was flagged (bytes for a whole-file read, "grep=unscoped" for a
+# repo-wide grep) so `pnpm agent-os:hooks:report` can quantify the flagged
+# volume — turning the compression advice into a measurable feedback loop.
+detail="grep=unscoped"
+[[ "$TOOL" == "Read" ]] && detail="bytes=${size:-0}"
+telemetry_fired "$detail"
 jq -cn --arg c "⚡ token-efficiency: ${hint}" \
   '{hookSpecificOutput:{hookEventName:"PostToolUse",additionalContext:$c}}'
 exit 0
