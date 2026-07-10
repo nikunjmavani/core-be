@@ -133,7 +133,7 @@ is issued — the same `session_id` keeps working, and a later refresh re-mints 
 ```json
 {
   "data": {
-    "user": { "id": "usr_…", "email": "…", "is_mfa_enabled": false },
+    "user": { "id": "usr_…", "email": "…", "is_mfa_enabled": false, "onboarding_completed": true },
     "active_organization": { "id": "org_…", "type": "TEAM" },
     "my_permissions": ["organization:read", "membership:manage"],
     "global_role": null,
@@ -408,6 +408,7 @@ export interface MeUser {
   job_title: string | null;
   avatar_url: string | null;
   status: string;
+  onboarding_completed: boolean;   // false → route to /onboarding (every mode; see below)
   created_at: string;
   updated_at: string;
   capabilities?: { personal_organizations: boolean; team_organizations: boolean };
@@ -416,11 +417,16 @@ export interface MeUser {
 // source: src/domains/auth/auth-me-context.types.ts → AuthMeContextOutput
 export interface MeContext {
   user: MeUser;
-  active_organization: Organization | null;             // null → no org in scope; route to onboarding
+  active_organization: Organization | null;             // the active org (may be an auto-provisioned personal org)
   my_permissions: string[];                              // e.g. ["organization:read", "membership:manage"]
   global_role: GlobalRole | null;                        // null for a standard user
   organizations: Array<Organization & { is_active: boolean }>;   // org-switcher list
 }
+// Onboarding routing is driven by user.onboarding_completed, NOT by active_organization:
+// every fresh user (any deployment mode) is routed to /onboarding once — even personal
+// deployments, whose personal org is auto-provisioned at signup. The wizard finish calls
+// POST /users/me/onboarding/complete (idempotent; empty body) to stamp the flag, then
+// re-reads /auth/me/context so the next resolve lands on the dashboard.
 // source: src/domains/auth/auth.serializer.ts → AuthSerializer.accessTokenWithActiveOrganization
 export interface SwitchResponse {
   access_token: string;

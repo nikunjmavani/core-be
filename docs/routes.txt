@@ -1,6 +1,6 @@
 ================================================================================
   ROUTE CATALOG — core-be
-  Total routes: 131
+  Total routes: 132
 ================================================================================
 
 Legend:
@@ -167,7 +167,7 @@ Legend:
 
 ================================================================================
   DOMAIN: USER (/api/v1/users)
-  Routes: 17
+  Routes: 18
 ================================================================================
 
   GET    /api/v1/users                                            200  -    both  ROLE: super_admin, admin
@@ -185,6 +185,7 @@ Legend:
   GET    /api/v1/users/me/data-export/:data_export_id             200  -    both  AUTH
   GET    /api/v1/users/me/notification-preferences                200  -    both  AUTH
   PUT    /api/v1/users/me/notification-preferences                200  -    both  AUTH
+  POST   /api/v1/users/me/onboarding/complete                     201  -    ???   AUTH
   GET    /api/v1/users/me/settings                                200  -    both  AUTH
   PATCH  /api/v1/users/me/settings                                200  -    both  AUTH
 
@@ -215,9 +216,9 @@ Legend:
   SUMMARY
 ================================================================================
 
-  Total routes    : 131
+  Total routes    : 132
   Public          : 17
-  Authenticated   : 49
+  Authenticated   : 50
   Role-guarded    : 9
   Perm-guarded    : 52
   Token-guarded   : 4

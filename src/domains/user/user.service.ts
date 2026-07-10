@@ -500,6 +500,16 @@ export class UserService {
     return this.toUserOutput(user);
   }
 
+  /**
+   * Marks the caller's onboarding as complete (idempotent) and returns the fresh
+   * self context. The frontend calls this when the user finishes the wizard so the
+   * next post-login resolution routes them to the dashboard instead of re-onboarding.
+   */
+  async completeOnboarding(publicId: string): Promise<UserOutput> {
+    await withUserDatabaseContext(publicId, () => this.repository.markOnboardingComplete(publicId));
+    return this.getMe(publicId);
+  }
+
   async deleteMe(publicId: string): Promise<void> {
     await this.softDeleteUserWithOffboarding(publicId);
   }

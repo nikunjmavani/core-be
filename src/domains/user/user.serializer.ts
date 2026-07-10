@@ -15,6 +15,7 @@ export const UserSerializer = {
     job_title: string | null;
     avatar_url: string | null;
     status: string;
+    onboarding_completed_at: Date | null;
     created_at: Date;
     updated_at: Date;
   }): UserOutput {
@@ -28,6 +29,9 @@ export const UserSerializer = {
       job_title: row.job_title,
       avatar_url: row.avatar_url,
       status: row.status,
+      // Boolean projection of the nullable timestamp — the client only needs to
+      // know whether onboarding is done, not when.
+      onboarding_completed: row.onboarding_completed_at != null,
       created_at: row.created_at.toISOString(),
       updated_at: row.updated_at.toISOString(),
     };
