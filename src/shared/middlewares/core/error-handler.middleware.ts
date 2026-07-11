@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
+import i18next from 'i18next';
 import { randomUUID } from 'node:crypto';
 import { z, ZodError } from 'zod';
 import { AppError, ERROR_CODE_TO_SNAKE, ValidationError } from '@/shared/errors/index.js';
@@ -55,9 +56,22 @@ function translateDetail(
   params?: Record<string, string | number>,
   fallback: string = key,
 ): string {
-  const translate = request.t;
-  if (translate) {
-    return translate(key, params ?? {});
+  const options = params ?? {};
+  // Prefer the per-request translator (honours the caller's Accept-Language).
+  const viaRequest = request.t?.(key, options);
+  if (viaRequest && viaRequest !== key) {
+    return viaRequest;
+  }
+  // request.t can be absent, or unable to resolve `key`, when the error is
+  // thrown before the i18n hook decorates the request (e.g. the captcha
+  // security preHandler -> `errors:captchaRequired`). Resolve against the
+  // initialised i18next singleton in the default language so `detail` is ALWAYS
+  // a human string and never leaks a raw `errors:*` key to the client.
+  if (i18next.isInitialized) {
+    const viaSingleton = i18next.t(key, { lng: 'en', ...options });
+    if (viaSingleton && viaSingleton !== key) {
+      return viaSingleton;
+    }
   }
   return fallback;
 }
@@ -146,10 +160,16 @@ function handleAppErrorResponse(
     isValidation && error.errors
       ? error.errors.map((item) => ({
           field: item.field,
-          message:
-            item.messageKey && request.t
-              ? request.t(item.messageKey, item.messageParams ?? {})
-              : (item.message ?? item.messageKey ?? 'Invalid'),
+          // Same resolver as `detail`: per-request t -> i18next singleton ->
+          // fallback, so a field message never leaks a raw `errors:*` key either.
+          message: item.messageKey
+            ? translateDetail(
+                request,
+                item.messageKey,
+                item.messageParams,
+                item.message ?? item.messageKey,
+              )
+            : (item.message ?? 'Invalid'),
         }))
       : undefined;
   return {
@@ -258,7 +278,11 @@ function handleUnhandledErrorResponse(
  * fall back to a generic invalid-request payload.
  */
 const FASTIFY_CLIENT_ERRORS: Record<number, { code: string; key: string; fallback: string }> = {
-  413: { code: 'payload_too_large', key: 'errors:payloadTooLarge', fallback: 'Payload too large' },
+  413: {
+    code: 'payload_too_large',
+    key: 'errors:payloadTooLarge',
+    fallback: 'Payload too large',
+  },
   415: {
     code: 'unsupported_media_type',
     key: 'errors:invalidInput',
@@ -372,4 +396,6 @@ const errorHandlerMiddlewarePlugin: FastifyPluginAsync = async (app) => {
 };
 
 /** Global error formatting for all routes and hooks (onRequest, preHandler, etc.). */
-export default fp(errorHandlerMiddlewarePlugin, { name: 'error-handler-middleware' });
+export default fp(errorHandlerMiddlewarePlugin, {
+  name: 'error-handler-middleware',
+});
