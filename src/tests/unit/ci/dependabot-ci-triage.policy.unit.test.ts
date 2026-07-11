@@ -8,7 +8,8 @@ describe('dependabot CI triage policy', () => {
   it('does not auto-merge; opens issues only when PR CI fails on Dependabot PRs', () => {
     const workflow = readFileSync(join(ROOT, '.github/workflows/dependabot-ci-triage.yml'), 'utf8');
     expect(workflow).toContain('workflow_run:');
-    expect(workflow).toContain("workflows: ['PR CI']");
+    // Quote-agnostic: the formatter owns quote style in workflow YAML.
+    expect(workflow).toMatch(/workflows: \[['"]PR CI['"]\]/);
     expect(workflow).toContain('ci-failed-triage');
     expect(workflow).toContain('dependabot-ci-failed-pr:');
     expect(workflow).not.toContain('pull_request:');

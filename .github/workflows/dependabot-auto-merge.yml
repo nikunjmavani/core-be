@@ -52,4 +52,8 @@ jobs:
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PAT (falling back to github.token) so the eventual merge is
+          # PAT-attributed and its push to main TRIGGERS post-merge CI. A
+          # GITHUB_TOKEN merge produces no post-merge run — no SBOM, no release
+          # processing for that commit. Same fix as core-fe / the release PRs.
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}

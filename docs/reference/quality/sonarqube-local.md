@@ -19,14 +19,22 @@ the background and the gate waits for readiness only when needed. First boot is 
 provisions an analysis token into `.env.local` (gitignored); after that a scan is ~60–90s.
 `pnpm sonar:up` starts only SonarQube, and the pre-commit gate auto-starts it if it is down.
 
+### Sharing port 9000 with core-fe
+
+Both repos use `localhost:9000` — **one server, two projects** (`core-be` and `core-fe` appear
+side by side in the same UI). Whichever repo starts SonarQube first owns the container; the other
+repo's gate **reuses it** instead of starting a second one. For core-fe's gate to mint its own
+token there, copy `SONAR_ADMIN_PASSWORD` from this repo's `.env.local` into core-fe's
+`.env.development` (see core-fe's `docs/reference/quality/sonarqube-local.md` for its side).
+
 ## Commands (`sonar:*` namespace)
 
-| Command | What it does |
-| --- | --- |
-| `pnpm sonar:up` | Start the local SonarQube server (`docker-compose.sonar.yml`). |
-| `pnpm sonar:scan` | Run the quality gate now: ensure server up → scan → wait → report. Exit 1 if any issue/hotspot, else 0. |
-| `pnpm sonar:down` | Stop the server (keeps the analysis volume). |
-| `pnpm sonar:reset` | Wipe the volume and start fresh (`down -v` + `up`). Use if auth/state gets stuck. |
+| Command            | What it does                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------- |
+| `pnpm sonar:up`    | Start the local SonarQube server (`docker-compose.sonar.yml`).                                          |
+| `pnpm sonar:scan`  | Run the quality gate now: ensure server up → scan → wait → report. Exit 1 if any issue/hotspot, else 0. |
+| `pnpm sonar:down`  | Stop the server (keeps the analysis volume).                                                            |
+| `pnpm sonar:reset` | Wipe the volume and start fresh (`down -v` + `up`). Use if auth/state gets stuck.                       |
 
 The server UI is at <http://localhost:9000>. Admin credentials are generated on first run and
 stored in `.env.local` as `SONAR_ADMIN_PASSWORD` / `SONAR_TOKEN`.

@@ -1,11 +1,14 @@
 # Opens or updates a GitHub issue when PR CI fails on a Dependabot pull request.
-# All Dependabot PRs require manual review and merge (branch protection).
+# Low-risk (npm-non-major) Dependabot PRs auto-merge after approval
+# (dependabot-auto-merge.yml); majors / security / github-actions / docker are manual.
 
 name: Dependabot CI triage
 
 on:
   workflow_run:
-    workflows: ['PR CI']
+    # Must match the `name:` of pr-ci.yml exactly — a stale name here means this
+    # workflow never fires (it silently listens for a name that no longer exists).
+    workflows: ["PR CI"]
     types: [completed]
 
 concurrency:

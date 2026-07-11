@@ -87,8 +87,11 @@ jobs:
             });
 
       - name: Guard .env files
+        # Branch names are repo-controlled, but pass them through env anyway —
+        # never interpolate event data directly into run: scripts.
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.base_ref || 'main' }}
         run: |
-          BASE_REF="${{ github.event.pull_request.base.ref || github.base_ref || 'main' }}"
           git fetch origin "${BASE_REF}" --depth=1 2>/dev/null || true
           ENV_FILES=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null \
             | grep -E '^\.env(\.|$)' \
