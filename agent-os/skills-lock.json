@@ -113,7 +113,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/i18n-message-guard/SKILL.md",
-      "computedHash": "38e601ef1b81d1dae6da5f0dde20156efa00cc53de0c783de267dc7ecd25304c"
+      "computedHash": "716f31a8cdac85d5ca027ce01351245bc939907ff6888807d78401ebd0f87f67"
     },
     "ide-productivity-guard": {
       "source": "local",
