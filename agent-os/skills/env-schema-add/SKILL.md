@@ -54,6 +54,14 @@ production` (see `env-schema.unit.test.ts`).
    `pnpm dev` behaves like a dev box.
 5. If tests need a value, set it in `src/tests/setup.ts` (+ `bootstrap-env.ts` for chaos) with `??=`.
 
+**Local-only affordances (Category-L)** are the mirror of Category-B: a developer-machine flag (docker
+autostart, the local Sonar gate, …) that must NEVER be enabled on a deployed environment. Default
+`false`, prefix the field `LOCAL_*`, mark it `// Category-L (local-only)`, and add a
+`.refine((data) => data.NODE_ENV === 'local' || data.FLAG === false, {...})` so the schema rejects
+`true` unless `NODE_ENV=local` (fail-loud in development/production). Document it in the `.env.example`
+Category-L block (commented-out — opt-in per machine) and cover it with a unit test (`accepts true when
+NODE_ENV=local` + `rejects true outside local`). These flags are read by dev **tooling**, not the runtime.
+
 Never reintroduce a removed `NODE_ENV` value (`test`/`staging`), `isProduction()` /
 `isDevelopment()`-style helpers, or a module-load `process.env.NODE_ENV` read to pick a default — the
 guard test fails the build. (`local` is a valid value; the loader may name `.env.local` from it but
