@@ -35,8 +35,15 @@ environment-varying behaviour is an explicit env flag with a **STATIC default** 
 
 1. Add a boolean flag via `booleanString('<static default>')` in `env-schema.ts` — the default is the
    **production-safe** value (a deployed `.env` keeps it by omission).
-2. If it must not be weakened in production, add `.refine((data) => data.NODE_ENV !== 'production' ||
-   data.FLAG === <safe>, {...})` next to the others.
+2. **Production-strict is mandatory for every security/behaviour flag.** Any new — OR newly
+   security-relevant existing — flag whose weakened value would loosen a guard MUST have a
+   Category-B `.refine((data) => data.NODE_ENV !== 'production' || data.FLAG === <safe>, {...})` in the
+   `env-schema.ts` "Category-B environment constraints" block, so a deploy that sets the unsafe value
+   fails schema validation loudly instead of silently weakening prod. Mark the field `// Category-B
+(security)` and note the prod requirement in `.env.example`. (Doc/URL/tuning-only vars — pool sizes,
+   log levels, base URLs — are exempt; the test is "does the wrong value weaken a security guard.")
+   Cover it with a unit test: `rejects FLAG=<unsafe> in production` + `allows <unsafe> outside
+production` (see `env-schema.unit.test.ts`).
 3. Read `env.FLAG` in code — **never** `NODE_ENV`.
 4. Ship the **development** value ACTIVE (uncommented) in the `.env.example` Policy-flags section so
    `pnpm dev` behaves like a dev box.
@@ -220,6 +227,10 @@ A rename is a delete + add, atomic in the same PR:
 ## Checklist
 
 - [ ] Added Zod field with the smallest valid type (`.optional()` and `.default()` where applicable).
+- [ ] **Production-strict:** any security/behaviour flag has a Category-B production `.refine()` pinning
+      its production-safe value (deploy with the unsafe value → schema fails), a `// Category-B (security)`
+      field comment, the prod requirement noted in `.env.example`, and a `rejects <unsafe> in production`
+      unit test. (Doc/URL/tuning-only vars are exempt.)
 - [ ] Added `KEY=placeholder` to `.env.example` under the correct **half**
       (`GitHub Secrets` vs `GitHub Variables`) and the correct **sub-section**.
 - [ ] Description comment above the key explains what it controls and what
