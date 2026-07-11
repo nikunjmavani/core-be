@@ -6,7 +6,7 @@ trunk), and how that maps to workflows and committed ruleset JSON under
 
 > **Single-trunk model.** `main` is the only long-lived branch. Its ruleset
 > ([`main.json`](../../../.github/rulesets/main.json)) is **squash-only**, 0 approvals (D8), with
-> `required_linear_history` and strict up-to-date checks. Branch protection requires exactly **two**
+> `required_linear_history`, **no `bypass_actors`**, and strict up-to-date OFF. Branch protection requires exactly **two**
 > aggregate contexts — **`Quality gate`** (the pr-ci.yml aggregate that rolls up every merge-gating
 > lane, including the authoritative DB matrix) and **`Checks`** (pr-governance). `main.json` is the
 > **only** committed ruleset: hotfixes fix-forward to `main` via ordinary `fix/*` PRs, so there are
@@ -120,11 +120,11 @@ These settings match the committed [`main.json`](../../../.github/rulesets/main.
 | Require signed commits | Yes |
 | Block force-push (`non_fast_forward`) | Yes |
 | Block branch deletion | Yes |
-| Required status checks | `Quality gate` (pr-ci aggregate) + `Checks` (pr-governance), strict up-to-date |
+| Required status checks | `Quality gate` (pr-ci aggregate) + `Checks` (pr-governance) — **no bypass**, strict off |
 
 > **Enforced peer review is off by design** while CODEOWNERS is single-owner. This is the **personal** governance mode; switch to **team** with one command once the roster grows — see [Governance mode — personal ↔ team](#governance-mode--personal--team-one-switch) below.
 
-**Signed commits on `main`:** Contributors must use [verified signatures](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification). Teams without signing enabled should temporarily relax `required_signatures` in `main.json` until onboarding is complete.
+**Signed commits on `main`:** `required_signatures` is intentionally **not** in the ruleset — branch commits are unsigned, and once `bypass_actors` was removed the rule would deadlock every PR. The commit that lands on `main` is signed regardless, because GitHub signs the squash-merge commit it creates (verify: `gh api repos/OWNER/REPO/commits/main --jq .commit.verification`). To require signed **branch** commits, set up [commit signing](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification) first, then re-add `required_signatures`.
 
 ---
 
@@ -139,7 +139,7 @@ The repository runs in one of two **governance modes**, and you switch between t
 
 In **both** modes the automated gates (`Quality gate` + `Checks`, including the authoritative DB matrix) still block every merge — the mode only governs the **human** review requirement.
 
-Today the repo is in **personal** mode **by design, not by oversight**: [`.github/CODEOWNERS`](../../../.github/CODEOWNERS) lists a **single** owner (`@nikunjmavani`), so requiring a (code-owner) review would make that owner's own PRs unmergeable (GitHub forbids self-approval) and every merge would fall back to the Admin bypass — strictly worse than leaving the gate off. The mode fields are **coupled** (e.g. `preventSelfReview` needs ≥2 reviewers; `require_code_owner_review` needs ≥2 owners), which is exactly why they move together through the tool.
+Today the repo is in **personal** mode **by design, not by oversight**: [`.github/CODEOWNERS`](../../../.github/CODEOWNERS) lists a **single** owner (`@nikunjmavani`), so requiring a (code-owner) review would make that owner's own PRs unmergeable (GitHub forbids self-approval) — strictly worse than leaving the human-review gate off. (There is no Admin bypass to fall back on: `bypass_actors` is empty, so the automated `Quality gate` / `Checks` gates are absolute for everyone.) The mode fields are **coupled** (e.g. `preventSelfReview` needs ≥2 reviewers; `require_code_owner_review` needs ≥2 owners), which is exactly why they move together through the tool.
 
 ### Switch modes
 
@@ -159,7 +159,7 @@ The tool ([`tooling/setup/github/governance-mode.ts`](../../../tooling/setup/git
 
 > **Invariant guard.** `pnpm github:tool:governance-mode:check` (and the unit test [`governance-mode.policy.unit.test.ts`](../../../src/tests/unit/ci/governance-mode.policy.unit.test.ts), which runs in the `unit` lane of `Quality gate`) fails if the two committed files ever drift into an inconsistent or deadlocking combination.
 >
-> **Break-glass unchanged.** The Admin bypass (`bypass_actors` → RepositoryRole `5`, `bypass_mode: pull_request` in [`main.json`](../../../.github/rulesets/main.json)) still lets an admin merge without the review in a genuine emergency. Four-eyes is the default path, not an absolute lock.
+> **No break-glass — a red check is absolute.** `bypass_actors` is intentionally **empty**: a PR with a failing or pending `Quality gate` / `Checks` cannot be merged by anyone, the repo owner included (no `--admin` / merge-API override). This is precisely what stops a red gate from slipping through. Pinned by [`rulesets.policy.unit.test.ts`](../../../src/tests/unit/ci/rulesets.policy.unit.test.ts). To restore an emergency bypass you would re-add `bypass_actors` to `main.json` — but that re-opens the red-merge hole, so don't.
 
 ---
 
