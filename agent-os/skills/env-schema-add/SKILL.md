@@ -18,10 +18,15 @@ you place a key under in agreement with what `classifyKey` will do. Get the
 classification right **and** read it from the matching context in every workflow,
 and the rest of the toolchain (github:sync, deploy, Actions) just works.
 
-## Environment model — dev + prod only; NO NODE_ENV branching
+## Environment model — local + dev + prod; NO NODE_ENV branching
 
-`NODE_ENV` is an enum of exactly **`development | production`** (no `test` / `staging` / `local`). The
-Vitest suite runs as `development`; test-only behaviour is driven by explicit flags the harness sets.
+`NODE_ENV` is an enum of exactly **`local | development | production`** (no `test` / `staging`).
+`local` is a developer's machine (primary file `.env.local`, self-contained); `development` /
+`production` are the two DEPLOY targets (the deploy-target enums in `tooling/setup/` stay
+`development | production` — you never deploy to `local`). The default stays `development`, so unset
+contexts (CI, a stock `pnpm dev`) are unchanged. The Vitest suite runs as `development`; test-only
+behaviour is driven by explicit flags the harness sets. An out-of-enum value fails loudly at boot
+(`env.config.ts` eager-parses `envSchema` and throws) — never a silent default.
 
 **Runtime code NEVER compares or branches on `NODE_ENV`.** It is *compared* in exactly one file —
 `env-schema.ts` (the enum field and `.refine()` constraints on the parsed `data`, e.g.
@@ -49,9 +54,10 @@ production` (see `env-schema.unit.test.ts`).
    `pnpm dev` behaves like a dev box.
 5. If tests need a value, set it in `src/tests/setup.ts` (+ `bootstrap-env.ts` for chaos) with `??=`.
 
-Never reintroduce a removed `NODE_ENV` value (`test`/`staging`/`local`), `isProduction()` /
+Never reintroduce a removed `NODE_ENV` value (`test`/`staging`), `isProduction()` /
 `isDevelopment()`-style helpers, or a module-load `process.env.NODE_ENV` read to pick a default — the
-guard test fails the build.
+guard test fails the build. (`local` is a valid value; the loader may name `.env.local` from it but
+must never *compare* against it.)
 
 ## The two-half rule
 
