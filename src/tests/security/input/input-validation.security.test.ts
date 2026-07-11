@@ -185,18 +185,9 @@ describe('Security: Input Validation', () => {
       });
       await testAppWithMock.app.close();
       expect(response.statusCode).toBe(400);
-      const body = response.json() as
-        | {
-            error?: { messageKey?: string; message?: string };
-            messageKey?: string;
-            message?: string;
-          }
-        | undefined;
-      const messageKey = body?.error?.messageKey ?? body?.messageKey;
-      const message = body?.message ?? body?.error?.message ?? JSON.stringify(body ?? '');
-      expect(
-        messageKey === 'errors:disposableEmail' || message.toLowerCase().includes('disposable'),
-      ).toBe(true);
+      // Stable machine-readable `reason`, not the resolved human detail.
+      const body = response.json() as { error?: { reason?: string } } | undefined;
+      expect(body?.error?.reason).toBe('disposable_email');
     });
 
     it('when switch is off (e.g. tests), disposable email is allowed', async () => {

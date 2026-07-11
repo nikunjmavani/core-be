@@ -357,13 +357,16 @@ export class AuthMethodService {
   async forgotPassword(
     body: unknown,
     _context?: { requestId?: string },
-  ): Promise<{ messageKey: string; messageParams?: Record<string, string | number> }> {
+  ): Promise<{
+    messageKey: string;
+    messageParams?: Record<string, string | number>;
+  }> {
     const startedAtMillis = Date.now();
     const parsed = validateForgotPassword(body);
     if (isDisposableEmailBlocked(parsed.email)) {
       throw new ValidationError('errors:disposableEmail', undefined, undefined, [
         { field: 'email', messageKey: 'errors:disposableEmail' },
-      ]);
+      ]).withReason('disposable_email');
     }
 
     // Anti-mail-bomb spacing: atomically claim a per-email cooldown slot. If one is already held

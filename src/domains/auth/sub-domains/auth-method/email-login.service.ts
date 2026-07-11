@@ -118,7 +118,7 @@ export class EmailLoginService {
     if (isDisposableEmailBlocked(parsed.email)) {
       throw new ValidationError('errors:disposableEmail', undefined, undefined, [
         { field: 'email', messageKey: 'errors:disposableEmail' },
-      ]);
+      ]).withReason('disposable_email');
     }
     // Anti-mail-bomb spacing: atomically claim a per-email cooldown slot BEFORE any find-or-create.
     // If one is already held (a code was sent within VERIFICATION_CODE_RESEND_COOLDOWN_SECONDS), skip
@@ -183,7 +183,9 @@ export class EmailLoginService {
     try {
       user = await withTransaction((transaction) =>
         runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
-          const created = await this.userService.createForEmailCode({ email });
+          const created = await this.userService.createForEmailCode({
+            email,
+          });
           await this.authMethodService.createEmailCodeMethod(created.id, created.public_id);
           return created;
         }),
@@ -243,7 +245,11 @@ export class EmailLoginService {
           EMAIL_CODE_TOKEN_TYPE,
           user.id,
           user.email,
-          hashVerificationCode({ tokenType: EMAIL_CODE_TOKEN_TYPE, userId: user.id, code }),
+          hashVerificationCode({
+            tokenType: EMAIL_CODE_TOKEN_TYPE,
+            userId: user.id,
+            code,
+          }),
           expiresAt,
         );
         await eventBus.emitStrict({
@@ -338,7 +344,10 @@ export class EmailLoginService {
         await this.verificationTokenRepository.invalidateAllForUser(user.id, EMAIL_CODE_TOKEN_TYPE);
         // sec-U1: reject soft-deleted/suspended users before minting a session (the resolver already
         // filters soft-deleted; this is belt-and-suspenders against a regression in either layer).
-        assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
+        assertUserAccountActive({
+          status: user.status,
+          deleted_at: user.deleted_at,
+        });
         // Completing the code proves the user controls this email, so mark it verified (parity with
         // OAuth, and the natural completion of email-code auto-signup).
         if (isFirstVerification) {
