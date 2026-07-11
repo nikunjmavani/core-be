@@ -31,7 +31,7 @@ indexNote: route params / public-ids / method→status policy / header matrix �
 ## Method → success status (enforced by middleware)
 
 | GET | POST | PUT/PATCH | DELETE |
-|-----|------|-----------|--------|
+| --- | ---- | --------- | ------ |
 | 200 | 201  | 200       | 204    |
 
 Exceptions (protocol-owned, stay 200): `POST /billing/webhook`, `POST /api/v1/mcp`.
@@ -49,6 +49,18 @@ The policy is enforced centrally in `method-status-policy.middleware.ts`; declar
 - **429** every route — with `Retry-After` + `X-RateLimit-*` headers.
 - **500** never intentional — the never-5xx fuzz gate fails CI on any 5xx from malformed input.
 - Rules of thumb: 400 = malformed shape, 422 = valid shape wrong meaning; 409 = conflicts with current state, 422 = payload logic always wrong (incl. a capability blocked by an immutable resource type — personal vs team org). Never invent a status outside this list.
+
+## Machine-readable `error.reason` (stable branch signal, not human copy)
+
+`code` is the status-class slug (`conflict`, `validation_error`, …). When a **4xx** error
+is a **distinct cause the frontend may branch on**, also attach a stable snake_case
+`reason` sub-code via **`.withReason('<slug>')`** at the throw site
+(`throw new ConflictError('errors:x').withReason('membership_already_exists')`). It is
+additive, surfaced on 4xx only (masked on 5xx), and is the ONLY dependable branch key —
+`detail` is localized human copy that changes with wording/locale (see **i18n-message-guard**).
+
+- Register every new slug in the list in [`docs/reference/api/response-codes.md`](../../../docs/reference/api/response-codes.md).
+- Tests for that cause assert `body.error.reason === '<slug>'` — never a `detail`/message substring or a raw `errors:*` key.
 
 ## Personal vs team organizations (one route surface, discoverable capabilities)
 

@@ -5,7 +5,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/api-contract-guard/SKILL.md",
-      "computedHash": "5dd57909f1cc44aefed01d9c2ffc743b9ec2692ca52010d498fb765c8c1b6f51"
+      "computedHash": "50505012bd8bcbdd14d0fcfb334907be87a93a0f2dc31254ff9889b1d47d074c"
     },
     "auto-implement": {
       "source": "local",
@@ -113,7 +113,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/i18n-message-guard/SKILL.md",
-      "computedHash": "f414240bb9d24253a4138dfc3be97015a4f65e753ebaed95dce385a738da8c3a"
+      "computedHash": "38e601ef1b81d1dae6da5f0dde20156efa00cc53de0c783de267dc7ecd25304c"
     },
     "ide-productivity-guard": {
       "source": "local",
