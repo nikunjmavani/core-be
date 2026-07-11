@@ -42,6 +42,34 @@ Run this skill when **any** of the following are created or modified:
 - [ ] Every key used in code exists in **`src/shared/locales/en/`** (and in other locales if they exist).
 - [ ] New keys are added to **`src/shared/locales/en/`** first, then to other locales.
 
+## The raw-key trap: `detail` is resolved copy, never a stable key
+
+`error-handler.middleware.ts → translateDetail` resolves a messageKey to human copy
+in three tiers: **per-request `request.t`** (honours `Accept-Language`) → the
+**initialised i18next singleton** (default language, for errors thrown *before* the
+i18n hook decorates the request — e.g. the captcha / disposable-email guards) → the
+messageKey as a last-resort fallback. So a response `detail` is **localized copy**,
+NOT a raw `errors:*` key — and it can change with wording or locale.
+
+Two hard rules follow:
+
+- **Client code and tests MUST NOT depend on the human `detail`/`message` text** — not
+  equality, not substring. Branch on the **stable machine fields**: `error.reason`
+  (snake_case sub-code) or `error.code` (status-class slug), plus the HTTP status.
+  A test asserting `body...includes('disposable')` or `detail === 'errors:foo'` only
+  passes while the raw key *leaks*; the moment the serializer resolves it, the test
+  flakes/breaks (this is exactly what a raw-key-leaking test did after the singleton
+  fallback landed — 4 disposable-email security tests went non-deterministic).
+- **When a 4xx error is a distinct cause the FE may branch on, tag it** with
+  `.withReason('<snake_case_slug>')` at the throw site and register the slug in
+  [`docs/reference/api/response-codes.md`](../../../docs/reference/api/response-codes.md)
+  (see the **api-contract-guard** skill). Then assert on `error.reason` in tests.
+
+### Checklist additions
+
+- [ ] No test asserts on a raw `errors:*` key or a human-copy substring in a response body — assert `error.reason` / `error.code` / status instead.
+- [ ] A new FE-relevant 4xx cause carries `.withReason('<slug>')`; the slug is added to the `response-codes.md` reason registry.
+
 ## Reference
 
 - **`docs/reference/runtime/internationalization.md`** — i18n conventions and key format (`namespace:key`).

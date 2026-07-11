@@ -363,12 +363,14 @@ export class MembershipService {
     if (isDisposableEmailBlocked(parsed.email)) {
       throw new ValidationError('errors:disposableEmail', undefined, undefined, [
         { field: 'email', messageKey: 'errors:disposableEmail' },
-      ]);
+      ]).withReason('disposable_email');
     }
     // Provision/find the invitee in its OWN transaction (BEFORE the org context) so the public-id
     // collision retry can open fresh transactions — a pinned org transaction would abort on retry.
     // A user left with no membership by a later failure is harmless and reused on the next attempt.
-    const inviteeUser = await userService.findOrCreateInvitedByEmail({ email: parsed.email });
+    const inviteeUser = await userService.findOrCreateInvitedByEmail({
+      email: parsed.email,
+    });
     const result = await withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationMembershipByPublicId(

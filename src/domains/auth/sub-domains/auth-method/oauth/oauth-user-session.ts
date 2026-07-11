@@ -103,7 +103,7 @@ export async function completeOAuthUserSession(parameters: {
       let claimedBare = false;
       if (!resolvedUser) {
         if (isDisposableEmailBlocked(normalizedEmail)) {
-          throw new ForbiddenError('errors:disposableEmail');
+          throw new ForbiddenError('errors:disposableEmail').withReason('disposable_email');
         }
         const nameParts = profile.name?.split(' ') ?? [];
         resolvedUser = await userService.createFromOAuth(
@@ -146,9 +146,16 @@ export async function completeOAuthUserSession(parameters: {
       // A pre-existing account may have been suspended/locked/soft-deleted since signup; never mint a
       // session for it via the OAuth callback. Passing the row (not just `status`) also rejects
       // soft-deleted users (sec-U1 defense in depth).
-      assertUserAccountActive({ status: resolvedUser.status, deleted_at: resolvedUser.deleted_at });
+      assertUserAccountActive({
+        status: resolvedUser.status,
+        deleted_at: resolvedUser.deleted_at,
+      });
 
-      return { user: resolvedUser, isNewUser: createdNow, claimedBareAccount: claimedBare };
+      return {
+        user: resolvedUser,
+        isNewUser: createdNow,
+        claimedBareAccount: claimedBare,
+      };
     }),
   );
 

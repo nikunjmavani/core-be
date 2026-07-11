@@ -138,7 +138,7 @@ export class AuthService {
     if (isDisposableEmailBlocked(parsed.email)) {
       throw new ValidationError('errors:disposableEmail', undefined, undefined, [
         { field: 'email', messageKey: 'errors:disposableEmail' },
-      ]);
+      ]).withReason('disposable_email');
     }
 
     // Reject before expensive argon2 work when this IP has exceeded its failure budget.

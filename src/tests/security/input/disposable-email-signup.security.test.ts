@@ -7,16 +7,11 @@ const DISPOSABLE_EMAIL = 'test@yopmail.com';
 
 function expectDisposableEmailRejected(response: { statusCode: number; json: () => unknown }) {
   expect(response.statusCode).toBe(400);
-  const body = response.json() as {
-    error?: { messageKey?: string; message?: string };
-    messageKey?: string;
-    message?: string;
-  };
-  const messageKey = body.error?.messageKey ?? body.messageKey;
-  const message = body.message ?? body.error?.message ?? JSON.stringify(body ?? '');
-  expect(
-    messageKey === 'errors:disposableEmail' || message.toLowerCase().includes('disposable'),
-  ).toBe(true);
+  const body = response.json() as { error?: { reason?: string } };
+  // Assert the stable machine-readable `reason`, not the human `detail` — the
+  // serializer resolves `errors:disposableEmail` to localized copy ("This email
+  // domain is not allowed."), so the old raw-key/substring check no longer holds.
+  expect(body.error?.reason).toBe('disposable_email');
 }
 
 describe('Security: Disposable email on auth signup paths (BLOCK_DISPOSABLE_EMAIL)', () => {
