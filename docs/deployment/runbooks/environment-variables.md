@@ -119,7 +119,11 @@ pnpm dev:worker                         # worker; same .env.development
 The loader (`src/shared/config/load-env-files.ts`) picks `.env.${NODE_ENV}`, strips
 empty values so optional Zod fields see `undefined` not `""`, then layers the
 gitignored `.env.local` on top as a per-machine override. It reads `NODE_ENV` **only**
-to name the file — no comparison, no branch. The Vitest suite runs as `development`, so
+to name the file — no comparison, no branch. The enum is `local | development |
+production` (default `development`): `development` / `production` are the two deploy
+targets, and `local` is a developer's machine — `NODE_ENV=local` makes `.env.local`
+the **primary** file (self-contained, so the override step is skipped). The Vitest
+suite runs as `development`, so
 it shares the one `.env.development` file (plus any `.env.local`); there is no separate
 test env file. `.env.local` is gitignored and excluded from the Docker image
 (`.dockerignore`), and production config is platform-injected — so it is absent in

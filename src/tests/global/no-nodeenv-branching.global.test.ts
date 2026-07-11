@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Regression guard for the env-driven-config model (dev+prod only; no NODE_ENV branching).
+ * Regression guard for the env-driven-config model (no NODE_ENV branching).
  *
  * Two invariants, both source-text scans (like no-stripe-shaped-literals) so a regression is caught
  * at the global suite / pre-commit rather than weeks later in a deploy:
@@ -13,7 +13,9 @@ import { describe, expect, it } from 'vitest';
  *     branches on NODE_ENV; every behaviour reads an explicit env flag that has a STATIC default. (The
  *     pre-schema `load-env-files.ts` loader *reads* `process.env.NODE_ENV` to name the `.env.<NODE_ENV>`
  *     file, but performs no comparison — so it needs no allowlist entry.)
- *  2. **NODE_ENV is never `test` / `staging` / `local`** — the enum is exactly `development | production`.
+ *  2. **NODE_ENV is never `test` / `staging`** — the enum is exactly `local | development | production`.
+ *     `local` is a valid runtime value (the developer's machine, primary file `.env.local`); `test` and
+ *     `staging` are NOT — the Vitest suite runs as `development`, and there is no `staging` environment.
  *     No source, harness, CI workflow, or Docker file assigns or compares NODE_ENV to a removed value.
  *
  * When adding an environment-varying behaviour: add a flag with a static production-safe default and a
@@ -56,7 +58,8 @@ describe('Global: no NODE_ENV branching, no removed env values (env-driven-confi
   const VALUE_EXTRA_FILES = ['Dockerfile', 'Dockerfile.worker', 'docker-compose.yml'] as const;
 
   const COMPARISON = /NODE_ENV\s*(===|!==|==|!=)\s*['"`]/;
-  const REMOVED_VALUE = /NODE_ENV[\s:=]{1,8}['"`]?(test|staging|local)\b/i;
+  // `local` is a VALID runtime value (developer machine); only `test` / `staging` are removed.
+  const REMOVED_VALUE = /NODE_ENV[\s:=]{1,8}['"`]?(test|staging)\b/i;
 
   function isCommentLine(line: string): boolean {
     const trimmed = line.trim();
@@ -120,7 +123,7 @@ describe('Global: no NODE_ENV branching, no removed env values (env-driven-confi
     expect(violations).toEqual([]);
   });
 
-  it('never sets or compares NODE_ENV to test / staging / local (enum is development | production)', async () => {
+  it('never sets or compares NODE_ENV to test / staging (enum is local | development | production)', async () => {
     const scanFiles = [
       ...(await collectFiles([...CODE_ROOTS, ...VALUE_EXTRA_ROOTS])),
       ...VALUE_EXTRA_FILES,
@@ -144,8 +147,8 @@ describe('Global: no NODE_ENV branching, no removed env values (env-driven-confi
 
     if (violations.length > 0) {
       throw new Error(
-        'NODE_ENV set/compared to a removed value (test/staging/local). The enum is exactly ' +
-          '`development | production`; the Vitest suite runs as `development` with explicit ' +
+        'NODE_ENV set/compared to a removed value (test/staging). The enum is exactly ' +
+          '`local | development | production`; the Vitest suite runs as `development` with explicit ' +
           'test-affordance flags. Use `development` and drive behaviour via env flags:\n' +
           violations.join('\n'),
       );

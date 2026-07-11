@@ -27,8 +27,9 @@ function forceLocalDatabaseForNonCiTestRun(): void {
  * These are hard-overridden (not `??=`) so local test runs are deterministic regardless of
  * what each contributor has in their `.env.development`.
  */
-// NODE_ENV is only `development` | `production`. The Vitest suite runs as `development` (there is no
-// separate `test` runtime); test-only behaviour is driven by the explicit flags set below.
+// NODE_ENV is `local` | `development` | `production` (`local` = a developer's machine). The Vitest
+// suite runs as `development` (there is no separate `test` runtime); test-only behaviour is driven by
+// the explicit flags set below.
 process.env.NODE_ENV = 'development';
 // shutdown.middleware reads this raw (the frozen `env` const predates this override) to skip
 // process-level shared-singleton teardown under the per-worker Vitest harness.

@@ -222,6 +222,35 @@ describe('env-schema', () => {
     expect(parsed.success && parsed.data.BLOCK_DISPOSABLE_EMAIL).toBe(false);
   });
 
+  it('accepts NODE_ENV=local (developer machine, primary file .env.local)', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'local',
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.NODE_ENV).toBe('local');
+  });
+
+  it('defaults NODE_ENV to development when unset (unchanged from before `local` was added)', () => {
+    // commonRequiredBase omits NODE_ENV, so this exercises the `.default('development')`.
+    const parsed = envSchema.safeParse({ ...commonRequiredBase });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.NODE_ENV).toBe('development');
+  });
+
+  it('fails loudly on an out-of-enum NODE_ENV (e.g. qa) — never a silent default', () => {
+    // Use a non-forbidden invalid value so this negative test doesn't itself trip the
+    // no-removed-values guard (which scans source for NODE_ENV=test/staging).
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'qa',
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((issue) => issue.path.includes('NODE_ENV'))).toBe(true);
+    }
+  });
+
   it('allows http localhost ALLOWED_ORIGINS outside production', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,
