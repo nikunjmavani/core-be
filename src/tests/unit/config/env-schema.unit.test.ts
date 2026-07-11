@@ -251,6 +251,46 @@ describe('env-schema', () => {
     }
   });
 
+  it('accepts a Category-L flag (LOCAL_INFRASTRUCTURE_AUTOSTART=true) when NODE_ENV=local', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'local',
+      LOCAL_INFRASTRUCTURE_AUTOSTART: 'true',
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.LOCAL_INFRASTRUCTURE_AUTOSTART).toBe(true);
+  });
+
+  it('rejects a Category-L flag set true outside local (development)', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      LOCAL_INFRASTRUCTURE_AUTOSTART: 'true',
+    });
+    expect(parsed.success).toBe(false);
+    expect(
+      !parsed.success &&
+        parsed.error.issues.some((issue) => issue.path.includes('LOCAL_INFRASTRUCTURE_AUTOSTART')),
+    ).toBe(true);
+  });
+
+  it('rejects a Category-L flag set true in production (LOCAL_SONARQUBE_GATE_ENABLED)', () => {
+    const parsed = envSchema.safeParse({
+      ...productionRequiredBase,
+      LOCAL_SONARQUBE_GATE_ENABLED: 'true',
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('defaults Category-L flags to false, allowed in every environment', () => {
+    const parsed = envSchema.safeParse({ ...productionRequiredBase });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.LOCAL_INFRASTRUCTURE_AUTOSTART).toBe(false);
+      expect(parsed.data.LOCAL_SONARQUBE_GATE_ENABLED).toBe(false);
+    }
+  });
+
   it('allows http localhost ALLOWED_ORIGINS outside production', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,

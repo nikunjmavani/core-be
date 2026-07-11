@@ -197,11 +197,15 @@ const envSchemaBase = z.object({
   COOKIE_SECURE: booleanString('true'),
 
   // ── Policy flags (replace former `NODE_ENV === …` comparisons in runtime code) ──────────────
-  // Every runtime module reads one of these flags, never NODE_ENV. Two kinds:
+  // Runtime modules read one of these flags, never NODE_ENV. Three kinds:
   //  • Category-A (behaviour): default selected per environment above; freely overridable.
   //  • Category-B (security): default to the HARDENED value everywhere; a `.refine()` below rejects
   //    an unsafe override in production. Relaxed dev/test values are set explicitly (env
   //    file / test harness) so nothing silently weakens on a deployed environment.
+  //  • Category-L (local-only): a developer-machine affordance (docker autostart, the local Sonar
+  //    gate, …) that must NEVER be enabled on a deployed environment. Defaults false; a `.refine()`
+  //    below rejects `true` unless NODE_ENV === 'local', so it cannot leak into development or
+  //    production — the mirror of Category-B (prod-strict) for the local end of the axis.
   /**
    * Category-A. Captcha verification fails OPEN (skips) when Turnstile is unconfigured. Defaults
    * false (fail closed, production-safe); development and the test harness set it true in `.env` so
@@ -235,6 +239,19 @@ const envSchemaBase = z.object({
    * sets it true explicitly (it runs as NODE_ENV=development).
    */
   AUTH_TEST_SUPER_ADMIN_FALLBACK: booleanString('false'),
+  /**
+   * Category-L (local-only). Auto-start the local Docker Compose infrastructure (Postgres / Redis /
+   * SonarQube) when a developer runs `pnpm dev`. Read by dev TOOLING, not the runtime. Defaults false;
+   * the refine rejects `true` unless NODE_ENV === 'local', so it can never be enabled on a deployed
+   * environment.
+   */
+  LOCAL_INFRASTRUCTURE_AUTOSTART: booleanString('false'),
+  /**
+   * Category-L (local-only). Enable the local SonarQube quality gate (`pnpm sonar:*`, the pre-commit
+   * step). Read by dev TOOLING, not the runtime. Defaults false; the refine rejects `true` unless
+   * NODE_ENV === 'local'.
+   */
+  LOCAL_SONARQUBE_GATE_ENABLED: booleanString('false'),
   /**
    * Category-A. Fail boot on scheduler/worker registry drift instead of warning. Defaults true
    * (fail fast, production-safe); development sets it false in `.env` so split-worker dev/test does
@@ -1247,6 +1264,18 @@ export const envSchema = envSchemaBase
       path: ['AUTH_TEST_SUPER_ADMIN_FALLBACK'],
     },
   )
+  // Category-L (local-only): a developer-machine affordance that must NOT be enabled on any deployed
+  // environment — the refine rejects `true` unless NODE_ENV === 'local' (the mirror of Category-B).
+  .refine((data) => data.NODE_ENV === 'local' || data.LOCAL_INFRASTRUCTURE_AUTOSTART === false, {
+    message:
+      'LOCAL_INFRASTRUCTURE_AUTOSTART may be true only when NODE_ENV=local (auto-starting local Docker infra is a developer-machine affordance; never enable it in development or production).',
+    path: ['LOCAL_INFRASTRUCTURE_AUTOSTART'],
+  })
+  .refine((data) => data.NODE_ENV === 'local' || data.LOCAL_SONARQUBE_GATE_ENABLED === false, {
+    message:
+      'LOCAL_SONARQUBE_GATE_ENABLED may be true only when NODE_ENV=local (the local SonarQube gate is a developer-machine affordance; never enable it in development or production).',
+    path: ['LOCAL_SONARQUBE_GATE_ENABLED'],
+  })
   // Boot-time safety checks: each must stay enforced in production (former isHostedDeployment gate).
   .refine((data) => data.NODE_ENV !== 'production' || data.DATABASE_TLS_ENFORCED === true, {
     message:
