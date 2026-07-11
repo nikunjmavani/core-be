@@ -198,6 +198,30 @@ describe('env-schema', () => {
     expect(parsed.success).toBe(true);
   });
 
+  it('rejects BLOCK_DISPOSABLE_EMAIL=false in production (Category-B)', () => {
+    const parsed = envSchema.safeParse({
+      ...productionRequiredBase,
+      BLOCK_DISPOSABLE_EMAIL: 'false',
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('defaults BLOCK_DISPOSABLE_EMAIL to blocking (true) in production', () => {
+    const parsed = envSchema.safeParse({ ...productionRequiredBase });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.BLOCK_DISPOSABLE_EMAIL).toBe(true);
+  });
+
+  it('allows BLOCK_DISPOSABLE_EMAIL=false outside production (dev affordance)', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      BLOCK_DISPOSABLE_EMAIL: 'false',
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.BLOCK_DISPOSABLE_EMAIL).toBe(false);
+  });
+
   it('allows http localhost ALLOWED_ORIGINS outside production', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,

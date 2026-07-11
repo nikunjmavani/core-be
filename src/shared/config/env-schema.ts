@@ -428,7 +428,9 @@ const envSchemaBase = z.object({
   RESEND_HTTP_TIMEOUT_MS: z.coerce.number().int().min(1000).max(180_000).default(30_000),
   EMAIL_FROM_ADDRESS: z.email().optional(),
   EMAIL_FROM_NAME: z.string().min(1).optional(),
-  // Block disposable/temporary email domains (default true). Set to false to allow (e.g. for testing).
+  // Category-B (security). Block disposable/temporary email domains. Defaults to the HARDENED value
+  // (true) everywhere; the `.refine()` below rejects `false` in production. The relaxed `false` is a
+  // dev/test affordance only (set explicitly in the env file / test harness).
   BLOCK_DISPOSABLE_EMAIL: z
     .string()
     .optional()
@@ -1225,6 +1227,11 @@ export const envSchema = envSchemaBase
     message:
       'METRICS_AUTH_REQUIRED must be true in production (the worker /metrics endpoint must require a bearer token).',
     path: ['METRICS_AUTH_REQUIRED'],
+  })
+  .refine((data) => data.NODE_ENV !== 'production' || data.BLOCK_DISPOSABLE_EMAIL === true, {
+    message:
+      'BLOCK_DISPOSABLE_EMAIL must be true in production (disposable/temporary email domains are rejected on signup — the relaxed false is a dev/test affordance only).',
+    path: ['BLOCK_DISPOSABLE_EMAIL'],
   })
   .refine(
     (data) => data.NODE_ENV !== 'production' || data.AUTH_TEST_SUPER_ADMIN_FALLBACK === false,
