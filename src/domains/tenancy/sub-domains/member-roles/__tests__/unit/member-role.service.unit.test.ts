@@ -31,7 +31,7 @@ const roleRow = {
 
 describe('MemberRoleService', () => {
   const organizationService = {
-    requireOrganizationMembershipByPublicId: vi.fn().mockResolvedValue(organization),
+    requireOrganizationRecordByPublicId: vi.fn().mockResolvedValue(organization),
     resolveUserInternalIdByPublicId: vi.fn().mockResolvedValue(5),
   } as unknown as OrganizationService;
 
@@ -56,7 +56,7 @@ describe('MemberRoleService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockResolvedValue(
+    vi.mocked(organizationService.requireOrganizationRecordByPublicId).mockResolvedValue(
       organization as never,
     );
     vi.mocked(organizationService.resolveUserInternalIdByPublicId).mockResolvedValue(5);
@@ -78,7 +78,7 @@ describe('MemberRoleService', () => {
   });
 
   it('create throws when organization is missing', async () => {
-    vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockRejectedValue(
+    vi.mocked(organizationService.requireOrganizationRecordByPublicId).mockRejectedValue(
       new NotFoundError('Organization'),
     );
     await expect(
@@ -96,7 +96,7 @@ describe('MemberRoleService', () => {
   });
 
   it('create rejects a PERSONAL organization (no custom roles without members)', async () => {
-    vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockResolvedValueOnce({
+    vi.mocked(organizationService.requireOrganizationRecordByPublicId).mockResolvedValueOnce({
       ...organization,
       type: 'PERSONAL',
     } as never);
@@ -127,13 +127,13 @@ describe('MemberRoleService', () => {
       roleRow.public_id,
     );
     expect(record.public_id).toBe(roleRow.public_id);
-    expect(organizationService.requireOrganizationMembershipByPublicId).not.toHaveBeenCalled();
+    expect(organizationService.requireOrganizationRecordByPublicId).not.toHaveBeenCalled();
   });
 
   it('resolveRolePublicIdForOrganization skips organization lookup', async () => {
     const publicId = await service.resolveRolePublicIdForOrganization(organization.id, roleRow.id);
     expect(publicId).toBe(roleRow.public_id);
-    expect(organizationService.requireOrganizationMembershipByPublicId).not.toHaveBeenCalled();
+    expect(organizationService.requireOrganizationRecordByPublicId).not.toHaveBeenCalled();
   });
 
   it('resolveRolePublicIdForOrganization throws when role is missing', async () => {
@@ -149,7 +149,7 @@ describe('MemberRoleService', () => {
       roleRow.id,
     );
     expect(publicId).toBe(roleRow.public_id);
-    expect(organizationService.requireOrganizationMembershipByPublicId).toHaveBeenCalled();
+    expect(organizationService.requireOrganizationRecordByPublicId).toHaveBeenCalled();
   });
 
   it('update and delete mutate role', async () => {
@@ -182,7 +182,7 @@ describe('MemberRoleService', () => {
   });
 
   it('list throws when organization is missing', async () => {
-    vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockRejectedValue(
+    vi.mocked(organizationService.requireOrganizationRecordByPublicId).mockRejectedValue(
       new NotFoundError('Organization'),
     );
     await expect(
@@ -253,7 +253,7 @@ describe('MemberRoleService', () => {
   });
 
   it('getByPublicId and requireRoleRecordByPublicId throw when organization is missing', async () => {
-    vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockRejectedValue(
+    vi.mocked(organizationService.requireOrganizationRecordByPublicId).mockRejectedValue(
       new NotFoundError('Organization'),
     );
     await expect(
@@ -272,7 +272,7 @@ describe('MemberRoleService', () => {
   });
 
   it('delete throws when organization is missing', async () => {
-    vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockRejectedValue(
+    vi.mocked(organizationService.requireOrganizationRecordByPublicId).mockRejectedValue(
       new NotFoundError('Organization'),
     );
     await expect(service.delete(organization.public_id, roleRow.public_id)).rejects.toBeInstanceOf(

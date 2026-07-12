@@ -3,6 +3,7 @@ import {
   acknowledgeCommitDispatchTask,
   appendCommitDispatchTask,
   consumeCommitDispatchTasks,
+  purgeCommitDispatchTasks,
 } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.store.js';
 import { executeCommitDispatchTask } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.executor.js';
 import type { CommitDispatchTask } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.types.js';
@@ -156,6 +157,28 @@ export class EventBus {
    */
   clearCommitDispatchMarker(requestId: string): void {
     pendingCommitDispatchRequestIds.delete(requestId);
+  }
+
+  /**
+   * Discards a rolled-back request's commit-dispatch tasks entirely — both the in-memory marker and
+   * the durable Redis tasks (audit-#M2).
+   *
+   * @remarks
+   * Call this instead of {@link clearCommitDispatchMarker} when the request's DB transaction rolled
+   * back / did not persist. Previously only the in-memory marker was cleared and the durable Redis
+   * tasks were left for the recovery sweeper — but those tasks reference rows that the rollback
+   * removed, so the sweeper would execute them against phantom rows, burn the worker's retry budget,
+   * and raise a FALSE final-failure Sentry alert. Purging is safe here precisely because the rows
+   * provably do not exist. Best-effort: a Redis failure is logged and the 24h list TTL is the final
+   * backstop; the rollback path must never throw.
+   */
+  async discardCommitDispatchOnRollback(requestId: string): Promise<void> {
+    pendingCommitDispatchRequestIds.delete(requestId);
+    try {
+      await purgeCommitDispatchTasks({ requestId });
+    } catch (error) {
+      logger.warn({ error, requestId }, 'commit-dispatch.rollback_purge_failed');
+    }
   }
 
   async emit(event: DomainEvent): Promise<void> {

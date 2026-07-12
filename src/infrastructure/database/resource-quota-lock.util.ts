@@ -18,6 +18,8 @@ export const RESOURCE_QUOTA_LOCK_NAMESPACE = {
   ORGANIZATION_API_KEY: 0x41_50_49_4b,
   /** Custom member-role cap, keyed by organization id. ASCII `ROLE`. */
   MEMBER_ROLE: 0x52_4f_4c_45,
+  /** Plan seat cap on member-add, keyed by organization id. ASCII `SEAT`. */
+  MEMBERSHIP_SEAT: 0x53_45_41_54,
   /** Organization notification-policy cap, keyed by organization id. ASCII `NPOL`. */
   ORGANIZATION_NOTIFICATION_POLICY: 0x4e_50_4f_4c,
   /** Organization webhook cap, keyed by organization id. ASCII `WHKS`. */

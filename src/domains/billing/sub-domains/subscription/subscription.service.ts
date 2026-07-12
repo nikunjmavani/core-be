@@ -221,9 +221,10 @@ export class SubscriptionService {
    * - **Failure modes:** none beyond the underlying queries; the caller MUST already hold an
    *   organization DB context + transaction so the lock spans the subsequent membership insert.
    * - **Side effects:** acquires a `FOR UPDATE` row lock (released at the caller's COMMIT) when an
-   *   active subscription exists. The Free-tier path has no subscription row to lock; with the
-   *   seeded Free plan at 1 seat (owner-only) the `used >= ceiling` check blocks any member add, so
-   *   serialization is not required there — see `docs/reference/architecture/production-audit-decisions.md`.
+   *   active subscription exists. The Free-tier path has no subscription row to lock; the caller
+   *   ({@link MembershipService} add-member) takes a per-org advisory lock up front so the
+   *   count+insert is serialized on the free path too (audit-#M1) — the seat cap no longer depends
+   *   on the free ceiling happening to be 1. See `docs/reference/architecture/production-audit-decisions.md`.
    * - **Notes:** this is the cross-domain entry point tenancy's `MembershipService` calls to
    *   enforce the seat limit on add-member; it returns only the numeric ceiling, never the row.
    */

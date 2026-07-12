@@ -63,7 +63,7 @@ describe('MemberRoleService.delete — sec-T3 guards (route-audit C2 atomic)', (
   };
 
   const organizationService = {
-    requireOrganizationMembershipByPublicId: vi.fn().mockResolvedValue(organization),
+    requireOrganizationRecordByPublicId: vi.fn().mockResolvedValue(organization),
   } as unknown as OrganizationService;
 
   const memberRoleRepository = {
@@ -75,7 +75,7 @@ describe('MemberRoleService.delete — sec-T3 guards (route-audit C2 atomic)', (
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockResolvedValue(
+    vi.mocked(organizationService.requireOrganizationRecordByPublicId).mockResolvedValue(
       organization as never,
     );
     // Default: the guarded delete succeeds (no active members).
@@ -164,7 +164,7 @@ describe('MemberRoleService.update — sec-T3 is_system guard', () => {
   };
 
   const orgServiceForUpdate = {
-    requireOrganizationMembershipByPublicId: vi.fn().mockResolvedValue(organization),
+    requireOrganizationRecordByPublicId: vi.fn().mockResolvedValue(organization),
     resolveUserInternalIdByPublicId: vi.fn().mockResolvedValue(null),
   } as unknown as OrganizationService;
 
@@ -177,7 +177,7 @@ describe('MemberRoleService.update — sec-T3 is_system guard', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(orgServiceForUpdate.requireOrganizationMembershipByPublicId).mockResolvedValue(
+    vi.mocked(orgServiceForUpdate.requireOrganizationRecordByPublicId).mockResolvedValue(
       organization as never,
     );
   });

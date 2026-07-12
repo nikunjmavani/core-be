@@ -560,9 +560,9 @@ describe('OrganizationService', () => {
     expect(repository.resolveUserIdByPublicId).toHaveBeenCalledWith('user_public');
   });
 
-  it('requireOrganizationMembershipByPublicId throws when organization is missing', async () => {
+  it('requireOrganizationRecordByPublicId throws when organization is missing', async () => {
     vi.mocked(repository.findByPublicId).mockResolvedValue(null);
-    await expect(service.requireOrganizationMembershipByPublicId('missing')).rejects.toBeInstanceOf(
+    await expect(service.requireOrganizationRecordByPublicId('missing')).rejects.toBeInstanceOf(
       NotFoundError,
     );
   });

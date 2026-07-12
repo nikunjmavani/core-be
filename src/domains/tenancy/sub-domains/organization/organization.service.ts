@@ -170,7 +170,7 @@ export class OrganizationService {
   }
 
   async requireOrganizationByPublicId(public_id: string): Promise<OrganizationBillingContext> {
-    const organization = await this.requireOrganizationMembershipByPublicId(public_id);
+    const organization = await this.requireOrganizationRecordByPublicId(public_id);
     return {
       id: organization.id,
       public_id: organization.public_id,
@@ -195,7 +195,22 @@ export class OrganizationService {
     );
   }
 
-  async requireOrganizationMembershipByPublicId(
+  /**
+   * Resolves the organization row for the active-org public id, throwing `NotFoundError` when it
+   * does not exist. Renamed from `requireOrganizationMembershipByPublicId` (audit-#T2).
+   *
+   * @remarks
+   * - **Algorithm:** a single `findByPublicId` under the caller's RLS-scoped context; shapes the
+   *   row into an {@link OrganizationMembershipContext}.
+   * - **Failure modes:** `NotFoundError('Organization')` if no row resolves.
+   * - **Side effects:** none (read-only).
+   * - **Notes:** this does **NOT** assert that the caller is a member of the organization — it only
+   *   resolves the row (the old name falsely implied a membership check). Authorization is enforced
+   *   upstream by the route's `requireOrganizationPermission` preHandler and Postgres RLS scoped to
+   *   `app.current_organization_id`. Do not add a route that relies on this method as its sole
+   *   authorization gate; always pair it with a permission preHandler.
+   */
+  async requireOrganizationRecordByPublicId(
     public_id: string,
   ): Promise<OrganizationMembershipContext> {
     const organization = await this.repository.findByPublicId(public_id);
@@ -221,7 +236,7 @@ export class OrganizationService {
       // a null result means a concurrent suspend/removal won the race after the caller's check.
       throw new ConflictError('errors:ownershipTransferTargetNotActive');
     }
-    return this.requireOrganizationMembershipByPublicId(organization_public_id);
+    return this.requireOrganizationRecordByPublicId(organization_public_id);
   }
 
   async findOrganizationByInternalId(

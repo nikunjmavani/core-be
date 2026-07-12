@@ -6,6 +6,7 @@ import {
   insertMailOutbox,
   markMailOutboxFailed,
   markMailOutboxSent,
+  tryClaimPendingMailOutbox,
 } from '@/infrastructure/mail/mail-outbox.repository.js';
 import { mail_outbox } from '@/infrastructure/mail/mail-outbox.schema.js';
 
@@ -62,5 +63,14 @@ describe('mail-outbox terminal-state secret scrubbing (audit-#10)', () => {
     expect(row.status).toBe('sent');
     expect(row.html).toBe('');
     expect(row.text_body).toBeNull();
+  });
+
+  it('audit-#W1: tryClaimPendingMailOutbox returns a distinct "failed" result for a terminal row', async () => {
+    const id = await insertMailOutbox(secretEmail);
+    await markMailOutboxFailed(id);
+
+    // A terminal `failed` row (body already scrubbed) is not `in_flight` — it can never be
+    // re-sent, so the claim result must be `failed` so the processor can fail a replay honestly.
+    await expect(tryClaimPendingMailOutbox(id)).resolves.toBe('failed');
   });
 });

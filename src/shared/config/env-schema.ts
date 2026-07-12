@@ -10,7 +10,7 @@
  * When you add a new env key that's conditionally required, mark it OPTIONAL in
  * `.env.example` and pair it with a corresponding `.optional()` / refinement here.
  */
-import { createPrivateKey, createPublicKey } from 'node:crypto';
+import { createHash, createPrivateKey, createPublicKey } from 'node:crypto';
 import { validateProductionRedisTopology } from '@/infrastructure/cache/redis-url.parse.util.js';
 import { PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { z } from 'zod';
@@ -34,6 +34,34 @@ const isStrongRsaPem = (pem: string, kind: 'private' | 'public'): boolean => {
   } catch {
     return false;
   }
+};
+
+/**
+ * SHA-256 fingerprints of the committed test RSA keypair's base64 bodies (`src/tests/setup.ts`),
+ * used by the production refine so the well-known test key can never sign or verify real tokens
+ * (audit-#L1). Recompute with the snippet in that refine's message if the test key is ever rotated.
+ */
+const FORBIDDEN_TEST_JWT_KEY_FINGERPRINTS = new Set<string>([
+  '68cfe10636b1315e7c1eb340d593f2b46408cf0a56263adc816c119e9c05a854', // test JWT_PRIVATE_KEY
+  'c3289b311fdd666237778b2d1d186832b7fb9acdb97aadd3d167600808ec8dd4', // test JWT_PUBLIC_KEY
+]);
+
+/** SHA-256 of a PEM block's base64 body (headers + all whitespace stripped) — stable across newline encodings. */
+const pemBodyFingerprint = (pemBlock: string): string =>
+  createHash('sha256')
+    .update(pemBlock.replace(/-----(?:BEGIN|END)[^-]*-----/g, '').replace(/[^A-Za-z0-9+/=]/g, ''))
+    .digest('hex');
+
+/**
+ * True when `value` contains any PEM block whose body matches a forbidden test-key fingerprint.
+ * Splits on PEM blocks so a multi-key `JWT_PUBLIC_KEYS` keyring is checked entry-by-entry.
+ */
+const containsForbiddenTestJwtKey = (value: string | undefined): boolean => {
+  if (!value) return false;
+  const pemBlocks = value.match(/-----BEGIN[\s\S]*?-----END[^-]*-----/g) ?? [value];
+  return pemBlocks.some((block) =>
+    FORBIDDEN_TEST_JWT_KEY_FINGERPRINTS.has(pemBodyFingerprint(block)),
+  );
 };
 
 // Runtime environment name — `local | development | production`. `local` is the developer's
@@ -1350,6 +1378,29 @@ export const envSchema = envSchemaBase
       message:
         'JWT_LEGACY_KEY_ENABLED must be false in production once JWT_PUBLIC_KEYS (the verification keyring) is configured — close the legacy kid-less trust window after migrating to the keyring.',
       path: ['JWT_LEGACY_KEY_ENABLED'],
+    },
+  )
+  .refine(
+    (data) => {
+      // audit-#L1: the suite ships a static, PUBLICLY-COMMITTED RSA keypair (src/tests/setup.ts).
+      // It must never sign or verify real tokens — reject it by base64-body fingerprint so a stray
+      // copy-paste of the test key into a production secret fails closed at boot instead of silently
+      // issuing forgeable tokens. Non-production (incl. the test harness running as `development`)
+      // is unaffected. Rotate: recompute fingerprints via
+      //   node -e "require('crypto');..." over src/tests/setup.ts and update FORBIDDEN_TEST_JWT_KEY_FINGERPRINTS.
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      return !(
+        containsForbiddenTestJwtKey(data.JWT_PRIVATE_KEY) ||
+        containsForbiddenTestJwtKey(data.JWT_PUBLIC_KEY) ||
+        containsForbiddenTestJwtKey(data.JWT_PUBLIC_KEYS)
+      );
+    },
+    {
+      message:
+        'JWT_PRIVATE_KEY / JWT_PUBLIC_KEY(S) must not be the committed test keypair (src/tests/setup.ts) in production — generate a fresh RSA keypair for the production environment.',
+      path: ['JWT_PRIVATE_KEY'],
     },
   )
   .refine(

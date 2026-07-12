@@ -44,20 +44,52 @@ const PERMISSION_CACHE_COMMIT_IF_LOCK_HELD_LUA =
 const PERMISSION_CACHE_RELEASE_LOCK_IF_HELD_LUA =
   "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end; return 0";
 
+/**
+ * Atomically bumps the org cache-version (`INCR`) and (re)sets its TTL in one round-trip.
+ * The TTL prevents the version key from lingering forever (audit-#T3 Redis hygiene) while
+ * staying far longer than any data-key TTL, so a version-key expiry can never resurrect a
+ * stale versioned entry — every data key from that epoch expired long before.
+ */
+const PERMISSION_CACHE_BUMP_VERSION_LUA =
+  "local v = redis.call('INCR', KEYS[1]); redis.call('EXPIRE', KEYS[1], ARGV[1]); return v";
+
+/**
+ * TTL for the per-org cache-version key. Must comfortably exceed the maximum data-key TTL
+ * ({@link PERMISSION_CACHE_DEFAULT_TTL_SECONDS} + jitter ≈ 6 min) so the invariant
+ * "version-key TTL ≫ data-key TTL" holds: by the time an idle org's version key could expire,
+ * every `perm:<version>:*` entry it namespaced has already expired, making a reset to 0 harmless.
+ */
+const PERMISSION_CACHE_ORGANIZATION_VERSION_TTL_SECONDS = 24 * 60 * 60;
+
 function buildOrganizationVersionKey(organizationId: string): string {
   return `${PERMISSION_CACHE_ORGANIZATION_VERSION_PREFIX}:${organizationId}:v`;
 }
 
+/**
+ * Read the org cache version. Absent/empty means "never invalidated" and maps to version 0
+ * (a legitimate value). A Redis error or a corrupt (non-integer) value THROWS rather than
+ * masquerading as `0`: security-critical callers ({@link invalidatePermissions}) must surface
+ * the failure to Sentry instead of silently deleting the wrong `perm:0:*` key, and read callers
+ * catch the throw and degrade to a safe cache-miss (audit-#T0).
+ */
 async function getOrganizationCacheVersion(organizationId: string): Promise<number> {
-  try {
-    const raw = await redisConnection.get(buildOrganizationVersionKey(organizationId));
-    if (!raw) return 0;
-    const parsed = Number.parseInt(raw, 10);
-    return Number.isFinite(parsed) ? parsed : 0;
-  } catch (error) {
-    logger.warn({ error }, 'permission-cache.version.read.failed');
-    return 0;
+  const raw = await redisConnection.get(buildOrganizationVersionKey(organizationId));
+  if (!raw) return 0;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed)) {
+    throw new Error('permission-cache.version.corrupt');
   }
+  return parsed;
+}
+
+/** Atomically bumps the org cache-version and refreshes its TTL (see {@link PERMISSION_CACHE_BUMP_VERSION_LUA}). */
+async function bumpOrganizationCacheVersion(organizationId: string): Promise<void> {
+  await redisConnection.eval(
+    PERMISSION_CACHE_BUMP_VERSION_LUA,
+    1,
+    buildOrganizationVersionKey(organizationId),
+    String(PERMISSION_CACHE_ORGANIZATION_VERSION_TTL_SECONDS),
+  );
 }
 
 /**
@@ -144,6 +176,8 @@ export async function setCachedPermissions(
 interface CommitCachedPermissionsOptions {
   userId: string;
   organizationId: string;
+  /** Org cache version captured BEFORE the recompute's DB read — see {@link withPermissionCacheRecomputeLock}. */
+  version: number;
   lockKey: string;
   lockNonce: string;
   codes: string[];
@@ -154,21 +188,25 @@ interface CommitCachedPermissionsOptions {
  * still held by this caller, atomically (see {@link PERMISSION_CACHE_COMMIT_IF_LOCK_HELD_LUA}).
  *
  * @remarks
- * - **Algorithm:** reads the org cache version, builds the versioned key, and runs the
- *   compare-and-set Lua so the `SET ... EX` only lands when `GET lockKey == lockNonce`.
- *   TTL is `default + jitter (0..60s)` to smear expirations.
+ * - **Algorithm:** builds the versioned key from the `version` captured at recompute START
+ *   (NOT re-read here) and runs the compare-and-set Lua so the `SET ... EX` only lands when
+ *   `GET lockKey == lockNonce`. TTL is `default + jitter (0..60s)` to smear expirations.
  * - **Failure modes:** Redis errors are caught and logged (`permission-cache.commit.failed`);
  *   the call resolves so a cache write failure never blocks the request.
  * - **Side effects:** at most one Redis `SET` under `perm:<version>:...`.
- * - **Notes:** the guard makes the write a no-op when a concurrent `invalidatePermissions`
- *   already deleted the lock, preventing stale permissions from being re-cached.
+ * - **Notes:** two guards prevent re-caching stale permissions — the lock-nonce compare-and-set
+ *   (a concurrent per-user {@link invalidatePermissions} deleted the lock → this write is a
+ *   no-op), and the captured `version` (a concurrent org-wide
+ *   {@link invalidateOrganizationPermissions} bumped the version during the recompute → this
+ *   write lands in the now-orphaned old namespace instead of the live one). The latter closes
+ *   audit-#H1, where re-reading the version at commit time let a stale set be published under
+ *   the post-invalidation version and served for the full TTL.
  */
 async function commitCachedPermissionsIfLockHeld(
   options: CommitCachedPermissionsOptions,
 ): Promise<void> {
-  const { userId, organizationId, lockKey, lockNonce, codes } = options;
+  const { userId, organizationId, version, lockKey, lockNonce, codes } = options;
   try {
-    const version = await getOrganizationCacheVersion(organizationId);
     /** Small jitter so many users do not expire and recompute in the same second. */
     const jitterSeconds = randomInt(PERMISSION_CACHE_JITTER_MAX_SECONDS);
     await redisConnection.eval(
@@ -264,14 +302,30 @@ export async function withPermissionCacheRecomputeLock(
       );
     }
 
+    // Bind the org cache version captured BEFORE the recompute's DB read (audit-#H1). If a
+    // concurrent org-wide invalidation INCRs the version during the recompute, this captured
+    // value is now stale, so the commit lands in the orphaned old namespace (harmless) instead
+    // of publishing the pre-invalidation set under the live version. A version-read failure
+    // means we cannot bind safely, so we skip caching and just serve the fresh result.
+    let capturedVersion: number | null;
+    try {
+      capturedVersion = await getOrganizationCacheVersion(organizationId);
+    } catch (error) {
+      logger.warn({ error }, 'permission-cache.version.read.failed');
+      capturedVersion = null;
+    }
+
     const fresh = await recompute();
-    await commitCachedPermissionsIfLockHeld({
-      userId,
-      organizationId,
-      lockKey,
-      lockNonce,
-      codes: fresh,
-    });
+    if (capturedVersion !== null) {
+      await commitCachedPermissionsIfLockHeld({
+        userId,
+        organizationId,
+        version: capturedVersion,
+        lockKey,
+        lockNonce,
+        codes: fresh,
+      });
+    }
     return fresh;
   } finally {
     if (acquiredLock) {
@@ -322,6 +376,16 @@ export async function invalidatePermissions(userId: string, organizationId: stri
       organizationId,
       tags: { subsystem: 'permission-cache', operation: 'invalidate' },
     });
+    // Backstop (audit-#T1): we could not target the user's key (version read or DEL failed, e.g.
+    // a transient blip that returned a wrong/`0` version). Best-effort bump the org version so
+    // the stale per-user entry is orphaned org-wide rather than served until its TTL. This
+    // over-invalidates the org (everyone recomputes once) — the security-favouring tradeoff. If
+    // Redis is fully down this also fails, harmlessly.
+    try {
+      await bumpOrganizationCacheVersion(organizationId);
+    } catch (backstopError) {
+      logger.warn({ error: backstopError }, 'permission-cache.invalidate.backstop.failed');
+    }
   }
 }
 
@@ -332,22 +396,23 @@ export async function invalidatePermissions(userId: string, organizationId: stri
  * see the bumped version and operate on a fresh namespace.
  *
  * @remarks
- * - **Algorithm:** atomically bumps `perm:org:<org>:v` via Redis `INCR`. All
- *   subsequent reads/writes go through {@link buildKey} with the new version,
- *   so every previously cached entry for the org is instantly unreachable.
+ * - **Algorithm:** atomically bumps `perm:org:<org>:v` via `INCR` and refreshes its
+ *   TTL in one Lua round-trip ({@link bumpOrganizationCacheVersion}). All subsequent
+ *   reads/writes go through {@link buildKey} with the new version, so every previously
+ *   cached entry for the org is instantly unreachable.
  * - **Failure modes:** Redis errors are caught and logged
  *   (`permission-cache.invalidate-organization.failed`); the function still
  *   resolves so callers (role/permission edits) never block on cache
  *   invalidation.
- * - **Side effects:** single Redis `INCR`; orphans existing keys which expire
- *   naturally via their TTL — keeps invalidation O(1).
+ * - **Side effects:** single Redis `INCR` + `EXPIRE`; orphans existing keys which
+ *   expire naturally via their TTL — keeps invalidation O(1).
  * - **Notes:** use this whenever a change can affect many users in the org
  *   (e.g. a role's permission set is replaced); per-user changes can use the
  *   narrower {@link invalidatePermissions}.
  */
 export async function invalidateOrganizationPermissions(organizationId: string): Promise<void> {
   try {
-    await redisConnection.incr(buildOrganizationVersionKey(organizationId));
+    await bumpOrganizationCacheVersion(organizationId);
   } catch (error) {
     // Same privilege-retention risk as invalidatePermissions, org-wide: a failed version bump
     // leaves every user's cached permission set live until TTL. Surface to Sentry.

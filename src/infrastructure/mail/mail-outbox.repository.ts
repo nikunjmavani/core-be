@@ -10,9 +10,16 @@ import type { MailEnqueueInput } from '@/infrastructure/mail/queues/mail.queue.j
 /**
  * Outcome of {@link tryClaimPendingMailOutbox}: `claimed` when this caller owns the
  * row, `in_flight` when another worker holds it (status `sending`), `already_sent`
- * when delivery completed, or `not_found` when the outbox row was deleted/expired.
+ * when delivery completed, `failed` when the row reached the terminal `failed` state
+ * (body already scrubbed — not replayable), or `not_found` when the outbox row was
+ * deleted/expired.
  */
-export type MailOutboxClaimResult = 'claimed' | 'in_flight' | 'already_sent' | 'not_found';
+export type MailOutboxClaimResult =
+  | 'claimed'
+  | 'in_flight'
+  | 'already_sent'
+  | 'failed'
+  | 'not_found';
 
 function mailOutboxDatabase() {
   if (isWorkerRuntime()) {
@@ -104,6 +111,12 @@ export async function tryClaimPendingMailOutbox(
   }
   if (existingRow.status === 'sent') {
     return 'already_sent';
+  }
+  if (existingRow.status === 'failed') {
+    // Terminal state (audit-#W1): the body was scrubbed on failure, so this row can never be
+    // re-sent. Distinct from `in_flight` so the DLQ replay tool reports it honestly instead of
+    // claiming success on a silent no-op.
+    return 'failed';
   }
   return 'in_flight';
 }

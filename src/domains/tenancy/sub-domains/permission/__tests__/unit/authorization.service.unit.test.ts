@@ -33,7 +33,11 @@ describe('AuthorizationService', () => {
   });
 
   it('returns cached permissions without hitting the database', async () => {
-    vi.mocked(redisConnection.get).mockResolvedValue(JSON.stringify(['organization:read']));
+    // Version key holds an integer; the data key holds the JSON codes — mock per-key so the
+    // version reader parses '0' rather than choking on the codes array.
+    vi.mocked(redisConnection.get).mockImplementation(async (key) =>
+      String(key).startsWith('perm:org:') ? '0' : JSON.stringify(['organization:read']),
+    );
     const codes = await authorizationService.resolveUserOrganizationPermissions(
       'user_public',
       'org_public',

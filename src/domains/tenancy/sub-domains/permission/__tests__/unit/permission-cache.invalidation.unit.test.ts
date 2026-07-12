@@ -10,7 +10,12 @@ vi.mock('@/infrastructure/cache/redis.client.js', () => ({
   },
 }));
 
+vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
+  captureException: vi.fn(),
+}));
+
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
+import { captureException } from '@/infrastructure/observability/sentry/sentry.js';
 import {
   getCachedPermissions,
   setCachedPermissions,
@@ -24,11 +29,16 @@ describe('permission-cache service invalidation', () => {
     vi.clearAllMocks();
   });
 
-  it('invalidateOrganizationPermissions calls INCR on the org version key', async () => {
-    vi.mocked(redisConnection.incr).mockResolvedValue(1);
+  it('invalidateOrganizationPermissions bumps the org version + refreshes its TTL via one Lua', async () => {
+    vi.mocked(redisConnection.eval).mockResolvedValue(1 as never);
     await invalidateOrganizationPermissions('org_public_id');
-    expect(redisConnection.incr).toHaveBeenCalledTimes(1);
-    expect(redisConnection.incr).toHaveBeenCalledWith('perm:org:org_public_id:v');
+    expect(redisConnection.eval).toHaveBeenCalledTimes(1);
+    const evalArgs = vi.mocked(redisConnection.eval).mock.calls[0]!;
+    // Lua bumps + expires; the version key never lingers TTL-less (audit-#T3).
+    expect(String(evalArgs[0])).toContain("redis.call('INCR'");
+    expect(String(evalArgs[0])).toContain("redis.call('EXPIRE'");
+    expect(evalArgs[2]).toBe('perm:org:org_public_id:v');
+    expect(Number(evalArgs[3])).toBeGreaterThan(300);
   });
 
   it('getCachedPermissions returns null when Redis throws (graceful failure)', async () => {
@@ -122,5 +132,61 @@ describe('permission-cache service invalidation', () => {
     expect(first).toEqual(['tenancy:read']);
     expect(second).toEqual(['tenancy:read']);
     expect(recompute).toHaveBeenCalledTimes(1);
+  });
+
+  it('commit binds to the org version captured BEFORE recompute, so an org-wide invalidation mid-recompute orphans the stale commit (audit-#H1)', async () => {
+    vi.mocked(redisConnection.set).mockResolvedValue('OK');
+    vi.mocked(redisConnection.eval).mockResolvedValue(1 as never);
+    // The org version is 0 when the recompute starts; a concurrent org-wide invalidation bumps
+    // it to 1 while the recompute runs. The commit must still target the CAPTURED version 0.
+    let versionBumpedMidRecompute = false;
+    vi.mocked(redisConnection.get).mockImplementation(async (key) => {
+      if (String(key).startsWith('perm:org:')) return versionBumpedMidRecompute ? '1' : '0';
+      return null; // cache empty → recompute runs
+    });
+
+    const result = await withPermissionCacheRecomputeLock(
+      'user_public_id',
+      'org_public_id',
+      async () => {
+        versionBumpedMidRecompute = true;
+        return ['tenancy:read'];
+      },
+    );
+
+    expect(result).toEqual(['tenancy:read']);
+    const commitCall = vi
+      .mocked(redisConnection.eval)
+      .mock.calls.find(
+        (call) => typeof call[0] === 'string' && call[0].includes("redis.call('SET'"),
+      );
+    expect(commitCall, 'commit went through the guarded Lua').toBeDefined();
+    // KEYS[2] (cache key) must use captured version 0, NOT the post-bump version 1.
+    expect(commitCall?.[3]).toBe('perm:0:user_public_id:org_public_id');
+  });
+
+  it('invalidatePermissions surfaces a Redis failure to Sentry and bumps the org version as a backstop (audit-#T0/#T1)', async () => {
+    vi.mocked(redisConnection.get).mockResolvedValue('4');
+    vi.mocked(redisConnection.del).mockRejectedValue(new Error('redis blip'));
+    vi.mocked(redisConnection.eval).mockResolvedValue(2 as never);
+
+    await invalidatePermissions('user_public_id', 'org_public_id');
+
+    // The failure is not swallowed as success: Sentry fires…
+    expect(captureException).toHaveBeenCalledTimes(1);
+    // …and the backstop over-invalidates the org so the stale entry cannot survive to its TTL.
+    expect(redisConnection.eval).toHaveBeenCalledTimes(1);
+    const backstopArgs = vi.mocked(redisConnection.eval).mock.calls[0]!;
+    expect(String(backstopArgs[0])).toContain("redis.call('INCR'");
+    expect(backstopArgs[2]).toBe('perm:org:org_public_id:v');
+  });
+
+  it('getOrganizationCacheVersion no longer masquerades a Redis error as version 0 (audit-#T0)', async () => {
+    // A read-path caller (setCachedPermissions) must NOT write under perm:0 when the version
+    // read fails — it degrades to a safe no-op instead of caching under the wrong namespace.
+    vi.mocked(redisConnection.get).mockRejectedValue(new Error('redis down'));
+    vi.mocked(redisConnection.set).mockResolvedValue('OK');
+    await setCachedPermissions('user_public_id', 'org_public_id', ['tenancy:read']);
+    expect(redisConnection.set).not.toHaveBeenCalled();
   });
 });

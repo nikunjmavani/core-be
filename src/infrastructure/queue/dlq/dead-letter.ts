@@ -10,6 +10,7 @@ import { insertDeadLetterJob } from '@/infrastructure/queue/dlq/dead-letter.repo
 import { THIRTY_DAYS_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { redactSensitive } from '@/shared/utils/security/sensitive-redaction.util.js';
 
 /** Suffix appended to a source queue name to derive its dead-letter queue (`<source>-dlq`). */
 export const DLQ_QUEUE_SUFFIX = '-dlq';
@@ -149,8 +150,11 @@ export async function enqueueDeadLetter(
     original_job_id: job.id ?? undefined,
     original_job_name: job.name,
     original_data_summary: summarizeJobDataForDeadLetter(job.data),
-    failed_reason: errorObject.message,
-    error_stack: errorObject.stack,
+    // audit-#W2: scrub URL/query-embedded secrets from the free-text error fields before they land
+    // in the 30-day Redis mirror, mirroring the Sentry `beforeSend` path (payload_summary is already
+    // whitelisted). Latent today, but a future error message interpolating a token must not persist.
+    failed_reason: redactSensitive(errorObject.message),
+    error_stack: redactSensitive(errorObject.stack),
     attempts_made: job.attemptsMade,
     max_attempts: maxAttempts,
     failed_at: new Date().toISOString(),
@@ -206,8 +210,9 @@ async function persistDeadLetterFailureToPostgres(
       job_id: job.id ?? null,
       job_name: job.name,
       payload_summary: summarizeJobDataForDeadLetter(job.data),
-      failed_reason: errorObject.message,
-      error_stack: errorObject.stack ?? null,
+      // audit-#W2: same value-level redaction for the durable Postgres ledger.
+      failed_reason: redactSensitive(errorObject.message),
+      error_stack: redactSensitive(errorObject.stack ?? null),
       attempts_made: job.attemptsMade,
       max_attempts: maxAttempts,
       failed_at: new Date(),
