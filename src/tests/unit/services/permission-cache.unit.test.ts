@@ -36,8 +36,12 @@ describe('PermissionCacheService', () => {
     });
 
     it('returns parsed codes on cache hit', async () => {
-      vi.mocked(redisConnection.get).mockResolvedValue(
-        JSON.stringify(['billing:read', 'billing:manage']),
+      // The integer version key and the JSON data key are distinct — mock per-key so the
+      // version reader parses an integer, not the codes array.
+      vi.mocked(redisConnection.get).mockImplementation(async (key) =>
+        String(key).startsWith('perm:org:')
+          ? '0'
+          : JSON.stringify(['billing:read', 'billing:manage']),
       );
       const result = await getCachedPermissions('user-1', 'org-1');
       expect(result).toEqual(['billing:read', 'billing:manage']);
@@ -52,6 +56,7 @@ describe('PermissionCacheService', () => {
 
   describe('setCachedPermissions', () => {
     it('stores codes in Redis with TTL plus jitter', async () => {
+      vi.mocked(redisConnection.get).mockResolvedValue(null); // org version unset → 0
       vi.mocked(redisConnection.set).mockResolvedValue('OK');
       await setCachedPermissions('user-1', 'org-1', ['billing:read'], 600);
       expect(redisConnection.set).toHaveBeenCalledTimes(1);
@@ -67,6 +72,7 @@ describe('PermissionCacheService', () => {
 
   describe('invalidatePermissions', () => {
     it('deletes the cache key and recompute lock', async () => {
+      vi.mocked(redisConnection.get).mockResolvedValue(null); // org version unset → 0
       vi.mocked(redisConnection.del).mockResolvedValue(1);
       await invalidatePermissions('user-1', 'org-1');
       expect(redisConnection.del).toHaveBeenCalledWith(

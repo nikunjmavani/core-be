@@ -59,6 +59,27 @@ describe('per-org row caps (sec-r5-followup-ratelimit-dos-1/2/3)', () => {
     });
   });
 
+  describe('MembershipService.assertSeatAvailableForMemberAdd — MEMBERSHIP_SEAT advisory lock (audit-#M1)', () => {
+    const source = readService('src/domains/tenancy/sub-domains/membership/membership.service.ts');
+
+    it('acquires the MEMBERSHIP_SEAT advisory lock so the free-tier count+insert is serialized', () => {
+      expect(source).toMatch(
+        /acquireResourceQuotaLock\(\s*RESOURCE_QUOTA_LOCK_NAMESPACE\.MEMBERSHIP_SEAT/,
+      );
+    });
+
+    it('takes the lock BEFORE reading the seat ceiling (serializes the whole check+insert)', () => {
+      const lockIndex = source.indexOf('RESOURCE_QUOTA_LOCK_NAMESPACE.MEMBERSHIP_SEAT');
+      const ceilingIndex = source.indexOf('reserveSeatCeilingForMemberAdd(organizationInternalId)');
+      expect(lockIndex).toBeGreaterThan(0);
+      expect(ceilingIndex).toBeGreaterThan(lockIndex);
+    });
+
+    it('compares used seats with `>=` the ceiling', () => {
+      expect(source).toMatch(/seatsUsed\s*>=\s*seatCeiling/);
+    });
+  });
+
   describe('OrganizationNotificationPolicyService.create — ORGANIZATION_NOTIFICATION_POLICY_MAX_PER_ORG', () => {
     const source = readService(
       'src/domains/tenancy/sub-domains/organization/organization-notification-policy/organization-notification-policy.service.ts',

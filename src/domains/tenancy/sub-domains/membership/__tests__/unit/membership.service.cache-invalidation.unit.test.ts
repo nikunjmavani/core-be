@@ -20,7 +20,7 @@ import { invalidatePermissions } from '@/domains/tenancy/sub-domains/permission/
 
 describe('MembershipService — permission cache invalidation', () => {
   const organizationService = {
-    requireOrganizationMembershipByPublicId: vi.fn().mockResolvedValue({
+    requireOrganizationRecordByPublicId: vi.fn().mockResolvedValue({
       id: 1,
       public_id: 'org_public_abc',
       owner_user_id: 10,

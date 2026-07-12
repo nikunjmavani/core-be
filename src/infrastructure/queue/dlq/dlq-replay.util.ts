@@ -196,6 +196,13 @@ export async function recordDlqReplayAuditEntry(input: {
  * Outcome of {@link replayDeadLetterJob}: either the job was re-enqueued (or simulated in
  * dry-run mode), the DLQ entry vanished before we could read it, or the payload shape was
  * not in {@link DLQ_REPLAY_SOURCE_QUEUE_NAMES} and cannot be reconstructed.
+ *
+ * @remarks
+ * A replay only re-enqueues the source job; whether it can actually re-deliver is decided by the
+ * source processor. A terminally-`failed` mail row (body scrubbed) is re-enqueued here but the mail
+ * processor immediately throws `UnrecoverableError` (audit-#W1), so the replayed job fails fast and
+ * reappears in the DLQ with an explicit `mail.outbox.terminal_failed_not_replayable` reason rather
+ * than silently no-opping as a success.
  */
 export type ReplayDeadLetterJobResult =
   | { status: 'replayed'; originalQueue: string }

@@ -39,11 +39,13 @@ function stripeWebhookLedgerDatabase() {
 }
 
 /**
- * Database handle for the RLS-free `billing.stripe_subscription_tombstones`
- * system table. Allows both the `system_table` and `organization` worker
- * contexts because the tombstone is written/read from inside the per-event
- * organization dispatch (BILL-03) as well as standalone system flows; the table
- * has no RLS policy, so neither context can leak across tenants.
+ * Database handle for the `billing.stripe_subscription_tombstones` system table.
+ * Allows both the `system_table` and `organization` worker contexts because the
+ * tombstone is written/read from inside the per-event organization dispatch
+ * (BILL-03) as well as standalone system flows. The table carries a deny-all +
+ * app-role RLS policy (migrations/20260614130000_*) — it is keyed by Stripe id,
+ * not tenant, so it is a system table by design and neither context can leak
+ * across tenants.
  */
 function stripeSubscriptionTombstoneDatabase() {
   if (isWorkerRuntime()) {

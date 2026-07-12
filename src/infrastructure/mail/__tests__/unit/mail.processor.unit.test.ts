@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { UnrecoverableError } from 'bullmq';
 import { CircuitBreakerOpenError } from '@/infrastructure/resilience/circuit-breaker.js';
 import { MAIL_QUEUE_MAX_ATTEMPTS } from '@/infrastructure/mail/queues/mail.queue.js';
 import {
@@ -43,6 +44,33 @@ describe('mail.processor', () => {
   it('buildMailOutboxIdempotencyKey is deterministic per outbox row', () => {
     expect(buildMailOutboxIdempotencyKey(43)).toBe('mail-outbox-43');
     expect(buildMailOutboxIdempotencyKey(43)).toBe(buildMailOutboxIdempotencyKey(43));
+  });
+
+  it('throws UnrecoverableError (no retry burn) when the outbox row is missing — audit-#M2 phantom row', async () => {
+    // A rolled-back request's commit-dispatch task references a row that never persisted. Retrying
+    // cannot make it appear, so the job must fail terminally rather than exhaust its retry budget
+    // and raise a false final-failure DLQ alert.
+    findMailOutboxByIdMock.mockResolvedValue(null);
+    await expect(processMailOutboxJob({ mailOutboxId: 999 })).rejects.toBeInstanceOf(
+      UnrecoverableError,
+    );
+    expect(tryClaimPendingMailOutboxMock).not.toHaveBeenCalled();
+  });
+
+  it('throws UnrecoverableError for a terminally-failed row (body scrubbed, not replayable) — audit-#W1', async () => {
+    // Previously this fell through to `in_flight` and returned skipped:true, so a DLQ replay looked
+    // like a success while delivering nothing. Now it fails terminally with an explicit reason.
+    findMailOutboxByIdMock.mockResolvedValue({
+      id: 7,
+      status: 'failed',
+      to_addresses: ['user@example.com'],
+    });
+    tryClaimPendingMailOutboxMock.mockResolvedValue('failed');
+    await expect(processMailOutboxJob({ mailOutboxId: 7 })).rejects.toBeInstanceOf(
+      UnrecoverableError,
+    );
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(markMailOutboxFailedMock).not.toHaveBeenCalled();
   });
 
   it('processMailOutboxJob skips send when outbox row is already sent', async () => {

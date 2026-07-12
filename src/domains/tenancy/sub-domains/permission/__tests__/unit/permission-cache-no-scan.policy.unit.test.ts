@@ -12,7 +12,10 @@ describe('permission-cache.service policy', () => {
   it('does not use Redis SCAN for organization invalidation', () => {
     const source = readFileSync(permissionCacheServicePath, 'utf8');
     expect(source).not.toMatch(/\bscan\s*\(/i);
-    expect(source).toContain('incr(buildOrganizationVersionKey');
+    // Org-wide invalidation stays O(1): a single INCR (+EXPIRE) on the version key via Lua,
+    // never a SCAN sweep. The version bump is centralized in bumpOrganizationCacheVersion.
+    expect(source).toContain("redis.call('INCR', KEYS[1])");
+    expect(source).toContain('buildOrganizationVersionKey(organizationId)');
   });
 
   it('includes organization cache version in permission keys', () => {

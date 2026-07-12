@@ -53,11 +53,19 @@ const requestLifecycleMiddleware: FastifyPluginAsync = async (app) => {
     }
 
     if (!persistSideEffects) {
-      // Rollback / settle-failed: side effects must NOT fire, so flushOnCommit is skipped. But the
-      // request id added to the in-memory commit-dispatch marker set still has to be released here,
-      // otherwise it accumulates forever (only flushOnCommit deletes it). Durable Redis tasks are
-      // left for the recovery sweeper.
-      eventBus.clearCommitDispatchMarker(request.id);
+      // Rollback / settle-failed: side effects must NOT fire, so flushOnCommit is skipped. Purge
+      // BOTH the in-memory marker and the durable Redis tasks (audit-#M2): the rows those tasks
+      // reference were rolled back, so leaving them for the recovery sweeper would replay them
+      // against phantom rows — burning the worker retry budget and raising false final-failure
+      // alerts. Best-effort; never throws out of the onResponse hook.
+      try {
+        await eventBus.discardCommitDispatchOnRollback(request.id);
+      } catch (error) {
+        logger.warn(
+          { error, requestId: request.id },
+          'request.lifecycle.commit_dispatch_purge_failed',
+        );
+      }
       return;
     }
 

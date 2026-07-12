@@ -45,7 +45,7 @@ const membershipRow = {
 
 describe('MembershipService', () => {
   const organizationService = {
-    requireOrganizationMembershipByPublicId: vi.fn().mockResolvedValue(organization),
+    requireOrganizationRecordByPublicId: vi.fn().mockResolvedValue(organization),
     resolveUserInternalIdByPublicId: vi.fn().mockResolvedValue(10),
     resolveUserPublicIdByInternalId: vi.fn().mockResolvedValue('user_public'),
   } as unknown as OrganizationService;
@@ -135,7 +135,7 @@ describe('MembershipService', () => {
     vi.mocked(memberRoleService.resolveRolePublicIdForOrganization).mockResolvedValue(
       'role_public',
     );
-    vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockResolvedValue(
+    vi.mocked(organizationService.requireOrganizationRecordByPublicId).mockResolvedValue(
       organization as never,
     );
     vi.mocked(organizationService.resolveUserInternalIdByPublicId).mockReset();
@@ -206,7 +206,7 @@ describe('MembershipService', () => {
   });
 
   it('create rejects a PERSONAL organization (single-member invariant; no side-door members)', async () => {
-    vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockResolvedValueOnce({
+    vi.mocked(organizationService.requireOrganizationRecordByPublicId).mockResolvedValueOnce({
       ...organization,
       type: 'PERSONAL',
     } as never);
@@ -221,7 +221,7 @@ describe('MembershipService', () => {
   });
 
   it('getPermissions throws when organization context is missing', async () => {
-    vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockRejectedValueOnce(
+    vi.mocked(organizationService.requireOrganizationRecordByPublicId).mockRejectedValueOnce(
       new NotFoundError('Organization'),
     );
     await expect(service.getPermissions('missing', 'mem_public')).rejects.toBeInstanceOf(
@@ -347,7 +347,7 @@ describe('MembershipService', () => {
     const transferOrganizationOwnership = vi.fn().mockResolvedValue(undefined);
     const organizationServiceWithTransfer = {
       ...organizationService,
-      requireOrganizationMembershipByPublicId: vi.fn().mockResolvedValue({
+      requireOrganizationRecordByPublicId: vi.fn().mockResolvedValue({
         ...organization,
         owner_user_id: 99,
       }),
@@ -454,7 +454,7 @@ describe('MembershipService', () => {
   });
 
   it('transferOwnership throws when current user cannot be resolved', async () => {
-    vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockResolvedValue({
+    vi.mocked(organizationService.requireOrganizationRecordByPublicId).mockResolvedValue({
       ...organization,
       owner_user_id: 99,
     } as never);
@@ -469,7 +469,7 @@ describe('MembershipService', () => {
   });
 
   it('transferOwnership throws when new owner user cannot be resolved', async () => {
-    vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockResolvedValue({
+    vi.mocked(organizationService.requireOrganizationRecordByPublicId).mockResolvedValue({
       ...organization,
       owner_user_id: 99,
     } as never);
@@ -486,7 +486,7 @@ describe('MembershipService', () => {
   });
 
   it('transferOwnership requires new owner membership', async () => {
-    vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockResolvedValue({
+    vi.mocked(organizationService.requireOrganizationRecordByPublicId).mockResolvedValue({
       ...organization,
       owner_user_id: 99,
     } as never);

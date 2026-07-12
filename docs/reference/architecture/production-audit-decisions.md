@@ -22,7 +22,14 @@ current plan row. Three states were previously under-specified; the policy below
 
 Resolved in `SubscriptionService.reserveSeatCeilingForMemberAdd`
 (`src/domains/billing/sub-domains/subscription/subscription.service.ts`), under the active-subscription
-`FOR UPDATE` row lock so it serializes against concurrent member adds:
+`FOR UPDATE` row lock so it serializes against concurrent member adds. On the **free-tier / no-subscription
+branch there is no subscription row to lock**, so `MembershipService.assertSeatAvailableForMemberAdd`
+additionally takes a per-org advisory xact lock (`RESOURCE_QUOTA_LOCK_NAMESPACE.MEMBERSHIP_SEAT`) before the
+count+insert — audit-#M1. This closes a TOCTOU where two concurrent adds could both pass `used < ceiling`
+and overshoot a free/entry plan with `included_seats > 1`; the cap no longer relies on the free ceiling
+happening to be 1.
+
+Seat-ceiling table by billing state:
 
 | Org billing state | Seat ceiling |
 | ----------------- | ------------ |

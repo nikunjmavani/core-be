@@ -136,6 +136,30 @@ describe('dead-letter helpers', () => {
       expect(options.defaultJobOptions?.removeOnFail?.count).toBeLessThanOrEqual(10_000);
     });
 
+    it('audit-#W2: redacts URL/query-embedded secrets in failed_reason/error_stack before the Redis mirror', async () => {
+      const { enqueueDeadLetter } = await import('@/infrastructure/queue/dlq/dead-letter.js');
+
+      const secretUrl = 'https://api.example.com/hook?api_key=live_sk_supersecret&id=42';
+      const error = new Error(`outbound POST failed for ${secretUrl}`);
+      error.stack = `Error: outbound POST failed for ${secretUrl}\n    at foo (bar.ts:1:1)`;
+      const job = {
+        id: 'job-secret',
+        name: 'dispatch-test',
+        data: {},
+        attemptsMade: 3,
+        opts: { attempts: 3 },
+      } as Job;
+
+      await enqueueDeadLetter('webhook-delivery', job, error);
+
+      const addCall = queueAddMock.mock.calls.at(-1)!;
+      const data = addCall[1] as { failed_reason: string; error_stack: string };
+      expect(data.failed_reason).toContain('api_key=[REDACTED]');
+      expect(data.failed_reason).not.toContain('live_sk_supersecret');
+      expect(data.error_stack).toContain('api_key=[REDACTED]');
+      expect(data.error_stack).not.toContain('live_sk_supersecret');
+    });
+
     it('audit-retention queue is in the canonical scheduler list so the Postgres DLQ ledger is bounded', async () => {
       const { getScheduledJobs } = await import('@/infrastructure/queue/scheduler.js');
       const { AUDIT_RETENTION_QUEUE_NAME } = await import(

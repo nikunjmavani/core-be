@@ -54,7 +54,7 @@ describe('MembershipService.create — grantable-permissions guard (sec-T1)', ()
   };
 
   const organizationService = {
-    requireOrganizationMembershipByPublicId: vi.fn().mockResolvedValue(organization),
+    requireOrganizationRecordByPublicId: vi.fn().mockResolvedValue(organization),
     resolveUserInternalIdByPublicId: vi.fn().mockResolvedValue(10),
     resolveUserPublicIdByInternalId: vi.fn().mockResolvedValue('user_public'),
   } as unknown as OrganizationService;
@@ -129,7 +129,7 @@ describe('MembershipService.create — grantable-permissions guard (sec-T1)', ()
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockResolvedValue(
+    vi.mocked(organizationService.requireOrganizationRecordByPublicId).mockResolvedValue(
       organization as never,
     );
     vi.mocked(organizationService.resolveUserInternalIdByPublicId).mockResolvedValue(10);

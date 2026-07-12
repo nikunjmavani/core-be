@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { UnrecoverableError } from 'bullmq';
 import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 import { CircuitBreakerOpenError } from '@/infrastructure/resilience/circuit-breaker.js';
 import { sendEmail } from '@/infrastructure/mail/mail.service.js';
@@ -116,7 +117,11 @@ async function processMailOutboxJobInner(
 
   const outboxRow = await findMailOutboxById(mailOutboxId);
   if (!outboxRow) {
-    throw new Error(`mail.outbox.not_found:${String(mailOutboxId)}`);
+    // audit-#M2: a missing row is a PHANTOM — the request that scheduled this job rolled back (or a
+    // slow request had its durable task swept before commit), so the row never persisted. Retrying
+    // cannot make it appear; throwing UnrecoverableError skips BullMQ's retry budget and the
+    // resulting false final-failure DLQ alert. A committed row is never missing here.
+    throw new UnrecoverableError(`mail.outbox.not_found:${String(mailOutboxId)}`);
   }
 
   const claimResult = await tryClaimPendingMailOutbox(mailOutboxId);
@@ -138,6 +143,19 @@ async function processMailOutboxJobInner(
   if (claimResult === 'in_flight') {
     logger.info({ jobId: options.jobId, requestId, mailOutboxId }, 'mail.worker.in_flight');
     return omitUndefined({ skipped: true as const });
+  }
+  if (claimResult === 'failed') {
+    // audit-#W1: terminal `failed` row — the body was scrubbed on failure, so it can NEVER be
+    // re-sent. Previously this fell through to `in_flight` and returned `skipped: true`, so a DLQ
+    // replay looked like a success while silently delivering nothing. Throw UnrecoverableError so a
+    // replayed job fails fast (no retry burn) and reappears in the DLQ with this explicit reason.
+    logger.warn(
+      { jobId: options.jobId, requestId, mailOutboxId },
+      'mail.worker.terminal_failed_not_replayable',
+    );
+    throw new UnrecoverableError(
+      `mail.outbox.terminal_failed_not_replayable:${String(mailOutboxId)}`,
+    );
   }
   if (claimResult !== 'claimed') {
     throw new Error(`mail.outbox.not_claimable:${String(mailOutboxId)}:${claimResult}`);

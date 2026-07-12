@@ -100,4 +100,17 @@ describe('commit-dispatch.store', () => {
     // The list is not yet empty, so the recovery index entry must remain (no del/zrem multi).
     expect(redisMock.multi).not.toHaveBeenCalled();
   });
+
+  it('audit-#M2: purgeCommitDispatchTasks DELs the pending list and ZREMs the recovery index', async () => {
+    const { purgeCommitDispatchTasks } = await import(
+      '@/infrastructure/queue/commit-dispatch/commit-dispatch.store.js'
+    );
+    await purgeCommitDispatchTasks({ requestId: 'req-rolledback' });
+
+    // A rolled-back request purges its durable tasks entirely so the recovery sweeper never replays
+    // them against phantom rows.
+    const multi = redisMock.multi.mock.results.at(-1)?.value;
+    expect(multi.del).toHaveBeenCalledWith('commit-dispatch:pending:req-rolledback');
+    expect(multi.zrem).toHaveBeenCalledWith('commit-dispatch:recovery', 'req-rolledback');
+  });
 });

@@ -30,12 +30,15 @@ vi.mock('@/infrastructure/observability/metrics/prometheus-metrics.js', () => ({
 
 const appendCommitDispatchTaskMock = vi.fn().mockResolvedValue(undefined);
 const consumeCommitDispatchTasksMock = vi.fn().mockResolvedValue([]);
+const purgeCommitDispatchTasksMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('@/infrastructure/queue/commit-dispatch/commit-dispatch.store.js', () => ({
   appendCommitDispatchTask: (...arguments_: unknown[]) =>
     appendCommitDispatchTaskMock(...arguments_),
   consumeCommitDispatchTasks: (...arguments_: unknown[]) =>
     consumeCommitDispatchTasksMock(...arguments_),
+  purgeCommitDispatchTasks: (...arguments_: unknown[]) =>
+    purgeCommitDispatchTasksMock(...arguments_),
 }));
 
 describe('EventBus.emit', () => {
@@ -298,6 +301,27 @@ describe('EventBus.clearCommitDispatchMarker (commit-dispatch marker leak guard)
 
   it('is idempotent and safe for an unknown request id', () => {
     expect(() => eventBus.clearCommitDispatchMarker('never-scheduled')).not.toThrow();
+  });
+
+  it('audit-#M2: discardCommitDispatchOnRollback purges durable tasks AND clears the marker', async () => {
+    purgeCommitDispatchTasksMock.mockClear();
+    await scheduleCommitDispatch(task, { requestId: 'req-rollback-purge' });
+
+    await eventBus.discardCommitDispatchOnRollback('req-rollback-purge');
+
+    // The durable Redis tasks are purged (rows rolled back → never replay against phantom rows)…
+    expect(purgeCommitDispatchTasksMock).toHaveBeenCalledWith({ requestId: 'req-rollback-purge' });
+    // …and the in-memory marker is cleared so a later flush is a no-op.
+    await eventBus.flushOnCommit({ requestId: 'req-rollback-purge' });
+    expect(consumeCommitDispatchTasksMock).not.toHaveBeenCalled();
+  });
+
+  it('audit-#M2: discardCommitDispatchOnRollback never throws even if the purge fails', async () => {
+    purgeCommitDispatchTasksMock.mockRejectedValueOnce(new Error('redis down'));
+    await scheduleCommitDispatch(task, { requestId: 'req-purge-fail' });
+    await expect(
+      eventBus.discardCommitDispatchOnRollback('req-purge-fail'),
+    ).resolves.toBeUndefined();
   });
 
   it('alerts and counts a durability fallback when the Redis append fails (EX-14)', async () => {

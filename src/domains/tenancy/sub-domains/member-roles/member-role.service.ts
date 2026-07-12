@@ -23,7 +23,7 @@ import type { ListMemberRolesQueryInput } from './member-role.dto.js';
  * @remarks
  * - **Algorithm:** every public method runs inside
  *   {@link withOrganizationDatabaseContext} and resolves the caller's
- *   organization through {@link OrganizationService.requireOrganizationMembershipByPublicId}
+ *   organization through {@link OrganizationService.requireOrganizationRecordByPublicId}
  *   before touching the role repository, so RLS and membership checks happen
  *   before any data access.
  * - **Failure modes:** `NotFoundError('Role' | 'Organization')` when lookups
@@ -49,9 +49,7 @@ export class MemberRoleService {
   async list(organization_public_id: string, pagination: ListMemberRolesQueryInput) {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
-        await this.organizationService.requireOrganizationMembershipByPublicId(
-          organization_public_id,
-        );
+        await this.organizationService.requireOrganizationRecordByPublicId(organization_public_id);
       validateListMemberRolesQuery(pagination);
       const result = await this.memberRoleRepository.findByOrganizationId(
         organization.id,
@@ -87,9 +85,7 @@ export class MemberRoleService {
     role_public_id: string,
   ): Promise<MemberRoleRow> {
     const organization =
-      await this.organizationService.requireOrganizationMembershipByPublicId(
-        organization_public_id,
-      );
+      await this.organizationService.requireOrganizationRecordByPublicId(organization_public_id);
     return this.requireRoleRecordForOrganization(organization.id, role_public_id);
   }
 
@@ -110,9 +106,7 @@ export class MemberRoleService {
     role_internal_id: number,
   ): Promise<string> {
     const organization =
-      await this.organizationService.requireOrganizationMembershipByPublicId(
-        organization_public_id,
-      );
+      await this.organizationService.requireOrganizationRecordByPublicId(organization_public_id);
     return this.resolveRolePublicIdForOrganization(organization.id, role_internal_id);
   }
 
@@ -122,9 +116,7 @@ export class MemberRoleService {
   ): Promise<MemberRoleOutput> {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
-        await this.organizationService.requireOrganizationMembershipByPublicId(
-          organization_public_id,
-        );
+        await this.organizationService.requireOrganizationRecordByPublicId(organization_public_id);
       const role = await this.memberRoleRepository.findByPublicId(role_public_id, organization.id);
       if (!role) throw new NotFoundError('Role');
       return serializeMemberRole(role);
@@ -151,9 +143,7 @@ export class MemberRoleService {
     const parsed = validateCreateMemberRole(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
-        await this.organizationService.requireOrganizationMembershipByPublicId(
-          organization_public_id,
-        );
+        await this.organizationService.requireOrganizationRecordByPublicId(organization_public_id);
       // Capability matrix: a PERSONAL organization is single-member by definition, so custom roles
       // (which exist to grant scoped permissions to OTHER members) are meaningless there. Reject —
       // role management is a TEAM-organization feature.
@@ -200,9 +190,7 @@ export class MemberRoleService {
     const parsed = validateUpdateMemberRole(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
-        await this.organizationService.requireOrganizationMembershipByPublicId(
-          organization_public_id,
-        );
+        await this.organizationService.requireOrganizationRecordByPublicId(organization_public_id);
       const role = await this.memberRoleRepository.findByPublicId(role_public_id, organization.id);
       if (!role) throw new NotFoundError('Role');
       // sec-T3: system roles (Admin/Member) are immutable from the API — same guard as delete.
@@ -247,9 +235,7 @@ export class MemberRoleService {
   async delete(organization_public_id: string, role_public_id: string): Promise<void> {
     await withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
-        await this.organizationService.requireOrganizationMembershipByPublicId(
-          organization_public_id,
-        );
+        await this.organizationService.requireOrganizationRecordByPublicId(organization_public_id);
       const role = await this.memberRoleRepository.findByPublicId(role_public_id, organization.id);
       if (!role) throw new NotFoundError('Role');
       if (role.is_system) {

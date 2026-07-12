@@ -139,6 +139,35 @@ export async function acknowledgeCommitDispatchTask({
 }
 
 /**
+ * Discards ALL durable tasks for a request without executing them (audit-#M2).
+ *
+ * @remarks
+ * - **Algorithm:** `DEL` the pending list and `ZREM` the recovery-index entry in one `MULTI`.
+ * - **Failure modes:** Redis errors propagate to the caller (which logs; the 24h list TTL is the
+ *   final backstop so a failed purge cannot leak the key forever).
+ * - **Side effects:** removes the pending list and the recovery index entry for `requestId`.
+ * - **Notes:** call ONLY when the request's DB transaction rolled back / did not persist, so the
+ *   rows the tasks reference provably do not exist. This prevents the recovery sweeper from later
+ *   executing orphan tasks against phantom rows (spurious retries → DLQ → false final-failure
+ *   alerts). Distinct from {@link acknowledgeCommitDispatchTask}, which removes one task AFTER it
+ *   ran successfully.
+ */
+export async function purgeCommitDispatchTasks({
+  requestId,
+  redis,
+}: {
+  requestId: string;
+  redis?: Redis;
+}): Promise<void> {
+  const client = resolveRedis(redis);
+  await client
+    .multi()
+    .del(pendingListKey(requestId))
+    .zrem(COMMIT_DISPATCH_RECOVERY_ZSET, requestId)
+    .exec();
+}
+
+/**
  * Returns request ids whose durable tasks were registered before `olderThanMs` and never flushed.
  *
  * @remarks

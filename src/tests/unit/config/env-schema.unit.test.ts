@@ -1,4 +1,6 @@
 import { generateKeyPairSync } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { envSchema, envSchemaKeys } from '@/shared/config/env-schema.js';
 
@@ -1039,6 +1041,49 @@ describe('env-schema', () => {
         NODE_ENV: 'development',
         WEBHOOK_URL_ALLOWLIST: '*.example.com, hooks.partner.io',
       });
+      expect(parsed.success).toBe(true);
+    });
+  });
+
+  describe('audit-#L1: committed test JWT keypair rejection', () => {
+    // Read the ACTUAL committed test key so this test self-updates if the key is ever rotated.
+    const readCommittedTestKey = (marker: string): string => {
+      const source = readFileSync(join(process.cwd(), 'src/tests/setup.ts'), 'utf8');
+      const match = source.match(
+        new RegExp(`-----BEGIN ${marker}-----[\\s\\S]*?-----END ${marker}-----`),
+      );
+      if (!match) throw new Error(`test ${marker} not found in src/tests/setup.ts`);
+      return `${match[0]}\n`;
+    };
+    const COMMITTED_TEST_PRIVATE_KEY = readCommittedTestKey('PRIVATE KEY');
+    const COMMITTED_TEST_PUBLIC_KEY = readCommittedTestKey('PUBLIC KEY');
+
+    it('rejects the committed test keypair in production', () => {
+      const parsed = envSchema.safeParse({
+        ...productionRequiredBase,
+        JWT_PRIVATE_KEY: COMMITTED_TEST_PRIVATE_KEY,
+        JWT_PUBLIC_KEY: COMMITTED_TEST_PUBLIC_KEY,
+      });
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues.some((issue) => issue.path.includes('JWT_PRIVATE_KEY'))).toBe(
+          true,
+        );
+      }
+    });
+
+    it('accepts the committed test key OUTSIDE production (the refine is production-gated)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NODE_ENV: 'development',
+        JWT_PRIVATE_KEY: COMMITTED_TEST_PRIVATE_KEY,
+        JWT_PUBLIC_KEY: COMMITTED_TEST_PUBLIC_KEY,
+      });
+      expect(parsed.success).toBe(true);
+    });
+
+    it('accepts a fresh production RSA keypair (control)', () => {
+      const parsed = envSchema.safeParse({ ...productionRequiredBase });
       expect(parsed.success).toBe(true);
     });
   });
