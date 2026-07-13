@@ -68,10 +68,11 @@ const containsForbiddenTestJwtKey = (value: string | undefined): boolean => {
 // Runtime environment name — `local | development | production`. `local` is the developer's
 // machine (primary file `.env.local`); `development` / `production` are the two DEPLOY targets
 // (deploy-target enums in `tooling/setup/` stay `development | production` — you never deploy to
-// `local`). Default stays `development` so unset contexts (CI, `pnpm dev` with no NODE_ENV) are
-// unchanged; a developer opts into a pure-local config with `NODE_ENV=local`. An out-of-enum value
-// (e.g. `staging`) makes `envSchema.parse` fail loudly at boot (env.config.ts) — never a silent default.
-const nodeEnvSchema = z.enum(['local', 'development', 'production']).default('development');
+// `local`). Default is `local` — an unset NODE_ENV is a developer's machine (a stock `pnpm dev`, a
+// local `pnpm db:*`); every DEPLOY and CI context sets NODE_ENV explicitly (workflows, both Docker
+// stages, the Vitest harness pin it), so the default never reaches a deployed or CI runtime. An
+// out-of-enum value (e.g. `staging`) makes `envSchema.parse` fail loudly at boot (env.config.ts).
+const nodeEnvSchema = z.enum(['local', 'development', 'production']).default('local');
 
 // Every policy flag below has a STATIC default (a hardcoded 'true'/'false'). NODE_ENV is NOT read to
 // choose a default — the module never branches on it. Each flag defaults to its PRODUCTION-safe value;

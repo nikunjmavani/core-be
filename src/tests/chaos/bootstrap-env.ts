@@ -1,15 +1,19 @@
 /**
  * Must stay free of `@/` path alias — env must be deterministic before Vitest resolves application modules.
- * Loads `.env.${NODE_ENV}` (defaulting to `.env.development`) from project root via the shared
+ * Loads `.env.${NODE_ENV}` (defaulting to `.env.local`) from project root via the shared
  * loader, same as the API and worker entrypoints.
  */
 import '../../shared/config/load-env-files.js';
 
 // Force NODE_ENV=development (mirrors src/tests/setup.ts) so a developer's `.env.local` cannot leak a
-// different value through load-env-files. NODE_ENV is only `development` | `production`; the chaos
+// different value through load-env-files. NODE_ENV is `local` | `development` | `production`; the chaos
 // suite runs as `development` and drives test-only behaviour (captcha bypass, in-memory rate limiting,
 // cleanupDatabase/cleanupTestRedis guards) via the explicit flags below.
 process.env.NODE_ENV = 'development';
+// Category-L (local-only) flags are permitted `true` only when NODE_ENV=local; force them false so a
+// developer's local-mode `.env.local` cannot trip the Category-L refine under the forced development env.
+process.env.LOCAL_INFRASTRUCTURE_AUTOSTART = 'false';
+process.env.LOCAL_SONARQUBE_GATE_ENABLED = 'false';
 // Isolate the chaos Redis keyspace from a running `pnpm dev` (both are NODE_ENV=development).
 process.env.REDIS_KEY_PREFIX ??= 'core:test:';
 // Skip process-level shared-singleton teardown under the per-worker Vitest harness.

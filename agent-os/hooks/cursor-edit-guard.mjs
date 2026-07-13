@@ -78,13 +78,14 @@ if (
   violations.push("relative parent import ('../') is banned under src/ — use the '@/' alias (import-paths.mdc).");
 }
 
-// R4 — NODE_ENV set/compared to a removed value (docs are exempt).
+// R4 — NODE_ENV set/compared to a REMOVED value (test|staging; docs are exempt). `local` is a valid
+// runtime (the developer's machine, primary file `.env.local`) so it is NOT blocked.
 if (
   !/\.(md|mdc|txt)$/.test(filePath) &&
-  /NODE_ENV\s*[:=]+\s*['"`]?(test|staging|local)\b/i.test(content)
+  /NODE_ENV\s*[:=]+\s*['"`]?(test|staging)\b/i.test(content)
 ) {
   violations.push(
-    "NODE_ENV is only 'development' | 'production' — use an explicit env flag with a static default instead (env-schema-add skill).",
+    "NODE_ENV must never be 'test' or 'staging' (the enum is 'local' | 'development' | 'production') — use an explicit env flag with a static default instead (env-schema-add skill).",
   );
 }
 
