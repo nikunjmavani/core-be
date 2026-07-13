@@ -106,8 +106,7 @@ export function initSentry(): void {
     env.SENTRY_PROFILE_SAMPLE_RATE ??
     (reducedSampling ? PRODUCTION_PROFILE_SESSION_SAMPLE_RATE : 1.0);
   const slowTransactionThresholdMs = env.SENTRY_SLOW_TRANSACTION_MS;
-  const release =
-    env.RAILWAY_GIT_COMMIT_SHA ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA;
+  const release = env.RAILWAY_GIT_COMMIT_SHA;
 
   // Tracing/profiling instrumentation wraps every HTTP/DB/cache call and adds per-call CPU even
   // when the trace is ultimately sampled out (the wrapper runs before the sampling decision). Only

@@ -31,11 +31,6 @@ function forceLocalDatabaseForNonCiTestRun(): void {
 // default). The Vitest suite runs as `development` (there is no separate `test` runtime); test-only
 // behaviour is driven by the explicit flags set below.
 process.env.NODE_ENV = 'development';
-// Category-L (local-only) flags are permitted `true` only when NODE_ENV=local; a developer's
-// local-mode `.env.local` may enable them. The harness force-sets NODE_ENV=development (above), so
-// these MUST be hard-reset to false (not `??=`) or the Category-L refine would reject the parse.
-process.env.LOCAL_INFRASTRUCTURE_AUTOSTART = 'false';
-process.env.LOCAL_SONARQUBE_GATE_ENABLED = 'false';
 // shutdown.middleware reads this raw (the frozen `env` const predates this override) to skip
 // process-level shared-singleton teardown under the per-worker Vitest harness.
 process.env.SHUTDOWN_SKIP_SHARED_TEARDOWN = 'true';
