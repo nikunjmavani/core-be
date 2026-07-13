@@ -1318,7 +1318,6 @@ src/
     ├── ops/
     │   ├── api-smoke-test.ts
     │   ├── db-migrate-dry-run.ts
-    │   ├── jwt-key-rotate.ts
     │   ├── memory-soak.ts
     │   ├── next-migration-prefix.ts
     │   ├── record-contract-fixtures.ts
