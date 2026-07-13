@@ -41,7 +41,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/code-quality-guard/SKILL.md",
-      "computedHash": "5c25c70da03ba5e1fe67561bd9c5190eb8755b1969ae3a5f5b4a3e45bc6992fe"
+      "computedHash": "8ff7a4751ac4fc625451be1a351170985ef00e6cd8283238d2ffd900b42c7158"
     },
     "code-smells-and-best-practices": {
       "source": "local",
@@ -233,7 +233,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/structure-maintainer/SKILL.md",
-      "computedHash": "dde9cc877911b03b1bcc9bf6eb04215c100fecfb333340fbe8afed8588e16156"
+      "computedHash": "b5d0cdce8feba826af75fa484c02fb69426cb847311d2f2ce88a1def1df08276"
     },
     "supabase-porting": {
       "source": "local",
@@ -263,7 +263,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/workers-events/SKILL.md",
-      "computedHash": "8d5bb67e56093d65119828424d6ed2e3ae28d8b982142a410c61fb602302e8de"
+      "computedHash": "8c27c992a3ca4e0b1f80f301917d14d665935eec39f5cf565a92cf29852142cc"
     }
   }
 }

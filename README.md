@@ -117,13 +117,14 @@ Deep dives: [src/OVERVIEW.md](src/OVERVIEW.md) · [src/PATTERNS.md](src/PATTERNS
 
 ```text
 src/
-  app.ts, server.ts, worker.ts   # Entry points
+  app.ts, server.ts, worker.ts   # Entry points (+ routes.ts, worker-containers.ts wiring)
   domains/                       # Bounded contexts (auth, billing, tenancy, …)
   infrastructure/                # Database, cache, queue, mail, payment, storage
   shared/                        # Config, errors, middleware, locales
   core/                          # In-process event bus
+  scripts/                       # Build-time + operational scripts (codegen, seed, ops, validators)
   tests/                         # Cross-cutting test suites
-tooling/                         # CI guards, setup wizard, dev helpers
+tooling/                         # CI guards, validate/vitest/openapi tooling, setup config, dev helpers
 migrations/                      # SQL migrations
 docs/                            # Hand-written guides + generated OpenAPI
 ```

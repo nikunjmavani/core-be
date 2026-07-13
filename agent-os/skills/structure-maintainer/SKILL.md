@@ -84,10 +84,14 @@ src/infrastructure/
     contexts/          # withOrganizationContext, withGlobalRetentionCleanupDatabaseContext, etc.
     migration/         # migrate.ts, migration runner
   cache/
-    redis.client.ts           # Redis connection
+    redis.client.ts           # Redis connection (+ bullmq-redis.client.ts, redis-lock.util.ts,
+                              # redis-prefix / redis-url / redis-url.parse utils, redis.constants.ts,
+                              # assert-redis-tls-safety.ts, redis-topology-warn.util.ts)
   queue/
     connection.ts             # Queue Redis re-export + getBullMQConnectionOptions
+    health.ts                 # BullMQ readiness helper
     scheduler.ts              # Repeatable retention job registration
+    queue.constants.ts        # Shared queue names / constants
     bootstrap.ts              # Domain worker registration + DLQ hooks
     queue-dashboard.ts        # Optional Bull Board
     dlq/               # DLQ: dead-letter.ts, dead-letter.repository.ts, dead-letter.schema.ts, dlq-auto-retry.worker.ts
@@ -102,10 +106,15 @@ src/infrastructure/
     workers/
     templates/
   storage/
-    storage.service.ts
-  outbound/            # Outbound HTTP call safety
-  resilience/          # Circuit breaker
-  api-reference/       # API reference helpers
+    storage.service.ts        # + object-storage.port.ts, s3-adapter.ts, s3-error.util.ts, public-media-url.util.ts
+  payment/
+    stripe.client.ts          # Stripe SDK client + helpers (customer, subscription, webhook)
+  outbound/            # Outbound HTTP call safety (outbound-fetch / call / defaults / error / redaction)
+  resilience/          # Circuit breaker + retry-with-backoff (circuit-breaker.ts, retry-with-backoff.util.ts, lua/)
+  api-reference/       # API reference helpers (scalar-api-reference.ts)
+  observability/       # sentry/, tracing/ (OTel), metrics/, idempotency-cardinality/, dlq-depth/,
+                       # redis-saturation/, posthog/, unhandled-rejection.handler.ts
+  mcp/                 # mcp-server.ts, mcp-capabilities.ts, mcp-client-guide.ts
 ```
 
 ### Shared layout
@@ -124,6 +133,7 @@ src/shared/
     tenant/                   # X-Organization-Id + RLS transaction
     rate-limit/               # global + route presets
     index.ts                  # registerMiddleware()
+  locales/                    # i18next resources (en/, es/ — common, errors, mail, success, openapi)
 ```
 
 ### Core layout
@@ -139,19 +149,34 @@ Outside `src/` — not part of the runtime app. Do not merge with `src/scripts/`
 
 ```text
 tooling/
-  setup/              # External infra wizard (pnpm setup:infra*) — Neon, Railway, Stripe, GitHub secrets
-                      # Providers live under setup/infra/providers/setup-<name>/setup-<name>.provider.ts
-  setup/setup.config.json   # Wizard config (committed)
+  setup/              # Project/environment scaffolding helpers (agent/, codegen/, common/, envs/, github/);
+                      # the external-infra wizard now lives in the standalone core-infra repo
+  setup/setup.config.json   # Canonical project + hosted-environment config (committed)
+  agent-os/           # agent-os generators, checks, lock (pnpm agent-os:*)
+  audit/              # Dependency/audit tooling
+  chaos/              # Toxiproxy chaos harness support
   ci/                 # Build/CI guards (check-dockerfile-sync.mjs, check-dist-imports.mjs)
   dev/                # Local dev helpers (wait-for-local-postgres.sh → pnpm compose:wait)
+  openapi/            # OpenAPI + route catalogs (route-catalog/, route-examples/)
+  route-coverage/     # Route success-coverage budget (route-success-coverage-budget.json)
+  sonar/              # Local SonarQube gate scripts
+  tsdoc-coverage/     # TSDoc coverage ratchet (budget.json)
+  validate/           # health-check.sh, lockfile-sync.sh
+  vitest/             # Vitest project configs (projects.ts, chaos/contract configs)
 ```
 
 ### Build-time scripts
 
 ```text
-src/scripts/    # e.g. generate-openapi.ts → docs/openapi/openapi.json for ApiDog
+src/scripts/    # Build-time + operational scripts (may import @/, unlike tooling/)
+  admin/        # admin-token, load-test-credentials, dlq-replay, rotate-field-secrets, worker-health, …
+  codegen/      # generate-openapi.ts → docs/openapi/openapi.json, generate-route-catalog.ts,
+                # generate-project-structure-tree.ts, generate-dbdiagram.ts, Postman/Scalar uploads, …
+  ops/          # api-smoke-test, db-migrate-dry-run, jwt/secrets key rotation, memory-soak, settle-check, …
   seed/         # seed orchestrator + contract (bulk.ts, bulk-config.ts, seed-contract.ts,
                 # production-guard.ts, seed-registry.ts, minimal.ts, full.ts); <folder>.overview.md
+  tooling/      # run-pre-commit-guard.ts and other repo-tooling entry points
+  validators/   # validate-domain.ts + domain/route/constants validators (pnpm validate:*)
 ```
 
 ### Seed layout

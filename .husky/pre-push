@@ -43,6 +43,20 @@ else
   echo "Skipping changed-markdown lint on pre-push (no markdown changes)."
 fi
 
+# Generated-doc drift (source tree, route catalog, org-scope catalog) — cheap
+# check-only net for commits made with --no-verify, where pre-commit steps
+# 5/6b/6c never regenerated docs/routes.txt or src-structure-tree.txt. Check
+# only, never mutate: fix on failure with pnpm tool:project-structure-tree /
+# pnpm routes:catalog, then amend the commit.
+PUSHED_SRC_OR_TOOLING=$(git diff --name-only "$PUSH_BASE"...HEAD 2>/dev/null | grep -E '^(src/|tooling/)' || true)
+if [ -n "$PUSHED_SRC_OR_TOOLING" ]; then
+  pnpm tool:project-structure-tree:check
+  pnpm routes:catalog:check
+  pnpm validate:route-org-scope
+else
+  echo "Skipping generated-doc drift checks on pre-push (no src/tooling changes)."
+fi
+
 # Unit tests (matches PR CI unit lane; excludes DB project)
 # Run only when pushed commits include unit-relevant files.
 # grep -E (not rg) — POSIX-portable so a machine without ripgrep still gates.

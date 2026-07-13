@@ -126,7 +126,7 @@ HTTP Request
 **Domains/sub-domains with all four (schema, dto, types, serializer):**
 
 - **Domain root:** audit, upload, user.
-- **Sub-domains:** subscription, member-invitation, member-role-permission, membership, member-roles (member-role), organization, organization-settings, organization-notification-policy, organization-api-key, webhook.
+- **Sub-domains:** subscription, plan, member-invitation, member-role-permission, membership, member-roles (member-role), organization, organization-settings, organization-notification-policy, organization-api-key, permission, user-settings, user-notification-preferences, user-data-export, webhook.
 
 **Domains/sub-domains missing one or more:**
 
@@ -136,17 +136,19 @@ HTTP Request
 | billing (root)                | .controller, .validator, .dto, .serializer, .repository, .types, .schema |
 | notify (root)                 | .controller, .validator, .dto, .serializer, .repository, .types, .schema |
 | tenancy (root)                | .controller, .validator, .dto, .serializer, .repository, .types, .schema |
-| auth-method                   | .dto, .serializer, .controller (API via auth.routes)                     |
-| auth-session                  | .dto, .serializer, .controller                                           |
-| auth-mfa                      | .dto, .serializer, .controller                                           |
-| user-settings                 | .dto, .serializer, .controller (service-only)                            |
-| user-notification-preferences | .dto, .serializer, .controller                                           |
-| user-data-export              | .dto, .validator, .serializer, .repository, .types, .schema              |
-| plan                          | .dto, .validator                                                         |
-| notification                  | .dto, .validator                                                         |
-| stripe-webhook                | .repository, .types, .schema, .dto, .validator, .serializer              |
+| auth-method                   | .dto, .validator, .serializer, .controller (API via auth.routes)         |
+| auth-session                  | .dto, .validator, .controller (has .serializer)                          |
+| auth-mfa                      | .dto, .validator, .serializer, .controller, .types (schemas split as auth-mfa-method / auth-mfa-recovery-code) |
+| auth-mfa-session              | single-file Redis challenge-ticket store (`auth-mfa-session.ts`) — no layer files by design |
+| auth-webauthn                 | .types, .controller (layers use the `webauthn.*` prefix; persistence as `webauthn-credential.repository/.schema`) |
+| verification-token (nested)   | persistence-only module: .service, .repository, .schema only (no routes) |
+| user-settings                 | .controller (routes served via user.routes)                              |
+| user-notification-preferences | .controller (routes served via user.routes)                              |
+| notification                  | .types                                                                   |
+| permission                    | .validator                                                               |
+| stripe-webhook                | .dto, .validator, .repository (event persistence as `stripe-webhook-event.repository.ts`) |
 | webhook-event                 | .dto, .schema, .validator                                                |
-| permission                    | .dto, .validator                                                         |
+| webhook-delivery (nested)     | .repository only (+ worker); no routed layer files                       |
 
 ---
 
@@ -301,5 +303,5 @@ Always use `.js` extensions in import specifiers. CI gate: `src/tests/global/imp
 - **auth-mfa-session:** Redis ticket store (no HTTP routes); exempt from standard layer matrix.
 - **CLAUDE.md / domains-and-public-api-design.md:** Domain mapping tables include `user-data-export` and nested `organization-api-key` under `organization` (keep in sync when adding sub-domains).
 - **No orchestrator layer:** Multi-sub-domain domains (**auth**, **user**, **billing**, **tenancy**, **notify**) wire sub-domain services via `<domain>.container.ts`; controllers call the appropriate service directly.
-- **Sub-domains missing standard files:** Several sub-domains lack .dto, .validator, .serializer, or .types as documented in Section 5 (e.g. user-data-export, stripe-webhook, webhook-event, plan, notification, auth-method, auth-session, auth-mfa, user-settings, user-notification-preferences).
+- **Sub-domains missing standard files:** A few sub-domains still lack .dto, .validator, .serializer, .types, or .controller as documented in Section 5 (e.g. auth-method, auth-session, auth-mfa, stripe-webhook, webhook-event, notification, permission); user-data-export, plan, user-settings, and user-notification-preferences now carry the full data-shape set.
 - **Test layout:** Domain e2e at `<domain>/__tests__/`; sub-domain and **nested** sub-domain unit/e2e under `sub-domains/.../__tests__/`; event handler tests under `__tests__/unit/events/` (not `events/__tests__/`); shared tenancy helpers at `tenancy/__tests__/factories/permission.factory.ts`. See **CLAUDE.md** § Testing and **domains-and-public-api-design.md** §1.5. `src/tests/node_modules/` is gitignored Vite cache (do not commit).
