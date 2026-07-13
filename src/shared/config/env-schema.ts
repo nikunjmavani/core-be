@@ -243,12 +243,6 @@ const envSchemaBase = z.object({
    */
   METRICS_AUTH_REQUIRED: booleanString('true'),
   /**
-   * Category-B. Test-harness-only: re-derive SUPER_ADMIN without the user domain (middleware
-   * harnesses). Defaults false (hardened); the refine rejects `true` in production. The test harness
-   * sets it true explicitly (it runs as NODE_ENV=development).
-   */
-  AUTH_TEST_SUPER_ADMIN_FALLBACK: booleanString('false'),
-  /**
    * Category-A. Fail boot on scheduler/worker registry drift instead of warning. Defaults true
    * (fail fast, production-safe); development sets it false in `.env` so split-worker dev/test does
    * not trip on drift.
@@ -1258,14 +1252,6 @@ export const envSchema = envSchemaBase
       'BLOCK_DISPOSABLE_EMAIL must be true in production (disposable/temporary email domains are rejected on signup — the relaxed false is a dev/test affordance only).',
     path: ['BLOCK_DISPOSABLE_EMAIL'],
   })
-  .refine(
-    (data) => data.NODE_ENV !== 'production' || data.AUTH_TEST_SUPER_ADMIN_FALLBACK === false,
-    {
-      message:
-        'AUTH_TEST_SUPER_ADMIN_FALLBACK must be false in production (it bypasses the SUPER_ADMIN re-derivation guard; development/test-harness only).',
-      path: ['AUTH_TEST_SUPER_ADMIN_FALLBACK'],
-    },
-  )
   // Boot-time safety checks: each must stay enforced in production (former isHostedDeployment gate).
   .refine((data) => data.NODE_ENV !== 'production' || data.DATABASE_TLS_ENFORCED === true, {
     message:

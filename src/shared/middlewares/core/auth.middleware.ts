@@ -1,7 +1,6 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
 import { ConfigurationError, UnauthorizedError } from '@/shared/errors/index.js';
-import { env } from '@/shared/config/env.config.js';
 import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { AuthContext } from '@/shared/types/index.js';
@@ -32,12 +31,12 @@ function getBearerToken(request: FastifyRequest): string {
  * the user, fails closed (downgrades to no role) so a missing user record cannot retain
  * admin privileges.
  *
- * audit-#16: when the user-domain is not wired this now **fails closed** outside the test
- * harness — a privileged claim can no longer be accepted without live allowlist/account-state
- * verification just because an alternate/minimal entrypoint forgot to decorate `userDomain`.
- * Production composition always wires it, so a missing service there is a configuration error
- * (raised loudly) rather than a silent privilege grant. The `test` seam is preserved because
- * several middleware-only test harnesses intentionally omit the user domain.
+ * audit-#16: when the user-domain is not wired this **fails closed** — a privileged claim can no
+ * longer be accepted without live allowlist/account-state verification just because an
+ * alternate/minimal entrypoint forgot to decorate `userDomain`. Production composition always wires
+ * it, so a missing service is a configuration error (raised loudly) rather than a silent privilege
+ * grant. Middleware test harnesses that exercise a privileged claim inject a stub `userService`
+ * (see `auth.middleware.super-admin-rederive.unit.test.ts`) — dependency injection, not an env flag.
  */
 async function rederiveSuperAdminRole(
   request: FastifyRequest,
@@ -45,9 +44,6 @@ async function rederiveSuperAdminRole(
 ): Promise<GlobalRole | undefined> {
   const userService = request.server.userDomain?.userService;
   if (!userService) {
-    if (env.AUTH_TEST_SUPER_ADMIN_FALLBACK) {
-      return GLOBAL_ROLES.SUPER_ADMIN;
-    }
     throw new ConfigurationError(
       'userDomain.userService is required to re-derive a privileged role; refusing to trust a SUPER_ADMIN claim without it',
     );

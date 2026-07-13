@@ -38,12 +38,12 @@ export default async function globalSetup(): Promise<void> {
   forceLocalDatabaseForNonCiTestRun();
 
   /** Contract tests mock outbound HTTP — skip Postgres churn (offline CI slice). See `pnpm test:contract`. */
-  if (process.env.CONTRACT_TESTS_ONLY === 'true') {
+  if (process.env.CONTRACT_TESTS_ENABLED === 'true') {
     return;
   }
 
   /** fast-check property slice — pure validators, no DB. See `pnpm test:property`. */
-  if (process.env.PROPERTY_TESTS_ONLY === 'true') {
+  if (process.env.PROPERTY_TESTS_ENABLED === 'true') {
     return;
   }
 

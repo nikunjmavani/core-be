@@ -1,7 +1,7 @@
 /**
  * Run load tests (health stress + API stress) and email the results.
  * Requires: server running with high rate limit (pnpm dev:loadtest), RESEND_API_KEY,
- * and LOAD_TEST_RESULT_EMAIL_TO or TEST_REPORT_EMAIL_TO.
+ * and TEST_RESULT_EMAIL_TO.
  * Run: pnpm run tool:send-load-test-results-email
  */
 import '@/shared/config/load-env-files.js';
@@ -53,10 +53,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  const recipientsEnv = process.env.LOAD_TEST_RESULT_EMAIL_TO ?? process.env.TEST_REPORT_EMAIL_TO;
+  const recipientsEnv = process.env.TEST_RESULT_EMAIL_TO;
   if (!recipientsEnv) {
     logger.warn(
-      'LOAD_TEST_RESULT_EMAIL_TO or TEST_REPORT_EMAIL_TO not set; skipping load test email.',
+      'TEST_RESULT_EMAIL_TO not set; skipping load test email.',
     );
     process.exitCode = 1;
     return;

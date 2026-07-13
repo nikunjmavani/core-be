@@ -39,9 +39,8 @@ process.env.SHUTDOWN_SKIP_SHARED_TEARDOWN = 'true';
 process.env.REDIS_READY_CHECK_ENABLED = 'false';
 // Category-B security flags now default to their HARDENED value everywhere; the harness sets the
 // relaxed values explicitly (previously implied by the non-production runtime) so e2e behaves as
-// before: auth-harness SUPER_ADMIN fallback, captcha bypass, Referer-fallback origin check, empty
-// webhook allowlist, and unauthenticated metrics all stay permissive under test.
-process.env.AUTH_TEST_SUPER_ADMIN_FALLBACK ??= 'true';
+// before: captcha bypass, Referer-fallback origin check, empty webhook allowlist, and unauthenticated
+// metrics all stay permissive under test.
 process.env.CAPTCHA_BYPASS_ALLOWED ??= 'true';
 process.env.SESSION_ORIGIN_CSRF_REQUIRED ??= 'false';
 process.env.WEBHOOK_ALLOWLIST_REQUIRED ??= 'false';
@@ -235,7 +234,7 @@ if (
  * Isolated outbound contract slice (`pnpm test:contract`): force placeholders so `.env`
  * sandbox keys / bucket names / regions never leak into mocks (or vice versa).
  */
-if (process.env.CONTRACT_TESTS_ONLY === 'true') {
+if (process.env.CONTRACT_TESTS_ENABLED === 'true') {
   process.env.STRIPE_SECRET_KEY = 'sk_test_contract_fixture_key_for_nock_stubs';
   process.env.STRIPE_WEBHOOK_SECRET =
     'whsec_test_contract_fixture_webhook_signing_must_be_minimum_32characters';

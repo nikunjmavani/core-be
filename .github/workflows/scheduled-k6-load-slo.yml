@@ -1,6 +1,6 @@
 # Nightly k6 load tests against an ephemeral API (Postgres + Redis).
 # Gate: health-stress + api-stress (SLO thresholds). Informational: auth, daily-ops, billing, webhooks, admin, org-scoped routes (incl. rls-concurrency-beyond-pool).
-# Secrets (optional email): RESEND_API_KEY, LOAD_TEST_RESULT_EMAIL_TO or TEST_REPORT_EMAIL_TO
+# Secrets (optional email): RESEND_API_KEY, TEST_RESULT_EMAIL_TO
 name: Scheduled k6 API load & SLO
 
 on:
@@ -185,12 +185,11 @@ jobs:
           retention-days: 14
 
       - name: Send load-test results email (from k6 summaries)
-        if: always() && env.RESEND_API_KEY != '' && (env.LOAD_TEST_RESULT_EMAIL_TO != '' || env.TEST_REPORT_EMAIL_TO != '')
+        if: always() && env.RESEND_API_KEY != '' && env.TEST_RESULT_EMAIL_TO != ''
         continue-on-error: true
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          LOAD_TEST_RESULT_EMAIL_TO: ${{ secrets.LOAD_TEST_RESULT_EMAIL_TO }}
-          TEST_REPORT_EMAIL_TO: ${{ secrets.TEST_REPORT_EMAIL_TO }}
+          TEST_RESULT_EMAIL_TO: ${{ secrets.TEST_RESULT_EMAIL_TO }}
           BASE_URL: http://localhost:3000
           K6_USE_SUMMARIES: '1'
         run: pnpm tool:send-load-test-results-email
