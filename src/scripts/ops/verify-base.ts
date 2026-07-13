@@ -3,7 +3,7 @@
  *
  * Prerequisites:
  * - `docker compose up -d` (Postgres + Redis for migrate, seed, and server)
- * - Optional: `pnpm scripts:wait-postgres` after compose up so Postgres is ready before migrate.
+ * - Optional: `pnpm compose:wait` after compose up so Postgres is ready before migrate.
  * - Set `TEST_PASSWORD` in `.env` to match smoke defaults (e.g. DemoPassword123!),
  *   otherwise full seed may generate a random demo password and login will fail.
  *
