@@ -156,6 +156,7 @@
   "stripeWebhookVerificationFailed": "Error al verificar la firma del webhook",
   "stripeWebhookEventInFlight": "El evento de webhook de Stripe {{eventId}} aún se está procesando; reintente en breve.",
   "subscriptionAlreadyExists": "Ya existe una suscripción activa para esta organización",
+  "subscriptionCreateInProgress": "Ya se está creando una suscripción para esta organización; vuelve a intentarlo en breve.",
   "seatLimitReached": "Se alcanzó el límite de asientos de tu plan ({{limit}}). Mejora tu plan o elimina un miembro antes de agregar otro.",
   "subscriptionNotMutable": "Esta suscripción está en estado terminal y ya no puede modificarse; crea una nueva suscripción en su lugar",
   "planNotAvailableForBillingCycle": "Este plan no está disponible para el ciclo de facturación de tu suscripción",

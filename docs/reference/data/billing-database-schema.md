@@ -86,6 +86,6 @@ erDiagram
 - [domains-and-public-api-design.md](../architecture/domains-and-public-api-design.md) — billing routes and permissions
 - [`src/domains/billing/billing.overview.md`](../../../src/domains/billing/billing.overview.md) — domain overview (Stripe authoritative, idempotency, stale-event protection)
 - [`src/domains/billing/sub-domains/plan/plan.overview.md`](../../../src/domains/billing/sub-domains/plan/plan.overview.md) — plan catalog invariants
-- [`src/domains/billing/sub-domains/subscription/subscription.overview.md`](../../../src/domains/billing/sub-domains/subscription/subscription.overview.md) — subscription state machine, immutable ledger semantics
+- [`src/domains/billing/sub-domains/subscription/subscription.overview.md`](../../../src/domains/billing/sub-domains/subscription/subscription.overview.md) — subscription state machine, retained mutable-state semantics (watermark-guarded, not append-only)
 - [`src/domains/billing/sub-domains/stripe-webhook/stripe-webhook.overview.md`](../../../src/domains/billing/sub-domains/stripe-webhook/stripe-webhook.overview.md) — webhook receiver, reclaim window, per-source DLQ
 - [`src/FLOWS.md`](../../../src/FLOWS.md) § Stripe webhook ingest, § Subscription create — end-to-end flows

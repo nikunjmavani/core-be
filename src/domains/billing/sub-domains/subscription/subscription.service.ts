@@ -3,7 +3,20 @@ import { randomUUID } from 'node:crypto';
 
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { env } from '@/shared/config/env.config.js';
+import {
+  RedisLockUnavailableError,
+  withRedisLock,
+} from '@/infrastructure/cache/redis-lock.util.js';
 import { INACTIVE_SUBSCRIPTION_STATUSES } from './subscription.repository.js';
+
+/**
+ * Per-org lock TTL (seconds) around subscription create (audit-#B4). Must exceed the worst-case
+ * `paymentProvider.createSubscription` latency plus the surrounding DB work so the lock never lapses
+ * mid-create; a crashed holder auto-releases at this TTL.
+ */
+const SUBSCRIPTION_CREATE_LOCK_TTL_SECONDS = 20;
+/** Max time (ms) a concurrent create waits for the in-flight one to finish before returning a retryable 409. */
+const SUBSCRIPTION_CREATE_LOCK_WAIT_MS = 10_000;
 
 /**
  * Subscription statuses that are considered terminal (non-mutable).
@@ -572,90 +585,119 @@ export class SubscriptionService {
     idempotencyKey?: string,
   ) {
     const parsed = validateCreateSubscription(body);
-    const { organization, plan, createdByUserInternalId } = await withOrganizationDatabaseContext(
-      organization_public_id,
-      async () => {
-        const organization =
-          await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-        // Personal organizations cannot manage billing (assertTeamOrganization → 422).
-        // Reject before the Stripe call so a personal org gets 422, not a churned provider call.
-        assertTeamOrganization(organization, 'BILLING');
-        // Reject before the Stripe call when a non-terminal subscription already
-        // exists, so a duplicate request never churns the payment provider.
-        const existingActive = await this.repository.findActiveByOrganization(organization.id);
-        if (existingActive) {
+    // B4: serialize concurrent creates for one org across the pre-check → Stripe create → insert
+    // window so two requests with distinct idempotency keys cannot each mint a Stripe subscription
+    // (the loser was previously compensated via cancel). The partial unique index + compensating
+    // cancel below remain the durable correctness backstop if the lock ever lapses.
+    const runCreate = async () => {
+      const { organization, plan, createdByUserInternalId } = await withOrganizationDatabaseContext(
+        organization_public_id,
+        async () => {
+          const organization =
+            await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+          // Personal organizations cannot manage billing (assertTeamOrganization → 422).
+          // Reject before the Stripe call so a personal org gets 422, not a churned provider call.
+          assertTeamOrganization(organization, 'BILLING');
+          // Reject before the Stripe call when a non-terminal subscription already
+          // exists, so a duplicate request never churns the payment provider.
+          const existingActive = await this.repository.findActiveByOrganization(organization.id);
+          if (existingActive) {
+            throw new ConflictError('errors:subscriptionAlreadyExists');
+          }
+          const plan = await this.planService.requireActivePlanByPublicId(parsed.plan_id);
+          const createdByUserInternalId =
+            await this.organizationService.resolveUserInternalIdByPublicId(
+              created_by_user_public_id,
+            );
+          return { organization, plan, createdByUserInternalId };
+        },
+      );
+
+      const now = new Date();
+      const periodEnd = new Date(now);
+      periodEnd.setMonth(periodEnd.getMonth() + (parsed.billing_cycle === 'yearly' ? 12 : 1));
+
+      // Stripe network call — outside any database context.
+      const paymentResult = await this.paymentProvider.createSubscription(
+        omitUndefined({
+          organization,
+          plan,
+          billingCycle: parsed.billing_cycle,
+          // audit #3: namespace the client key by org before it reaches Stripe's global key space.
+          idempotencyKey: buildStripeIdempotencyKey(
+            'sub-create',
+            organization_public_id,
+            idempotencyKey,
+          ),
+        }),
+      );
+
+      try {
+        const created = await withOrganizationDatabaseContext(organization_public_id, async () =>
+          this.repository.create(
+            omitUndefined({
+              organization_id: organization.id,
+              plan_id: plan.id,
+              billing_cycle: parsed.billing_cycle.toUpperCase() as 'MONTHLY' | 'YEARLY',
+              // audit-#2: a Stripe-backed subscription is created with
+              // `payment_behavior: 'default_incomplete'`, i.e. Stripe status
+              // `incomplete` with NO successful payment yet. Persist the local row
+              // as INCOMPLETE so entitlement never over-reports as TRIALING (an
+              // entitled state) before the first `customer.subscription.updated`
+              // webhook reconciles the real status. Local-only subscriptions (no
+              // Stripe) keep the repository's TRIALING default.
+              status: paymentResult.providerSubscriptionId ? 'INCOMPLETE' : undefined,
+              current_period_start: now,
+              current_period_end: periodEnd,
+              created_by_user_id: createdByUserInternalId ?? undefined,
+              provider: paymentResult.providerSubscriptionId ? 'stripe' : undefined,
+              provider_subscription_id: paymentResult.providerSubscriptionId,
+              provider_customer_id: paymentResult.providerCustomerId,
+              // sec-B2: stamp the watermark when Stripe accepted the subscription so a
+              // late-arriving `customer.subscription.created` event (whose `created`
+              // timestamp predates this moment) is filtered by the monotonic guard and
+              // cannot regress the row to a stale earlier state. Unset when Stripe is
+              // not configured (no webhook to reconcile, no watermark needed).
+              last_stripe_event_created_at: paymentResult.providerSubscriptionId
+                ? new Date()
+                : undefined,
+            }),
+          ),
+        );
+        // REQ-4: a freshly-created subscription has no Stripe-synced `seats` yet, so seats_total
+        // falls back to the plan's included_seats; seats_used reflects current memberships.
+        const [decorated] = await this.decorateWithSeatCounts(organization_public_id, [created]);
+        return decorated!;
+      } catch (error) {
+        if (paymentResult.providerSubscriptionId) {
+          await this.paymentProvider.compensateFailedCreate(paymentResult.providerSubscriptionId);
+        }
+        // A concurrent create that lost the race to the partial unique index
+        // surfaces as a 409 instead of a 500 (the Stripe sub is already rolled back above).
+        if (isPostgresUniqueViolation(error)) {
           throw new ConflictError('errors:subscriptionAlreadyExists');
         }
-        const plan = await this.planService.requireActivePlanByPublicId(parsed.plan_id);
-        const createdByUserInternalId =
-          await this.organizationService.resolveUserInternalIdByPublicId(created_by_user_public_id);
-        return { organization, plan, createdByUserInternalId };
-      },
-    );
-
-    const now = new Date();
-    const periodEnd = new Date(now);
-    periodEnd.setMonth(periodEnd.getMonth() + (parsed.billing_cycle === 'yearly' ? 12 : 1));
-
-    // Stripe network call — outside any database context.
-    const paymentResult = await this.paymentProvider.createSubscription(
-      omitUndefined({
-        organization,
-        plan,
-        billingCycle: parsed.billing_cycle,
-        // audit #3: namespace the client key by org before it reaches Stripe's global key space.
-        idempotencyKey: buildStripeIdempotencyKey(
-          'sub-create',
-          organization_public_id,
-          idempotencyKey,
-        ),
-      }),
-    );
+        throw error;
+      }
+    };
 
     try {
-      const created = await withOrganizationDatabaseContext(organization_public_id, async () =>
-        this.repository.create(
-          omitUndefined({
-            organization_id: organization.id,
-            plan_id: plan.id,
-            billing_cycle: parsed.billing_cycle.toUpperCase() as 'MONTHLY' | 'YEARLY',
-            // audit-#2: a Stripe-backed subscription is created with
-            // `payment_behavior: 'default_incomplete'`, i.e. Stripe status
-            // `incomplete` with NO successful payment yet. Persist the local row
-            // as INCOMPLETE so entitlement never over-reports as TRIALING (an
-            // entitled state) before the first `customer.subscription.updated`
-            // webhook reconciles the real status. Local-only subscriptions (no
-            // Stripe) keep the repository's TRIALING default.
-            status: paymentResult.providerSubscriptionId ? 'INCOMPLETE' : undefined,
-            current_period_start: now,
-            current_period_end: periodEnd,
-            created_by_user_id: createdByUserInternalId ?? undefined,
-            provider: paymentResult.providerSubscriptionId ? 'stripe' : undefined,
-            provider_subscription_id: paymentResult.providerSubscriptionId,
-            provider_customer_id: paymentResult.providerCustomerId,
-            // sec-B2: stamp the watermark when Stripe accepted the subscription so a
-            // late-arriving `customer.subscription.created` event (whose `created`
-            // timestamp predates this moment) is filtered by the monotonic guard and
-            // cannot regress the row to a stale earlier state. Unset when Stripe is
-            // not configured (no webhook to reconcile, no watermark needed).
-            last_stripe_event_created_at: paymentResult.providerSubscriptionId
-              ? new Date()
-              : undefined,
-          }),
-        ),
+      return await withRedisLock(
+        {
+          key: `billing:subscription:create:${organization_public_id}`,
+          ttlSeconds: SUBSCRIPTION_CREATE_LOCK_TTL_SECONDS,
+          waitTimeoutMs: SUBSCRIPTION_CREATE_LOCK_WAIT_MS,
+        },
+        runCreate,
       );
-      // REQ-4: a freshly-created subscription has no Stripe-synced `seats` yet, so seats_total
-      // falls back to the plan's included_seats; seats_used reflects current memberships.
-      const [decorated] = await this.decorateWithSeatCounts(organization_public_id, [created]);
-      return decorated!;
     } catch (error) {
-      if (paymentResult.providerSubscriptionId) {
-        await this.paymentProvider.compensateFailedCreate(paymentResult.providerSubscriptionId);
-      }
-      // A concurrent create that lost the race to the partial unique index
-      // surfaces as a 409 instead of a 500 (the Stripe sub is already rolled back above).
-      if (isPostgresUniqueViolation(error)) {
-        throw new ConflictError('errors:subscriptionAlreadyExists');
+      if (error instanceof RedisLockUnavailableError) {
+        // A concurrent create for this org held the lock past our wait — return a retryable 409
+        // instead of minting a second Stripe subscription. By the time the wait elapses the winner
+        // has usually committed, so a retry gets a clean `subscriptionAlreadyExists`.
+        throw new ConflictError('errors:subscriptionCreateInProgress').withReason(
+          'subscription_create_in_progress',
+        );
       }
       throw error;
     }

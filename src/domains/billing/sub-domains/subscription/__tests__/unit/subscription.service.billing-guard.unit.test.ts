@@ -13,6 +13,13 @@ vi.mock('@/infrastructure/database/contexts/organization-database.context.js', (
   ),
 }));
 
+// audit-#B4: run the create critical section transparently — the lock itself is covered in
+// redis-lock.util.unit.test.ts; here it must not open a real Redis connection.
+vi.mock('@/infrastructure/cache/redis-lock.util.js', () => ({
+  withRedisLock: vi.fn(async (_options: unknown, fn: () => Promise<unknown>) => fn()),
+  RedisLockUnavailableError: class RedisLockUnavailableError extends Error {},
+}));
+
 import { SubscriptionService } from '@/domains/billing/sub-domains/subscription/subscription.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { PlanService } from '@/domains/billing/sub-domains/plan/plan.service.js';
