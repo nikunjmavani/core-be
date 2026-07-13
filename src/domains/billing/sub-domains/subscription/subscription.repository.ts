@@ -63,7 +63,13 @@ const subscriptionRowWithPlanPublicId = {
 } as const;
 
 /**
- * Drizzle access to the append-only `billing.subscriptions` ledger.
+ * Drizzle access to the `billing.subscriptions` table — a **mutable state table**, not an
+ * immutable append-only ledger (audit-#B2). Rows are updated in place as the subscription
+ * transitions status (Stripe syncs, cancel/resume, plan changes, seat counts); they are never
+ * hard-deleted in normal flow. DB-level append-only enforcement (as on `audit.logs`) is
+ * intentionally NOT applied here because in-place status transitions are the table's core purpose —
+ * immutability is scoped to the monotonic `last_stripe_event_created_at` watermark guard below,
+ * which prevents stale/out-of-order events from regressing the row, not to the row as a whole.
  *
  * @remarks
  * - **Algorithm:** Each organization is constrained to a single *non-terminal*

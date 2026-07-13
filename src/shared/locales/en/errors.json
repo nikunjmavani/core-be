@@ -156,6 +156,7 @@
   "stripeWebhookVerificationFailed": "Webhook signature verification failed",
   "stripeWebhookEventInFlight": "Stripe webhook event {{eventId}} is still being processed; retry shortly.",
   "subscriptionAlreadyExists": "An active subscription already exists for this organization",
+  "subscriptionCreateInProgress": "A subscription is already being created for this organization; please retry shortly.",
   "seatLimitReached": "Your plan's seat limit ({{limit}}) has been reached. Upgrade your plan or remove a member before adding another.",
   "subscriptionNotMutable": "This subscription is in a terminal state and can no longer be modified; create a new subscription instead",
   "planNotAvailableForBillingCycle": "This plan is not available for your subscription's billing cycle",

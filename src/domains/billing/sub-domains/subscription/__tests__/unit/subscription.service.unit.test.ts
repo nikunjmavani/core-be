@@ -14,6 +14,17 @@ vi.mock('@/infrastructure/database/contexts/organization-database.context.js', (
   ),
 }));
 
+// audit-#B4: run the create critical section transparently by default (the lock is exercised in
+// redis-lock.util.unit.test.ts). Individual tests override withRedisLock to simulate contention.
+const redisLockMocks = vi.hoisted(() => {
+  class RedisLockUnavailableError extends Error {}
+  return {
+    RedisLockUnavailableError,
+    withRedisLock: vi.fn(async (_options: unknown, fn: () => Promise<unknown>) => fn()),
+  };
+});
+vi.mock('@/infrastructure/cache/redis-lock.util.js', () => redisLockMocks);
+
 import {
   ConflictError,
   NotFoundError,
@@ -135,6 +146,35 @@ describe('SubscriptionService', () => {
     // repository row — assert the original fields survived rather than exact equality.
     expect(result).toMatchObject(subscriptionRow);
     expect(result).toHaveProperty('seats_used');
+  });
+
+  it('audit-#B4: create wraps the critical section in a per-org Redis lock', async () => {
+    await service.create(
+      'org_public',
+      { plan_id: 'plan_public', billing_cycle: 'monthly' },
+      'user_public',
+    );
+    expect(redisLockMocks.withRedisLock).toHaveBeenCalledTimes(1);
+    const lockOptions = redisLockMocks.withRedisLock.mock.calls[0]![0] as { key: string };
+    expect(lockOptions.key).toBe('billing:subscription:create:org_public');
+  });
+
+  it('audit-#B4: create maps lock contention to a retryable 409 without minting a second Stripe sub', async () => {
+    stripeMocks.isStripeConfigured.mockReturnValue(true);
+    // Simulate a concurrent create still holding the lock past our wait window.
+    redisLockMocks.withRedisLock.mockRejectedValueOnce(
+      new redisLockMocks.RedisLockUnavailableError('billing:subscription:create:org_public'),
+    );
+    await expect(
+      service.create(
+        'org_public',
+        { plan_id: 'plan_public', billing_cycle: 'monthly' },
+        'user_public',
+      ),
+    ).rejects.toBeInstanceOf(ConflictError);
+    // The critical section never ran, so no Stripe subscription was created for the loser.
+    expect(stripeMocks.createStripeSubscription).not.toHaveBeenCalled();
+    expect(repository.create).not.toHaveBeenCalled();
   });
 
   it('create rejects with ConflictError before Stripe when an active subscription exists', async () => {
