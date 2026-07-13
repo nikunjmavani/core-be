@@ -13,7 +13,7 @@ function isSupportedVersion(value: string): value is FieldSecretKeyVersion {
   return (SUPPORTED_VERSIONS as readonly string[]).includes(value);
 }
 
-/** Returns the `<version>` of a stored value's `<version>:` prefix, or `null` for legacy plaintext. */
+/** Returns the `<version>` of a stored value's `<version>:` prefix, or `null` when unprefixed (corrupt/tampered — every real value is written prefixed). */
 function parseVersionPrefix(stored: string): FieldSecretKeyVersion | null {
   const colonIndex = stored.indexOf(':');
   if (colonIndex <= 0) {
@@ -83,7 +83,6 @@ function resolveFieldSecretEncryptionKey(version: FieldSecretKeyVersion): Buffer
 
 /**
  * Encrypts a short secret for at-rest storage (MFA seeds, webhook signing keys).
- * Legacy plaintext values are still readable via decryptFieldSecret.
  *
  * @remarks
  * - Algorithm: AES-256-GCM with a random 12-byte IV; output is `<version>:base64(iv|authTag|cipher)`.
@@ -107,21 +106,28 @@ export function encryptFieldSecret(plaintext: string): string {
 }
 
 /**
- * Reverse of {@link encryptFieldSecret}. Returns the input unchanged when it lacks a recognised
- * `<version>:` prefix so legacy plaintext rows continue to work during migrations from plaintext
- * to encrypted columns.
+ * Reverse of {@link encryptFieldSecret}. Fail-closed: a non-empty value that lacks a recognised
+ * `<version>:` prefix throws, because every real secret is written prefixed by
+ * {@link encryptFieldSecret} — an unprefixed non-empty value can only be corruption or tampering,
+ * never trusted plaintext (audit greenfield cleanup). The empty string round-trips unchanged since
+ * it is the canonical "no secret" representation (`encryptFieldSecret('')` returns `''`).
  *
  * @remarks
  * - Decrypts using the key for the value's OWN stored version, so values written under an older key
  *   stay readable after a newer current version is configured.
- * - Failure modes: throws when no key is configured for the stored version or when the GCM auth tag
- *   fails (tampered ciphertext or wrong key).
+ * - Failure modes: throws when the value is a non-empty unencrypted string, when no key is
+ *   configured for the stored version, or when the GCM auth tag fails (tampered ciphertext / wrong key).
  * - Side effects: none.
  */
 export function decryptFieldSecret(stored: string): string {
+  if (stored === '') {
+    return stored;
+  }
   const version = parseVersionPrefix(stored);
   if (!version) {
-    return stored;
+    throw new Error(
+      'field-secret value is not encrypted: missing recognised <version>: prefix (corrupt or tampered)',
+    );
   }
   const key = resolveFieldSecretEncryptionKey(version);
   const data = Buffer.from(stored.slice(version.length + 1), 'base64');

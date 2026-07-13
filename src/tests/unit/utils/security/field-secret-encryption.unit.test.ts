@@ -44,16 +44,22 @@ describe('field-secret-encryption.util', () => {
     expect(decryptFieldSecret(encrypted)).toBe(plaintext);
   });
 
-  it('returns legacy plaintext values unchanged', () => {
+  it('fail-closed: throws on a non-empty unencrypted (unprefixed) value', () => {
     process.env.SECRETS_ENCRYPTION_KEY =
       '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
     resetEnvCacheForTests();
 
-    expect(decryptFieldSecret('legacy-plaintext-secret')).toBe('legacy-plaintext-secret');
+    // Greenfield: every real value is written `<version>:`-prefixed, so an unprefixed non-empty
+    // value can only be corruption/tampering — it must throw, never round-trip as trusted plaintext.
+    expect(() => decryptFieldSecret('unencrypted-plaintext-secret')).toThrow(/not encrypted/);
   });
 
-  it('returns empty string without encrypting', () => {
+  it('returns empty string without encrypting (encrypt)', () => {
     expect(encryptFieldSecret('')).toBe('');
+  });
+
+  it('round-trips the empty "no secret" value through decrypt unchanged', () => {
+    expect(decryptFieldSecret('')).toBe('');
   });
 
   it('throws when SECRETS_ENCRYPTION_KEY is unset', () => {
