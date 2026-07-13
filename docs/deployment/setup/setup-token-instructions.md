@@ -75,4 +75,4 @@ Get links: [Stripe](https://dashboard.stripe.com/apikeys) · [Google OAuth](http
 ## See Also
 
 - [setup-automation.md](setup-automation.md) — full setup flow
-- [SETUP_INFRA_PREREQUISITES.md](../../../tooling/setup/SETUP_INFRA_PREREQUISITES.md) — quick reference tables
+- `SETUP_INFRA_PREREQUISITES.md` (in the standalone **core-infra** repo) — quick reference tables

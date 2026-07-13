@@ -80,7 +80,7 @@ When **`METRICS_ENABLED=true`**, workers export BullMQ telemetry to the shared P
 | `bullmq_queue_{waiting,active,delayed,failed}{queue}` | `refreshBullMQQueueGauges()` — called from `refreshMetricsBeforeScrape()` before `GET /metrics`                |
 | `bullmq_job_duration_seconds{queue,job_name}`         | `attachBullMQJobMetrics()` on worker `completed` — wired via `attachDeadLetterAndAlerting()` in `bootstrap.ts` |
 
-Queue depth gauges scrape the monitored queue list in `src/infrastructure/observability/bullmq-metrics.ts` (`MONITORED_BULLMQ_QUEUE_NAMES`). See [observability runbook](../../deployment/runbooks/observability.md) for scrape setup and metric names.
+Queue depth gauges scrape the monitored queue list in `src/infrastructure/observability/metrics/bullmq-metrics.ts` (`MONITORED_BULLMQ_QUEUE_NAMES`). See [observability runbook](../../deployment/runbooks/observability.md) for scrape setup and metric names.
 
 ---
 
@@ -133,7 +133,7 @@ HTTP requests set `app.current_organization_id` via tenant middleware and an org
 
 `src/worker.ts` sets `CORE_BE_RUNTIME=worker`. Calling `getRequestDatabase()` without a pinned ALS session throws `WorkerDatabaseContextError`. Pass `databaseHandle` into `createWorker*Repository(databaseHandle)` for tenant-scoped work.
 
-FORCE RLS table list: `src/infrastructure/database/force-rls-tables.constants.ts`. Security regression: `src/tests/security/rls/worker-rls-context.security.test.ts`.
+FORCE RLS table list: `src/infrastructure/database/utils/force-rls-tables.constants.ts`. Security regression: `src/tests/security/rls/worker-rls-context.security.test.ts`.
 
 ---
 
@@ -176,7 +176,7 @@ Operational sizing per family is documented in [resource-limits.md → Worker Po
 | Queues + enqueue                                                                    | `src/domains/<domain>/sub-domains/<sub-domain>/queues/*`                                                                                              |
 | Workers                                                                             | `src/domains/<domain>/sub-domains/<sub-domain>/workers/*` (or domain root for flat domains)                                                           |
 | Worker entrypoint                                                                   | `src/worker.ts`                                                                                                                                       |
-| BullMQ Prometheus gauges/histogram                                                  | `src/infrastructure/observability/bullmq-metrics.ts`, `prometheus-metrics.ts`                                                                         |
+| BullMQ Prometheus gauges/histogram                                                  | `src/infrastructure/observability/metrics/bullmq-metrics.ts`, `prometheus-metrics.ts`                                                                         |
 
 **Queue ownership:** `src/infrastructure/queue/` wires Redis, repeatable retention registration (`scheduler.ts`), dead-letter (`dead-letter.ts`), and worker startup only. **Processors** and event-driven **queue definitions + enqueue helpers** live in domain sub-domains — never in `infrastructure/queue/processors/` (that path does not exist).
 

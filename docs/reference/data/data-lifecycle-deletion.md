@@ -149,10 +149,10 @@ Batch deletes use `deleteInBatchesByCondition` with per-row FK fallback (`blocke
 - **Session cleanup worker (processor):** `src/domains/auth/sub-domains/auth-session/workers/session-cleanup.worker.ts`
 - **GDPR export retention:** `src/domains/user/sub-domains/user-data-export/workers/user-data-export-retention.worker.ts` — see [user-data-export.md](../data/user-data-export.md)
 - **Tombstone hard-delete** (uses **`TOMBSTONE_RETENTION_DAYS`**, default **90**): tombstoned `deleted_at` tables — `user/workers/user-tombstone-retention.worker.ts`, `tenancy/organization/workers/organization-tombstone-retention.worker.ts`, `tenancy/membership/workers/membership-tombstone-retention.worker.ts`, `tenancy/member-roles/workers/member-role-tombstone-retention.worker.ts`, `tenancy/organization/organization-api-key/workers/organization-api-key-tombstone-retention.worker.ts`, `tenancy/organization/organization-notification-policy/workers/organization-notification-policy-tombstone-retention.worker.ts`, `notify/webhook/workers/webhook-tombstone-retention.worker.ts`, `upload/workers/upload-tombstone-retention.worker.ts` (upload purge deletes S3 objects per row)
-- **Billing ledger guard**: domain unit test `src/domains/billing/__tests__/unit/billing-ledger-immutability.test.ts`
-- **Tombstone read guard**: `src/domains/user/__tests__/unit/tombstone-repository-reads.test.ts`
-- **Batch delete FK fallback**: `src/infrastructure/database/batch-delete.util.ts`, `src/tests/unit/infrastructure/database/batch-delete.util.test.ts`
-- **Scheduler tombstone order**: `src/tests/unit/infrastructure/queue/scheduler.test.ts`
+- **Billing ledger guard**: domain unit test `src/domains/billing/__tests__/unit/billing-ledger-immutability.unit.test.ts`
+- **Tombstone read guard**: `src/domains/user/__tests__/unit/tombstone-repository-reads.unit.test.ts`
+- **Batch delete FK fallback**: `src/infrastructure/database/utils/batch-delete.util.ts`, `src/tests/unit/infrastructure/database/batch-delete.util.unit.test.ts`
+- **Scheduler tombstone order**: `src/tests/unit/infrastructure/queue/scheduler.unit.test.ts`
 - **SQL design guard**: `.cursor/skills/sql-design-guard/SKILL.md`
 
 After pulling schema changes (for example **`notify.webhooks.deleted_at`**), apply **`pnpm db:migrate`** so the database matches Drizzle definitions.

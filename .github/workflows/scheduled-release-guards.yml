@@ -15,6 +15,9 @@
 #      the production required-reviewer gate every week. The production copy is
 #      additionally verified at use time by the tripwire step in post-merge-ci's
 #      release-please job.
+#   3. Repo settings drift (weekly): read-only `pnpm github:sync --check` over the
+#      whole setup surface (setup.config.json ↔ rulesets ↔ workflows ↔ GitHub
+#      Environments) — broader than guard 1's protection/ruleset checks.
 
 name: Release-flow guards
 
@@ -149,12 +152,35 @@ jobs:
             echo "RELEASE_PLEASE_TOKEN valid; expiry header present but unparseable: ${expiry}"
           fi
 
+  repo-settings-drift:
+    name: Repo settings drift (github:sync --check)
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 6 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      # Read-only consistency + remote drift for the WHOLE setup surface
+      # (setup.config.json ↔ rulesets ↔ workflows ↔ GitHub Environments) —
+      # broader than the environment-drift job's protection/ruleset checks.
+      # `github:sync` shells out to `gh`, which authenticates via GH_TOKEN;
+      # the PAT fallback keeps this runnable if the default token lacks a
+      # settings-read scope.
+      - name: Run github:sync --check (read-only)
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+        run: pnpm github:sync --check
+
   notify-failure:
     name: Notify failure
-    needs: [environment-drift, release-token]
+    needs: [environment-drift, release-token, repo-settings-drift]
     if: |
       always() &&
-      (needs.environment-drift.result == 'failure' || needs.release-token.result == 'failure')
+      (needs.environment-drift.result == 'failure' || needs.release-token.result == 'failure' || needs.repo-settings-drift.result == 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -170,6 +196,7 @@ jobs:
           GH_REPOSITORY: ${{ github.repository }}
           DRIFT_RESULT: ${{ needs.environment-drift.result }}
           TOKEN_RESULT: ${{ needs.release-token.result }}
+          SETTINGS_RESULT: ${{ needs.repo-settings-drift.result }}
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -184,9 +211,11 @@ jobs:
             "| --- | --- |" \
             "| environment/ruleset drift | ${DRIFT_RESULT} |" \
             "| RELEASE_PLEASE_TOKEN canary | ${TOKEN_RESULT} |" \
+            "| repo settings drift (github:sync --check) | ${SETTINGS_RESULT} |" \
             "" \
             "Drift red → align GitHub environment settings with .github/environments/*.json and re-apply .github/rulesets/*.json." \
             "Token red → rotate the RELEASE_PLEASE_TOKEN PAT and update both environment copies (pnpm github:sync)." \
+            "Settings red → run pnpm github:sync --check locally and reconcile with pnpm github:sync." \
             "" \
             "Close this issue once the guard is green again.")"
           existing="$(gh issue list --repo "$GH_REPOSITORY" --state open --label ci-failure \

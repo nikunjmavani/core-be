@@ -15,7 +15,7 @@ Keep **multilingual OpenAPI documentation** in sync with the API. The generator 
 ## When to Use
 
 - **After route changes** — run **route-schema-doc-guard** first to add `schema: { summary, description, tags }` on the Fastify registration; use this skill for locale file parity and generation.
-- **Adding or changing OpenAPI documentation** for a new locale (e.g. add `src/shared/locales/fr/openapi.json`)
+- **Adding or changing OpenAPI documentation** for a new locale (e.g. add `src/shared/locales/<locale>/openapi.json` for `fr`)
 - **Adding or editing** strings in `src/shared/locales/*/openapi.json` (info, tags, components, responses)
 - **Adding a new tag** used in route metadata — add the tag key and description to all `src/shared/locales/*/openapi.json` files so translated specs stay complete
 - **Adding a new response key** used in `buildResponses` — add the key to all locale files with the same structure as `responses` in `src/shared/locales/en/openapi.json`
@@ -39,7 +39,7 @@ Keep **multilingual OpenAPI documentation** in sync with the API. The generator 
 ## How to Run (checklist)
 
 1. **Add a new locale** (e.g. French):
-   - Copy `src/shared/locales/en/openapi.json` to `src/shared/locales/fr/openapi.json`.
+   - Copy `src/shared/locales/en/openapi.json` to `src/shared/locales/<locale>/openapi.json` (e.g. `fr`).
    - Translate all values (info, tags, components, responses). Keep keys unchanged.
    - Add `fr` to the `docs:generate:multilang` script in `package.json` (e.g. `OPENAPI_LOCALE=fr pnpm docs:generate`).
    - Run `pnpm docs:generate:multilang` and confirm `docs/openapi/openapi.fr.json` is generated.

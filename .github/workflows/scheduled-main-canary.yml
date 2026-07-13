@@ -1,0 +1,87 @@
+# Main-branch quality canary — nightly `pnpm ci:quality` on the trunk itself.
+#
+# Why this exists: the main ruleset intentionally has `strict up-to-date` OFF, so
+# two individually-green PRs can merge into a combined tree that no gate ever
+# tested (post-merge-ci's FAST lane deliberately skips re-testing single-PR
+# pushes). That is exactly how `validate:route-org-scope` went red on main in
+# July 2026 without any PR failing. This canary re-runs the full static quality
+# slice on the merged trunk every night and raises a ci-failure issue on red —
+# a broken main becomes a next-morning notification instead of a surprise weeks
+# later. Companion canaries: scheduled-release-guards.yml (settings drift),
+# codeql.yml (advisories), scheduled-k6-load-slo.yml (SLOs).
+name: Main quality canary
+
+on:
+  schedule:
+    - cron: '30 1 * * *' # nightly 01:30 UTC — before the 02:00 k6 run
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main-quality-canary
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    name: ci:quality on main
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      # The full static slice: audits, lint+typecheck, domain/route/docs/agent-os
+      # validators, contract + property tests, migration lint — no DB services
+      # needed (mirrors the PR quality lanes, which also run these on plain runners).
+      - name: Run static quality slice
+        run: pnpm ci:quality
+
+  notify-failure:
+    name: Notify failure
+    needs: [quality]
+    if: always() && needs.quality.result == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open or update ci-failure issue
+        # A failed canary on a schedule is invisible unless someone checks the
+        # Actions tab; an issue produces a real notification. One open issue
+        # collects repeats as comments; closing it acknowledges the fix.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create ci-failure --repo "$GH_REPOSITORY" \
+            --color D93F0B --description "Automated post-merge/guard failure notification" \
+            2>/dev/null || true
+          title="Main quality canary failing"
+          body="$(printf '%s\n' \
+            "Run: ${WORKFLOW_URL}" \
+            "" \
+            "\`pnpm ci:quality\` is red on the current main tree — usually merge skew:" \
+            "two green PRs whose combined tree was never tested together (strict" \
+            "up-to-date is intentionally off)." \
+            "" \
+            "Reproduce locally on main: \`pnpm ci:quality\` (or \`pnpm health\` for a full PASS/FAIL table)." \
+            "Fix forward with a short-lived branch + PR; close this issue once the canary is green.")"
+          existing="$(gh issue list --repo "$GH_REPOSITORY" --state open --label ci-failure \
+            --search "in:title \"${title}\"" --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GH_REPOSITORY" --body "$body"
+            echo "Commented on existing ci-failure issue #${existing}."
+          else
+            gh issue create --repo "$GH_REPOSITORY" --title "$title" --label ci-failure --body "$body"
+          fi

@@ -43,5 +43,5 @@ None — these tests read source files directly.
 ## Failure modes
 
 - **New cross-domain repository or schema import in a service** → `service-cross-domain-boundary.global.test.ts` prints the offending file; refactor through the owning domain's service.
-- **New worker file forgets to register its DLQ** → the readiness scan flags it; wire through [src/infrastructure/queue/dead-letter.ts](src/infrastructure/queue/dead-letter.ts).
+- **New worker file forgets to register its DLQ** → the readiness scan flags it; wire through [src/infrastructure/queue/dlq/dead-letter.ts](src/infrastructure/queue/dlq/dead-letter.ts).
 - **Route added without `schema` block** → catalog drift caught by sibling `routes:catalog:check`.

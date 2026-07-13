@@ -40,6 +40,7 @@ Granular procedures live in **skills** (invoked by name); these commands are **w
 | `/ci-local` | Run the full `pnpm ci:local` PR gate; summarize and fix failures. |
 | `/new-domain <name>` | Scaffold a domain/sub-domain via the domain-generator skill (full DAG). |
 | `/routes-sync` | Re-sync route catalog + OpenAPI/seed artifacts after route changes. |
+| `/structure-audit` | Monthly semantic drift audit — hand-written docs/skills/rules vs the actual `src/` tree (also run by the `monthly-structure-audit` scheduled routine). |
 
 **Autonomous build**
 

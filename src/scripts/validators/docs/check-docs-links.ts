@@ -1,5 +1,14 @@
 /**
- * Validates hand-written docs: stale path patterns and broken relative markdown links.
+ * Validates hand-written docs: stale path patterns, broken relative markdown
+ * links, and inline-code path citations (`src/...`, `tooling/...`, …) that no
+ * longer exist on disk.
+ *
+ * Limitations: fenced code blocks (``` … ```) are excluded from the inline-path
+ * pass — directory-tree blocks cite names relative to their tree root, which
+ * cannot be resolved reliably. Tree drift is covered by the generated
+ * `docs/reference/architecture/src-structure-tree.txt` gate and the periodic
+ * structure audit (`/structure-audit`) instead.
+ *
  * Usage: pnpm docs:links:check
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -23,15 +32,62 @@ const SCAN_ROOTS = [
   join(REPO_ROOT, 'CLAUDE.md'),
   join(REPO_ROOT, 'AGENTS.md'),
   join(REPO_ROOT, 'CONTRIBUTING.md'),
-  join(REPO_ROOT, '.cursor/skills'),
-  join(REPO_ROOT, '.cursor/rules'),
+  join(REPO_ROOT, 'agent-os'),
   join(REPO_ROOT, '.github'),
-  join(REPO_ROOT, 'src/tests/load/k6/README.md'),
+  join(REPO_ROOT, 'src'),
 ];
 
 const SKIP_DIR_NAMES = new Set(['openapi', 'node_modules', '.git']);
 
 const MARKDOWN_LINK = /\[[^\]]*\]\(([^)]+)\)/g;
+
+/** Inline-code spans (single backtick) — the citation form the path pass scans. */
+const INLINE_CODE = /`([^`\n]+)`/g;
+
+/** A cited token must start with one of these to be treated as a repo path. */
+const PATH_PREFIXES = [
+  'src/',
+  'tooling/',
+  'migrations/',
+  'agent-os/',
+  'docs/',
+  '.github/',
+  '.husky/',
+];
+
+/** Generated or gitignored targets a doc may cite without them existing on a fresh clone. */
+const GENERATED_PATH_PREFIXES = [
+  'docs/openapi/',
+  'docs/postman-collection.json',
+  'docs/ONBOARDING.md', // optional output of /understand-onboard
+];
+
+/**
+ * Paths docs cite as deliberately absent ("there is intentionally no …", "never
+ * commit a …") or as retired locations kept for contrast. Exact-token match
+ * (trailing slash ignored).
+ */
+const INTENTIONALLY_ABSENT = new Set<string>([
+  'src/infrastructure/database/schemas',
+  'src/infrastructure/queue/processors',
+  'src/tests/node_modules',
+  'migrations/meta', // Drizzle bookkeeping — docs instruct never to commit it
+  'tooling/feature-docs', // retired DOCS.md aggregator, cited historically
+  '.github/sync.config.json', // dead reference the evals README quotes as a past finding
+  'docs/reference/load-testing.md', // docs-audit skill cites it as the example of a stale flat path
+]);
+
+/**
+ * Archival point-in-time snapshots — exempt from both passes (they legitimately
+ * cite paths and link targets as they existed at the time).
+ */
+const ARCHIVAL_DIRS = ['docs/reviews/', 'docs/superpowers/'];
+
+/** Archive-suffixed docs are inline-path exempt for the same reason. */
+const ARCHIVE_FILE_SUFFIX = '-archive.md';
+
+/** Placeholder / glob / prose markers that mean a token is not a literal path. */
+const NON_LITERAL_TOKEN = /[*?<>{}|,()\s€£§]|\.{3}|…/;
 
 function collectMarkdownFiles(path: string, out: string[]): void {
   if (!statSync(path, { throwIfNoEntry: false })?.isDirectory()) {
@@ -54,11 +110,44 @@ function isExternalOrAnchor(target: string): boolean {
   return false;
 }
 
-function resolveMarkdownTarget(fromFile: string, target: string): string {
+function resolveMarkdownTarget(fromFile: string, target: string): string | null {
   const withoutAnchor = target.split('#')[0]?.trim() ?? '';
   if (!withoutAnchor) return fromFile;
-  const base = dirname(fromFile);
-  return resolve(base, withoutAnchor);
+  // Docs use two href conventions: relative to the file, and repo-root-relative
+  // (clickable from the repo root — the style used by src/ overview docs).
+  // Accept either: resolve relative first, fall back to repo root.
+  const relative = resolve(dirname(fromFile), withoutAnchor);
+  if (statSync(relative, { throwIfNoEntry: false })) return relative;
+  const fromRoot = resolve(REPO_ROOT, withoutAnchor);
+  if (statSync(fromRoot, { throwIfNoEntry: false })) return fromRoot;
+  return null;
+}
+
+function stripFences(content: string): string {
+  return content.replace(/```[\s\S]*?```/g, '');
+}
+
+function extractCitedPath(rawToken: string): string | null {
+  // Trim trailing prose punctuation and a `:line` / `#L10` suffix (`file.ts:42`).
+  const token = rawToken
+    .replace(/[.,;:!]+$/, '')
+    .replace(/:\d+(?:-\d+)?$/, '')
+    .replace(/#L\d+(?:-L?\d+)?$/, '');
+  if (NON_LITERAL_TOKEN.test(token)) return null;
+  if (!PATH_PREFIXES.some((prefix) => token.startsWith(prefix))) return null;
+  if (GENERATED_PATH_PREFIXES.some((prefix) => token.startsWith(prefix))) return null;
+  if (INTENTIONALLY_ABSENT.has(token.replace(/\/$/, ''))) return null;
+  return token;
+}
+
+function citedPathExists(cited: string): boolean {
+  if (statSync(resolve(REPO_ROOT, cited), { throwIfNoEntry: false })) return true;
+  // Import-specifier convention: docs may cite the runtime `.js` name of a `.ts` source.
+  if (cited.endsWith('.js')) {
+    const twin = `${cited.slice(0, -'.js'.length)}.ts`;
+    if (statSync(resolve(REPO_ROOT, twin), { throwIfNoEntry: false })) return true;
+  }
+  return false;
 }
 
 function main(): void {
@@ -73,10 +162,14 @@ function main(): void {
 
   const staleHits: string[] = [];
   const brokenLinks: string[] = [];
+  const missingCitedPaths: string[] = [];
 
   for (const file of files) {
     const content = readFileSync(file, 'utf8');
     const relativeFile = relativePath(file);
+    const isArchival =
+      ARCHIVAL_DIRS.some((dir) => relativeFile.startsWith(dir)) ||
+      relativeFile.endsWith(ARCHIVE_FILE_SUFFIX);
 
     for (const { pattern, suggestion } of STALE_PATTERNS) {
       if (content.includes(pattern)) {
@@ -84,17 +177,28 @@ function main(): void {
       }
     }
 
+    if (isArchival) continue;
+
     for (const match of content.matchAll(MARKDOWN_LINK)) {
       const target = match[1];
       if (!target || isExternalOrAnchor(target)) continue;
-      const resolved = resolveMarkdownTarget(file, target);
-      if (!statSync(resolved, { throwIfNoEntry: false })) {
-        brokenLinks.push(`${relativeFile}: broken link (${target}) → ${resolved}`);
+      if (!resolveMarkdownTarget(file, target)) {
+        brokenLinks.push(`${relativeFile}: broken link (${target})`);
+      }
+    }
+
+    const seenTokens = new Set<string>();
+    for (const match of stripFences(content).matchAll(INLINE_CODE)) {
+      const cited = extractCitedPath(match[1] ?? '');
+      if (!cited || seenTokens.has(cited)) continue;
+      seenTokens.add(cited);
+      if (!citedPathExists(cited)) {
+        missingCitedPaths.push(`${relativeFile}: cited path does not exist (\`${cited}\`)`);
       }
     }
   }
 
-  if (staleHits.length === 0 && brokenLinks.length === 0) {
+  if (staleHits.length === 0 && brokenLinks.length === 0 && missingCitedPaths.length === 0) {
     console.log(`docs:links:check OK (${files.length} files scanned)`);
     return;
   }
@@ -106,6 +210,12 @@ function main(): void {
   if (brokenLinks.length > 0) {
     console.error('\nBroken relative links:\n');
     for (const line of brokenLinks) console.error(`  ${line}`);
+  }
+  if (missingCitedPaths.length > 0) {
+    console.error(
+      '\nInline-cited paths that do not exist (fix the doc or the allowlists at the top of check-docs-links.ts):\n',
+    );
+    for (const line of missingCitedPaths) console.error(`  ${line}`);
   }
   process.exit(1);
 }
