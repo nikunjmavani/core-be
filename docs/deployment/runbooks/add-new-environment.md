@@ -89,8 +89,8 @@ pnpm github:sync                    # .env.<environment>, rulesets, GitHub Envir
 This creates (idempotent — never overwrites existing files):
 
 - `.env.staging` (local, **gitignored**) — copy of `.env.example`. Edit it with real values.
-- `.github/environments/staging.json` (committed) — empty protection by default.
-- `.github/rulesets/staging.json` (committed) — branch ruleset matching the default non-production policy.
+- `.github/environments/<environment>.json` (committed, e.g. `staging`) — empty protection by default.
+- `.github/rulesets/<environment>.json` (committed, e.g. `staging`) — branch ruleset matching the default non-production policy.
 
 It also prints the exact next commands.
 

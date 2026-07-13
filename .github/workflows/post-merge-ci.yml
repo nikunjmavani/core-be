@@ -4,9 +4,11 @@ name: Post-merge CI
 #
 # The PR gate (pr-ci.yml) is AUTHORITATIVE: the same tree already passed lint,
 # typecheck, unit, build, security, contract/property AND the full DB-backed
-# matrix (e2e/integration/rls/performance) before merge. Because strict
-# up-to-date checks + squash mean the merge commit's tree == the tested PR tree,
-# post-merge does not re-test a single-PR push.
+# matrix (e2e/integration/rls/performance) before merge. Post-merge does not
+# re-test a single-PR push. Caveat: `strict up-to-date` is intentionally OFF on
+# the main ruleset, so a green PR tested on a stale base can squash-merge into a
+# combined tree no gate ever saw — that residual skew is caught by the nightly
+# scheduled-main-canary.yml (`pnpm ci:quality` on main → ci-failure issue).
 #
 # Adaptive lanes (D10 — migration item 1.32), keyed on N = commits in the push
 # (squash ⇒ N = number of PRs merged in this push):

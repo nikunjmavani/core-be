@@ -86,4 +86,4 @@ See [src/POLICIES.md](src/POLICIES.md) for the full rationale:
 
 ## Related runbooks
 
-- [Stripe webhook replay](docs/deployment/runbooks/stripe-webhook-replay.md) (when present)
+- Stripe webhook replay script: `src/scripts/admin/stripe-webhook-replay.ts` (runbook pending)

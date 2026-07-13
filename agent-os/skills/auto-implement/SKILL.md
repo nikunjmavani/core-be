@@ -7,7 +7,7 @@ indexNote: workflow orchestrator — runs a chain end-to-end with per-step gates
 # auto-implement — requirement → chain → gates → review
 
 The **master orchestrator**. It owns no procedure of its own: it selects an existing
-**chain** ([`agent-os/skills/chains.json`](../../chains.json)), runs that chain's steps in
+**chain** ([`agent-os/skills/chains.json`](../chains.json)), runs that chain's steps in
 order — each step is an existing skill invoked by name — runs the step's **gate** as a
 checkpoint, **stops on the first red**, and ends with the **pre-merge-review** pipeline
 ([`agent-os/agents/pipelines.json`](../../agents/pipelines.json)). No step list is duplicated

@@ -15,7 +15,7 @@ pnpm setup:domain --all-environments --domain-template "api.{env}.example.com"
 pnpm setup:domain --environment production --domain api.example.com
 ```
 
-The command is implemented in [`tooling/setup/railway/custom-domain.ts`](../../../tooling/setup/railway/custom-domain.ts) and registered as `setup:domain` (and `setup:infra:domain` for symmetry with the rest of the `setup:infra:*` namespace) in [`package.json`](../../../package.json).
+The command is implemented in the standalone **core-infra** repo (registered there as `setup:domain`) — run it from a core-infra checkout; it is no longer part of core-be.
 
 ## Prerequisites
 

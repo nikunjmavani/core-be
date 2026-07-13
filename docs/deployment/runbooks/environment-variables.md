@@ -376,10 +376,9 @@ This section is specifically the **dev / load-test → production delta**.
 - **Setup manifest (canonical):** `tooling/setup/setup.config.json`
 - **GitHub push:** `tooling/setup/github/sync.ts` (`pnpm github:sync`)
 - **Secret/Variable classifier (by name):** `tooling/setup/github/sync-github-environments.ts` (`classifyKey`)
-- **`.env.example` section scaffolder:** `tooling/setup/envs/parse-env-sections.ts`
+- **`.env.example` add helper:** `tooling/setup/envs/env-add.ts` (`pnpm env:add`)
 - **Validator: schema ↔ template:** `src/scripts/validators/env/sync-env-example.ts` (`pnpm tool:sync-env-example`)
 - **Consistency (in github:sync):** `tooling/setup/github/sync-config.ts` (`validateGithubSyncConsistency`; run via `pnpm github:sync --check`)
-- **Validator: GitHub deploy-required keys:** `tooling/setup/github/validate.ts` (`pnpm validate:github-env`)
 - **Skill (use this when editing the schema):** `.cursor/skills/env-schema-add/SKILL.md`
 - **Where to obtain credentials:** [credentials-and-env.md](../../integrations/credentials-and-env.md)
 - **Hosted-environment plumbing:** [add-new-environment.md](./add-new-environment.md)

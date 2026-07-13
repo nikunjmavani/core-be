@@ -329,7 +329,7 @@ An organization has an immutable `type` — `PERSONAL` (single-owner workspace) 
 - [x] **core-response-format** — Add Paddle-style response helpers in `src/shared/utils/http/response.util.ts`: single (`data` + `meta.request_id`), paginated (`data` + `meta.request_id` + `meta.pagination` with `per_page`, `next`, `has_more`, `estimated_total`). Ensure request has `request_id` (e.g. `request.id` or middleware).
 - [x] **core-error-format** — Update `src/shared/middlewares/core/error-handler.middleware.ts` and `src/shared/errors/index.ts` to Paddle error shape: `error.type`, `error.code` (snake_case), `error.detail`, `error.documentation_url`, `error.errors` (for validation); `meta.request_id`. Map existing codes to snake_case.
 - [x] **db-migrations** — Add SQL migrations for OptimizedAuthTenantSchema: create schemas auth, tenancy, billing, notify, audit; create all tables with bigserial PKs, public_id (varchar 21), indexes, constraints, partial indexes as per DBML.
-- [x] **db-drizzle-schema** — Add Drizzle schema definitions (snake_case) for `auth.*`, `tenancy.*`, `billing.*`, `notify.*`, `audit.*` in `src/db/schema.ts` or split per schema.
+- [x] **db-drizzle-schema** — Add Drizzle schema definitions (snake_case) for `auth.*`, `tenancy.*`, `billing.*`, `notify.*`, `audit.*` co-located per sub-domain (`src/domains/<domain>/**/*.schema.ts`).
 - [x] **domain-auth** — Scaffold `src/domains/auth/`: users (handlers, services, repos, types, routes). Wire auth routes (me). Register under `/api/v1/auth`.
 - [x] **domain-tenancy** — Add `src/domains/tenancy/` (folder = schema name). Implement organizations (get by id, get by slug). Register under `/api/v1/tenancy`. Legacy `organizations` domain kept at `/api/v1/organizations`.
 - [x] **domain-billing** — Scaffold `src/domains/billing/`: plans (list, get by id). Register under `/api/v1/billing`.
@@ -364,7 +364,7 @@ All 19 phases from the Consolidated Master Plan (Domain API Upgrade + CI/CD + en
 - [x] Upload and MFA schemas co-located
 - [x] `DATABASE_MIGRATION_URL` in env config; `migrate.ts` uses it with fallback
 - [x] `db:push` script added to `package.json`
-- [x] RLS migration (`migrations/20260215000002_enable_rls.sql`) for all multi-tenant tables
+- [x] RLS migration (consolidated into the baseline `migrations/00000000000000_init.sql`) for all multi-tenant tables
 - [x] Tenant middleware sets `app.current_organization_id` Postgres session variable for RLS
 
 ### Phase 3 — Security hardening
@@ -406,18 +406,18 @@ All 19 phases from the Consolidated Master Plan (Domain API Upgrade + CI/CD + en
 
 ### Phase 7 — Security tests
 
-- [x] Auth enforcement (`src/tests/security/auth-enforcement.test.ts`)
-- [x] Input validation / injection prevention (`src/tests/security/input-validation.test.ts`)
-- [x] CORS headers (`src/tests/security/cors.test.ts`)
-- [x] Helmet / security headers (`src/tests/security/helmet-headers.test.ts`)
-- [x] Rate limiting (`src/tests/security/rate-limiting.test.ts`)
-- [x] Idempotency (`src/tests/security/idempotency.test.ts`)
-- [x] JWT security (`src/tests/security/jwt-security.test.ts`)
+- [x] Auth enforcement (`src/tests/security/auth/auth-enforcement.security.test.ts`)
+- [x] Input validation / injection prevention (`src/tests/security/input/` suite)
+- [x] CORS headers (`src/tests/security/headers/` suite (CORS))
+- [x] Helmet / security headers (`src/tests/security/headers/` suite (Helmet))
+- [x] Rate limiting (`src/tests/security/rate-limit/` suite)
+- [x] Idempotency (`src/tests/security/infrastructure/` suite (idempotency))
+- [x] JWT security (`src/tests/security/auth/jwt-security.security.test.ts`)
 
 ### Phase 8 — Performance tests
 
-- [x] N+1 query detection (`src/tests/performance/n-plus-one.test.ts`)
-- [x] Concurrent request handling (`src/tests/performance/concurrent-requests.test.ts`)
+- [x] N+1 query detection (`src/tests/performance/n-plus-one.performance.test.ts`)
+- [x] Concurrent request handling (`src/tests/performance/concurrent-requests.performance.test.ts`)
 
 ### Phase 9 — Permission system tests
 
@@ -427,7 +427,7 @@ All 19 phases from the Consolidated Master Plan (Domain API Upgrade + CI/CD + en
 ### Phase 10 — Route registry + completeness
 
 - [x] `docs/routes.txt` — auto-generated route catalog (`pnpm routes:catalog`)
-- [x] `src/tests/global/route-completeness.test.ts` — validates registry integrity and Fastify parity
+- [x] `src/tests/global/route-completeness.global.test.ts` — validates registry integrity and Fastify parity
 
 ### Phase 11 — k6 load testing
 
@@ -437,8 +437,8 @@ All 19 phases from the Consolidated Master Plan (Domain API Upgrade + CI/CD + en
 
 ### Phase 12 — CI/CD pipeline
 
-- [x] `.github/workflows/ci.yml` — quality, test, security, docker-build, docs jobs
-- [x] `.github/workflows/pr-checks.yml` — title validation, labeling
+- [x] `.github/workflows/pr-ci.yml` — quality, test, security, docker-build, docs lanes
+- [x] `.github/workflows/pr-governance.yml` — commit/PR governance checks
 - [x] `.github/CODEOWNERS`
 - [x] `.github/dependabot.yml`
 - [x] `.github/labeler.yml`
@@ -448,11 +448,11 @@ All 19 phases from the Consolidated Master Plan (Domain API Upgrade + CI/CD + en
 
 ### Phase 13 — Structural tests
 
-- [x] `src/tests/global/domain-consistency.test.ts` — kebab-case, file naming, required files per domain
+- [x] `src/tests/global/domain-consistency.global.test.ts` — kebab-case, file naming, required files per domain
 
 ### Phase 14 — Unit tests
 
-- [x] `src/tests/unit/services/permission-cache.test.ts`
+- [x] `src/tests/unit/services/permission-cache.unit.test.ts`
 
 ### Phase 15 — Scalability + stability
 
@@ -462,7 +462,7 @@ All 19 phases from the Consolidated Master Plan (Domain API Upgrade + CI/CD + en
 
 ### Phase 16 — Final validation
 
-- [x] `src/tests/global/system-validation.test.ts` — validates migrations, route registry, middleware, JWT, logger, schemas, DTOs, TypeScript, CI config
+- [x] `src/tests/global/system-validation.global.test.ts` — validates migrations, route registry, middleware, JWT, logger, schemas, DTOs, TypeScript, CI config
 
 ### Phase 17 — AI skills + rules (auto-mode)
 
@@ -479,5 +479,5 @@ All 19 phases from the Consolidated Master Plan (Domain API Upgrade + CI/CD + en
 - [x] Convention: only root `.env.example` is committed; `.env.<environment>` (e.g. `.env.development`, `.env.production`) are gitignored operator templates generated by `pnpm github:sync` from `tooling/setup/setup.config.json`; no `env/` directory
 - [x] `.gitignore`: ignores all `.env*` except `.env.example`
 - [x] `.env.example`: two top-level halves (`# GitHub Secrets`, `# GitHub Variables`) — section IS Secret/Variable classification for `pnpm github:sync`
-- [x] PR check (`.github/workflows/pr-checks.yml`): reject commits that add any `.env.*` file other than `.env.example`
+- [x] Guard: pre-commit step rejects staged `.env.<environment>` files; `.gitignore` keeps them untracked (only `.env.example` is committed)
 - [x] README / docs: local setup uses `pnpm github:sync` (see [environment-variables.md](../../deployment/runbooks/environment-variables.md))

@@ -11,7 +11,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/auto-implement/SKILL.md",
-      "computedHash": "01e46517294717b84517d53d6269b900acb46d9752dd55767cf5f6e1f89ad58d"
+      "computedHash": "3ec6c3e336c25ce17807fabaeca3777348359cad4cadeb34ca89f714ccd1c254"
     },
     "before-commit-guard": {
       "source": "local",
@@ -137,7 +137,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/openapi-multilingual/SKILL.md",
-      "computedHash": "fd5552675ab7f2d77408f31babb40a152cfbd7113648696e8f3fcbab33c343ad"
+      "computedHash": "b68b24235adecf00d5073062dd498bac0737f044a105c0385ec2513571a2f548"
     },
     "openapi-route-sync": {
       "source": "local",

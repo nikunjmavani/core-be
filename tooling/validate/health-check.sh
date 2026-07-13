@@ -75,6 +75,7 @@ phase "Env example sync"         tool:sync-env-example
 phase "Structure tree drift"     tool:project-structure-tree:check
 phase "Migration lint"           db:migrate:lint
 phase "OpenAPI / Postman sync"   docs:check
+phase "Docs links + cited paths" docs:links:check
 phase "Knip (dead code)"         knip
 phase "agent-os integrity"       agent-os:check
 phase "agent-os triggers"        agent-os:triggers:strict
