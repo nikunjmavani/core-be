@@ -101,7 +101,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/env-schema-add/SKILL.md",
-      "computedHash": "c6d4d5f2d39f8ca5537c8b6e6f0319f4a85ea93c4ff7d82e156ecc16b2c0e952"
+      "computedHash": "945e885fdb5d95efc13d359d9c3ecbe8aff04bdf60f99c38e9aecd11baa0e18f"
     },
     "find-skills": {
       "source": "local",

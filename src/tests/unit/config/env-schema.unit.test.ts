@@ -207,11 +207,12 @@ describe('env-schema', () => {
     expect(parsed.success && parsed.data.NODE_ENV).toBe('local');
   });
 
-  it('defaults NODE_ENV to development when unset (unchanged from before `local` was added)', () => {
-    // commonRequiredBase omits NODE_ENV, so this exercises the `.default('development')`.
+  it('defaults NODE_ENV to local when unset (an unset NODE_ENV is a developer machine)', () => {
+    // commonRequiredBase omits NODE_ENV, so this exercises the `.default('local')`. Every deploy/CI
+    // context sets NODE_ENV explicitly, so the default only governs a bare local `pnpm dev`.
     const parsed = envSchema.safeParse({ ...commonRequiredBase });
     expect(parsed.success).toBe(true);
-    expect(parsed.success && parsed.data.NODE_ENV).toBe('development');
+    expect(parsed.success && parsed.data.NODE_ENV).toBe('local');
   });
 
   it('fails loudly on an out-of-enum NODE_ENV (e.g. qa) — never a silent default', () => {

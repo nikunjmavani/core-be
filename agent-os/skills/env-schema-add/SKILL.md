@@ -23,10 +23,12 @@ and the rest of the toolchain (github:sync, deploy, Actions) just works.
 `NODE_ENV` is an enum of exactly **`local | development | production`** (no `test` / `staging`).
 `local` is a developer's machine (primary file `.env.local`, self-contained); `development` /
 `production` are the two DEPLOY targets (the deploy-target enums in `tooling/setup/` stay
-`development | production` — you never deploy to `local`). The default stays `development`, so unset
-contexts (CI, a stock `pnpm dev`) are unchanged. The Vitest suite runs as `development`; test-only
-behaviour is driven by explicit flags the harness sets. An out-of-enum value fails loudly at boot
-(`env.config.ts` eager-parses `envSchema` and throws) — never a silent default.
+`development | production` — you never deploy to `local`). The default is `local`: an unset `NODE_ENV`
+is a developer's machine (a stock `pnpm dev`, a local `pnpm db:*`). Every DEPLOY and CI context sets
+`NODE_ENV` explicitly (workflows, both Docker stages, the Vitest harness pin it), so the default never
+reaches a deployed or CI runtime. The Vitest suite runs as `development`; test-only behaviour is driven
+by explicit flags the harness sets. An out-of-enum value fails loudly at boot (`env.config.ts`
+eager-parses `envSchema` and throws) — never a silent default.
 
 **Runtime code NEVER compares or branches on `NODE_ENV`.** It is *compared* in exactly one file —
 `env-schema.ts` (the enum field and `.refine()` constraints on the parsed `data`, e.g.

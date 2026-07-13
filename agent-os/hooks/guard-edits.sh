@@ -12,7 +12,7 @@ telemetry_init "guard-edits" "PreToolUse"
 #   R1  getRequestDatabase() inside *.worker.ts | *.processor.ts
 #   R2  a `../` relative import/require added under src/
 #   R3  hand-editing a generated / do-not-edit file
-#   R4  NODE_ENV set/compared to a removed value (test|staging|local) — enum is development|production
+#   R4  NODE_ENV set/compared to a removed value (test|staging) — enum is local|development|production
 #   R5  editing the enforcement wiring itself (hook manifest / platform hook
 #       configs / guard scripts) escalates to explicit user confirmation
 #       ("ask") — the guard layer must not be silently disarmable by a session
@@ -82,15 +82,17 @@ case "$FILE" in
     fi ;;
 esac
 
-# R4 — NODE_ENV is only `development` | `production`. Never set/compare it to a removed value
-# (test|staging|local): the enum rejects them and the Vitest suite runs as `development`. Requires an
-# actual `:`/`=` after NODE_ENV so prose isn't blocked. Docs (.md/.mdc/.txt) may quote the pattern to
-# explain the rule, so they are exempt (they are not scanned by the global guard either).
+# R4 — the NODE_ENV enum is `local` | `development` | `production`. Never set/compare it to a REMOVED
+# value (test|staging): the enum rejects them and the Vitest suite runs as `development`. `local` IS a
+# valid runtime (the developer's machine; primary file `.env.local`, default when NODE_ENV is unset), so
+# it is NOT blocked. Requires an actual `:`/`=` after NODE_ENV so prose isn't blocked. Docs
+# (.md/.mdc/.txt) may quote the pattern to explain the rule, so they are exempt (nor are they scanned by
+# the global guard).
 case "$FILE" in
   *.md | *.mdc | *.txt) : ;;
   *)
-    if printf '%s' "$CONTENT" | grep -Eiq "NODE_ENV[[:space:]]*[:=]+[[:space:]]*['\"\`]?(test|staging|local)\b"; then
-      deny "NODE_ENV is only 'development' | 'production' (never 'test'/'staging'/'local' — the enum rejects them and tests run as development). Drive environment-varying behaviour via an explicit env flag with a static default + production .refine() (agent-os/skills/env-schema-add/SKILL.md; enforced by no-nodeenv-branching.global.test.ts)."
+    if printf '%s' "$CONTENT" | grep -Eiq "NODE_ENV[[:space:]]*[:=]+[[:space:]]*['\"\`]?(test|staging)\b"; then
+      deny "NODE_ENV must never be 'test' or 'staging' (the enum is 'local' | 'development' | 'production'; the Vitest suite runs as 'development'). Drive environment-varying behaviour via an explicit env flag with a static default + production .refine() (agent-os/skills/env-schema-add/SKILL.md; enforced by no-nodeenv-branching.global.test.ts)."
     fi ;;
 esac
 

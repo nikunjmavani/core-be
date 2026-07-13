@@ -6,10 +6,11 @@
  * behaviour on `NODE_ENV` — behaviour is driven by explicit env flags validated in the schema.
  *
  * Convention: a single file named `.env.<NODE_ENV>` per environment. The enum is
- * `local | development | production`; `NODE_ENV` defaults to `development` when unset (matching the
- * env schema default), so `.env.development` is the primary file for a stock `pnpm dev`. `local` is
- * the developer's machine: `NODE_ENV=local` makes `.env.local` the PRIMARY file (a self-contained
- * config with no `.env.development` inheritance). The files are gitignored — `.env.example`
+ * `local | development | production`; `NODE_ENV` defaults to `local` when unset (matching the env
+ * schema default), so `.env.local` is the primary file for a stock `pnpm dev` — an unset NODE_ENV is
+ * a developer's machine. The two DEPLOY targets set NODE_ENV explicitly (`development` / `production`,
+ * via `pnpm github:sync`), so the local default never reaches a deployed runtime. The files are
+ * gitignored — `.env.example`
  * (committed) is the canonical template; `pnpm setup:local` scaffolds a self-contained `.env.local`,
  * and `pnpm github:sync` creates missing `.env.<environment>` files (the two DEPLOY targets,
  * `development` / `production`) from `tooling/setup/setup.config.json` and pushes values.
@@ -48,7 +49,7 @@ function applyDotenvFile(envFilePath: string, override = false): void {
 
 function loadEnvFiles(): void {
   // Read NODE_ENV ONLY to name the primary file (`.env.<NODE_ENV>`) — no comparison, no branch.
-  const nodeEnv = process.env.NODE_ENV ?? 'development';
+  const nodeEnv = process.env.NODE_ENV ?? 'local';
   const primary = resolve(projectRoot, `.env.${nodeEnv}`);
   if (existsSync(primary)) {
     applyDotenvFile(primary);
