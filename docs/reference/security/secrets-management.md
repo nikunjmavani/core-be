@@ -48,4 +48,4 @@ Values are stored as `<version>:` + base64(AES-256-GCM with random IV and auth t
 ## Related
 
 - [`src/shared/utils/security/field-secret-encryption.util.ts`](../../../src/shared/utils/security/field-secret-encryption.util.ts)
-- [`docs/deployment/runbooks/jwt-key-rotation.md`](../../deployment/runbooks/jwt-key-rotation.md) (JWT signing keys — separate from field secrets)
+- [`src/shared/utils/security/jwt.util.ts`](../../../src/shared/utils/security/jwt.util.ts) (single-key RS256 JWT signing/verification — separate from field secrets)

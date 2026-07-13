@@ -107,89 +107,22 @@ describe('jwt.util', () => {
 
       await expect(verifyAccessToken(token)).rejects.toThrow();
     });
-  });
 
-  describe('kid-indexed verify keyring (JWT_PUBLIC_KEYS)', () => {
-    const keyPairA = generateRsaPemKeyPair();
-    const keyPairB = generateRsaPemKeyPair();
+    it('verifies a kid-less token against the single public key (kid is not used to select a key)', async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const signingKey = await importPKCS8(keyPairA.privateKey, 'RS256');
+      const kidlessToken = await new SignJWT({})
+        .setProtectedHeader({ alg: 'RS256' })
+        .setSubject('user-kidless')
+        .setIssuer(JWT_ISSUER)
+        .setAudience(JWT_AUDIENCE)
+        .setIssuedAt(now)
+        .setExpirationTime(now + 60)
+        .sign(signingKey);
+      expect(decodeProtectedHeader(kidlessToken).kid).toBeUndefined();
 
-    afterEach(() => {
-      delete process.env.JWT_PUBLIC_KEYS;
-      delete process.env.JWT_SIGNING_KID;
-      resetEnvCacheForTests();
-      resetJwtCachesForTests();
-    });
-
-    it('verifies a token signed under kid A against the keyring', async () => {
-      process.env.JWT_PRIVATE_KEY = keyPairA.privateKey;
-      process.env.JWT_PUBLIC_KEY = keyPairA.publicKey;
-      process.env.JWT_SIGNING_KID = 'key-a';
-      process.env.JWT_PUBLIC_KEYS = JSON.stringify({
-        'key-a': keyPairA.publicKey,
-        'key-b': keyPairB.publicKey,
-      });
-      resetEnvCacheForTests();
-      resetJwtCachesForTests();
-
-      const token = await signAccessToken({ userId: 'user-kid-a' });
-      expect(decodeProtectedHeader(token).kid).toBe('key-a');
-      const payload = await verifyAccessToken(token);
-      expect(payload.userId).toBe('user-kid-a');
-    });
-
-    it('still verifies old-kid tokens after rotating the signing kid (overlap window)', async () => {
-      process.env.JWT_PRIVATE_KEY = keyPairA.privateKey;
-      process.env.JWT_PUBLIC_KEY = keyPairA.publicKey;
-      process.env.JWT_SIGNING_KID = 'key-a';
-      resetEnvCacheForTests();
-      resetJwtCachesForTests();
-      const oldToken = await signAccessToken({ userId: 'user-old' });
-
-      process.env.JWT_PRIVATE_KEY = keyPairB.privateKey;
-      process.env.JWT_PUBLIC_KEY = keyPairB.publicKey;
-      process.env.JWT_SIGNING_KID = 'key-b';
-      process.env.JWT_PUBLIC_KEYS = JSON.stringify({
-        'key-a': keyPairA.publicKey,
-        'key-b': keyPairB.publicKey,
-      });
-      resetEnvCacheForTests();
-      resetJwtCachesForTests();
-
-      const newToken = await signAccessToken({ userId: 'user-new' });
-      expect(decodeProtectedHeader(newToken).kid).toBe('key-b');
-      expect((await verifyAccessToken(newToken)).userId).toBe('user-new');
-      expect((await verifyAccessToken(oldToken)).userId).toBe('user-old');
-    });
-
-    it('rejects a token whose kid is present but not in the active keyring (no silent fallback)', async () => {
-      // Signing with key-a (kid=key-a) but the keyring only knows key-b — this must be
-      // rejected hard so retired keys cannot verify against JWT_PUBLIC_KEY after rotation.
-      process.env.JWT_PRIVATE_KEY = keyPairA.privateKey;
-      process.env.JWT_PUBLIC_KEY = keyPairA.publicKey;
-      process.env.JWT_SIGNING_KID = 'key-a';
-      process.env.JWT_PUBLIC_KEYS = JSON.stringify({ 'key-b': keyPairB.publicKey });
-      resetEnvCacheForTests();
-      resetJwtCachesForTests();
-
-      const token = await signAccessToken({ userId: 'user-retired-key' });
-      await expect(verifyAccessToken(token)).rejects.toThrow(
-        "JWT kid 'key-a' is not present in the active key rotation ring",
-      );
-    });
-
-    it('rejects a token whose kid maps to a non-matching keyring entry', async () => {
-      process.env.JWT_PRIVATE_KEY = keyPairA.privateKey;
-      process.env.JWT_PUBLIC_KEY = keyPairA.publicKey;
-      process.env.JWT_SIGNING_KID = 'key-b';
-      process.env.JWT_PUBLIC_KEYS = JSON.stringify({
-        'key-a': keyPairA.publicKey,
-        'key-b': keyPairB.publicKey,
-      });
-      resetEnvCacheForTests();
-      resetJwtCachesForTests();
-
-      const token = await signAccessToken({ userId: 'user-wrong-kid' });
-      await expect(verifyAccessToken(token)).rejects.toThrow();
+      const payload = await verifyAccessToken(kidlessToken);
+      expect(payload.userId).toBe('user-kidless');
     });
   });
 
@@ -261,73 +194,6 @@ describe('jwt.util', () => {
         .sign(signingKey);
 
       await expect(verifyAccessToken(token)).rejects.toThrow();
-    });
-  });
-
-  describe('JWT_LEGACY_KEY_ENABLED sunset gate', () => {
-    const keyPair = generateRsaPemKeyPair();
-    const now = Math.floor(Date.now() / 1000);
-    let signingKey: CryptoKey;
-
-    beforeEach(async () => {
-      process.env.JWT_PRIVATE_KEY = keyPair.privateKey;
-      process.env.JWT_PUBLIC_KEY = keyPair.publicKey;
-      delete process.env.JWT_SIGNING_KID;
-      delete process.env.JWT_PUBLIC_KEYS;
-      resetEnvCacheForTests();
-      resetJwtCachesForTests();
-      signingKey = await importPKCS8(keyPair.privateKey, 'RS256');
-    });
-
-    afterEach(() => {
-      delete process.env.JWT_LEGACY_KEY_ENABLED;
-      delete process.env.JWT_SIGNING_KID;
-      delete process.env.JWT_PUBLIC_KEYS;
-      resetEnvCacheForTests();
-      resetJwtCachesForTests();
-    });
-
-    async function signKidlessToken(userId: string): Promise<string> {
-      return new SignJWT({})
-        .setProtectedHeader({ alg: 'RS256' })
-        .setSubject(userId)
-        .setIssuer(JWT_ISSUER)
-        .setAudience(JWT_AUDIENCE)
-        .setIssuedAt(now)
-        .setExpirationTime(now + 60)
-        .sign(signingKey);
-    }
-
-    it('accepts a kid-less token when JWT_LEGACY_KEY_ENABLED defaults to true', async () => {
-      const token = await signKidlessToken('user-kidless-default');
-      expect(decodeProtectedHeader(token).kid).toBeUndefined();
-
-      const payload = await verifyAccessToken(token);
-      expect(payload.userId).toBe('user-kidless-default');
-    });
-
-    it('rejects a kid-less token when JWT_LEGACY_KEY_ENABLED=false (sunset)', async () => {
-      process.env.JWT_LEGACY_KEY_ENABLED = 'false';
-      resetEnvCacheForTests();
-      resetJwtCachesForTests();
-
-      const token = await signKidlessToken('user-kidless-rejected');
-      await expect(verifyAccessToken(token)).rejects.toThrow(
-        /legacy kid-less verification disabled/,
-      );
-    });
-
-    it('still accepts kid-bearing tokens via the keyring when JWT_LEGACY_KEY_ENABLED=false', async () => {
-      process.env.JWT_LEGACY_KEY_ENABLED = 'false';
-      process.env.JWT_SIGNING_KID = 'key-a';
-      process.env.JWT_PUBLIC_KEYS = JSON.stringify({ 'key-a': keyPair.publicKey });
-      resetEnvCacheForTests();
-      resetJwtCachesForTests();
-
-      const token = await signAccessToken({ userId: 'user-kid-accepted-after-sunset' });
-      expect(decodeProtectedHeader(token).kid).toBe('key-a');
-      const payload = await verifyAccessToken(token);
-      expect(payload.userId).toBe('user-kid-accepted-after-sunset');
     });
   });
 

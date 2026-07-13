@@ -53,8 +53,9 @@ const pemBodyFingerprint = (pemBlock: string): string =>
     .digest('hex');
 
 /**
- * True when `value` contains any PEM block whose body matches a forbidden test-key fingerprint.
- * Splits on PEM blocks so a multi-key `JWT_PUBLIC_KEYS` keyring is checked entry-by-entry.
+ * True when `value` contains a PEM block whose body matches a forbidden test-key fingerprint.
+ * Checks `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` so the committed test keypair can never sign or verify
+ * production tokens.
  */
 const containsForbiddenTestJwtKey = (value: string | undefined): boolean => {
   if (!value) return false;
@@ -188,25 +189,8 @@ const envSchemaBase = z.object({
   JWT_PRIVATE_KEY: z.string().min(1),
   /** RS256 PEM public key. Required in every runtime; NODE_ENV is metadata only. */
   JWT_PUBLIC_KEY: z.string().min(1),
-  /** Key id in JWT header when signing with RS256 (default: `default`). */
+  /** Key id stamped in the JWT header when signing with RS256 (default: `default`). Informational — single-key model, not used to select a verification key. */
   JWT_SIGNING_KID: z.string().min(1).optional().default('default'),
-  /**
-   * Optional `kid`→PEM verification keyring (JSON object) enabling zero-downtime RS256
-   * rotation. When set, a token is verified against the public key whose `kid` matches the
-   * token header (current + previous keys during an overlap window). Unset preserves the
-   * single `JWT_PUBLIC_KEY` path exactly. Public key material → GitHub Variable.
-   */
-  JWT_PUBLIC_KEYS: z.string().min(1).optional(),
-  /**
-   * Legacy `kid`-less token acceptance gate. When `true` (default) tokens without a
-   * `kid` header fall back to `JWT_PUBLIC_KEY` — the pre-rotation behaviour required so
-   * already-issued access tokens keep verifying during a rolling deploy. Flip to `false`
-   * after every issued token carries a `kid` (the 15 min access-token TTL + a session-refresh
-   * cycle is the upper bound) to hard-reject any `kid`-less token, removing the permanent
-   * trust window on the original signing key. Uses {@link booleanString} so `"false"` actually
-   * parses to `false` (`z.coerce.boolean()` would treat `"false"` as truthy).
-   */
-  JWT_LEGACY_KEY_ENABLED: booleanString('true'),
   /** Comma-separated emails that receive super_admin in JWT on login/refresh (platform ops). */
   GLOBAL_ADMIN_EMAILS: z.string().optional(),
   /** Shorter access-token TTL (seconds) for GLOBAL_ADMIN_EMAILS super_admin JWTs. Default 300 (5 min). */
@@ -1359,29 +1343,6 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
-      // audit-#15b: once a JWT verification keyring (JWT_PUBLIC_KEYS) is configured
-      // in production, the legacy kid-less fallback must be CLOSED. Leaving
-      // JWT_LEGACY_KEY_ENABLED=true alongside a keyring keeps the original single
-      // signing key as a permanent trust anchor that key rotation / revocation
-      // cannot retire — a leaked original key would keep minting valid tokens.
-      // Deployments WITHOUT a keyring are unaffected: the legacy single-key path
-      // stays available until they migrate to the keyring.
-      if (data.NODE_ENV !== 'production') {
-        return true;
-      }
-      if (!data.JWT_PUBLIC_KEYS) {
-        return true;
-      }
-      return data.JWT_LEGACY_KEY_ENABLED === false;
-    },
-    {
-      message:
-        'JWT_LEGACY_KEY_ENABLED must be false in production once JWT_PUBLIC_KEYS (the verification keyring) is configured — close the legacy kid-less trust window after migrating to the keyring.',
-      path: ['JWT_LEGACY_KEY_ENABLED'],
-    },
-  )
-  .refine(
-    (data) => {
       // audit-#L1: the suite ships a static, PUBLICLY-COMMITTED RSA keypair (src/tests/setup.ts).
       // It must never sign or verify real tokens — reject it by base64-body fingerprint so a stray
       // copy-paste of the test key into a production secret fails closed at boot instead of silently
@@ -1393,13 +1354,12 @@ export const envSchema = envSchemaBase
       }
       return !(
         containsForbiddenTestJwtKey(data.JWT_PRIVATE_KEY) ||
-        containsForbiddenTestJwtKey(data.JWT_PUBLIC_KEY) ||
-        containsForbiddenTestJwtKey(data.JWT_PUBLIC_KEYS)
+        containsForbiddenTestJwtKey(data.JWT_PUBLIC_KEY)
       );
     },
     {
       message:
-        'JWT_PRIVATE_KEY / JWT_PUBLIC_KEY(S) must not be the committed test keypair (src/tests/setup.ts) in production — generate a fresh RSA keypair for the production environment.',
+        'JWT_PRIVATE_KEY / JWT_PUBLIC_KEY must not be the committed test keypair (src/tests/setup.ts) in production — generate a fresh RSA keypair for the production environment.',
       path: ['JWT_PRIVATE_KEY'],
     },
   )

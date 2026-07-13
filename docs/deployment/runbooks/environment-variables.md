@@ -316,7 +316,6 @@ instead of running insecure — you cannot ship the dev value:
 | `SECRETS_ENCRYPTION_KEY`              | all-zero placeholder      | high-entropy 32-byte key (`openssl rand -hex 32`); low-entropy rejected           |
 | `ALLOWED_ORIGINS`                     | `http://localhost:3000`   | absolute `https://` only; no `*`, path, userinfo, query, or trailing slash        |
 | `COOKIE_SECURE`                       | `false`                   | `true` (cookies sent over HTTPS only)                                              |
-| `JWT_LEGACY_KEY_ENABLED`              | `true` (pre-keyring)      | `false` once `JWT_PUBLIC_KEYS` (verification keyring) is set                       |
 | `UPLOAD_USE_PRESIGNED_POST`           | may be `false`            | `true` (presigned PUT has no min-size enforcement)                                 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`         | `http://…` ok             | `https://` (telemetry must not transmit SQL/paths in plaintext)                   |
 | `METRICS_SCRAPE_TOKEN`                | optional                  | **required (≥32 chars)** when `METRICS_ENABLED=true`                               |

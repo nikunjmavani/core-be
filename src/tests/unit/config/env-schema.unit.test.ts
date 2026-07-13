@@ -112,34 +112,8 @@ describe('env-schema', () => {
     }
   });
 
-  it('rejects JWT_LEGACY_KEY_ENABLED=true in production once JWT_PUBLIC_KEYS is configured (audit-#15b)', () => {
-    const parsed = envSchema.safeParse({
-      ...productionRequiredBase,
-      JWT_PUBLIC_KEYS: '[{"kid":"k1","key":"pub"}]',
-      // JWT_LEGACY_KEY_ENABLED defaults to true — must be rejected alongside a keyring.
-    });
-    expect(parsed.success).toBe(false);
-    if (!parsed.success) {
-      expect(
-        parsed.error.issues.some((issue) => issue.path.includes('JWT_LEGACY_KEY_ENABLED')),
-      ).toBe(true);
-    }
-  });
-
-  it('accepts a JWT keyring in production when the legacy gate is closed (audit-#15b)', () => {
-    const parsed = envSchema.safeParse({
-      ...productionRequiredBase,
-      JWT_PUBLIC_KEYS: '[{"kid":"k1","key":"pub"}]',
-      JWT_LEGACY_KEY_ENABLED: 'false',
-    });
-    expect(parsed.success).toBe(true);
-  });
-
-  it('leaves the legacy single-key path available in production without a keyring (audit-#15b)', () => {
-    const parsed = envSchema.safeParse({
-      ...productionRequiredBase,
-      // No JWT_PUBLIC_KEYS — the legacy default must still validate (no breaking change).
-    });
+  it('validates the single-key RS256 model in production (JWT_PUBLIC_KEY only, no keyring)', () => {
+    const parsed = envSchema.safeParse({ ...productionRequiredBase });
     expect(parsed.success).toBe(true);
   });
 
