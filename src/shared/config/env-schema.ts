@@ -286,10 +286,16 @@ const envSchemaBase = z.object({
   /** Category-B. Fail boot when TRUST_PROXY is unset/false (behind a load balancer the client IP collapses). */
   TRUST_PROXY_REQUIRED: booleanString('true'),
   /**
+   * Category-B. Marks the process as a test run — the master gate for test-only affordances (today the
+   * destructive DB/Redis wipe helpers). Defaults false; a refine forbids `true` in production; the
+   * test harness sets it true. A test-only capability must additionally check `env.TEST_MODE`.
+   */
+  TEST_MODE: booleanString('false'),
+  /**
    * Category-B. Permit the destructive test-data wipe helpers (TRUNCATE all tables + flush Redis
    * keys) used by the e2e suite. Defaults false (hardened); a refine forbids `true` on
    * production. The test harness sets it true; a developer may set it true in `.env.local`
-   * to run cleanup against a local development database.
+   * to run cleanup against a local development database. Additionally gated by `TEST_MODE`.
    */
   TEST_DATA_WIPE_ALLOWED: booleanString('false'),
   /**
@@ -1288,6 +1294,11 @@ export const envSchema = envSchemaBase
     message:
       'TRUST_PROXY_REQUIRED must be true in production (without a trusted proxy hop every client collapses to the proxy IP).',
     path: ['TRUST_PROXY_REQUIRED'],
+  })
+  .refine((data) => data.NODE_ENV !== 'production' || data.TEST_MODE === false, {
+    message:
+      'TEST_MODE must be false in production (it gates test-only affordances that must never be reachable on a deployed runtime).',
+    path: ['TEST_MODE'],
   })
   .refine((data) => data.NODE_ENV !== 'production' || data.TEST_DATA_WIPE_ALLOWED === false, {
     message:

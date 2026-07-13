@@ -29,6 +29,8 @@ process.env.DATABASE_RLS_SAFETY_ENFORCED ??= 'false';
 process.env.DATABASE_CONNECTION_BUDGET_ENFORCED ??= 'false';
 process.env.REDIS_TLS_ENFORCED ??= 'false';
 process.env.TRUST_PROXY_REQUIRED ??= 'false';
+// TEST_MODE marks this as a test run — the master gate the test-only affordances require.
+process.env.TEST_MODE = 'true';
 process.env.TEST_DATA_WIPE_ALLOWED ??= 'true';
 process.env.RATE_LIMIT_RELAXED_CAPS ??= 'true';
 process.env.RATE_LIMIT_IN_MEMORY_FALLBACK_ALLOWED ??= 'true';

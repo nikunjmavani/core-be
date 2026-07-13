@@ -198,6 +198,30 @@ describe('env-schema', () => {
     expect(parsed.success && parsed.data.BLOCK_DISPOSABLE_EMAIL).toBe(false);
   });
 
+  it('defaults TEST_MODE to false', () => {
+    const parsed = envSchema.safeParse({ ...commonRequiredBase, NODE_ENV: 'development' });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.TEST_MODE).toBe(false);
+  });
+
+  it('rejects TEST_MODE=true in production (Category-B)', () => {
+    const parsed = envSchema.safeParse({ ...productionRequiredBase, TEST_MODE: 'true' });
+    expect(parsed.success).toBe(false);
+    expect(
+      !parsed.success && parsed.error.issues.some((issue) => issue.path.includes('TEST_MODE')),
+    ).toBe(true);
+  });
+
+  it('allows TEST_MODE=true outside production (test-run gate)', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      TEST_MODE: 'true',
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.TEST_MODE).toBe(true);
+  });
+
   it('accepts NODE_ENV=local (developer machine, primary file .env.local)', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,

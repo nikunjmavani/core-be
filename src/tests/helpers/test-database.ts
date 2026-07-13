@@ -7,13 +7,13 @@ const MAX_CLEANUP_RETRIES = 3;
 const CLEANUP_RETRY_DELAY_MS = 100;
 
 /**
- * Whether wiping all rows is acceptable, read from the explicit `TEST_DATA_WIPE_ALLOWED` flag.
- * Defaults true only under `test`; a schema refine forbids it on staging/production so a deployed
- * data store can never be truncated. A developer sets it true in `.env.local` to wipe a local
- * development database.
+ * Whether wiping all rows is acceptable. Requires BOTH the master `TEST_MODE` gate (this is a test
+ * run) AND the specific `TEST_DATA_WIPE_ALLOWED` flag. Both default false and a schema refine forbids
+ * either being `true` in production, so a deployed data store can never be truncated. The test harness
+ * sets both true; a developer sets both in `.env.local` to wipe a local development database.
  */
 function isDataWipeAllowed(): boolean {
-  return env.TEST_DATA_WIPE_ALLOWED;
+  return env.TEST_MODE && env.TEST_DATA_WIPE_ALLOWED;
 }
 
 /**
@@ -24,7 +24,9 @@ function isDataWipeAllowed(): boolean {
 export async function cleanupDatabase(): Promise<void> {
   if (!isDataWipeAllowed()) {
     throw new Error(
-      'cleanupDatabase can only be called in test or a non-hosted development environment',
+      'cleanupDatabase is disabled: it requires TEST_MODE=true AND TEST_DATA_WIPE_ALLOWED=true. ' +
+        'The Vitest harness sets both; for a manual run set them in .env.local (NODE_ENV=local/development). ' +
+        'Both are refine-forbidden in production, so this can never truncate a deployed database.',
     );
   }
 
