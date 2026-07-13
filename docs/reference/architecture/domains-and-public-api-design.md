@@ -46,15 +46,15 @@ src/domains/<domain>/              # domain = DB schema
 | Domain (folder) | Sub-domains (folders)                                                                                                                                                           |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **audit**       | (single domain, no sub-domains)                                                                                                                                                 |
-| **auth**        | auth-method (email verification-code, oauth), auth-session, auth-mfa, auth-webauthn                                                                                                          |
+| **auth**        | auth-method (email verification-code, oauth; verification-token nested persistence module), auth-session, auth-mfa, auth-mfa-session (Redis MFA challenge-ticket store), auth-webauthn        |
 | **user**        | user-settings, user-notification-preferences, user-data-export                                                                                                                  |
 | **tenancy**     | organization (organization-settings, organization-notification-policy, organization-api-key), membership (member-invitation), member-roles (member-role-permission), permission |
 | **billing**     | plan, subscription, stripe-webhook                                                                                                                                              |
-| **notify**      | notification, webhook (webhook-event)                                                                                                                                           |
+| **notify**      | notification, webhook (webhook-event, webhook-delivery)                                                                                                                          |
 | **upload**      | (single domain, no sub-domains)                                                                                                                                                 |
 
 - **Code:** `src/domains/auth/sub-domains/auth-method/`, `src/domains/tenancy/sub-domains/organization/`, etc. Use `.cursor/skills/domain-generator/SKILL.md` and **CLAUDE.md** when adding or extending sub-domains.
-- **DB:** Schemas `auth`, `tenancy`, `billing`, `notify`, `audit` in Postgres (same names as domain folders).
+- **DB:** Schemas `auth`, `tenancy`, `billing`, `notify`, `audit`, `upload` in Postgres (same names as domain folders; the `user` domain has no dedicated schema — its `users` table lives in `auth`).
 
 ### 1.3 Sub-domain nesting (sub-domains may contain sub-domains)
 
@@ -262,7 +262,7 @@ Domain folder = DB schema; each **sub-domain** is a folder with its own controll
 
 ### 4.1 auth — sub-domain: users
 
-- **Path:** `src/domains/auth/` (controller, service, repos; sub-domains: auth-method, auth-session, auth-mfa, auth-webauthn).
+- **Path:** `src/domains/auth/` (controller, service, repos; sub-domains: auth-method, auth-session, auth-mfa, auth-mfa-session, auth-webauthn).
 - **Routes:** Auth flows `POST /api/v1/auth/login`, `logout`, `email verification-code`, `oauth/:provider`; current user `GET|PATCH /api/v1/auth/me`; under me: `GET|PATCH /api/v1/auth/me/settings`, `GET|PUT /api/v1/auth/me/notification-preferences`, `GET|POST|DELETE /api/v1/auth/me/auth-methods`, `GET /api/v1/auth/me/sessions`, `DELETE /api/v1/auth/me/sessions/:session_id`.
 - **Self-service MFA / WebAuthn (authenticated, under `/auth/me/`):** managing a user's own second factor is a self-service operation and lives under `/auth/me/`: `GET /api/v1/auth/me/mfa`, `DELETE /api/v1/auth/me/mfa/:mfa_method_id`, `POST /api/v1/auth/me/mfa/enroll`, `POST /api/v1/auth/me/mfa/enroll/confirm`, `POST /api/v1/auth/me/mfa/verify`, `POST /api/v1/auth/me/webauthn/register/options`, `POST /api/v1/auth/me/webauthn/register/verify`. MFA-method ids use the `am_` (auth-method) prefix — `mfa_method_id` validates `^am_[a-z0-9]{21}$`.
 - **Public login-flow second factor (unauthenticated):** the routes used **during login**, before a session exists, stay at the top level: `POST /api/v1/auth/mfa/login`, `POST /api/v1/auth/webauthn/authenticate/options`, `POST /api/v1/auth/webauthn/authenticate/verify`. The old `/auth/mfa*` (non-login) paths now return 404 — there are no deprecation aliases (pre-first-release).
@@ -312,7 +312,7 @@ An organization has an immutable `type` — `PERSONAL` (single-owner workspace) 
 
 ## 5. Conventions summary
 
-- **Domain folders = DB schemas:** Exactly five: `auth`, `tenancy`, `billing`, `notify`, `audit`. Folder under `src/domains/<name>/` uses the same name as the Postgres schema.
+- **Domain folders = DB schemas:** Six Postgres schemas: `auth`, `tenancy`, `billing`, `notify`, `audit`, `upload` — each named after its domain folder. Seven domain folders total: `user` has no dedicated schema (its `users` table lives in `auth`).
 - **URL path segments:** Plural, kebab-case (e.g. `member-invitations`, `audit-logs`).
 - **IDs in URLs:** Always **public_id** (21-char NanoID/ULID). Response bodies use `id` for public_id.
 - **Body field casing:** Request body and response body property keys are **snake_case** (`file_name`, `created_at`, `avatar_key`) — matching the DB columns and the `meta`/`pagination` envelope; the single external identifier is `id`. Validation `error.errors[].field` values are snake_case too. Internal TypeScript identifiers may stay camelCase. Verbatim third-party / browser-native payloads (Stripe webhooks, OAuth, WebAuthn W3C JSON) and JWT claims are the only exceptions. Enforced by `src/tests/unit/api/snake-case-body-keys.policy.unit.test.ts`.
@@ -348,7 +348,7 @@ All 19 phases from the Consolidated Master Plan (Domain API Upgrade + CI/CD + en
 
 ### Phase 0 — Domain co-location audit
 
-- [x] Schema co-location audit (verified Drizzle schemas live under `src/infrastructure/database/schemas/<domain>/`)
+- [x] Schema co-location audit (verified Drizzle schemas are co-located in domains as `src/domains/<domain>/**/<sub-domain>.schema.ts`)
 - [x] Domain and sub-domain directory naming follows canonical layout from CLAUDE.md
 
 ### Phase 1 — Infrastructure hardening

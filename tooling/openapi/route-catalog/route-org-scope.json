@@ -125,6 +125,7 @@
   "POST /api/v1/users/:user_id/suspend": "both",
   "POST /api/v1/users/:user_id/unsuspend": "both",
   "POST /api/v1/users/me/data-export": "both",
+  "POST /api/v1/users/me/onboarding/complete": "both",
   "POST /internal/ops/circuit-breakers/:circuit_name/reset": "both",
   "PUT /api/v1/tenancy/organization/logo": "both",
   "PUT /api/v1/tenancy/organization/roles/:role_id/permissions": "both",

@@ -164,7 +164,8 @@ src/infrastructure/
   cache/
     redis.client.ts           # Redis connection (managed service)
     bullmq-redis.client.ts    # Separate BullMQ Redis client (logical DB) + redis-url / redis-prefix utils
-                              # + redis.constants.ts, assert-redis-tls-safety.ts (boot guard), redis-topology-warn.util.ts
+                              # + redis.constants.ts, assert-redis-tls-safety.ts (boot guard), redis-topology-warn.util.ts,
+                              #   redis-lock.util.ts (withRedisLock compare-and-del lock), redis-url.parse.util.ts
   queue/
     connection.ts             # Re-exports Redis for BullMQ + getBullMQConnectionOptions()
     health.ts                  # BullMQ readiness helper (notification queue client ping)
@@ -177,6 +178,7 @@ src/infrastructure/
     commit-dispatch/          # Post-commit dispatch recovery: commit-dispatch.executor.ts/.store.ts, commit-dispatch-recovery.worker.ts/.processor.ts
   mail/
     mail.service.ts           # Resend email service
+    resend-api.error.ts       # Structured Resend API error (counts as a circuit-breaker failure)
     mail-outbox.schema.ts     # Transactional outbox table (shared infrastructure pattern)
     mail-outbox.repository.ts # Outbox persistence (not domain-owned)
     templates/                # HTML email templates (base, verification-code, invitation)
@@ -189,7 +191,8 @@ src/infrastructure/
   storage/
     storage.service.ts        # S3 storage service (presigned URLs, head object)
     s3-adapter.ts             # S3 adapter behind object-storage.port.ts (+ public-media-url.util.ts, s3-error.util.ts)
-  outbound/                   # Hardened outbound HTTP (outbound-fetch.ts: timeouts, redaction) for third-party calls
+  outbound/                   # Hardened outbound HTTP for third-party calls: outbound-fetch.ts (timeouts, redaction),
+                              # outbound-call.ts, outbound-defaults.ts, outbound-error.ts, outbound-redaction.ts, index.ts
   resilience/                 # Circuit breaker + retry-with-backoff for outbound/third-party calls (circuit-breaker.ts, retry-with-backoff.util.ts, lua/)
   api-reference/              # Scalar API-reference wiring (scalar-api-reference.ts)
   observability/
@@ -203,6 +206,8 @@ src/infrastructure/
     unhandled-rejection.handler.ts  # Burst-tolerant unhandledRejection policy
   mcp/
     mcp-server.ts             # MCP (ENABLE_MCP_SERVER, dynamic import; @modelcontextprotocol/sdk optionalDependency): POST /api/v1/mcp
+    mcp-capabilities.ts       # Canonical MCP tools/resources (shared by MCP server + OpenAPI /reference UI)
+    mcp-client-guide.ts       # Client integration guide served as the core-be://client-guide MCP resource
 ```
 
 ## Shared
@@ -368,7 +373,7 @@ See [docs/reference/architecture/documentation-system.md](docs/reference/archite
 ## Testing
 
 - **Test framework**: Vitest + `fastify.inject()` (helpers in `src/tests/helpers/test-http-inject.helper.ts`)
-- **Cross-cutting tests**: `src/tests/` — helpers, shared factories, security, performance, chaos, contract; k6 under `src/tests/load/k6/`
+- **Cross-cutting tests**: `src/tests/` — helpers, shared factories, security, performance, chaos, contract, cross-cutting e2e flows (`src/tests/e2e/` — signup, billing onboarding, data-export deletion), smoke (`src/tests/smoke/`), bench (`src/tests/bench/`), SQL fixtures (`src/tests/fixtures/`); k6 under `src/tests/load/k6/`
 - **Domain tests** (co-located with code):
   - **Bundled e2e**: `src/domains/<domain>/__tests__/<domain>.test.ts` (auth, billing, notify, user, tenancy, audit, upload)
   - **Domain integration**: `src/domains/<domain>/__tests__/integration/*.integration.test.ts` — **required** for routed domains (`validate:domain` requires a `.test.ts` under `__tests__/integration/`; the `.integration.test.ts` suffix is enforced by `validate:test-naming`); route smoke + focused in-process HTTP contracts
@@ -386,7 +391,7 @@ See [docs/reference/architecture/documentation-system.md](docs/reference/archite
 
 ## Commands
 
-Script namespaces: `ci:*`, `compose:*`, `test:*`, `db:*`, `docs:*`, `routes:*`, `load:*`, `chaos:*`, `tool:*`, `setup:*`, `mcp:*`, `security:*`, `sonar:*`, `deps:*`. List all: `pnpm run`.
+Script namespaces: `ci:*`, `compose:*`, `test:*`, `validate:*`, `db:*`, `docs:*`, `routes:*`, `load:*`, `chaos:*`, `tool:*`, `setup:*`, `mcp:*`, `security:*`, `sonar:*`, `deps:*`, `agent-os:*`, `github:*`, `tsdoc:*`, `docker:*`, `dashboards:*`, `ops:*`, `sbom:*`. List all: `pnpm run`.
 
 Local SonarQube quality gate (pre-commit): `pnpm sonar:up` / `sonar:scan` / `sonar:down` / `sonar:reset`. The pre-commit hook (`pnpm guard:pre-commit`, step 17) blocks a commit when SonarQube has any open issue on the deployed-app surface; the gate is mandatory — there is no bypass, every issue must be resolved. See **`docs/reference/quality/sonarqube-local.md`**.
 

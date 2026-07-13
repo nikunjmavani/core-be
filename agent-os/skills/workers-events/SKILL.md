@@ -118,7 +118,7 @@ billing events  →  notify/sub-domains/webhook/events/billing-webhook.event-han
      - log structured metadata (job id, organization id, etc.)
      - be idempotent when possible
    - **Database access in workers/processors** (never `getRequestDatabase()` or `request-database.context` imports):
-     - Type handles via `PostgresDatabaseHandle` / `WorkerDatabaseHandle` in `src/infrastructure/database/utils/database-handle.types.ts` and `worker-processor.util.ts`
+     - Type handles via `PostgresDatabaseHandle` / `WorkerDatabaseHandle` in `src/infrastructure/database/utils/database-handle.types.ts` and `src/infrastructure/queue/worker-runtime/worker-processor.util.ts`
      - **Runtime guard:** `src/worker.ts` sets `CORE_BE_RUNTIME=worker`. Unpinned `getRequestDatabase()` throws `WorkerDatabaseContextError`. Context kind is tracked in `worker-database.context.ts` (ALS).
      - Use `runTenantScopedWorkerJob`, `runGlobalRetentionWorkerJob`, or `runUserScopedWorkerJob` from `worker-processor.util.ts`, or `createTenantScopedBullMQWorker` for tenant-scoped queues, or call the context wrappers directly
      - Tenant-scoped jobs → `withOrganizationContext(organizationPublicId, (databaseHandle) => …)` — pins ALS + `SET LOCAL app.current_organization_id`

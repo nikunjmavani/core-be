@@ -185,7 +185,7 @@ Legend:
   GET    /api/v1/users/me/data-export/:data_export_id             200  -    both  AUTH
   GET    /api/v1/users/me/notification-preferences                200  -    both  AUTH
   PUT    /api/v1/users/me/notification-preferences                200  -    both  AUTH
-  POST   /api/v1/users/me/onboarding/complete                     201  -    ???   AUTH
+  POST   /api/v1/users/me/onboarding/complete                     201  -    both  AUTH
   GET    /api/v1/users/me/settings                                200  -    both  AUTH
   PATCH  /api/v1/users/me/settings                                200  -    both  AUTH
 
