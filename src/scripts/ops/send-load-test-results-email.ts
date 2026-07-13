@@ -2,7 +2,7 @@
  * Run load tests (health stress + API stress) and email the results.
  * Requires: server running with high rate limit (pnpm dev:loadtest), RESEND_API_KEY,
  * and LOAD_TEST_RESULT_EMAIL_TO or TEST_REPORT_EMAIL_TO.
- * Run: pnpm run scripts:send-load-test-results-email
+ * Run: pnpm run tool:send-load-test-results-email
  */
 import '@/shared/config/load-env-files.js';
 import { PROJECT_DISPLAY_NAME } from '@/shared/constants/project-identity.constants.js';
@@ -81,7 +81,7 @@ async function main(): Promise<void> {
   const healthOk = healthResult.exitCode === 0;
 
   logger.info('Fetching credentials for API stress...');
-  const credsResult = await runCommand('pnpm', ['run', 'scripts:load-test-credentials'], {
+  const credsResult = await runCommand('pnpm', ['run', 'tool:load-test-credentials'], {
     BASE_URL,
   });
   let testToken = '';

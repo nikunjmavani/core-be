@@ -386,7 +386,7 @@ See [docs/reference/architecture/documentation-system.md](docs/reference/archite
 
 ## Commands
 
-Script namespaces: `ci:*`, `compose:*`, `test:*`, `db:*`, `docs:*`, `routes:*`, `load:*`, `chaos:*`, `tool:*`, `setup:*`, `mcp:*`, `security:*`, `sonar:*`, `deps:*`. Legacy: `route-catalog`, `scripts:*`. List all: `pnpm run`.
+Script namespaces: `ci:*`, `compose:*`, `test:*`, `db:*`, `docs:*`, `routes:*`, `load:*`, `chaos:*`, `tool:*`, `setup:*`, `mcp:*`, `security:*`, `sonar:*`, `deps:*`. List all: `pnpm run`.
 
 Local SonarQube quality gate (pre-commit): `pnpm sonar:up` / `sonar:scan` / `sonar:down` / `sonar:reset`. The pre-commit hook (`pnpm guard:pre-commit`, step 17) blocks a commit when SonarQube has any open issue on the deployed-app surface; the gate is mandatory — there is no bypass, every issue must be resolved. See **`docs/reference/quality/sonarqube-local.md`**.
 
@@ -425,7 +425,7 @@ Local SonarQube quality gate (pre-commit): `pnpm sonar:up` / `sonar:scan` / `son
 - `pnpm chaos:provision` — register Postgres + Redis listener proxies (`src/tests/chaos/provision-proxies.ts`)
 - `pnpm test:api-smoke` — live API smoke (server running + seed)
 - `pnpm verify:base` — end-to-end gate: migrate → seed (minimal + full) → API smoke (auto-detects/launches server + worker) → validate
-- `pnpm routes:catalog` / `pnpm routes:catalog:check` — regenerate or verify `docs/routes.txt` (legacy: `route-catalog`, `route-catalog:check`)
+- `pnpm routes:catalog` / `pnpm routes:catalog:check` — regenerate or verify `docs/routes.txt`
 - `pnpm validate:route-success-statuses` — verify `tooling/openapi/route-catalog/route-success-statuses.json` (declared happy-path status per route) stays in sync with `docs/routes.txt`
 - `pnpm validate:route-schema-docs` — verify every route registration (incl. `health.middleware.ts`, `mcp-server.ts`) declares `schema.summary`/`description`/`tags` (drives OpenAPI operation docs)
 - `pnpm validate:route-org-scope` — verify `tooling/openapi/route-catalog/route-org-scope.json` (the catalog `O` column: `both` or team-only `team`) stays in sync with `docs/routes.txt`
@@ -444,5 +444,5 @@ Local SonarQube quality gate (pre-commit): `pnpm sonar:up` / `sonar:scan` / `son
 - `pnpm github:sync` — consistency, scaffold, rulesets, GitHub Environments, push `.env.<environment>` values; `--check` read-only; `--dry-run` preview (single trunk: `main` is the repo default, so no branch is created)
 - `pnpm github:tool:governance-mode` — switch the merge + production-deploy review posture between `personal` and `team` (atomically flips the coupled review fields in `.github/rulesets/<branch>.json` + `.github/environments/production.json`; `team` derives reviewers from `.github/CODEOWNERS` and needs ≥2 owners, then run `pnpm github:sync`). `pnpm github:tool:governance-mode:check` guards the two files against an inconsistent/deadlocking combo. See **`docs/deployment/ci-cd/branch-protection.md`**
 - **Merge policy — never merge on red (enforced, not convention):** the `main` ruleset has **no `bypass_actors`**, so a PR with any failing or pending required check (`Quality gate`, `Checks`) **cannot be merged by anyone — the repo owner included**. Never re-add `bypass_actors` to `.github/rulesets/main.json`, and never merge with `--admin` / the merge API to skip a red gate: a flaky-red required check is **re-run (or its branch updated) to green**, never bypassed. `strict up-to-date` is off so a green PR merges cleanly via `gh pr merge --squash`; `required_signatures` is intentionally absent (unsigned branch commits — GitHub signs the squash-merge commit on `main` regardless). Pinned by [`src/tests/unit/ci/rulesets.policy.unit.test.ts`](src/tests/unit/ci/rulesets.policy.unit.test.ts).
-- `pnpm tool:sync-env-example` — report env schema vs .env.example diff and PR snippet; use `--fix` to append missing vars (legacy: `scripts:sync-env-example`, `validate:env-example`)
+- `pnpm tool:sync-env-example` — report env schema vs .env.example diff and PR snippet; use `--fix` to append missing vars
 - `pnpm tool:project-structure-tree` — print `src/` directory tree to stdout (see `docs/reference/architecture/project-structure-guide.md`)

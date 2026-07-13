@@ -1,7 +1,7 @@
 /**
  * Print a JWT with role super_admin for k6 admin scenario load tests.
  * Normal login only issues role "user"; admin endpoints require super_admin/admin.
- * For load-test use only. Run: pnpm run scripts:admin-token
+ * For load-test use only. Run: pnpm run tool:admin-token
  */
 import '@/shared/config/load-env-files.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';

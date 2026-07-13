@@ -1,7 +1,7 @@
 /**
  * Obtain TEST_TOKEN and TEST_ORG_ID for k6 load tests (daily-ops, billing, webhooks).
  * Requires server running and full seed (demo@example.com / DemoPassword123!).
- * Run: pnpm run scripts:load-test-credentials
+ * Run: pnpm run tool:load-test-credentials
  */
 import '@/shared/config/load-env-files.js';
 

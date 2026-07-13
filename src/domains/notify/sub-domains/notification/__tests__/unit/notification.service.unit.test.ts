@@ -54,7 +54,7 @@ describe('NotificationService', () => {
   });
 
   it('listForUser returns keyset paginated notifications', async () => {
-    const result = await service.listForUser('user_public', 50);
+    const result = await service.listForUser('user_public', { limit: 50 });
     expect(result.items).toHaveLength(1);
     expect(result.has_more).toBe(false);
     expect(result.next_cursor).toBeNull();
@@ -81,7 +81,9 @@ describe('NotificationService', () => {
 
   it('resolveUserId throws when user missing', async () => {
     vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(null);
-    await expect(service.listForUser('missing', 50)).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(service.listForUser('missing', { limit: 50 })).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
   });
 
   it('markRead updates notification', async () => {

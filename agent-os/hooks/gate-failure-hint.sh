@@ -25,8 +25,8 @@ HINTS=()
 case "$lower" in *validate:domain*)
   HINTS+=("domain structure → fix layout per CLAUDE.md › Domain Structure (domain-generator / structure-maintainer); details: pnpm validate:domain:strict") ;;
 esac
-case "$lower" in *routes:catalog* | *route-catalog*)
-  HINTS+=("route catalog drift → pnpm routes:catalog to regenerate docs/routes.txt (route-catalog)") ;;
+case "$lower" in *routes:catalog*)
+  HINTS+=("route catalog drift → pnpm routes:catalog to regenerate docs/routes.txt") ;;
 esac
 case "$lower" in *tsdoc:check*)
   HINTS+=("TSDoc coverage → add summary + @remarks on new exports; budget tooling/tsdoc-coverage/budget.json (tsdoc-export-guard); details: pnpm tsdoc:check:report") ;;
@@ -40,7 +40,7 @@ esac
 case "$lower" in *docs:check*)
   HINTS+=("OpenAPI out of sync → pnpm docs:generate; ensure route schema blocks (route-schema-doc-guard)") ;;
 esac
-case "$lower" in *sync-env-example* | *validate:env-example*)
+case "$lower" in *sync-env-example*)
   HINTS+=("env drift → pnpm tool:sync-env-example --fix; keep env-schema + .env.example in sync (env-schema-add)") ;;
 esac
 case "$lower" in *validate:route*)

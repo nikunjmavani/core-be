@@ -33,8 +33,7 @@ export interface NotificationListServiceOptions {
  *   propagate; `enqueueNotification` failures bubble to the caller.
  * - **Side effects:** Postgres reads/writes against `notify.notifications` (mark-read,
  *   mark-all-read, delete) plus optional BullMQ enqueue from `dispatchNotification`.
- * - **Notes:** the legacy numeric `limit` shape on `listForUser` is kept for backward
- *   compatibility; new callers should pass {@link NotificationListServiceOptions}.
+ * - **Notes:** `listForUser` takes a {@link NotificationListServiceOptions} object.
  */
 export class NotificationService {
   constructor(
@@ -49,24 +48,20 @@ export class NotificationService {
   }
 
   /**
-   * List notifications for a user using keyset pagination. Accepts a numeric limit (legacy
-   * callers) or an options object so HTTP controllers can pass parsed pagination input
-   * forward unchanged.
+   * List notifications for a user using keyset pagination. Takes a
+   * {@link NotificationListServiceOptions} object so HTTP controllers can pass parsed
+   * pagination input forward unchanged.
    */
-  async listForUser(
-    user_public_id: string,
-    options: number | NotificationListServiceOptions = PAGINATION.DEFAULT_LIMIT,
-  ) {
-    const resolved = typeof options === 'number' ? { limit: options } : options;
-    const limit = resolved.limit ?? PAGINATION.DEFAULT_LIMIT;
+  async listForUser(user_public_id: string, options: NotificationListServiceOptions = {}) {
+    const limit = options.limit ?? PAGINATION.DEFAULT_LIMIT;
     const userId = await this.resolveUserId(user_public_id);
     return withUserDatabaseContext(user_public_id, () =>
       this.repository.findByUser(
         userId,
         omitUndefined({
-          after: resolved.after,
+          after: options.after,
           limit,
-          include_total: resolved.include_total,
+          include_total: options.include_total,
         }),
       ),
     );

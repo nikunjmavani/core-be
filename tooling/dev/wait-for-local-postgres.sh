@@ -7,7 +7,7 @@
 #   WAIT_FOR_POSTGRES_ATTEMPTS (default 60) — retry count
 #   WAIT_FOR_POSTGRES_INTERVAL_SECONDS (default 1) — sleep between attempts
 #
-# Usage (from repo root): pnpm compose:wait  (alias: pnpm scripts:wait-postgres)
+# Usage (from repo root): pnpm compose:wait  (canonical: pnpm compose:wait)
 set -euo pipefail
 
 readonly MAXIMUM_ATTEMPTS="${WAIT_FOR_POSTGRES_ATTEMPTS:-60}"
