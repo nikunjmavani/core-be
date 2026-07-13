@@ -50,7 +50,6 @@ Hand-written guides grouped by **setup**, **CI/CD**, and **runbooks**.
 | [production-go-live.md](runbooks/production-go-live.md)                                 | Local gates, path-to-production gate, env checklist, build, deploy, smoke. |
 | [resource-limits.md](runbooks/resource-limits.md)                                       | Railway/K8s memory and `NODE_OPTIONS`.                                     |
 | [observability.md](runbooks/observability.md)                                           | Sentry, logs, health; Prometheus re-enable checklist.                      |
-| [jwt-key-rotation.md](runbooks/jwt-key-rotation.md)                                     | JWT PEM rotation; deferred `kid` multi-key verify.                         |
 | [upload-storage.md](runbooks/upload-storage.md)                                         | Direct-to-S3 upload hardening: validation, sweeper, lifecycle policy.      |
 | [railway-custom-domain.md](runbooks/railway-custom-domain.md)                           | `pnpm setup:domain` — attach a custom domain (SSL) to a Railway service.   |
 | [rollback-deploy.md](runbooks/rollback-deploy.md)                                       | One-click rollback: redeploy the `:previous` GHCR images.                  |

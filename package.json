@@ -179,7 +179,6 @@
     "tool:test-report-email": "tsx src/scripts/ops/send-test-report-email.ts",
     "tool:send-load-test-results-email": "tsx src/scripts/ops/send-load-test-results-email.ts",
     "verify:base": "tsx src/scripts/ops/verify-base.ts",
-    "ops:jwt:rotate": "tsx src/scripts/ops/jwt-key-rotate.ts",
     "ops:secrets:rotate": "tsx src/scripts/ops/secrets-key-rotate.ts",
     "ops:stripe:reconcile": "tsx src/scripts/ops/stripe-subscription-reconcile.ts",
     "ops:worker:drain": "tsx src/scripts/ops/worker-drain.ts",
