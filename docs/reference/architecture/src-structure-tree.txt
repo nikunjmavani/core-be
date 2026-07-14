@@ -1763,7 +1763,6 @@ src/
     ├── load/
     │   ├── k6/
     │   │   ├── data/
-    │   │   │   └── credential-pool.json
     │   │   ├── helpers/
     │   │   │   ├── auth.js
     │   │   │   ├── checks.js
@@ -2159,5 +2158,5 @@ src/
 ├── worker-containers.ts
 └── worker.ts
 
-# Skipped directories: node_modules, .vite, dist, coverage/, .gitkeep
+# Skipped directories: node_modules, .vite, dist, coverage/, .gitkeep, credential-pool.json
 # Canonical layout: CLAUDE.md, docs/reference/architecture/domains-and-public-api-design.md
