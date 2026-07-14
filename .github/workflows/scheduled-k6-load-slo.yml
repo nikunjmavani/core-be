@@ -55,8 +55,12 @@ jobs:
       REDIS_URL: redis://localhost:6379
       ENABLE_MCP_SERVER: 'true'
       BASE_URL: http://localhost:3000
-      # Fixed demo password for db:seed:full + k6 auth scenario
-      TEST_PASSWORD: DemoPassword123!
+      # Fixed demo account for db:seed:full + the k6 auth scenarios (password login).
+      DEMO_EMAIL: demo@example.com
+      DEMO_PASSWORD: DemoPassword123!
+      # Test-run gate: lets /auth/email/send-code echo debug_verification_code so the
+      # passwordless-signup scenario can complete. A refine forbids TEST_MODE=true in production.
+      TEST_MODE: 'true'
 
     steps:
       - name: Checkout
@@ -136,8 +140,15 @@ jobs:
         run: >
           k6 run --summary-export=k6-auth-onboarding.json src/tests/load/k6/scenarios/auth-onboarding.js
         env:
-          TEST_EMAIL: demo@example.com
-          TEST_PASSWORD: DemoPassword123!
+          DEMO_EMAIL: demo@example.com
+          DEMO_PASSWORD: DemoPassword123!
+
+      - name: k6 passwordless-signup (informational)
+        if: always()
+        continue-on-error: true
+        # Relies on TEST_MODE=true (job env) so /auth/email/send-code echoes debug_verification_code.
+        run: >
+          k6 run --summary-export=k6-passwordless-signup.json src/tests/load/k6/scenarios/passwordless-signup.js
 
       - name: k6 daily-ops (informational)
         if: always()

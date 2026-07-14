@@ -11,7 +11,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "dev:loadtest": "RATE_LIMIT_MAX=10000 tsx watch src/server.ts",
+    "dev:loadtest": "RATE_LIMIT_MAX=10000 TEST_MODE=true tsx watch src/server.ts",
     "dev:worker": "tsx watch src/worker.ts",
     "build": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json",
     "build:check": "node tooling/ci/check-dist-imports.mjs",
@@ -107,7 +107,8 @@
     "load:stress": "k6 run src/tests/load/k6/scenarios/health-stress.js",
     "load:breakpoint": "k6 run src/tests/load/k6/scenarios/health-breakpoint.js",
     "load:stress:api": "k6 run src/tests/load/k6/scenarios/api-stress.js",
-    "load:auth": "TEST_EMAIL=demo@example.com TEST_PASSWORD='DemoPassword123!' k6 run src/tests/load/k6/scenarios/auth-onboarding.js",
+    "load:auth": "DEMO_EMAIL=demo@example.com DEMO_PASSWORD='DemoPassword123!' k6 run src/tests/load/k6/scenarios/auth-onboarding.js",
+    "load:signup": "k6 run src/tests/load/k6/scenarios/passwordless-signup.js",
     "load:daily-ops": "k6 run src/tests/load/k6/scenarios/daily-ops.js",
     "load:billing": "k6 run src/tests/load/k6/scenarios/billing.js",
     "load:webhooks": "k6 run src/tests/load/k6/scenarios/webhooks.js",

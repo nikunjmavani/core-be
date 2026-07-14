@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { sleep } from 'k6';
 import { API_PREFIX, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
-import { checkOk, checkResponseTime } from '../helpers/checks.js';
+import { checkOk, checkStatus, checkResponseTime } from '../helpers/checks.js';
 
 /**
  * k6 Scenario: Auth + Onboarding Flow
@@ -28,8 +28,8 @@ export function authOnboarding() {
   const loginResponse = http.post(
     `${API_PREFIX}/auth/login`,
     JSON.stringify({
-      email: __ENV.TEST_EMAIL || 'test@test.com',
-      password: __ENV.TEST_PASSWORD || 'test-password',
+      email: __ENV.DEMO_EMAIL || 'demo@example.com',
+      password: __ENV.DEMO_PASSWORD || 'DemoPassword123!',
     }),
     { headers, tags: { name: 'auth-login' } },
   );
