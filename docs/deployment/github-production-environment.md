@@ -1,6 +1,6 @@
 # GitHub production environment (manual approval)
 
-How **production** deploys are gated in GitHub Actions when using [reusable-railway-deploy.yml](../../.github/workflows/reusable-railway-deploy.yml). There is **no Terraform** in this repository — environment protection rules are declared in [`.github/environments/`](../../.github/environments/) and applied in the GitHub UI.
+How **production** deploys are gated in GitHub Actions when using [reusable-railway-deploy.yml](../../.github/workflows/reusable-railway-deploy.yml). There is **no Terraform** in this repository — environment protection rules are declared in [`.github/environments/`](../../.github/environments/) and applied to GitHub by `pnpm github:sync` (reviewers + deployment branch policy), so the committed JSON is the source of truth and drift self-heals on every run.
 
 ---
 
@@ -15,13 +15,11 @@ Both environments deploy from `main`; the target GitHub Environment is chosen ex
 
 ---
 
-## Required protection on `production`
+Declared in [`production.json`](../../.github/environments/production.json) and applied by `pnpm github:sync` — edit the JSON, run the command, GitHub matches it:
 
-Configure in **Settings → Environments → production**:
-
-1. **Required reviewers** — at least one team member (platform or release manager) must approve before the deploy job runs.
-2. **Deployment branches** — restrict to `main` only (optional but recommended).
-3. **Environment secrets** — `DATABASE_URL`, `RAILWAY_TOKEN`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, etc. per [cicd-and-deployment.md](ci-cd/cicd-and-deployment.md). Do not reuse dev secrets.
+1. **Required reviewers** — at least one team member (platform or release manager) must approve before the deploy job runs (`requiredReviewers` in the JSON).
+2. **Deployment branch policy** — `customBranchPolicies` allowing the `main` branch and `v*` release tags. Production deploys fire on release **tags** (`release-deploy.yml`), so tags must be permitted — a protected-branches-only policy would block them (this is exactly the drift that caused issues #924 / #877).
+3. **Environment secrets** — `DATABASE_URL`, `RAILWAY_TOKEN`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, etc. per [cicd-and-deployment.md](ci-cd/cicd-and-deployment.md). Pushed by the same `pnpm github:sync`; do not reuse dev secrets.
 
 The deploy workflow sets `environment: ${{ needs.resolve-environment.outputs.environment }}` on the deploy job, so GitHub enforces reviewers **only** when the resolved environment is `production` (or when you add reviewers to development).
 
@@ -53,7 +51,7 @@ Committed JSON under [`.github/environments/`](../../.github/environments/) is t
 
 Use `SKIP_GITHUB_ENV=1` to skip API calls locally when you only need deploy-sync or secret checks.
 
-**When reviewers change:** update GitHub (**Settings → Environments → production → Required reviewers**) and the matching `users` / `teams` arrays in `.github/environments/production.json` in the same change.
+**When reviewers or the deployment branch policy change:** edit `.github/environments/production.json` and run `pnpm github:sync` — it applies both to GitHub. Verify with `pnpm github:sync --check` (or `pnpm validate:github-environments`); the release-guard canary enforces it on a schedule.
 
 Infrastructure (Neon, Railway Redis database, Railway) is provisioned via `pnpm setup:infra` ([setup-automation.md](setup/setup-automation.md)), not Terraform in this repo. GitHub environment rules are the **manual approval** layer for production code deploys.
 
