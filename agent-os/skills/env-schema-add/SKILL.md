@@ -38,6 +38,22 @@ environment-varying behaviour is an explicit env flag with a **STATIC default** 
 `NODE_ENV`-derived). Enforced by `src/tests/global/no-nodeenv-branching.global.test.ts` and the
 `guard-edits.sh` R4 pre-edit hook.
 
+## Env-flag principles (non-negotiable)
+
+1. **Conditions live in the env layer; code reads one specific flag.** Every environment-varying
+   condition (prod-forbidden, allowed-only-when, must-be-true-in-prod) is a `.refine()` in
+   `env-schema.ts`. Runtime code reads the specific `env.FLAG` boolean and runs on it — it never
+   re-derives the condition, compares `NODE_ENV`, or combines flags to reconstruct a rule. Layered:
+   env validates/gates, code consumes one flag.
+2. **One thing → exactly one env variable.** A single behaviour is gated by ONE flag, never two. Using
+   `env.A && env.B` (or `||`) to make a single decision is banned — collapse it to one flag. Example:
+   the destructive wipe helpers gate on `env.TEST_MODE` **alone**, not `TEST_MODE && TEST_DATA_WIPE_ALLOWED`.
+   This holds for new work too — never add a second flag for a thing that already has one.
+3. **Casing: env vars are `UPPER_SNAKE_CASE`; body fields are `snake_case`.** Environment variables are
+   always `UPPER_SNAKE_CASE` (`TEST_MODE`, `DEMO_EMAIL`). A `snake_case` identifier like
+   `debug_verification_code` is a request/response **body field** (API-contract snake_case), NOT an env
+   var — do not confuse the two or "capitalise" a body field.
+
 **To add an environment-varying behaviour** (e.g. "strict in prod, relaxed in dev"):
 
 1. Add a boolean flag via `booleanString('<static default>')` in `env-schema.ts` — the default is the

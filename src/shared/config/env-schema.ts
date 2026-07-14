@@ -286,13 +286,6 @@ const envSchemaBase = z.object({
    */
   TEST_MODE: booleanString('false'),
   /**
-   * Category-B. Permit the destructive test-data wipe helpers (TRUNCATE all tables + flush Redis
-   * keys) used by the e2e suite. Defaults false (hardened); a refine forbids `true` on
-   * production. The test harness sets it true; a developer may set it true in `.env.local`
-   * to run cleanup against a local development database. Additionally gated by `TEST_MODE`.
-   */
-  TEST_DATA_WIPE_ALLOWED: booleanString('false'),
-  /**
    * Category-B. ioredis ready-check on the cache / BullMQ connections. Defaults true (on); the test
    * harness sets `REDIS_READY_CHECK_ENABLED=false` (the per-worker singletons churn across
    * createTestApp instances and a reconnect ready-check rejects against a closing stream). Read via
@@ -1285,11 +1278,6 @@ export const envSchema = envSchemaBase
     message:
       'TEST_MODE must be false in production (it gates test-only affordances that must never be reachable on a deployed runtime).',
     path: ['TEST_MODE'],
-  })
-  .refine((data) => data.NODE_ENV !== 'production' || data.TEST_DATA_WIPE_ALLOWED === false, {
-    message:
-      'TEST_DATA_WIPE_ALLOWED must be false in production (the destructive wipe helpers must never target a deployed data store).',
-    path: ['TEST_DATA_WIPE_ALLOWED'],
   })
   .refine((data) => data.NODE_ENV !== 'production' || data.REDIS_READY_CHECK_ENABLED === true, {
     message:
