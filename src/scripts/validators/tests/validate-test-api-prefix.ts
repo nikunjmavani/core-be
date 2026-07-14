@@ -13,9 +13,15 @@ import { join, relative } from 'node:path';
 /** Hardcoded version segment in an inject/options `url` property. */
 export const INJECT_URL_PATTERN = /url:\s*['`]\/api\/v\d+/;
 
-/** Files that intentionally embed literal inject URL strings (validator fixtures). */
+/**
+ * Files that intentionally embed a literal `/api/vN` in a `url:` property that is
+ * NOT a real `inject()` call, so the `testApiPath()` ban does not apply:
+ * - validator fixtures — literal inject-URL strings fed to the route-coverage analyzer;
+ * - unit tests that build mocked `FastifyRequest` objects whose `url` is the request path.
+ */
 export const EXCLUDED_RELATIVE_PATHS = new Set([
-  'src/scripts/validators/__tests__/route-http-coverage-validation.unit.test.ts',
+  'src/tests/unit/scripts/route-http-coverage-validation.unit.test.ts',
+  'src/tests/unit/utils/auth/authorization.util.permission-deny-audit.unit.test.ts',
 ]);
 
 /** A single test file × line that hardcodes a `/api/vN/` prefix in an inject URL. */
