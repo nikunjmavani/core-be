@@ -96,7 +96,9 @@ agent-os/mcp/mcp.json
 # Hook telemetry — local runtime log (pnpm agent-os:hooks:report aggregates it)
 agent-os/hooks/.telemetry.log
 
-# codegraph — local code-intelligence index (rebuilt via `codegraph init` / `codegraph sync`; machine-local, not shared)
+# codegraph — local code-intelligence index (machine-local, not shared). Built via
+# `codegraph init` / `codegraph sync`; auto-synced on branch switch / pull by
+# .husky/post-checkout + .husky/post-merge.
 .codegraph/
 
 # Local, secret-bearing env backups live here (out of the repo root so they do not

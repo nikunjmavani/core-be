@@ -95,6 +95,7 @@ codegraph install --print-config cursor            # print the MCP snippet, no f
 ## Git and CI
 
 - The index DB and daemon runtime files are **never committed** (see `.codegraph/.gitignore`); each developer builds their own from their checkout.
+- **Auto-refreshed on branch switch / pull.** [`.husky/post-checkout`](../../.husky/post-checkout) and [`.husky/post-merge`](../../.husky/post-merge) run `codegraph sync -q` in the background so the index tracks the working tree with zero manual effort. Both are **guarded** (no-op when `codegraph` or the index is absent — CI, web sessions) and **backgrounded** (never block the git command). `codegraph sync` is a local, incremental re-index, so it costs **no LLM tokens** — and a fresh index actually *lowers* agent token use (accurate `codegraph_*` queries replace whole-file reads). Pinned by `src/tests/unit/ci/codegraph-git-hooks.policy.unit.test.ts`.
 - The real per-agent configs (`.mcp.json`, `.cursor/mcp.json`) are **gitignored** because they may hold live API keys and machine-specific paths. Only the secret-free templates (`.mcp.example.json`, `.cursor/mcp.example.json`) are committed; `setup:local` writes the real configs per machine.
 - CI does not run CodeGraph; the index is developer-local.
 
