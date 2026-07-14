@@ -46,7 +46,14 @@ function appendTreeLines(options: {
       if (leftDirectory !== rightDirectory) {
         return leftDirectory ? -1 : 1;
       }
-      return left.localeCompare(right);
+      // Code-point comparison, NOT localeCompare: the latter uses the runtime's
+      // default locale, which differs between a developer's macOS (en_US ICU
+      // collation) and a minimal Linux CI runner (C/POSIX), producing a different
+      // ordering and a spurious "out of sync" drift on CI. Byte-wise `<`/`>` is
+      // identical on every platform.
+      if (left < right) return -1;
+      if (left > right) return 1;
+      return 0;
     });
 
   for (let index = 0; index < entries.length; index += 1) {
