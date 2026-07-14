@@ -7,12 +7,8 @@
       "preventSelfReview": false
     },
     "deploymentBranchPolicy": {
-      "protectedBranches": false,
-      "customBranchPolicies": true,
-      "customBranches": [
-        { "name": "main", "type": "branch" },
-        { "name": "v*", "type": "tag" }
-      ]
+      "protectedBranches": true,
+      "customBranchPolicies": false
     }
   }
 }
