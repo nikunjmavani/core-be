@@ -28,10 +28,19 @@ function errorIdentity(response: InjectHttpResult): {
 }
 
 function responseData(response: InjectHttpResult): unknown {
-  // Success envelope is `{ data, meta: { request_id } }`; meta carries the only
-  // per-request-volatile field, so the enumeration-relevant content is `data`.
-  const body = response.json() as { data?: unknown } | undefined;
-  return body?.data;
+  // Success envelope is `{ data, meta: { request_id } }`; meta carries per-request-volatile fields,
+  // so the enumeration-relevant content is `data`. Under TEST_MODE the send-code `data` also carries
+  // `debug_verification_code` — a fresh random code echoed for BOTH known and unknown emails
+  // (auto-signup issues a code either way), so its PRESENCE is not an existence oracle; only its VALUE
+  // churns. Normalise the value (but KEEP the key) so this equality check still catches a
+  // presence-mismatch oracle while ignoring the expected value churn. The field never appears outside
+  // TEST_MODE (a `.refine()` forbids `TEST_MODE=true` in production), so real responses are identical.
+  const body = response.json() as { data?: Record<string, unknown> } | undefined;
+  const data = body?.data;
+  if (data && typeof data === 'object' && 'debug_verification_code' in data) {
+    return { ...data, debug_verification_code: '<test-mode-code>' };
+  }
+  return data;
 }
 
 describe('Security: auth account-enumeration resistance', () => {
