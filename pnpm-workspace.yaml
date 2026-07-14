@@ -32,6 +32,10 @@ packageExtensions:
       esbuild: ^0.25.0
 
 overrides:
+  # Hold Biome at 2.5.2 — 2.5.3 crashes `biome check` with an upstream panic in
+  # the module-graph resolver (biome_module_graph module_resolver.rs:500:33).
+  # Remove this pin once a fixed Biome (2.5.4+) is released.
+  '@biomejs/biome': 2.5.2
   '@babel/core': '>=7.29.1'
   ioredis: 5.10.1
   esbuild: '>=0.28.1'
