@@ -6,9 +6,9 @@
  *
  *   1. gh auth preflight (show active user, allow switch).
  *   2. Sync rulesets (POST new ones, PUT existing by name).
- *   3. Ensure each GitHub Environment from .github/environments/*.json exists
- *      (idempotent PUT with no protection updates — protection drift is
- *      surfaced separately by `pnpm validate:github-environments`).
+ *   3. Sync each GitHub Environment from .github/environments/*.json — ensure it
+ *      exists and apply its protection (required reviewers + deployment branch
+ *      policy) so the committed JSON is the source of truth and drift self-heals.
  *
  * Single trunk: `main` is the only long-lived branch and it is the repository
  * default — always present — so there is no branch-creation step. Hotfixes
@@ -32,154 +32,17 @@
  * step with the upstream "Upgrade to GitHub Pro …" message.
  */
 
-import { execSync } from 'node:child_process';
-
 import { resolveGitMetadata } from '@tooling/setup/codegen/project-identity.util.js';
 import { loadConfig } from '@tooling/setup/common/config.js';
 import { runGhAuthPreflight } from './auth-preflight.js';
 import { getGithubSyncEnvironmentNames, scaffoldGithubSyncFiles } from './sync-config.js';
+import { syncEnvironmentProtection } from './sync-environment-protection.js';
 import {
   getRepositoryIdentifier,
   loadLocalRulesets,
   syncRulesets,
   type SyncMode,
 } from './rulesets.js';
-
-interface GhProbeResult {
-  readonly exitCode: number;
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
-function ghProbe(args: readonly string[]): GhProbeResult {
-  try {
-    const stdout = execSync(`gh ${args.join(' ')}`, {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 30_000,
-    });
-    return { exitCode: 0, stdout, stderr: '' };
-  } catch (commandError) {
-    const errorObject = commandError as {
-      status?: number;
-      stderr?: Buffer | string;
-      stdout?: Buffer | string;
-    };
-    const stderr =
-      typeof errorObject.stderr === 'string'
-        ? errorObject.stderr
-        : (errorObject.stderr?.toString('utf-8') ?? '');
-    const stdout =
-      typeof errorObject.stdout === 'string'
-        ? errorObject.stdout
-        : (errorObject.stdout?.toString('utf-8') ?? '');
-    return { exitCode: errorObject.status ?? 1, stdout, stderr };
-  }
-}
-
-function ghWriteWithBody(args: readonly string[], body: string): void {
-  try {
-    execSync(`gh ${args.join(' ')}`, {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 30_000,
-      input: body,
-    });
-  } catch (commandError) {
-    const errorObject = commandError as {
-      stderr?: Buffer | string;
-      stdout?: Buffer | string;
-      message?: string;
-    };
-    const stderr =
-      typeof errorObject.stderr === 'string'
-        ? errorObject.stderr
-        : (errorObject.stderr?.toString('utf-8') ?? '');
-    const stdout =
-      typeof errorObject.stdout === 'string'
-        ? errorObject.stdout
-        : (errorObject.stdout?.toString('utf-8') ?? '');
-    throw new Error(stderr || stdout || (errorObject.message ?? 'gh command failed'));
-  }
-}
-
-function environmentExists(repository: string, environment: string): boolean {
-  const probe = ghProbe(['api', `repos/${repository}/environments/${environment}`]);
-  if (probe.exitCode === 0) return true;
-  if (/HTTP\s+404/i.test(probe.stderr) || /HTTP\s+404/i.test(probe.stdout)) return false;
-  throw new Error(
-    `Failed to probe environment "${environment}" on ${repository}: ${probe.stderr || probe.stdout || `exit ${probe.exitCode}`}`,
-  );
-}
-
-function createOrUpdateEnvironment(repository: string, environment: string): void {
-  ghWriteWithBody(
-    [
-      'api',
-      '--method',
-      'PUT',
-      '-H',
-      "'Accept: application/vnd.github+json'",
-      `repos/${repository}/environments/${environment}`,
-      '--input',
-      '-',
-    ],
-    '{}',
-  );
-}
-
-interface EnsureResult {
-  readonly failures: number;
-  readonly drift: number;
-}
-
-function ensureEnvironments(args: {
-  readonly repository: string;
-  readonly environments: readonly string[];
-  readonly mode: SyncMode;
-}): EnsureResult {
-  const { repository, environments, mode } = args;
-
-  if (environments.length === 0) {
-    console.log('  (no .github/environments/*.json files found)');
-    return { failures: 0, drift: 0 };
-  }
-
-  let failures = 0;
-  let drift = 0;
-
-  for (const environment of environments) {
-    try {
-      const exists = environmentExists(repository, environment);
-
-      if (exists) {
-        console.log(`  ${environment}: already present`);
-        continue;
-      }
-
-      if (mode === 'check') {
-        console.error(`  ${environment}: missing on remote`);
-        drift += 1;
-        continue;
-      }
-
-      if (mode === 'dry-run') {
-        console.log(`  ${environment}: would create`);
-        continue;
-      }
-
-      createOrUpdateEnvironment(repository, environment);
-      console.log(`  ${environment}: created`);
-    } catch (ensureError) {
-      failures += 1;
-      const message = ensureError instanceof Error ? ensureError.message : String(ensureError);
-      console.error(`  ${environment}: FAILED`);
-      console.error(`    ${message.replace(/\n/g, '\n    ')}`);
-    }
-  }
-
-  return { failures, drift };
-}
 
 export interface RunGithubInitResult {
   readonly failures: number;
@@ -246,8 +109,12 @@ export async function runGithubInit(args: {
   const rulesetResult = syncRulesets({ repository, locals, mode: args.mode });
 
   console.log('');
-  console.log('Step 2/2 — Ensuring GitHub Environments exist');
-  const environmentResult = ensureEnvironments({ repository, environments, mode: args.mode });
+  console.log('Step 2/2 — Syncing GitHub Environment protection (reviewers + branch policy)');
+  const environmentResult = syncEnvironmentProtection({
+    repository,
+    environments,
+    mode: args.mode,
+  });
 
   return {
     failures: rulesetResult.failures + environmentResult.failures,
