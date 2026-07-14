@@ -55,9 +55,7 @@ async function main(): Promise<void> {
 
   const recipientsEnv = process.env.TEST_RESULT_EMAIL_TO;
   if (!recipientsEnv) {
-    logger.warn(
-      'TEST_RESULT_EMAIL_TO not set; skipping load test email.',
-    );
+    logger.warn('TEST_RESULT_EMAIL_TO not set; skipping load test email.');
     process.exitCode = 1;
     return;
   }
