@@ -7,8 +7,8 @@ import '@/shared/config/load-env-files.js';
 
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000';
 const API_PREFIX = `${BASE_URL}/api/v1`;
-const EMAIL = process.env.TEST_EMAIL ?? 'demo@example.com';
-const PASSWORD = process.env.TEST_PASSWORD ?? 'DemoPassword123!';
+const EMAIL = process.env.DEMO_EMAIL ?? 'demo@example.com';
+const PASSWORD = process.env.DEMO_PASSWORD ?? 'DemoPassword123!';
 
 async function main() {
   const loginResponse = await fetch(`${API_PREFIX}/auth/login`, {

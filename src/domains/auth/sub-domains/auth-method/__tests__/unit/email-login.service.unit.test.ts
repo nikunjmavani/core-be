@@ -46,6 +46,9 @@ vi.mock('@/shared/config/env.config.js', () => {
     AUTH_SESSION_MAX_AGE_DAYS: 7,
     PERSONAL_ORGANIZATION_ENABLED: false,
     SECRETS_ENCRYPTION_KEY: 'test-secret-encryption-key-for-verification-code-pepper',
+    // TEST_MODE gates the send-code `debug_verification_code` affordance; the Vitest harness runs
+    // TEST_MODE=true. A test can flip this on the mock object to exercise the disabled path.
+    TEST_MODE: true,
   };
   return { env, getEnv: () => env };
 });
@@ -177,13 +180,56 @@ describe('EmailLoginService', () => {
       'EMAIL_CODE',
     );
     expect(verificationTokenRepository.create).toHaveBeenCalled();
-    // Raw code never leaves via the result — only via the event payload.
+    // The raw `verification_code`/`code` key never leaves via the result — only via the event payload.
     expect(result).not.toHaveProperty('code');
     expect(result).not.toHaveProperty('verification_code');
     const emittedEvent = vi.mocked(eventBus.emitStrict).mock.calls[0]?.[0];
     expect(emittedEvent?.type).toBe(AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED);
     const emittedPayload = emittedEvent?.payload as { verification_code: string };
     expect(emittedPayload.verification_code).toMatch(/^[A-Z0-9]{6}$/);
+  });
+
+  it('sendCode echoes debug_verification_code under TEST_MODE (matches the emitted code)', async () => {
+    // The Vitest harness runs with TEST_MODE=true (src/tests/setup.ts), so the TEST_MODE-only
+    // affordance is active: the result carries the plaintext code for out-of-process test clients.
+    // A `.refine()` forbids TEST_MODE=true in production and it is never set on a deployed runtime, so
+    // this key is absent everywhere real (see env-schema.unit.test.ts `rejects TEST_MODE=true in production`).
+    vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
+
+    const result = await service.sendCode({ email: user.email });
+
+    const emittedPayload = vi.mocked(eventBus.emitStrict).mock.calls[0]?.[0]?.payload as {
+      verification_code: string;
+    };
+    expect(result.debug_verification_code).toBe(emittedPayload.verification_code);
+    expect(result.debug_verification_code).toMatch(/^[A-Z0-9]{6}$/);
+  });
+
+  it('sendCode omits debug_verification_code when no code is issued (cooldown held) even under TEST_MODE', async () => {
+    vi.mocked(redis.set).mockResolvedValueOnce(null); // cooldown already held → no issue, no code
+    vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
+
+    const result = await service.sendCode({ email: user.email });
+
+    expect(result).not.toHaveProperty('debug_verification_code');
+  });
+
+  it('sendCode NEVER exposes debug_verification_code when TEST_MODE is off (even though a code is issued)', async () => {
+    // Security-critical: the affordance is gated strictly on env.TEST_MODE. A .refine() forbids
+    // TEST_MODE=true in production (env-schema.unit.test.ts), so a deployed runtime always takes this
+    // path — the code is issued/emailed but never echoed to the caller.
+    const envMutable = env as unknown as { TEST_MODE: boolean };
+    envMutable.TEST_MODE = false;
+    try {
+      vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
+
+      const result = await service.sendCode({ email: user.email });
+
+      expect(vi.mocked(eventBus.emitStrict)).toHaveBeenCalled(); // a code WAS issued + emailed
+      expect(result).not.toHaveProperty('debug_verification_code'); // but never returned
+    } finally {
+      envMutable.TEST_MODE = true;
+    }
   });
 
   it('sendCode resets the per-user verify-attempt cap so a fresh code restores the budget', async () => {

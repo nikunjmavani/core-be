@@ -17,7 +17,6 @@ process.env.SHUTDOWN_SKIP_SHARED_TEARDOWN = 'true';
 // Disable the ioredis ready-check (read raw from process.env by the Redis/BullMQ clients).
 process.env.REDIS_READY_CHECK_ENABLED = 'false';
 // Category-B security flags default hardened; set the relaxed test values (see src/tests/setup.ts).
-process.env.AUTH_TEST_SUPER_ADMIN_FALLBACK ??= 'true';
 process.env.CAPTCHA_BYPASS_ALLOWED ??= 'true';
 process.env.SESSION_ORIGIN_CSRF_REQUIRED ??= 'false';
 process.env.WEBHOOK_ALLOWLIST_REQUIRED ??= 'false';
@@ -29,6 +28,8 @@ process.env.DATABASE_RLS_SAFETY_ENFORCED ??= 'false';
 process.env.DATABASE_CONNECTION_BUDGET_ENFORCED ??= 'false';
 process.env.REDIS_TLS_ENFORCED ??= 'false';
 process.env.TRUST_PROXY_REQUIRED ??= 'false';
+// TEST_MODE marks this as a test run — the master gate the test-only affordances require.
+process.env.TEST_MODE = 'true';
 process.env.TEST_DATA_WIPE_ALLOWED ??= 'true';
 process.env.RATE_LIMIT_RELAXED_CAPS ??= 'true';
 process.env.RATE_LIMIT_IN_MEMORY_FALLBACK_ALLOWED ??= 'true';

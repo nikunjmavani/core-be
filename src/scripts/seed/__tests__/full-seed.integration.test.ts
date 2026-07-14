@@ -55,7 +55,7 @@ describe('Full seed — integration', () => {
 
   beforeEach(async () => {
     await cleanupDatabase();
-    process.env.TEST_PASSWORD = DEMO_TEST_PASSWORD;
+    process.env.DEMO_PASSWORD = DEMO_TEST_PASSWORD;
   });
 
   it('should not duplicate demo billing rows when runFullSeed is called twice', async () => {

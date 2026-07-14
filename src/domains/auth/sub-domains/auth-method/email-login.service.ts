@@ -107,10 +107,12 @@ export class EmailLoginService {
   /**
    * Find-or-create the user, then email them a one-time sign-in code.
    *
-   * The raw code is never returned to the caller in any environment — it leaves the service only
+   * On a deployed runtime the raw code is never returned to the caller — it leaves the service only
    * through the `AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED` event payload (consumed by the mail
-   * handler). Tests capture the code by subscribing to that event via `captureNextVerificationCode`
-   * in `src/tests/helpers/verification-code.helper.ts`.
+   * handler). In-process tests capture it by subscribing to that event via `captureNextVerificationCode`
+   * in `src/tests/helpers/verification-code.helper.ts`. The single exception is `env.TEST_MODE` (a
+   * `.refine()` forbids it in production; never set on a deployed runtime): under it the result carries
+   * `debug_verification_code` so an out-of-process test client (k6 load test) can complete the flow.
    */
   async sendCode(body: unknown, _context?: { requestId?: string }): Promise<EmailSendCodeResult> {
     const startedAtMillis = Date.now();
@@ -148,6 +150,7 @@ export class EmailLoginService {
       logger.warn({ err: error }, 'email_login.send.cooldown_unavailable');
       cooldownClaimed = 'OK';
     }
+    let issuedCode: string | undefined;
     if (cooldownClaimed) {
       // Auto-signup: an unknown email creates a new passwordless user (mirrors OAuth find-or-create).
       // New and existing users then run the identical issue-code path, so the response body cannot
@@ -156,12 +159,18 @@ export class EmailLoginService {
       const user =
         (await this.userService.findByEmail(parsed.email)) ??
         (await this.createEmailCodeUser(parsed.email));
-      await this.issueVerificationCode(user);
+      issuedCode = await this.issueVerificationCode(user);
     }
     await enforceMinimumDuration(startedAtMillis);
     return {
       messageKey: 'success:verificationCodeSent',
       expires_in_minutes: VERIFICATION_CODE_TTL_MINUTES,
+      // TEST_MODE-only affordance: echo the plaintext code so an out-of-process test client (k6 load
+      // test) can complete the passwordless flow. `env.TEST_MODE` is `.refine()`-forbidden in
+      // production and is never set on a deployed runtime, so this key is absent everywhere real.
+      // When the per-email cooldown was already held, no code was issued this call (`issuedCode`
+      // undefined) — mirroring the uniform no-op response.
+      ...(env.TEST_MODE && issuedCode ? { debug_verification_code: issuedCode } : {}),
     };
   }
 
@@ -231,7 +240,7 @@ export class EmailLoginService {
    * most recently emailed code is the only redeemable one (the per-email send cooldown spaces issuance
    * so an in-flight code is not invalidated by an accidental rapid re-request).
    */
-  private async issueVerificationCode(user: { id: number; email: string }): Promise<void> {
+  private async issueVerificationCode(user: { id: number; email: string }): Promise<string> {
     const code = generateVerificationCode();
     const expiresAt = new Date(
       Date.now() + VERIFICATION_CODE_TTL_MINUTES * MILLISECONDS_PER_MINUTE,
@@ -269,6 +278,7 @@ export class EmailLoginService {
     // new code restores their attempts. Brute-force is unaffected (each code is an independent random
     // target over a large keyspace, and `sendCode` is itself per-email + per-IP rate-limited).
     await this.clearVerifyAttemptCounter(user.id);
+    return code;
   }
 
   /**

@@ -6,7 +6,7 @@
  *           pnpm dev + pnpm dev:worker
  *
  * Usage: pnpm test:api-smoke
- * Env: BASE_URL (default http://localhost:3000), TEST_EMAIL, TEST_PASSWORD
+ * Env: BASE_URL (default http://localhost:3000), DEMO_EMAIL, DEMO_PASSWORD
  * Deploy CD sets BASE_URL from Railway API domain; optional GitHub secrets SMOKE_DEMO_EMAIL / SMOKE_DEMO_PASSWORD
  */
 import '@/shared/config/load-env-files.js';
@@ -22,8 +22,8 @@ import {
 
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000';
 const API_PREFIX = '/api/v1';
-const EMAIL = process.env.TEST_EMAIL ?? 'demo@example.com';
-const PASSWORD = process.env.TEST_PASSWORD ?? 'DemoPassword123!';
+const EMAIL = process.env.DEMO_EMAIL ?? 'demo@example.com';
+const PASSWORD = process.env.DEMO_PASSWORD ?? 'DemoPassword123!';
 
 /** Acceptable HTTP statuses (route reachable, auth/validation handled). */
 type ExpectedStatus = number | number[];
@@ -148,7 +148,7 @@ async function setupLogin(): Promise<void> {
   });
   const payload = body as { data?: { access_token?: string } };
   if (!payload.data?.access_token) {
-    throw new Error('login: missing access_token — run pnpm db:seed:full with TEST_PASSWORD');
+    throw new Error('login: missing access_token — run pnpm db:seed:full with DEMO_PASSWORD');
   }
   smokeContext.accessToken = payload.data.access_token;
 }
@@ -529,7 +529,7 @@ async function main(): Promise<void> {
 
   await runCase('setup: login', setupLogin);
   if (!smokeContext.accessToken) {
-    console.error('\nSetup failed — run: TEST_PASSWORD=DemoPassword123! pnpm db:seed:full');
+    console.error('\nSetup failed — run: DEMO_PASSWORD=DemoPassword123! pnpm db:seed:full');
     process.exit(1);
   }
 

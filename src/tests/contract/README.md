@@ -8,7 +8,7 @@ Offline HTTP contract checks for **Stripe**, **Resend**, and **S3** wrappers.
 pnpm test:contract
 ```
 
-Do **not** rely on real API keys: the script sets `CONTRACT_TESTS_ONLY=true` and placeholder env (see `src/tests/setup.ts`).
+Do **not** rely on real API keys: the script sets `CONTRACT_TESTS_ENABLED=true` and placeholder env (see `src/tests/setup.ts`).
 
 ## Design notes
 

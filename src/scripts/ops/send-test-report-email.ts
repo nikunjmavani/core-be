@@ -301,9 +301,9 @@ async function main(): Promise<void> {
     return;
   }
 
-  const recipientsEnv = process.env.TEST_REPORT_EMAIL_TO;
+  const recipientsEnv = process.env.TEST_RESULT_EMAIL_TO;
   if (!recipientsEnv) {
-    logger.warn('TEST_REPORT_EMAIL_TO not set; skipping test report email.');
+    logger.warn('TEST_RESULT_EMAIL_TO not set; skipping test report email.');
     return;
   }
 
@@ -313,7 +313,7 @@ async function main(): Promise<void> {
     .filter((value) => value.length > 0);
 
   if (to.length === 0) {
-    logger.warn('TEST_REPORT_EMAIL_TO is empty after parsing; skipping test report email.');
+    logger.warn('TEST_RESULT_EMAIL_TO is empty after parsing; skipping test report email.');
     return;
   }
 

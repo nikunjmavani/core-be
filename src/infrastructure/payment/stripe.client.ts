@@ -14,11 +14,11 @@ let stripeInstance: Stripe | null = null;
 /**
  * Nock 14 intercepts `fetch` (undici) reliably; Stripe's default `NodeHttpClient` +
  * deferred `socket` handling can hang under nock 14 / `@mswjs/interceptors` (see stripe-node#2211,
- * nock#2785). The contract-test harness is the only caller that sets `CONTRACT_TESTS_ONLY=true`; use
+ * nock#2785). The contract-test harness is the only caller that sets `CONTRACT_TESTS_ENABLED=true`; use
  * the fetch-based client only there so production keeps the Node HTTP stack.
  */
 function shouldUseStripeFetchHttpClientForContractOutboundTests(): boolean {
-  return process.env.CONTRACT_TESTS_ONLY === 'true';
+  return process.env.CONTRACT_TESTS_ENABLED === 'true';
 }
 
 /**

@@ -17,7 +17,7 @@ on:
     secrets:
       RESEND_API_KEY:
         required: false
-      TEST_REPORT_EMAIL_TO:
+      TEST_RESULT_EMAIL_TO:
         required: false
     outputs:
       coverage_gate_result:
@@ -177,10 +177,10 @@ jobs:
           retention-days: ${{ github.event_name == 'pull_request' && 30 || 14 }}
 
       - name: Send test result email
-        if: always() && env.RESEND_API_KEY != '' && env.TEST_REPORT_EMAIL_TO != ''
+        if: always() && env.RESEND_API_KEY != '' && env.TEST_RESULT_EMAIL_TO != ''
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          TEST_REPORT_EMAIL_TO: ${{ secrets.TEST_REPORT_EMAIL_TO }}
+          TEST_RESULT_EMAIL_TO: ${{ secrets.TEST_RESULT_EMAIL_TO }}
           TEST_STATUS: ${{ steps.run-tests.outcome }}
           TEST_SHARD: ${{ matrix.shard.id }}
           GITHUB_REPOSITORY: ${{ github.repository }}

@@ -31,12 +31,12 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 const DEMO_EMAIL = 'demo@example.com';
 
 function getDemoPassword(): string {
-  const fromEnv = process.env.TEST_PASSWORD;
+  const fromEnv = process.env.DEMO_PASSWORD;
   if (fromEnv && fromEnv.length >= 8) return fromEnv;
   const random = randomBytes(16).toString('base64url');
   const generated = `Demo${random}!`;
   logger.info(
-    'seed.full: using generated demo password — set TEST_PASSWORD in .env for a fixed password',
+    'seed.full: using generated demo password — set DEMO_PASSWORD in .env for a fixed password',
   );
   return generated;
 }
