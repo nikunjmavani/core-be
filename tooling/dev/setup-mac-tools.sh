@@ -69,12 +69,14 @@ export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_NO_INSTALL_CLEANUP=1
 export HOMEBREW_NO_ENV_HINTS=1
 
-# install-or-upgrade a brew formula.
+# install-or-upgrade a brew formula, reporting which happened.
 brew_ensure() {
   formula="$1"
   if brew list --formula "$formula" >/dev/null 2>&1; then
+    log "${formula}: already installed — upgrading if outdated."
     run brew upgrade "$formula" || true
   else
+    log "${formula}: not present — installing."
     run brew install "$formula"
   fi
 }
@@ -120,6 +122,11 @@ fi
 
 # --- codegraph (npm registry, pinned to latest) ---
 if command -v npm >/dev/null 2>&1; then
+  if command -v codegraph >/dev/null 2>&1; then
+    log "codegraph: already installed ($(codegraph --version 2>/dev/null || echo present)) — upgrading to latest."
+  else
+    log "codegraph: not present — installing."
+  fi
   run npm install -g @colbymchenry/codegraph@latest
 else
   log "npm not on PATH — skipping codegraph (run pnpm setup:local so Node is present)."
@@ -129,8 +136,10 @@ fi
 if command -v pipx >/dev/null 2>&1; then
   run pipx ensurepath >/dev/null 2>&1 || true
   if pipx list 2>/dev/null | grep -q 'headroom-ai'; then
+    log "headroom: already installed — upgrading."
     run pipx upgrade headroom-ai || true
   else
+    log "headroom: not present — installing."
     run pipx install 'headroom-ai[mcp]'
   fi
 else
