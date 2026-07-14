@@ -9,16 +9,18 @@ How **production** deploys are gated in GitHub Actions when using [reusable-rail
 | GitHub Environment | Trigger                            | Railway target                   |
 | ------------------ | ---------------------------------- | -------------------------------- |
 | `development`      | push to `main` (every merge)       | Development stack                |
-| `production`       | release tag (`release-deploy.yml`) | Production API + worker services |
+| `production`       | manual dispatch from `main` (`release-deploy.yml`) | Production API + worker services |
 
 Both environments deploy from `main`; the target GitHub Environment is chosen explicitly, not derived from the branch. Manual dispatch (`workflow_dispatch`) can target either environment via the `target` input.
 
 ---
 
+## Required protection on `production`
+
 Declared in [`production.json`](../../.github/environments/production.json) and applied by `pnpm github:sync` — edit the JSON, run the command, GitHub matches it:
 
 1. **Required reviewers** — at least one team member (platform or release manager) must approve before the deploy job runs (`requiredReviewers` in the JSON).
-2. **Deployment branch policy** — `customBranchPolicies` allowing the `main` branch and `v*` release tags. Production deploys fire on release **tags** (`release-deploy.yml`), so tags must be permitted — a protected-branches-only policy would block them (this is exactly the drift that caused issues #924 / #877).
+2. **Deployment branch policy** — `protectedBranches` (only a protected branch — `main` — may deploy). Production is deployed by dispatching `release-deploy.yml` **from `main`** with the release tag as an input (`gh workflow run release-deploy.yml --ref main -f tag=vX.Y.Z`). The `release: published` auto-trigger runs with the tag as the deployment ref, which this policy does **not** permit — so release-published does not auto-deploy production; production deploys are dispatched from `main` by design.
 3. **Environment secrets** — `DATABASE_URL`, `RAILWAY_TOKEN`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, etc. per [cicd-and-deployment.md](ci-cd/cicd-and-deployment.md). Pushed by the same `pnpm github:sync`; do not reuse dev secrets.
 
 The deploy workflow sets `environment: ${{ needs.resolve-environment.outputs.environment }}` on the deploy job, so GitHub enforces reviewers **only** when the resolved environment is `production` (or when you add reviewers to development).
