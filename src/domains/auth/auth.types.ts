@@ -11,4 +11,12 @@
 export interface EmailSendCodeResult {
   messageKey: string;
   expires_in_minutes: number;
+  /**
+   * TEST_MODE-only affordance: the plaintext verification code, echoed so an out-of-process test
+   * client (e.g. a k6 load test) can complete the passwordless flow without reading the email.
+   * Populated ONLY when `env.TEST_MODE` is on — a `.refine()` forbids `TEST_MODE=true` in production,
+   * and TEST_MODE is a test-run signal never set on a deployed runtime, so this is always `undefined`
+   * outside a test/load run. In-process tests should prefer `captureNextVerificationCode`.
+   */
+  debug_verification_code?: string;
 }

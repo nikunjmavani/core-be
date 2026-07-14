@@ -26,6 +26,9 @@ export function createAuthEmailLoginHandlers({
         AuthSerializer.verificationCodeSent({
           message: translated.message,
           expires_in_minutes: data.expires_in_minutes,
+          ...(data.debug_verification_code
+            ? { debug_verification_code: data.debug_verification_code }
+            : {}),
         }),
         getRequestIdentifier(request),
       );

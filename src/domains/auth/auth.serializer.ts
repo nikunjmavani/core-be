@@ -62,10 +62,18 @@ export const AuthSerializer = {
   mfaRequired(data: { mfa_required: true; mfa_session_token: string }) {
     return data;
   },
-  verificationCodeSent(data: { message: string; expires_in_minutes: number }) {
+  verificationCodeSent(data: {
+    message: string;
+    expires_in_minutes: number;
+    debug_verification_code?: string;
+  }) {
     return {
       message: data.message,
       expires_in_minutes: data.expires_in_minutes,
+      // TEST_MODE-only: present only when the service echoed a code (env.TEST_MODE on, never in prod).
+      ...(data.debug_verification_code
+        ? { debug_verification_code: data.debug_verification_code }
+        : {}),
     };
   },
   mfaVerified(data: { verified: boolean }) {
