@@ -60,7 +60,22 @@ const GENERATED_PATH_PREFIXES = [
   'docs/openapi/',
   'docs/postman-collection.json',
   'docs/ONBOARDING.md', // optional output of /understand-onboard
+  'agent-os/mcp/mcp.json', // gitignored live MCP config (scaffold via pnpm mcp:setup)
+  'agent-os/hooks/.telemetry.log', // gitignored runtime hook telemetry log
+  'src/tests/load/k6/data/credential-pool.json', // gitignored k6 credential pool
 ];
+
+/**
+ * Git-ignored targets a doc may LINK to (markdown `[text](path)`). Unlike inline
+ * citations these have no prefix pass, so they are matched here as exact repo-root
+ * relative paths and skipped — they legitimately dangle on a fresh clone.
+ * `.mcp.json` is a tracked symlink to the gitignored `agent-os/mcp/mcp.json`, so it
+ * resolves on a developer's machine (target present) but dangles on CI.
+ */
+const IGNORED_LINK_TARGETS = new Set<string>([
+  '.mcp.json',
+  'docs/reference/security/adversarial-audit-report.md',
+]);
 
 /**
  * Paths docs cite as deliberately absent ("there is intentionally no …", "never
@@ -123,6 +138,13 @@ function resolveMarkdownTarget(fromFile: string, target: string): string | null 
   return null;
 }
 
+/** Repo-root-relative form of a markdown link target, whether or not it exists on disk. */
+function markdownTargetRepoPath(fromFile: string, target: string): string {
+  const withoutAnchor = target.split('#')[0]?.trim() ?? '';
+  const absolute = resolve(dirname(fromFile), withoutAnchor);
+  return absolute.startsWith(REPO_ROOT) ? absolute.slice(REPO_ROOT.length + 1) : absolute;
+}
+
 function stripFences(content: string): string {
   return content.replace(/```[\s\S]*?```/g, '');
 }
@@ -183,6 +205,7 @@ function main(): void {
       const target = match[1];
       if (!target || isExternalOrAnchor(target)) continue;
       if (!resolveMarkdownTarget(file, target)) {
+        if (IGNORED_LINK_TARGETS.has(markdownTargetRepoPath(file, target))) continue;
         brokenLinks.push(`${relativeFile}: broken link (${target})`);
       }
     }

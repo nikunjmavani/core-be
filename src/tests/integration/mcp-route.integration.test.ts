@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import { injectAuthenticated } from '@/tests/helpers/test-http-inject.helper.js';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
@@ -36,7 +37,7 @@ describe('MCP route — POST initialize happy path', () => {
 
     const response = await injectAuthenticated(app, {
       method: 'POST',
-      url: '/api/v1/mcp',
+      url: testApiPath('/mcp'),
       token,
       headers: {
         accept: 'application/json, text/event-stream',

@@ -31,6 +31,15 @@ jobs:
     name: ci:quality on main
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Some ci:quality validators (validate:sunset-dates, the route-schema/param
+    # validators) transitively import env.config.ts, which boot-validates the whole
+    # Zod env schema — so the required no-default vars must be present. These are
+    # dummy CI values: NO service container is started, DATABASE_URL/REDIS_URL point
+    # nowhere and are never dialed. The rest (JWT keypair, SECRETS_ENCRYPTION_KEY,
+    # ALLOWED_ORIGINS, …) come from the shared test-env action below.
+    env:
+      DATABASE_URL: postgresql://core:core@localhost:5432/core
+      REDIS_URL: redis://localhost:6379
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -38,9 +47,12 @@ jobs:
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
 
+      - name: Export shared CI test env (JWT keys + secrets-encryption + origins)
+        uses: ./.github/actions/test-env
+
       # The full static slice: audits, lint+typecheck, domain/route/docs/agent-os
-      # validators, contract + property tests, migration lint — no DB services
-      # needed (mirrors the PR quality lanes, which also run these on plain runners).
+      # validators, contract + property tests, migration lint. No DB/Redis service
+      # is started — the env vars above only satisfy env.config.ts's boot check.
       - name: Run static quality slice
         run: pnpm ci:quality
 

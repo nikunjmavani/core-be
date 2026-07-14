@@ -1560,8 +1560,8 @@ src/
     └── shared.overview.md
 ├── tests/
     ├── bench/
-    │   ├── bench.overview.md
-    │   └── README.md
+    │   ├── README.md
+    │   └── bench.overview.md
     ├── chaos/
     │   ├── helpers/
     │   │   ├── chaos-app.ts
@@ -1618,9 +1618,9 @@ src/
     │   │   ├── resend.schemas.ts
     │   │   ├── s3.schemas.ts
     │   │   └── stripe.schemas.ts
+    │   ├── README.md
     │   ├── contract-vitest-setup.ts
     │   ├── contract.overview.md
-    │   ├── README.md
     │   ├── request-id-eventbus.contract.test.ts
     │   ├── resend.contract.test.ts
     │   ├── s3-object-storage-adapter.contract.test.ts
@@ -1763,7 +1763,6 @@ src/
     ├── load/
     │   ├── k6/
     │   │   ├── data/
-    │   │   │   └── credential-pool.json
     │   │   ├── helpers/
     │   │   │   ├── auth.js
     │   │   │   ├── checks.js
@@ -1800,9 +1799,9 @@ src/
     │   │   │   ├── user-data-export.js
     │   │   │   ├── user-journey.js
     │   │   │   └── webhooks.js
-    │   │   ├── check-prereqs.mjs
     │   │   ├── COMPREHENSIVE-JOURNEY.md
     │   │   ├── README.md
+    │   │   ├── check-prereqs.mjs
     │   │   ├── run-journey.sh
     │   │   └── setup-loadtest.sh
     │   └── load.overview.md
@@ -2148,16 +2147,16 @@ src/
     │   └── unit.overview.md
     ├── global-setup.ts
     └── setup.ts
-├── app.ts
-├── fastify.d.ts
 ├── FLOWS.md
 ├── OVERVIEW.md
 ├── PATTERNS.md
 ├── POLICIES.md
+├── app.ts
+├── fastify.d.ts
 ├── routes.ts
 ├── server.ts
 ├── worker-containers.ts
 └── worker.ts
 
-# Skipped directories: node_modules, .vite, dist, coverage/, .gitkeep
+# Skipped directories: node_modules, .vite, dist, coverage/, .gitkeep, credential-pool.json
 # Canonical layout: CLAUDE.md, docs/reference/architecture/domains-and-public-api-design.md

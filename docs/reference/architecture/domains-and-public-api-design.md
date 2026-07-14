@@ -442,7 +442,7 @@ All 19 phases from the Consolidated Master Plan (Domain API Upgrade + CI/CD + en
 - [x] `.github/CODEOWNERS`
 - [x] `.github/dependabot.yml`
 - [x] `.github/labeler.yml`
-- [x] `.github/pull_request_template.md`
+- [x] `.github/PULL_REQUEST_TEMPLATE.md`
 - [x] Domain structure validation in CI (`pnpm validate:domain`)
 - [x] Dockerfile HEALTHCHECK
 
