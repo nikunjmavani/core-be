@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+# Refresh the codegraph code-intelligence index after a merge/pull so queries
+# (codegraph_search / callers / impact) match the updated tree. `codegraph sync`
+# is a LOCAL, incremental index update — it costs no LLM tokens and, backgrounded,
+# never blocks the merge. Complements .husky/post-checkout (branch switches);
+# together they keep the index current with every code change (see .gitignore
+# note on `.codegraph/`).
+command -v codegraph >/dev/null 2>&1 || exit 0
+[ -f .codegraph/codegraph.db ] || exit 0
+( codegraph sync -q >/dev/null 2>&1 & ) || true

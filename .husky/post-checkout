@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+# Refresh the codegraph code-intelligence index after a branch switch so queries
+# (codegraph_search / callers / impact) match the checked-out tree instead of a
+# stale one. `codegraph sync` is a LOCAL, incremental index update — it costs no
+# LLM tokens and, backgrounded, never blocks the checkout.
+#
+# Args (git post-checkout): $1 previous HEAD, $2 new HEAD, $3 = 1 for a branch
+# checkout / 0 for a file checkout. Only branch checkouts change the tree meaningfully.
+[ "$3" = "1" ] || exit 0
+command -v codegraph >/dev/null 2>&1 || exit 0
+[ -f .codegraph/codegraph.db ] || exit 0
+( codegraph sync -q >/dev/null 2>&1 & ) || true
