@@ -234,7 +234,7 @@ const varDot = (varName, pulse) => { const s = el('span', `h-2 w-2 flex-none rou
 function statusColor(s) { const v = String(s).toLowerCase(); if (['ok','live','ready','healthy','connected','up'].includes(v)) return 'success'; if (['starting','degraded','warming','stalled'].includes(v)) return 'warning'; return 'destructive'; }
 async function getJson(url) { try { const j = await (await fetch(url, { cache:'no-store' })).json(); return j && j.data !== undefined && j.meta ? j.data : j; } catch (e) { return null; } }
 async function getText(url) { try { const r = await fetch(url, { cache:'no-store' }); return r.ok ? await r.text() : null; } catch (e) { return null; } }
-function humanDur(sec) { if (sec == null || sec < 0 || !isFinite(sec)) return ['—', '']; const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60); if (d > 0) return [`${d}d ${h}h`, '']; if (h > 0) return [`${h}h ${m}m`, '']; return [`${m}m`, '']; }
+function humanDur(sec) { if (sec == null || sec < 0 || !Number.isFinite(sec)) return ['—', '']; const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60); if (d > 0) return [`${d}d ${h}h`, '']; if (h > 0) return [`${h}h ${m}m`, '']; return [`${m}m`, '']; }
 function fmtNum(raw, fmt, unit) {
   if (raw == null) return ['—', ''];
   if (fmt === 'bytes') { const mb = raw / 1048576; return mb >= 1024 ? [(mb / 1024).toFixed(1), 'GB'] : [mb.toFixed(0), 'MB']; }
@@ -254,7 +254,7 @@ const HISTORY = 30; const series = {}; const seriesT = {}; const prevCpu = {}; c
 const PEAK_TTL_MS = 60000;
 function pushSeries(name, v) { if (v == null) return; if (!series[name]) { series[name] = []; seriesT[name] = []; } series[name].push(v); seriesT[name].push(performance.now()); if (series[name].length > HISTORY) { series[name].shift(); seriesT[name].shift(); } }
 // A tsx-watch reload's multi-second boot lag is not a runtime stall — when a process restarts (its start time changes) drop that process's vitals history so the boot spike cannot resurface as a peak.
-function forgetSeriesOnRestart(parsed, prefix) { const start = parsed && parsed.process_start_time_seconds; if (start == null) return; if (procStart[prefix] != null && start !== procStart[prefix]) { for (const k of Object.keys(series)) { if (k.startsWith(prefix)) { series[k] = []; seriesT[k] = []; } } } procStart[prefix] = start; }
+function forgetSeriesOnRestart(parsed, prefix) { const start = parsed?.process_start_time_seconds; if (start == null) return; if (procStart[prefix] != null && start !== procStart[prefix]) { for (const k of Object.keys(series)) { if (k.startsWith(prefix)) { series[k] = []; seriesT[k] = []; } } } procStart[prefix] = start; }
 function pushRate(name, raw) { if (raw == null) return; const p = prevCpu[name]; prevCpu[name] = raw; if (p != null) pushSeries(name, Math.max(0, raw - p)); }
 function spark(values, color, hArg) {
   const w = 100, h = hArg || 24;
@@ -379,36 +379,36 @@ function toggleAlertPop(force) {
 
 /* ── 2. OVERVIEW: Jobs + Runtime + System health ── */
 const RUNTIME = [
-  { key: 'memory', icon: 'memory', label: 'Memory', fmt: 'bytes', spark: true, get: (m) => m && m.process_resident_memory_bytes,
+  { key: 'memory', icon: 'memory', label: 'Memory', fmt: 'bytes', spark: true, get: (m) => m?.process_resident_memory_bytes,
     detail: (m) => `RSS ${toMB(m.process_resident_memory_bytes)} · external ${toMB(m.nodejs_external_memory_bytes)} · heap ${toMB(m.nodejs_heap_size_used_bytes)} / ${toMB(m.nodejs_heap_size_total_bytes)}` },
-  { key: 'heap',   icon: 'heap',   label: 'Heap', fmt: 'bytes', spark: true, get: (m) => m && m.nodejs_heap_size_used_bytes,
+  { key: 'heap',   icon: 'heap',   label: 'Heap', fmt: 'bytes', spark: true, get: (m) => m?.nodejs_heap_size_used_bytes,
     detail: (m) => `used ${toMB(m.nodejs_heap_size_used_bytes)} of ${toMB(m.nodejs_heap_size_total_bytes)} allocated · external ${toMB(m.nodejs_external_memory_bytes)}` },
-  { key: 'loop',   icon: 'loop',   label: 'Event-loop', fmt: 'ms', warnAbove: 0.1, spark: true, peak: true, get: (m) => m && m.nodejs_eventloop_lag_p99_seconds,
+  { key: 'loop',   icon: 'loop',   label: 'Event-loop', fmt: 'ms', warnAbove: 0.1, spark: true, peak: true, get: (m) => m?.nodejs_eventloop_lag_p99_seconds,
     detail: (m) => `p50 ${toMS(m.nodejs_eventloop_lag_p50_seconds)} · p90 ${toMS(m.nodejs_eventloop_lag_p90_seconds)} · p99 ${toMS(m.nodejs_eventloop_lag_p99_seconds)} · max ${toMS(m.nodejs_eventloop_lag_max_seconds)}` },
-  { key: 'cpu',    icon: 'cpu',    label: 'CPU', fmt: 'sec', spark: true, rate: true, get: (m) => m && m.process_cpu_seconds_total,
+  { key: 'cpu',    icon: 'cpu',    label: 'CPU', fmt: 'sec', spark: true, rate: true, get: (m) => m?.process_cpu_seconds_total,
     detail: (m) => `user ${toSec(m.process_cpu_user_seconds_total)} · system ${toSec(m.process_cpu_system_seconds_total)} · total ${toSec(m.process_cpu_seconds_total)}` },
-  { key: 'pool',   icon: 'pool',   label: 'DB pool', spark: false, bar: true, get: (m) => m && m.pg_pool_active,
+  { key: 'pool',   icon: 'pool',   label: 'DB pool', spark: false, bar: true, get: (m) => m?.pg_pool_active,
     detail: (m) => `active ${m.pg_pool_active || 0} · idle ${m.pg_pool_idle || 0} · waiting ${m.pg_pool_waiting || 0} / max ${m.postgres_pool_max_connections || '?'}` },
-  { key: 'uptime', icon: 'uptime', label: 'Uptime', fmt: 'uptime', spark: false, get: (m) => m && m.process_start_time_seconds,
+  { key: 'uptime', icon: 'uptime', label: 'Uptime', fmt: 'uptime', spark: false, get: (m) => m?.process_start_time_seconds,
     detail: (m) => `started ${new Date(m.process_start_time_seconds * 1000).toLocaleString()} · GC ${Math.round(m.nodejs_gc_duration_seconds_count || 0).toLocaleString()} runs · ${Math.round(m.nodejs_active_handles_total || 0)} libuv handles` },
 ];
 const JOBS = [
-  { key: 'j_throughput', icon: 'throughput', label: 'Throughput', unit: '/min', color: 'brand', get: (a) => a && a.throughput,
+  { key: 'j_throughput', icon: 'throughput', label: 'Throughput', unit: '/min', color: 'brand', get: (a) => a?.throughput,
     info: 'Jobs completed per minute across all queues — the rate computed from the change in total completed count between refreshes. Zero means nothing finished in the last interval.' },
-  { key: 'j_waiting', icon: 'waiting', label: 'Jobs waiting', color: 'brand', get: (a) => a && a.waiting,
+  { key: 'j_waiting', icon: 'waiting', label: 'Jobs waiting', color: 'brand', get: (a) => a?.waiting,
     info: 'Jobs queued and waiting for a worker to pick them up, summed across every queue. A rising number means the workers are falling behind.' },
-  { key: 'j_failed', icon: 'failed', label: 'Jobs failed', color: 'brand', warnAbove: 0, badColor: 'destructive', get: (a) => a && a.failed,
+  { key: 'j_failed', icon: 'failed', label: 'Jobs failed', color: 'brand', warnAbove: 0, badColor: 'destructive', get: (a) => a?.failed,
     info: 'Jobs that errored and exhausted their retries — currently in the failed state across all queues. Inspect them in Bull Board (Queues link) to retry or discard.' },
-  { key: 'j_dlq', icon: 'dlq', label: 'DLQ depth', color: 'brand', warnAbove: 0, badColor: 'destructive', get: (a) => a && a.dlq,
+  { key: 'j_dlq', icon: 'dlq', label: 'DLQ depth', color: 'brand', warnAbove: 0, badColor: 'destructive', get: (a) => a?.dlq,
     info: 'Dead-letter depth: waiting + failed jobs in the *-dlq queues. These gave up after the final retry and need manual replay — they will not be processed automatically.' },
-  { key: 'j_mail', icon: 'mail', label: 'Mail outbox', color: 'brand', warnAbove: 0, badColor: 'warning', get: (a, s) => s && s.mail_outbox_pending,
+  { key: 'j_mail', icon: 'mail', label: 'Mail outbox', color: 'brand', warnAbove: 0, badColor: 'warning', get: (a, s) => s?.mail_outbox_pending,
     info: 'Pending rows in the transactional mail outbox (auth.mail_outbox) awaiting BullMQ dispatch to the email worker. A sustained backlog means email delivery is falling behind.' },
-  { key: 'j_jobdur', icon: 'uptime', label: 'Avg job', unit: 'ms', color: 'brand', get: (a, s) => (s && s.bullmq_job_duration_seconds_count ? (s.bullmq_job_duration_seconds_sum / s.bullmq_job_duration_seconds_count) * 1000 : null),
+  { key: 'j_jobdur', icon: 'uptime', label: 'Avg job', unit: 'ms', color: 'brand', get: (a, s) => (s?.bullmq_job_duration_seconds_count ? (s.bullmq_job_duration_seconds_sum / s.bullmq_job_duration_seconds_count) * 1000 : null),
     info: 'Average BullMQ job processing time across all queues (from the bullmq_job_duration_seconds histogram). Blank until jobs run.' },
 ];
 function bufferVitals(agg, sS, sW, fQ, fS, fW) {
-  if (fS && sS) RUNTIME.forEach((m) => { if (!m.spark) return; if (m.rate) pushRate('s_' + m.key, m.get(sS)); else pushSeries('s_' + m.key, m.get(sS)); });
-  if (fW && sW) RUNTIME.forEach((m) => { if (!m.spark) return; if (m.rate) pushRate('w_' + m.key, m.get(sW)); else pushSeries('w_' + m.key, m.get(sW)); });
+  if (fS && sS) RUNTIME.forEach((m) => { if (!m.spark) return; if (m.rate) pushRate(`s_${m.key}`, m.get(sS)); else pushSeries(`s_${m.key}`, m.get(sS)); });
+  if (fW && sW) RUNTIME.forEach((m) => { if (!m.spark) return; if (m.rate) pushRate(`w_${m.key}`, m.get(sW)); else pushSeries(`w_${m.key}`, m.get(sW)); });
   if (fQ && agg) { pushSeries('j_throughput', agg.throughput); pushSeries('j_waiting', agg.waiting); pushSeries('j_failed', agg.failed); pushSeries('j_dlq', agg.dlq); }
   if (fS && sS) { pushSeries('j_mail', sS.mail_outbox_pending); pushSeries('j_jobdur', sS.bullmq_job_duration_seconds_count ? (sS.bullmq_job_duration_seconds_sum / sS.bullmq_job_duration_seconds_count) * 1000 : null); }
 }
@@ -416,9 +416,9 @@ function jobTile(j, agg, sS) {
   const raw = j.get(agg, sS);
   const bad = raw != null && j.warnAbove != null && raw > j.warnAbove;
   const color = bad ? j.badColor : j.color;
-  const tile = el('div', `${CARD} overflow-hidden px-4 pt-3.5${bad ? ' ring-1 ring-' + color + '/30' : ''}`);
+  const tile = el('div', `${CARD} overflow-hidden px-4 pt-3.5${bad ? ` ring-1 ring-${color}/30` : ''}`);
   const top = el('div', 'flex items-center gap-1.5');
-  top.appendChild(iconEl(j.icon, bad ? 'text-' + color : 'text-muted-foreground'));
+  top.appendChild(iconEl(j.icon, bad ? `text-${color}` : 'text-muted-foreground'));
   top.appendChild(el('div', 'text-[12px] text-muted-foreground', j.label));
   const ib = el('button', 'ml-auto inline-flex h-5 w-5 flex-none items-center justify-center rounded-full text-muted-foreground/60 transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring');
   ib.type = 'button'; ib.setAttribute('aria-label', `${j.label} — what is this?`); ib.innerHTML = iconSvg('info', 15);
@@ -426,7 +426,7 @@ function jobTile(j, agg, sS) {
   top.appendChild(ib);
   tile.appendChild(top);
   const [num, unit] = fmtNum(raw, null, j.unit);
-  const v = el('div', `mt-2 font-mono text-[26px] font-semibold leading-none tabular-nums tracking-tight${bad ? ' text-' + color : ''}`);
+  const v = el('div', `mt-2 font-mono text-[26px] font-semibold leading-none tabular-nums tracking-tight${bad ? ` text-${color}` : ''}`);
   if (raw == null) v.innerHTML = '<span class="text-[15px] font-normal text-muted-foreground">—</span>';
   else v.innerHTML = num + (unit ? ` <span class="text-[12px] font-normal text-muted-foreground">${unit}</span>` : '');
   tile.appendChild(v);
@@ -440,8 +440,8 @@ function runtimeCell(key, procSums, m, proc) {
   const cell = el('div', `w-[84px] flex-none sm:w-[112px]${procSums && m.detail ? ' cursor-help' : ''}`);
   const line = el('div', 'flex items-center justify-end gap-1.5'); // sparkline/bar inline LEFT of the value → single-line rows
   if (m.bar) {
-    const max = (procSums && procSums.postgres_pool_max_connections) || 0;
-    const act = (procSums && procSums.pg_pool_active) || 0, idle = (procSums && procSums.pg_pool_idle) || 0, wait = (procSums && procSums.pg_pool_waiting) || 0;
+    const max = (procSums?.postgres_pool_max_connections) || 0;
+    const act = (procSums?.pg_pool_active) || 0, idle = (procSums?.pg_pool_idle) || 0, wait = (procSums?.pg_pool_waiting) || 0;
     const bar = el('div', 'flex h-1.5 w-9 flex-none overflow-hidden rounded-full bg-muted');
     if (max) { const seg = (n, cls) => { if (!n) return; const s = el('div', cls); s.style.width = `${Math.min(100, (n / max) * 100)}%`; bar.appendChild(s); }; seg(wait, 'bg-destructive'); seg(act, 'bg-brand'); seg(idle, 'bg-muted-foreground/30'); }
     line.appendChild(bar);
@@ -496,8 +496,8 @@ function renderRuntime(sS, sW, worker, stale) {
     lab.appendChild(iconEl(m.icon, 'text-muted-foreground'));
     lab.appendChild(el('span', 'truncate text-[13px] font-medium', m.label));
     row.appendChild(lab);
-    row.appendChild(runtimeCell('s_' + m.key, sS, m, 'Server'));
-    row.appendChild(runtimeCell('w_' + m.key, sW, m, 'Worker'));
+    row.appendChild(runtimeCell(`s_${m.key}`, sS, m, 'Server'));
+    row.appendChild(runtimeCell(`w_${m.key}`, sW, m, 'Worker'));
     card.appendChild(row);
   });
   const foot = el('div', `${cols} border-t border-border py-1.5 font-mono text-[11px] text-muted-foreground`);
@@ -605,7 +605,7 @@ function queueBar(c) {
   if (!any) bar.appendChild(el('div', 'flex-1'));
   return bar;
 }
-function relAgoTs(ts) { const t = Date.parse(ts); if (isNaN(t)) return '—'; const s = Math.round((Date.now() - t) / 1000); if (s < 60) return `${s}s ago`; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; }
+function relAgoTs(ts) { const t = Date.parse(ts); if (Number.isNaN(t)) return '—'; const s = Math.round((Date.now() - t) / 1000); if (s < 60) return `${s}s ago`; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; }
 function queueTip(q, lastJobAt) {
   const c = q.counts || {}; const total = QSTATES.reduce((s, [k]) => s + (c[k] || 0), 0);
   const seen = new Set();
@@ -618,8 +618,8 @@ function queueTip(q, lastJobAt) {
 }
 function renderQueues(queues, agg, sS, worker, opts) {
   const host = $('queues');
-  const lastJob = {}; ((worker && worker.worker_queues) || []).forEach((q) => { lastJob[q.queue] = q.last_job_at; });
-  const stale = !!(opts && opts.stale) && everLoaded.queues;
+  const lastJob = {}; ((worker?.worker_queues) || []).forEach((q) => { lastJob[q.queue] = q.last_job_at; });
+  const stale = !!(opts?.stale) && everLoaded.queues;
   if (!queues) { if (!everLoaded.queues) return; host.replaceChildren(el('div', `${CARD} p-4 text-[13px] text-muted-foreground`, 'Queue data unavailable.')); return; }
   const active = queues.filter((q) => { const c = q.counts || {}; return (c.waiting || 0) + (c.active || 0) + (c.delayed || 0) + (c.failed || 0) + (c.paused || 0) + (c.prioritized || 0) > 0; });
   const idle = queues.length - active.length;
@@ -668,7 +668,7 @@ function renderQueues(queues, agg, sS, worker, opts) {
 let reqFilter = 'all'; // active Requests tab (persists across polls + manual refresh)
 function renderRequests(routes, opts) {
   const host = $('requests'); if (!host) return;
-  const stale = !!(opts && opts.stale) && everLoaded.requests;
+  const stale = !!(opts?.stale) && everLoaded.requests;
   if (!(routes || everLoaded.requests)) return;
   const data = routes || lastGood.routes || [];
   const INFRA = /^\/(metrics|livez|readyz|admin)|^\/reference|^\/_/;
@@ -732,7 +732,7 @@ function renderRequests(routes, opts) {
     row.appendChild(el('div', 'w-[60px] text-right font-mono text-[12px] tabular-nums text-muted-foreground', r.count.toLocaleString()));
     row.appendChild(el('div', `w-[60px] text-right font-mono text-[12px] tabular-nums${slow ? ' text-warning' : ' text-muted-foreground'}`, `${avgMs < 10 ? avgMs.toFixed(1) : Math.round(avgMs)}ms`));
     const show4xx = reqFilter === 'client', lastBad = show4xx ? r.clientErrors > 0 : err;
-    row.appendChild(el('div', `w-[52px] text-right font-mono text-[12px] tabular-nums${lastBad ? ' font-semibold ' + (err ? 'text-destructive' : 'text-warning') : ' text-muted-foreground'}`, lastBad ? (show4xx ? r.clientErrors : r.errors).toLocaleString() : '·'));
+    row.appendChild(el('div', `w-[52px] text-right font-mono text-[12px] tabular-nums${lastBad ? ` font-semibold ${err ? 'text-destructive' : 'text-warning'}` : ' text-muted-foreground'}`, lastBad ? (show4xx ? r.clientErrors : r.errors).toLocaleString() : '·'));
     scroll.appendChild(row);
   });
   host.replaceChildren(card); everLoaded.requests = true;
