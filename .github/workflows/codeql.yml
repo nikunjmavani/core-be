@@ -15,6 +15,11 @@ on:
     # Weekly full scan (Monday 04:27 UTC) so advisories that land between merges
     # are still surfaced (direct-push backstop under PR-only merges).
     - cron: '27 4 * * 1'
+  # On-demand default-branch scan. With no `push` trigger, a code-scanning alert
+  # fixed on a PR is not re-analyzed on `main` until the next weekly cron — so the
+  # alert lingers as "open" for up to a week. Dispatching this workflow from `main`
+  # runs a fresh analysis of the trunk immediately, clearing fixed alerts on demand.
+  workflow_dispatch:
 
 concurrency:
   group: codeql-${{ github.ref }}
