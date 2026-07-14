@@ -53,9 +53,9 @@ process.env.DATABASE_RLS_SAFETY_ENFORCED ??= 'false';
 process.env.DATABASE_CONNECTION_BUDGET_ENFORCED ??= 'false';
 process.env.REDIS_TLS_ENFORCED ??= 'false';
 process.env.TRUST_PROXY_REQUIRED ??= 'false';
-// TEST_MODE marks this as a test run — the master gate the test-only affordances require.
+// TEST_MODE marks this as a test run — the single gate the test-only affordances (destructive wipe
+// helpers, send-code debug echo) require.
 process.env.TEST_MODE = 'true';
-process.env.TEST_DATA_WIPE_ALLOWED ??= 'true';
 process.env.RATE_LIMIT_RELAXED_CAPS ??= 'true';
 // Category-A behaviour flags now have STATIC production-safe defaults (NODE_ENV no longer selects a
 // default); the harness sets the development values so test captcha/shutdown/log/timing behaviour is

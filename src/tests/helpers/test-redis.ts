@@ -20,12 +20,12 @@ const TEST_REDIS_PREFIXES = [
 ] as const;
 
 /**
- * Whether flushing test-scoped Redis keys is acceptable (the same gate as the Postgres wipe): requires
- * BOTH the master `TEST_MODE` gate AND `TEST_DATA_WIPE_ALLOWED`. Both default false and a schema refine
- * forbids either being `true` in production, so a deployed store is never flushed.
+ * Whether flushing test-scoped Redis keys is acceptable (the same gate as the Postgres wipe): the
+ * single `TEST_MODE` flag. It defaults false and a schema refine forbids `true` in production, so a
+ * deployed store is never flushed.
  */
 function isRedisWipeAllowed(): boolean {
-  return env.TEST_MODE && env.TEST_DATA_WIPE_ALLOWED;
+  return env.TEST_MODE;
 }
 
 /**
@@ -67,9 +67,9 @@ async function clearRateLimitCounters(): Promise<void> {
 export async function cleanupTestRedis(): Promise<void> {
   if (!isRedisWipeAllowed()) {
     throw new Error(
-      'cleanupTestRedis is disabled: it requires TEST_MODE=true AND TEST_DATA_WIPE_ALLOWED=true. ' +
-        'The Vitest harness sets both; for a manual run set them in .env.local (NODE_ENV=local/development). ' +
-        'Both are refine-forbidden in production, so this can never flush a deployed Redis.',
+      'cleanupTestRedis is disabled: it requires TEST_MODE=true. ' +
+        'The Vitest harness sets it; for a manual run set it in .env.local (NODE_ENV=local/development). ' +
+        'TEST_MODE is refine-forbidden in production, so this can never flush a deployed Redis.',
     );
   }
 
