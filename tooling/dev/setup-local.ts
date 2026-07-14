@@ -16,6 +16,7 @@
  *   pnpm setup:local --check                    (preflight only, no mutations)
  *   pnpm setup:local --skip-deps --skip-docker  (granular skips)
  *   pnpm setup:local --skip-codegraph           (skip the CodeGraph agent index)
+ *   pnpm setup:local --skip-mac-tools           (skip the macOS external-tool install/upgrade)
  *   pnpm setup:local --skip-mcp                  (skip MCP setup: CodeGraph + Headroom + .mcp.json)
  *   pnpm setup:local --only-env                  (scaffold .env.local only, then exit)
  *
@@ -56,6 +57,7 @@ interface BootstrapOptions {
   skipMigrate: boolean;
   skipCodegraph: boolean;
   skipMcp: boolean;
+  skipMacTools: boolean;
   forceEnvLocal: boolean;
   onlyEnv: boolean;
   seed: 'none' | 'minimal' | 'full';
@@ -155,6 +157,7 @@ function parseArgs(): BootstrapOptions {
     skipMigrate: has('--skip-migrate'),
     skipCodegraph: has('--skip-codegraph'),
     skipMcp: has('--skip-mcp'),
+    skipMacTools: has('--skip-mac-tools'),
     forceEnvLocal: has('--force-env-local'),
     onlyEnv: has('--only-env'),
     seed,
@@ -220,7 +223,7 @@ function inspectContainer(name: string): ContainerState {
   };
 }
 
-function runPreflight(reports: StepReport[]): void {
+function runPreflight(reports: StepReport[], options: BootstrapOptions): void {
   logHeading('1/9 Preflight');
 
   const nodeStartedAt = performance.now();
@@ -258,6 +261,25 @@ function runPreflight(reports: StepReport[]): void {
     pnpmStatus = 'warning';
   }
   reportStep(reports, 'pnpm CLI', pnpmStatus, pnpmStartedAt, pnpmDetail);
+
+  // External tools (macOS only for now): install-or-upgrade Homebrew, Node, gitleaks,
+  // gh, jq, uv, pipx, codegraph, headroom, and a headless docker runtime — all from
+  // authenticated sources, non-interactively. Runs BEFORE the Docker check so a fresh
+  // machine gets a runtime (colima) before that gate. Idempotent + skippable.
+  if (process.platform === 'darwin' && !options.skipMacTools) {
+    const toolsStartedAt = performance.now();
+    const toolsResult = runCommand('bash', [
+      'tooling/dev/setup-mac-tools.sh',
+      ...(options.check ? ['--check'] : []),
+    ]);
+    reportStep(
+      reports,
+      'External tools (macOS)',
+      toolsResult.code === 0 ? 'done' : 'warning',
+      toolsStartedAt,
+      toolsResult.code === 0 ? undefined : 'some tools did not install/upgrade — see output',
+    );
+  }
 
   const dockerStartedAt = performance.now();
   const dockerInfo = captureCommand('docker', ['info', '--format', '{{.ServerVersion}}']);
@@ -823,7 +845,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  runPreflight(reports);
+  runPreflight(reports, options);
   runInstallDependencies(reports, options);
   runEnvScaffolding(reports, options);
   runDocker(reports, options);

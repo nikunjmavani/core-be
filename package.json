@@ -184,6 +184,7 @@
     "ops:stripe:reconcile": "tsx src/scripts/ops/stripe-subscription-reconcile.ts",
     "ops:worker:drain": "tsx src/scripts/ops/worker-drain.ts",
     "setup:local": "tsx tooling/dev/setup-local.ts",
+    "setup:mac-tools": "bash tooling/dev/setup-mac-tools.sh",
     "mcp:setup": "tsx tooling/dev/setup-mcp.ts",
     "mcp:setup:default": "tsx tooling/dev/setup-mcp.ts --default",
     "mcp:setup:check": "tsx tooling/dev/setup-mcp.ts --check",

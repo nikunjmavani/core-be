@@ -1,0 +1,26 @@
+# macOS external-tool manifest — the SINGLE SOURCE OF TRUTH for the tools that
+# `tooling/dev/setup-mac-tools.sh` installs/upgrades (run by `pnpm setup:local`
+# and `pnpm setup:mac-tools`). One tool per line:
+#
+#   <method>|<spec>|<note>
+#
+#   method  brew | npm | pipx | node | docker
+#   spec    brew: formula · npm: package@version · pipx: package[extras]
+#           node: (empty — the .nvmrc-pinned major is read automatically)
+#           docker: the headless runtime formula to install if none is present
+#   note    free text (shown in docs / for humans)
+#
+# Remove a line here → that tool is dropped from setup. Add a line → it's included.
+# Order matters (top-to-bottom). Homebrew itself is bootstrapped by the script
+# before this list (it's the install mechanism, not a listed tool). All installs
+# come from authenticated sources only; blank lines and `#` comments are ignored.
+
+node||Node.js — pinned .nvmrc major; existing nvm/fnm Node left alone; pnpm via corepack
+brew|gitleaks|secret scan (pre-commit + CI)
+brew|gh|GitHub CLI (env/ruleset sync, PR tooling)
+brew|jq|JSON in shell/CI scripts
+brew|uv|runtime for the uvx MCP servers
+brew|pipx|isolated host for the headroom Python CLI
+docker|colima|headless Docker runtime — only if none present (OrbStack/Docker Desktop respected)
+npm|@colbymchenry/codegraph@latest|codegraph code-intelligence MCP
+pipx|headroom-ai[mcp]|headroom context-compression MCP
