@@ -1,20 +1,16 @@
 #!/usr/bin/env bash
 # Non-interactive macOS external-tool installer for `pnpm setup:local`.
 #
-# Installs-or-UPGRADES every external tool the project uses that `pnpm install`
-# cannot provide, from AUTHENTICATED sources only and with NO prompts/pauses, so
-# setup runs fully hands-off:
-#   - Homebrew (official installer, NONINTERACTIVE) → then all brew formulae
-#   - Node.js (the .nvmrc-pinned major) via Homebrew — only if missing/older; an
-#     existing nvm/fnm-managed Node is left alone. pnpm comes via corepack.
-#   - gitleaks, gh, jq, uv, pipx         via Homebrew (checksummed official formulae)
-#   - a headless Docker runtime (colima)  via Homebrew — only if none is present
-#   - codegraph  (@colbymchenry/codegraph) via the npm registry (latest)
-#   - headroom   (headroom-ai[mcp])        via PyPI through pipx
+# The tool list is data-driven from `setup-prerequisites-mac-tools.manifest` (the
+# single source of truth) — remove a line there and that tool is dropped from
+# setup; add a line and it is included. This script only bootstraps Homebrew (the
+# install mechanism) and dispatches each manifest entry to the matching handler.
 #
-# macOS only for now — a no-op on other platforms. Idempotent: present tools are
-# upgraded, missing tools installed. No tool is a prerequisite; Homebrew itself is
-# bootstrapped if absent.
+# Installs-or-UPGRADES every external tool the project needs that `pnpm install`
+# cannot provide, from AUTHENTICATED sources only (Homebrew official formulae, the
+# npm registry, PyPI) and with NO prompts/pauses, so setup runs fully hands-off.
+# Already-present tools are upgraded (or left as-is for Node/Docker); missing ones
+# are installed. macOS only for now — a no-op on other platforms.
 #
 #   --check / --dry-run : report what WOULD be installed/upgraded; change nothing.
 
@@ -31,6 +27,14 @@ log() { printf 'setup-mac-tools: %s\n' "$*" >&2; }
 if [ "$(uname -s)" != "Darwin" ]; then
   log "not macOS — skipping (mac-only for now)."
   exit 0
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+MANIFEST="${SCRIPT_DIR}/setup-prerequisites-mac-tools.manifest"
+if [ ! -f "$MANIFEST" ]; then
+  log "manifest not found: ${MANIFEST}"
+  exit 1
 fi
 
 # Run a command, or in dry-run mode just print it.
@@ -69,7 +73,11 @@ export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_NO_INSTALL_CLEANUP=1
 export HOMEBREW_NO_ENV_HINTS=1
 
-# install-or-upgrade a brew formula, reporting which happened.
+# ---------------------------------------------------------------------------
+# Per-method handlers. Each reports already-installed (→ upgrade) vs installing.
+# ---------------------------------------------------------------------------
+
+# install-or-upgrade a Homebrew formula.
 brew_ensure() {
   formula="$1"
   if brew list --formula "$formula" >/dev/null 2>&1; then
@@ -81,69 +89,91 @@ brew_ensure() {
   fi
 }
 
-# --- Node.js: match the pinned .nvmrc major. Only install when missing or older
-# than required, so an existing nvm/fnm/volta-managed Node is left alone. pnpm is
-# provided by corepack (ships with Node) — never installed globally here. ---
-required_node_major="$(sed -E 's/^v?([0-9]+).*/\1/' .nvmrc 2>/dev/null || echo 24)"
-current_node_major=0
-if command -v node >/dev/null 2>&1; then
-  current_node_major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
-fi
-if [ "${current_node_major:-0}" -lt "$required_node_major" ] 2>/dev/null; then
-  log "Node ${required_node_major}+ not found (have: ${current_node_major:-none}) — installing node@${required_node_major} via Homebrew…"
-  if brew info "node@${required_node_major}" >/dev/null 2>&1; then
-    brew_ensure "node@${required_node_major}"
-    run brew link --overwrite --force "node@${required_node_major}" || true
-  else
-    brew_ensure node
+# Node.js — match the pinned .nvmrc major; only install if missing/older so an
+# existing nvm/fnm/volta Node is left alone. pnpm is provided by corepack.
+node_ensure() {
+  required_major="$(sed -E 's/^v?([0-9]+).*/\1/' "${REPO_ROOT}/.nvmrc" 2>/dev/null || echo 24)"
+  current_major=0
+  if command -v node >/dev/null 2>&1; then
+    current_major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
   fi
-else
-  log "Node $(node -v 2>/dev/null) present (>= ${required_node_major}) — leaving it as-is."
-fi
-if command -v corepack >/dev/null 2>&1; then
-  run corepack enable || true
-fi
+  if [ "${current_major:-0}" -lt "$required_major" ] 2>/dev/null; then
+    log "node: not present or older than ${required_major} (have: ${current_major:-none}) — installing node@${required_major}."
+    if brew info "node@${required_major}" >/dev/null 2>&1; then
+      brew_ensure "node@${required_major}"
+      run brew link --overwrite --force "node@${required_major}" || true
+    else
+      brew_ensure node
+    fi
+  else
+    log "node: already installed ($(node -v 2>/dev/null)) (>= ${required_major}) — leaving it as-is."
+  fi
+  if command -v corepack >/dev/null 2>&1; then run corepack enable || true; fi
+}
 
-# --- CLI tools + secret scanner + Python launchers (Homebrew) ---
-for formula in gitleaks gh jq uv pipx; do
-  brew_ensure "$formula"
-done
-
-# --- Docker runtime: only if none is present (respect an existing OrbStack / Docker Desktop) ---
-if command -v docker >/dev/null 2>&1; then
-  log "docker runtime already present ($(command -v docker)) — leaving it as-is."
-else
-  log "no docker runtime — installing colima (headless, no GUI/pause)…"
-  brew_ensure colima
+# Docker — install a headless runtime only if none is present (respect an existing
+# OrbStack / Docker Desktop). $1 = runtime formula (e.g. colima).
+docker_ensure() {
+  runtime="${1:-colima}"
+  if command -v docker >/dev/null 2>&1; then
+    log "docker: runtime already present ($(command -v docker)) — leaving it as-is."
+    return 0
+  fi
+  log "docker: no runtime — installing ${runtime} (headless) + docker CLI."
+  brew_ensure "$runtime"
   brew_ensure docker
   brew_ensure docker-compose
-  run colima start || true
-fi
+  if [ "$runtime" = "colima" ]; then run colima start || true; fi
+}
 
-# --- codegraph (npm registry, pinned to latest) ---
-if command -v npm >/dev/null 2>&1; then
-  if command -v codegraph >/dev/null 2>&1; then
-    log "codegraph: already installed ($(codegraph --version 2>/dev/null || echo present)) — upgrading to latest."
-  else
-    log "codegraph: not present — installing."
+# npm global — install-or-upgrade. $1 = package@version (e.g. @scope/name@latest).
+npm_ensure() {
+  pkg="$1"
+  base="$(printf '%s' "$pkg" | sed -E 's/@[^@]*$//')" # strip trailing @version
+  if ! command -v npm >/dev/null 2>&1; then
+    log "npm: not on PATH — skipping ${base} (run pnpm setup:local so Node is present)."
+    return 0
   fi
-  run npm install -g @colbymchenry/codegraph@latest
-else
-  log "npm not on PATH — skipping codegraph (run pnpm setup:local so Node is present)."
-fi
+  if npm ls -g --depth=0 "$base" >/dev/null 2>&1; then
+    log "${base}: already installed — upgrading to latest (npm)."
+  else
+    log "${base}: not present — installing (npm)."
+  fi
+  run npm install -g "$pkg"
+}
 
-# --- headroom (PyPI via pipx) ---
-if command -v pipx >/dev/null 2>&1; then
+# pipx — install-or-upgrade. $1 = package[extras] (e.g. headroom-ai[mcp]).
+pipx_ensure() {
+  pkg="$1"
+  base="${pkg%%[*}" # strip [extras]
+  if ! command -v pipx >/dev/null 2>&1; then
+    log "pipx: not on PATH — skipping ${base} (retry after a fresh shell)."
+    return 0
+  fi
   run pipx ensurepath >/dev/null 2>&1 || true
-  if pipx list 2>/dev/null | grep -q 'headroom-ai'; then
-    log "headroom: already installed — upgrading."
-    run pipx upgrade headroom-ai || true
+  if pipx list 2>/dev/null | grep -q "$base"; then
+    log "${base}: already installed — upgrading (pipx)."
+    run pipx upgrade "$base" || true
   else
-    log "headroom: not present — installing."
-    run pipx install 'headroom-ai[mcp]'
+    log "${base}: not present — installing (pipx)."
+    run pipx install "$pkg"
   fi
-else
-  log "pipx not on PATH — skipping headroom (retry after a fresh shell)."
-fi
+}
+
+# ---------------------------------------------------------------------------
+# Drive every tool from the manifest (blank lines and `#` comments ignored).
+# ---------------------------------------------------------------------------
+while IFS='|' read -r method spec _note || [ -n "$method" ]; do
+  method="$(printf '%s' "$method" | tr -d '[:space:]')"
+  case "$method" in
+    '' | \#*) continue ;;
+    node) node_ensure ;;
+    brew) brew_ensure "$spec" ;;
+    docker) docker_ensure "$spec" ;;
+    npm) npm_ensure "$spec" ;;
+    pipx) pipx_ensure "$spec" ;;
+    *) log "unknown method '${method}' in manifest — skipping." ;;
+  esac
+done <"$MANIFEST"
 
 log "done."

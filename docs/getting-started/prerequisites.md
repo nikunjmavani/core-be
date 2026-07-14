@@ -16,6 +16,10 @@ Run once on a fresh machine — it installs Homebrew if missing, then installs (
 skip it with `pnpm setup:local --skip-mac-tools`, or run it on its own with
 `pnpm setup:mac-tools` (`--check` for a dry-run that changes nothing).
 
+The tool list is **data-driven** from [`tooling/dev/setup-prerequisites-mac-tools.manifest`](../../tooling/dev/setup-prerequisites-mac-tools.manifest)
+— the single source of truth. Add or remove a line there to change what setup
+installs; the script (`tooling/dev/setup-mac-tools.sh`) just dispatches each entry.
+
 | Tool | Why | Source (authenticated) |
 | --- | --- | --- |
 | **Homebrew** | package manager for everything below | official installer (`NONINTERACTIVE=1`), Homebrew GitHub org |
