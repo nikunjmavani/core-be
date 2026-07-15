@@ -94,7 +94,7 @@ export type WebauthnAuthenticateOptionsResult = {
  * - **Failure modes:** mismatched challenge user, replayed/forged assertions, or
  *   counter regression surface as `UnauthorizedError` or `ValidationError` with
  *   WebAuthn-specific i18n keys (`errors:webauthnInvalidChallenge`,
- *   `errors:webauthnNoCredentials`, `errors:webauthnAuthenticationFailed`, …). The
+ *   `errors:webauthnAuthenticationFailed`, `errors:webauthnCredentialNotFound`, …). The
  *   `authenticate/options` step never reveals account existence: unknown emails and
  *   emails without passkeys receive deterministic decoy options instead of an error.
  * - **Side effects:** writes to {@link webauthn_credentials} (`createCredential`,

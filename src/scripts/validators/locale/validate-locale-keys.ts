@@ -9,6 +9,7 @@ import {
   LOCALE_PARITY_FILES,
   OTHER_LOCALES,
 } from './locale-key-parity.util.js';
+import { findUndefinedKeyReferences } from './locale-key-usage.util.js';
 
 function main(): void {
   let failed = false;
@@ -40,15 +41,24 @@ function main(): void {
     }
   }
 
+  const undefinedKeyReferences = findUndefinedKeyReferences();
+  if (undefinedKeyReferences.length > 0) {
+    failed = true;
+    console.error('\n❌ i18n keys referenced in code but missing from the locale JSON:\n');
+    for (const { file, line, key } of undefinedKeyReferences) {
+      console.error(`  ${file}:${line} -> ${key}`);
+    }
+  }
+
   if (failed) {
     console.error(
-      '\nFix: sync src/shared/locales/es/*.json with en; use messageKey-only throws (see docs/reference/runtime/internationalization.md).',
+      '\nFix: add the key to src/shared/locales/en/*.json (then es), sync es with en, and use messageKey-only throws (see docs/reference/runtime/internationalization.md).',
     );
     process.exit(1);
   }
 
   console.log(
-    `✅ validate-locale-keys passed (${BASE_LOCALE} ↔ ${OTHER_LOCALES.join(', ')}; ${LOCALE_PARITY_FILES.join(', ')}; no redundant fallbacks)`,
+    `✅ validate-locale-keys passed (${BASE_LOCALE} ↔ ${OTHER_LOCALES.join(', ')}; ${LOCALE_PARITY_FILES.join(', ')}; no redundant fallbacks; every referenced key defined)`,
   );
 }
 
