@@ -27,7 +27,7 @@ pnpm github:sync              # creates missing .env.<environment> files from se
 pnpm github:sync              # branches + rulesets + environments + push values (confirms before push)
 ```
 
-`github:sync` runs the full pipeline: ensure protected branches exist, sync committed rulesets from [`.github/rulesets/`](../rulesets/), create GitHub Environments from this folder, then push each local `.env.<environment>` file. Preview without writes: `pnpm github:sync:dry-run`.
+`github:sync` runs the full pipeline: ensure protected branches exist, sync committed rulesets from [`.github/rulesets/`](../rulesets/), create GitHub Environments from this folder, then push each local `.env.<environment>` file. Preview without writes: `pnpm github:sync --dry-run`.
 
 **One environment only** (same full pipeline, values limited to that environment): `pnpm github:sync <environment>`.
 
