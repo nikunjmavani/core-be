@@ -45,7 +45,7 @@ There is intentionally **no auto-generated `DOCS.md`** layer. The previous `tool
 | Layer | File(s) | Source of truth | Skill |
 | --- | --- | --- | --- |
 | **System narratives** (cross-cutting) | `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` | Hand-written | system-narrative-maintainer |
-| **Per-folder overviews** (hand-written narrative) | `src/<folder>/<folder>.overview.md` (~51 files at meaningful boundaries — domains, sub-domains, infra subsystems, test suites) | Hand-written | overview-doc-maintainer |
+| **Per-folder overviews** (hand-written narrative) | `src/<folder>/<folder>.overview.md` (~58 files at meaningful boundaries — domains, sub-domains, nested sub-domains, infra subsystems, test suites) | Hand-written | overview-doc-maintainer |
 | **Symbol-level TSDoc** (per-export documentation) | every `export <kind> <name>` declaration in `*.ts`; IDE hover, TypeDoc, and `tsdoc:check` all read this | Hand-written, in-source | tsdoc-export-guard |
 | **Fastify route schema** (route documentation) | `schema: { summary, description, tags }` on every route registration → drives `docs/openapi/openapi.json` → Postman + API hub | Inline Zod schema | route-schema-doc-guard |
 

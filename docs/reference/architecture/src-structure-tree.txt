@@ -152,6 +152,7 @@ src/
     │   │   │   │   ├── oauth-pkce.ts
     │   │   │   │   ├── oauth-state.ts
     │   │   │   │   ├── oauth-user-session.ts
+    │   │   │   │   ├── oauth.overview.md
     │   │   │   │   ├── oauth.service.ts
     │   │   │   │   └── oauth.types.ts
     │   │   │   ├── seed/
@@ -165,6 +166,7 @@ src/
     │   │   │   │   │   │   ├── verification-token.repository.db.unit.test.ts
     │   │   │   │   │   │   ├── verification-token.repository.unit.test.ts
     │   │   │   │   │   │   └── verification-token.service.unit.test.ts
+    │   │   │   │   ├── verification-token.overview.md
     │   │   │   │   ├── verification-token.repository.ts
     │   │   │   │   ├── verification-token.schema.ts
     │   │   │   │   └── verification-token.service.ts
@@ -622,6 +624,7 @@ src/
     │   │   │   │   │   │   └── member-role-permission.validator.unit.test.ts
     │   │   │   │   ├── member-role-permission.controller.ts
     │   │   │   │   ├── member-role-permission.dto.ts
+    │   │   │   │   ├── member-role-permission.overview.md
     │   │   │   │   ├── member-role-permission.repository.ts
     │   │   │   │   ├── member-role-permission.schema.ts
     │   │   │   │   ├── member-role-permission.serializer.ts
@@ -683,6 +686,7 @@ src/
     │   │   │   │   │   └── member-invitation.faker.ts
     │   │   │   │   ├── member-invitation.controller.ts
     │   │   │   │   ├── member-invitation.dto.ts
+    │   │   │   │   ├── member-invitation.overview.md
     │   │   │   │   ├── member-invitation.repository.ts
     │   │   │   │   ├── member-invitation.schema.ts
     │   │   │   │   ├── member-invitation.serializer.ts
@@ -746,6 +750,7 @@ src/
     │   │   │   │   │   └── organization-api-key-tombstone-retention.worker.ts
     │   │   │   │   ├── organization-api-key.controller.ts
     │   │   │   │   ├── organization-api-key.dto.ts
+    │   │   │   │   ├── organization-api-key.overview.md
     │   │   │   │   ├── organization-api-key.repository.ts
     │   │   │   │   ├── organization-api-key.schema.ts
     │   │   │   │   ├── organization-api-key.serializer.ts
@@ -771,6 +776,7 @@ src/
     │   │   │   │   │   └── organization-notification-policy-tombstone-retention.worker.ts
     │   │   │   │   ├── organization-notification-policy.controller.ts
     │   │   │   │   ├── organization-notification-policy.dto.ts
+    │   │   │   │   ├── organization-notification-policy.overview.md
     │   │   │   │   ├── organization-notification-policy.repository.ts
     │   │   │   │   ├── organization-notification-policy.schema.ts
     │   │   │   │   ├── organization-notification-policy.serializer.ts
@@ -792,6 +798,7 @@ src/
     │   │   │   │   ├── i18n-locale.cache.ts
     │   │   │   │   ├── organization-settings.controller.ts
     │   │   │   │   ├── organization-settings.dto.ts
+    │   │   │   │   ├── organization-settings.overview.md
     │   │   │   │   ├── organization-settings.repository.ts
     │   │   │   │   ├── organization-settings.schema.ts
     │   │   │   │   ├── organization-settings.serializer.ts
