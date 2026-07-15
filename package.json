@@ -42,7 +42,6 @@
     "validate:github-env-runtime": "tsx tooling/setup/github/validate-environment-runtime.ts",
     "tool:railway-deploy-image": "tsx tooling/setup/railway/deploy-image.ts",
     "env:add": "tsx tooling/setup/envs/env-add.ts",
-    "envs:sync:github": "tsx tooling/setup/envs/sync-github.ts",
     "validate:locale-keys": "tsx src/scripts/validators/locale/validate-locale-keys.ts",
     "validate:constants": "tsx src/scripts/validators/code/validate-constants-centralization.ts",
     "validate:test-api-prefix": "tsx src/scripts/validators/tests/validate-test-api-prefix.ts",

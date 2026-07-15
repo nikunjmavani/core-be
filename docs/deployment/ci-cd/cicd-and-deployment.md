@@ -256,7 +256,7 @@ Optional on Railway/GitHub only if overriding app default: **`TOMBSTONE_RETENTIO
 
 | Item | Notes |
 | --- | --- |
-| **Integration secrets** | `pnpm github:sync <environment>` pushes `RESEND_*`, `STRIPE_*`, `OAUTH_*`, `S3_*`, etc. to GitHub via the env sync pipeline (`tooling/setup/envs/sync-github.ts`), but `reusable-railway-deploy.yml` does **not** call `railway variable set` for those keys. Set them on Railway once or add them to the CD variable loop. |
+| **Integration secrets** | `pnpm github:sync <environment>` pushes `RESEND_*`, `STRIPE_*`, `OAUTH_*`, `S3_*`, etc. to GitHub via the env sync pipeline (`tooling/setup/github/sync-github-environments.ts`), but `reusable-railway-deploy.yml` does **not** call `railway variable set` for those keys. Set them on Railway once or add them to the CD variable loop. |
 
 ### Partial re-runs and manual recovery
 
