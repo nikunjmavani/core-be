@@ -299,7 +299,7 @@ see the dedicated runbook: **[add-new-environment.md](./add-new-environment.md)*
 
 ## 11. Production safety: unsafe dev and load-test values
 
-The `local`, `test`, and load-test profiles deliberately **turn off** protections
+The `local` and load-test profiles deliberately **turn off** protections
 (captcha, rate limiting, Sentry) and tune sizing for one machine. Production must
 inherit **none** of those values. Three layers govern this — the first two are
 enforced for you; the third is entirely on the operator.

@@ -248,7 +248,7 @@ Neon branch names must match the git ref (`main`). Without both secrets, the mon
 
 ## 8. Postman (optional) — upload API collection
 
-**Used for:** `pnpm docs:upload` to push the generated collection to a Postman workspace. CI runs this on **push** to `dev` and `main` using GitHub Environment secrets (`development`, `production`).
+**Used for:** `pnpm docs:upload` to push the generated collection to a Postman workspace. CI runs this on merge to `main` (`development` environment) and on release (`production` environment), using the matching GitHub Environment secrets.
 
 | .env variable          | Where to get it                                |
 | ---------------------- | ---------------------------------------------- |
@@ -263,7 +263,7 @@ Use a **separate workspace per environment** by setting different `POSTMAN_WORKS
 
 ## 9. Scalar Registry (optional) — publish OpenAPI
 
-**Used for:** `pnpm docs:upload:scalar` to publish the OpenAPI document to the Scalar Registry. CI runs this on **push** to `dev` and `main` using GitHub Environment secrets (`development`, `production`).
+**Used for:** `pnpm docs:upload:scalar` to publish the OpenAPI document to the Scalar Registry. CI runs this on merge to `main` (`development` environment) and on release (`production` environment), using the matching GitHub Environment secrets.
 
 | .env variable      | Where to get it                                  |
 | ------------------ | ------------------------------------------------ |

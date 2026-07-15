@@ -57,7 +57,7 @@ export const GHCR_CACHE_SCOPE_WORKER = 'core-be-worker';
 /** Git branches that receive protected CI + deploy pipelines. */
 export const PROTECTED_GIT_BRANCHES = ['main'] as const;
 
-/** Default git branch for new clones and PR bases (typically `dev`). */
+/** Default git branch (repository trunk) for new clones and PR bases; from setup.config.json git.defaultBranch. */
 export const GIT_DEFAULT_BRANCH = 'main';
 
 /** Production deploy branch (maps to production GitHub Environment). */

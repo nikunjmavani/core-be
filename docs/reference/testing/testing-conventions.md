@@ -182,7 +182,7 @@ All tiers share one root **`vitest.config.ts`**. Named projects live in **`tooli
 | ---------- | -------------------------------------------- |
 | Output     | Repo root `coverage/` (gitignored)           |
 | Created by | `pnpm test:coverage` only                    |
-| Browse     | `pnpm coverage:open`                         |
+| Browse     | open `coverage/lcov-report/index.html`       |
 | Thresholds | Stage 5 in `vitest.config.ts`; see AGENTS.md |
 
 ---

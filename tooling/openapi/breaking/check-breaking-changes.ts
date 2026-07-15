@@ -4,8 +4,9 @@
  * oasdiff is a Go binary with no npm distribution, so it cannot live in
  * package.json devDependencies — this script downloads the SAME pinned,
  * checksum-verified release CI uses (see `.github/workflows/pr-ci.yml`) into
- * `.cache/oasdiff/` on first run, generates the base spec from `origin/main`
- * in a temporary git worktree, regenerates the head spec from the working
+ * `.cache/oasdiff/` on first run, generates the base spec from the resolved
+ * default branch (`origin/<git.defaultBranch>`) in a temporary git worktree,
+ * regenerates the head spec from the working
  * tree, and diffs them with the committed err-ignore file:
  *
  *   pnpm docs:breaking
@@ -17,6 +18,8 @@ import { createHash } from 'node:crypto';
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { resolveGitMetadata } from '@tooling/setup/codegen/project-identity.util.js';
+import { loadConfig } from '@tooling/setup/common/config.js';
 
 const OASDIFF_VERSION = '1.18.1';
 const OASDIFF_SHA256: Record<string, string> = {
@@ -25,6 +28,9 @@ const OASDIFF_SHA256: Record<string, string> = {
 };
 
 const repoRoot = process.cwd();
+// Resolve the trunk from setup.config.json instead of hardcoding it, so a branch rename does not
+// silently break this gate while the rest of the tooling adapts (matches governance-mode.ts).
+const DEFAULT_BRANCH = resolveGitMetadata(loadConfig()).defaultBranch;
 const cacheDirectory = resolve(repoRoot, '.cache', 'oasdiff', OASDIFF_VERSION);
 const binaryPath = join(cacheDirectory, 'oasdiff');
 const ignoreFilePath = resolve(repoRoot, '.github/oasdiff/breaking-changes-ignore.txt');
@@ -60,11 +66,13 @@ function ensureBinary(): void {
 function generateBaseSpec(): string {
   const worktreePath = join(tmpdir(), `core-be-oasdiff-base-${process.pid}`);
   const baseSpecPath = join(tmpdir(), `core-be-base-openapi-${process.pid}.json`);
-  console.log('Generating base spec from origin/main (temporary worktree)…');
-  execFileSync('git', ['fetch', 'origin', 'main', '--quiet'], { cwd: repoRoot });
-  execFileSync('git', ['worktree', 'add', '--detach', worktreePath, 'origin/main', '--quiet'], {
-    cwd: repoRoot,
-  });
+  console.log(`Generating base spec from origin/${DEFAULT_BRANCH} (temporary worktree)…`);
+  execFileSync('git', ['fetch', 'origin', DEFAULT_BRANCH, '--quiet'], { cwd: repoRoot });
+  execFileSync(
+    'git',
+    ['worktree', 'add', '--detach', worktreePath, `origin/${DEFAULT_BRANCH}`, '--quiet'],
+    { cwd: repoRoot },
+  );
   try {
     execFileSync('pnpm', ['install', '--prefer-offline', '--silent'], {
       cwd: worktreePath,

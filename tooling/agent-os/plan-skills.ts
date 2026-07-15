@@ -8,13 +8,17 @@
  *
  * Usage:
  *   tsx tooling/agent-os/plan-skills.ts <file> [<file> ...]
- *   tsx tooling/agent-os/plan-skills.ts --diff [base]   # base default: origin/main
+ *   tsx tooling/agent-os/plan-skills.ts --diff [base]   # base default: origin/<git.defaultBranch>
  */
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { resolveGitMetadata } from '@tooling/setup/codegen/project-identity.util.js';
+import { loadConfig } from '@tooling/setup/common/config.js';
 
 const repositoryRoot = process.cwd();
+// Resolve the trunk from setup.config.json rather than hardcoding it (no-static-branch-names).
+const DEFAULT_BRANCH = resolveGitMetadata(loadConfig()).defaultBranch;
 
 interface ChainDefinition {
   description?: string;
@@ -58,7 +62,7 @@ const args = process.argv.slice(2);
 let files: string[];
 if (args.includes('--diff')) {
   const after = args[args.indexOf('--diff') + 1];
-  const base = after && !after.startsWith('-') ? after : 'origin/main';
+  const base = after && !after.startsWith('-') ? after : `origin/${DEFAULT_BRANCH}`;
   files = changedFromGit(base);
 } else {
   files = args.filter((argument) => !argument.startsWith('-'));

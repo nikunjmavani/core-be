@@ -139,10 +139,10 @@ When a migration already reached production and must be reversed:
 
 ## Transaction rollback (CI)
 
-Postgres transaction rollback for multi-write helpers is covered in CI by:
+Postgres transaction rollback for multi-write helpers is covered in CI by the integration suite:
 
 ```bash
-pnpm test:integration:transaction-rollback
+pnpm test:integration
 ```
 
 (`src/tests/integration/database/transaction-rollback.integration.test.ts` — asserts `withTransaction` rolls back on error and commits on success.) This is **not** SQL migration rollback.
