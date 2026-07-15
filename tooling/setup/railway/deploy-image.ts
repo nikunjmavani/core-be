@@ -65,6 +65,7 @@
  *   0   Deployment reached SUCCESS within the timeout (or --skip-wait was set).
  *   1   Any validation, GraphQL, polling, or terminal-failure error.
  */
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import * as logger from '@tooling/setup/common/logger.js';
 
@@ -125,11 +126,25 @@ async function sleep(milliseconds: number): Promise<void> {
   });
 }
 
-function isRetryableHttpStatus(statusCode: number): boolean {
+/**
+ * Returns whether a Railway HTTP status is worth retrying.
+ *
+ * @remarks
+ * 429 (rate limit) and 5xx are transient; every 4xx other than 429 is a client error that a retry
+ * would only repeat (a bad token or an unknown service id must fail fast, not burn the backoff).
+ */
+export function isRetryableHttpStatus(statusCode: number): boolean {
   return statusCode === 429 || statusCode >= 500;
 }
 
-function isRetryableNetworkError(error: unknown): boolean {
+/**
+ * Returns whether a thrown fetch/network error is transient and worth retrying.
+ *
+ * @remarks
+ * Matches on message text because undici surfaces these as generic `TypeError: fetch failed` with
+ * the cause in the message rather than a stable error code.
+ */
+export function isRetryableNetworkError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /timed out|timeout|ECONNRESET|ENOTFOUND|EAI_AGAIN|fetch failed/i.test(message);
 }
@@ -239,7 +254,15 @@ async function railwayGraphQLWithFallback<T>({
   throw new Error(`Railway GraphQL authorization failed (${errors.join(' | ')}).`);
 }
 
-function buildAuthHeaders({
+/**
+ * Builds the Railway GraphQL auth headers for the resolved token type.
+ *
+ * @remarks
+ * The two modes are not interchangeable: a project token authenticates via `Project-Access-Token`
+ * and can trigger a deployment but is often not permitted to READ deployment status, while an
+ * account token uses `Bearer` and can poll. Sending a project token as `Bearer` fails authorization.
+ */
+export function buildAuthHeaders({
   token,
   authMode,
 }: {
@@ -252,7 +275,8 @@ function buildAuthHeaders({
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 }
 
-function isAuthorizationError(message: string): boolean {
+/** Returns whether a Railway GraphQL error message indicates an auth/permission failure. */
+export function isAuthorizationError(message: string): boolean {
   return /not authorized|unauthorized|forbidden/i.test(message);
 }
 
@@ -547,9 +571,16 @@ async function waitForTerminalStatus({
   );
 }
 
-function parseOptions(): RailwayDeployImageOptions {
+/**
+ * Parses and validates the CLI flags into deploy options.
+ *
+ * @remarks
+ * Failure modes: throws when `--service` or `--image` is absent, or when a numeric flag is not a
+ * positive number. `argv` is injectable for tests; the CLI passes `process.argv.slice(2)`.
+ */
+export function parseOptions(argv: string[] = process.argv.slice(2)): RailwayDeployImageOptions {
   const { values } = parseArgs({
-    args: process.argv.slice(2),
+    args: argv,
     options: {
       service: { type: 'string' },
       image: { type: 'string' },
@@ -689,8 +720,13 @@ async function main(): Promise<void> {
   logger.success(`  ${options.label}: deployment ${deploymentId} SUCCESS (${accessUrl}).`);
 }
 
-main().catch((error) => {
-  const message = error instanceof Error ? error.message : String(error);
-  logger.error(message);
-  process.exit(1);
-});
+// Run as CLI only when invoked directly (not when imported by tests).
+const invokedDirectly =
+  process.argv[1] !== undefined && process.argv[1] === fileURLToPath(import.meta.url);
+if (invokedDirectly) {
+  main().catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(message);
+    process.exit(1);
+  });
+}
