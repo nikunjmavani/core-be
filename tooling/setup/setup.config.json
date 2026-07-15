@@ -2,7 +2,6 @@
   "project": {
     "name": "core-be",
     "displayName": "core-be",
-    "organization": "albetrios",
     "artifacts": {
       "apiImage": "core-be-api",
       "workerImage": "core-be-worker",
@@ -14,14 +13,6 @@
   "git": {
     "protectedBranches": ["main"],
     "defaultBranch": "main"
-  },
-  "product": { "name": "core" },
-  "frontend": {
-    "name": "core-fe",
-    "url": {
-      "development": "https://dev--core-fe.netlify.app",
-      "production": ""
-    }
   },
   "environments": [
     {
@@ -39,97 +30,9 @@
     }
   ],
   "providers": {
-    "neon": {
-      "enabled": true,
-      "region": "aws-us-east-2",
-      "pgVersion": 17,
-      "computeSize": {
-        "min": 0.25,
-        "max": 1
-      }
-    },
-    "railwayRedis": {
-      "enabled": true,
-      "region": "asia-southeast1-eqsg3a",
-      "cpuLimit": 1,
-      "memoryLimitMb": 512
-    },
-    "aws": {
-      "enabled": true,
-      "region": "us-east-1",
-      "s3BucketPrefix": "core-be",
-      "iamUserPrefix": "core-be-s3"
-    },
-    "sentry": {
-      "enabled": true,
-      "organization": "albetrios-7j",
-      "project": "core-be",
-      "team": "albetrios",
-      "platform": "node-fastify",
-      "sampleRates": {
-        "development": {
-          "traces": 1,
-          "profile": 1
-        },
-        "production": {
-          "traces": 0.1,
-          "profile": 0.05
-        }
-      }
-    },
-    "resend": {
-      "enabled": true,
-      "fromAddress": "",
-      "fromName": ""
-    },
-    "stripe": {
-      "enabled": false
-    },
-    "oauth": {
-      "google": {
-        "enabled": false
-      },
-      "github": {
-        "enabled": true
-      }
-    },
-    "posthog": {
-      "enabled": true,
-      "region": "us"
-    },
-    "turnstile": {
-      "enabled": true
-    },
-    "railway": {
-      "enabled": true
-    },
     "github": {
       "enabled": true,
-      "repository": "nikunjmavani/core-be",
-      "syncEnvironments": false
-    },
-    "postman": {
-      "enabled": true
-    },
-    "scalar": {
-      "enabled": true
-    }
-  },
-  "app": {
-    "port": 3000,
-    "host": "0.0.0.0",
-    "rateLimitMax": {
-      "development": 10000,
-      "production": 100
-    },
-    "rateLimitWindowMs": 60000,
-    "frontendUrl": {
-      "development": "https://dev--core-fe.netlify.app",
-      "production": ""
-    },
-    "allowedOrigins": {
-      "development": "https://dev--core-fe.netlify.app",
-      "production": ""
+      "repository": "nikunjmavani/core-be"
     }
   }
 }
