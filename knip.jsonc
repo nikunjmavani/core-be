@@ -58,8 +58,6 @@
     "gh",
     "semgrep",
     // Load-test runner invoked by load:* scripts.
-    "k6",
-    // Windows counterpart of `which`, probed in tooling/setup/common/exec.ts.
-    "where"
+    "k6"
   ]
 }

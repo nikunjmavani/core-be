@@ -55,7 +55,6 @@ if (/create_pull_request/i.test(toolName)) {
 // Secrets file referenced anywhere in the MCP input.
 function isReadableSecretPath(p) {
   if (!p) return false;
-  if (/(^|\/)\.setup-credentials\.example$/.test(p)) return false;
   if (/(^|\/)\.setup-credentials$/.test(p)) return true;
   if (/(^|\/)\.setup-state\.(json|lock|audit\.log)$/.test(p)) return true;
   if (/(^|\/)\.env\.example$/.test(p) || /(^|\/)\.env\.setup\.example$/.test(p)) return false;
