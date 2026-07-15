@@ -107,7 +107,7 @@ export class AuditRepository {
       parsedCursor?.filter_fingerprint !== undefined &&
       parsedCursor.filter_fingerprint !== filterFingerprint
     ) {
-      throw new ValidationError('errors:invalidPagination');
+      throw new ValidationError('errors:validation.invalidPagination');
     }
 
     const conditions = [...filterConditions];
