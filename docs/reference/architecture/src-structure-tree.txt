@@ -2089,7 +2089,9 @@ src/
     │   │   ├── agent-docker-daemon-script.unit.test.ts
     │   │   ├── check-patch-coverage.unit.test.ts
     │   │   ├── project-identity.policy.unit.test.ts
-    │   │   └── route-catalog-auth.unit.test.ts
+    │   │   ├── railway-deploy-image.unit.test.ts
+    │   │   ├── route-catalog-auth.unit.test.ts
+    │   │   └── validate-environment-runtime.unit.test.ts
     │   ├── utils/
     │   │   ├── auth/
     │   │   │   ├── account-status.util.unit.test.ts

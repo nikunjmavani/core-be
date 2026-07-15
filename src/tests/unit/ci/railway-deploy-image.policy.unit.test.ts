@@ -58,12 +58,15 @@ describe('Railway deploy tooling (policy)', () => {
     expect(validateAt).toBeLessThan(deployAt);
   });
 
-  it('the env pre-flight asserts schema-required keys are present and non-empty', () => {
+  it('the env pre-flight checks schema-required keys and exits with its verdict', () => {
     // Presence alone is not enough: an empty GitHub Environment secret reaches the
     // runner as '' and would satisfy a naive `in process.env` check while failing
-    // the app's Zod validation at boot.
+    // the app's Zod validation at boot. (The verdict logic itself is covered by
+    // src/tests/unit/tooling/validate-environment-runtime.unit.test.ts.)
     expect(envValidator).toContain('envSchemaRequiredKeys');
     expect(envValidator).toContain(".trim() === ''");
-    expect(envValidator).toContain('process.exit(1)');
+    // The CLI must propagate the validation result as the exit code — a deploy job
+    // only fails when this process does.
+    expect(envValidator).toContain('process.exit(runEnvironmentValidation(');
   });
 });
