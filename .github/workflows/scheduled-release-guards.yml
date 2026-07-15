@@ -22,7 +22,7 @@ name: Release-flow guards
 
 on:
   schedule:
-    - cron: '30 6 * * 1' # weekly (Monday) — environment protection drift + PAT canary
+    - cron: '30 6 * * 1' # weekly (Monday) — ruleset liveness + PAT canary + repo settings drift
   workflow_dispatch:
 
 env:
@@ -36,7 +36,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  environment-drift:
+  ruleset-liveness-drift:
     name: Ruleset liveness drift
     if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 6 * * 1'
     runs-on: ubuntu-latest
@@ -140,7 +140,7 @@ jobs:
 
       # Read-only consistency + remote drift for the WHOLE setup surface
       # (setup.config.json ↔ rulesets ↔ workflows ↔ GitHub Environments) —
-      # broader than the environment-drift job's protection/ruleset checks.
+      # broader than the ruleset-liveness job's checks (it also covers environment protection).
       # `github:sync` shells out to `gh`, which authenticates via GH_TOKEN;
       # the PAT fallback keeps this runnable if the default token lacks a
       # settings-read scope.
@@ -151,10 +151,10 @@ jobs:
 
   notify-failure:
     name: Notify failure
-    needs: [environment-drift, release-token, repo-settings-drift]
+    needs: [ruleset-liveness-drift, release-token, repo-settings-drift]
     if: |
       always() &&
-      (needs.environment-drift.result == 'failure' || needs.release-token.result == 'failure' || needs.repo-settings-drift.result == 'failure')
+      (needs.ruleset-liveness-drift.result == 'failure' || needs.release-token.result == 'failure' || needs.repo-settings-drift.result == 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -168,7 +168,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPOSITORY: ${{ github.repository }}
-          DRIFT_RESULT: ${{ needs.environment-drift.result }}
+          DRIFT_RESULT: ${{ needs.ruleset-liveness-drift.result }}
           TOKEN_RESULT: ${{ needs.release-token.result }}
           SETTINGS_RESULT: ${{ needs.repo-settings-drift.result }}
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

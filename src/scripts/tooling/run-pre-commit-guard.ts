@@ -361,7 +361,7 @@ export function buildGuardSteps(options: {
       label: 'No secret/state files staged',
       when: 'always',
       description:
-        'reject staged .env.<env> / .setup-state.* / setup.secrets.json (force-add guard)',
+        'reject staged .env.<env> / .setup-credentials / .setup-state.* / setup.secrets.json (force-add guard)',
     },
     {
       id: '15',

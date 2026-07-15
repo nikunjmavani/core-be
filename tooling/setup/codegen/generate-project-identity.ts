@@ -39,7 +39,6 @@ const WORKFLOW_FILES_TO_PATCH = [
   'scheduled-chaos.yml',
   'cleanup-cache.yml',
   'cleanup-ghcr.yml',
-  'bootstrap-railway-service.yml',
   'reusable-vitest-postgres-redis.yml',
 ] as const;
 

@@ -76,7 +76,7 @@ to which skill(s) to run (no duplicate invocations).
 | **Seeds & tests** | `seed-maintainer`, `test-generator`, `contract-test-maintainer`, `chaos-test-maintainer` | `seed/`, `__tests__/` |
 | **Docs & narrative** | `docs-maintainer`, `overview-doc-maintainer`, `system-narrative-maintainer`, `tsdoc-export-guard` | `docs/**/*.md`, `src/**/*.overview.md`, public exports |
 | **Quality & CI** | `code-quality-guard`, `before-commit-guard`, `dependency-security`, `ci-investigator`, `pr-babysit` | Pre-commit, `package.json`, CI failures |
-| **Infra & setup** | `setup-infra-maintainer`, `env-schema-add`, `production-hardening-guard`, `path-to-production-gate` | `tooling/setup/**`, env schema, deploy readiness |
+| **Infra & setup** | `env-schema-add`, `production-hardening-guard`, `path-to-production-gate` | `tooling/setup/**`, env schema, deploy readiness |
 | **Security & tenancy** | `rls-tenant-isolation-guard`, `idempotency-guard` | RLS, tenant middleware, idempotency |
 | **Cursor built-ins (reference)** | `cursor-global-skills` | Editing `agent-os/skills`, rules, agents, hooks |
 

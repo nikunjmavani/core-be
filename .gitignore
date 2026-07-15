@@ -18,11 +18,9 @@ dist/
 !.env.example
 !.env.example.fe
 
-# Setup-tooling files live in the gitignored `.setup/` dir (credentials + state),
-# separate from app `.env.<environment>`. The only committed setup file is the template
-# `.setup-credentials.example` at the repo root, next to `.env.example`.
+# Setup-tooling credentials + state live in the gitignored `.setup/` dir, separate
+# from app `.env.<environment>`. Nothing in it is ever committed.
 .setup/
-!.setup-credentials.example
 
 # Docker Compose machine-local overrides (auto-merged by compose; never shared with team/CI)
 docker-compose.override.yml

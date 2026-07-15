@@ -241,7 +241,7 @@ After completing any task, scan the changes and invoke matching skills:
 - **Note**: this runs alongside `schema-generator` (which handles scaffolding); `sql-design-guard` reviews and enhances the design quality.
 
 > **Setup infra (third-party providers)** lives in a separate infrastructure repository.
-> core-be keeps only `github:sync`, `env:add`, and the Railway deploy tool
+> core-be keeps only `github:sync`, `env:add`, `validate:github-env-runtime`, and the Railway deploy tool
 > (`tool:railway-deploy-image`); provider/provisioning changes are made in that repository.
 
 ### In-source docs (TSDoc, <folder>.overview.md, system narratives, route schema)

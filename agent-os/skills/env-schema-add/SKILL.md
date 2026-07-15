@@ -280,5 +280,7 @@ A rename is a delete + add, atomic in the same PR:
 - **Setup manifest:** `tooling/setup/setup.config.json` (single source of truth for project identity)
 - **GitHub sync (incl. pushing env values):** `tooling/setup/github/sync.ts` — `pnpm github:sync [<environment>]`
 - **Schema ↔ template validator:** `src/scripts/validators/env/sync-env-example.ts` (`pnpm tool:sync-env-example`)
+- **Scaffolder:** `tooling/setup/envs/env-add.ts` (`pnpm env:add KEY --type <t> --section <secret|variable>`) — writes the key into BOTH the schema and `.env.example`; bare `pnpm env:add` is interactive
+- **Pre-deploy runtime gate:** `tooling/setup/github/validate-environment-runtime.ts` (`pnpm validate:github-env-runtime`) — asserts every `envSchemaRequiredKeys` key is present in the exported GitHub Environment; runs in `reusable-railway-deploy.yml` before any container deploys
 - **Cross-dimension consistency (in github:sync):** `tooling/setup/github/sync-config.ts` — run `pnpm github:sync --check` before pushing
-- **Add hosted environment:** edit `tooling/setup/setup.config.json`, run `pnpm tool:generate-project-identity`, then `pnpm github:sync` (no env:add script)
+- **Add hosted environment:** edit `tooling/setup/setup.config.json`, run `pnpm tool:generate-project-identity`, then `pnpm github:sync` (no script automates this — `env:add` adds a *variable*, not an environment)
