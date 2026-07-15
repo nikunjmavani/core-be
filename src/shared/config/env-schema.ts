@@ -460,7 +460,7 @@ const envSchemaBase = z.object({
   // Stripe
   STRIPE_SECRET_KEY: z.string().min(1).optional(),
   // STRIPE_PUBLISHABLE_KEY is intentionally NOT in this schema: it is public, browser-only, and the
-  // backend never reads it. setup:infra writes it to `.env.<environment>` and surfaces it to core-fe.
+  // backend never reads it. setup:infra (core-infra) writes it to `.env.<environment>` and surfaces it to core-fe.
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
   /** Stripe Node client per-request HTTP timeout (ms). */
   STRIPE_HTTP_TIMEOUT_MS: z.coerce.number().int().min(1000).max(180_000).default(30_000),
@@ -485,7 +485,7 @@ const envSchemaBase = z.object({
   // Sentry
   SENTRY_DSN: z.url().optional(),
   // SENTRY_FRONTEND_DSN is intentionally NOT in this schema: it is the public core-fe project DSN,
-  // never read by the backend. setup:infra writes it to `.env.<environment>` and surfaces it to core-fe.
+  // never read by the backend. setup:infra (core-infra) writes it to `.env.<environment>` and surfaces it to core-fe.
   SENTRY_ENVIRONMENT: z.string().min(1).optional(),
   SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).optional(),
   SENTRY_PROFILE_SAMPLE_RATE: z.coerce.number().min(0).max(1).optional(),
@@ -857,7 +857,7 @@ const envSchemaBase = z.object({
   /** Turnstile secret key — required when CAPTCHA_PROVIDER=turnstile. */
   CAPTCHA_SECRET: z.string().min(1).optional(),
   // CAPTCHA_SITE_KEY is intentionally NOT in this schema: it is the public Turnstile widget key,
-  // used only by the browser. setup:infra writes it to `.env.<environment>` and surfaces it to core-fe.
+  // used only by the browser. setup:infra (core-infra) writes it to `.env.<environment>` and surfaces it to core-fe.
   /**
    * Dev/test only: request header name that bypasses CAPTCHA when value is true/1.
    * Ignored in production.

@@ -527,7 +527,7 @@ export function runPreCommitGuard(options: RunGuardOptions = {}): number {
         run: () => {
           if (!gitleaksInstalled()) {
             console.error(
-              'ERROR: gitleaks is not installed. Install it (e.g. brew install gitleaks) or run: pnpm setup:infra',
+              'ERROR: gitleaks is not installed. Install it (e.g. brew install gitleaks; pnpm setup:local auto-installs it on macOS).',
             );
             return 1;
           }

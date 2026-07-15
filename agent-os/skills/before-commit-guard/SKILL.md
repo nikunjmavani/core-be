@@ -40,7 +40,7 @@ The hook in `.husky/pre-commit` delegates to **`pnpm guard:pre-commit`** (labele
 | 10b | When migrations staged: `pnpm tool:generate-dbdiagram` + stage DBML | Local DBML regen (not enforced in CI). |
 | 11 | `pnpm tool:generate-project-identity:check` | Manifest ↔ constants ↔ workflows. Fix per **project-identity.mdc**. |
 | 12 | `pnpm tool:sync-env-example` | `.env.example` vs env schema. Run `pnpm tool:sync-env-example --fix` if needed. |
-| 13 | `gitleaks protect --staged` | Secrets in staged files (**required** — install gitleaks or run `pnpm setup:infra`). |
+| 13 | `gitleaks protect --staged` | Secrets in staged files (**required** — install gitleaks, e.g. `brew install gitleaks`; `pnpm setup:local` auto-installs it on macOS). |
 | 14 | Conflict markers | Resolve `<<<<<<<` / `>>>>>>>` in staged files. |
 | 15 | Large files (>1MB) | Unstage or use LFS. |
 | 16 | When deployed-surface `src/**/*.ts` staged: `pnpm sonar:scan` | SonarQube quality gate — blocks the commit on any unresolved issue/hotspot. **Mandatory — no bypass.** Run `pnpm sonar:up && pnpm sonar:scan` locally and fix every finding (or mark a genuine false positive resolved in the SonarQube UI at <http://localhost:9000>). |

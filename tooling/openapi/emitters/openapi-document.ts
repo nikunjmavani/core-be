@@ -197,7 +197,7 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
     }))
     .filter((group) => group.tags.length > 0);
 
-  // Per-environment base URL: setup:infra sets OPENAPI_SERVER_URL when generating an environment's
+  // Per-environment base URL: core-infra's setup:infra sets OPENAPI_SERVER_URL when generating an environment's
   // Postman collection / Scalar doc so the artifact points at that env's API. Unset (normal
   // `docs:generate` / CI) → the default localhost server, so the committed spec is unchanged.
   const serverOverrideUrl = process.env.OPENAPI_SERVER_URL?.trim();

@@ -160,7 +160,7 @@ export const setupStateSchema = z.object({
 });
 
 // State is EPHEMERAL: held in memory for the lifetime of a single setup process and never
-// persisted to disk — there is no `.setup-state.json`. Within one `pnpm setup:infra` run the
+// persisted to disk — there is no `.setup-state.json`. Within one `pnpm setup:infra` (core-infra) run the
 // in-memory object carries provider outputs (resource ids, urls, write-once secrets) to the
 // env-file writer; standalone commands hydrate it from live remote via the reconstruct path
 // (each provider's `detectRemote`). The durable record of provisioned values is the

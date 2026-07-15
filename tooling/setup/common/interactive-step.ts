@@ -73,7 +73,7 @@ export interface StepDescriptor<T> {
   instructions: string[];
   /**
    * Optional resource existence/drift check (state-based). `absent` → create silently;
-   * `present`/`drift` → prompt update/skip. Also consumed by `setup:infra:plan`. Omit for
+   * `present`/`drift` → prompt update/skip. Also consumed by core-infra's `setup:infra:plan`. Omit for
    * validate-only or always-run steps.
    */
   detectStatus?: () => ResourceStatus | Promise<ResourceStatus>;
@@ -108,7 +108,7 @@ export function assertInteractive(): void {
   if (isAssumeYes()) return;
   if (!(process.stdin.isTTY && process.stdout.isTTY)) {
     throw new SetupError(
-      'setup:infra is interactive and human-only — run it in a terminal, or pass --yes for non-interactive mode.',
+      'This setup flow is interactive and human-only — run it in a terminal, or pass --yes for non-interactive mode.',
     );
   }
 }
@@ -331,7 +331,7 @@ export async function runInteractiveStep<T>(
       logger.error(`Failed: ${message}`);
       if (isNonRecoverableProvisionerError(message)) {
         logger.error(
-          'Fix credentials or config in .setup/.setup-credentials, then re-run setup:infra.',
+          'Fix credentials or config in .setup/.setup-credentials, then re-run the setup command.',
         );
         return { name: descriptor.name, status: 'aborted', errorMessage: message };
       }

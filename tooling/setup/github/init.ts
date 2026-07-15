@@ -56,12 +56,12 @@ export interface RunGithubInitResult {
 export async function runGithubInit(args: {
   readonly mode: SyncMode;
   readonly purpose?: string;
-  /** Skip gh auth preflight (e.g. setup:infra with GITHUB_TOKEN only). */
+  /** Skip gh auth preflight (e.g. core-infra's setup:infra with GITHUB_TOKEN only). */
   readonly skipPreflight?: boolean;
   /** When true, scaffold local IaC on sync mode (default). github/sync.ts passes false — it scaffolds first. */
   readonly scaffoldOnSync?: boolean;
   /**
-   * Restrict the sync to these environment names (setup:infra runs this once per environment, so
+   * Restrict the sync to these environment names (core-infra's setup:infra runs this once per environment, so
    * each pass syncs only that environment's ruleset + GitHub Environment). Omit for the whole
    * repository (`pnpm github:sync`).
    */
