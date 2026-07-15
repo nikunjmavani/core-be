@@ -7,6 +7,7 @@ import {
   RedisLockUnavailableError,
   withRedisLock,
 } from '@/infrastructure/cache/redis-lock.util.js';
+import { addMonths } from './subscription-period.util.js';
 import { INACTIVE_SUBSCRIPTION_STATUSES } from './subscription.repository.js';
 
 /**
@@ -614,8 +615,10 @@ export class SubscriptionService {
       );
 
       const now = new Date();
-      const periodEnd = new Date(now);
-      periodEnd.setMonth(periodEnd.getMonth() + (parsed.billing_cycle === 'yearly' ? 12 : 1));
+      // addMonths clamps month-end dates (Jan 31 + 1mo → Feb 28/29, not Mar 3) instead of the raw
+      // Date.setMonth overflow. For Stripe-backed subs the webhook overwrites this with the
+      // authoritative period end; for local-only subs this is the persisted value.
+      const periodEnd = addMonths(now, parsed.billing_cycle === 'yearly' ? 12 : 1);
 
       // Stripe network call — outside any database context.
       const paymentResult = await this.paymentProvider.createSubscription(

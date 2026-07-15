@@ -105,6 +105,7 @@ export class OrganizationApiKeyService {
     organization_public_id: string,
     body: unknown,
     created_by_user_public_id: string,
+    options?: { expiresAtOverride?: Date | null },
   ): Promise<CreateOrganizationApiKeyResult> {
     const parsed = validateCreateOrganizationApiKey(body);
     await assertCallerCanGrantPermissionCodes({
@@ -132,10 +133,17 @@ export class OrganizationApiKeyService {
       const rawKey = generateApiKey();
       const keyHash = hashApiKey(rawKey);
       const keyPrefix = getKeyPrefix(rawKey);
-      let expiresAt: Date | null = null;
-      if (parsed.expires_in_days) {
+      // Rotation passes the replaced key's absolute expiry through `expiresAtOverride` (which may be
+      // null = no expiry) so a time-boxed key does not silently become non-expiring on rotate. A
+      // normal create resolves the expiry from the request's `expires_in_days` instead.
+      let expiresAt: Date | null;
+      if (options?.expiresAtOverride !== undefined) {
+        expiresAt = options.expiresAtOverride;
+      } else if (parsed.expires_in_days) {
         expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + parsed.expires_in_days);
+      } else {
+        expiresAt = null;
       }
       const row = await this.apiKeyRepository.create({
         organization_id: organization.id,
@@ -235,6 +243,8 @@ export class OrganizationApiKeyService {
         organization_public_id,
         { name: existing.name, scopes: existing.scopes },
         created_by_user_public_id,
+        // Carry the replaced key's expiry forward so rotation preserves the original time-box.
+        { expiresAtOverride: existing.expires_at },
       );
     });
   }

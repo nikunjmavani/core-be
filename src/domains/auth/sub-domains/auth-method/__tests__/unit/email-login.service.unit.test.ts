@@ -339,6 +339,28 @@ describe('EmailLoginService', () => {
     expect(verificationTokenRepository.consumeOtpForUser).not.toHaveBeenCalled();
   });
 
+  it('login enforces a constant-time floor on the unknown-email and attempt-cap branches', async () => {
+    const { enforceMinimumDuration } = await import(
+      '@/shared/utils/security/anti-enumeration.util.js'
+    );
+
+    // Unknown-email branch rejects after a single lookup but must still apply the floor, so its
+    // latency cannot be distinguished from the slower known-email path (account-existence oracle).
+    vi.mocked(userService.findByEmail).mockResolvedValueOnce(null);
+    await expect(
+      service.login({ email: 'missing@example.com', code: 'ABCDEF' }, '127.0.0.1'),
+    ).rejects.toThrow();
+
+    // Attempt-cap branch: a known email over the per-user cap.
+    vi.mocked(userService.findByEmail).mockResolvedValueOnce(user as never);
+    vi.mocked(redis.eval).mockResolvedValueOnce(99);
+    await expect(
+      service.login({ email: user.email, code: 'ABCDEF' }, '127.0.0.1'),
+    ).rejects.toThrow();
+
+    expect(vi.mocked(enforceMinimumDuration)).toHaveBeenCalledTimes(2);
+  });
+
   it('login rejects a wrong or expired code', async () => {
     vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
     vi.mocked(verificationTokenRepository.consumeOtpForUser).mockResolvedValue(null);
