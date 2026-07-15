@@ -328,7 +328,8 @@ async function main(): Promise<void> {
 
   let valueFailures = 0;
   let totalPushed = 0;
-  let totalSkipped = 0;
+  let totalUnchanged = 0;
+  let totalEmptySkipped = 0;
   let totalDeleted = 0;
 
   for (const entry of localFiles) {
@@ -340,7 +341,8 @@ async function main(): Promise<void> {
         skipPreflight: true,
       });
       totalPushed += result.pushed;
-      totalSkipped += result.skipped;
+      totalUnchanged += result.unchanged;
+      totalEmptySkipped += result.emptySkipped;
       totalDeleted += result.deleted;
     } catch (error) {
       valueFailures += 1;
@@ -361,8 +363,14 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    `Sync complete — pushed ${totalPushed}, skipped ${totalSkipped}, deleted ${totalDeleted} across ${localFiles.length} environment(s).`,
+    `Sync complete — pushed ${totalPushed}, unchanged ${totalUnchanged}, ` +
+      `empty ${totalEmptySkipped}, deleted ${totalDeleted} across ${localFiles.length} environment(s).`,
   );
+  if (totalEmptySkipped > 0) {
+    console.log(
+      `  ${totalEmptySkipped} key(s) are declared but blank locally — not pushed, and their remote values were left intact.`,
+    );
+  }
 }
 
 const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);

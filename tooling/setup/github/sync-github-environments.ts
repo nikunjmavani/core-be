@@ -10,12 +10,14 @@
  *   - Items in the local file but missing on GitHub → created.
  *   - Variables with changed values → updated.
  *   - Secrets are always re-encrypted and pushed (GitHub hides secret values).
- *   - Items on GitHub but NOT in the local file → DELETED (the file is truth).
- *   - Variables with unchanged values → skipped.
+ *   - Keys absent from the local file entirely → DELETED on GitHub (file is truth).
+ *   - Variables with unchanged values → left alone (counted as `unchanged`).
  *
- * Empty values in the local file are skipped (not pushed), but they also won't
- * trigger deletion of an existing remote item — use an explicit removal from
- * the file to trigger deletion.
+ * A key DECLARED in the local file but left blank (`KEY=`) is neither pushed nor
+ * deleted: blank means "not managed here" (optional integrations ship blank in
+ * `.env.example`), so the remote value is preserved. Only removing the key's LINE
+ * marks it stale and deletes it. Blank keys are reported as `empty` in the summary
+ * so a half-filled env file is visible rather than silent.
  *
  * Usage:
  *   pnpm github:sync development
@@ -280,12 +282,59 @@ function classifyKey(key: string): 'secret' | 'variable' {
  * as the literal `"0 3 * * *"` with surrounding quotes and would also fail
  * the value-diff check on the next sync.
  */
+/**
+ * Reads every key DECLARED in the env file, blank values included.
+ *
+ * @remarks
+ * Blank entries are retained deliberately: they must still register as locally declared so the
+ * stale-detection pass does not treat them as removed and delete the live remote value. Callers
+ * filter to non-blank entries for the push list.
+ */
 function parseEnvFile(filePath: string): EnvEntry[] {
-  const content = readFileSync(filePath, 'utf-8');
-  const parsed = dotenv.parse(content);
-  return Object.entries(parsed)
-    .filter(([, value]) => value !== '')
-    .map(([name, value]) => ({ name, value }));
+  return parseEnvContents(readFileSync(filePath, 'utf-8'));
+}
+
+/**
+ * Parses env-file contents into every DECLARED entry, blank values included.
+ *
+ * @remarks
+ * Split from {@link parseEnvFile} so the reconciliation rules are testable without touching disk.
+ */
+export function parseEnvContents(contents: string): EnvEntry[] {
+  return Object.entries(dotenv.parse(contents)).map(([name, value]) => ({ name, value }));
+}
+
+/**
+ * Splits declared entries into the ones to push and the ones left blank.
+ *
+ * @remarks
+ * A blank local value (`KEY=`) is pushed to nobody, but it stays DECLARED — see
+ * {@link findStaleRemoteKeys}. Blank means "not managed here" (optional integrations ship blank in
+ * `.env.example`), so the remote value is preserved rather than deleted.
+ */
+export function splitDeclaredEntries(declared: readonly EnvEntry[]): {
+  pushable: EnvEntry[];
+  blank: EnvEntry[];
+} {
+  return {
+    pushable: declared.filter((entry) => entry.value !== ''),
+    blank: declared.filter((entry) => entry.value === ''),
+  };
+}
+
+/**
+ * Returns the remote keys that no longer exist in the local file and must be deleted.
+ *
+ * @remarks
+ * `declaredNames` MUST include blank-valued keys. Filtering blanks out upstream makes a blanked key
+ * look absent, so this reports it stale and the caller deletes a live secret — the opposite of the
+ * documented contract. Only a removed LINE marks a key stale.
+ */
+export function findStaleRemoteKeys(options: {
+  declaredNames: ReadonlySet<string>;
+  remoteKeys: readonly string[];
+}): string[] {
+  return options.remoteKeys.filter((name) => !options.declaredNames.has(name));
 }
 
 function formatDuration(milliseconds: number): string {
@@ -501,7 +550,10 @@ async function setVariable(
 
 export interface SyncEnvironmentResult {
   pushed: number;
-  skipped: number;
+  /** Variables whose remote value already matched — no API write needed. */
+  unchanged: number;
+  /** Keys declared in the local file but left blank — neither pushed nor deleted. */
+  emptySkipped: number;
   deleted: number;
 }
 
@@ -523,16 +575,31 @@ export async function syncEnvironmentToGitHub(
     );
   }
 
-  const allEntries = parseEnvFile(envFilePath);
-  const secrets = allEntries.filter((e) => classifyKey(e.name) === 'secret');
-  const variables = allEntries.filter((e) => classifyKey(e.name) === 'variable');
+  const declaredEntries = parseEnvFile(envFilePath);
+  const { pushable: pushableEntries, blank: blankEntries } = splitDeclaredEntries(declaredEntries);
+  const secrets = pushableEntries.filter((e) => classifyKey(e.name) === 'secret');
+  const variables = pushableEntries.filter((e) => classifyKey(e.name) === 'variable');
 
-  const localSecretNames = new Set(secrets.map((s) => s.name));
-  const localVariableNames = new Set(variables.map((v) => v.name));
+  // Stale-detection uses DECLARED names (blank included) so blanking a value never
+  // deletes the live remote item — only deleting the key's line does.
+  const localSecretNames = new Set(
+    declaredEntries.filter((e) => classifyKey(e.name) === 'secret').map((e) => e.name),
+  );
+  const localVariableNames = new Set(
+    declaredEntries.filter((e) => classifyKey(e.name) === 'variable').map((e) => e.name),
+  );
 
   console.log(`Source:      .env.${environment}`);
   console.log(`Environment: ${environment}`);
   console.log(`Plan:        ${secrets.length} secret(s), ${variables.length} variable(s)`);
+  if (blankEntries.length > 0) {
+    console.log(
+      `Blank:       ${blankEntries.length} declared but empty — not pushed, remote preserved`,
+    );
+    for (const entry of blankEntries) {
+      console.log(`  [empty]    ${entry.name}`);
+    }
+  }
   console.log('');
 
   if (dryRun) {
@@ -540,7 +607,7 @@ export async function syncEnvironmentToGitHub(
     for (const entry of variables) console.log(`  [variable] ${entry.name}`);
     console.log('');
     console.log('Dry run — no API calls made. Drop --dry-run to push.');
-    return { pushed: 0, skipped: 0, deleted: 0 };
+    return { pushed: 0, unchanged: 0, emptySkipped: blankEntries.length, deleted: 0 };
   }
 
   const repositoryFullName = getRepositoryFullName();
@@ -565,14 +632,14 @@ export async function syncEnvironmentToGitHub(
   const pushTotal = secrets.length + variables.length;
   console.log(`Pushing ${pushTotal} item(s) through the GitHub REST API`);
   console.log(
-    '(Variables with unchanged values are skipped; secrets are always re-encrypted and pushed).',
+    '(Variables with unchanged values are left alone; secrets are always re-encrypted and pushed).',
   );
   console.log('');
 
   const startTime = Date.now();
   let processed = 0;
   let pushed = 0;
-  let skipped = 0;
+  let unchanged = 0;
 
   const push = async (
     kind: 'secret' | 'variable',
@@ -585,7 +652,7 @@ export async function syncEnvironmentToGitHub(
 
     processed += 1;
     if (status !== 'skipped') pushed += 1;
-    else skipped += 1;
+    else unchanged += 1;
 
     const remaining = pushTotal - processed;
     const elapsed = Date.now() - startTime;
@@ -632,10 +699,14 @@ export async function syncEnvironmentToGitHub(
   //      previously, now correctly classified as a Variable). The Secret is
   //      no longer in localSecretNames, so it gets pruned here while the
   //      Variable is created above — no duplicate left behind.
-  const staleSecrets = [...existingSecrets].filter((name) => !localSecretNames.has(name));
-  const staleVariables = [...existingVariables.keys()].filter(
-    (name) => !localVariableNames.has(name),
-  );
+  const staleSecrets = findStaleRemoteKeys({
+    declaredNames: localSecretNames,
+    remoteKeys: [...existingSecrets],
+  });
+  const staleVariables = findStaleRemoteKeys({
+    declaredNames: localVariableNames,
+    remoteKeys: [...existingVariables.keys()],
+  });
   const crossKindDuplicates = new Set<string>([
     ...staleSecrets.filter((name) => localVariableNames.has(name)),
     ...staleVariables.filter((name) => localSecretNames.has(name)),
@@ -681,11 +752,12 @@ export async function syncEnvironmentToGitHub(
   const totalDuration = Date.now() - startTime;
   console.log('');
   console.log(
-    `Done. Pushed ${pushed}, skipped ${skipped}, deleted ${deleted} in ${formatDuration(totalDuration)}.`,
+    `Done. Pushed ${pushed}, unchanged ${unchanged}, empty ${blankEntries.length}, ` +
+      `deleted ${deleted} in ${formatDuration(totalDuration)}.`,
   );
   console.log('Verify: pnpm github:sync --check');
 
-  return { pushed, skipped, deleted };
+  return { pushed, unchanged, emptySkipped: blankEntries.length, deleted };
 }
 
 async function main(): Promise<void> {
