@@ -33,10 +33,9 @@ const warnings = [];
 
 // A real secrets file the agent must not read or write: app `.env.<env>`, setup-tooling
 // credentials `.setup-credentials` (or legacy `.env.setup`), and `.setup-state.*` — but
-// NOT the committed templates (`*.example`).
+// NOT the committed template (`.env.example`).
 function isReadableSecretPath(p) {
   if (!p) return false;
-  if (/(^|\/)\.setup-credentials\.example$/.test(p)) return false; // committed template
   if (/(^|\/)\.setup-credentials$/.test(p)) return true; // setup-tooling input credentials
   if (/(^|\/)\.setup-state\.(json|lock|audit\.log)$/.test(p)) return true;
   if (/(^|\/)\.env\.example$/.test(p) || /(^|\/)\.env\.setup\.example$/.test(p)) return false;
@@ -47,7 +46,7 @@ const SECRET_READ_DENIAL =
   "Blocked by core-be guardrail: reading secrets files (.env.<env> / .setup-credentials / .setup-state.*) " +
   "is not allowed for the agent — they hold provisioned secrets. App config goes in .env.<environment> " +
   "(editable), setup creds in .setup-credentials (off-limits). If a human needs a value, read it from " +
-  ".env.<environment> directly, or use core-infra's `pnpm setup:infra:output --copy <KEY>`.";
+  ".env.<environment> directly.";
 
 function deny(reason) {
   recordTelemetry("guardrails", "PreToolUse", "fired");

@@ -39,7 +39,7 @@ neon_project_id() {
   projects_json="$(neon_request GET "/projects")"
   project_id="$(printf '%s' "$projects_json" | jq -r --arg name "$NEON_PROJECT_NAME" '.projects[]? | select(.name == $name) | .id' | head -n 1)"
   if [ -z "$project_id" ] || [ "$project_id" = "null" ]; then
-    echo "::error::Could not resolve Neon project named ${NEON_PROJECT_NAME} (same lookup as core-infra's setup:infra). Check API key access."
+    echo "::error::Could not resolve Neon project named ${NEON_PROJECT_NAME} via the Neon API. Check API key access."
     exit 1
   fi
 

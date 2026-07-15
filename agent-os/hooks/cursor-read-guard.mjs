@@ -38,7 +38,6 @@ if (!filePath) allow();
 // Same predicate as guardrails.mjs isReadableSecretPath().
 function isReadableSecretPath(p) {
   if (!p) return false;
-  if (/(^|\/)\.setup-credentials\.example$/.test(p)) return false;
   if (/(^|\/)\.setup-credentials$/.test(p)) return true;
   if (/(^|\/)\.setup-state\.(json|lock|audit\.log)$/.test(p)) return true;
   if (/(^|\/)\.env\.example$/.test(p) || /(^|\/)\.env\.setup\.example$/.test(p)) return false;
