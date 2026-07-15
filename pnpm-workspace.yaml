@@ -37,6 +37,10 @@ overrides:
   # Remove this pin once a fixed Biome (2.5.4+) is released.
   '@biomejs/biome': 2.5.2
   '@babel/core': '>=7.29.1'
+  # Keep ioredis deduplicated against BullMQ, which pins an exact ioredis version in its
+  # `dependencies` (currently 5.10.1). Two ioredis copies caused TS type errors in workers/queues
+  # (docs/reviews/full-codebase-review-deliverables.md). Bump ONLY in lockstep with BullMQ's pin —
+  # check `node_modules/bullmq/package.json` before raising this.
   ioredis: 5.10.1
   esbuild: '>=0.28.1'
   '@esbuild-kit/core-utils>esbuild': '>=0.28.1'

@@ -1,7 +1,7 @@
 /**
  * Cross-platform clipboard helper for setup-infra secret reveal.
  *
- * Used by `setup:infra:output --copy <KEY>` to put a secret value on the system
+ * Used by core-infra's `setup:infra:output --copy <KEY>` to put a secret value on the system
  * clipboard WITHOUT ever printing it to stdout (so it never enters the terminal /
  * agent transcript). Shells out to the native tool via the shared `exec` helpers —
  * no dependency: macOS → pbcopy · Wayland → wl-copy · X11 → xclip / xsel · Windows → clip

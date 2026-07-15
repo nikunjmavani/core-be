@@ -148,7 +148,7 @@ export interface InfraProviderExistingResource {
 /**
  * The organization / project / environment names a provider operates on — exactly as the
  * provider's own code derives them (all from `setup.config.json`, never hardcoded).
- * Surfaced as columns by `setup:infra:plan`. `—` (omitted field) = not applicable.
+ * Surfaced as columns by core-infra's `setup:infra:plan`. `—` (omitted field) = not applicable.
  */
 export interface InfraProviderDescription {
   /** Org / owner / workspace name (e.g. Sentry org, GitHub owner). */

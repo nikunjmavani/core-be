@@ -46,7 +46,7 @@ export const setupConfigSchema = z.object({
   //   • project.organization  — ORGANIZATION NAME (Sentry org, GitHub owner, etc.)
   //   • environments[].name   — ENVIRONMENT NAMES (the only valid env identifiers;
   //                             alias maps like dev→development only NORMALIZE input)
-  // Change a name here and re-run `pnpm setup:infra:init` / `pnpm tool:generate-project-identity`.
+  // Change a name here and re-run core-infra's `pnpm setup:infra:init` / `pnpm tool:generate-project-identity`.
   project: z.object({
     name: z.string().min(1),
     displayName: z.string().min(1),
@@ -137,7 +137,7 @@ export const setupConfigSchema = z.object({
       repository: z.string().regex(/^[^/]+\/[^/]+$/),
       /**
        * Push local `.env.<environment>` secrets/variables to GitHub Environments as the final
-       * setup:infra step ("Sync .env.<environment> to GitHub Environments"). Set to false to skip
+       * setup:infra (core-infra) step ("Sync .env.<environment> to GitHub Environments"). Set to false to skip
        * that sync entirely (e.g. when GitHub Environment config is managed elsewhere, or to avoid
        * GitHub's secondary rate limit). Branch/ruleset/environment creation is unaffected. Default true.
        */
@@ -221,7 +221,7 @@ export function loadConfig(): z.infer<typeof setupConfigSchema> {
   const config = loadConfigIfExists();
   if (!config) {
     throw new SetupError(`Config file not found or invalid: ${CONFIG_PATH}`, {
-      hint: 'Run pnpm setup --init to create tooling/setup/setup.config.json.',
+      hint: 'Run pnpm setup --init (from a core-infra checkout) to create tooling/setup/setup.config.json.',
     });
   }
   return config;
@@ -234,7 +234,7 @@ export function getEnvironmentNames(config: z.infer<typeof setupConfigSchema>): 
 /**
  * Persists the config back to `tooling/setup/setup.config.json`. This file
  * doubles as the saved "answers" for project / organization / branches /
- * environments — when the user runs `pnpm setup:infra` again they see the
+ * environments — when the user runs core-infra's `pnpm setup:infra` again they see the
  * previously chosen values as defaults and don't have to re-enter them.
  */
 export function saveConfig(config: z.infer<typeof setupConfigSchema>): void {

@@ -649,7 +649,7 @@ export async function syncEnvironmentToGitHub(
     console.log(`Pruning ${deleteTotal} stale item(s) from GitHub...`);
     if (crossKindDuplicates.size > 0) {
       console.log(
-        `  (${crossKindDuplicates.size} of these are cross-kind duplicates from an older setup:infra version)`,
+        `  (${crossKindDuplicates.size} of these are cross-kind duplicates from an older setup:infra (core-infra) version)`,
       );
     }
 
@@ -683,7 +683,9 @@ export async function syncEnvironmentToGitHub(
   console.log(
     `Done. Pushed ${pushed}, skipped ${skipped}, deleted ${deleted} in ${formatDuration(totalDuration)}.`,
   );
-  console.log(`Verify: SKIP_GITHUB_ENV=1 CONFIG=${environment} pnpm validate:github-env`);
+  console.log(
+    `Verify (from a core-infra checkout): SKIP_GITHUB_ENV=1 CONFIG=${environment} pnpm validate:github-env`,
+  );
 
   return { pushed, skipped, deleted };
 }

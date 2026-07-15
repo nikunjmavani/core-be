@@ -288,7 +288,7 @@ export function buildEnvSetupTemplateContent(config: SetupConfig): string {
     '# Setup secrets — fill each value and run pnpm setup.',
     '# Get each key from the URL on the line above the variable.',
     '',
-    '# Project / organization / environments (to change these, edit tooling/setup/setup.config.json and re-run pnpm setup --init)',
+    '# Project / organization / environments (to change these, edit tooling/setup/setup.config.json and re-run pnpm setup --init in core-infra)',
     `# Project: ${config.project.displayName} (${config.project.name})`,
     `# Organization: ${config.project.organization}`,
     `# Environments: ${environmentNames.join(', ')}`,
