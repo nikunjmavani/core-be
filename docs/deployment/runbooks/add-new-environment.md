@@ -145,7 +145,7 @@ gh api --method POST repos/:owner/:repo/rulesets \
 ```bash
 pnpm github:sync --check                  # cross-dimension drift + GitHub IaC check
 pnpm tool:sync-env-example                # .env.example <-> schema coverage
-CONFIG=staging pnpm validate:github-env   # GH env <-> schema required keys (run from core-infra)
+# GH env <-> schema required keys: verified by the deploy workflow's validate:github-env-runtime step
 ```
 
 All three must exit 0 before merging.

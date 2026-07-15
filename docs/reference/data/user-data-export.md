@@ -14,7 +14,7 @@ Async export of personal data to S3 with time-limited presigned download URLs.
 | ------- | ----- |
 | Presigned download URL | ≤24h (`USER_DATA_EXPORT_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS`) |
 | Row `expires_at` | 7 days (`USER_DATA_EXPORT_ARTIFACT_TTL_DAYS`) |
-| S3 lifecycle | Bucket rule on prefix `user-data-export/` — expire objects after **7 days** (applied by `core-infra`'s `pnpm setup:infra` AWS provision via `PutBucketLifecycleConfiguration`) |
+| S3 lifecycle | Bucket rule on prefix `user-data-export/` — expire objects after **7 days** (applied at bucket provisioning time via `PutBucketLifecycleConfiguration`) |
 | Expired row purge | Daily BullMQ `user-data-export-retention` worker deletes S3 objects + DB rows where `expires_at` has passed |
 | Account deletion | `UserService` offboarding calls `deleteAllExportsForUser` (S3 `deleteObject` + DB rows) immediately on `DELETE /users/me` |
 

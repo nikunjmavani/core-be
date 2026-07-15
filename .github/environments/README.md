@@ -51,7 +51,7 @@ Preview without pushing: `pnpm github:sync <environment> --dry-run`.
 
 See [docs/deployment/runbooks/add-new-environment.md](../../docs/deployment/runbooks/add-new-environment.md).
 
-**Drift check:** `pnpm github:sync --check` (consistency + branches/rulesets/environments). `pnpm validate:github-environments` (run from the companion `core-infra` repo) compares protection JSON vs GitHub API (requires `gh auth login`).
+**Drift check:** `pnpm github:sync --check` — consistency + branches/rulesets/environments, comparing the committed protection JSON vs the GitHub API (requires `gh auth login`).
 
 **When reviewers change:** prefer `pnpm github:tool:governance-mode` (`personal` / `team`) — it sets `production.json` `requiredReviewers.users` + `preventSelfReview` from CODEOWNERS and refuses a deadlocking combo — then `pnpm github:sync`. If you hand-edit `production.json`, run `pnpm github:tool:governance-mode:check` to catch an inconsistent/deadlocking state, and keep the GitHub UI in sync. See [docs/deployment/ci-cd/branch-protection.md](../../docs/deployment/ci-cd/branch-protection.md#governance-mode--personal--team-one-switch).
 

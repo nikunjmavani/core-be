@@ -20,7 +20,7 @@ invariant. This runbook covers the **per-key lifecycle**.
 | Add a hosted environment             | edit `tooling/setup/setup.config.json`, then `pnpm tool:generate-project-identity` and `pnpm github:sync` |
 | Verify schema ↔ template parity      | `pnpm tool:sync-env-example`                  |
 | Verify branch/env/NODE_ENV invariant | `pnpm github:sync --check`                    |
-| Verify required keys exist in GitHub | `CONFIG=<env> pnpm validate:github-env` (in `core-infra`) |
+| Verify required keys exist in GitHub | deploy workflow step `pnpm validate:github-env-runtime` (after the environment export) |
 | Add a new env var (skill)            | read `.cursor/skills/env-schema-add/SKILL.md` |
 | **Which dev/load-test values are unsafe in prod** | [§11 Production safety](#11-production-safety-unsafe-dev-and-load-test-values) |
 
@@ -274,7 +274,7 @@ A rename is atomic — delete + add in the **same PR**:
 | --------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------ |
 | `pnpm tool:sync-env-example`            | Schema ↔ `.env.example` parity; both halves present                                 | local, pre-commit, CI `ci:quality`   |
 | `pnpm github:sync --check`              | `NODE_ENV` enum ↔ config ↔ rulesets ↔ workflow ↔ GitHub env JSON; remote ruleset/env drift | local before sync                    |
-| `CONFIG=<env> pnpm validate:github-env` (in `core-infra`) | Each `envSchemaRequiredKeys` key exists as a secret in GitHub Environment `<env>`   | local before deploy; deploy workflow |
+| `pnpm validate:github-env-runtime` | Each `envSchemaRequiredKeys` key is present in the exported GitHub Environment   | deploy workflow (pre-deploy step) |
 | `pnpm github:sync <env> --dry-run`      | Local `.env.<env>` → GitHub plan; surfaces typos and Secret/Variable column         | local before each sync               |
 
 Run `pnpm github:sync --check`, `pnpm tool:sync-env-example`, and (when pushing values) `pnpm github:sync <env> --dry-run` before merging env plumbing changes.
@@ -322,8 +322,8 @@ instead of running insecure — you cannot ship the dev value:
 | `EMAIL_FROM_ADDRESS`                  | optional                  | **required** when `RESEND_API_KEY` or `STRIPE_SECRET_KEY` is set                   |
 
 **Verify before deploy:** `NODE_ENV=production pnpm dev` with `.env.production`
-filled — boot fails loudly on any violation. `CONFIG=production pnpm validate:github-env`
-(run from the companion `core-infra` repo) confirms the required keys exist in the GitHub Environment.
+filled — boot fails loudly on any violation. The deploy workflow's `validate:github-env-runtime`
+step confirms the required keys exist in the GitHub Environment before anything deploys.
 
 ### 11.2 Layer 2 — `NODE_ENV` selects each policy flag's default (it is not itself a runtime switch)
 

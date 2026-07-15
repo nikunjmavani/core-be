@@ -90,8 +90,6 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 
 | Doc                                                                                                          | Description                                                                                       |
 | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| [deployment/setup/setup-automation.md](deployment/setup/setup-automation.md)                                 | One-command provisioning (`pnpm setup:infra`, run from the companion `core-infra` repo).          |
-| [deployment/setup/setup-token-instructions.md](deployment/setup/setup-token-instructions.md)                 | Token sources and `.setup-credentials` variable names.                                                    |
 | [deployment/setup/railway-github-cli-setup.md](deployment/setup/railway-github-cli-setup.md)                 | Manual Railway + GitHub CLI setup.                                                                |
 | [deployment/ci-cd/cicd-and-deployment.md](deployment/ci-cd/cicd-and-deployment.md)                           | CI pipeline, Railway deploy, GitHub secrets.                                                      |
 | [deployment/ci-cd/deploy-artifact-and-secret-decisions.md](deployment/ci-cd/deploy-artifact-and-secret-decisions.md) | Standing decisions on how core-be ships: deploy artifact + secret handling (the *why*).   |
@@ -108,7 +106,6 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [database/core-be.dbml](database/core-be.dbml)                                                               | Full ER diagram (DBML) for [dbdiagram.io](https://dbdiagram.io/) — `pnpm tool:generate-dbdiagram` |
 | [deployment/runbooks/observability.md](deployment/runbooks/observability.md)                                 | Sentry, logs, health; Prometheus re-enable checklist.                                             |
 | [deployment/runbooks/upload-storage.md](deployment/runbooks/upload-storage.md)                               | Direct-to-S3 upload hardening: validation, presigned POST, PENDING sweeper, lifecycle policy.     |
-| [deployment/runbooks/railway-custom-domain.md](deployment/runbooks/railway-custom-domain.md)                 | `pnpm setup:domain` (from `core-infra`) — attach a custom domain (SSL) to a Railway service; both envs in one run. |
 | [deployment/github-production-environment.md](deployment/github-production-environment.md)                     | GitHub production Environment protection and required reviewers.                                  |
 | [deployment/restore-drill.md](deployment/restore-drill.md)                                                   | Backup restore drill procedure and RTO evidence.                                                 |
 | [deployment/runbooks/stripe-subscription-reconciliation.md](deployment/runbooks/stripe-subscription-reconciliation.md) | Reconcile Stripe subscriptions against the local ledger.                               |

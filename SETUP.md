@@ -3,7 +3,7 @@
 End-to-end guide to get **core-be** running locally or on managed cloud infrastructure. Two paths:
 
 - **[Local development](#local-development)** — run everything on your machine against Docker Postgres + Redis. Best for day-to-day development. One command: `pnpm setup:local`.
-- **[Cloud infrastructure](#cloud-infrastructure-setupinfra)** — provision managed providers (Neon, Redis, S3, Sentry, Railway, GitHub) for shared/hosted environments. One command: `pnpm setup:infra` (run from the companion `core-infra` repo).
+- **[Cloud infrastructure](#cloud-infrastructure)** — hosted providers (Neon, Redis, S3, Sentry, Railway, GitHub) are provisioned from a separate infrastructure repository; core-be consumes the resulting `.env.<environment>` values.
 
 **Related:** [README.md](README.md) · [CLAUDE.md](CLAUDE.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [docs/README.md](docs/README.md) · [cicd-and-deployment.md](docs/deployment/ci-cd/cicd-and-deployment.md) · [credentials-and-env.md](docs/integrations/credentials-and-env.md)
 
@@ -31,7 +31,7 @@ End-to-end guide to get **core-be** running locally or on managed cloud infrastr
 flowchart LR
   A[Clone + pnpm install] --> B{Path?}
   B -->|Local dev| C[pnpm setup:local]
-  B -->|Cloud infra| D[pnpm setup:infra in core-infra]
+  B -->|Cloud infra| D[Provision infra externally]
   C --> E[API on :3000 + worker]
   D --> F[Migrate + seed via CD] --> E
 ```
@@ -118,29 +118,17 @@ The runtime loader reads `.env.${NODE_ENV}` (defaults to `.env.development`) the
 
 ---
 
-## Cloud infrastructure (`setup:infra`)
+## Cloud infrastructure
 
-Use this to provision managed providers for a shared or hosted environment. Auto-deploy on push to `main` expects this infrastructure to already exist.
+Hosted providers (Neon Postgres, Redis, S3, Sentry, Railway services, GitHub environment secrets) are provisioned from a **separate infrastructure repository** — core-be contains no provisioning tooling. Auto-deploy on push to `main` expects that infrastructure to already exist.
 
-> **Run from `core-infra`:** the provisioning CLI below lives in the companion **`core-infra`** repo, not core-be — run these commands from a `core-infra` checkout.
+What core-be owns on this path:
 
-```bash
-pnpm setup --init              # optional: interactive config → setup.config.json + .setup/.setup-credentials template
-$EDITOR .setup/.setup-credentials             # fill provider API keys (each line has a comment with the URL)
-pnpm setup:infra:preview       # show providers + where to get each token (no API calls)
-pnpm setup:infra               # provision Neon, Redis, S3, Sentry, Railway, GitHub (double confirm)
-pnpm setup:infra:check         # health-check provisioned resources
-pnpm setup:infra:status        # what is provisioned vs missing per environment
-```
+- `tooling/setup/setup.config.json` — canonical project + hosted-environment names (committed).
+- `pnpm github:sync` — scaffold and push rulesets, GitHub Environments, and each local `.env.<environment>`'s values to GitHub (`--check` for a read-only drift report).
+- The CD pipeline — migrations, image builds, and Railway deploys (`pnpm tool:railway-deploy-image`) run in GitHub Actions once the environment secrets exist.
 
-Notes:
-
-- **Config** lives in `tooling/setup/setup.config.json` (committed); **secrets** in `.setup/.setup-credentials` at root (gitignored).
-- `setup:infra` does **not** run migrations or seeds — those run via the CD pipeline.
-- After provisioning it writes `.env.<environment>` files you can push to GitHub Environment secrets. Regenerate anytime with `pnpm setup:infra:export-env`.
-- `setup:infra:delete` only prints manual-delete dashboard URLs — it never deletes resources.
-
-Full detail: [setup-automation.md](docs/deployment/setup/setup-automation.md) · [setup-token-instructions.md](docs/deployment/setup/setup-token-instructions.md)
+Manual alternative: [railway-github-cli-setup.md](docs/deployment/setup/railway-github-cli-setup.md).
 
 ---
 

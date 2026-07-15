@@ -215,7 +215,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/skill-index/SKILL.md",
-      "computedHash": "816c94704dda08ab4617c10c1b36a6c62acf68327fc6b59c0c3af8559bf6b324"
+      "computedHash": "75f35c0125a3a914abb9385805e9f486db0fb1f7590dbad5971f83672999dd52"
     },
     "split-to-prs": {
       "source": "local",
@@ -233,7 +233,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/structure-maintainer/SKILL.md",
-      "computedHash": "b5d0cdce8feba826af75fa484c02fb69426cb847311d2f2ce88a1def1df08276"
+      "computedHash": "08352cb4330f444ae49ad58370da47166c17a98ece578820f019c386f6bf4ba9"
     },
     "supabase-porting": {
       "source": "local",

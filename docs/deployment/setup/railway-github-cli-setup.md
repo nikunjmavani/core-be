@@ -1,6 +1,6 @@
 # Full setup via CLI (Railway + GitHub)
 
-Follow this document **top to bottom** for manual setup. For automated one-command provisioning, use [setup-automation.md](setup-automation.md) (`pnpm setup:infra`, run from the companion `core-infra` repo) instead.
+Follow this document **top to bottom** for manual setup. (Automated provisioning lives in a separate infrastructure repository; this is the in-repo manual path.)
 
 ---
 
@@ -142,17 +142,10 @@ If the token authenticates but a later step still fails with permission errors, 
 
 After deploy, Railway exposes the service on a generated `*.up.railway.app` hostname. To map a domain you own (e.g. `api.example.com`) and let Railway issue + renew a Let's Encrypt cert, run:
 
-```bash
-# run from a core-infra checkout
-pnpm setup:domain --all-environments --domain-template "api.{env}.example.com"
-```
-
-The command attaches the custom domain, prints the DNS records to add at your DNS provider, and polls until DNS verifies and the certificate issues. See **[../runbooks/railway-custom-domain.md](../runbooks/railway-custom-domain.md)** for full flag reference, troubleshooting, and the env-var follow-ups (`ALLOWED_ORIGINS`, `FRONTEND_URL`, OAuth redirect URIs).
+Attach it in the Railway dashboard: **Service → Settings → Networking → Custom Domain** — add the domain, create the CNAME record Railway prints at your DNS provider, and wait for verification + certificate issuance. Afterwards update the env-var follow-ups (`ALLOWED_ORIGINS`, `FRONTEND_URL`, OAuth redirect URIs) in the environment's env file and push with `pnpm github:sync <environment>` (see [environment-variables.md](../runbooks/environment-variables.md)).
 
 ---
 
 ## See Also
 
-- [setup-automation.md](setup-automation.md) — Automated provisioning (recommended)
 - [cicd-and-deployment.md](../ci-cd/cicd-and-deployment.md) — Full CI/CD reference
-- [../runbooks/railway-custom-domain.md](../runbooks/railway-custom-domain.md) — Attach a custom domain (SSL) via `pnpm setup:domain` (in `core-infra`)
