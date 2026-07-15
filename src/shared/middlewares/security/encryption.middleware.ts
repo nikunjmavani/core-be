@@ -1,3 +1,4 @@
+import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
 import { AppError } from '@/shared/errors/app.error.js';
 import { env } from '@/shared/config/env.config.js';
@@ -77,4 +78,7 @@ const encryptionMiddleware: FastifyPluginAsync = async (application) => {
   });
 };
 
-export default encryptionMiddleware;
+// fp(): the encryption plugin adds a global onSend hook. Without fastify-plugin, app.register()
+// encapsulates it and the hook never fires for sibling-registered routes — enabling
+// ENABLE_RESPONSE_ENCRYPTION would then silently ship plaintext. Mirrors compress.middleware.ts.
+export default fp(encryptionMiddleware, { name: 'response-encryption-middleware' });

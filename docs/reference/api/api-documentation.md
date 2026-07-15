@@ -65,12 +65,12 @@ Uses `@scalar/cli` (`scalar document validate`) against `OPENAPI_SPEC_PATH` (def
 
 ## Hosted uploads (CI after merge)
 
-On **push** to **`dev`** or **`main`** (after Quality passes), CI regenerates specs and uploads to the matching **GitHub Environment** secrets:
+Single trunk (after Quality passes), CI regenerates specs and uploads to the matching **GitHub Environment** secrets — on merge to **`main`** (`development`) and on release (`production`). There is no `dev` branch.
 
-| Branch | GitHub Environment | Typical `SCALAR_SLUG` |
-| ------ | ------------------ | --------------------- |
-| `dev` | `development` | `core-be-dev` |
-| `main` | `production` | `core-be` |
+| GitHub Environment | Typical `SCALAR_SLUG` | Trigger           |
+| ------------------ | --------------------- | ----------------- |
+| `development`      | `core-be-dev`         | merge to `main`   |
+| `production`       | `core-be`             | release published |
 
 | Target | Command | Secrets / env (per GitHub Environment) |
 | ------ | ------- | -------------------------------------- |

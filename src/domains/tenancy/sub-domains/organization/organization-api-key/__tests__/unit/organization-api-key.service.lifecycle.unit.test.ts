@@ -227,5 +227,29 @@ describe('OrganizationApiKeyService lifecycle', () => {
       expect(apiKeyRepository.create).toHaveBeenCalledTimes(1);
       expect(result.raw_key).toMatch(/^ak_/);
     });
+
+    it('carries the replaced key expiry forward so a time-boxed key stays time-boxed', async () => {
+      const { service, apiKeyRepository } = buildService();
+      const originalExpiry = new Date('2027-01-31T00:00:00.000Z');
+      apiKeyRepository.findByPublicId.mockResolvedValueOnce({
+        ...KEY_ROW,
+        expires_at: originalExpiry,
+      });
+
+      await service.rotate('org_public', 'apikey_public', 'user_public');
+
+      const createArg = apiKeyRepository.create.mock.calls[0]![0] as { expires_at: Date | null };
+      expect(createArg.expires_at).toEqual(originalExpiry);
+    });
+
+    it('rotates a non-expiring key into another non-expiring key', async () => {
+      const { service, apiKeyRepository } = buildService();
+      apiKeyRepository.findByPublicId.mockResolvedValueOnce({ ...KEY_ROW, expires_at: null });
+
+      await service.rotate('org_public', 'apikey_public', 'user_public');
+
+      const createArg = apiKeyRepository.create.mock.calls[0]![0] as { expires_at: Date | null };
+      expect(createArg.expires_at).toBeNull();
+    });
   });
 });

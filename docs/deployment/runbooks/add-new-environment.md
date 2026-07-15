@@ -45,12 +45,15 @@ Run it locally before merging plumbing changes.
 
 ## Existing hosted environments
 
-| Branch | GitHub Environment | `NODE_ENV` |
-| ------ | ------------------ | ---------- |
-| `main` | `production`       | `production` |
-| `dev`  | `development`      | `development` |
+Single trunk: both environments deploy from `main` (environment ≠ branch). The
+deploy workflow picks the environment explicitly, never from the branch.
 
-Non-hosted runtime modes (no branch, no GH env): `local`, `test`.
+| GitHub Environment | `NODE_ENV`    | Deploy trigger                                             |
+| ------------------ | ------------- | ---------------------------------------------------------- |
+| `development`      | `development` | every merge to `main` (`post-merge-ci.yml`)                |
+| `production`       | `production`  | release published / manual dispatch (`release-deploy.yml`) |
+
+Non-hosted runtime mode (no GH env): `local`. The Vitest suite runs as `development`.
 
 ## First-time bootstrap
 
@@ -119,19 +122,16 @@ env var.
 
 ### 5. Wire CI (usually automatic)
 
-Re-run `pnpm tool:generate-project-identity` so workflow `branches:` lists, deploy
-`case` maps, and `PROTECTED_BRANCHES_JSON` match the manifest. Only hand-edit a
-workflow if you are adding a **new** workflow file — then add it to
-`WORKFLOW_FILES_TO_PATCH` in `tooling/setup/codegen/generate-project-identity.ts`.
+Re-run `pnpm tool:generate-project-identity` so workflow `branches:` lists and
+`PROTECTED_BRANCHES_JSON` match the manifest. Only hand-edit a workflow if you are
+adding a **new** workflow file — then add it to `WORKFLOW_FILES_TO_PATCH` in
+`tooling/setup/codegen/generate-project-identity.ts`.
 
-```bash
-case "${{ github.event.workflow_run.head_branch }}" in
-  main)    echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
-  dev)     echo "environment=development" >> "$GITHUB_OUTPUT" ;;
-  staging) echo "environment=staging"     >> "$GITHUB_OUTPUT" ;;   # add this
-  *)       echo "::error::Unsupported branch for deploy" && exit 1 ;;
-esac
-```
+Single trunk: the deploy workflow does **not** map a branch to an environment. The
+caller passes the target environment explicitly via the `github_environment` input
+(see `.github/workflows/reusable-railway-deploy.yml`): `post-merge-ci.yml` passes
+`development` on every merge to `main`, and `release-deploy.yml` passes `production`
+on release. A new environment is deployed by a caller that passes its name.
 
 ### 6. Apply the branch ruleset
 

@@ -48,7 +48,7 @@ Set in `.env.development` / `.env.production` under the **GitHub Secrets** half 
 | --- | --- |
 | `MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY` | Neon Console → Developer settings → API key |
 
-Neon **project ID** is resolved automatically via the Neon API using project name **`core-be`**. The workflow maps **`main` → `production`**, **`dev` → `development`**. Without the API key in the matching GitHub Environment, the monthly workflow **fails**.
+Neon **project ID** is resolved automatically via the Neon API using project name **`core-be`**. Single trunk: the workflow maps **`main` → `production`** (environment ≠ branch; there is no `dev` branch). Without the API key in the matching GitHub Environment, the monthly workflow **fails**.
 
 ---
 

@@ -67,6 +67,16 @@ describe('encryption.middleware', () => {
     }
   });
 
+  it('is fastify-plugin wrapped so its global onSend hook is not encapsulated', () => {
+    // Regression guard: without fp(), app.register() isolates this plugin in a child scope and the
+    // onSend hook never fires for sibling-registered routes — enabling ENABLE_RESPONSE_ENCRYPTION
+    // would then silently ship plaintext. fastify-plugin sets skip-override=true to de-encapsulate.
+    const skipOverride = (encryptionMiddleware as unknown as Record<symbol, unknown>)[
+      Symbol.for('skip-override')
+    ];
+    expect(skipOverride).toBe(true);
+  });
+
   it('throws AppError when encryptPayload fails (fail-closed)', async () => {
     encryptPayloadMock.mockImplementation(() => {
       throw new Error('encryption failed');

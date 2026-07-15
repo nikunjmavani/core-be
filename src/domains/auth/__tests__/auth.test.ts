@@ -670,18 +670,15 @@ describe('Auth Domain — Integration', () => {
       expect(body.error?.detail).toBe('Route not found');
     });
 
-    it('returns 404 error with translated detail (Accept-Language respected when supported)', async () => {
+    it('returns 404 error detail in Spanish when Accept-Language: es is supported', async () => {
       const response = await injectUnauthenticated(app, {
         url: testApiPath('/auth/nonexistent-route-for-i18n-test'),
         headers: { 'accept-language': 'es' },
       });
       expect(response.statusCode).toBe(404);
       const body = response.json() as { error?: { detail?: string } };
-      expect(body.error?.detail).toBeDefined();
-      const errorDetail = body.error?.detail;
-      expect(typeof errorDetail).toBe('string');
-      // May be "Route not found" (en) or "Ruta no encontrada" (es) depending on detector
-      expect(['Route not found', 'Ruta no encontrada']).toContain(errorDetail);
+      // Deterministic once i18nMiddleware is fp()-wrapped: Accept-Language: es yields Spanish.
+      expect(body.error?.detail).toBe('Ruta no encontrada');
     });
   });
 

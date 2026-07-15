@@ -311,8 +311,15 @@ export class EmailLoginService {
     // The code is bounded-entropy, so resolve the owner first and gate guessing with a per-user
     // attempt cap (mirrors MFA) BEFORE any DB work. An unknown email is treated like a wrong code so
     // the response is not an account-existence oracle (the route also rate-limits per email + IP).
+    // Measure from before the user lookup so the fast unknown-email branch and the slower
+    // known-email branch (Redis + code-consume transaction) share the same minimum duration —
+    // otherwise response latency leaks which emails have accounts (parity with sendCode + login).
+    const startedAtMillis = Date.now();
     const user = await this.userService.findByEmail(normalizedEmail);
-    if (!user) throw new UnauthorizedError('errors:invalidOrExpiredVerificationCode');
+    if (!user) {
+      await enforceMinimumDuration(startedAtMillis);
+      throw new UnauthorizedError('errors:invalidOrExpiredVerificationCode');
+    }
 
     const attemptKey = `${EMAIL_CODE_VERIFY_ATTEMPT_KEY_PREFIX}${user.id}`;
     const attempts = await incrementWithExpiryOnFirst(
@@ -321,6 +328,7 @@ export class EmailLoginService {
       VERIFICATION_CODE_TTL_MINUTES * 60,
     );
     if (attempts > VERIFICATION_CODE_MAX_VERIFY_ATTEMPTS) {
+      await enforceMinimumDuration(startedAtMillis);
       throw new UnauthorizedError('errors:invalidOrExpiredVerificationCode');
     }
 

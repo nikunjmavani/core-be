@@ -174,6 +174,8 @@
     "tool:backfill-personal-orgs": "tsx src/scripts/admin/backfill-personal-organizations.ts",
     "tool:admin-token": "tsx src/scripts/admin/admin-token.ts",
     "tool:worker-readiness": "tsx src/scripts/admin/worker-readiness.ts",
+    "tool:dlq-replay": "tsx src/scripts/admin/dlq-replay.ts",
+    "tool:stripe-webhook-replay": "tsx src/scripts/admin/stripe-webhook-replay.ts",
     "tool:project-structure-tree": "tsx src/scripts/codegen/generate-project-structure-tree.ts",
     "tool:project-structure-tree:check": "tsx src/scripts/codegen/generate-project-structure-tree.ts --check",
     "tool:codemod-import-paths": "tsx src/scripts/tooling/codemod-import-paths.ts",

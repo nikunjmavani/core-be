@@ -107,7 +107,7 @@ gh secret set DATABASE_URL --env development --body "postgresql://..."
 
 ## Step 4: Push to deploy
 
-Push to **dev** or **main**. The deploy workflow uses the corresponding GitHub environment (development, production) and deploys to Railway.
+Merge to **main** to deploy the `development` environment; publish a release to deploy `production` (single trunk — there is no `dev` branch). The deploy workflow passes the target GitHub environment explicitly and deploys to Railway.
 
 ---
 
