@@ -57,7 +57,7 @@ If you set split counts instead of `DEPLOYMENT_TOTAL_REPLICA_COUNT`, the API and
 
 At startup, API and worker processes call `assertPostgresConnectionBudget()` ([`assert-connection-budget.ts`](../../../src/infrastructure/database/safety/assert-connection-budget.ts)): when `DATABASE_CONNECTION_BUDGET_ENFORCED=true` (the default when deployed — production; a local `development` laptop defaults it off) the check **fails fast** without deployment counts. With it off, the process defaults to **1 API + 1 worker** when counts are unset.
 
-The pre-deploy CI job (`pnpm validate:github-env`) additionally fails the [`reusable-railway-deploy.yml`](../../../.github/workflows/reusable-railway-deploy.yml) workflow when the `development` or `production` GitHub Environment is missing `DEPLOYMENT_TOTAL_REPLICA_COUNT` **and** the split counts, so a misconfigured environment is caught before any container starts.
+The pre-deploy CI job (`pnpm --dir core-infra validate:github-environments`) additionally fails the [`reusable-railway-deploy.yml`](../../../.github/workflows/reusable-railway-deploy.yml) workflow when the `development` or `production` GitHub Environment is missing `DEPLOYMENT_TOTAL_REPLICA_COUNT` **and** the split counts, so a misconfigured environment is caught before any container starts.
 
 ### Worker Postgres pool demand (per process)
 
@@ -126,7 +126,7 @@ Use **`DATABASE_MIGRATION_URL`** (owner) for migrations and **`DATABASE_URL`** a
 
 | Variable                     | Use                                       | Notes                                                                                                                                  |
 | ---------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| **`DATABASE_URL`**           | API + worker runtime                      | Prefer **pooled** endpoint (`-pooler` host / `?pgbouncer=true` per Neon docs). `setup:infra` requests `pooled=true` from the Neon API. |
+| **`DATABASE_URL`**           | API + worker runtime                      | Prefer **pooled** endpoint (`-pooler` host / `?pgbouncer=true` per Neon docs). `setup:infra` (in `core-infra`) requests `pooled=true` from the Neon API. |
 | **`DATABASE_MIGRATION_URL`** | `pnpm db:migrate`, deploy pre-deploy step | **Direct** (non-pooler) connection with migration owner credentials.                                                                   |
 
 Size the connection budget against Neon `max_connections` (see formula above).

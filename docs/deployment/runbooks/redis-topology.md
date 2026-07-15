@@ -81,7 +81,7 @@ A startup **info** log records whether BullMQ is sharing `REDIS_URL` or using a 
 ### Production
 
 1. Create **two Railway Redis database services** per environment (cache + BullMQ) from Railway's `redis` template, or one HA instance per surface.
-2. Set `REDIS_URL` (cache) and `REDIS_BULLMQ_URL` (BullMQ) in GitHub Environment secrets (via `pnpm setup:infra`, or manually).
+2. Set `REDIS_URL` (cache) and `REDIS_BULLMQ_URL` (BullMQ) in GitHub Environment secrets (via `pnpm setup:infra` in `core-infra`, or manually).
 3. Enable persistence on both, and prefer a replica + automatic failover plan (see HA recommendation above).
 4. Configure alerting on the saturation signals (`REDIS_MEMORY_*_RATIO`, `QUEUE_WAITING_DEPTH_WARN_THRESHOLD`).
 

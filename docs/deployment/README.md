@@ -4,7 +4,7 @@ Hand-written guides grouped by **setup**, **CI/CD**, and **runbooks**.
 
 | Subfolder              | Purpose                                                                                              |
 | ---------------------- | ---------------------------------------------------------------------------------------------------- |
-| [setup/](setup/)       | Infra provisioning (`pnpm setup:infra`), tokens, manual Railway/GitHub                               |
+| [setup/](setup/)       | Infra provisioning (`pnpm setup:infra`, in `core-infra`), tokens, manual Railway/GitHub              |
 | [ci-cd/](ci-cd/)       | Pipelines, branch protection — **canonical:** [cicd-and-deployment.md](ci-cd/cicd-and-deployment.md) |
 | [runbooks/](runbooks/) | Local → prod path, gates, memory, observability                                                      |
 
@@ -31,7 +31,7 @@ Hand-written guides grouped by **setup**, **CI/CD**, and **runbooks**.
 
 | Doc                                                              | Description                                                                        |
 | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| [setup-automation.md](setup/setup-automation.md)                 | `pnpm setup:infra` — provision, check, revert, export env (includes design notes). |
+| [setup-automation.md](setup/setup-automation.md)                 | `pnpm setup:infra` (in `core-infra`) — provision, check, revert, export env (includes design notes). |
 | [setup-token-instructions.md](setup/setup-token-instructions.md) | Token sources and `.setup-credentials` variable names.                             |
 | [railway-github-cli-setup.md](setup/railway-github-cli-setup.md) | Manual Railway + GitHub (no automated setup).                                      |
 
@@ -51,7 +51,7 @@ Hand-written guides grouped by **setup**, **CI/CD**, and **runbooks**.
 | [resource-limits.md](runbooks/resource-limits.md)                                       | Railway/K8s memory and `NODE_OPTIONS`.                                     |
 | [observability.md](runbooks/observability.md)                                           | Sentry, logs, health; Prometheus re-enable checklist.                      |
 | [upload-storage.md](runbooks/upload-storage.md)                                         | Direct-to-S3 upload hardening: validation, sweeper, lifecycle policy.      |
-| [railway-custom-domain.md](runbooks/railway-custom-domain.md)                           | `pnpm setup:domain` — attach a custom domain (SSL) to a Railway service.   |
+| [railway-custom-domain.md](runbooks/railway-custom-domain.md)                           | `pnpm setup:domain` (in `core-infra`) — attach a custom domain (SSL) to a Railway service. |
 | [rollback-deploy.md](runbooks/rollback-deploy.md)                                       | One-click rollback: redeploy the `:previous` GHCR images.                  |
 | [hotfix-release.md](runbooks/hotfix-release.md)                                         | Ship an urgent fix under the single-`main` delivery model.                 |
 | [environment-variables.md](runbooks/environment-variables.md)                           | Canonical env-var reference across every workflow.                         |

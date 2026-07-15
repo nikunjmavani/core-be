@@ -8,7 +8,7 @@ deploy **development**; FULL for a batched push: also the matrix) **→ merge th
 (the ship button) → `release-deploy.yml` deploys production** on the published tag (reviewer-gated).
 Versions are stable `X.Y.Z` only.
 
-> **Prerequisite:** Infrastructure must be set up before auto-deploy works. Use [setup-automation.md](../setup/setup-automation.md) (`pnpm setup:infra`) to provision Neon, Redis, Railway, GitHub secrets first.
+> **Prerequisite:** Infrastructure must be set up before auto-deploy works. Use [setup-automation.md](../setup/setup-automation.md) (`pnpm setup:infra`, run from the companion `core-infra` repo) to provision Neon, Redis, Railway, GitHub secrets first.
 
 ### Project identity (branches, images, slug)
 
@@ -205,7 +205,7 @@ sequenceDiagram
   GH->>GH: CI docker-build (build, Trivy, push)
   GH->>GHCR: core-be-api:sha, core-be-worker:sha
   Dev->>GH: CI success triggers deploy
-  GH->>GH: validate:github-env, db:migrate
+  GH->>GH: validate:github-environments via core-infra, db:migrate
   GH->>GH: Resolve GHCR image refs (commit SHA or secrets)
   GH->>GH: railway variable set (per-service runtime env vars)
   GH->>RailwayAPI: pnpm tool:railway-deploy-image (API)
@@ -220,7 +220,7 @@ sequenceDiagram
 Steps in each deploy workflow:
 
 1. Checkout code, install dependencies (migrations only — no app `pnpm build`).
-2. Run `pnpm validate:github-env` against the GitHub environment.
+2. Run `pnpm validate:github-env` (from the companion `core-infra` repo; CI runs `pnpm --dir core-infra validate:github-environments`) against the GitHub environment.
 3. **Log expected scanned CI image refs from GHCR** — default `ghcr.io/<owner>/<repo>/core-be-api:<commit-sha>` and `core-be-worker:<commit-sha>`; optional secrets **`GHCR_API_IMAGE`** / **`GHCR_WORKER_IMAGE`** override the logged ref. These are the exact refs the next step pins onto Railway.
 4. Run `pnpm db:migrate`, install Railway CLI, sync app env vars with `railway variable set`.
 5. Deploy API + worker with **`pnpm tool:railway-deploy-image --service <id> --image <ghcr-ref> --label <api|worker>`** (implemented in the standalone **core-infra** repo; the workflow runs `pnpm --dir core-infra tool:railway-deploy-image`). For each service the tool calls the Railway GraphQL API to (a) resolve the project-token scope with **`projectToken { projectId environmentId }`** using the `Project-Access-Token` header; (b) **`serviceInstanceUpdate`** with `{ source: { image } }` so the service is pinned to the freshly built, Trivy-scanned image; (c) **`serviceInstanceDeployV2(serviceId, environmentId)`** to create a brand-new deployment from the updated configuration; (d) poll `deployment(id)` until terminal status when token scope permits deployment reads. Railway project tokens can trigger the deployment but may not be allowed to read deployment status, so the workflow's API `/readyz` probe, the Railway-reported worker deployment SUCCESS (gated by the in-pod `Dockerfile.worker` HEALTHCHECK on `9090/readyz`), and the post-deploy API smoke remain the hard deploy gates. Worker readiness is **not** probed from the GitHub runner because Postgres/Redis sit on Railway's private network (`*.railway.internal`) which is unreachable from public CI hosts.
@@ -250,13 +250,13 @@ Optional on Railway/GitHub only if overriding app default: **`TOMBSTONE_RETENTIO
 
 `RAILWAY_TOKEN` and `RAILWAY_SERVICE_ID` are used by the CLI only; they are not written to Railway as app env vars.
 
-**Validate GitHub env:** Run `pnpm validate:github-env` (or `CONFIG=production pnpm validate:github-env`) to ensure all required vars from `.env.example` exist in the target GitHub environment. Deploy workflows use `environment: development|production` so secrets are scoped per env.
+**Validate GitHub env:** Run `pnpm validate:github-env` (or `CONFIG=production pnpm validate:github-env`) from the companion `core-infra` repo to ensure all required vars from `.env.example` exist in the target GitHub environment. Deploy workflows use `environment: development|production` so secrets are scoped per env.
 
 **Not synced to Railway by CD today:**
 
 | Item | Notes |
 | --- | --- |
-| **Integration secrets** | `pnpm setup:infra` can push `RESEND_*`, `STRIPE_*`, `OAUTH_*`, `S3_*`, etc. to GitHub via the env sync pipeline (`tooling/setup/envs/sync-github.ts`), but `reusable-railway-deploy.yml` does **not** call `railway variable set` for those keys. Set them on Railway once or add them to the CD variable loop. |
+| **Integration secrets** | `pnpm setup:infra` (in `core-infra`) can push `RESEND_*`, `STRIPE_*`, `OAUTH_*`, `S3_*`, etc. to GitHub via the env sync pipeline (`tooling/setup/envs/sync-github.ts`), but `reusable-railway-deploy.yml` does **not** call `railway variable set` for those keys. Set them on Railway once or add them to the CD variable loop. |
 
 ### Partial re-runs and manual recovery
 
@@ -269,7 +269,7 @@ Use **workflow_dispatch** when you need to run part of the pipeline without a fu
 | [bootstrap-railway-service.yml](../../../.github/workflows/bootstrap-railway-service.yml) | One-time or recovery Railway service setup | `environment`, `service` (`api` / `worker` / `both`), `dry_run` (default `true`) |
 | Reusable test/docker workflows | Ad-hoc validation on a branch tip | `merge_commit_sha`, `target_branch` on `reusable-vitest-postgres-redis.yml`, `reusable-docker-build-trivy.yml`, `reusable-chaos-toxiproxy.yml`, `reusable-openapi-postman-publish.yml` |
 
-**Bootstrap flow:** Run **Bootstrap Railway service** with `dry_run=true` first and review `pnpm setup:infra:status` / `pnpm setup:infra:plan` output. Flip `dry_run=false` to apply `pnpm setup:infra --yes` and trigger the first deploy via `pnpm tool:railway-deploy-image` (same path as steady-state CD). Re-running against an already-configured environment is idempotent.
+**Bootstrap flow:** Run **Bootstrap Railway service** with `dry_run=true` first and review `pnpm setup:infra:status` / `pnpm setup:infra:plan` output (the workflow runs these via `pnpm --dir core-infra …`). Flip `dry_run=false` to apply `pnpm setup:infra --yes` and trigger the first deploy via `pnpm tool:railway-deploy-image` (same path as steady-state CD). Re-running against an already-configured environment is idempotent.
 
 **Rollback:** Dispatch **Reusable — Railway deploy** with `image_override=ghcr.io/<owner>/<repo>/core-be-api:previous` (and the worker ref derived automatically when the override contains `core-be-api`).
 
@@ -388,7 +388,7 @@ Use this once to get CI and deployment working.
 ### 8.1 GitHub Environments
 
 - [ ] Create environments **development** and **production** in the repo: Settings → Environments → New environment.
-- [ ] Run `pnpm setup:infra` — it provisions Neon, Redis, Railway, etc., and pushes all secrets to GitHub (repository + environment secrets).
+- [ ] Run `pnpm setup:infra` (from the companion `core-infra` repo) — it provisions Neon, Redis, Railway, etc., and pushes all secrets to GitHub (repository + environment secrets).
 - [ ] Or manually: add **RAILWAY_TOKEN**, **RAILWAY_SERVICE_ID**, **DATABASE_URL**, **REDIS_URL**, **JWT_PRIVATE_KEY**, **JWT_PUBLIC_KEY**, **ALLOWED_ORIGINS** (and other app vars) to each environment’s Environment secrets.
 
 ### 8.2 Railway
@@ -458,7 +458,7 @@ gh secret set DATABASE_URL --env development --body "postgresql://..."
 | Auth                   | `railway login`                                   | `gh auth login`                                                                 |
 | Create project/service | `railway init` then `railway add`                 | Create environments development, production in repo Settings                    |
 | Get service ID         | `railway status --json`                           | —                                                                               |
-| Set secrets            | Use dashboard for project token                   | `gh secret set NAME --env development --body "value"` or run `pnpm setup:infra` |
+| Set secrets            | Use dashboard for project token                   | `gh secret set NAME --env development --body "value"` or run `pnpm setup:infra` (in `core-infra`) |
 | Deploy a new image     | `pnpm tool:railway-deploy-image --service <id> --image <ghcr-ref> --label <api\|worker>` (GraphQL: `serviceInstanceUpdate` + `serviceInstanceDeployV2`) | CD calls this automatically; manual redeploys can run it locally with `RAILWAY_TOKEN` exported |
 
 No Doppler. All deploy secrets live in GitHub Environments.
