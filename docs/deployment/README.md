@@ -38,7 +38,7 @@ GitHub repo/environment sync is core-be's own tooling:
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pnpm github:sync`         | Full GitHub sync: consistency + scaffold + rulesets + environments + push each local `.env.<environment>` (typed `sync` confirmation before values). Add an environment name to limit the values push. |
 | `pnpm github:sync --check` | Read-only: cross-dimension consistency + remote drift report (no writes).                                                                                    |
-| `pnpm github:sync:dry-run` | Preview full sync without writing.                                                                                                                            |
+| `pnpm github:sync --dry-run` | Preview full sync (remote + values) without writing.                                                                                                        |
 
 ### [ci-cd/](ci-cd/)
 
