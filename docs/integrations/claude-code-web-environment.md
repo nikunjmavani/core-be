@@ -107,7 +107,7 @@ SECRETS_ENCRYPTION_KEY=000000000000000000000000000000000000000000000000000000000
 - `DATABASE_MIGRATION_URL` must be the **direct (non-pooler)** host — `pnpm db:migrate` rejects a pooler URL.
 - `DATABASE_SSL_ENABLED=false` is for plaintext local Docker only.
 - `METRICS_ENABLED=false` avoids requiring `METRICS_SCRAPE_TOKEN` at boot.
-- **JWT keys** (`JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY`) are multi-line RS256 PEMs the env-var field handles poorly; generate them in a SessionStart hook (writing to a gitignored `.env.local`) or via `pnpm setup:infra` in `core-infra`. Tests do not need this — they use the baked-in keys in [`src/tests/setup.ts`](../../src/tests/setup.ts).
+- **JWT keys** (`JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY`) are multi-line RS256 PEMs the env-var field handles poorly; generate them in a SessionStart hook (writing to a gitignored `.env.local`) or via `pnpm setup:local --only-env`. Tests do not need this — they use the baked-in keys in [`src/tests/setup.ts`](../../src/tests/setup.ts).
 
 The full variable surface and how to obtain real values: [`.env.example`](../../.env.example) and [credentials-and-env.md](credentials-and-env.md).
 

@@ -28,7 +28,7 @@ Worker process (optional): `pnpm dev:worker`
 
 | Path                                                   | Purpose                                                                                                                        |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| [`tooling/setup/`](tooling/setup/)                     | GitHub/env sync (`pnpm github:sync`); config in `tooling/setup/setup.config.json`. The infra wizard (`pnpm setup:infra`) moved to the companion `core-infra` repo |
+| [`tooling/setup/`](tooling/setup/)                     | GitHub/env sync (`pnpm github:sync`) + Railway deploy tooling; config in `tooling/setup/setup.config.json`                                                        |
 | [`tooling/ci/`](tooling/ci/)                           | Build/CI guards — Dockerfile sync, `dist/` `@/` alias check (`pnpm docker:check-sync`, `pnpm build:check`)                     |
 | [`tooling/dev/`](tooling/dev/)                         | Local dev helpers — e.g. `pnpm compose:wait` (Postgres readiness)                                                              |
 | [`src/scripts/`](src/scripts/)                         | Repo tooling invoked via `pnpm` — OpenAPI generation, route catalog, DB seeds, `verify-base`                                   |

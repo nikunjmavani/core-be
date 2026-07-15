@@ -149,8 +149,8 @@ Outside `src/` — not part of the runtime app. Do not merge with `src/scripts/`
 
 ```text
 tooling/
-  setup/              # Project/environment scaffolding helpers (agent/, codegen/, common/, envs/, github/);
-                      # the external-infra wizard now lives in the standalone core-infra repo
+  setup/              # Project/environment scaffolding helpers (agent/, codegen/, common/, envs/, github/, railway/);
+                      # the external-infra wizard lives in a separate infrastructure repository
   setup/setup.config.json   # Canonical project + hosted-environment config (committed)
   agent-os/           # agent-os generators, checks, lock (pnpm agent-os:*)
   audit/              # Dependency/audit tooling

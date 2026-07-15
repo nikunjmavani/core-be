@@ -240,9 +240,9 @@ After completing any task, scan the changes and invoke matching skills:
 - **Action**: read and follow `sql-design-guard` — run the full checklist: table naming, column naming, data types, auto-index suggestions, partitioning recommendations, constraint naming, audit/soft-delete patterns, and SQL formatting. Output the SQL Design Guard Review block at the end.
 - **Note**: this runs alongside `schema-generator` (which handles scaffolding); `sql-design-guard` reviews and enhances the design quality.
 
-> **Setup infra (third-party providers)** moved to the standalone **core-infra** repo
-> (`../core-infra`, skill `setup-infra-maintainer`). core-be keeps only `github:sync`, `env:add`,
-> and `envs:sync:github`; provider/`setup:infra` changes are made in core-infra.
+> **Setup infra (third-party providers)** lives in a separate infrastructure repository.
+> core-be keeps only `github:sync`, `env:add`, `envs:sync:github`, and the Railway deploy tool
+> (`tool:railway-deploy-image`); provider/provisioning changes are made in that repository.
 
 ### In-source docs (TSDoc, <folder>.overview.md, system narratives, route schema)
 
