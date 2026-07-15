@@ -48,14 +48,14 @@ Committed JSON under [`.github/environments/`](../../.github/environments/) is t
 
 | Command                             | Purpose                                                                                                                                                 |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm validate:github-environments` | Compare committed config vs live GitHub UI (all `*.json` in `.github/environments/`)                                                                    |
-| `pnpm validate:github-env`          | Same drift check **plus** `.env.example` secrets and `METRICS_*` deploy sync (runs in [reusable-railway-deploy.yml](../../.github/workflows/reusable-railway-deploy.yml)) |
+| `pnpm validate:github-environments` (in `core-infra`) | Compare committed config vs live GitHub UI (all `*.json` in `.github/environments/`)                                                                    |
+| `pnpm validate:github-env` (in `core-infra`) | Same drift check **plus** `.env.example` secrets and `METRICS_*` deploy sync (runs in [reusable-railway-deploy.yml](../../.github/workflows/reusable-railway-deploy.yml) via `pnpm --dir core-infra …`) |
 
 Use `SKIP_GITHUB_ENV=1` to skip API calls locally when you only need deploy-sync or secret checks.
 
-**When reviewers or the deployment branch policy change:** edit `.github/environments/production.json` and run `pnpm github:sync` — it applies both to GitHub. Verify with `pnpm github:sync --check` (or `pnpm validate:github-environments`); the release-guard canary enforces it on a schedule.
+**When reviewers or the deployment branch policy change:** edit `.github/environments/production.json` and run `pnpm github:sync` — it applies both to GitHub. Verify with `pnpm github:sync --check` (or `pnpm validate:github-environments` from `core-infra`); the release-guard canary enforces it on a schedule.
 
-Infrastructure (Neon, Railway Redis database, Railway) is provisioned via `pnpm setup:infra` ([setup-automation.md](setup/setup-automation.md)), not Terraform in this repo. GitHub environment rules are the **manual approval** layer for production code deploys.
+Infrastructure (Neon, Railway Redis database, Railway) is provisioned via `pnpm setup:infra` in the companion `core-infra` repo ([setup-automation.md](setup/setup-automation.md)), not Terraform in this repo. GitHub environment rules are the **manual approval** layer for production code deploys.
 
 ---
 

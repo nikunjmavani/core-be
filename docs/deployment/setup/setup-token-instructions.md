@@ -1,6 +1,6 @@
 # Setup Token Instructions
 
-Where to get each token and **which file to put it in**. Run `pnpm setup:infra:preview` for the checklist. Run `pnpm setup --init` to scaffold config + `.setup/.setup-credentials`.
+Where to get each token and **which file to put it in**. The `setup:*` provisioning commands below run from the companion **`core-infra`** repo. Run `pnpm setup:infra:preview` for the checklist. Run `pnpm setup --init` to scaffold config + `.setup/.setup-credentials`.
 
 ---
 
@@ -50,7 +50,7 @@ Get links: [Stripe](https://dashboard.stripe.com/apikeys) · [Google OAuth](http
 
 ## Init flow
 
-1. **`pnpm setup --init`** → `setup.config.json` + `.setup/.setup-credentials` template.
+1. **`pnpm setup --init`** (in `core-infra`) → `setup.config.json` + `.setup/.setup-credentials` template.
 2. Fill **`.setup/.setup-credentials`** with account-wide tokens (table above).
 3. Fill **`.env.development`** / **`.env.production`** with per-env keys (table above). Run `pnpm setup:infra` — the interactive guide prints per-environment Stripe/OAuth steps.
 4. **`pnpm setup:infra`** → provisions infra, resolves PostHog, validates Stripe/OAuth, writes/updates `.env.<environment>`.

@@ -1,6 +1,6 @@
 # Full setup via CLI (Railway + GitHub)
 
-Follow this document **top to bottom** for manual setup. For automated one-command provisioning, use [setup-automation.md](setup-automation.md) (`pnpm setup:infra`) instead.
+Follow this document **top to bottom** for manual setup. For automated one-command provisioning, use [setup-automation.md](setup-automation.md) (`pnpm setup:infra`, run from the companion `core-infra` repo) instead.
 
 ---
 
@@ -143,6 +143,7 @@ If the token authenticates but a later step still fails with permission errors, 
 After deploy, Railway exposes the service on a generated `*.up.railway.app` hostname. To map a domain you own (e.g. `api.example.com`) and let Railway issue + renew a Let's Encrypt cert, run:
 
 ```bash
+# run from a core-infra checkout
 pnpm setup:domain --all-environments --domain-template "api.{env}.example.com"
 ```
 
@@ -154,4 +155,4 @@ The command attaches the custom domain, prints the DNS records to add at your DN
 
 - [setup-automation.md](setup-automation.md) — Automated provisioning (recommended)
 - [cicd-and-deployment.md](../ci-cd/cicd-and-deployment.md) — Full CI/CD reference
-- [../runbooks/railway-custom-domain.md](../runbooks/railway-custom-domain.md) — Attach a custom domain (SSL) via `pnpm setup:domain`
+- [../runbooks/railway-custom-domain.md](../runbooks/railway-custom-domain.md) — Attach a custom domain (SSL) via `pnpm setup:domain` (in `core-infra`)

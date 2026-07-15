@@ -3,7 +3,7 @@
 End-to-end guide to get **core-be** running locally or on managed cloud infrastructure. Two paths:
 
 - **[Local development](#local-development)** — run everything on your machine against Docker Postgres + Redis. Best for day-to-day development. One command: `pnpm setup:local`.
-- **[Cloud infrastructure](#cloud-infrastructure-setupinfra)** — provision managed providers (Neon, Redis, S3, Sentry, Railway, GitHub) for shared/hosted environments. One command: `pnpm setup:infra`.
+- **[Cloud infrastructure](#cloud-infrastructure-setupinfra)** — provision managed providers (Neon, Redis, S3, Sentry, Railway, GitHub) for shared/hosted environments. One command: `pnpm setup:infra` (run from the companion `core-infra` repo).
 
 **Related:** [README.md](README.md) · [CLAUDE.md](CLAUDE.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [docs/README.md](docs/README.md) · [cicd-and-deployment.md](docs/deployment/ci-cd/cicd-and-deployment.md) · [credentials-and-env.md](docs/integrations/credentials-and-env.md)
 
@@ -31,7 +31,7 @@ End-to-end guide to get **core-be** running locally or on managed cloud infrastr
 flowchart LR
   A[Clone + pnpm install] --> B{Path?}
   B -->|Local dev| C[pnpm setup:local]
-  B -->|Cloud infra| D[pnpm setup:infra]
+  B -->|Cloud infra| D[pnpm setup:infra in core-infra]
   C --> E[API on :3000 + worker]
   D --> F[Migrate + seed via CD] --> E
 ```
@@ -121,6 +121,8 @@ The runtime loader reads `.env.${NODE_ENV}` (defaults to `.env.development`) the
 ## Cloud infrastructure (`setup:infra`)
 
 Use this to provision managed providers for a shared or hosted environment. Auto-deploy on push to `main` expects this infrastructure to already exist.
+
+> **Run from `core-infra`:** the provisioning CLI below lives in the companion **`core-infra`** repo, not core-be — run these commands from a `core-infra` checkout.
 
 ```bash
 pnpm setup --init              # optional: interactive config → setup.config.json + .setup/.setup-credentials template
