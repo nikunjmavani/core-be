@@ -200,21 +200,6 @@ jobs:
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
 
-      # setup:infra tooling (github env validation + image deploy) lives in the standalone
-      # core-infra repo. Check it out alongside core-be and run it against this checkout via
-      # CORE_BE_DIR. Override with CORE_INFRA_REPO / CORE_INFRA_REF vars + CORE_INFRA_TOKEN secret.
-      - name: Checkout core-infra (provisioning tool)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          repository: ${{ vars.CORE_INFRA_REPO || format('{0}/core-infra', github.repository_owner) }}
-          ref: ${{ vars.CORE_INFRA_REF || 'main' }}
-          token: ${{ secrets.CORE_INFRA_TOKEN || github.token }}
-          path: core-infra
-          fetch-depth: 1
-
-      - name: Install core-infra deps
-        run: pnpm --dir core-infra install --frozen-lockfile
-
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
@@ -286,15 +271,13 @@ jobs:
           fi
 
       - name: Validate GitHub environment secrets
-        # The validator (core-infra src/github/environments.ts) reads required keys from core-be's
-        # Zod env schema (via CORE_BE_DIR) and checks `process.env` (runtime mode).
-        # Everything is already in process.env from the previous step.
+        # tooling/setup/github/validate-environment-runtime.ts asserts every
+        # schema-required key (src/shared/config/env-schema.ts) is present and
+        # non-empty in process.env. Everything is already in process.env from
+        # the previous step.
         env:
           CONFIG: ${{ needs.resolve-environment.outputs.environment }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN || github.token }}
-          GITHUB_ENV_VALIDATION_SOURCE: runtime
-          CORE_BE_DIR: ${{ github.workspace }}
-        run: pnpm --dir core-infra validate:github-environments
+        run: pnpm validate:github-env-runtime
 
       - name: Validate Railway deploy secrets
         if: inputs.debug == true
@@ -656,7 +639,7 @@ jobs:
             local label="$3"
             railway variable set --service "$service" --skip-deploys "RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}"
             echo "Deploying ${label} service from GHCR image: ${image}"
-            pnpm --dir "${GITHUB_WORKSPACE}/core-infra" tool:railway-deploy-image \
+            pnpm tool:railway-deploy-image \
               --service "$service" \
               --image "$image" \
               --label "$label"
