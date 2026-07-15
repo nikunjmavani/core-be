@@ -49,7 +49,7 @@ describe('Integration: i18n locale fallback', () => {
     expect(translated.length).toBeGreaterThan(0);
   });
 
-  it('returns translated 404 detail via HTTP Accept-Language when locale is supported', async () => {
+  it('returns the Spanish 404 detail via HTTP Accept-Language when the locale is supported', async () => {
     const response = await injectRoute(app, {
       method: 'GET',
       url: testApiPath('/auth/nonexistent-route-for-i18n-fallback-test'),
@@ -58,8 +58,11 @@ describe('Integration: i18n locale fallback', () => {
 
     expect(response.statusCode).toBe(404);
     const errorDetail = (response.json() as { error?: { detail?: string } }).error?.detail;
-    expect(typeof errorDetail).toBe('string');
-    expect(['Route not found', 'Ruta no encontrada']).toContain(errorDetail);
+    // Strict: Accept-Language: es MUST produce the Spanish string, not merely
+    // "either language". The i18n preHandler that sets request.t only reaches a
+    // matched/not-found route when i18nMiddleware is fp()-wrapped (unencapsulated);
+    // a lenient "en OR es" assertion here silently passes even when es is dead.
+    expect(errorDetail).toBe('Ruta no encontrada');
   });
 
   it('returns English 404 detail when Accept-Language is unsupported (fr)', async () => {

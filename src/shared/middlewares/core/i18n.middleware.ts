@@ -5,6 +5,7 @@
  */
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import fp from 'fastify-plugin';
 import Backend from 'i18next-fs-backend';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { handle as i18nextHandle, LanguageDetector } from 'i18next-http-middleware';
@@ -153,4 +154,9 @@ const i18nMiddleware: FastifyPluginAsync = async (app) => {
   });
 };
 
-export default i18nMiddleware;
+// fp(): i18nMiddleware registers global onRequest/preHandler hooks that set request.t /
+// request.language. Without fastify-plugin, app.register() encapsulates the plugin in a child
+// scope and those hooks never fire for sibling-registered routes, so Accept-Language is silently
+// ignored and every response falls back to English. Every other global-hook middleware here is
+// fp()-wrapped for exactly this reason (see compress.middleware.ts).
+export default fp(i18nMiddleware, { name: 'i18n-middleware' });
