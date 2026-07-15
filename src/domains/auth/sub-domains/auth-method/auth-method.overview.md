@@ -6,7 +6,7 @@ Parent: [auth](../../auth.overview.md)
 
 ## Purpose
 
-Per-user credential records and the verification-token / email verification-code / OAuth flows that issue or validate them. The sub-domain holds the row that says "user X has a password / OAuth account / email verification-code recovery enabled" and the services that produce one-shot verification tokens.
+Per-user credential records and the [verification-token](src/domains/auth/sub-domains/auth-method/verification-token/) / email verification-code / OAuth flows that issue or validate them. The sub-domain holds the row that says "user X has a password / OAuth account / email verification-code recovery enabled" and the services that produce one-shot verification tokens.
 
 The folder also houses the [email verification-code](src/domains/auth/sub-domains/auth-method/) and [oauth](src/domains/auth/sub-domains/auth-method/oauth/) services as **internal modules** (not separate sub-domains) — they're implementation details of how an auth method is exercised, not separate API resources.
 
