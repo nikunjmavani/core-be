@@ -39,6 +39,8 @@
     "docs:lint:changed": "bash tooling/ci/lint-changed-markdown.sh",
     "docs:links:check": "tsx src/scripts/validators/docs/check-docs-links.ts",
     "github:sync": "tsx tooling/setup/github/sync.ts",
+    "validate:github-env-runtime": "tsx tooling/setup/github/validate-environment-runtime.ts",
+    "tool:railway-deploy-image": "tsx tooling/setup/railway/deploy-image.ts",
     "env:add": "tsx tooling/setup/envs/env-add.ts",
     "envs:sync:github": "tsx tooling/setup/envs/sync-github.ts",
     "validate:locale-keys": "tsx src/scripts/validators/locale/validate-locale-keys.ts",
