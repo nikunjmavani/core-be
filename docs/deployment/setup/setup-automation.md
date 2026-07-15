@@ -2,6 +2,8 @@
 
 One-command infrastructure setup that provisions Neon, Redis Cloud, AWS S3, Sentry, Railway, GitHub secrets, and more across multiple environments (development, production). Includes double confirmation, pre-existence checks, and atomic rollback on failure.
 
+> **Where these commands live:** the provisioning CLI (`pnpm setup --init`, `pnpm setup:infra*`, `pnpm setup:domain`, `pnpm setup:push-retention-secrets`, `pnpm validate:github-environments`) was extracted to the companion **`core-infra`** repo — run those from a `core-infra` checkout. Only the `pnpm github:sync*` commands in this doc run from `core-be`.
+
 **Config:** `tooling/setup/setup.config.json` (committed). **Secrets:** `.setup/.setup-credentials` at project root (env-style, gitignored); each variable has a comment with the URL to get the key.
 
 ---

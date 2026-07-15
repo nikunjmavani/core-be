@@ -12,7 +12,7 @@ The full `src/` file tree is **not** duplicated here (it drifts from code quickl
 | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | [CLAUDE.md](../../../CLAUDE.md) | Domain → sub-domain (and nested sub-domain) layout, tests, dependency rules |
 | [domains-and-public-api-design.md](./domains-and-public-api-design.md) | Layout variants, nesting rules, tests (§1.5), route-file strategy |
-| [documentation-system.md](./documentation-system.md) | Layered docs system (system narratives, per-folder OVERVIEW, auto-generated DOCS, TSDoc) |
+| [documentation-system.md](./documentation-system.md) | Layered docs system (system narratives, per-folder overviews, TSDoc, route schema) |
 | [`src/OVERVIEW.md`](../../../src/OVERVIEW.md) | Top of the system narrative tree — domain map, infra modules, cross-cutting overview |
 | [`src/PATTERNS.md`](../../../src/PATTERNS.md) | Cross-cutting patterns (RLS context, idempotency, transactional outbox, audit emission, …) |
 | [`src/FLOWS.md`](../../../src/FLOWS.md) | End-to-end flows (signup, webhook ingest, billing reconciliation, …) |

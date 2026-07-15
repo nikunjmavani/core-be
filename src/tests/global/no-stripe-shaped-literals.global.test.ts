@@ -53,11 +53,6 @@ describe('Global: no Stripe-shaped literals in source (sec-r5-secret-scanning)',
     // anyway, but listed explicitly).
     'src/tests/unit/config/env-schema.unit.test.ts',
     'src/shared/config/env-schema.ts',
-    // Setup-time prefix sniff and operator-facing copy that names the
-    // prefixes for users to recognise in the Stripe Dashboard. No secret
-    // literal — just the prefix in prose.
-    'tooling/setup/infra/guide.ts',
-    'tooling/setup/infra/providers/setup-stripe/setup-stripe.provider.ts',
     // The whsec-prefix appears only as a doc string ("a comma-separated
     // list of whsec_-prefixed secrets") with no body characters. Won't trip
     // the 16+-char body threshold anyway; listed for explicitness.

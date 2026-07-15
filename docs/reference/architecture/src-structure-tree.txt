@@ -1915,9 +1915,11 @@ src/
     │   │   ├── stripe-webhook-ingress.policy.unit.test.ts
     │   │   └── zod-route-body-boundary.policy.unit.test.ts
     │   ├── ci/
+    │   │   ├── codegraph-git-hooks.policy.unit.test.ts
     │   │   ├── dependabot-ci-triage.policy.unit.test.ts
     │   │   ├── github-actions-node24.policy.unit.test.ts
     │   │   ├── github-actions-workflow-run-references.policy.unit.test.ts
+    │   │   ├── github-environment-protection.policy.unit.test.ts
     │   │   ├── governance-mode.policy.unit.test.ts
     │   │   ├── hosted-docs-publish.policy.unit.test.ts
     │   │   ├── k6-coverage.policy.unit.test.ts
@@ -1933,6 +1935,7 @@ src/
     │   │   ├── restore-drill.policy.unit.test.ts
     │   │   ├── route-param-schemas.policy.unit.test.ts
     │   │   ├── rulesets.policy.unit.test.ts
+    │   │   ├── setup-mac-tools.policy.unit.test.ts
     │   │   ├── stryker-config.policy.unit.test.ts
     │   │   └── supply-chain-sbom.policy.unit.test.ts
     │   ├── composition-root/

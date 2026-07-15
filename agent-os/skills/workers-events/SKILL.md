@@ -38,7 +38,7 @@ Event handler failure must **not** fail the HTTP request (log and continue).
 - Domain event aggregator: `src/domains/<domain>/events/index.ts` → calls sub-domain `register*EventHandlers()`
 - Event types + handlers: `src/domains/<domain>/sub-domains/<sub-domain>/events/*` (or nested: `sub-domains/<parent>/<child>/events/*`)
 - Queue definitions + enqueue helpers: `src/domains/<domain>/sub-domains/<sub-domain>/queues/*` (same nesting rule)
-- Workers: `src/domains/<domain>/sub-domains/<sub-domain>/workers/*` (or nested path; or domain root `workers/` for flat domains like `user`)
+- Workers: `src/domains/<domain>/sub-domains/<sub-domain>/workers/*` (or nested path; or domain root `workers/` for flat domains (`audit`, `upload`) and domain-spanning workers, e.g. `user`)
 - Worker entrypoint: `src/worker.ts`
 
 **Important**: Queue infrastructure lives in `src/infrastructure/queue/` and only wires Redis, **central repeatable-job registration** (`scheduler.ts`), **dead-letter** (`dead-letter.ts`) + worker DLQ/Sentry hooks from `bootstrap.ts`, and worker startup. **Processor** logic and **event-driven** queue definitions + enqueue helpers must reside in their respective domain sub-domains, **not** in infrastructure or shared.
@@ -186,7 +186,7 @@ Every BullMQ worker is registered exactly once in [`worker-registration.registry
 3. **Add a single entry to `worker-registration.registry.ts`** — pick `family`, `usesPostgres`, `resolvePostgresConcurrency`, `scheduled`, `criticality`, and (when relevant) `holdsConnectionDuringExternalIo`. Use `retentionDefinition({ ... })` for single-concurrency cron workers (it defaults `scheduled: true` + `criticality: 'maintenance'`).
 4. If it is a repeatable / cron job, add an `upsertJobScheduler` entry in `scheduler.ts` using the same `queueName` constant — and set `scheduled: true` in the registration. The startup audit will warn if these disagree.
 5. Run targeted tests: `pnpm test:unit src/infrastructure/queue/worker-runtime/__tests__/unit/` and `pnpm test:unit src/infrastructure/database/__tests__/unit/assert-connection-budget.unit.test.ts` (asserts new demand is bounded).
-6. Update the worker count and family breakdown in [`docs/deployment/runbooks/resource-limits.md`](../../../docs/deployment/runbooks/resource-limits.md#per-family-registry-breakdown-30-workers-27-use-postgres) when the totals change, including the **External-IO holding** column when `holdsConnectionDuringExternalIo: true`.
+6. Update the worker count and family breakdown in [`docs/deployment/runbooks/resource-limits.md`](../../../docs/deployment/runbooks/resource-limits.md#per-family-registry-breakdown-32-workers-29-use-postgres) when the totals change, including the **External-IO holding** column when `holdsConnectionDuringExternalIo: true`.
 
 ### Anti-patterns
 

@@ -54,7 +54,7 @@ pnpm dev:worker   # BullMQ worker (separate terminal)
 
 **One-command local bootstrap:** `pnpm setup:local` (Docker + env + migrate + dev). Full clone-to-running guide: [SETUP.md](SETUP.md).
 
-**Environment:** copy values from [`.env.example`](.env.example) into `.env.development`, or run `pnpm github:sync` to bootstrap env files. For one-command cloud provisioning (Neon, Redis, S3, Sentry, Railway, GitHub), see [setup automation](docs/deployment/setup/setup-automation.md) (`pnpm setup:infra`).
+**Environment:** copy values from [`.env.example`](.env.example) into `.env.development`, or run `pnpm github:sync` to bootstrap env files. For one-command cloud provisioning (Neon, Redis, S3, Sentry, Railway, GitHub), see [setup automation](docs/deployment/setup/setup-automation.md) (`pnpm setup:infra`, run from the companion `core-infra` repo).
 
 ---
 
