@@ -2,12 +2,11 @@
 # is still a notification, not a blocked release (all of these bit the 4.8.0 release).
 # Single-trunk model: the branch-ancestry guard is retired (no dev → main promotion
 # or back-merge exists anymore — main is the only long-lived branch).
-#   1. GitHub environment protection drift (weekly): the committed
-#      `.github/environments/*.json` must match the GitHub UI, and every committed
-#      `.github/rulesets/*.json` must have a live, active ruleset counterpart. The
-#      Railway deploy validates environment protection as a pre-flight and refuses
-#      to deploy on drift, so catching it here turns a failed production deploy
-#      into a Monday notification.
+#   1. Ruleset liveness (weekly): every committed `.github/rulesets/*.json` must
+#      have a live, active ruleset counterpart — a deleted or disabled ruleset
+#      silently removes the merge gates. Environment-protection drift
+#      (`.github/environments/*.json` vs the GitHub UI) is covered by guard 3's
+#      `github:sync --check`, which diffs the whole setup surface.
 #   2. RELEASE_PLEASE_TOKEN canary (weekly): probes the development environment's
 #      PAT copy for expiry. Rotation (`pnpm github:sync`) updates both environment
 #      copies together, so the unprotected development copy is a usable canary for
@@ -38,38 +37,13 @@ concurrency:
 
 jobs:
   environment-drift:
-    name: GitHub environment protection drift
+    name: Ruleset liveness drift
     if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 6 * * 1'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Setup Node and pnpm
-        uses: ./.github/actions/setup-node-pnpm
-        with:
-          install: 'false'
-
-      # Same pattern as reusable-railway-deploy.yml: the validator lives in the
-      # standalone core-infra repo and reads this checkout via CORE_BE_DIR.
-      - name: Checkout core-infra (provisioning tool)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          repository: ${{ vars.CORE_INFRA_REPO || format('{0}/core-infra', github.repository_owner) }}
-          ref: ${{ vars.CORE_INFRA_REF || 'main' }}
-          token: ${{ secrets.CORE_INFRA_TOKEN || github.token }}
-          path: core-infra
-          fetch-depth: 1
-
-      - name: Install core-infra deps
-        run: pnpm --dir core-infra install --frozen-lockfile
-
-      - name: Validate GitHub environment protection (config vs UI)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN || github.token }}
-          CORE_BE_DIR: ${{ github.workspace }}
-        run: pnpm --dir core-infra validate:github-environments
 
       - name: Verify committed rulesets are live and active
         # `.github/rulesets/*.json` is the committed source of truth for branch
