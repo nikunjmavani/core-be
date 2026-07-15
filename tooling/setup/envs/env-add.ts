@@ -265,8 +265,10 @@ async function main(): Promise<void> {
     console.log('Done. Next steps:');
     console.log(`  1. Review the changes in ${SCHEMA_PATH} and ${ENV_EXAMPLE_PATH}`);
     console.log('  2. Run: pnpm tool:sync-env-example');
-    console.log('  3. Run: pnpm envs:sync:local   (to add to .env.<environment> files)');
-    console.log('  4. Run: pnpm envs:sync:github  (to push to GitHub Environments)');
+    console.log(
+      '  3. Add the value to each .env.<environment> file (no script — they are gitignored)',
+    );
+    console.log('  4. Run: pnpm github:sync <environment>  (to push to GitHub Environments)');
   } else {
     process.exit(1);
   }

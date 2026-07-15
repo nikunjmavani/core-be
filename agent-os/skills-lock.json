@@ -17,7 +17,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/before-commit-guard/SKILL.md",
-      "computedHash": "4ef50c608ffd65ec0f47c87d0fa5abbec5a4be805ca40349ec3d3ece8af8a627"
+      "computedHash": "7bbf323225d548a3e33bf8a134de5fc7e634c89733672e3ab0c105a8257ab37e"
     },
     "change-completeness-guard": {
       "source": "local",
@@ -101,7 +101,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/env-schema-add/SKILL.md",
-      "computedHash": "b1ce9b49da878461a784de672b316807b25ff4fdbca0d1359a6d30a951d40411"
+      "computedHash": "81cb653737f08da37dc869edc6021dfb5f326fe63fd1d386f1654bcbc48c9a35"
     },
     "find-skills": {
       "source": "local",
@@ -215,7 +215,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/skill-index/SKILL.md",
-      "computedHash": "75f35c0125a3a914abb9385805e9f486db0fb1f7590dbad5971f83672999dd52"
+      "computedHash": "caf40ea08781f8267b562ff966f712c40e821e359bf6908342a062c637e28d79"
     },
     "split-to-prs": {
       "source": "local",

@@ -39,4 +39,8 @@ When you edit a file matching a pattern below, invoke the listed skill(s). Gener
 > The 25 `agent-os/rules/*-sync.mdc` files remain for Cursor's glob auto-attach.
 > This table is the human-readable cross-platform equivalent.
 >
-> Every entry in the "Invoke skill(s)" column is a skill in `agent-os/skills/` **except** `project-identity-sync` — the one command-driven sync rule (`agent-os/rules/project-identity-sync.mdc`) with no backing skill.
+> Every entry in the "Invoke skill(s)" column is a skill in `agent-os/skills/`.
+>
+> One sync rule has **no** backing skill and therefore no row above: `project-identity-sync`
+> (`agent-os/rules/project-identity-sync.mdc`) auto-attaches on `tooling/setup/setup.config.json`
+> and is command-driven — run `pnpm tool:generate-project-identity` after editing that manifest.

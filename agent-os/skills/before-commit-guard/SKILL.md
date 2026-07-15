@@ -25,6 +25,7 @@ The hook in `.husky/pre-commit` delegates to **`pnpm guard:pre-commit`** (labele
 | Step | Command / check | What to do if it fails |
 | ---- | --------------- | ---------------------- |
 | 1 | `pnpm lint-staged` | Biome on staged `src/**/*.ts` and `tooling/**/*.{ts,mjs}`; Biome format on `*.{json,yaml,yml}`; `markdownlint-cli2 --fix` on `*.md`. Run `pnpm lint` / `pnpm format`; for markdown run `pnpm docs:lint:fix`. Fix per **code-smells-and-best-practices**. |
+| 1b | When `package.json` / `pnpm-lock.yaml` / `pnpm-workspace.yaml` staged: `pnpm validate:lockfile` | Lockfile out of sync with the manifest — run `pnpm install` and stage `pnpm-lock.yaml`. |
 | 2 | `pnpm typecheck` | TypeScript errors in `src/`. Fix types (no `any`, correct imports). |
 | 3 | `pnpm validate:domain:strict` | Domain structure; warnings fail. Fix per **domain-generator** and CLAUDE.md. |
 | 3b | Architecture policy tests (conditional) | `pnpm test:global` — runs when `src/domains/**/*.ts` files are staged; skipped otherwise |
@@ -41,9 +42,10 @@ The hook in `.husky/pre-commit` delegates to **`pnpm guard:pre-commit`** (labele
 | 11 | `pnpm tool:generate-project-identity:check` | Manifest ↔ constants ↔ workflows. Fix per **project-identity.mdc**. |
 | 12 | `pnpm tool:sync-env-example` | `.env.example` vs env schema. Run `pnpm tool:sync-env-example --fix` if needed. |
 | 13 | `gitleaks protect --staged` | Secrets in staged files (**required** — install gitleaks, e.g. `brew install gitleaks`; `pnpm setup:local` auto-installs it on macOS). |
-| 14 | Conflict markers | Resolve `<<<<<<<` / `>>>>>>>` in staged files. |
-| 15 | Large files (>1MB) | Unstage or use LFS. |
-| 16 | When deployed-surface `src/**/*.ts` staged: `pnpm sonar:scan` | SonarQube quality gate — blocks the commit on any unresolved issue/hotspot. **Mandatory — no bypass.** Run `pnpm sonar:up && pnpm sonar:scan` locally and fix every finding (or mark a genuine false positive resolved in the SonarQube UI at <http://localhost:9000>). |
+| 14 | No secret/state files staged | Hard-rejects a force-added `.env.<environment>` / `.setup-credentials` / `.setup-state.*` / `setup.secrets.json` (only `.env.example` is allowed). Unstage it — `git restore --staged <file>`. |
+| 15 | Conflict markers | Resolve `<<<<<<<` / `>>>>>>>` in staged files. |
+| 16 | Large files (>1MB) | Unstage or use LFS. |
+| 17 | When deployed-surface `src/**/*.ts` staged: `pnpm sonar:scan` | SonarQube quality gate — blocks the commit on any unresolved issue/hotspot. **Mandatory — no bypass.** Run `pnpm sonar:up && pnpm sonar:scan` locally and fix every finding (or mark a genuine false positive resolved in the SonarQube UI at <http://localhost:9000>). |
 
 ## Pre-push hook (`.husky/pre-push`)
 
