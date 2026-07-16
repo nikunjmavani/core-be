@@ -1,5 +1,5 @@
 # Reusable Railway deploy (called from post-merge-ci.yml) or manual workflow_dispatch.
-# Gate sequence: migrate → deploy API → API /readyz → deploy worker.
+# Gate sequence: migrate → seed reference data → deploy API → API /readyz → deploy worker.
 # When the worker deploy reaches Railway terminal SUCCESS the environment is
 # fully live for traffic.
 #
@@ -40,10 +40,6 @@ on:
     inputs:
       merge_commit_sha:
         description: Commit SHA on the target branch after merge (optional when invoked via workflow_dispatch)
-        required: false
-        type: string
-      target_branch:
-        description: Branch context for checkout/metadata (single-trunk — main)
         required: false
         type: string
       github_environment:
@@ -92,12 +88,6 @@ on:
         required: false
         type: string
         default: ''
-      target_branch:
-        description: Branch context (single-trunk — main)
-        required: false
-        type: choice
-        options:
-          - main
       image_override:
         description: Optional GHCR image ref to deploy instead of the commit SHA tag
         required: false
@@ -474,6 +464,19 @@ jobs:
         env:
           METRICS_ENABLED: 'false'
         run: pnpm db:migrate
+
+      - name: Seed reference data
+        # `pnpm db:seed` (minimal) inserts the idempotent reference/bootstrap rows the app
+        # HARD-depends on — chiefly the `tenancy.permissions` codes that owner-role
+        # provisioning FK-references (plus billing `plans`). Migrations create the schema but
+        # never seed these, so without this step a fresh environment provisions NO
+        # personal/team organization: every provision rolls back on the missing permission
+        # FK and the read-path self-heal swallows it to `personal_organization_id: null`.
+        # Idempotent (onConflictDoNothing), so it is safe to run on every deploy. Same env
+        # requirements as the migrate step above (env.config boot-validates the schema).
+        env:
+          METRICS_ENABLED: 'false'
+        run: pnpm db:seed
 
       - name: Set Railway service variables
         # Mirror the entire GitHub Environment (secrets + variables) into each

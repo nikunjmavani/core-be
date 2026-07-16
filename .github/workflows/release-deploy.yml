@@ -150,7 +150,6 @@ jobs:
     secrets: inherit
     with:
       merge_commit_sha: ${{ needs.resolve.outputs.sha }}
-      target_branch: main
       github_environment: production
       # Deploy the exact scanned tag-sha image (D3 build-once, promote).
       image_override: ${{ needs.resolve.outputs.api_image }}

@@ -69,4 +69,26 @@ describe('Railway deploy tooling (policy)', () => {
     // only fails when this process does.
     expect(envValidator).toContain('process.exit(runEnvironmentValidation(');
   });
+
+  it('seeds reference data after migrate so a fresh environment can provision orgs', () => {
+    // Migrations create the schema but never insert the `tenancy.permissions` reference
+    // rows that owner-role provisioning FK-references. Without the seed, a fresh
+    // environment provisions NO personal/team org — every provision rolls back on the
+    // missing permission FK and the read-path self-heal swallows it to
+    // `personal_organization_id: null`. The reference seed must run, and AFTER migrate
+    // (the schema must exist first).
+    const migrateAt = deployWorkflow.indexOf('pnpm db:migrate');
+    const seedAt = deployWorkflow.indexOf('pnpm db:seed');
+    expect(migrateAt).toBeGreaterThan(-1);
+    expect(seedAt).toBeGreaterThan(-1);
+    expect(migrateAt).toBeLessThan(seedAt);
+  });
+
+  it('declares no dead target_branch input (single-trunk keeps one branch control)', () => {
+    // `target_branch` was declared in both trigger blocks and passed as `main` by every
+    // caller but never consumed — on manual dispatch it rendered a redundant single-option
+    // `[main]` dropdown beside GitHub's native branch selector, which is the one branch
+    // control on a single-trunk repo.
+    expect(deployWorkflow).not.toContain('target_branch');
+  });
 });
