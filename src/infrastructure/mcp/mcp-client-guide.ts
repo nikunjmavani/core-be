@@ -48,11 +48,10 @@ alongside \`core-be://openapi\` (full spec) and \`core-be://routes\` (route list
 - On login the token defaults to the user's last-active organization (or their
   personal organization).
 
-## 3. Identity, organizations & capabilities
+## 3. Identity & organizations
 
-- \`GET /api/v1/users/me\` → profile plus \`capabilities\` (which of
-  personal / team organization modes are enabled) and \`personal_organization_id\`.
-  Use it to feature-gate the UI and render the org switcher.
+- \`GET /api/v1/users/me\` → profile plus \`personal_organization_id\` (the
+  account-level "Personal" workspace). Use it to render the org switcher.
 - \`GET /api/v1/tenancy/organizations\` → the team organizations the user belongs
   to (for the switcher). The personal organization is account-level (always
   present); list + personal together to populate the switcher.
@@ -97,8 +96,7 @@ The active organization is implicit (from the token), so routes are flat:
 ## 7. Recommended client flow
 
 1. Login → store the access token (and refresh via cookie + CSRF).
-2. \`GET /users/me\` + \`GET /tenancy/organizations\` → render switcher and gate
-   features by \`capabilities\`.
+2. \`GET /users/me\` + \`GET /tenancy/organizations\` → render the org switcher.
 3. To act in a different org, call a switch endpoint, replace the stored token
    with the returned one, then call the flat org-scoped routes.
 4. Discover exact request/response shapes from \`core-be://openapi\`.
