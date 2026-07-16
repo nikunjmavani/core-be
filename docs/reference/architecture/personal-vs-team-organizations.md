@@ -47,8 +47,11 @@ TEAM_ORGANIZATION_ENABLED       (default true)   — at least one must be true
 | B2C    | on       | off  | personal org auto-provisioned | personal org                                                              |
 | B2B    | off      | on   | nothing provisioned           | most-recent team, else **none** → frontend redirects to "create your own" |
 
-`GET /users/me` returns `capabilities { personal_organization, team_organizations }` and
-`personal_organization_id` so the frontend can render the switcher and hide the disabled kind.
+`GET /users/me` returns `personal_organization_id` so the frontend can render the org switcher.
+Which organization kinds are enabled is a deployment setting the frontend reads from its own
+build-time flags (`VITE_PERSONAL_ORGANIZATIONS` / `VITE_TEAM_ORGANIZATIONS`); the backend is the
+enforcement authority (provisioning is gated on `PERSONAL_ORGANIZATION_ENABLED` /
+`TEAM_ORGANIZATION_ENABLED`), so it does not re-advertise them in the response.
 
 ## Configuring the mode
 
@@ -126,7 +129,7 @@ catalog, subscription reads + PATCH update, Stripe webhook), `/notify/*`,
   all up front (idempotent) rather than on first access.
 - **`TEAM` on → off** (hybrid → B2C): `POST /tenancy/organizations` returns
   `403 teamOrganizationsDisabled`; existing team orgs are not deleted, only no longer
-  creatable. The frontend hides team UI from the `/users/me` `capabilities` flags.
+  creatable. The frontend hides team UI based on its own `VITE_TEAM_ORGANIZATIONS` build flag.
 - **`PERSONAL` on → off** (hybrid → B2B): no new personal orgs are provisioned and
   `switch-to-personal` returns `404`; users default to their most-recent team (or the
   onboarding redirect when they have none). Existing personal orgs persist until account
@@ -182,8 +185,7 @@ Account-level routes stay **plural** because they are not scoped to one active o
 Delivered: schema (`type`, nullable slug, partial index) · capability flags · personal-org
 auto-provisioning (OAuth signup) · **read-path self-heal** (`ensurePersonalOrganization` —
 `/users/me` + `switch-to-personal` provision on demand when personal is enabled and missing) ·
-deletion guard · `/users/me` capabilities +
-`personal_organization_id` · personal-org immutability · backfill · JWT `org`/`sv` claims · login
+deletion guard · `/users/me` `personal_organization_id` · personal-org immutability · backfill · JWT `org`/`sv` claims · login
 & refresh org-claim minting · `switch-to-personal` / `switch-to-organization` endpoints (e2e
 tested) · **route flatten** — org-scoped routes dropped the per-organization path
 segment in favour of the singular `/tenancy/organization` resource sourced from the `org` claim ·

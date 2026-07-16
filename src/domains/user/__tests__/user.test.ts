@@ -93,25 +93,16 @@ describe('User Domain — Integration', () => {
       expect(body.data).toHaveProperty('is_mfa_enabled', false);
     });
 
-    it('exposes deployment organization capabilities + personal_organization_id', async () => {
+    it('exposes personal_organization_id (self-heal provisions one on demand)', async () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
       const response = await getMeWithRetry(app, token);
       expect(response.statusCode).toBe(200);
       const body = response.json() as {
         data: {
-          capabilities: {
-            personal_organization: boolean;
-            team_organizations: boolean;
-          };
           personal_organization_id: string | null;
         };
       };
-      // Defaults: both organization kinds enabled.
-      expect(body.data.capabilities).toEqual({
-        personal_organization: true,
-        team_organizations: true,
-      });
       // Self-heal: a bare createTestUser has no personal org, but with personal enabled
       // getMe provisions one on demand so personal_organization_id is reliably non-null
       // (a user can never dead-end onboarding for lack of a personal workspace).
