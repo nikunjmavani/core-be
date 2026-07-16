@@ -444,7 +444,6 @@ jobs:
     secrets: inherit
     with:
       merge_commit_sha: ${{ github.sha }}
-      target_branch: main
       github_environment: development
 
   notify-failure:
