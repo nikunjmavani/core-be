@@ -17,6 +17,12 @@ export interface SeedUserPayload {
   job_title?: string | null;
   password_hash?: string | null;
   status?: string;
+  /**
+   * Stamp `onboarding_completed_at` so the frontend routes this user straight
+   * to a dashboard instead of the onboarding wizard. Omit to leave the column
+   * untouched (new rows default to NULL = wizard required on first login).
+   */
+  onboarding_completed_at?: Date;
 }
 
 /**
@@ -39,6 +45,7 @@ export async function seedUser(payload: SeedUserPayload) {
       job_title: payload.job_title ?? null,
       password_hash: payload.password_hash ?? null,
       status: payload.status ?? 'ACTIVE',
+      onboarding_completed_at: payload.onboarding_completed_at ?? null,
     })
     .onConflictDoUpdate({
       target: users.email,
@@ -49,6 +56,11 @@ export async function seedUser(payload: SeedUserPayload) {
         last_name: payload.last_name,
         job_title: payload.job_title ?? null,
         password_hash: payload.password_hash ?? null,
+        // Only stamp when the caller asked for it — an idempotent re-seed must
+        // never NULL-out an existing user's onboarding progress.
+        ...(payload.onboarding_completed_at
+          ? { onboarding_completed_at: payload.onboarding_completed_at }
+          : {}),
       },
     })
     .returning();
@@ -58,6 +70,8 @@ export async function seedUser(payload: SeedUserPayload) {
 /**
  * Seed a single demo user with known credentials for login.
  * Uses hashPassword so the user can log in via POST /api/v1/auth/login.
+ * Stamps `onboarding_completed_at`: the demo admin exists to land on a working
+ * dashboard, so the frontend must never route it through the onboarding wizard.
  */
 export async function seedDemoUser(
   email: string,
@@ -70,5 +84,6 @@ export async function seedDemoUser(
     first_name: options?.first_name ?? 'Demo',
     last_name: options?.last_name ?? 'User',
     password_hash: passwordHash,
+    onboarding_completed_at: new Date(),
   });
 }
