@@ -238,6 +238,8 @@ export class AuthService {
       organizationSettingsService: this.organizationSettingsService,
       mfaService: this.mfaService,
       authSessionService: this.authSessionService,
+      // Non-pinned path: self-heal a missing personal org into the token (item #5).
+      ensurePersonalOrganizationOnMiss: true,
     });
   }
 
@@ -277,6 +279,8 @@ export class AuthService {
       organizationSettingsService: this.organizationSettingsService,
       mfaService: this.mfaService,
       authSessionService: this.authSessionService,
+      // Non-pinned path: self-heal a missing personal org into the token (item #5).
+      ensurePersonalOrganizationOnMiss: true,
     });
   }
 
