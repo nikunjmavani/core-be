@@ -3,7 +3,10 @@ import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
-import { resolveDefaultActiveOrganizationPublicId } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
+import {
+  ensurePersonalOrganizationPublicId,
+  resolveDefaultActiveOrganizationPublicId,
+} from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
@@ -30,6 +33,13 @@ export type FirstFactorAuthResult =
  * @remarks
  * Password login, magic link, OAuth, and WebAuthn must all call this helper so tenant-required MFA
  * cannot be bypassed by alternate authentication methods.
+ *
+ * `ensurePersonalOrganizationOnMiss` (item #5) opts a caller into self-healing: when the user
+ * resolves to NO active organization but personal orgs are enabled, provision their personal org so
+ * the minted token carries it instead of `undefined`. Only **non-pinned** callers may opt in — the
+ * email-code login mints inside its single-use-code transaction (audit-#12) and self-provisions
+ * post-commit, so it must NOT trigger this separate-connection write. `ensurePersonalOrganizationPublicId`
+ * is best-effort and never throws, so opting in cannot fail a login.
  */
 export async function completeFirstFactorAuth(options: {
   user: FirstFactorAuthUser;
@@ -38,6 +48,8 @@ export async function completeFirstFactorAuth(options: {
   organizationSettingsService: OrganizationSettingsService;
   mfaService: MfaService;
   authSessionService: AuthSessionService;
+  /** Non-pinned callers only: provision a personal org when the user resolves to none (see @remarks). */
+  ensurePersonalOrganizationOnMiss?: boolean;
 }): Promise<FirstFactorAuthResult> {
   const organizationRequiresMfa =
     await options.organizationSettingsService.userHasOrganizationRequiringMfa(options.user.id);
@@ -48,7 +60,17 @@ export async function completeFirstFactorAuth(options: {
 
   // Default active organization for this login: personal (when enabled) else most-recent team,
   // else undefined (team-only mode with no team yet → the frontend redirects to onboarding).
-  const organizationPublicId = await resolveDefaultActiveOrganizationPublicId(options.user.id);
+  let organizationPublicId = await resolveDefaultActiveOrganizationPublicId(options.user.id);
+  // Item #5: a personal-org user who resolves to nothing (a signup-time provisioning miss) would be
+  // stranded on the onboarding wizard. Self-heal on the opted-in non-pinned paths so the token
+  // carries their personal org. Best-effort + idempotent — never fails the login.
+  if (
+    !organizationPublicId &&
+    options.ensurePersonalOrganizationOnMiss &&
+    env.PERSONAL_ORGANIZATION_ENABLED
+  ) {
+    organizationPublicId = await ensurePersonalOrganizationPublicId(options.user.id);
+  }
 
   const jsonWebToken = await signAccessToken({
     userId: options.user.public_id,
