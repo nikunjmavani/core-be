@@ -65,7 +65,7 @@ export async function seedRole(payload: SeedRolePayload) {
   const [row] = await getRequestDatabase()
     .insert(roles)
     .values({
-      public_id: generatePublicId('organization'),
+      public_id: generatePublicId('memberRole'),
       organization_id: payload.organization_id,
       name: payload.name,
       is_system: payload.is_system ?? false,
@@ -103,7 +103,7 @@ export async function seedMembership(payload: SeedMembershipPayload) {
   const [row] = await getRequestDatabase()
     .insert(memberships)
     .values({
-      public_id: generatePublicId('organization'),
+      public_id: generatePublicId('membership'),
       user_id: payload.user_id,
       organization_id: payload.organization_id,
       role_id: payload.role_id,
@@ -169,7 +169,7 @@ export async function seedMemberInvitation(payload: SeedMemberInvitationPayload)
   const [row] = await getRequestDatabase()
     .insert(member_invitations)
     .values({
-      public_id: generatePublicId('organization'),
+      public_id: generatePublicId('memberInvitation'),
       membership_id: payload.membership_id,
       email: payload.email,
       token_hash: payload.token_hash,
