@@ -156,8 +156,17 @@ This works **identically for personal and team organizations** — there is one 
 > audit-logs, api-keys, notification-policies, memberships, roles, invitations live under it),
 > `/api/v1/billing/subscriptions`, `/api/v1/notify/webhooks`. Account-level routes that aren't tied
 > to one active org stay plural: `GET|POST /api/v1/tenancy/organizations`,
-> `GET /api/v1/tenancy/organizations/by-slug/{slug}`, and cross-org invitation actions
-> `POST /api/v1/tenancy/invitations/{invitation_id}/accept|decline`.
+> `GET /api/v1/tenancy/organizations/by-slug/{slug}`, and the cross-org invitation-accept action
+> `POST /api/v1/tenancy/invitations/{invitation_id}/accept`.
+>
+> **Inviting is not a separate resource.** There is **no** `POST` or `GET /tenancy/organization/invitations`.
+> To invite a teammate, `POST /api/v1/tenancy/organization/memberships` with `{ email, role_id }` — this
+> creates an **`INVITED` membership** and emails a token. Invited people appear in the **members list**
+> (`GET /api/v1/tenancy/organization/memberships`) with `status: "INVITED"` and an embedded `invitation`
+> object; there is no separate pending-invitations list to fetch. Revoke with
+> `DELETE /api/v1/tenancy/organization/invitations/{invitation_id}` and resend with
+> `POST /api/v1/tenancy/organization/invitations/{invitation_id}/resend`. The invitee becomes `ACTIVE`
+> by calling `POST /api/v1/tenancy/invitations/{invitation_id}/accept`.
 
 ---
 
