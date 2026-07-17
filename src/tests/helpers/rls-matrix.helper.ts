@@ -305,7 +305,7 @@ export async function seedRlsMatrixFixtures(): Promise<RlsTenantFixture> {
     .values({
       public_id: generatePublicId('organization'),
       organization_id: organizationA.id,
-      notification_type: 'billing',
+      notification_type: 'billing.usage_threshold',
       channel: 'EMAIL',
     })
     .returning();
@@ -314,7 +314,7 @@ export async function seedRlsMatrixFixtures(): Promise<RlsTenantFixture> {
     .values({
       public_id: generatePublicId('organization'),
       organization_id: organizationB.id,
-      notification_type: 'billing',
+      notification_type: 'billing.usage_threshold',
       channel: 'EMAIL',
     })
     .returning();
