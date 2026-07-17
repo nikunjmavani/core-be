@@ -14,7 +14,16 @@ vi.mock('@/domains/tenancy/sub-domains/permission/permission-cache.service.js', 
 import { MemberRoleService } from '@/domains/tenancy/sub-domains/member-roles/member-role.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { MemberRoleRepository } from '@/domains/tenancy/sub-domains/member-roles/member-role.repository.js';
+import type { MemberRolePermissionRepository } from '@/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.repository.js';
+import type { AuthorizationService } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
+import type { PermissionRepository } from '@/domains/tenancy/sub-domains/permission/permission.repository.js';
 import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
+
+// These delete/update-guard tests never supply permission_codes, so the permission-side
+// dependencies (added for atomic create-with-permissions) are never exercised — stub them.
+const stubMemberRolePermissionRepository = {} as unknown as MemberRolePermissionRepository;
+const stubAuthorizationService = {} as unknown as AuthorizationService;
+const stubPermissionRepository = {} as unknown as PermissionRepository;
 
 /**
  * Regression for sec-T3 (High): role-delete must refuse to silently strip every member
@@ -71,7 +80,13 @@ describe('MemberRoleService.delete — sec-T3 guards (route-audit C2 atomic)', (
     softDeleteIfNoActiveMembers: vi.fn(),
   } as unknown as MemberRoleRepository;
 
-  const service = new MemberRoleService(organizationService, memberRoleRepository);
+  const service = new MemberRoleService(
+    organizationService,
+    memberRoleRepository,
+    stubMemberRolePermissionRepository,
+    stubAuthorizationService,
+    stubPermissionRepository,
+  );
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -173,7 +188,13 @@ describe('MemberRoleService.update — sec-T3 is_system guard', () => {
     update: vi.fn(),
   } as unknown as MemberRoleRepository;
 
-  const updateService = new MemberRoleService(orgServiceForUpdate, roleRepoForUpdate);
+  const updateService = new MemberRoleService(
+    orgServiceForUpdate,
+    roleRepoForUpdate,
+    stubMemberRolePermissionRepository,
+    stubAuthorizationService,
+    stubPermissionRepository,
+  );
 
   beforeEach(() => {
     vi.clearAllMocks();

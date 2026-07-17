@@ -10,11 +10,19 @@ vi.mock('@/domains/tenancy/sub-domains/permission/permission-cache.service.js', 
   invalidateOrganizationPermissions: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/shared/errors/index.js';
 import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { MemberRoleService } from '@/domains/tenancy/sub-domains/member-roles/member-role.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { MemberRoleRepository } from '@/domains/tenancy/sub-domains/member-roles/member-role.repository.js';
+import type { MemberRolePermissionRepository } from '@/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.repository.js';
+import type { AuthorizationService } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
+import type { PermissionRepository } from '@/domains/tenancy/sub-domains/permission/permission.repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 const organization = { id: 1, public_id: generatePublicId('memberRole') };
@@ -52,7 +60,25 @@ describe('MemberRoleService', () => {
     softDeleteIfNoActiveMembers: vi.fn().mockResolvedValue(roleRow),
   } as unknown as MemberRoleRepository;
 
-  const service = new MemberRoleService(organizationService, memberRoleRepository);
+  const memberRolePermissionRepository = {
+    replace: vi.fn().mockResolvedValue([]),
+  } as unknown as MemberRolePermissionRepository;
+
+  const authorizationService = {
+    resolveUserOrganizationPermissionsFromDatabase: vi.fn().mockResolvedValue([]),
+  } as unknown as AuthorizationService;
+
+  const permissionRepository = {
+    findAll: vi.fn().mockResolvedValue([]),
+  } as unknown as PermissionRepository;
+
+  const service = new MemberRoleService(
+    organizationService,
+    memberRoleRepository,
+    memberRolePermissionRepository,
+    authorizationService,
+    permissionRepository,
+  );
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -111,6 +137,50 @@ describe('MemberRoleService', () => {
     expect(memberRoleRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Minimal' }),
     );
+  });
+
+  it('create assigns an initial permission set when the caller holds every code', async () => {
+    vi.mocked(permissionRepository.findAll).mockResolvedValue([
+      { code: 'organization:read' },
+    ] as never);
+    vi.mocked(
+      authorizationService.resolveUserOrganizationPermissionsFromDatabase,
+    ).mockResolvedValue(['organization:read']);
+
+    await service.create(
+      organization.public_id,
+      { name: 'Editor', permission_codes: ['organization:read'] },
+      'creator_public',
+    );
+
+    expect(memberRoleRepository.create).toHaveBeenCalled();
+    expect(memberRolePermissionRepository.replace).toHaveBeenCalledWith(
+      roleRow.id,
+      ['organization:read'],
+      5,
+    );
+  });
+
+  it('create rejects permission_codes the caller does not hold and creates no role (atomic)', async () => {
+    vi.mocked(permissionRepository.findAll).mockResolvedValue([
+      { code: 'subscription:manage' },
+    ] as never);
+    // Caller holds nothing → may not grant subscription:manage.
+    vi.mocked(
+      authorizationService.resolveUserOrganizationPermissionsFromDatabase,
+    ).mockResolvedValue([]);
+
+    await expect(
+      service.create(
+        organization.public_id,
+        { name: 'Escalate', permission_codes: ['subscription:manage'] },
+        'creator_public',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+
+    // The guard runs BEFORE the insert, so neither the role nor its grants are written.
+    expect(memberRoleRepository.create).not.toHaveBeenCalled();
+    expect(memberRolePermissionRepository.replace).not.toHaveBeenCalled();
   });
 
   it('requireRoleRecordByPublicId returns role row', async () => {
