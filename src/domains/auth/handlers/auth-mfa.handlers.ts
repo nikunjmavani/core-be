@@ -80,7 +80,7 @@ export function createAuthMfaHandlers({ mfaService }: AuthMfaHandlersDependencie
       if (!auth.sessionPublicId) {
         throw new ForbiddenError('errors:recentStepUpRequired');
       }
-      await recordRecentStepUp(redisConnection, auth.userId, auth.sessionPublicId);
+      await recordRecentStepUp(redisConnection, auth.userId, auth.sessionPublicId, 'mfa');
       await recordScopedAuditEvent(request, {
         actorUserPublicId: auth.userId,
         action: 'auth.mfa.step_up',

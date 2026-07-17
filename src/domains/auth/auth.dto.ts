@@ -134,12 +134,25 @@ export const ChangePasswordDto = z
 /** Inferred input type of {@link ChangePasswordDto}. */
 export type ChangePasswordInput = z.infer<typeof ChangePasswordDto>;
 
-/** Zod schema for the `POST /api/v1/auth/step-up` request body (password re-authentication). */
-export const StepUpVerifyDto = z
-  .object({
-    password: trimmedStringMinMax(1, 128),
-  })
-  .strict();
+/**
+ * Zod schema for the `POST /api/v1/auth/step-up` request body — re-authentication via exactly one
+ * factor: a `password` (password accounts) OR a 6-char email verification `code`. The email-code
+ * factor is bootstrap-only (a passwordless account with no MFA enrolling its first factor); it is
+ * accepted by the service only when the account has no password and no MFA. `.strict()` on each
+ * member rejects a body carrying both factors or unknown keys.
+ */
+export const StepUpVerifyDto = z.union([
+  z.object({ password: trimmedStringMinMax(1, 128) }).strict(),
+  z
+    .object({
+      code: z
+        .string()
+        .trim()
+        .length(6)
+        .regex(/^[A-Za-z0-9]+$/),
+    })
+    .strict(),
+]);
 /** Inferred input type of {@link StepUpVerifyDto}. */
 export type StepUpVerifyInput = z.infer<typeof StepUpVerifyDto>;
 

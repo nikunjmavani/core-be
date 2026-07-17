@@ -90,6 +90,7 @@ describe('EmailLoginService', () => {
     findByEmail: vi.fn(),
     createForEmailCode: vi.fn(),
     updateEmailVerified: vi.fn().mockResolvedValue(user),
+    requireUserRecordByPublicId: vi.fn(),
   } as unknown as UserService;
 
   const organizationSettingsService = {
@@ -430,5 +431,63 @@ describe('EmailLoginService', () => {
     vi.mocked(userService.createForEmailCode).mockResolvedValue(user as never);
     await service.sendCode({ email: 'team-only@example.com' });
     expect(vi.mocked(provisionPersonalOrganization)).not.toHaveBeenCalled();
+  });
+
+  describe('verifyCodeForStepUp (bootstrap-only email-code step-up, item #8)', () => {
+    const passwordlessUser = { ...user, is_mfa_enabled: false, password_hash: null };
+
+    it('consumes the code for a passwordless-no-MFA account and mints NO session', async () => {
+      vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(
+        passwordlessUser as never,
+      );
+      vi.mocked(verificationTokenRepository.consumeOtpForUser).mockResolvedValue({
+        id: 9,
+      } as never);
+
+      await expect(
+        service.verifyCodeForStepUp({ userPublicId: passwordlessUser.public_id, code: 'ABC123' }),
+      ).resolves.toBeUndefined();
+
+      expect(verificationTokenRepository.consumeOtpForUser).toHaveBeenCalled();
+      expect(verificationTokenRepository.invalidateAllForUser).toHaveBeenCalledWith(
+        passwordlessUser.id,
+        'EMAIL_CODE',
+      );
+      // No session is minted (unlike login) — this only opens a step-up window.
+      expect(completeFirstFactorAuth).not.toHaveBeenCalled();
+    });
+
+    it('rejects an MFA-enabled account before consuming any code (preserves the MFA invariant)', async () => {
+      vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue({
+        ...passwordlessUser,
+        is_mfa_enabled: true,
+      } as never);
+      await expect(
+        service.verifyCodeForStepUp({ userPublicId: passwordlessUser.public_id, code: 'ABC123' }),
+      ).rejects.toMatchObject({ messageKey: 'errors:mfaStepUpRequired' });
+      expect(verificationTokenRepository.consumeOtpForUser).not.toHaveBeenCalled();
+    });
+
+    it('rejects an account that has a password (email-code step-up is passwordless-only)', async () => {
+      vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue({
+        ...passwordlessUser,
+        password_hash: 'argon2-hash',
+      } as never);
+      await expect(
+        service.verifyCodeForStepUp({ userPublicId: passwordlessUser.public_id, code: 'ABC123' }),
+      ).rejects.toMatchObject({ messageKey: 'errors:passwordStepUpRequired' });
+      expect(verificationTokenRepository.consumeOtpForUser).not.toHaveBeenCalled();
+    });
+
+    it('rejects a wrong/expired code (no matching token consumed)', async () => {
+      vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(
+        passwordlessUser as never,
+      );
+      vi.mocked(verificationTokenRepository.consumeOtpForUser).mockResolvedValue(null as never);
+      await expect(
+        service.verifyCodeForStepUp({ userPublicId: passwordlessUser.public_id, code: 'ABC123' }),
+      ).rejects.toMatchObject({ messageKey: 'errors:invalidOrExpiredVerificationCode' });
+      expect(verificationTokenRepository.invalidateAllForUser).not.toHaveBeenCalled();
+    });
   });
 });

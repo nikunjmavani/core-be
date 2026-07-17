@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
-import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import {
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from '@/shared/errors/index.js';
 import type { Redis } from 'ioredis';
 import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { enforceMinimumDuration } from '@/shared/utils/security/anti-enumeration.util.js';
@@ -411,5 +416,46 @@ export class EmailLoginService {
     }
 
     return result;
+  }
+
+  /**
+   * Verifies an email verification-code as a **bootstrap-only** step-up factor for an authenticated
+   * user, WITHOUT minting a session. Consuming the code proves current control of the account's
+   * email — the same assurance a passwordless login uses — so the caller (the `/auth/step-up`
+   * handler) may open a recent-step-up window and record the `email_code` factor.
+   *
+   * @remarks
+   * - **Algorithm:** load the user; reject if MFA is enabled (preserve the MFA invariant — an MFA
+   *   user must step up via MFA); reject if the account has a password (email-code step-up exists
+   *   only for passwordless accounts that cannot otherwise reach the step-up gate); else atomically
+   *   consume a single-use code scoped to `(user_id, EMAIL_CODE)` and invalidate the user's
+   *   remaining live codes.
+   * - **Failure modes:** `NotFoundError('User')`; `ForbiddenError('errors:mfaStepUpRequired')` for an
+   *   MFA account; `ForbiddenError('errors:passwordStepUpRequired')` for a password account;
+   *   `UnauthorizedError('errors:invalidOrExpiredVerificationCode')` for a wrong/expired/spent code.
+   * - **Side effects:** consumes + invalidates verification tokens. Mints NO session (unlike
+   *   {@link EmailLoginService.login}). The window this authorizes is `email_code`-tagged, so it can
+   *   enroll a first factor but never satisfy the strong gate on destructive mutations.
+   */
+  async verifyCodeForStepUp(options: { userPublicId: string; code: string }): Promise<void> {
+    const user = await this.userService.requireUserRecordByPublicId(options.userPublicId);
+    if (!user) throw new NotFoundError('User');
+    if (user.is_mfa_enabled) {
+      throw new ForbiddenError('errors:mfaStepUpRequired');
+    }
+    if (user.password_hash) {
+      throw new ForbiddenError('errors:passwordStepUpRequired');
+    }
+    const record = await this.verificationTokenRepository.consumeOtpForUser(
+      user.id,
+      EMAIL_CODE_TOKEN_TYPE,
+      hashVerificationCode({
+        tokenType: EMAIL_CODE_TOKEN_TYPE,
+        userId: user.id,
+        code: options.code,
+      }),
+    );
+    if (!record) throw new UnauthorizedError('errors:invalidOrExpiredVerificationCode');
+    await this.verificationTokenRepository.invalidateAllForUser(user.id, EMAIL_CODE_TOKEN_TYPE);
   }
 }

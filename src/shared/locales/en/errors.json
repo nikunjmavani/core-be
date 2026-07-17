@@ -20,6 +20,8 @@
   "cannotModifySystemRole": "System roles cannot be modified; they are required for the organization's default permission tiers.",
   "roleHasActiveMembers": "Cannot delete a role that is currently assigned to one or more active members. Reassign those members to a different role first.",
   "recentStepUpRequired": "Recent step-up authentication is required for this action",
+  "strongStepUpRequired": "This action requires a recent step-up with your password or MFA; an email-code step-up is not sufficient.",
+  "passwordStepUpRequired": "Step up with your password for this action; email-code step-up is only available to accounts with no password and no MFA.",
   "originNotAllowed": "Request origin is not allowed for this operation.",
   "invalidRefererOrigin": "Referer header is missing or invalid for this operation.",
   "invalidCsrfToken": "CSRF token is missing or invalid for this operation.",
