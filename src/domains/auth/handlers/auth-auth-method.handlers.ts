@@ -4,7 +4,7 @@ import { successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
-import { recordRecentStepUp } from '@/shared/utils/auth/recent-step-up.util.js';
+import { recordRecentStepUp, type StepUpFactor } from '@/shared/utils/auth/recent-step-up.util.js';
 import {
   getIpAddress,
   getUserAgent,
@@ -19,12 +19,16 @@ import {
 import { AuthSerializer } from '@/domains/auth/auth.serializer.js';
 import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
-type AuthAuthMethodHandlersDependencies = Pick<AuthContainer, 'authMethodService' | 'authService'>;
+type AuthAuthMethodHandlersDependencies = Pick<
+  AuthContainer,
+  'authMethodService' | 'authService' | 'emailLoginService'
+>;
 
-/** Builds the auth-method management Fastify handlers (`listAuthMethods`, `createAuthMethod`, `deleteAuthMethod`, plus the password flows) and emits the `auth.auth_method.*` audit events. Reset-password auto-logs-in via {@link AuthContainer.authService}. */
+/** Builds the auth-method management Fastify handlers (`listAuthMethods`, `createAuthMethod`, `deleteAuthMethod`, plus the password + email-code step-up flows) and emits the `auth.auth_method.*` audit events. Reset-password auto-logs-in via {@link AuthContainer.authService}. */
 export function createAuthAuthMethodHandlers({
   authMethodService,
   authService,
+  emailLoginService,
 }: AuthAuthMethodHandlersDependencies) {
   return {
     listAuthMethods: async (request: FastifyRequest, _reply: FastifyReply) => {
@@ -97,17 +101,35 @@ export function createAuthAuthMethodHandlers({
     },
     stepUp: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const { password } = validateStepUpVerify(request.body);
-      await authMethodService.verifyPasswordForStepUp({ userPublicId: auth.userId, password });
+      const parsed = validateStepUpVerify(request.body);
+      let factor: StepUpFactor;
+      if ('password' in parsed) {
+        await authMethodService.verifyPasswordForStepUp({
+          userPublicId: auth.userId,
+          password: parsed.password,
+        });
+        factor = 'password';
+      } else {
+        // Bootstrap-only email-code step-up: the service rejects it for accounts that have a
+        // password or MFA, so this branch only ever succeeds for a passwordless-no-MFA account.
+        // The resulting window is `email_code`-tagged — it can enroll a first factor but never
+        // satisfy the strong gate on destructive mutations.
+        await emailLoginService.verifyCodeForStepUp({
+          userPublicId: auth.userId,
+          code: parsed.code,
+        });
+        factor = 'email_code';
+      }
       // Step-up sentinel is per-(user, session) (sec-A2); fail closed if session id is missing.
       if (!auth.sessionPublicId) {
         throw new ForbiddenError('errors:recentStepUpRequired');
       }
-      await recordRecentStepUp(redisConnection, auth.userId, auth.sessionPublicId);
+      await recordRecentStepUp(redisConnection, auth.userId, auth.sessionPublicId, factor);
       await recordScopedAuditEvent(request, {
         actorUserPublicId: auth.userId,
         action: 'auth.step_up',
         resource_type: 'user',
+        metadata: { factor },
       });
       return successResponse({ stepped_up: true }, getRequestIdentifier(request));
     },

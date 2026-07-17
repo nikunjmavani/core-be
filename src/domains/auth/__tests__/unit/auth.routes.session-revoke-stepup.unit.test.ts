@@ -9,11 +9,11 @@ import { dirname, resolve } from 'node:path';
  * other session of the legitimate user, kicking them out of their own browser long
  * enough to complete a transfer in another tab.
  *
- * Both routes now require `requireRecentStepUpPreHandler` (same gate used by
- * `mfa/enroll`, `mfa/:id` delete, `webauthn/register/*`, `me/auth-methods` create/
- * delete, `password/change`). After sec-A1, that gate cannot be opened by password
- * alone for MFA-enabled users — so a stolen-session attacker must also know the
- * second factor to disrupt session state.
+ * Both routes now require `requireStrongRecentStepUpPreHandler` — a STRONG step-up
+ * (password or MFA), stricter than the enroll gate. A bootstrap email-code step-up
+ * (a passwordless-no-MFA account enrolling its first factor) can open a window but must
+ * NOT revoke sessions, so a stolen session plus inbox access on a passwordless account
+ * cannot disrupt session state.
  *
  * Tests against the source text of `auth.routes.ts` because registering the live
  * plugin in a unit test pulls in `@fastify/rate-limit`, `zod-type-provider`, and the
@@ -28,7 +28,7 @@ describe('auth.routes — DELETE /me/sessions requires recent step-up (sec-A7)',
     'utf8',
   );
 
-  it('DELETE /me/sessions registration includes requireRecentStepUpPreHandler', () => {
+  it('DELETE /me/sessions registration includes requireStrongRecentStepUpPreHandler', () => {
     // Match the `zodApplication.delete('/me/sessions', { ... })` block (no trailing slash
     // qualifier so it does not falsely match `/me/sessions/:session_id` below) and assert it
     // mentions the step-up preHandler.
@@ -36,14 +36,14 @@ describe('auth.routes — DELETE /me/sessions requires recent step-up (sec-A7)',
       /zodApplication\.delete\(\s*'\/me\/sessions'\s*,\s*\{[\s\S]*?\}\s*,\s*controller\./;
     const match = blockPattern.exec(routesSource);
     expect(match).not.toBeNull();
-    expect(match?.[0]).toContain('requireRecentStepUpPreHandler');
+    expect(match?.[0]).toContain('requireStrongRecentStepUpPreHandler');
   });
 
-  it('DELETE /me/sessions/:session_id registration includes requireRecentStepUpPreHandler', () => {
+  it('DELETE /me/sessions/:session_id registration includes requireStrongRecentStepUpPreHandler', () => {
     const blockPattern =
       /zodApplication\.delete[^(]*\(\s*'\/me\/sessions\/:session_id'\s*,\s*\{[\s\S]*?\}\s*,\s*controller\./;
     const match = blockPattern.exec(routesSource);
     expect(match).not.toBeNull();
-    expect(match?.[0]).toContain('requireRecentStepUpPreHandler');
+    expect(match?.[0]).toContain('requireStrongRecentStepUpPreHandler');
   });
 });

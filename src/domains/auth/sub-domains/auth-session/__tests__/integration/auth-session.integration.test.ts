@@ -10,6 +10,7 @@ import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateTestToken, generateTestTokenAndSession } from '@/tests/helpers/test-auth.js';
 import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+import enErrors from '@/shared/locales/en/errors.json' with { type: 'json' };
 import type { FastifyInstance } from 'fastify';
 
 describe('Auth Session Sub-Domain — Integration', () => {
@@ -134,6 +135,47 @@ describe('Auth Session Sub-Domain — Integration', () => {
         token,
       });
       expect(response.statusCode).toBe(200);
+    });
+  });
+
+  describe('step-up factor gating on destructive session routes (item #8)', () => {
+    it('rejects DELETE /me/sessions when the recent step-up used the bootstrap email_code factor', async () => {
+      const user = await createTestUser();
+      const { token, sessionPublicId } = await generateTestTokenAndSession({
+        userId: user.public_id,
+      });
+      // A bootstrap email-code step-up window (a passwordless account enrolling its first factor)
+      // may NOT authorize a destructive session revoke — the strong gate requires password/MFA.
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId, 'email_code');
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath('/auth/me/sessions'),
+        token,
+      });
+
+      expect(response.statusCode).toBe(403);
+      const body = response.json() as { error?: { detail?: string } };
+      expect(['errors:strongStepUpRequired', enErrors.strongStepUpRequired]).toContain(
+        body.error?.detail,
+      );
+    });
+
+    it('allows DELETE /me/sessions with a strong (password) step-up', async () => {
+      const user = await createTestUser();
+      const { token, sessionPublicId } = await generateTestTokenAndSession({
+        userId: user.public_id,
+      });
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId, 'password');
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath('/auth/me/sessions'),
+        token,
+      });
+
+      // Not the 403 step-up gate — a strong factor authorizes the revoke.
+      expect(response.statusCode).toBeLessThan(400);
     });
   });
 });

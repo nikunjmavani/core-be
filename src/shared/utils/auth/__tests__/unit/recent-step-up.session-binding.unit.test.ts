@@ -31,28 +31,28 @@ describe('recent-step-up util — session binding (sec-A2)', () => {
   });
 
   it('step-up recorded for session A is NOT visible to session B (same user)', async () => {
-    await recordRecentStepUp(mockRedis, 'user_pub', 'session_A');
+    await recordRecentStepUp(mockRedis, 'user_pub', 'session_A', 'password');
 
     await expect(hasRecentStepUp(mockRedis, 'user_pub', 'session_A')).resolves.toBe(true);
     await expect(hasRecentStepUp(mockRedis, 'user_pub', 'session_B')).resolves.toBe(false);
   });
 
   it('step-up recorded for one user is NOT visible to a different user', async () => {
-    await recordRecentStepUp(mockRedis, 'user_a', 'session_X');
+    await recordRecentStepUp(mockRedis, 'user_a', 'session_X', 'password');
 
     await expect(hasRecentStepUp(mockRedis, 'user_a', 'session_X')).resolves.toBe(true);
     await expect(hasRecentStepUp(mockRedis, 'user_b', 'session_X')).resolves.toBe(false);
   });
 
   it('hasRecentStepUp without a sessionPublicId returns false (no fallback to user-only key)', async () => {
-    await recordRecentStepUp(mockRedis, 'user_pub', 'session_A');
+    await recordRecentStepUp(mockRedis, 'user_pub', 'session_A', 'password');
 
     // Defense in depth: a future caller that forgets to pass session id must fail closed.
     await expect(hasRecentStepUp(mockRedis, 'user_pub', undefined)).resolves.toBe(false);
   });
 
   it('uses the documented TTL', async () => {
-    await recordRecentStepUp(mockRedis, 'user_pub', 'session_A');
+    await recordRecentStepUp(mockRedis, 'user_pub', 'session_A', 'password');
 
     // ioredis signature: set(key, value, 'EX', seconds, ...) — the TTL must appear in the args.
     expect(mockRedis.set).toHaveBeenCalledWith(

@@ -20,6 +20,8 @@
   "cannotModifySystemRole": "Los roles del sistema no pueden modificarse; son necesarios para los niveles de permisos predeterminados de la organización.",
   "roleHasActiveMembers": "No se puede eliminar un rol que está actualmente asignado a uno o más miembros activos. Primero reasigna esos miembros a otro rol.",
   "recentStepUpRequired": "Se requiere una autenticación de confirmación reciente para esta acción",
+  "strongStepUpRequired": "Esta acción requiere una confirmación reciente con tu contraseña o MFA; una confirmación por código de correo no es suficiente.",
+  "passwordStepUpRequired": "Confirma con tu contraseña para esta acción; la confirmación por código de correo solo está disponible para cuentas sin contraseña ni MFA.",
   "originNotAllowed": "Origen de la solicitud no permitido para esta operación.",
   "invalidRefererOrigin": "El encabezado Referer falta o no es válido para esta operación.",
   "invalidCsrfToken": "El token CSRF falta o no es válido para esta operación.",

@@ -2,7 +2,10 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { captchaPreHandler } from '@/shared/middlewares/security/captcha.middleware.js';
-import { requireRecentStepUpPreHandler } from '@/shared/middlewares/core/recent-step-up.middleware.js';
+import {
+  requireRecentStepUpPreHandler,
+  requireStrongRecentStepUpPreHandler,
+} from '@/shared/middlewares/core/recent-step-up.middleware.js';
 import {
   REFRESH_RATE_LIMIT,
   STRICT_AUTHED_RATE_LIMIT,
@@ -270,7 +273,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'Step-up (re-authenticate)',
         description:
-          'Re-verifies the authenticated user\'s password to open a short "recent step-up" window required before sensitive credential mutations (MFA enrollment, passkey registration, auth-method changes). MFA users may instead complete an MFA verification. Returns 401 if the password is incorrect.',
+          'Opens a short "recent step-up" window required before sensitive credential mutations. Re-verify with your password, or — for a passwordless account with no MFA — a 6-character email verification code (bootstrap-only, so the account can enroll its first MFA/passkey). MFA users must complete an MFA verification instead. An email-code window can enroll a factor but cannot perform destructive mutations (revoking sessions, deleting a credential / MFA / auth-method), which require a password or MFA step-up. Returns 401 for a wrong password/code.',
         tags: ['Auth'],
         body: StepUpVerifyDto,
       },
@@ -359,7 +362,8 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/webauthn/credentials/:credential_id',
     {
       onRequest: [app.authenticate],
-      preHandler: [requireRecentStepUpPreHandler],
+      // Destructive: a bootstrap email-code step-up window must not revoke a credential (sec-A2).
+      preHandler: [requireStrongRecentStepUpPreHandler],
       ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Revoke a passkey',
@@ -388,7 +392,8 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/mfa/:mfa_method_id',
     {
       onRequest: [app.authenticate],
-      preHandler: [requireRecentStepUpPreHandler],
+      // Destructive: a bootstrap email-code step-up window must not delete an MFA method (sec-A2).
+      preHandler: [requireStrongRecentStepUpPreHandler],
       ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Remove MFA method',
@@ -407,8 +412,9 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       // sec-A7: a stolen bearer must not be able to kick the legitimate user out of their
       // own browser. Requiring recent step-up forces the attacker to also possess the
       // second factor (or password for non-MFA users — sec-A1 blocks the password-only
-      // step-up path for MFA-enabled accounts).
-      preHandler: [requireRecentStepUpPreHandler],
+      // step-up path for MFA-enabled accounts). A STRONG step-up is required, so a bootstrap
+      // email-code window (passwordless-no-MFA) can enroll a factor but never revoke sessions.
+      preHandler: [requireStrongRecentStepUpPreHandler],
       ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Revoke all sessions',
@@ -482,7 +488,8 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/auth-methods/:auth_method_id',
     {
       onRequest: [app.authenticate],
-      preHandler: [requireRecentStepUpPreHandler],
+      // Destructive: a bootstrap email-code step-up window must not remove an auth method (sec-A2).
+      preHandler: [requireStrongRecentStepUpPreHandler],
       ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Remove auth method',
@@ -512,8 +519,8 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/sessions/:session_id',
     {
       onRequest: [app.authenticate],
-      // sec-A7: see the comment on DELETE /me/sessions above — same threat model.
-      preHandler: [requireRecentStepUpPreHandler],
+      // sec-A7: see the comment on DELETE /me/sessions above — same threat model (strong step-up).
+      preHandler: [requireStrongRecentStepUpPreHandler],
       ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Revoke a specific session',

@@ -51,8 +51,15 @@ single POST — the browser must run `navigator.credentials.create()` between th
 - **Delete:** `DELETE /auth/me/webauthn/credentials/:credential_id` (the `wac_…` id from the list)
 - **Login (passwordless):** public `POST /auth/webauthn/authenticate/options` → `POST /auth/webauthn/authenticate/verify`
 
-> Credential mutations require a recent **step-up** (`POST /auth/step-up` with the password, or an MFA
-> verification) within the step-up window, else `403`.
+> Credential mutations require a recent **step-up** within the step-up window, else `403`. Open one
+> via `POST /auth/step-up` with the account's **password**, or — for a **passwordless account with no
+> MFA** — a 6-character **email verification code** (`{ code }`, bootstrap-only, so it can enroll a
+> first factor). MFA users step up via an **MFA verification** instead.
+>
+> **Enroll vs destructive:** an email-code step-up window can *enroll* (MFA/passkey/add auth-method)
+> but **cannot** perform *destructive* mutations — revoking sessions or deleting a passkey / MFA
+> method / auth-method require a **strong** step-up (password or MFA), returning `403`
+> `strongStepUpRequired` otherwise.
 
 ### Notifications
 
