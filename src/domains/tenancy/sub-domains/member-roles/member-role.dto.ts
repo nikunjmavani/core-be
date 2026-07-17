@@ -18,11 +18,17 @@ export const roleIdParamsDto = z
  * previous schema accepted it from the body so a tenant could mint roles
  * indistinguishable from seeds and bypass the delete-guard. The `.strict()` shape
  * rejects any body that includes the key.
+ *
+ * Optional `permission_codes` lets a role be created with its permission set in one
+ * atomic call (create + assign in a single transaction). When present it is subject to
+ * the same caller-can-grant guard as `PUT /roles/:role_id/permissions`; omit it to create
+ * a role with no permissions and assign them later via the PUT.
  */
 export const createMemberRoleDto = z
   .object({
     name: trimmedStringMinMax(1, 100),
     description: trimmedString().max(500).nullable().optional(),
+    permission_codes: z.array(trimmedStringMinMax(1, 100)).max(200).optional(),
   })
   .strict();
 

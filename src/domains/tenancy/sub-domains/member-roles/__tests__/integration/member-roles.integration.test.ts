@@ -22,6 +22,7 @@ import {
   provisionOrganizationWithOwner,
 } from '@/domains/tenancy/sub-domains/organization/organization-provisioning.js';
 import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
+import { role_permissions } from '@/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.schema.js';
 import { database } from '@/infrastructure/database/connection.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import enErrors from '@/shared/locales/en/errors.json' with { type: 'json' };
@@ -113,6 +114,59 @@ describe('Member Roles Sub-Domain — Integration', () => {
         payload: { permission_codes: [TENANCY_PERMISSIONS.ORGANIZATION_READ] },
       });
       expect([200, 204]).toContain(response.statusCode);
+    });
+  });
+
+  describe('POST /api/v1/tenancy/organization/roles with permission_codes (atomic create + assign)', () => {
+    it('creates the role and assigns its permission set in one call when the caller holds every code', async () => {
+      const { organization, token } = await createAuthorizedContext();
+      const roleName = `Atomic Role ${randomUUID()}`;
+
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: testApiPath('/tenancy/organization/roles'),
+        token,
+        organizationPublicId: organization.public_id,
+        payload: { name: roleName, permission_codes: [TENANCY_PERMISSIONS.ORGANIZATION_READ] },
+      });
+
+      expect(response.statusCode).toBe(201);
+
+      const [roleRow] = await database
+        .select({ id: roles.id })
+        .from(roles)
+        .where(and(eq(roles.organization_id, organization.id), eq(roles.name, roleName)));
+      expect(roleRow).toBeDefined();
+
+      const grants = await database
+        .select({ code: role_permissions.permission_code })
+        .from(role_permissions)
+        .where(eq(role_permissions.role_id, roleRow!.id));
+      expect(grants.map((grant) => grant.code)).toEqual([TENANCY_PERMISSIONS.ORGANIZATION_READ]);
+    });
+
+    it('rejects create with a permission the caller does not hold and writes no role (atomic rollback)', async () => {
+      const { organization, token } = await createAuthorizedContext();
+      // A real, seeded code the caller's role does NOT include — the grant-guard must refuse it.
+      await seedPermissions([TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE]);
+      const roleName = `Escalation Role ${randomUUID()}`;
+
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: testApiPath('/tenancy/organization/roles'),
+        token,
+        organizationPublicId: organization.public_id,
+        payload: { name: roleName, permission_codes: [TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE] },
+      });
+
+      expect(response.statusCode).toBe(403);
+
+      // Atomic: the whole create rolled back — no role by that name exists.
+      const rows = await database
+        .select({ name: roles.name })
+        .from(roles)
+        .where(and(eq(roles.organization_id, organization.id), eq(roles.name, roleName)));
+      expect(rows).toHaveLength(0);
     });
   });
 

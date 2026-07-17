@@ -5,6 +5,7 @@ import { withOrganizationDatabaseContext } from '@/infrastructure/database/conte
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import { assertTeamOrganization } from '@/domains/tenancy/sub-domains/organization/organization-capability.js';
 import type { MemberRoleRepository } from './member-role.repository.js';
+import type { MemberRolePermissionRepository } from './member-role-permission/member-role-permission.repository.js';
 import type { MemberRoleOutput, MemberRoleRow } from './member-role.types.js';
 import {
   validateCreateMemberRole,
@@ -13,6 +14,9 @@ import {
 } from './member-role.validator.js';
 import { serializeMemberRole } from './member-role.serializer.js';
 import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
+import type { AuthorizationService } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
+import type { PermissionRepository } from '@/domains/tenancy/sub-domains/permission/permission.repository.js';
+import { assertCallerCanGrantPermissionCodes } from '@/domains/tenancy/sub-domains/permission/assert-grantable-permissions.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { ListMemberRolesQueryInput } from './member-role.dto.js';
 
@@ -33,9 +37,10 @@ import type { ListMemberRolesQueryInput } from './member-role.dto.js';
  * - **Side effects:** writes through `MemberRoleRepository` (insert / update /
  *   soft-delete with `deleted_at`). Deleting a role calls
  *   {@link invalidateOrganizationPermissions} so members who held it stop
- *   resolving its permissions from cache. The companion
- *   {@link MemberRolePermissionService} owns the role's permission set; this
- *   service does not touch `role_permissions`.
+ *   resolving its permissions from cache. {@link create} may optionally assign an
+ *   initial permission set in the same transaction (reusing the same
+ *   `assertCallerCanGrantPermissionCodes` guard as the PUT); the companion
+ *   {@link MemberRolePermissionService} owns all subsequent edits to the set.
  * - **Notes:** `requireRoleRecord*` and `resolveRolePublicId*` helpers are
  *   shared with other tenancy services (membership, invitations) to keep role
  *   identity resolution in one place.
@@ -44,6 +49,9 @@ export class MemberRoleService {
   constructor(
     private readonly organizationService: OrganizationService,
     private readonly memberRoleRepository: MemberRoleRepository,
+    private readonly memberRolePermissionRepository: MemberRolePermissionRepository,
+    private readonly authorizationService: AuthorizationService,
+    private readonly permissionRepository: PermissionRepository,
   ) {}
 
   async list(organization_public_id: string, pagination: ListMemberRolesQueryInput) {
@@ -162,11 +170,29 @@ export class MemberRoleService {
       }
       const userId =
         await this.organizationService.resolveUserInternalIdByPublicId(created_by_user_public_id);
+
+      // When an initial permission set is requested, verify the caller may grant every code
+      // BEFORE creating the role. An escalation attempt (a code the caller does not hold) or an
+      // unknown code throws here, and the whole `withOrganizationDatabaseContext` transaction
+      // rolls back — no half-made role. A brand-new role has no current permissions and is never
+      // the owner role, so the owner-protection / removed-codes checks the PUT path runs do not apply.
+      const permissionCodes = parsed.permission_codes ?? [];
+      if (permissionCodes.length > 0) {
+        await assertCallerCanGrantPermissionCodes({
+          authorizationService: this.authorizationService,
+          permissionRepository: this.permissionRepository,
+          callerUserPublicId: created_by_user_public_id,
+          organizationPublicId: organization_public_id,
+          requestedPermissionCodes: permissionCodes,
+        });
+      }
+
+      let created: MemberRoleRow;
       try {
         // sec-T3: `is_system` is intentionally omitted — the DTO no longer accepts it
         // from clients and the repository default is false. Only seeds set it (via a
         // server-side path that does not go through this service).
-        const created = await this.memberRoleRepository.create(
+        created = await this.memberRoleRepository.create(
           omitUndefined({
             organization_id: organization.id,
             name: parsed.name,
@@ -174,10 +200,22 @@ export class MemberRoleService {
             created_by_user_id: userId ?? null,
           }),
         );
-        return serializeMemberRole(created);
       } catch (error) {
         throw this.mapRoleNameConflict(error, parsed.name);
       }
+
+      // Assign the initial permission set in the SAME transaction as the insert (atomic).
+      // No cache invalidation is needed — a brand-new role has no members whose resolved
+      // permissions could be stale.
+      if (permissionCodes.length > 0) {
+        await this.memberRolePermissionRepository.replace(
+          created.id,
+          permissionCodes,
+          userId ?? null,
+        );
+      }
+
+      return serializeMemberRole(created);
     });
   }
 
