@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import {
@@ -158,7 +157,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         method: 'POST',
         url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
-        payload: { notification_type: 'IN_APP', channel: 'EMAIL', default_enabled: true },
+        payload: { notification_type: 'system.welcome', channel: 'EMAIL', default_enabled: true },
       });
       expect(created.statusCode).toBe(201);
       const createdBody = created.json() as { data: { id: string } };
@@ -172,7 +171,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
       const body = response.json() as { data: { id: string; notification_type: string } };
       expect(body.data).toHaveProperty('id', policyId);
       expect(typeof body.data.id).toBe('string'); // sec-T5: public id (not bigserial)
-      expect(body.data).toHaveProperty('notification_type', 'IN_APP');
+      expect(body.data).toHaveProperty('notification_type', 'system.welcome');
     });
   });
 
@@ -181,7 +180,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
       const response = await injectUnauthenticated(app, {
         method: 'POST',
         url: NOTIFICATION_POLICIES_COLLECTION_PATH,
-        payload: { notification_type: 'TYPE', channel: 'EMAIL' },
+        payload: { notification_type: 'system.maintenance', channel: 'EMAIL' },
       });
       expect(response.statusCode).toBe(401);
     });
@@ -195,7 +194,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         method: 'POST',
         url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
-        payload: { notification_type: 'IN_APP', channel: 'EMAIL' },
+        payload: { notification_type: 'system.welcome', channel: 'EMAIL' },
       });
       expect(response.statusCode).toBe(403);
     });
@@ -223,7 +222,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         method: 'POST',
         url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
-        payload: { notification_type: 'IN_APP' },
+        payload: { notification_type: 'system.welcome' },
       });
       expect([400, 422]).toContain(response.statusCode);
     });
@@ -239,7 +238,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         method: 'POST',
         url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
-        payload: { notification_type: 'IN_APP', channel: 'CARRIER_PIGEON' },
+        payload: { notification_type: 'system.welcome', channel: 'CARRIER_PIGEON' },
       });
       expect([400, 422]).toContain(response.statusCode);
       expect(response.statusCode).toBeLessThan(500);
@@ -255,7 +254,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
         payload: {
-          notification_type: 'IN_APP',
+          notification_type: 'system.welcome',
           channel: 'EMAIL',
           extra_field: true,
         },
@@ -273,7 +272,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
         payload: {
-          notification_type: 'IN_APP',
+          notification_type: 'system.welcome',
           channel: 'EMAIL',
           muted_until: 'not-a-valid-datetime',
         },
@@ -291,7 +290,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
         payload: {
-          notification_type: 'BILLING',
+          notification_type: 'billing.usage_threshold',
           channel: 'PUSH',
           default_enabled: false,
           is_mandatory: false,
@@ -300,7 +299,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
       });
       expect(response.statusCode).toBe(201);
       const body = response.json() as { data: { notification_type: string; channel: string } };
-      expect(body.data).toHaveProperty('notification_type', 'BILLING');
+      expect(body.data).toHaveProperty('notification_type', 'billing.usage_threshold');
       expect(body.data).toHaveProperty('channel', 'PUSH');
     });
   });
@@ -323,7 +322,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         method: 'POST',
         url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token: manageContext.token,
-        payload: { notification_type: 'SECURITY', channel: 'EMAIL' },
+        payload: { notification_type: 'security.alert', channel: 'EMAIL' },
       });
       expect(created.statusCode).toBe(201);
       const createdBody = created.json() as { data: { id: string } };
@@ -364,7 +363,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         method: 'POST',
         url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
-        payload: { notification_type: 'UPDATE_TEST', channel: 'EMAIL' },
+        payload: { notification_type: 'subscription.updated', channel: 'EMAIL' },
       });
       expect(created.statusCode).toBe(201);
       const createdBody = created.json() as { data: { id: string } };
@@ -388,7 +387,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         method: 'POST',
         url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
-        payload: { notification_type: 'MUTED_TEST', channel: 'SMS' },
+        payload: { notification_type: 'billing.payment_failed', channel: 'SMS' },
       });
       expect(created.statusCode).toBe(201);
       const createdBody = created.json() as { data: { id: string } };
@@ -413,7 +412,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
         payload: {
-          notification_type: 'ORIGINAL_POLICY',
+          notification_type: 'membership.invite_accepted',
           channel: 'IN_APP',
           default_enabled: true,
           is_mandatory: false,
@@ -458,7 +457,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         method: 'POST',
         url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token: manageContext.token,
-        payload: { notification_type: 'DELETE_GUARD', channel: 'EMAIL' },
+        payload: { notification_type: 'webhook.delivery_failed', channel: 'EMAIL' },
       });
       expect(created.statusCode).toBe(201);
       const createdBody = created.json() as { data: { id: string } };
@@ -513,7 +512,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
         payload: {
-          notification_type: `TEMPORARY_POLICY_${randomUUID().slice(0, 8)}`,
+          notification_type: 'membership.invite_accepted',
           channel: 'IN_APP',
         },
       });

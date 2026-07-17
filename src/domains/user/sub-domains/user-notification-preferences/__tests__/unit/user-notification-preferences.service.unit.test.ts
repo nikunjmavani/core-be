@@ -23,7 +23,7 @@ vi.mock('@/infrastructure/database/transaction.js', () => ({
 const user = { id: 1, public_id: 'user_public', email: 'user@example.com' };
 const preferenceRow = {
   id: 2,
-  notification_type: 'SUBSCRIPTION_UPDATED',
+  notification_type: 'subscription.updated',
   channel: 'EMAIL',
   organization_id: null,
   is_enabled: true,
@@ -51,7 +51,7 @@ describe('UserNotificationPreferencesService', () => {
   it('get returns preferences for user', async () => {
     const result = await service.get('user_public');
     expect(result).toHaveLength(1);
-    expect(result[0]?.notification_type).toBe('SUBSCRIPTION_UPDATED');
+    expect(result[0]?.notification_type).toBe('subscription.updated');
   });
 
   it('get throws when user missing', async () => {
@@ -64,7 +64,7 @@ describe('UserNotificationPreferencesService', () => {
     await expect(
       service.put('missing', {
         preferences: [
-          { notification_type: 'SUBSCRIPTION_UPDATED', channel: 'EMAIL', is_enabled: true },
+          { notification_type: 'subscription.updated', channel: 'EMAIL', is_enabled: true },
         ],
       }),
     ).rejects.toBeInstanceOf(NotFoundError);
@@ -78,7 +78,7 @@ describe('UserNotificationPreferencesService', () => {
       service.put('user_public', {
         preferences: [
           {
-            notification_type: 'SUBSCRIPTION_UPDATED',
+            notification_type: 'subscription.updated',
             channel: 'EMAIL',
             organization_id: 1,
             is_enabled: true,
@@ -93,7 +93,7 @@ describe('UserNotificationPreferencesService', () => {
   it('put persists user-wide preferences when organization_id is omitted', async () => {
     await service.put('user_public', {
       preferences: [
-        { notification_type: 'SUBSCRIPTION_UPDATED', channel: 'EMAIL', is_enabled: true },
+        { notification_type: 'subscription.updated', channel: 'EMAIL', is_enabled: true },
       ],
     });
 
@@ -101,7 +101,7 @@ describe('UserNotificationPreferencesService', () => {
       user.id,
       [
         {
-          notification_type: 'SUBSCRIPTION_UPDATED',
+          notification_type: 'subscription.updated',
           channel: 'EMAIL',
           organization_id: null,
           is_enabled: true,
@@ -115,7 +115,7 @@ describe('UserNotificationPreferencesService', () => {
     vi.mocked(preferencesRepository.replaceAll).mockResolvedValue([]);
     const result = await service.put('user_public', {
       preferences: [
-        { notification_type: 'SUBSCRIPTION_UPDATED', channel: 'EMAIL', is_enabled: false },
+        { notification_type: 'subscription.updated', channel: 'EMAIL', is_enabled: false },
       ],
     });
     expect(result).toEqual([]);
@@ -125,7 +125,7 @@ describe('UserNotificationPreferencesService', () => {
     const result = await service.put('user_public', {
       preferences: [
         {
-          notification_type: 'SUBSCRIPTION_UPDATED',
+          notification_type: 'subscription.updated',
           channel: 'EMAIL',
           is_enabled: false,
         },

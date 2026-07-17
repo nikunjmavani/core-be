@@ -8,10 +8,10 @@ import {
 describe('organization-notification-policy validators', () => {
   it('validateCreateOrganizationNotificationPolicy accepts type and channel', () => {
     const result = validateCreateOrganizationNotificationPolicy({
-      notification_type: 'billing',
+      notification_type: 'billing.usage_threshold',
       channel: 'EMAIL',
     });
-    expect(result.notification_type).toBe('billing');
+    expect(result.notification_type).toBe('billing.usage_threshold');
     expect(result.default_enabled).toBe(true);
     expect(result.is_mandatory).toBe(false);
   });
@@ -20,7 +20,7 @@ describe('organization-notification-policy validators', () => {
     // An unknown channel must be a 422 at the edge, not a chk_org_notif_channel 500.
     expect(() =>
       validateCreateOrganizationNotificationPolicy({
-        notification_type: 'billing',
+        notification_type: 'billing.usage_threshold',
         channel: 'CARRIER_PIGEON',
       }),
     ).toThrow(ValidationError);
@@ -35,9 +35,19 @@ describe('organization-notification-policy validators', () => {
   it('validateCreateOrganizationNotificationPolicy rejects invalid muted_until', () => {
     expect(() =>
       validateCreateOrganizationNotificationPolicy({
-        notification_type: 'billing',
+        notification_type: 'billing.usage_threshold',
         channel: 'EMAIL',
         muted_until: 'not-a-datetime',
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('validateCreateOrganizationNotificationPolicy rejects a notification_type outside the canonical set', () => {
+    // An unknown notification_type must be a 422 at the edge, mirroring the channel enum.
+    expect(() =>
+      validateCreateOrganizationNotificationPolicy({
+        notification_type: 'not.a.canonical.type',
+        channel: 'EMAIL',
       }),
     ).toThrow(ValidationError);
   });

@@ -7,7 +7,7 @@ describe('user-notification-preferences.validator', () => {
     const input = {
       preferences: [
         {
-          notification_type: 'billing',
+          notification_type: 'billing.usage_threshold',
           channel: 'EMAIL',
           is_enabled: true,
         },
@@ -18,7 +18,9 @@ describe('user-notification-preferences.validator', () => {
 
   it('validatePutUserNotificationPreferences rejects invalid preferences shape', () => {
     expect(() =>
-      validatePutUserNotificationPreferences({ preferences: [{ notification_type: 'x' }] }),
+      validatePutUserNotificationPreferences({
+        preferences: [{ notification_type: 'security.alert' }],
+      }),
     ).toThrow(ValidationError);
   });
 
@@ -27,7 +29,19 @@ describe('user-notification-preferences.validator', () => {
     // chk_user_notif_prefs_channel database check and surface as a 500.
     expect(() =>
       validatePutUserNotificationPreferences({
-        preferences: [{ notification_type: 'billing', channel: 'TELEPATHY', is_enabled: true }],
+        preferences: [
+          { notification_type: 'billing.usage_threshold', channel: 'TELEPATHY', is_enabled: true },
+        ],
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('validatePutUserNotificationPreferences rejects a notification_type outside the canonical set', () => {
+    expect(() =>
+      validatePutUserNotificationPreferences({
+        preferences: [
+          { notification_type: 'not.a.canonical.type', channel: 'EMAIL', is_enabled: true },
+        ],
       }),
     ).toThrow(ValidationError);
   });

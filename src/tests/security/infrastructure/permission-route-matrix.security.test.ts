@@ -57,9 +57,10 @@ function payloadForPermissionRoute(
     return { key: 'organization-logos/matrix-logo.png' };
   }
   if (route.path.endsWith('/notification-policies')) {
-    // `channel` must be a valid NOTIFICATION_CHANNELS member; an invalid value makes
-    // schema validation (400) preempt the permission check (403) this matrix asserts on.
-    return { notification_type: 'billing', channel: 'EMAIL' };
+    // `notification_type` and `channel` must both be valid NOTIFICATION_TYPES / NOTIFICATION_CHANNELS
+    // members; an invalid value makes schema validation (400) preempt the permission check (403)
+    // this matrix asserts on.
+    return { notification_type: 'billing.usage_threshold', channel: 'EMAIL' };
   }
   if (route.path.includes('/notification-policies/:notification_policy_id')) {
     return { default_enabled: false };

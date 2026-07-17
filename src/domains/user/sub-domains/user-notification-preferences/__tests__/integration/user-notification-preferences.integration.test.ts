@@ -58,7 +58,13 @@ describe('User Notification Preferences Sub-Domain — Integration', () => {
         url: testApiPath('/users/me/notification-preferences'),
         token,
         payload: {
-          preferences: [{ notification_type: 'billing', channel: 'TELEPATHY', is_enabled: true }],
+          preferences: [
+            {
+              notification_type: 'billing.usage_threshold',
+              channel: 'TELEPATHY',
+              is_enabled: true,
+            },
+          ],
         },
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -77,7 +83,7 @@ describe('User Notification Preferences Sub-Domain — Integration', () => {
         payload: {
           preferences: [
             {
-              notification_type: 'billing',
+              notification_type: 'billing.usage_threshold',
               channel: 'EMAIL',
               organization_id: 12345,
               is_enabled: true,
@@ -96,7 +102,9 @@ describe('User Notification Preferences Sub-Domain — Integration', () => {
         url: testApiPath('/users/me/notification-preferences'),
         token,
         payload: {
-          preferences: [{ notification_type: 'billing', channel: 'EMAIL', is_enabled: true }],
+          preferences: [
+            { notification_type: 'billing.usage_threshold', channel: 'EMAIL', is_enabled: true },
+          ],
         },
       });
       expect(response.statusCode).toBe(200);

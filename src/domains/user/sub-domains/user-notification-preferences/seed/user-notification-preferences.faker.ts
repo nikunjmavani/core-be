@@ -3,11 +3,11 @@
  * orchestrator's seeded `faker` so output is reproducible for a given `SEED`.
  */
 import type { Faker } from '@faker-js/faker';
-import { NOTIFICATION_CHANNELS } from '@/shared/constants/index.js';
+import { NOTIFICATION_CHANNELS, NOTIFICATION_TYPES } from '@/shared/constants/index.js';
 
 /** Generated opt-in row for `auth.user_notification_preferences`. */
 export interface BulkNotificationPreferenceProfile {
-  /** Notification type identifier (e.g. `security_alert`). */
+  /** Notification type identifier (e.g. `security.alert`). */
   notification_type: string;
   /** Delivery channel; constrained to the schema check (`EMAIL`/`SMS`/`PUSH`/`IN_APP`). */
   channel: string;
@@ -15,12 +15,6 @@ export interface BulkNotificationPreferenceProfile {
   is_enabled: boolean;
 }
 
-const NOTIFICATION_TYPES = [
-  'security_alert',
-  'product_update',
-  'billing_reminder',
-  'mention',
-] as const;
 const CHANNELS = NOTIFICATION_CHANNELS;
 
 /** Builds one fake notification-preference profile from the provided faker instance. */

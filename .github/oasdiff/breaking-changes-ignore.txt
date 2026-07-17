@@ -32,6 +32,14 @@ api post /api/v1/tenancy/organizations/{id}/notification-policies request proper
 #    database check (user-notification-preferences.validator.unit.test.ts).
 api put /api/v1/users/me/notification-preferences request property `preferences/items/channel` was restricted to a list of enum values
 
+# 5b. Both notification-type surfaces tightened `notification_type` to the canonical
+#     NOTIFICATION_TYPES enum (one shared vocabulary across user preferences, org policies, and
+#     emitted notifications), so an unknown type is a 422 at the edge instead of a free-form string
+#     that no preference could ever gate. Pinned by organization-notification-policy.validator.unit.test.ts
+#     and user-notification-preferences.validator.unit.test.ts (each rejects a non-canonical type).
+api post /api/v1/tenancy/organization/notification-policies request property `notification_type` was restricted to a list of enum values
+api put /api/v1/users/me/notification-preferences request property `preferences/items/notification_type` was restricted to a list of enum values
+
 # 6. Array maxItems bounds added as a security hardening measure (audit finding #1-#4).
 #    Clients sending >50 webhook event types, >200 notification preferences,
 #    >200 permission codes, or >10 preferred locales receive a 422 instead of

@@ -1,7 +1,7 @@
 /**
  * Organization-notification-policy bulk seeder — inserts one default `tenancy.organization_
  * notification_policies` row per organization in the registry for a fixed
- * `(notification_type, channel)` pair (`security_alert` / `EMAIL`).
+ * `(notification_type, channel)` pair (`security.alert` / `EMAIL`).
  *
  * Idempotency: the row is keyed by the deterministic natural key and the
  * `idx_org_notif_policy_unique(organization_id, notification_type, channel)` unique index, so
@@ -14,7 +14,7 @@ import type { SeedContext } from '@/scripts/seed/seed-contract.js';
 import { generateBulkNotificationPolicy } from './organization-notification-policy.faker.js';
 
 /** Fixed `(type, channel)` pair seeded per org so the natural-key unique index gates re-runs. */
-const SEED_NOTIFICATION_TYPE = 'security_alert';
+const SEED_NOTIFICATION_TYPE = 'security.alert';
 const SEED_CHANNEL = 'EMAIL';
 
 /**
