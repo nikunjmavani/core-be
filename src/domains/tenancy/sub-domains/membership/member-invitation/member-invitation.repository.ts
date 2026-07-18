@@ -19,7 +19,7 @@ import {
 /**
  * Cross-organization lookup result returned by the SECURITY DEFINER
  * `tenancy.resolve_member_invitation_lookup_by_public_id` function. Used by
- * `MemberInvitationService.accept/decline` so the caller can resolve the owning
+ * `MemberInvitationService.accept` so the caller can resolve the owning
  * organization without RLS context, then wrap the actual UPDATE in
  * `withOrganizationDatabaseContext`.
  */
@@ -45,7 +45,7 @@ export interface MemberInvitationListPagination {
  * Drizzle data access for `tenancy.member_invitations`. Org-scoped reads
  * (listing, find-by-public-id, accept/revoke/resend updates) run under the
  * caller's RLS context; cross-org lookups by email or by invitation public id
- * use SECURITY DEFINER SQL functions so the public accept/decline flows can
+ * use SECURITY DEFINER SQL functions so the public accept flow can
  * resolve the owning organization without an org GUC set up front.
  */
 export class MemberInvitationRepository {

@@ -35,7 +35,7 @@ export interface MembershipRoutesDeps {
  * Fastify plugin that registers active-organization membership routes (list,
  * get, create, update, delete, plus self-service leave / transfer-ownership)
  * and the member-invitation routes (org-scoped create/list/cancel/resend plus
- * the cross-org `/invitations/...` user-facing pending/accept/decline endpoints).
+ * the cross-org `/invitations/:invitation_id/accept` user-facing endpoint).
  * Permission-gated routes are protected with
  * `requireOrganizationPermission(MEMBERSHIP_*|INVITATION_MANAGE)`; public
  * accept has only a strict rate limit.

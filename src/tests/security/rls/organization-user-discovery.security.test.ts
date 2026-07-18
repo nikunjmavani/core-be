@@ -26,7 +26,7 @@ import { grantCoreBeAppRoleForTests } from '@/tests/helpers/rls-matrix.helper.js
  *      or an active membership. Existing `*_tenant_isolation` policies are unchanged.
  *   2. `tenancy.resolve_member_invitation_lookup_by_public_id` and
  *      `tenancy.list_pending_member_invitations_for_email` SECURITY DEFINER helpers
- *      let the invitation accept/decline/pending routes resolve the owning organization
+ *      let the invitation accept route resolve the owning organization
  *      without an active `app.current_organization_id` GUC, then wrap the actual write
  *      in `withOrganizationDatabaseContext`.
  *
