@@ -5,6 +5,7 @@ import { memberships } from '@/domains/tenancy/sub-domains/membership/membership
 import { member_invitations } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
+import { role_permissions } from '@/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.schema.js';
 import { BaseRepository } from '@/infrastructure/database/base-repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
@@ -342,6 +343,39 @@ export class MembershipRepository extends BaseRepository {
       // through to its `{ name: '' }` placeholder).
       .where(and(inArray(roles.id, [...roleInternalIds]), isNull(roles.deleted_at)));
     return new Map(rows.map((row) => [row.id, { public_id: row.public_id, name: row.name }]));
+  }
+
+  /**
+   * Returns the internal user ids of every ACTIVE member of an organization whose (non-deleted)
+   * role grants the given permission code — e.g. all `membership:manage` holders, for the
+   * invite-accepted notification fan-out.
+   *
+   * @remarks Runs under the org RLS context (`memberships` / `roles` / `role_permissions` are all
+   * org-scoped). `selectDistinct` collapses a user who holds the permission via more than one row.
+   */
+  async findUserIdsWithPermission(
+    organization_id: number,
+    permission_code: string,
+  ): Promise<number[]> {
+    const rows = await getRequestDatabase()
+      .selectDistinct({ user_id: memberships.user_id })
+      .from(memberships)
+      .innerJoin(roles, and(eq(roles.id, memberships.role_id), isNull(roles.deleted_at)))
+      .innerJoin(
+        role_permissions,
+        and(
+          eq(role_permissions.role_id, roles.id),
+          eq(role_permissions.permission_code, permission_code),
+        ),
+      )
+      .where(
+        and(
+          eq(memberships.organization_id, organization_id),
+          eq(memberships.status, 'ACTIVE'),
+          isNull(memberships.deleted_at),
+        ),
+      );
+    return rows.map((row) => row.user_id);
   }
 
   /**

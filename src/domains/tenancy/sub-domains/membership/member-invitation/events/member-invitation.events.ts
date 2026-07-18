@@ -6,6 +6,7 @@
 export const MEMBER_INVITATION_EVENT = {
   CREATED: 'tenancy.member_invitation.created',
   RESENT: 'tenancy.member_invitation.resent',
+  ACCEPTED: 'tenancy.member_invitation.accepted',
 } as const;
 
 /** Union of literal event codes defined by {@link MEMBER_INVITATION_EVENT}. */
@@ -24,4 +25,20 @@ export interface MemberInvitationEmailPayload {
   token: string;
   invitation_public_id: string;
   expires_in_days: number;
+}
+
+/**
+ * Payload carried by {@link MEMBER_INVITATION_EVENT} `ACCEPTED`. Recipients are resolved by the
+ * tenancy accept path (all `membership:manage` holders, minus the invitee) so the notify handler
+ * only fans out `createAndDispatchNotification` and never runs a cross-domain permission query.
+ */
+export interface MemberInvitationAcceptedPayload {
+  /** Internal user ids to notify — the org's `membership:manage` holders, excluding the invitee. */
+  recipient_user_ids: number[];
+  /** Internal id of the organization the invitee joined (the notification's `organization_id`). */
+  organization_id: number;
+  /** Display name of the organization, for the notification copy. */
+  organization_name: string;
+  /** Display name (or email) of the invitee who accepted, for the notification copy. */
+  invitee_name: string;
 }

@@ -453,6 +453,41 @@ describe('Membership Sub-Domain — Integration', () => {
       expect(updated!.joined_at).not.toBeNull();
     });
 
+    it('notifies the org membership-managers when the invitation is accepted (item #10)', async () => {
+      const {
+        organization,
+        invitation,
+        invitee,
+        rawToken,
+        token: adminToken,
+      } = await createPendingInvitation();
+      const inviteeToken = await generateTestToken({ userId: invitee.public_id });
+
+      const acceptResponse = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/tenancy/invitations/${invitation.public_id}/accept`),
+        token: inviteeToken,
+        payload: { token: rawToken },
+      });
+      expect(acceptResponse.statusCode).toBe(201);
+
+      // Regression for item #10: the inviter (a membership:manage holder) previously saw an EMPTY
+      // inbox after an invitee accepted. Now an in-app `membership.invite_accepted` row is created.
+      const notificationsResponse = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/notify/notifications'),
+        token: adminToken,
+        organizationPublicId: organization.public_id,
+      });
+      expect(notificationsResponse.statusCode).toBe(200);
+      const rows =
+        (notificationsResponse.json() as { data?: Array<{ type?: string; action_url?: string }> })
+          .data ?? [];
+      const inviteAccepted = rows.filter((row) => row.type === 'membership.invite_accepted');
+      expect(inviteAccepted).toHaveLength(1);
+      expect(inviteAccepted[0]?.action_url).toBe('/settings/members');
+    });
+
     it('rejects a manager PATCH that tries to activate a never-joined membership', async () => {
       const { organization, token, inviteeMembership } = await createPendingInvitation();
 
