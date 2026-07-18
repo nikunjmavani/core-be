@@ -35,6 +35,23 @@ const RUN = (__ENV.RUN || 'r').replace(/[^a-z0-9]/gi, ''); // run id -> unique r
 const REAUTH = (__ENV.REAUTH || 'false') === 'true'; // re-login on 401 (off for capacity runs — see req())
 const WRITE_EVERY = Number(__ENV.WRITE_EVERY || '1'); // run write phases every Nth iteration (read-dominant when >1)
 
+// Notification vocabulary — mirrors src/shared/constants/notification.constants.ts, a strict enum
+// since #964 (free-form types are 422'd). Each VU takes a distinct (type, channel) pair from the 9x4
+// grid so concurrent policy creates rarely collide on the unique (notification_type, channel) key;
+// phasePolicy's create->delete lifecycle frees the pair each iteration.
+const NOTIFICATION_TYPES = [
+  'system.welcome',
+  'system.maintenance',
+  'security.alert',
+  'billing.usage_threshold',
+  'billing.payment_succeeded',
+  'billing.payment_failed',
+  'membership.invite_accepted',
+  'subscription.updated',
+  'webhook.delivery_failed',
+];
+const NOTIFICATION_CHANNELS = ['EMAIL', 'SMS', 'WEB_PUSH', 'IN_APP'];
+
 const pool = new SharedArray('creds', () => JSON.parse(open('../data/credential-pool.json')));
 
 export const options = {
@@ -306,7 +323,9 @@ function phaseSelfService(_uniq) {
     language: 'en',
   });
   req('put-notif-prefs', 'PUT', '/users/me/notification-preferences', {
-    preferences: [{ notification_type: 'billing', channel: 'EMAIL', is_enabled: true }],
+    preferences: [
+      { notification_type: 'billing.usage_threshold', channel: 'EMAIL', is_enabled: true },
+    ],
   });
   think();
 }
@@ -354,14 +373,19 @@ function phaseApiKey(uniq) {
   think();
 }
 
-function phasePolicy(uniq) {
+function phasePolicy(_uniq) {
+  // Distinct (type, channel) pair per VU across the 9x4 valid combinations (see the note above).
+  const pairIndex = (__VU - 1) % (NOTIFICATION_TYPES.length * NOTIFICATION_CHANNELS.length);
+  const notificationType = NOTIFICATION_TYPES[pairIndex % NOTIFICATION_TYPES.length];
+  const notificationChannel =
+    NOTIFICATION_CHANNELS[Math.floor(pairIndex / NOTIFICATION_TYPES.length)];
   const r = req(
     'create-notif-policy',
     'POST',
     '/tenancy/organization/notification-policies',
     {
-      notification_type: `k6_${uniq}`.slice(0, 50),
-      channel: 'WEB_PUSH',
+      notification_type: notificationType,
+      channel: notificationChannel,
       default_enabled: true,
     },
     true,
