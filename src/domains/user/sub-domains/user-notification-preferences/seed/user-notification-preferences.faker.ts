@@ -9,7 +9,7 @@ import { NOTIFICATION_CHANNELS, NOTIFICATION_TYPES } from '@/shared/constants/in
 export interface BulkNotificationPreferenceProfile {
   /** Notification type identifier (e.g. `security.alert`). */
   notification_type: string;
-  /** Delivery channel; constrained to the schema check (`EMAIL`/`SMS`/`PUSH`/`IN_APP`). */
+  /** Delivery channel; constrained to the schema check (`EMAIL`/`SMS`/`WEB_PUSH`/`IN_APP`). */
   channel: string;
   /** Whether the user opted in for this `(type, channel)` pair. */
   is_enabled: boolean;

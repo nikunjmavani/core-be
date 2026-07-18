@@ -11,7 +11,7 @@ export const notificationPolicyIdParamsDto = z
 
 /**
  * Zod schema for `POST /api/v1/organization/notification-policies` —
- * binds a `notification_type` to a `channel` (`EMAIL`/`SMS`/`PUSH`/`IN_APP`)
+ * binds a `notification_type` to a `channel` (`EMAIL`/`SMS`/`WEB_PUSH`/`IN_APP`)
  * with default-on/mandatory toggles and an optional ISO `muted_until`.
  */
 export const createOrganizationNotificationPolicyDto = z

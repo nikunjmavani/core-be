@@ -18,7 +18,7 @@ import { organizations } from '@/domains/tenancy/sub-domains/organization/organi
  * `(notification_type, channel)` tuple, pinned to the user across every
  * organization context. Row-level security ties each row to the current user
  * (active, not soft-deleted), so the user-database context is required when
- * reading or writing. Channel values are constrained to `EMAIL`, `SMS`, `PUSH`,
+ * reading or writing. Channel values are constrained to `EMAIL`, `SMS`, `WEB_PUSH`,
  * `IN_APP` by check constraint.
  *
  * @remarks
@@ -66,7 +66,7 @@ export const user_notification_preferences = authSchema
       ),
       check(
         'chk_user_notif_prefs_channel',
-        sql`${table.channel} IN ('EMAIL', 'SMS', 'PUSH', 'IN_APP')`,
+        sql`${table.channel} IN ('EMAIL', 'SMS', 'WEB_PUSH', 'IN_APP')`,
       ),
       check('chk_user_notif_prefs_updated', sql`${table.updated_at} >= ${table.created_at}`),
       // sec-U7: defense-in-depth pin — non-null org_id is rejected at the

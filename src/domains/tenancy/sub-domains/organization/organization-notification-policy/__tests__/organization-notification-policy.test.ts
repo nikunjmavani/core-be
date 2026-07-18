@@ -291,7 +291,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token,
         payload: {
           notification_type: 'billing.usage_threshold',
-          channel: 'PUSH',
+          channel: 'WEB_PUSH',
           default_enabled: false,
           is_mandatory: false,
           muted_until: null,
@@ -300,7 +300,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
       expect(response.statusCode).toBe(201);
       const body = response.json() as { data: { notification_type: string; channel: string } };
       expect(body.data).toHaveProperty('notification_type', 'billing.usage_threshold');
-      expect(body.data).toHaveProperty('channel', 'PUSH');
+      expect(body.data).toHaveProperty('channel', 'WEB_PUSH');
     });
   });
 
