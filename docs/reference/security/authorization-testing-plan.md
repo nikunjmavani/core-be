@@ -97,10 +97,10 @@ Each row is a real attack pattern, its applicability here, the structural defens
 | 6 | **Nested-object exposure** (authorized parent leaks unauthorized children) | list/detail serializers with nested arrays | serializer scoping | Nested ids belong only to caller's scope |
 | 7 | **Function-level escalation** (member calls admin function) | every `PERM:` and `ROLE:` route | permission middleware | Without perm → `403`; with perm → not `403` |
 | 8 | **Vertical tier violation** (admin suspends/removes the **owner**) | `PATCH`/`DELETE /memberships/:id`, `leave`, `transfer-ownership` | domain guards | `ownerMembershipCannotBeModified` / `ownerCannotBeRemoved` / `onlyOwnerCanTransfer` / `ownerCannotLeave` → `403` |
-| 9 | **Grant-what-you-don't-hold** (role:manage grants `organization:delete` they lack) | `PUT roles/:id/permissions`, `POST roles`, `POST invitations`, api-key scopes | `assertCallerCanGrantPermissionCodes` | Over-grant → `403 cannotGrantPermissionNotHeld`; union (add+remove) enforced |
+| 9 | **Grant-what-you-don't-hold** (role:manage grants `organization:delete` they lack) | `PUT roles/:id/permissions`, `POST roles`, `POST memberships`, api-key scopes | `assertCallerCanGrantPermissionCodes` | Over-grant → `403 cannotGrantPermissionNotHeld`; union (add+remove) enforced |
 | 10 | **Token / claim forgery** (mint token with foreign `org`) | all org-scoped routes | membership re-check on `org` claim | Foreign `org` claim → `403` (no membership) |
 | 11 | **JWT tampering / alg confusion** | all authed routes | RS256 verify | Tampered/`alg:none`/wrong-key → `401` |
-| 12 | **Email-targeted resource hijack** (accept an invite addressed to someone else) | `POST invitations/:id/{accept,decline}` | email-match guard | Caller email ≠ invite email → `403` |
+| 12 | **Email-targeted resource hijack** (accept an invite addressed to someone else) | `POST invitations/:id/accept` | email-match guard | Caller email ≠ invite email → `403` |
 | 13 | **API-key escalation** (key grants perms) | api-key principal on grant paths | fail-closed (no acting user) | Key cannot grant → `403` |
 
 ---
@@ -180,7 +180,6 @@ A global test banning the unscoped `findByPublicId` from user-scoped service cod
 | `POST /uploads/:upload_id/confirm` | user | user B | 404 + still PENDING | app-check `row.user_id` | ➕ e2e + verify |
 | `GET /users/me/data-export/:data_export_id` | user | user B | 404 | `(public_id,user_id)` + user-RLS | ➕ e2e |
 | `POST /tenancy/invitations/:invitation_id/accept` | email | wrong email | 403 + no membership | email-match | ➕ e2e + verify |
-| `POST /tenancy/invitations/:invitation_id/decline` | email | wrong email | 403 | `declineOwnInvitationOnly` | ➕ e2e |
 
 ### 6.2 Class B — invariant / tier (Delta B)
 
@@ -192,7 +191,7 @@ A global test banning the unscoped `findByPublicId` from user-scoped service cod
 | `DELETE /tenancy/organization/memberships/:membership_id` | tier | admin targeting owner | 403 + owner intact | `ownerCannotBeRemoved` | 🟡→➕ e2e |
 | `PUT /tenancy/organization/roles/:role_id/permissions` | grant | `role:manage` over-grants | 403 + role unchanged | `assertCallerCanGrant…` | 🟡→➕ e2e + verify |
 | `POST /tenancy/organization/roles` | grant | over-grant on create | 403 | `assertCallerCanGrant…` | 🟡→➕ e2e |
-| `POST /tenancy/organization/invitations` | grant | invite with role > caller holds | 403 | grant-grantability | 🟡→➕ e2e |
+| `POST /tenancy/organization/memberships` | grant | add member with role > caller holds | 403 | grant-grantability | 🟡→➕ e2e |
 | `POST` / `PATCH /tenancy/organization/api-keys[/:api_key_id]` | grant | key scope > caller holds | 403 | grant-grantability | 🟡→➕ e2e |
 
 ### 6.3 Class C — cross-org BOLA (already systematic; assert breadth)
