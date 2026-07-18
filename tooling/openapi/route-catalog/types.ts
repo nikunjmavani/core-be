@@ -29,6 +29,4 @@ export type ParsedRoute = {
   idempotencyRequired?: boolean;
   /** Organization scope (from route-org-scope.json): `both` or team-only. */
   orgScope?: OrgScope;
-  /** True when the route emits deprecation headers (`applyDeprecatedEndpointHeaders`). */
-  deprecated?: boolean;
 };

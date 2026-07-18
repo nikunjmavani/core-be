@@ -45,7 +45,7 @@ export function listSearchSortSchema<const Fields extends readonly [string, ...s
       q: z.string().trim().min(1).max(SEARCH_TERM_MAX_LENGTH).optional(),
       sort: z.enum(sortFields).optional(),
       // Optional (not `.default`) so OpenAPI emits it as an optional query param — a defaulted
-      // param serializes as `required`, which oasdiff flags as a breaking change. Defaulted to
+      // param serializes as `required`, a breaking contract change. Defaulted to
       // ascending inside resolveKeysetSort instead.
       order: z.enum(['asc', 'desc']).optional(),
     })

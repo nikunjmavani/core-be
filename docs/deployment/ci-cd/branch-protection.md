@@ -80,7 +80,7 @@ Post-merge Docker (Trivy + GHCR), SBOM, API docs, deploy, and release automation
 
 ### Advisory PR jobs (run but not in the aggregate)
 
-These run on every non-docs-only PR and display on the PR, but are **not** in `quality-gate.needs`, so they do not block merge: `agent-os evals` (internal tooling gate, only runs on `agent-os/**` changes) and `OpenAPI breaking-change` (expected to fail on deliberate major-version breaks, which are acknowledged via the err-ignore list rather than a merge block). Promote one to blocking by adding its job id to `quality-gate.needs` **and** to `REQUIRED_LANES` in [`pr-quality-gate.policy.unit.test.ts`](../../../src/tests/unit/ci/pr-quality-gate.policy.unit.test.ts).
+These run on every non-docs-only PR and display on the PR, but are **not** in `quality-gate.needs`, so they do not block merge: `agent-os evals` (internal tooling gate, only runs on `agent-os/**` changes). Promote one to blocking by adding its job id to `quality-gate.needs` **and** to `REQUIRED_LANES` in [`pr-quality-gate.policy.unit.test.ts`](../../../src/tests/unit/ci/pr-quality-gate.policy.unit.test.ts).
 
 ### Skipped PR CI jobs on docs-only pull requests
 

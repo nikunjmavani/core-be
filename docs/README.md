@@ -144,7 +144,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [reference/architecture/typescript-strictness.md](reference/architecture/typescript-strictness.md) | TypeScript strictness settings and rationale. |
 | [reference/architecture/scripts-layout.md](reference/architecture/scripts-layout.md) | `src/scripts/` layout and script conventions. |
 | [reference/architecture/production-audit-decisions.md](reference/architecture/production-audit-decisions.md) | Audit decisions: seat-entitlement policy, `updated_at` triggers, ops-polish, scale milestones. |
-| [reference/api/api-versioning.md](reference/api/api-versioning.md)                                                 | `/api/v1`, deprecation, `Sunset` / `Deprecation` headers.                              |
+| [reference/api/api-versioning.md](reference/api/api-versioning.md)                                                 | `/api/v1` major-version path prefix, `API-Version` header.                             |
 | [reference/api/response-codes.md](reference/api/response-codes.md)                                                 | Method→status policy, when to use each error code, error envelope.                     |
 | [reference/api/route-consistency-and-org-model.md](reference/api/route-consistency-and-org-model.md)               | One route surface for personal/team orgs, the `capabilities` object + 422 backstop, route-catalog S/I/O columns, `/auth/me/*` vs login flow. |
 | [reference/api/frontend-auth-guide.md](reference/api/frontend-auth-guide.md)                                       | Frontend SPA auth: Bearer + reactive refresh, headers per route, org switching.        |

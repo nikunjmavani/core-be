@@ -32,7 +32,7 @@ Layer 3 (CI)      -- Full validation, Semgrep SAST, Gitleaks full-repo, tests
 | `lint-staged.config.mjs`            | 2     | Which files get linted/formatted on commit (at repo root)                                                                                                                                                     |
 | `.gitleaks.toml`                    | 2 + 3 | Gitleaks allowlist (ignored paths)                                                                                                                                                                            |
 | `.semgrepignore`                    | 3     | Semgrep ignored paths in CI                                                                                                                                                                                   |
-| `.github/workflows/pr-ci.yml`       | 3     | CI jobs: `lint`, `typecheck`, `static-sync`, `unit`, `security-audit`, `security-secrets`, `security-sast`, `rls-security`, `build-verify`, `contract-plus-property`, `migration-lint`, `openapi-breaking-change` |
+| `.github/workflows/pr-ci.yml`       | 3     | CI jobs: `lint`, `typecheck`, `static-sync`, `unit`, `security-audit`, `security-secrets`, `security-sast`, `rls-security`, `build-verify`, `contract-plus-property`, `migration-lint` |
 | `.github/workflows/pr-governance.yml` | 3   | Commitlint on every push to `main`                                                                                                                                                                            |
 
 ## When to run this skill

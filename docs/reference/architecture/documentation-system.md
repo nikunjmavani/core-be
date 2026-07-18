@@ -171,7 +171,7 @@ flowchart LR
 | i18n | [internationalization.md](../runtime/internationalization.md) | i18n-message-guard | Key format, locale files |
 | CSRF / sessions | [csrf-and-session-cookies.md](../security/csrf-and-session-cookies.md) | production-hardening-guard | Cookie model, Origin checks |
 | Data lifecycle | [data-lifecycle-deletion.md](../data/data-lifecycle-deletion.md) | sql-design-guard, db-migration-maintainer | Soft-delete, retention, immutable ledgers |
-| API versioning | [api-versioning.md](../api/api-versioning.md) | route-schema-doc-guard | Deprecation headers, version prefix |
+| API versioning | [api-versioning.md](../api/api-versioning.md) | route-schema-doc-guard | Version prefix, API-Version header |
 | Chaos testing | [chaos-testing.md](../reliability/chaos-testing.md) | chaos-test-maintainer | Toxiproxy setup, scenarios |
 | Contract tests | [contract-tests.md](../testing/contract-tests.md) | contract-test-maintainer | Stripe/Resend/S3 fixtures |
 | Load testing | [load-testing.md](../testing/load-testing.md) | structure-maintainer | k6 scenarios, npm scripts |

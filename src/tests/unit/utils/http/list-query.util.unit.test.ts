@@ -31,7 +31,7 @@ describe('list-query.util', () => {
   describe('listSearchSortSchema', () => {
     it('parses q/sort/order; order is optional (defaulted to asc in resolveKeysetSort, not the schema)', () => {
       // No `.default` on order so OpenAPI emits it as an optional query param (a defaulted param
-      // serializes as `required`, which oasdiff flags as breaking).
+      // serializes as `required`, a breaking contract change).
       const parsed = schema.parse({ q: 'ann', sort: 'name' });
       expect(parsed).toMatchObject({ q: 'ann', sort: 'name' });
       expect('order' in parsed).toBe(false);

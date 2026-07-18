@@ -82,20 +82,6 @@ function buildIdempotencySection(routes: ParsedRoute[]): string[] {
   ];
 }
 
-function buildDeprecatedSection(routes: ParsedRoute[]): string[] {
-  const deprecated = routes
-    .filter((route) => route.deprecated)
-    .map((route) => `    ${route.method} ${route.fullPath}`);
-  return [
-    SEPARATOR,
-    `  DEPRECATED ROUTES (${deprecated.length}) — Sunset / Deprecation headers`,
-    SEPARATOR,
-    '',
-    ...(deprecated.length > 0 ? deprecated : ['  (none)']),
-    '',
-  ];
-}
-
 export function buildCatalogContent(routes: ParsedRoute[]): string {
   const permissionMap = loadPermissionConstantMap();
 
@@ -182,7 +168,6 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
   );
 
   lines.push(...buildIdempotencySection(sortedRoutes));
-  lines.push(...buildDeprecatedSection(sortedRoutes));
   lines.push(...buildPermissionCodesSection(permissionMap));
 
   return lines.join('\n');

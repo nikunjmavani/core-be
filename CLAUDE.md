@@ -234,7 +234,7 @@ src/shared/
     infrastructure/logger.util.ts   # Pino logger
     http/response.util.ts           # successResponse, paginatedResponse
     http/request.util.ts            # getRequestIdentifier, requireAuth
-    http/api-versioning.util.ts     # buildPublicApiPrefix; Sunset / Deprecation headers
+    http/api-versioning.util.ts     # buildPublicApiPrefix; applyPublicApiVersionHeader
   middlewares/                # registered via middlewares/index.ts → registerMiddleware()
     core/                     # auth, error-handler, idempotency, compression, i18n, metrics, health
     rate-limit/               # global + per-route limits
@@ -281,7 +281,7 @@ Typical flow: `service` → `eventBus.emit` → handler → `recordOutboxEmail()
 
 - **Route flow**: HTTP Request → Middleware → Controller → Service → Repository
 - **DI flow**: Container (repos → services) → Routes (controllers) → `src/routes.ts` (domain containers + route registration)
-- **API versioning**: Major versions use `/api/v1`, …; deprecation policy and standard `Sunset` / `Deprecation` response headers — see **`docs/reference/api/api-versioning.md`** and `src/shared/utils/http/api-versioning.util.ts`.
+- **API versioning**: Major versions use `/api/v1`, …; additive/non-breaking changes ship on the same major, a breaking change gets a new major prefix — see **`docs/reference/api/api-versioning.md`** and `src/shared/utils/http/api-versioning.util.ts`.
 - **Data lifecycle**: Soft-delete (`deleted_at`), revocation vs immutable billing ledgers, session/audit retention — see **`docs/reference/data/data-lifecycle-deletion.md`**.
 - **Controllers**: Thin layer; export `create<Resource>Controller(service)` or `create<Resource>Controller(container)` returning handler map. Use `getRequestIdentifier()` and `requireAuth()` from `@/shared/utils/http/request.util.js`.
 - **Validation**: DTO (Zod schemas in `.dto.ts`), Validator (function-based, calls `.safeParse()`, throws `ValidationError`)
@@ -415,7 +415,6 @@ Local SonarQube quality gate (pre-commit): `pnpm sonar:up` / `sonar:scan` / `son
 - `pnpm docs:upload:scalar` — publish the OpenAPI document to the Scalar Registry (requires `SCALAR_API_KEY` + `SCALAR_NAMESPACE`; optional `SCALAR_SLUG`, default `core-be`)
 - `pnpm docs:upload:hosted` — run both hosted uploads (Postman workspace + Scalar Registry)
 - `pnpm docs:all` — generate OpenAPI spec + Postman Collection in one step
-- `pnpm docs:breaking` — local mirror of the CI oasdiff breaking-change gate (pinned checksum-verified binary in `.cache/oasdiff/`; base spec from `origin/main` worktree; honors `.github/oasdiff/breaking-changes-ignore.txt`)
 - `pnpm test` — run all Vitest tests (serial)
 - `pnpm test:unit` — unit only (`--project unit` in `tooling/vitest/projects.ts`: `src/tests/unit` + domain `__tests__/unit/`)
 - `pnpm test:integration` — `src/tests/integration`

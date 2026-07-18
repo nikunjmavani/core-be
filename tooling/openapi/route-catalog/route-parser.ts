@@ -13,7 +13,7 @@ import {
   SUPPLEMENTAL_ROUTES,
 } from './constants.js';
 import { listDomainRouteFiles } from './file-collectors.js';
-import { classifyDeprecated, classifyIdempotency } from './idempotency-classifier.js';
+import { classifyIdempotency } from './idempotency-classifier.js';
 import { loadDomainPrefixMap, loadPermissionConstantMap } from './prefix-map.js';
 import type { OrgScope, ParsedRoute, RegistryAccess, RouteAccess } from './types.js';
 
@@ -95,7 +95,6 @@ function parseRouteFile(
         subDomain,
         subDomainLabel,
         idempotencyRequired: classifyIdempotency(snippet) || undefined,
-        deprecated: classifyDeprecated(snippet) || undefined,
       }),
     );
   }

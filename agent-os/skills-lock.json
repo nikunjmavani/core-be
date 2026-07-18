@@ -5,7 +5,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/api-contract-guard/SKILL.md",
-      "computedHash": "50505012bd8bcbdd14d0fcfb334907be87a93a0f2dc31254ff9889b1d47d074c"
+      "computedHash": "1d5c8f22afa1288e7ff8724055627baef5227787bd978b5bebe41db46d002f88"
     },
     "auto-implement": {
       "source": "local",
@@ -41,7 +41,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/code-quality-guard/SKILL.md",
-      "computedHash": "8ff7a4751ac4fc625451be1a351170985ef00e6cd8283238d2ffd900b42c7158"
+      "computedHash": "dff5d26d45b19a6c767b57877e7b1edc0b4bc7c394d9aff2929f5b945ab74ebf"
     },
     "code-smells-and-best-practices": {
       "source": "local",

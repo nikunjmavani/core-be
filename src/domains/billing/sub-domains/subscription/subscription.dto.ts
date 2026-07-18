@@ -59,7 +59,7 @@ export type ChangePlanInput = z.infer<typeof ChangePlanDto>;
  * @remarks
  * `limit` is `.optional()` (not `.default`) so the OpenAPI query param stays optional — these
  * params are newly added to a pre-existing route, and a defaulted param serializes as `required`,
- * which oasdiff flags as a breaking change. The default is applied in the service instead.
+ * which is a breaking contract change. The default is applied in the service instead.
  */
 export const listInvoicesQueryDto = z
   .object({
