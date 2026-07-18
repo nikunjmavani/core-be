@@ -4,6 +4,7 @@ import { OAuthService } from '@/domains/auth/sub-domains/auth-method/oauth/oauth
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-method.service.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
+import type { OAuthProfile } from '@/domains/auth/sub-domains/auth-method/oauth/oauth.types.js';
 
 vi.mock('@/domains/auth/sub-domains/auth-method/oauth/oauth-state.js', () => ({
   assertOAuthProviderSupported: vi.fn((provider: string) => provider),
@@ -21,18 +22,20 @@ vi.mock('@/domains/auth/sub-domains/auth-method/oauth/providers/google-oauth.pro
   buildGoogleOAuthRedirectUrl: vi.fn().mockReturnValue('https://google.example/oauth'),
   exchangeGoogleOAuthCode: vi.fn().mockResolvedValue({
     email: 'oauth@example.com',
-    first_name: 'OAuth',
-    last_name: 'User',
-  }),
+    name: 'OAuth User',
+    avatar_url: 'https://google.example/avatar.png',
+    provider_user_id: 'google-user-123',
+  } satisfies OAuthProfile),
 }));
 
 vi.mock('@/domains/auth/sub-domains/auth-method/oauth/providers/github-oauth.provider.js', () => ({
   buildGitHubOAuthRedirectUrl: vi.fn().mockReturnValue('https://github.example/oauth'),
   exchangeGitHubOAuthCode: vi.fn().mockResolvedValue({
     email: 'github@example.com',
-    first_name: 'Git',
-    last_name: 'Hub',
-  }),
+    name: 'Git Hub',
+    avatar_url: 'https://github.example/avatar.png',
+    provider_user_id: 'github-user-456',
+  } satisfies OAuthProfile),
 }));
 
 vi.mock('@/domains/auth/sub-domains/auth-method/oauth/oauth-user-session.js', () => ({
