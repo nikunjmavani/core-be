@@ -13,6 +13,7 @@ import { outboundCall } from '@/infrastructure/outbound/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { type S3HeadResult, isS3NotFoundError } from '@/infrastructure/storage/s3-error.util.js';
 import { buildPublicMediaUrl } from '@/infrastructure/storage/public-media-url.util.js';
+import { buildSharedS3ClientConfig } from '@/infrastructure/storage/s3-client-config.util.js';
 import type {
   ObjectStoragePort,
   PresignedUploadPost,
@@ -25,22 +26,13 @@ function getS3Client(): S3Client {
   if (s3Client) return s3Client;
 
   s3Client = new S3Client({
-    region: env.S3_REGION ?? 'us-east-1',
-    maxAttempts: env.S3_MAX_ATTEMPTS,
+    ...buildSharedS3ClientConfig(),
     // Bound each attempt so a stalled S3 endpoint can't hang a request/worker indefinitely. Without
     // an explicit handler the AWS SDK uses Node's default (effectively unbounded socket) timeout.
     requestHandler: {
       requestTimeout: env.S3_REQUEST_TIMEOUT_MS,
       connectionTimeout: env.S3_CONNECTION_TIMEOUT_MS,
     },
-    ...(env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY
-      ? {
-          credentials: {
-            accessKeyId: env.S3_ACCESS_KEY_ID,
-            secretAccessKey: env.S3_SECRET_ACCESS_KEY,
-          },
-        }
-      : {}),
   });
 
   return s3Client;

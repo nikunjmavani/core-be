@@ -584,6 +584,18 @@ const envSchemaBase = z.object({
   /** TCP connection-establishment timeout (ms) for S3 requests. */
   S3_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(500).max(60000).default(5000),
   /**
+   * Custom S3-compatible endpoint (MinIO / Cloudflare R2 / LocalStack) for local dev or non-AWS
+   * storage. Unset in production → the AWS SDK targets the standard AWS S3 endpoint for `S3_REGION`.
+   * Both API calls and presigned URLs sign against this endpoint automatically when set.
+   */
+  S3_ENDPOINT: z.url().optional(),
+  /**
+   * Force path-style S3 addressing (`<endpoint>/<bucket>/<key>` instead of virtual-hosted
+   * `<bucket>.<endpoint>/<key>`). Most S3-compatible endpoints (MinIO, LocalStack) require it;
+   * ignored unless `S3_ENDPOINT` is set.
+   */
+  S3_FORCE_PATH_STYLE: booleanString('false'),
+  /**
    * audit-#13: public base URL (e.g. a CloudFront distribution) for PUBLIC media only
    * (avatars, organization logos). When set, `getObjectUrl` builds links from this base instead
    * of the raw `https://<bucket>.s3.<region>.amazonaws.com/<key>` form, so the S3 bucket can keep

@@ -12,6 +12,7 @@ import { outboundCall } from '@/infrastructure/outbound/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { type S3HeadResult, isS3NotFoundError } from '@/infrastructure/storage/s3-error.util.js';
 import { buildPublicMediaUrl } from '@/infrastructure/storage/public-media-url.util.js';
+import { buildSharedS3ClientConfig } from '@/infrastructure/storage/s3-client-config.util.js';
 import { ConfigurationError } from '@/shared/errors/index.js';
 
 const S3_BUCKET_NOT_CONFIGURED_MESSAGE = 'S3_BUCKET is not configured';
@@ -21,18 +22,7 @@ let s3Client: S3Client | null = null;
 function getS3Client(): S3Client {
   if (s3Client) return s3Client;
 
-  s3Client = new S3Client({
-    region: env.S3_REGION ?? 'us-east-1',
-    maxAttempts: env.S3_MAX_ATTEMPTS,
-    ...(env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY
-      ? {
-          credentials: {
-            accessKeyId: env.S3_ACCESS_KEY_ID,
-            secretAccessKey: env.S3_SECRET_ACCESS_KEY,
-          },
-        }
-      : {}),
-  });
+  s3Client = new S3Client(buildSharedS3ClientConfig());
 
   return s3Client;
 }

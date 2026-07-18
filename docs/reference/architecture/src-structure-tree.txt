@@ -1291,6 +1291,7 @@ src/
     │       └── unit/
     │       │   ├── public-media-url.util.unit.test.ts
     │       │   ├── s3-adapter.unit.test.ts
+    │       │   ├── s3-client-config.unit.test.ts
     │       │   ├── s3-error.util.unit.test.ts
     │       │   ├── storage.service.presigned-put.unit.test.ts
     │       │   ├── storage.service.put-object-buffer.unit.test.ts
@@ -1298,6 +1299,7 @@ src/
     │   ├── object-storage.port.ts
     │   ├── public-media-url.util.ts
     │   ├── s3-adapter.ts
+    │   ├── s3-client-config.util.ts
     │   ├── s3-error.util.ts
     │   ├── storage.overview.md
     │   └── storage.service.ts
@@ -1991,6 +1993,8 @@ src/
     │   │   │   ├── __snapshots__/
     │   │   │   │   └── email-template.snapshot.unit.test.ts.snap
     │   │   │   └── email-template.snapshot.unit.test.ts
+    │   │   ├── outbound/
+    │   │   │   └── outbound-redaction.unit.test.ts
     │   │   ├── queue/
     │   │   │   ├── bullmq-producer-connection.unit.test.ts
     │   │   │   └── scheduler.unit.test.ts
