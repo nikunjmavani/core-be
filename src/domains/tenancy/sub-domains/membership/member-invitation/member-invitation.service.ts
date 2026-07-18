@@ -198,8 +198,8 @@ export class MemberInvitationService {
     const parsed = validateAcceptMemberInvitation(body);
     // sec-T4: previously accept was unauthenticated, so anyone with the
     // invitation URL could flip the victim's pending membership to ACTIVE.
-    // Bind the acting user's email to the invitee email — mirrors the
-    // decline path which has always had this check.
+    // Bind the acting user's email to the invitee email so a forwarded
+    // invitation link cannot be accepted by anyone but the invitee.
     if (!this.userService) {
       throw new Error(
         'UserService is not configured on MemberInvitationService. Wire it via tenancy.container.',

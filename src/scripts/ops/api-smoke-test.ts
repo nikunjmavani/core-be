@@ -240,12 +240,6 @@ function buildDomainProbes(): RouteProbe[] {
       authenticated: true,
       expectedStatus: 200,
     },
-    {
-      name: 'GET /api/v1/tenancy/invitations/pending',
-      path: `${API_PREFIX}/tenancy/invitations/pending`,
-      authenticated: true,
-      expectedStatus: 200,
-    },
 
     // ── User ──────────────────────────────────────────────────────────
     {

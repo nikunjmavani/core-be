@@ -27,7 +27,7 @@ Answers "is every route — organization-level included — covered, and what is
 
 > **Reconciliation with integration tests:** the per-domain `*.integration` suites already cover more than the dedicated `security/` suite. For example `membership.integration` asserts cross-org `404` (invitation revoke/resend, membership-permission lookup), owner-tier `403` (`transfer-ownership`, owner-cannot-leave), and email-match `403` (decline someone else's invitation). The gaps below are what remains **after** counting those.
 
-1. ~~**Cross-user (intra-tenant) BOLA — `auth-by-id`.**~~ **RESOLVED (Phase 2).** `object-ownership.security.test.ts` denies User B every User A object (uploads, notifications, data-export, sessions/MFA/auth-methods under step-up) with `verifyNoMutation`; `invitation-email.security.test.ts` covers the email-bound accept/decline.
+1. ~~**Cross-user (intra-tenant) BOLA — `auth-by-id`.**~~ **RESOLVED (Phase 2).** `object-ownership.security.test.ts` denies User B every User A object (uploads, notifications, data-export, sessions/MFA/auth-methods under step-up) with `verifyNoMutation`; `invitation-email.security.test.ts` covers the email-bound accept.
 2. ~~**Cross-org BOLA e2e — `org-by-id` resources.**~~ **RESOLVED (Phase 2).** `cross-org-resource.security.test.ts` (reads → 404 + same-org 200) and `cross-org-mutation.security.test.ts` (writes → 404, incl. subscription/api-key/notification-policy/webhook/role/membership/invitation) cover every org-by-id route.
 3. **Grant-grantability on create paths.** The role-permission **PUT** is now e2e-asserted (`tier-and-grant.security.test.ts`: a manager cannot grant a permission they do not hold, and cannot reach across orgs). Residual: create paths (`POST roles`, `POST invitations`, api-key scopes) are not all asserted at the route level.
 4. **Global-role denial — `global-role`.** **RESOLVED for the by-id surface (Phase 2):** `admin-only.security.test.ts` asserts a regular user is denied on all five `/users/:user_id` admin routes (GET/PATCH/DELETE/suspend/unsuspend). Residual: the collection `GET /users`, `audit/logs`, and `mcp` admin routes are still only sampled.
@@ -224,6 +224,6 @@ Answers "is every route — organization-level included — covered, and what is
 
 ## How the gaps close
 
-- **Phase 1 (done):** `route-authorization-model.json` (48 entries) declares the model for every object-by-id protected route; `authz-model-coverage.global.test.ts` fails CI if a by-id route is added without a model entry.
+- **Phase 1 (done):** `route-authorization-model.json` (49 entries) declares the model for every object-by-id protected route; `authz-model-coverage.global.test.ts` fails CI if a by-id route is added without a model entry.
 - **Phase 2 (done):** the matrix in `src/tests/security/authz/` (80 tests, 7 suites) asserts attacker outcomes e2e (cross-user, cross-org read + write, tier, grant, email, global-role) with `verifyNoMutation`. `authz-runtime-coverage.global.test.ts` now fails CI if a modelled route lacks a mapped runtime attack test — so gaps 1, 2, 4 cannot silently reappear. Closes gaps 1–2 and 4 (by-id surface).
 - **Phase 3 (next):** caller-scope assertions for `auth-self-mutation` (gap 5), grant-grantability on create paths (gap 3 residual), and business-flow abuse (gap 6).
