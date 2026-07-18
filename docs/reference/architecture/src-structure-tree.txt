@@ -110,7 +110,8 @@ src/
     │   ├── shared/
     │   │   ├── __tests__/
     │   │   │   └── unit/
-    │   │   │   │   └── audit-login.util.unit.test.ts
+    │   │   │   │   ├── audit-login.util.unit.test.ts
+    │   │   │   │   └── complete-first-factor-auth.unit.test.ts
     │   │   ├── audit-login.util.ts
     │   │   └── complete-first-factor-auth.ts
     │   ├── sub-domains/
@@ -441,8 +442,9 @@ src/
     │   │   │   │   │   └── notification.integration.test.ts
     │   │   │   │   └── unit/
     │   │   │   │   │   ├── events/
-    │   │   │   │   │       └── worker/
+    │   │   │   │   │       ├── worker/
     │   │   │   │   │       │   └── notification-retention.worker.unit.test.ts
+    │   │   │   │   │       └── member-invitation-accepted.event-handlers.unit.test.ts
     │   │   │   │   │   ├── notification-dispatch.service.unit.test.ts
     │   │   │   │   │   ├── notification-email-content.unit.test.ts
     │   │   │   │   │   ├── notification.controller.unit.test.ts
@@ -454,6 +456,8 @@ src/
     │   │   │   │   │   ├── notification.service.unit.test.ts
     │   │   │   │   │   ├── notification.validator.unit.test.ts
     │   │   │   │   │   └── notification.worker.unit.test.ts
+    │   │   │   ├── events/
+    │   │   │   │   └── member-invitation-accepted.event-handlers.ts
     │   │   │   ├── queues/
     │   │   │   │   ├── notification.job.schema.ts
     │   │   │   │   └── notification.queue.ts
@@ -1341,8 +1345,6 @@ src/
     │   ├── verify-base.ts
     │   └── worker-drain.ts
     ├── seed/
-    │   ├── __tests__/
-    │   │   └── full-seed.integration.test.ts
     │   ├── bulk-config.ts
     │   ├── bulk.ts
     │   ├── ensure-demo-admin.ts
@@ -1491,6 +1493,7 @@ src/
     │   ├── auth/
     │   │   ├── __tests__/
     │   │   │   └── unit/
+    │   │   │   │   ├── recent-step-up.factor.unit.test.ts
     │   │   │   │   └── recent-step-up.session-binding.unit.test.ts
     │   │   ├── account-status.util.ts
     │   │   ├── authorization.util.ts
@@ -1692,6 +1695,7 @@ src/
     │   ├── public-route-allowlist.global.test.ts
     │   ├── rls-context-network-isolation.global.test.ts
     │   ├── route-completeness.global.test.ts
+    │   ├── seed-public-id-entity.global.test.ts
     │   ├── service-cross-domain-boundary.global.test.ts
     │   ├── stryker-mutate-paths.global.test.ts
     │   ├── system-validation.global.test.ts
@@ -1766,6 +1770,7 @@ src/
     │   │   ├── webhook-delivery-race.integration.test.ts
     │   │   └── webhook-reclaim.integration.test.ts
     │   ├── empty-body-json-parser.integration.test.ts
+    │   ├── full-seed.integration.test.ts
     │   ├── integration.overview.md
     │   ├── mcp-route.integration.test.ts
     │   ├── ops-route-smoke.integration.test.ts
