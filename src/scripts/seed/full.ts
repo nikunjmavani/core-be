@@ -6,6 +6,7 @@
  */
 import '@/shared/config/load-env-files.js';
 import { createHash, randomBytes } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { closeDatabase } from './helpers.js';
 import {
   seedPermissions,
@@ -46,7 +47,8 @@ const ADMIN_PERMISSION_CODES = SYSTEM_PERMISSIONS.map((permission) => permission
  * Orchestrator for the full demo seed: applies the minimal seed (permissions,
  * plans, demo user) and then layers on faker-generated organizations,
  * memberships, invitations, and role wiring. Idempotent — re-running upserts
- * existing rows. Closes the DB connection on completion.
+ * existing rows. Does not manage the DB connection; the CLI entrypoint below
+ * drains the pool after it resolves, so a test may call it directly.
  */
 export async function runFullSeed(): Promise<void> {
   logger.info('seed.full: starting');
@@ -155,15 +157,18 @@ export async function runFullSeed(): Promise<void> {
 }
 
 /**
- * `closeDatabase` always runs (success or failure). Without it, a thrown error here
- * would `process.exit(1)` before the postgres.js pool finishes draining and leave
- * aborted connections behind in Postgres.
+ * Auto-run only when executed directly (`tsx src/scripts/seed/full.ts`), never on import — so a
+ * test can import {@link runFullSeed} without triggering a seed or tearing down the shared pool.
+ * `closeDatabase` always runs (success or failure) so the postgres.js pool drains before exit;
+ * without it a thrown error would `process.exit(1)` and leave aborted connections behind in Postgres.
  */
-runFullSeed()
-  .catch((error) => {
-    logger.error({ error }, 'seed.full: failed');
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await closeDatabase();
-  });
+if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1]) {
+  runFullSeed()
+    .catch((error) => {
+      logger.error({ error }, 'seed.full: failed');
+      process.exitCode = 1;
+    })
+    .finally(async () => {
+      await closeDatabase();
+    });
+}
