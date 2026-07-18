@@ -16,10 +16,13 @@ import {
 import { serializeMemberInvitation } from './member-invitation.serializer.js';
 import { hashInvitationToken, generateInvitationToken } from './member-invitation.token.js';
 import { invalidatePermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import { buildDomainEvent, eventBus } from '@/core/events/event-bus.js';
 import {
   MEMBER_INVITATION_EVENT,
   type MemberInvitationEmailPayload,
+  type MemberInvitationAcceptedPayload,
 } from '@/domains/tenancy/sub-domains/membership/member-invitation/events/member-invitation.events.js';
 
 const MEMBER_INVITATION_RESOURCE = 'Member invitation';
@@ -238,6 +241,40 @@ export class MemberInvitationService {
           (await this.organizationRepository.resolveUserPublicIdByInternalId(
             activatedMembership.user_id,
           )) ?? null;
+        // Item #10: notify the org's `membership:manage` holders that the invite was accepted.
+        // Recipients are resolved HERE (inside the org RLS context, minus the invitee) so the notify
+        // handler only fans out. Emitted via `emit` (which swallows handler errors) and wrapped so a
+        // notification-path failure can NEVER roll back the accept.
+        try {
+          const managerUserIds = await this.membershipRepository.findUserIdsWithPermission(
+            lookup.organization_id,
+            TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE,
+          );
+          const recipientUserIds = managerUserIds.filter(
+            (userId) => userId !== activatedMembership.user_id,
+          );
+          if (recipientUserIds.length > 0) {
+            const organization = await this.organizationRepository.findByPublicId(
+              lookup.organization_public_id,
+            );
+            const inviteeName =
+              [actingUser.first_name, actingUser.last_name].filter(Boolean).join(' ').trim() ||
+              actingUser.email;
+            await eventBus.emit(
+              buildDomainEvent(MEMBER_INVITATION_EVENT.ACCEPTED, {
+                recipient_user_ids: recipientUserIds,
+                organization_id: lookup.organization_id,
+                organization_name: organization?.name ?? '',
+                invitee_name: inviteeName,
+              } satisfies MemberInvitationAcceptedPayload),
+            );
+          }
+        } catch (error) {
+          logger.error(
+            { err: error, invitationPublicId: invitation_public_id },
+            'member_invitation.accept.notify_failed',
+          );
+        }
         return serializeMemberInvitation(updated, lookup.membership_public_id);
       },
     );

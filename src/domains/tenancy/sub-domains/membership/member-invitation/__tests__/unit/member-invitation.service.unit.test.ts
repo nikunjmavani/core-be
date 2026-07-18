@@ -70,6 +70,9 @@ describe('MemberInvitationService', () => {
     findById: vi.fn().mockResolvedValue(membership),
     activateForInvitationAccept: vi.fn().mockResolvedValue(membership),
     softDelete: vi.fn().mockResolvedValue(membership),
+    // item #10: accept() resolves membership:manage holders for the invite-accepted notification;
+    // default to none so these lifecycle tests don't emit (the fan-out is covered by its own suites).
+    findUserIdsWithPermission: vi.fn().mockResolvedValue([]),
   } as unknown as MembershipRepository;
 
   const invitationRepository = {
