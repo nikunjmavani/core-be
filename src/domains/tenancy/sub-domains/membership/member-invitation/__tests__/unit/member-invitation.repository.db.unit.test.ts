@@ -249,3 +249,64 @@ describe('MemberInvitationRepository.accept (single-use + credential + expiry gu
     expect(results.filter((row) => row !== null)).toHaveLength(1);
   });
 });
+
+describe('MemberInvitationRepository.countPendingByOrganization (live pending only)', () => {
+  const repository = new MemberInvitationRepository();
+
+  beforeEach(async () => {
+    await cleanupDatabase();
+  });
+
+  async function seedInvitation(
+    membership_id: number,
+    invited_by_user_id: number,
+    expires_at: Date,
+  ): Promise<number> {
+    const row = await repository.create({
+      membership_id,
+      email: `invitee-${Date.now()}-${Math.random()}@test.com`,
+      token_hash: hashInvitationToken(`token-${Date.now()}-${Math.random()}`),
+      invited_by_user_id,
+      expires_at,
+      created_by_user_id: invited_by_user_id,
+    });
+    return row.id;
+  }
+
+  it('counts only unaccepted, unrevoked, and unexpired invitations', async () => {
+    const { organization, membership, owner } = await setupOrganizationWithMembership();
+    const future = new Date(Date.now() + ONE_DAY_MS);
+
+    // 1 live pending — the only one that should count.
+    await seedInvitation(membership.id, owner.id, future);
+    // Accepted — excluded.
+    const acceptedId = await seedInvitation(membership.id, owner.id, future);
+    await database
+      .update(member_invitations)
+      .set({ accepted_at: new Date() })
+      .where(eq(member_invitations.id, acceptedId));
+    // Revoked — excluded.
+    const revokedId = await seedInvitation(membership.id, owner.id, future);
+    await database
+      .update(member_invitations)
+      .set({ revoked_at: new Date() })
+      .where(eq(member_invitations.id, revokedId));
+    // Lapsed — excluded. An invitation can't be born expired (chk_member_inv_expires:
+    // expires_at > created_at), so backdate both timestamps after insert to model one that lapsed.
+    const expiredId = await seedInvitation(membership.id, owner.id, future);
+    await database
+      .update(member_invitations)
+      .set({
+        created_at: new Date(Date.now() - 10 * ONE_DAY_MS),
+        expires_at: new Date(Date.now() - ONE_DAY_MS),
+      })
+      .where(eq(member_invitations.id, expiredId));
+
+    expect(await repository.countPendingByOrganization(organization.id)).toBe(1);
+  });
+
+  it('returns 0 for an organization with no live pending invitations', async () => {
+    const { organization } = await setupOrganizationWithMembership();
+    expect(await repository.countPendingByOrganization(organization.id)).toBe(0);
+  });
+});

@@ -5,6 +5,10 @@ import { member_invitations } from '@/domains/tenancy/sub-domains/membership/mem
 import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
+import {
+  acquireResourceQuotaLock,
+  RESOURCE_QUOTA_LOCK_NAMESPACE,
+} from '@/infrastructure/database/resource-quota-lock.util.js';
 import type { MemberInvitationRow } from './member-invitation.types.js';
 import {
   buildAscendingCreatedAtIdCursorCondition,
@@ -105,6 +109,42 @@ export class MemberInvitationRepository {
       .where(eq(member_invitations.public_id, public_id))
       .limit(1);
     return (rows[0] ?? null) as MemberInvitationRow | null;
+  }
+
+  /**
+   * Count an organization's live pending invitations — not accepted, not revoked, and not yet
+   * expired. Joins through `memberships` because `member_invitations` carries no `organization_id`
+   * column. Backs the service-layer per-organization cap so a single tenant cannot enqueue an
+   * unbounded backlog of outstanding invites (each of which also sends an email).
+   */
+  async countPendingByOrganization(organization_id: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ value: count() })
+      .from(member_invitations)
+      .innerJoin(memberships, eq(member_invitations.membership_id, memberships.id))
+      .where(
+        and(
+          eq(memberships.organization_id, organization_id),
+          isNull(member_invitations.accepted_at),
+          isNull(member_invitations.revoked_at),
+          gt(member_invitations.expires_at, new Date()),
+          isNull(memberships.deleted_at),
+        ),
+      );
+    return Number(rows[0]?.value ?? 0);
+  }
+
+  /**
+   * audit-#8: transaction-scoped advisory lock serializing the per-org pending-invitation quota
+   * check + insert so concurrent invites cannot both pass the same count and overshoot
+   * `INVITATION_MAX_PENDING_PER_ORG`. Call inside the create transaction before
+   * {@link MemberInvitationRepository.countPendingByOrganization}.
+   */
+  async acquireCreationQuotaLock(organization_id: number): Promise<void> {
+    await acquireResourceQuotaLock(
+      RESOURCE_QUOTA_LOCK_NAMESPACE.MEMBER_INVITATION,
+      organization_id,
+    );
   }
 
   /**
