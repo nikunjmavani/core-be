@@ -3,7 +3,7 @@ import { invitationTemplate } from '@/infrastructure/mail/templates/invitation.t
 
 describe('invitationTemplate HTML escaping', () => {
   const baseData = {
-    acceptUrl: 'https://app.example.com/invitations/abc/accept?token=signed',
+    acceptUrl: 'https://app.example.com/accept-invite/abc?token=signed',
     expiresInDays: 7,
   };
 
@@ -44,7 +44,7 @@ describe('invitationTemplate HTML escaping', () => {
     const html = invitationTemplate({
       inviterName: 'Alice',
       organizationName: 'Acme',
-      acceptUrl: 'https://app.example.com/invite/abc?token=t1&ref=email',
+      acceptUrl: 'https://app.example.com/accept-invite/abc?token=t1&ref=email',
       expiresInDays: 7,
     });
 

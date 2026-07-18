@@ -20,7 +20,11 @@ async function handleMemberInvitationEmail(
   }
 
   const frontendUrl = env.FRONTEND_URL ?? DEFAULT_FRONTEND_URL;
-  const acceptUrl = `${frontendUrl}/invitations/${payload.invitation_public_id}/accept?token=${payload.token}`;
+  // Link to the FRONTEND accept page (core-fe route `/accept-invite/:invitation_id`), which reads
+  // the token from the query string and POSTs it to `/api/v1/tenancy/invitations/:id/accept`.
+  // NOT the API route — a browser GET on the API path is a POST-only, auth-gated 404 the recipient
+  // can never complete.
+  const acceptUrl = `${frontendUrl}/accept-invite/${payload.invitation_public_id}?token=${payload.token}`;
 
   const html = invitationTemplate({
     inviterName: payload.inviter_name,

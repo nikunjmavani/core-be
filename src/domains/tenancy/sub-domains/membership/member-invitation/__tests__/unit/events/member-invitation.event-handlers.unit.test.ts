@@ -57,6 +57,27 @@ describe('tenancy member-invitation event handlers', () => {
     expect(dispatchOutboxEmailMock).toHaveBeenCalledWith(99);
   });
 
+  it('links the invitation to the frontend accept page, not the API route', async () => {
+    await emitAndFlushOnCommit({
+      type: MEMBER_INVITATION_EVENT.CREATED,
+      payload: {
+        email: 'invitee@example.com',
+        organization_name: 'Acme Corp',
+        inviter_name: 'usr_inviter',
+        token: 'secret-token',
+        invitation_public_id: 'inv_01test',
+        expires_in_days: 7,
+      },
+      timestamp: new Date(),
+    });
+
+    const emailArg = recordOutboxEmailMock.mock.calls[0]?.[0] as { html?: string } | undefined;
+    // The CTA must point at the core-fe accept page (/accept-invite/:id?token=), which forwards the
+    // token to POST /invitations/:id/accept — NOT the API path (a browser GET 404s there).
+    expect(emailArg?.html).toContain('/accept-invite/inv_01test?token=secret-token');
+    expect(emailArg?.html).not.toContain('/invitations/inv_01test/accept');
+  });
+
   it('records outbox and dispatches after commit on tenancy.member_invitation.resent', async () => {
     await emitAndFlushOnCommit({
       type: MEMBER_INVITATION_EVENT.RESENT,
