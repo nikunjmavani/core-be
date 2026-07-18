@@ -1616,3 +1616,12 @@ api post /api/v1/auth/magic-link/send api path removed without deprecation
 api post /api/v1/auth/magic-link/verify api path removed without deprecation
 api post /api/v1/auth/signup api path removed without deprecation
 api post /api/v1/auth/me/auth-methods removed the enum value `magic_link` of the request property `method_type`
+# ---
+# [#PR-D] PUSH -> WEB_PUSH notification-channel rename (2026-07-18). Greenfield replacement (no
+#     backward compatibility by design): the product delivers browser Web Push, so the generic PUSH
+#     value was dropped from the NOTIFICATION_CHANNELS vocabulary (now EMAIL/SMS/WEB_PUSH/IN_APP) and
+#     its two DB check constraints (chk_org_notif_channel, chk_user_notif_prefs_channel) via migration
+#     20260718000000_notification_channel_push_to_web_push.sql. Pinned by
+#     organization-notification-policy.test.ts (channel: 'WEB_PUSH' -> 201).
+api post /api/v1/tenancy/organization/notification-policies removed the enum value `push` of the request property `channel`
+api put /api/v1/users/me/notification-preferences removed the enum value `push` of the request property `preferences/items/channel`

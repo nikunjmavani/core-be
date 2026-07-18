@@ -361,7 +361,7 @@ function phasePolicy(uniq) {
     '/tenancy/organization/notification-policies',
     {
       notification_type: `k6_${uniq}`.slice(0, 50),
-      channel: 'PUSH',
+      channel: 'WEB_PUSH',
       default_enabled: true,
     },
     true,

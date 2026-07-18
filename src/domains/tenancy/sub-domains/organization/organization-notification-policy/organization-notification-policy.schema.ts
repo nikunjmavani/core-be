@@ -20,7 +20,7 @@ import { organizations } from '@/domains/tenancy/sub-domains/organization/organi
  * delivered (default_enabled / is_mandatory / muted_until). The
  * `idx_org_notif_policy_unique` index enforces a single policy per pair, the
  * channel `check` constraint restricts values to
- * `EMAIL`/`SMS`/`PUSH`/`IN_APP`, and the
+ * `EMAIL`/`SMS`/`WEB_PUSH`/`IN_APP`, and the
  * `organization_notification_policies_tenant_isolation` policy enforces RLS.
  */
 export const organization_notification_policies = tenancySchema
@@ -59,7 +59,10 @@ export const organization_notification_policies = tenancySchema
       // 20260607060000. After sec-D1 (writers normalize stale mutes to NULL),
       // the column is either NULL or a future timestamp and no read path
       // filters by it; the btree was pure dead weight on every upsert.
-      check('chk_org_notif_channel', sql`${table.channel} IN ('EMAIL', 'SMS', 'PUSH', 'IN_APP')`),
+      check(
+        'chk_org_notif_channel',
+        sql`${table.channel} IN ('EMAIL', 'SMS', 'WEB_PUSH', 'IN_APP')`,
+      ),
       // sec-D1: the previous `chk_org_notif_muted` (volatile `now()` in a
       // CHECK) made the row IMMUTABLE once `muted_until` slipped into the
       // past — even soft-delete failed. Mute expiry is enforced at the

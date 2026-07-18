@@ -7,7 +7,7 @@
  * rather than slipping through to the database and surfacing the check
  * violation as an opaque 500.
  */
-export const NOTIFICATION_CHANNELS = ['EMAIL', 'SMS', 'PUSH', 'IN_APP'] as const;
+export const NOTIFICATION_CHANNELS = ['EMAIL', 'SMS', 'WEB_PUSH', 'IN_APP'] as const;
 
 /** A delivery channel accepted by notification preference / policy endpoints. */
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
