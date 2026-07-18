@@ -40,7 +40,6 @@ installs; the script (`tooling/dev/setup-mac-tools.sh`) just dispatches each ent
 
 | Tool | When you need it | How |
 | --- | --- | --- |
-| **oasdiff** | `pnpm docs:breaking` (OpenAPI breaking-change gate) | auto-downloaded + checksum-verified into `.cache/` on first use |
 | **railway** / **neonctl** CLIs | deploy / infra ops | npm global, or via their MCP servers |
 | **trivy** · **semgrep** · **codeql** · **actionlint** · **k6** | run in CI | installed by the CI workflows, not locally |
 | the ~15 provider MCP servers (context7, stripe, sentry, …) | opt-in agent tooling | `pnpm mcp:setup <names>` + provider tokens; runtimes self-fetch via `npx`/`uvx`/Docker |

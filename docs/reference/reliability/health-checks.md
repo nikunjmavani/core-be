@@ -14,7 +14,7 @@ The previous combined `GET /health` endpoint has been **removed** and replaced b
 | `GET /livez` | Liveness | None | Container `HEALTHCHECK` — "is the process up" |
 | `GET /readyz` | Readiness | Postgres + Redis + BullMQ | Deploy gating + load-balancer routing |
 
-Both endpoints are canonical and **not deprecated**. They do not emit `Deprecation` or `Sunset` headers.
+Both endpoints are canonical and permanent parts of the API surface.
 
 ## API `GET /livez`
 

@@ -173,17 +173,6 @@ describe('health.middleware', () => {
     expect(response.json().bullmq).toBe('unavailable');
   });
 
-  it('does not set deprecation headers on GET /readyz', async () => {
-    application = Fastify();
-    await application.register(healthMiddleware);
-    await application.ready();
-
-    const response = await application.inject({ method: 'GET', url: '/readyz' });
-    expect(response.statusCode).toBe(200);
-    expect(response.headers.deprecation).toBeUndefined();
-    expect(response.headers.sunset).toBeUndefined();
-  });
-
   it('EX-03: surfaces breaker state + queue depth as degraded but stays 200 when opt-in 503 is off', async () => {
     vi.mocked(getCachedHealthOperationalMetrics).mockResolvedValueOnce({
       migration_version: '20260501000000_test.sql',

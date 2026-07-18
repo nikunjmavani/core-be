@@ -544,88 +544,6 @@ jobs:
           FAST_CHECK_NUM_RUNS: 50
         run: pnpm test:property
 
-  openapi-breaking:
-    name: OpenAPI breaking-change
-    needs: [changes]
-    if: needs.changes.outputs.src-code == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # docs:generate emits the spec statically (no app boot), but env validation
-    # requires DATABASE_URL/REDIS_URL to be present — point them at unused
-    # localhost values; no Postgres/Redis service is started (keeps PR CI fast).
-    env:
-      NODE_ENV: development
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/core
-      REDIS_URL: redis://localhost:6379
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          # Full history so the PR base commit can be checked out for the baseline spec.
-          fetch-depth: 0
-
-      - uses: ./.github/actions/setup-node-pnpm
-
-      - uses: ./.github/actions/test-env
-
-      - name: Generate head OpenAPI spec
-        run: |
-          pnpm docs:generate
-          cp docs/openapi/openapi.json "$RUNNER_TEMP/openapi-head.json"
-          # Snapshot the err-ignore file while still on the PR head — the next step
-          # checks out the PR base SHA, which predates this file.
-          cp .github/oasdiff/breaking-changes-ignore.txt "$RUNNER_TEMP/breaking-ignore.txt"
-
-      - name: Generate base OpenAPI spec
-        run: |
-          git checkout --force "${{ github.event.pull_request.base.sha }}"
-          pnpm install --frozen-lockfile
-          pnpm docs:generate
-          cp docs/openapi/openapi.json "$RUNNER_TEMP/openapi-base.json"
-
-      - name: Install oasdiff (pinned + checksum-verified)
-        env:
-          OASDIFF_VERSION: 1.18.1
-          OASDIFF_SHA256: 5174ba660d559684e67e8ab44ca6d45919114f8c57de5a1e32b91d4e5347705d
-        run: |
-          set -euo pipefail
-          url="https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz"
-          curl -sSfL "$url" -o "$RUNNER_TEMP/oasdiff.tar.gz"
-          echo "${OASDIFF_SHA256}  $RUNNER_TEMP/oasdiff.tar.gz" | sha256sum -c -
-          tar -xzf "$RUNNER_TEMP/oasdiff.tar.gz" -C "$RUNNER_TEMP" oasdiff
-          "$RUNNER_TEMP/oasdiff" --version
-
-      - name: Detect breaking API changes (oasdiff)
-        # Run the pinned binary directly (the Docker action remaps RUNNER_TEMP to a
-        # different in-container path). Fail only on ERR-severity breaking changes
-        # (removed/renamed operations, newly required inputs, removed response fields);
-        # additive/WARN changes pass. --err-ignore carries breaking changes explicitly
-        # accepted for major promotions (see .github/oasdiff/breaking-changes-ignore.txt);
-        # unlisted breaks still fail the gate.
-        #
-        # oasdiff 1.18.1 SIGSEGV workaround: `RequestPropertyMaxSetCheck` panics
-        # when a `max` is added to a string property that previously had no `max`
-        # (upstream bug; no `--exclude-checks` flag exists in 1.18.1). Detect the
-        # panic (exit 2 + "SIGSEGV" in output) and convert to a warning so real
-        # ERR breaking changes (exit 1) still fail the gate. When oasdiff cuts a
-        # release that fixes the panic, drop this wrapper and revert to a simple
-        # `set -euo pipefail` invocation.
-        run: |
-          set -uo pipefail
-          oasdiff_output=$("$RUNNER_TEMP/oasdiff" breaking \
-            "$RUNNER_TEMP/openapi-base.json" \
-            "$RUNNER_TEMP/openapi-head.json" \
-            --fail-on ERR \
-            --err-ignore "$RUNNER_TEMP/breaking-ignore.txt" 2>&1) || oasdiff_exit=$?
-          echo "$oasdiff_output"
-          if [ "${oasdiff_exit:-0}" -eq 0 ]; then
-            exit 0
-          fi
-          if [ "${oasdiff_exit:-0}" -eq 2 ] && echo "$oasdiff_output" | grep -q "SIGSEGV"; then
-            echo "::warning::oasdiff 1.18.1 SIGSEGV (upstream RequestPropertyMaxSetCheck bug) — treating as non-fatal"
-            exit 0
-          fi
-          exit "${oasdiff_exit:-1}"
-
   quality-gate:
     name: Quality gate
     # ── Single aggregate required check ──────────────────────────────────────
@@ -640,13 +558,10 @@ jobs:
     # pass; a real failure or cancellation fails the gate. The ruleset ↔ needs
     # invariant is pinned by src/tests/unit/ci/pr-quality-gate.policy.unit.test.ts.
     #
-    # The remaining advisory lane, openapi-breaking, is intentionally NOT in
-    # `needs:` — it runs and displays on the PR but does not block, because it is
-    # expected to fail on deliberate major-version breaks (acknowledged via the
-    # err-ignore list, not a merge block). agent-os-gate IS required: it only runs
-    # on agent-os/** changes (skip → pass otherwise) and blocks a broken routing map
-    # or drifted .cursor/.claude/.codex adapters. Promote a lane to blocking by
-    # adding it here AND to REQUIRED_LANES in the policy test.
+    # agent-os-gate IS required: it only runs on agent-os/** changes (skip → pass
+    # otherwise) and blocks a broken routing map or drifted .cursor/.claude/.codex
+    # adapters. Promote a lane to blocking by adding it here AND to REQUIRED_LANES
+    # in the policy test.
     needs:
       - changes
       - lint

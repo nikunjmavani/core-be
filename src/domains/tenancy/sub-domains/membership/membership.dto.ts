@@ -45,7 +45,7 @@ export const updateMembershipDto = z
  * `q` (free-text search over the member's email / first name / last name), `sort` (`name` |
  * `created_at`), and `order` (`asc` | `desc`). Brings memberships to parity with the roles / api-key
  * lists (`listSearchSortSchema`) so the FE can sort the members table server-side. `sort` / `order`
- * are `.optional()` (a defaulted param serializes as `required`, which oasdiff flags breaking); the
+ * are `.optional()` (a defaulted param serializes as `required`, a breaking contract change); the
  * repository defaults to `created_at` ascending to preserve the pre-sort ordering. Sorting by `name`
  * orders by the member's `auth.users` display name and is resolved through a SECURITY DEFINER
  * function (that table is FORCE RLS — a plain join under org-only context matches zero rows).
