@@ -84,6 +84,9 @@ describe('MemberInvitationService', () => {
       membership_public_id: 'mem_public_xyz',
     }),
     create: vi.fn().mockResolvedValue(makeInvitationRow()),
+    // item #E: createForMembership takes the per-org pending-invitation quota lock + count before insert.
+    acquireCreationQuotaLock: vi.fn().mockResolvedValue(undefined),
+    countPendingByOrganization: vi.fn().mockResolvedValue(0),
     accept: vi.fn().mockResolvedValue(makeInvitationRow({ accepted_at: now })),
     revoke: vi.fn().mockResolvedValue(makeInvitationRow({ revoked_at: now })),
     resend: vi.fn().mockResolvedValue(makeInvitationRow()),
@@ -150,6 +153,7 @@ describe('MemberInvitationService', () => {
   describe('createForMembership', () => {
     const params = {
       organization_name: 'Test Org',
+      organization_id: 1,
       membership_id: 10,
       membership_public_id: 'mem_public_xyz',
       email: 'invitee@example.com',
@@ -174,6 +178,17 @@ describe('MemberInvitationService', () => {
       // R1: the raw token is never part of the returned shape.
       expect(result).toMatchObject({ id: 'inv_public_123' });
       expect((result as unknown as Record<string, unknown>).token).toBeUndefined();
+    });
+
+    it('throws ConflictError and does not insert when the org is at the pending-invitation cap', async () => {
+      // Well above any configured INVITATION_MAX_PENDING_PER_ORG (max 1000) so the cap always trips.
+      vi.mocked(invitationRepository.countPendingByOrganization).mockResolvedValueOnce(100_000);
+      await expect(service.createForMembership(params)).rejects.toMatchObject({
+        name: 'ConflictError',
+      });
+      // The advisory lock is taken (keyed by the org id) before the count, and no row is inserted.
+      expect(invitationRepository.acquireCreationQuotaLock).toHaveBeenCalledWith(1);
+      expect(invitationRepository.create).not.toHaveBeenCalled();
     });
   });
 

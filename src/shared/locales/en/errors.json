@@ -86,6 +86,7 @@
   "organizationApiKeyMaxReached": "Maximum number of API keys ({{max}}) reached for this organization. Delete an existing API key before adding another.",
   "memberRoleMaxReached": "Maximum number of custom roles ({{max}}) reached for this organization. Delete an existing role before adding another.",
   "organizationNotificationPolicyMaxReached": "Maximum number of notification policies ({{max}}) reached for this organization. Delete an existing policy before adding another.",
+  "memberInvitationMaxReached": "Maximum number of pending invitations ({{max}}) reached for this organization. Wait for invitations to be accepted, or revoke an existing one, before sending another.",
   "webauthnCredentialExists": "This passkey is already registered",
   "webauthnCredentialMaxReached": "Maximum number of passkeys ({{max}}) reached. Remove an existing passkey before adding another.",
   "authMethodMaxReached": "Maximum number of linked authentication methods ({{max}}) reached. Remove an existing method before adding another.",

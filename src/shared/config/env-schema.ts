@@ -427,6 +427,15 @@ const envSchemaBase = z.object({
     .max(1000)
     .default(100),
   /**
+   * Max number of live pending (not accepted, not revoked, not expired) member invitations allowed
+   * per organization. Parity with `WEBHOOK_MAX_PER_ORG`. Invitations are otherwise only seat-bounded,
+   * and a PERSONAL / free-tier org has no seat ceiling (null), so without this cap an Admin could
+   * enqueue an unbounded backlog of outstanding invites — each sending an email (amplification) and
+   * growing the table. Default 100 is a generous ceiling for real onboarding while bounding abuse;
+   * raise it deliberately for large orgs bulk-inviting more than 100 people at once.
+   */
+  INVITATION_MAX_PENDING_PER_ORG: z.coerce.number().int().min(1).max(1000).default(100),
+  /**
    * Window (hours) during which outbound webhook deliveries dual-sign with
    * the previous secret too (sec-N8). After this window the worker stops
    * sending `X-Webhook-Signature-Previous`. Default 24h covers a one-day

@@ -440,6 +440,7 @@ export class MembershipService {
       // Issue the invitation (token + email) in this same org transaction.
       await memberInvitationService.createForMembership({
         organization_name: organization.name ?? organization.public_id,
+        organization_id: organization.id,
         membership_id: created.id,
         membership_public_id: created.public_id,
         email: inviteeUser.email,

@@ -86,6 +86,7 @@
   "organizationApiKeyMaxReached": "Se alcanzó el número máximo de claves de API ({{max}}) para esta organización. Elimina una clave existente antes de agregar otra.",
   "memberRoleMaxReached": "Se alcanzó el número máximo de roles personalizados ({{max}}) para esta organización. Elimina un rol existente antes de agregar otro.",
   "organizationNotificationPolicyMaxReached": "Se alcanzó el número máximo de políticas de notificación ({{max}}) para esta organización. Elimina una política existente antes de agregar otra.",
+  "memberInvitationMaxReached": "Se alcanzó el número máximo de invitaciones pendientes ({{max}}) para esta organización. Espera a que se acepten las invitaciones, o revoca una existente, antes de enviar otra.",
   "webauthnCredentialExists": "Esta clave de acceso ya está registrada",
   "webauthnCredentialMaxReached": "Se alcanzó el número máximo de claves de acceso ({{max}}). Elimina una clave de acceso existente antes de agregar otra.",
   "authMethodMaxReached": "Se alcanzó el número máximo de métodos de autenticación vinculados ({{max}}). Elimina un método existente antes de agregar otro.",

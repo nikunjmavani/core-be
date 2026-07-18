@@ -1,4 +1,10 @@
-import { ForbiddenError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/shared/errors/index.js';
+import { env } from '@/shared/config/env.config.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
 import type { MembershipRepository } from '@/domains/tenancy/sub-domains/membership/membership.repository.js';
@@ -81,6 +87,7 @@ export interface MemberInvitationCommandOptions {
  */
 export interface CreateInvitationForMembershipParams {
   organization_name: string;
+  organization_id: number;
   membership_id: number;
   membership_public_id: string;
   email: string;
@@ -142,6 +149,18 @@ export class MemberInvitationService {
   async createForMembership(
     params: CreateInvitationForMembershipParams,
   ): Promise<MemberInvitationOutput> {
+    // Bound the organization's outstanding invitations (email-amplification / row-growth abuse).
+    // Runs inside MembershipService.create's org transaction, so the advisory lock serializes the
+    // count + insert — two concurrent invites cannot both pass the same count and overshoot the cap.
+    await this.invitationRepository.acquireCreationQuotaLock(params.organization_id);
+    const pendingCount = await this.invitationRepository.countPendingByOrganization(
+      params.organization_id,
+    );
+    if (pendingCount >= env.INVITATION_MAX_PENDING_PER_ORG) {
+      throw new ConflictError('errors:memberInvitationMaxReached', {
+        max: env.INVITATION_MAX_PENDING_PER_ORG,
+      });
+    }
     const token = generateInvitationToken();
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + params.expires_in_days);
