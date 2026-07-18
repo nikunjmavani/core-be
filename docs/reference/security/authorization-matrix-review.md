@@ -1,10 +1,10 @@
 # Authorization matrix — route model review
 
-> Review artifact. Generated from `tooling/openapi/route-catalog/route-authorization-model.json` on 2026-06-15.
+> Review artifact. Generated from `tooling/openapi/route-catalog/route-authorization-model.json` on 2026-06-15; reconciled to the model on 2026-07-18.
 
 Every protected by-id route (plus the two owner-tier routes) and the authorization **model** assigned to it. Please review each row; to change one, tell me e.g. *"`PATCH /…/memberships/:id` should be `org`, not `tier:owner`"*. Once you are happy, I build the Phase 2 attack tests against exactly these models.
 
-**Total routes modelled: 48.**
+**Total routes modelled: 49.**
 
 ---
 
@@ -23,13 +23,14 @@ Every protected by-id route (plus the two owner-tier routes) and the authorizati
 
 ---
 
-## `user` — Cross-user (intra-tenant) BOLA (10) → expect 404
+## `user` — Cross-user (intra-tenant) BOLA (11) → expect 404
 
 | Method | Path | verifyNoMutation |
 | --- | --- | --- |
 | DELETE | `/api/v1/auth/me/auth-methods/:auth_method_id` | yes |
+| DELETE | `/api/v1/auth/me/mfa/:mfa_method_id` | yes |
 | DELETE | `/api/v1/auth/me/sessions/:session_id` | yes |
-| DELETE | `/api/v1/auth/mfa/:mfa_method_id` | yes |
+| DELETE | `/api/v1/auth/me/webauthn/credentials/:credential_id` | yes |
 | DELETE | `/api/v1/notify/notifications/:notification_id` | yes |
 | DELETE | `/api/v1/uploads/:upload_id` | yes |
 | GET | `/api/v1/notify/notifications/:notification_id` | — |
@@ -38,7 +39,7 @@ Every protected by-id route (plus the two owner-tier routes) and the authorizati
 | PATCH | `/api/v1/notify/notifications/:notification_id/read` | yes |
 | POST | `/api/v1/uploads/:upload_id/confirm` | yes |
 
-## `org` — Cross-org BOLA (26) → expect 404 / 403
+## `org` — Cross-org BOLA (27) → expect 404 / 403
 
 | Method | Path | verifyNoMutation |
 | --- | --- | --- |
@@ -48,6 +49,7 @@ Every protected by-id route (plus the two owner-tier routes) and the authorizati
 | DELETE | `/api/v1/tenancy/organization/notification-policies/:notification_policy_id` | yes |
 | DELETE | `/api/v1/tenancy/organization/roles/:role_id` | yes |
 | GET | `/api/v1/billing/subscriptions/:subscription_id` | — |
+| GET | `/api/v1/billing/subscriptions/:subscription_id/payment-setup` | — |
 | GET | `/api/v1/notify/webhooks/:webhook_id` | — |
 | GET | `/api/v1/notify/webhooks/:webhook_id/delivery-attempts` | — |
 | GET | `/api/v1/tenancy/organization/api-keys/:api_key_id` | — |
@@ -69,12 +71,11 @@ Every protected by-id route (plus the two owner-tier routes) and the authorizati
 | POST | `/api/v1/tenancy/organization/api-keys/:api_key_id/rotate` | yes |
 | POST | `/api/v1/tenancy/organization/invitations/:invitation_id/resend` | — |
 
-## `email` — Email-targeted ownership (2) → expect 403
+## `email` — Email-targeted ownership (1) → expect 403
 
 | Method | Path | verifyNoMutation |
 | --- | --- | --- |
 | POST | `/api/v1/tenancy/invitations/:invitation_id/accept` | yes |
-| POST | `/api/v1/tenancy/invitations/:invitation_id/decline` | yes |
 
 ## `tier:owner` — Owner-tier protection (4) → expect 403
 
@@ -111,19 +112,20 @@ Every protected by-id route (plus the two owner-tier routes) and the authorizati
 4. **Phase 3 hardening** — extend the coverage gate to every mutation (models `self`/`public`/`function`), add the static `findByPublicId` ban.
 5. **Verify** — typecheck locally; the e2e attacks run in CI (`reusable-vitest-postgres-redis`, Postgres + Redis). This environment has no Docker, so green is confirmed in CI.
 
-## Built (Phase 2 complete — all 48 routes, verified green)
+## Built (Phase 2 complete — all 49 routes, verified green)
 
-Every modelled route now has a dedicated attacker test. The suite is **80 tests
-across 7 files** under `src/tests/security/authz/` (e2e, Postgres + Redis):
+Every modelled route now has a dedicated attacker test, across **7 files** under
+`src/tests/security/authz/` (e2e, Postgres + Redis). The route count is authoritative-by-gate:
+`authz-runtime-coverage.global.test.ts` fails CI if any modelled route lacks a test.
 
 | Suite | Models | Coverage |
 | --- | --- | --- |
-| `object-ownership.security.test.ts` | `user` (10) + `org`/subscription read | cross-user 404 + baselines + `verifyNoMutation`; step-up-gated session/MFA/auth-method |
-| `cross-org-resource.security.test.ts` | `org` reads (10) | cross-org GET → 404 + same-org 200 baseline; by-slug scoped separately |
+| `object-ownership.security.test.ts` | `user` (11) + `org`/subscription read | cross-user 404 + baselines + `verifyNoMutation`; step-up-gated session/MFA/webauthn/auth-method |
+| `cross-org-resource.security.test.ts` | `org` reads (11) | cross-org GET → 404 + same-org 200 baseline; by-slug scoped separately |
 | `cross-org-mutation.security.test.ts` | `org` writes (16) | cross-org PATCH/DELETE/POST/rotate → 404 (valid bodies + Idempotency-Key); subscriptions via two-org fixture |
 | `tier-and-grant.security.test.ts` | `tier:owner` (4) + `grant` (1) | non-owner/owner-membership protection; grant-grantability + cross-org PUT |
 | `admin-only.security.test.ts` | `global-role` (5) | every `/users/:user_id` admin route: regular user → 401/403 + admin baseline |
-| `invitation-email.security.test.ts` | `email` (2) | email-mismatch accept/decline → 403 + invitee baseline |
+| `invitation-email.security.test.ts` | `email` (1) | email-mismatch accept → 403 + invitee baseline |
 | `auth-token-flow.security.test.ts` | (authn lifecycle) | bearer-contract + revoked-session 401 (complements `jwt-attacks`) |
 
 **Gates (both DB-free, run in the `global` project):**
