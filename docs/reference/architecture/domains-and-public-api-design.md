@@ -278,7 +278,7 @@ Domain folder = DB schema; each **sub-domain** is a folder with its own controll
   - Notification policies: `GET|POST /api/v1/tenancy/organization/notification-policies`, `PATCH|DELETE .../notification-policies/:notification_policy_id`.
   - Roles: `GET|POST /api/v1/tenancy/organization/roles`, `GET|PATCH|DELETE .../roles/:role_id`; role permissions `GET|PUT .../roles/:role_id/permissions`.
   - Memberships: `GET|POST /api/v1/tenancy/organization/memberships`, `GET|PATCH|DELETE .../memberships/:membership_id`; `POST /api/v1/tenancy/organization/leave`, `POST /api/v1/tenancy/organization/transfer-ownership`.
-  - Invitations: `GET|POST /api/v1/tenancy/organization/invitations`, `DELETE .../invitations/:invitation_id`; cross-org accept/decline are account-level: `POST /api/v1/tenancy/invitations/:invitation_id/accept|decline`.
+  - Invitations: `POST .../invitations/:invitation_id/resend`, `DELETE .../invitations/:invitation_id` (invites are created via `POST .../organization/memberships`); cross-org accept is account-level: `POST /api/v1/tenancy/invitations/:invitation_id/accept`.
   - Permissions (global): `GET /api/v1/tenancy/permissions`.
 
 All `:id` params are **public_id**. Organization **slug** is unique; `getBySlug(slug)` returns same shape as the active-org get.
@@ -287,10 +287,10 @@ All `:id` params are **public_id**. Organization **slug** is unique; `getBySlug(
 
 #### Personal vs Team capability matrix
 
-An organization has an immutable `type` — `PERSONAL` (single-owner workspace) or `TEAM` (shareable, multi-member). There is **one** route surface for both: no personal-only or team-only URLs. Six actions are structurally unavailable to a personal organization; a client hides or disables them from the org `type`, and a centralized guard backstops the routes.
+An organization has an immutable `type` — `PERSONAL` (single-owner workspace) or `TEAM` (shareable, multi-member). There is **one** route surface for both: no personal-only or team-only URLs. Nine routes are structurally unavailable to a personal organization; a client hides or disables them from the org `type`, and a centralized guard backstops the routes.
 
 - **No `capabilities` object** — the org `type` (`PERSONAL` / `TEAM`) is the sole signal. A client gates a team-only action on `type === 'TEAM'` **and** the caller's permission (e.g. `subscription:manage`); permissions/roles govern what the caller may do, separately. (A redundant type-derived `capabilities` object was removed; reintroduce a purpose-built `features`/`entitlements` object only if availability ever stops being purely type-derived.)
-- **The 9 team-only routes** (reject a personal org with **HTTP 422** `unprocessable_entity`): `DELETE /api/v1/tenancy/organization`, `POST /api/v1/tenancy/organization/invitations`, `POST /api/v1/tenancy/organization/memberships`, `POST /api/v1/tenancy/organization/transfer-ownership`, `POST /api/v1/tenancy/organization/roles`, and the four subscription mutations `POST /api/v1/billing/subscriptions`, `POST /api/v1/billing/subscriptions/{subscription_id}/change-plan`, `POST /api/v1/billing/subscriptions/{subscription_id}/cancel`, `POST /api/v1/billing/subscriptions/{subscription_id}/resume`.
+- **The 9 team-only routes** (reject a personal org with **HTTP 422** `unprocessable_entity`): the four tenancy mutations `DELETE /api/v1/tenancy/organization`, `POST /api/v1/tenancy/organization/memberships`, `POST /api/v1/tenancy/organization/transfer-ownership`, `POST /api/v1/tenancy/organization/roles`, and the five billing mutations `POST /api/v1/billing/payment-methods/setup`, `POST /api/v1/billing/subscriptions`, `POST /api/v1/billing/subscriptions/{subscription_id}/change-plan`, `POST /api/v1/billing/subscriptions/{subscription_id}/cancel`, `POST /api/v1/billing/subscriptions/{subscription_id}/resume`.
 - **Backstop guard** — `assertTeamOrganization(organization, capability)` (capability buckets `MEMBERS | ROLES | MUTATION | BILLING`) is the single point of enforcement shared by those routes. It returns 422 (not 409) because the org `type` is immutable, so an identical retry can never succeed. See **[response-codes.md](../api/response-codes.md)** (`409 vs 422`) and **[route-consistency-and-org-model.md](../api/route-consistency-and-org-model.md)**.
 
 ### 4.3 billing — sub-domains: plans, subscriptions

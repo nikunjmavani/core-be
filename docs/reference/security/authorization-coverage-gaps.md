@@ -12,12 +12,12 @@ Answers "is every route — organization-level included — covered, and what is
 
 | Bucket | Count | Guard (in code) | Tested by | Gap |
 | --- | --- | --- | --- | --- |
-| `auth-by-id` | 13 | Ownership filter / user RLS / email-match | object-ownership + invitation-email (Phase 2 matrix) | ✅ cross-user/email BOLA e2e for every by-id route |
+| `auth-by-id` | 12 | Ownership filter / user RLS / email-match | object-ownership + invitation-email (Phase 2 matrix) | ✅ cross-user/email BOLA e2e for every by-id route |
 | `org-by-id` | 28 | Org permission + org RLS | permission-route-matrix (BFLA) + cross-org-resource/cross-org-mutation (Phase 2) | ✅ cross-org BOLA e2e for every by-id route (read + write) |
-| `org-collection` | 22 | Org permission middleware | permission-route-matrix (every PERM route) | ✅ BFLA; grant-grantability on creates only partially asserted |
+| `org-collection` | 20 | Org permission middleware | permission-route-matrix (every PERM route) | ✅ BFLA; grant-grantability on creates only partially asserted |
 | `global-role` | 9 | JWT global role claim | admin-only (every `/users/:user_id` route) + privilege-escalation | ✅ all 5 user-by-id admin routes asserted; collection `/users`, audit, mcp still sampled |
 | `auth-self-mutation` | 24 | Auth; acts on caller (/me) | auth-enforcement (401), mass-assignment (subset) | ⚠ caller-scoped; no per-route assertion |
-| `auth-self-list` | 12 | Auth; results scoped to caller | auth-enforcement (401) | ✅ low risk (caller-scoped list) |
+| `auth-self-list` | 11 | Auth; results scoped to caller | auth-enforcement (401) | ✅ low risk (caller-scoped list) |
 | `public` | 20 | None (some need X-Captcha-Token / Stripe-Signature) | public-routes, captcha, oauth-callback, stripe-webhook | ⚠ business-flow abuse (API6) not systematically tested |
 | `bearer-token` | 3 | Service/metrics token | api-key-auth, ops route tests | ✅ low |
 
@@ -123,13 +123,11 @@ Answers "is every route — organization-level included — covered, and what is
 | GET | `/api/v1/notify/webhooks/:webhook_id/delivery-attempts` | PERM: webhook:read | `org-by-id` | ✅ BFLA + cross-org |
 | POST | `/api/v1/notify/webhooks/:webhook_id/test` | PERM: webhook:manage | `org-by-id` | ✅ BFLA + cross-org |
 
-### TENANCY (45)
+### TENANCY (41)
 
 | Method | Path | Access | Bucket | Status |
 | --- | --- | --- | --- | --- |
 | POST | `/api/v1/tenancy/invitations/:invitation_id/accept` | AUTH | `auth-by-id` | ✅ e2e attack test (Phase 2) |
-| POST | `/api/v1/tenancy/invitations/:invitation_id/decline` | AUTH | `auth-by-id` | ✅ e2e attack test (Phase 2) |
-| GET | `/api/v1/tenancy/invitations/pending` | AUTH | `auth-self-list` | ✅ caller-scoped |
 | GET | `/api/v1/tenancy/organization` | AUTH | `auth-self-list` | ✅ caller-scoped |
 | PATCH | `/api/v1/tenancy/organization` | PERM: organization:update | `org-collection` | ✅ BFLA (matrix) |
 | DELETE | `/api/v1/tenancy/organization` | PERM: organization:delete | `org-collection` | ✅ BFLA (matrix) |
@@ -140,8 +138,6 @@ Answers "is every route — organization-level included — covered, and what is
 | DELETE | `/api/v1/tenancy/organization/api-keys/:api_key_id` | PERM: api-key:manage | `org-by-id` | ✅ BFLA + cross-org |
 | POST | `/api/v1/tenancy/organization/api-keys/:api_key_id/rotate` | PERM: api-key:manage | `org-by-id` | ✅ BFLA + cross-org |
 | GET | `/api/v1/tenancy/organization/audit-logs` | PERM: audit-log:read | `org-collection` | ✅ BFLA (matrix) |
-| GET | `/api/v1/tenancy/organization/invitations` | PERM: invitation:manage | `org-collection` | ✅ BFLA (matrix) |
-| POST | `/api/v1/tenancy/organization/invitations` | PERM: invitation:manage | `org-collection` | ✅ BFLA (matrix) |
 | DELETE | `/api/v1/tenancy/organization/invitations/:invitation_id` | PERM: invitation:manage | `org-by-id` | ✅ BFLA + cross-org |
 | POST | `/api/v1/tenancy/organization/invitations/:invitation_id/resend` | PERM: invitation:manage | `org-by-id` | ✅ BFLA + cross-org |
 | POST | `/api/v1/tenancy/organization/leave` | AUTH | `auth-self-mutation` | ⚠ self; not asserted |

@@ -102,10 +102,10 @@ not listed operates on the active org regardless of type.
 | `POST /tenancy/organizations` (create team)                 | **403** `teamOrganizationsDisabled` | 201                         | 201                       |
 | `GET /tenancy/organizations` (list teams)                   | 200 (empty)                         | 200                         | 200                       |
 | `DELETE /tenancy/organization`                              | **422**                             | 204 team · **422** personal | 204                       |
-| `POST /tenancy/organization/invitations`                    | **422**                             | 201 team · **422** personal | 201                       |
 | `POST /tenancy/organization/memberships`                    | **422**                             | 201 team · **422** personal | 201                       |
 | `POST /tenancy/organization/roles`                          | **422**                             | 201 team · **422** personal | 201                       |
 | `POST /tenancy/organization/transfer-ownership`             | **422**                             | 201 team · **422** personal | 201                       |
+| `POST /billing/payment-methods/setup`                       | **422**                             | 201 team · **422** personal | 201                       |
 | `POST /billing/subscriptions`                               | **422**                             | 201 team · **422** personal | 201                       |
 | `POST /billing/subscriptions/{subscription_id}/change-plan` | **422**                             | 201 team · **422** personal | 201                       |
 | `POST /billing/subscriptions/{subscription_id}/cancel`      | **422**                             | 201 team · **422** personal | 201                       |
@@ -177,8 +177,8 @@ leave, transfer-ownership). Other domains hang directly off the claim: `/api/v1/
 
 Account-level routes stay **plural** because they are not scoped to one active org:
 `GET|POST /api/v1/tenancy/organizations` (list / create a team org),
-`GET /api/v1/tenancy/organizations/by-slug/{slug}`, and the cross-org invitation actions
-`POST /api/v1/tenancy/invitations/{invitation_id}/accept|decline`.
+`GET /api/v1/tenancy/organizations/by-slug/{slug}`, and the cross-org invitation accept action
+`POST /api/v1/tenancy/invitations/{invitation_id}/accept`.
 
 ## Implementation status
 
