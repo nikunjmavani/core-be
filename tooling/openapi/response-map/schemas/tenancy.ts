@@ -242,6 +242,12 @@ export const memberRoleSchema = {
     name: { type: 'string' },
     description: { type: 'string', nullable: true },
     is_system: { type: 'boolean' },
+    member_count: {
+      type: 'integer',
+      minimum: 0,
+      description: 'Members (ACTIVE or INVITED) assigned this role in the organization.',
+      example: 3,
+    },
     created_at: { type: 'string', format: 'date-time' },
     updated_at: { type: 'string', format: 'date-time' },
   },
@@ -252,6 +258,7 @@ export const memberRoleExample = {
   name: 'Admin',
   description: 'Full access to all organization resources',
   is_system: true,
+  member_count: 3,
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
 };

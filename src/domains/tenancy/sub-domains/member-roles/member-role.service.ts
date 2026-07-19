@@ -69,8 +69,15 @@ export class MemberRoleService {
           order: pagination.order,
         }),
       );
+      // One membership aggregate (GROUP BY role_id) → member_count per role, so the roles-list
+      // projection stays a single extra query instead of an N+1 across the page.
+      const memberCounts = await this.memberRoleRepository.countMembersByRoleForOrganization(
+        organization.id,
+      );
       return {
-        items: result.items.map(serializeMemberRole),
+        items: result.items.map((role) =>
+          serializeMemberRole(role, memberCounts.get(role.id) ?? 0),
+        ),
         limit: result.limit,
         total: result.total,
         has_more: result.has_more,
@@ -127,7 +134,11 @@ export class MemberRoleService {
         await this.organizationService.requireOrganizationRecordByPublicId(organization_public_id);
       const role = await this.memberRoleRepository.findByPublicId(role_public_id, organization.id);
       if (!role) throw new NotFoundError('Role');
-      return serializeMemberRole(role);
+      const memberCount = await this.memberRoleRepository.countMembersForRole(
+        role.id,
+        organization.id,
+      );
+      return serializeMemberRole(role, memberCount);
     });
   }
 
@@ -215,7 +226,9 @@ export class MemberRoleService {
         );
       }
 
-      return serializeMemberRole(created);
+      // A brand-new role has no memberships yet (a member cannot be assigned to a role that did
+      // not exist), so member_count is definitionally 0 — no aggregate query needed.
+      return serializeMemberRole(created, 0);
     });
   }
 
@@ -249,7 +262,11 @@ export class MemberRoleService {
         throw this.mapRoleNameConflict(error, parsed.name);
       }
       if (!updated) throw new NotFoundError('Role');
-      return serializeMemberRole(updated);
+      const memberCount = await this.memberRoleRepository.countMembersForRole(
+        updated.id,
+        organization.id,
+      );
+      return serializeMemberRole(updated, memberCount);
     });
   }
 

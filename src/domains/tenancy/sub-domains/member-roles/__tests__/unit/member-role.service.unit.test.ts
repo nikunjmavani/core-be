@@ -58,6 +58,9 @@ describe('MemberRoleService', () => {
     create: vi.fn().mockResolvedValue(roleRow),
     update: vi.fn().mockResolvedValue(roleRow),
     softDeleteIfNoActiveMembers: vi.fn().mockResolvedValue(roleRow),
+    // member_count projection: aggregate for the list, single count for get/update.
+    countMembersByRoleForOrganization: vi.fn().mockResolvedValue(new Map<number, number>()),
+    countMembersForRole: vi.fn().mockResolvedValue(0),
   } as unknown as MemberRoleRepository;
 
   const memberRolePermissionRepository = {
@@ -91,11 +94,58 @@ describe('MemberRoleService', () => {
     vi.mocked(memberRoleRepository.update).mockResolvedValue(roleRow as never);
     vi.mocked(memberRoleRepository.softDeleteIfNoActiveMembers).mockResolvedValue(roleRow as never);
     vi.mocked(memberRoleRepository.create).mockResolvedValue(roleRow as never);
+    vi.mocked(memberRoleRepository.countMembersByRoleForOrganization).mockResolvedValue(new Map());
+    vi.mocked(memberRoleRepository.countMembersForRole).mockResolvedValue(0);
   });
 
   it('list returns roles', async () => {
     const result = await service.list(organization.public_id, { limit: 20, order: 'asc' });
     expect(result.items).toHaveLength(1);
+  });
+
+  it('list attaches member_count per role from the single aggregate (no N+1)', async () => {
+    vi.mocked(memberRoleRepository.countMembersByRoleForOrganization).mockResolvedValue(
+      new Map([[roleRow.id, 4]]),
+    );
+    const result = await service.list(organization.public_id, { limit: 20, order: 'asc' });
+    expect(result.items[0]).toMatchObject({ id: roleRow.public_id, member_count: 4 });
+    // One grouped query for the whole page — never the per-role count.
+    expect(memberRoleRepository.countMembersByRoleForOrganization).toHaveBeenCalledTimes(1);
+    expect(memberRoleRepository.countMembersForRole).not.toHaveBeenCalled();
+  });
+
+  it('list defaults member_count to 0 for a role absent from the aggregate', async () => {
+    vi.mocked(memberRoleRepository.countMembersByRoleForOrganization).mockResolvedValue(new Map());
+    const result = await service.list(organization.public_id, { limit: 20, order: 'asc' });
+    expect(result.items[0]!.member_count).toBe(0);
+  });
+
+  it('getByPublicId includes member_count from the single-role count', async () => {
+    vi.mocked(memberRoleRepository.countMembersForRole).mockResolvedValue(2);
+    const result = await service.getByPublicId(organization.public_id, roleRow.public_id);
+    expect(result).toMatchObject({ id: roleRow.public_id, member_count: 2 });
+  });
+
+  it('create returns member_count 0 for the brand-new role without an aggregate query', async () => {
+    const result = await service.create(
+      organization.public_id,
+      { name: 'Editor' },
+      'creator_public',
+    );
+    expect(result.member_count).toBe(0);
+    expect(memberRoleRepository.countMembersForRole).not.toHaveBeenCalled();
+    expect(memberRoleRepository.countMembersByRoleForOrganization).not.toHaveBeenCalled();
+  });
+
+  it('update returns the refreshed member_count for the updated role', async () => {
+    vi.mocked(memberRoleRepository.countMembersForRole).mockResolvedValue(5);
+    const result = await service.update(
+      organization.public_id,
+      roleRow.public_id,
+      { name: 'Updated' },
+      'updater_public',
+    );
+    expect(result).toMatchObject({ id: roleRow.public_id, member_count: 5 });
   });
 
   it('getByPublicId returns role', async () => {

@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
@@ -24,6 +24,18 @@ interface MemberRoleListPagination {
   sort?: 'name' | 'created_at';
   order?: 'asc' | 'desc';
 }
+
+/**
+ * Membership lifecycle statuses that count toward a role's `member_count`.
+ *
+ * ACTIVE + INVITED mirrors the organization seat count
+ * ({@link MembershipRepository.countActiveByOrganization}) and the set the
+ * members list surfaces per role, so the Roles panel's per-role count reconciles
+ * with the Members list. SUSPENDED memberships are a per-org ban and are
+ * excluded (a suspended seat is not in use). This constant is the single lever
+ * for the counted-status policy — change it here to change every `member_count`.
+ */
+const MEMBER_COUNT_STATUSES = ['ACTIVE', 'INVITED'] as const;
 
 /**
  * Drizzle data access for `tenancy.roles`. Active rows are filtered via
@@ -86,6 +98,61 @@ export class MemberRoleRepository extends BaseRepository {
       .orderBy(...orderBy)
       .limit(limit + 1)) as MemberRoleRow[];
     return finishKeysetPage(rows, { limit, sortValueFor, filterFingerprint });
+  }
+
+  /**
+   * Counts the members assigned to each role in an organization, in ONE aggregate.
+   *
+   * @remarks
+   * - **Algorithm:** a single `GROUP BY role_id` over `memberships`, filtered to
+   *   {@link MEMBER_COUNT_STATUSES} (ACTIVE + INVITED) and `deleted_at IS NULL`.
+   *   Returns a `Map` keyed by internal `role_id`; roles with no counted members
+   *   are simply absent, so callers default to 0. One grouped scan bounded by the
+   *   per-org member cap — this is what keeps the roles-list `member_count`
+   *   projection free of an N+1 (never call {@link countMembersForRole} per row).
+   * - **Failure modes:** none beyond the underlying query; runs under the org RLS
+   *   context (`memberships` is org-scoped), so the org predicate is belt-and-suspenders.
+   * - **Side effects:** none (read-only).
+   */
+  async countMembersByRoleForOrganization(organization_id: number): Promise<Map<number, number>> {
+    const rows = await getRequestDatabase()
+      .select({ role_id: memberships.role_id, member_count: sql<number>`count(*)::int` })
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.organization_id, organization_id),
+          inArray(memberships.status, [...MEMBER_COUNT_STATUSES]),
+          isNull(memberships.deleted_at),
+        ),
+      )
+      .groupBy(memberships.role_id);
+    return new Map(rows.map((row) => [row.role_id, row.member_count]));
+  }
+
+  /**
+   * Counts the members assigned to a single role in an organization.
+   *
+   * @remarks
+   * Same status filter as {@link countMembersByRoleForOrganization} (ACTIVE +
+   * INVITED, not soft-deleted) — used by the single-role get / update paths where
+   * grouping the whole org would be wasteful. Distinct from
+   * {@link MembershipRepository.countActiveByRoleId}, which counts EVERY
+   * non-deleted membership (including SUSPENDED) for the delete guard's
+   * "any member blocks delete" semantics.
+   */
+  async countMembersForRole(role_id: number, organization_id: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ member_count: sql<number>`count(*)::int` })
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.role_id, role_id),
+          eq(memberships.organization_id, organization_id),
+          inArray(memberships.status, [...MEMBER_COUNT_STATUSES]),
+          isNull(memberships.deleted_at),
+        ),
+      );
+    return rows[0]?.member_count ?? 0;
   }
 
   async findByPublicId(public_id: string, organization_id: number): Promise<MemberRoleRow | null> {

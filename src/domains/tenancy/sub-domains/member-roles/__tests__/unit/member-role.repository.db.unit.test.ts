@@ -134,4 +134,64 @@ describe('MemberRoleRepository (database)', () => {
     ).not.toBeNull();
     expect(await repository.findByPublicId(emptyRole.public_id, organization.id)).toBeNull();
   });
+
+  it('countMembers* count ACTIVE + INVITED per role, excluding SUSPENDED; unassigned role → 0', async () => {
+    const owner = await createTestUser({ email: 'mc-owner@test.com' });
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+
+    const roleA = await createRoleWithPermissions({
+      organizationId: organization.id,
+      permissionCodes: [],
+    });
+    const roleB = await createRoleWithPermissions({
+      organizationId: organization.id,
+      permissionCodes: [],
+    });
+    const emptyRole = await createRoleWithPermissions({
+      organizationId: organization.id,
+      permissionCodes: [],
+    });
+
+    // roleA: 1 ACTIVE + 1 INVITED are counted (2); the SUSPENDED member is excluded.
+    // Distinct users — the partial unique index is on (user_id, organization_id).
+    const active = await createTestUser({ email: 'mc-active@test.com' });
+    const invited = await createTestUser({ email: 'mc-invited@test.com' });
+    const suspended = await createTestUser({ email: 'mc-suspended@test.com' });
+    await createMembership({
+      userId: active.id,
+      organizationId: organization.id,
+      roleId: roleA.id,
+      status: 'ACTIVE',
+    });
+    await createMembership({
+      userId: invited.id,
+      organizationId: organization.id,
+      roleId: roleA.id,
+      status: 'INVITED',
+    });
+    await createMembership({
+      userId: suspended.id,
+      organizationId: organization.id,
+      roleId: roleA.id,
+      status: 'SUSPENDED',
+    });
+    // roleB: a single ACTIVE member.
+    const soloActive = await createTestUser({ email: 'mc-solo@test.com' });
+    await createMembership({
+      userId: soloActive.id,
+      organizationId: organization.id,
+      roleId: roleB.id,
+      status: 'ACTIVE',
+    });
+
+    const counts = await repository.countMembersByRoleForOrganization(organization.id);
+    expect(counts.get(roleA.id)).toBe(2); // ACTIVE + INVITED; SUSPENDED excluded
+    expect(counts.get(roleB.id)).toBe(1);
+    // A role with no counted members is absent from the map — callers default it to 0.
+    expect(counts.has(emptyRole.id)).toBe(false);
+
+    // The single-role variant shares the status filter and matches the aggregate.
+    expect(await repository.countMembersForRole(roleA.id, organization.id)).toBe(2);
+    expect(await repository.countMembersForRole(emptyRole.id, organization.id)).toBe(0);
+  });
 });
