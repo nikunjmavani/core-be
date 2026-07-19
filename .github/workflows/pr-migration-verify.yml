@@ -1,0 +1,113 @@
+name: Migration verify
+
+# Path-scoped, fast migration feedback. Runs ONLY on PRs that touch migrations, Drizzle
+# schemas, or the migration runner — so a schema/migration author learns within ~90s that
+# the migrations apply cleanly from scratch AND are idempotent, without waiting for the full
+# ~12-minute DB test matrix.
+#
+# What it adds over the existing gates:
+#   - The integration matrix already applies migrations (each shard runs `pnpm db:migrate`),
+#     so "applies cleanly" is already merge-blocking — this lane just surfaces it FAST and in
+#     isolation on the PRs where it matters.
+#   - Idempotency (a second `db:migrate` must be a no-op) is NOT checked anywhere else. A
+#     migration that re-applies, or one whose filename collides / is not recorded in
+#     `public.schema_migrations`, is caught here.
+#   - `db:migrate:lint` (safety DDL lint) already runs on every non-docs PR via pr-ci.yml, so
+#     it is intentionally NOT duplicated here.
+#
+# Advisory by design: NOT in the `main` ruleset's required checks (the matrix is the
+# authoritative blocking gate for apply failures). To promote it to blocking, add a job that
+# `needs` it to pr-ci.yml's `quality-gate` and to REQUIRED_LANES in
+# src/tests/unit/ci/pr-quality-gate.policy.unit.test.ts — do not add it to the ruleset directly.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'migrations/**'
+      - 'src/domains/**/*.schema.ts'
+      - 'src/infrastructure/database/migration/**'
+      - 'src/infrastructure/database/pg-schemas.ts'
+      # Self-test: a change to this workflow re-runs it so it never rots silently.
+      - '.github/workflows/pr-migration-verify.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migration-verify-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
+
+jobs:
+  verify:
+    name: Migration verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17.10-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: core
+          POSTGRES_PASSWORD: core
+          POSTGRES_DB: core
+        options: >-
+          --health-cmd="pg_isready -U core -d core"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      NODE_ENV: development
+      LOG_LEVEL: warn
+      # Migrations connect to Postgres only; REDIS_URL / ALLOWED_ORIGINS are set to satisfy the
+      # env-schema (both are required strings) — nothing here connects to Redis.
+      DATABASE_URL: postgresql://core:core@localhost:5432/core
+      REDIS_URL: redis://localhost:6379
+      ALLOWED_ORIGINS: http://localhost:3000
+      DATABASE_SSL_ENABLED: 'false'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Export shared CI test env (JWT keys + secrets-encryption)
+        uses: ./.github/actions/test-env
+
+      - name: Apply migrations from scratch
+        run: pnpm db:migrate
+
+      - name: Re-run is idempotent (a second migrate applies nothing)
+        run: |
+          set -euo pipefail
+          before=$(psql "$DATABASE_URL" -tAc 'SELECT count(*) FROM public.schema_migrations;' | tr -d '[:space:]')
+          pnpm db:migrate
+          after=$(psql "$DATABASE_URL" -tAc 'SELECT count(*) FROM public.schema_migrations;' | tr -d '[:space:]')
+          echo "schema_migrations rows: before=${before} after=${after}"
+          if [ "${before}" != "${after}" ]; then
+            echo "::error title=Migrations are not idempotent::A second 'db:migrate' changed public.schema_migrations (${before} -> ${after}). A migration re-applied or was not recorded — check for a duplicate/renamed filename or a runner tracking bug."
+            exit 1
+          fi
+          echo "Idempotent: a second migrate applied no new migrations."
+
+      - name: Dry-run applies the full sequence on a disposable database
+        env:
+          DATABASE_MIGRATION_URL: postgresql://core:core@localhost:5432/core_dryrun
+        run: |
+          set -euo pipefail
+          # db:migrate:dry-run applies every pending migration WITHOUT recording it — the
+          # "validate against a disposable database" path the script is built for. A fresh
+          # database means all migrations are pending, so this replays the entire SQL sequence
+          # top-to-bottom and fails loudly on any statement error.
+          psql "$DATABASE_URL" -c 'CREATE DATABASE core_dryrun;'
+          pnpm db:migrate:dry-run
