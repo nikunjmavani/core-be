@@ -1,6 +1,12 @@
 name: Reusable — integration tests with Postgres and Redis
 
-# Post-merge integration gate: three parallel DB shards (no unit/global — those run on PR).
+# Post-merge integration gate: five parallel DB shards (no unit/global — those run on PR).
+# Domain e2e/integration is split across three domain shards; the cross-cutting projects
+# (unit-db + security + performance + non-domain `rest` e2e/integration) are the heaviest single
+# group (~150 files, ~277s of module import alone), so they are split in HALF with vitest
+# `--shard=1/2` / `2/2` — an even by-file-count split across the two runners. Both halves carry
+# route-exercising tests (security + e2e/integration span both), so each still emits its
+# route-status observation and the shard-completeness guard holds.
 # Always migrates against ephemeral Postgres + Redis and enforces merged coverage thresholds.
 
 on:
@@ -55,7 +61,7 @@ jobs:
         id: config
         run: |
           set -euo pipefail
-          shards_compact='[{"name":"tenancy + billing","id":"db-tenancy-billing","projects":"--project e2e --project integration","domain_filter":"tenancy,billing"},{"name":"auth + user","id":"db-auth-user","projects":"--project e2e --project integration","domain_filter":"auth,user"},{"name":"notify + audit + upload","id":"db-rest","projects":"--project unit-db --project e2e --project integration --project security --project performance","domain_filter":"notify,audit,upload,rest"}]'
+          shards_compact='[{"name":"tenancy + billing","id":"db-tenancy-billing","projects":"--project e2e --project integration","domain_filter":"tenancy,billing"},{"name":"auth + user","id":"db-auth-user","projects":"--project e2e --project integration","domain_filter":"auth,user"},{"name":"notify + audit + upload","id":"db-notify-audit-upload","projects":"--project e2e --project integration","domain_filter":"notify,audit,upload"},{"name":"cross-cutting 1/2","id":"db-crosscutting-1","projects":"--project unit-db --project e2e --project integration --project security --project performance --shard=1/2","domain_filter":"rest"},{"name":"cross-cutting 2/2","id":"db-crosscutting-2","projects":"--project unit-db --project e2e --project integration --project security --project performance --shard=2/2","domain_filter":"rest"}]'
           echo "shards=${shards_compact}" >> "$GITHUB_OUTPUT"
           echo "Selected shards:"
           jq . <<<"${shards_compact}"
