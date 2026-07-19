@@ -1577,6 +1577,34 @@ export const envSchemaKeys = Object.keys(envSchemaBase.shape) as (keyof z.infer<
 >)[];
 
 /**
+ * Resolved default value — stringified — for every schema key that HAS one, keyed by env var name.
+ *
+ * @remarks
+ * Built with Zod's public `safeParse(undefined)` — the exact default-resolution the runtime applies
+ * at boot, and the same technique {@link envSchemaRequiredKeys} uses — so it never touches Zod
+ * internals and degrades safely: a key that resolves to `undefined` (optional-without-default) or
+ * fails to parse (required) is simply ABSENT from the map. Values are post-transform and stringified
+ * (`booleanString('false')` → `'false'`, `.default(3000)` → `'3000'`, `.default('info')` → `'info'`).
+ *
+ * Consumed by `pnpm github:sync` (`tooling/setup/github/sync-github-environments.ts`): a variable
+ * whose local value string-equals this default is NOT pushed to the GitHub Environment and is pruned
+ * if already present — an unset variable falls back to exactly this value at boot, so storing it is
+ * redundant. The match is exact-string and therefore conservative: a semantically-equivalent but
+ * differently-written value (`'1'` for a boolean, `'3000.0'` for a number) does NOT match and is
+ * kept as an override, so the tool can never wrongly drop a real override.
+ */
+export const envSchemaDefaults: Readonly<Record<string, string>> = (() => {
+  const defaults: Record<string, string> = {};
+  for (const [key, schema] of Object.entries(envSchemaBase.shape)) {
+    const parsed = (schema as z.ZodTypeAny).safeParse(undefined);
+    if (parsed.success && parsed.data !== undefined && parsed.data !== null) {
+      defaults[key] = String(parsed.data);
+    }
+  }
+  return defaults;
+})();
+
+/**
  * Keys whose schema entry has no default and is not marked `.optional()`. These must
  * always be present at runtime — the app Zod-rejects on first request otherwise.
  *

@@ -54,6 +54,7 @@ interface CliOptions {
   readonly dryRun: boolean;
   readonly skipConfirmation: boolean;
   readonly prune: boolean;
+  readonly keepSchemaDefaults: boolean;
   readonly environments: string[];
 }
 
@@ -62,7 +63,9 @@ function parseArguments(): CliOptions {
   const environments: string[] = [];
 
   if (argumentsList.includes('--help') || argumentsList.includes('-h')) {
-    console.log('Usage: pnpm github:sync [environment...] [--check | --dry-run] [--yes] [--prune]');
+    console.log(
+      'Usage: pnpm github:sync [environment...] [--check | --dry-run] [--yes] [--prune] [--keep-schema-defaults]',
+    );
     console.log('');
     console.log('  (default)   All environments: scaffold + remote apply + full reconcile');
     console.log('  environment Optional environment name(s), e.g. production');
@@ -70,10 +73,19 @@ function parseArguments(): CliOptions {
     console.log('  --dry-run   Preview remote and values push (no writes)');
     console.log('  --yes       Skip the values-push confirmation prompt');
     console.log('  --prune     Delete remote environments not in setup.config.json');
+    console.log('  --keep-schema-defaults  Push variables equal to their env-schema default');
+    console.log('                          instead of skipping and pruning them');
     process.exit(0);
   }
 
-  const allowed = new Set(['--check', '--dry-run', '--yes', '-y', '--prune']);
+  const allowed = new Set([
+    '--check',
+    '--dry-run',
+    '--yes',
+    '-y',
+    '--prune',
+    '--keep-schema-defaults',
+  ]);
   for (const argument of argumentsList) {
     if (allowed.has(argument)) continue;
     if (argument.startsWith('--')) {
@@ -94,6 +106,7 @@ function parseArguments(): CliOptions {
     dryRun: argumentsList.includes('--dry-run'),
     skipConfirmation: argumentsList.includes('--yes') || argumentsList.includes('-y'),
     prune: argumentsList.includes('--prune'),
+    keepSchemaDefaults: argumentsList.includes('--keep-schema-defaults'),
     environments,
   };
 }
@@ -228,7 +241,8 @@ function isInteractiveShell(): boolean {
 }
 
 async function main(): Promise<void> {
-  const { checkOnly, dryRun, skipConfirmation, prune, environments } = parseArguments();
+  const { checkOnly, dryRun, skipConfirmation, prune, keepSchemaDefaults, environments } =
+    parseArguments();
   const mode: SyncMode = checkOnly ? 'check' : dryRun ? 'dry-run' : 'sync';
   const config = loadConfig();
 
@@ -313,6 +327,11 @@ async function main(): Promise<void> {
       console.log('  ! This reconciles GitHub Environments against local .env.<env> files.');
       console.log('  ! Items in the local files are pushed; items on GitHub NOT in the');
       console.log('  ! local files are DELETED. The local file is the source of truth.');
+      if (!keepSchemaDefaults) {
+        console.log('  ! Variables equal to their env-schema default are NOT pushed and are');
+        console.log('  ! pruned from GitHub (runtime uses the default). --keep-schema-defaults');
+        console.log('  ! pushes them verbatim.');
+      }
       console.log('  ! Type "sync" to proceed (anything else aborts).');
       console.log('');
       const confirmed = await askExactPhrase('  Confirm: ', 'sync');
@@ -331,6 +350,7 @@ async function main(): Promise<void> {
   let totalUnchanged = 0;
   let totalEmptySkipped = 0;
   let totalDeleted = 0;
+  let totalSchemaDefaultSkipped = 0;
 
   for (const entry of localFiles) {
     console.log(`--- ${entry.environment} ---`);
@@ -339,11 +359,13 @@ async function main(): Promise<void> {
         environment: entry.environment,
         dryRun,
         skipPreflight: true,
+        keepSchemaDefaults,
       });
       totalPushed += result.pushed;
       totalUnchanged += result.unchanged;
       totalEmptySkipped += result.emptySkipped;
       totalDeleted += result.deleted;
+      totalSchemaDefaultSkipped += result.schemaDefaultSkipped;
     } catch (error) {
       valueFailures += 1;
       console.error(`Sync for "${entry.environment}" failed.`);
@@ -364,11 +386,17 @@ async function main(): Promise<void> {
 
   console.log(
     `Sync complete — pushed ${totalPushed}, unchanged ${totalUnchanged}, ` +
-      `empty ${totalEmptySkipped}, deleted ${totalDeleted} across ${localFiles.length} environment(s).`,
+      `empty ${totalEmptySkipped}, schema-default ${totalSchemaDefaultSkipped}, ` +
+      `deleted ${totalDeleted} across ${localFiles.length} environment(s).`,
   );
   if (totalEmptySkipped > 0) {
     console.log(
       `  ${totalEmptySkipped} key(s) are declared but blank locally — not pushed, and their remote values were left intact.`,
+    );
+  }
+  if (totalSchemaDefaultSkipped > 0) {
+    console.log(
+      `  ${totalSchemaDefaultSkipped} variable(s) equal their env-schema default — not pushed, and pruned from GitHub so the runtime falls back to the same default (use --keep-schema-defaults to push them).`,
     );
   }
 }

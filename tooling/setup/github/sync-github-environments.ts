@@ -12,12 +12,22 @@
  *   - Secrets are always re-encrypted and pushed (GitHub hides secret values).
  *   - Keys absent from the local file entirely → DELETED on GitHub (file is truth).
  *   - Variables with unchanged values → left alone (counted as `unchanged`).
+ *   - Variables whose value EQUALS their env-schema default → not pushed, and pruned
+ *     from GitHub if present (the runtime falls back to the identical default, so
+ *     storing it is redundant). Reported as `schema-default`. Pass
+ *     `--keep-schema-defaults` to push them verbatim like any other variable.
  *
  * A key DECLARED in the local file but left blank (`KEY=`) is neither pushed nor
  * deleted: blank means "not managed here" (optional integrations ship blank in
  * `.env.example`), so the remote value is preserved. Only removing the key's LINE
  * marks it stale and deletes it. Blank keys are reported as `empty` in the summary
  * so a half-filled env file is visible rather than silent.
+ *
+ * The schema-default skip only ever applies to VARIABLES whose value matches the
+ * exact stringified default from {@link envSchemaDefaults} (secrets and required keys
+ * have no resolvable default and are always pushed). The match is conservative — a
+ * value written in a different-but-equivalent form is treated as an override — so a
+ * real override can never be dropped. See `envSchemaDefaults` for the extraction.
  *
  * Usage:
  *   pnpm github:sync development
@@ -32,6 +42,7 @@ import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import sodium from 'libsodium-wrappers';
 
+import { envSchemaDefaults } from '@/shared/config/env-schema.js';
 import { runGhAuthPreflight } from './auth-preflight.js';
 
 const projectRoot = process.cwd();
@@ -233,6 +244,11 @@ export interface SyncEnvironmentToGitHubOptions {
   readonly dryRun: boolean;
   readonly skipCreate?: boolean;
   readonly skipPreflight?: boolean;
+  /**
+   * Push variables that equal their env-schema default verbatim instead of skipping
+   * and pruning them. Restores the pre-schema-default reconciliation behaviour.
+   */
+  readonly keepSchemaDefaults?: boolean;
 }
 
 interface EnvEntry {
@@ -305,21 +321,55 @@ export function parseEnvContents(contents: string): EnvEntry[] {
 }
 
 /**
- * Splits declared entries into the ones to push and the ones left blank.
+ * Splits declared entries into the ones to push, the ones left blank, and the ones
+ * whose value equals their env-schema default.
  *
  * @remarks
- * A blank local value (`KEY=`) is pushed to nobody, but it stays DECLARED — see
- * {@link findStaleRemoteKeys}. Blank means "not managed here" (optional integrations ship blank in
- * `.env.example`), so the remote value is preserved rather than deleted.
+ * Three disjoint buckets:
+ *   - `blank` — `KEY=` with an empty value. Pushed to nobody but stays DECLARED (see
+ *     {@link findStaleRemoteKeys}); "not managed here", so the remote value is preserved.
+ *   - `schemaDefault` — a VARIABLE (never a secret) whose value string-equals its
+ *     {@link envSchemaDefaults} entry. Not pushed AND intentionally treated as
+ *     not-declared by the caller so the prune removes any stale remote copy — the
+ *     runtime falls back to the identical default. Suppressed when `keepSchemaDefaults`
+ *     is set, which routes these back into `pushable` (legacy push-everything behaviour).
+ *   - `pushable` — everything else (all secrets, and variables that override a default).
+ *
+ * `schemaDefaults` is injectable for tests; it defaults to the real {@link envSchemaDefaults}.
  */
-export function splitDeclaredEntries(declared: readonly EnvEntry[]): {
+export function splitDeclaredEntries(
+  declared: readonly EnvEntry[],
+  options: {
+    readonly schemaDefaults?: Readonly<Record<string, string>>;
+    readonly keepSchemaDefaults?: boolean;
+  } = {},
+): {
   pushable: EnvEntry[];
   blank: EnvEntry[];
+  schemaDefault: EnvEntry[];
 } {
-  return {
-    pushable: declared.filter((entry) => entry.value !== ''),
-    blank: declared.filter((entry) => entry.value === ''),
-  };
+  const schemaDefaults = options.schemaDefaults ?? envSchemaDefaults;
+  const pushable: EnvEntry[] = [];
+  const blank: EnvEntry[] = [];
+  const schemaDefault: EnvEntry[] = [];
+
+  for (const entry of declared) {
+    if (entry.value === '') {
+      blank.push(entry);
+      continue;
+    }
+    const equalsSchemaDefault =
+      !options.keepSchemaDefaults &&
+      classifyKey(entry.name) === 'variable' &&
+      schemaDefaults[entry.name] === entry.value;
+    if (equalsSchemaDefault) {
+      schemaDefault.push(entry);
+      continue;
+    }
+    pushable.push(entry);
+  }
+
+  return { pushable, blank, schemaDefault };
 }
 
 /**
@@ -555,6 +605,8 @@ export interface SyncEnvironmentResult {
   /** Keys declared in the local file but left blank — neither pushed nor deleted. */
   emptySkipped: number;
   deleted: number;
+  /** Variables equal to their env-schema default — not pushed; pruned from remote if present. */
+  schemaDefaultSkipped: number;
 }
 
 /**
@@ -566,7 +618,13 @@ export interface SyncEnvironmentResult {
 export async function syncEnvironmentToGitHub(
   options: SyncEnvironmentToGitHubOptions,
 ): Promise<SyncEnvironmentResult> {
-  const { environment, dryRun, skipCreate = false, skipPreflight = false } = options;
+  const {
+    environment,
+    dryRun,
+    skipCreate = false,
+    skipPreflight = false,
+    keepSchemaDefaults = false,
+  } = options;
   const envFilePath = resolve(projectRoot, `.env.${environment}`);
 
   if (!existsSync(envFilePath)) {
@@ -576,17 +634,27 @@ export async function syncEnvironmentToGitHub(
   }
 
   const declaredEntries = parseEnvFile(envFilePath);
-  const { pushable: pushableEntries, blank: blankEntries } = splitDeclaredEntries(declaredEntries);
+  const {
+    pushable: pushableEntries,
+    blank: blankEntries,
+    schemaDefault: schemaDefaultEntries,
+  } = splitDeclaredEntries(declaredEntries, { keepSchemaDefaults });
   const secrets = pushableEntries.filter((e) => classifyKey(e.name) === 'secret');
   const variables = pushableEntries.filter((e) => classifyKey(e.name) === 'variable');
 
   // Stale-detection uses DECLARED names (blank included) so blanking a value never
-  // deletes the live remote item — only deleting the key's line does.
+  // deletes the live remote item — only deleting the key's line does. Schema-default
+  // variables are the deliberate exception: they are EXCLUDED from the declared set so
+  // the prune removes any stale remote copy and the runtime falls back to the identical
+  // default (secrets never qualify as schema-default — see splitDeclaredEntries).
+  const schemaDefaultNames = new Set(schemaDefaultEntries.map((e) => e.name));
   const localSecretNames = new Set(
     declaredEntries.filter((e) => classifyKey(e.name) === 'secret').map((e) => e.name),
   );
   const localVariableNames = new Set(
-    declaredEntries.filter((e) => classifyKey(e.name) === 'variable').map((e) => e.name),
+    declaredEntries
+      .filter((e) => classifyKey(e.name) === 'variable' && !schemaDefaultNames.has(e.name))
+      .map((e) => e.name),
   );
 
   console.log(`Source:      .env.${environment}`);
@@ -600,14 +668,31 @@ export async function syncEnvironmentToGitHub(
       console.log(`  [empty]    ${entry.name}`);
     }
   }
+  if (schemaDefaultEntries.length > 0) {
+    console.log(
+      `Default:     ${schemaDefaultEntries.length} equal the env-schema default — not pushed, pruned from remote (runtime uses the default)`,
+    );
+    for (const entry of schemaDefaultEntries) {
+      console.log(`  [default]  ${entry.name}=${entry.value}`);
+    }
+  }
   console.log('');
 
   if (dryRun) {
     for (const entry of secrets) console.log(`  [secret]   ${entry.name}`);
     for (const entry of variables) console.log(`  [variable] ${entry.name}`);
+    for (const entry of schemaDefaultEntries) {
+      console.log(`  [default]  ${entry.name} (equals schema default — not pushed, pruned)`);
+    }
     console.log('');
     console.log('Dry run — no API calls made. Drop --dry-run to push.');
-    return { pushed: 0, unchanged: 0, emptySkipped: blankEntries.length, deleted: 0 };
+    return {
+      pushed: 0,
+      unchanged: 0,
+      emptySkipped: blankEntries.length,
+      deleted: 0,
+      schemaDefaultSkipped: schemaDefaultEntries.length,
+    };
   }
 
   const repositoryFullName = getRepositoryFullName();
@@ -740,7 +825,11 @@ export async function syncEnvironmentToGitHub(
       try {
         await deleteVariable(token, repositoryFullName, environment, name);
         deleted += 1;
-        const note = crossKindDuplicates.has(name) ? ' (now a secret)' : '';
+        const note = crossKindDuplicates.has(name)
+          ? ' (now a secret)'
+          : schemaDefaultNames.has(name)
+            ? ' (equals schema default)'
+            : '';
         console.log(`  [deleted]  variable ${name}${note}`);
       } catch (deleteError) {
         const msg = deleteError instanceof Error ? deleteError.message : String(deleteError);
@@ -753,24 +842,38 @@ export async function syncEnvironmentToGitHub(
   console.log('');
   console.log(
     `Done. Pushed ${pushed}, unchanged ${unchanged}, empty ${blankEntries.length}, ` +
-      `deleted ${deleted} in ${formatDuration(totalDuration)}.`,
+      `schema-default ${schemaDefaultEntries.length}, deleted ${deleted} in ${formatDuration(totalDuration)}.`,
   );
   console.log('Verify: pnpm github:sync --check');
 
-  return { pushed, unchanged, emptySkipped: blankEntries.length, deleted };
+  return {
+    pushed,
+    unchanged,
+    emptySkipped: blankEntries.length,
+    deleted,
+    schemaDefaultSkipped: schemaDefaultEntries.length,
+  };
 }
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
 
   if (argv.includes('--help') || argv.includes('-h')) {
-    console.log('Usage: pnpm github:sync <environment> [--dry-run] [--no-create]');
+    console.log(
+      'Usage: pnpm github:sync <environment> [--dry-run] [--no-create] [--keep-schema-defaults]',
+    );
     console.log('       pnpm github:sync --all [--dry-run]');
+    console.log('');
+    console.log(
+      '  --keep-schema-defaults  Push variables equal to their env-schema default instead of',
+    );
+    console.log('                          skipping and pruning them (legacy push-everything).');
     process.exit(0);
   }
 
   const dryRun = argv.includes('--dry-run') || argv.includes('-n');
   const skipCreate = argv.includes('--no-create');
+  const keepSchemaDefaults = argv.includes('--keep-schema-defaults');
   const env = argv.find((a) => !a.startsWith('--') && a !== '-n');
 
   if (!env) {
@@ -779,7 +882,7 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
-  await syncEnvironmentToGitHub({ environment: env, dryRun, skipCreate });
+  await syncEnvironmentToGitHub({ environment: env, dryRun, skipCreate, keepSchemaDefaults });
 }
 
 const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);

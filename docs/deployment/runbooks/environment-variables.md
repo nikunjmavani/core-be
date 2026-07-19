@@ -242,6 +242,16 @@ pnpm github:sync <environment>              # push
 `github:sync` is **idempotent** and **overwrites in place** — running it twice
 with the same file is a no-op for unchanged keys.
 
+A variable whose value **equals its env-schema default** is deliberately **not
+pushed**, and is **pruned** from the GitHub Environment if already present — an
+unset variable falls back to that exact default at boot (`envSchemaDefaults` in
+`src/shared/config/env-schema.ts`), so storing it is redundant. The sync reports
+these as `schema-default`, so each hosted environment holds **only real overrides
++ secrets**. The match is exact-string and conservative (a differently-written but
+equivalent value is treated as an override, never dropped); secrets and required
+keys have no default and are always pushed. Pass **`--keep-schema-defaults`** to
+push default-valued variables verbatim instead.
+
 ## 6. Renaming a key
 
 A rename is atomic — delete + add in the **same PR**:
@@ -251,11 +261,13 @@ A rename is atomic — delete + add in the **same PR**:
 3. **Remove the old key** from the schema, `.env.example`, and any consumers.
 4. `pnpm tool:sync-env-example` — must report 0 missing / 0 extra.
 5. Update local `.env.<environment>` files manually.
-6. After merge, delete the old key from GitHub:
+6. After merge, remove the old key from GitHub. Once the old key is gone from
+   `.env.<environment>` (step 5), the **next `pnpm github:sync <environment>`
+   prunes it automatically** — the file is the source of truth, so any
+   Secret/Variable on GitHub not present in the file is deleted. To remove it
+   immediately without waiting for a sync:
    - Secret: `gh secret delete <OLD_NAME> --env <environment>`
    - Variable: `gh api --method DELETE repos/:owner/:repo/environments/<environment>/variables/<OLD_NAME>`
-
-   `github:sync` does **not** remove keys — it only creates and updates.
 
 ## 7. Removing a key
 
@@ -275,7 +287,7 @@ A rename is atomic — delete + add in the **same PR**:
 | `pnpm tool:sync-env-example`            | Schema ↔ `.env.example` parity; both halves present                                 | local, pre-commit, CI `ci:quality`   |
 | `pnpm github:sync --check`              | `NODE_ENV` enum ↔ config ↔ rulesets ↔ workflow ↔ GitHub env JSON; remote ruleset/env drift | local before sync                    |
 | `pnpm validate:github-env-runtime` | Each `envSchemaRequiredKeys` key is present in the exported GitHub Environment   | deploy workflow (pre-deploy step) |
-| `pnpm github:sync <env> --dry-run`      | Local `.env.<env>` → GitHub plan; surfaces typos and Secret/Variable column         | local before each sync               |
+| `pnpm github:sync <env> --dry-run`      | Local `.env.<env>` → GitHub plan; surfaces typos, Secret/Variable column, and which variables are skipped as `schema-default` | local before each sync               |
 
 Run `pnpm github:sync --check`, `pnpm tool:sync-env-example`, and (when pushing values) `pnpm github:sync <env> --dry-run` before merging env plumbing changes.
 
