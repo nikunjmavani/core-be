@@ -247,7 +247,7 @@ pushed**, and is **pruned** from the GitHub Environment if already present — a
 unset variable falls back to that exact default at boot (`envSchemaDefaults` in
 `src/shared/config/env-schema.ts`), so storing it is redundant. The sync reports
 these as `schema-default`, so each hosted environment holds **only real overrides
-+ secrets**. The match is exact-string and conservative (a differently-written but
+and secrets**. The match is exact-string and conservative (a differently-written but
 equivalent value is treated as an override, never dropped); secrets and required
 keys have no default and are always pushed. Pass **`--keep-schema-defaults`** to
 push default-valued variables verbatim instead.
