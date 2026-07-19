@@ -186,6 +186,8 @@ describe('MemberRoleService.update — sec-T3 is_system guard', () => {
   const roleRepoForUpdate = {
     findByPublicId: vi.fn(),
     update: vi.fn(),
+    // update() now projects member_count via a single-role count after the write.
+    countMembersForRole: vi.fn().mockResolvedValue(0),
   } as unknown as MemberRoleRepository;
 
   const updateService = new MemberRoleService(

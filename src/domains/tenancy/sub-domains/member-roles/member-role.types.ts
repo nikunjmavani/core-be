@@ -17,13 +17,16 @@ export interface MemberRoleRow {
 
 /**
  * Public HTTP response shape for a role. `id` is the role's external
- * `public_id`; timestamps are ISO-8601 strings.
+ * `public_id`; timestamps are ISO-8601 strings. `member_count` is the number of
+ * ACTIVE or INVITED memberships assigned this role in the organization (0 when
+ * none) — computed per response, never stored.
  */
 export interface MemberRoleOutput {
   id: string;
   name: string;
   description: string | null;
   is_system: boolean;
+  member_count: number;
   created_at: string;
   updated_at: string;
 }

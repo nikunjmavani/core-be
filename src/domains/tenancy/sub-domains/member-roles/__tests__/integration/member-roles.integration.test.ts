@@ -13,6 +13,7 @@ import { createTestOrganization } from '@/tests/factories/organization.factory.j
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
 import {
   seedPermissions,
+  seedAllPermissions,
   createRoleWithPermissions,
   createMembership,
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
@@ -97,6 +98,55 @@ describe('Member Roles Sub-Domain — Integration', () => {
         token,
       });
       expect(response.statusCode).toBe(200);
+    });
+
+    it('includes member_count per role: Owner counted, an assigned role counted, unassigned roles 0', async () => {
+      // TEAM provisioning grants tenancy + billing codes (role_permissions FK → permissions.code),
+      // so the full permission catalog must exist first.
+      await seedAllPermissions();
+      const owner = await createTestUser();
+      const team = await provisionOrganizationWithOwner({
+        name: 'Member Count Team',
+        slug: `mc-${generatePublicId('organization').slice(4, 14)}`,
+        type: 'TEAM',
+        ownerUserId: owner.id,
+      });
+
+      // Provisioning seeds: Owner (with the owner's ACTIVE membership) + Admin/Member/Viewer
+      // (no members). Assign a second ACTIVE member to Admin so it also counts 1.
+      const [adminRole] = await database
+        .select({ id: roles.id })
+        .from(roles)
+        .where(and(eq(roles.organization_id, team.organization.id), eq(roles.name, 'Admin')));
+      const member = await createTestUser();
+      await createMembership({
+        userId: member.id,
+        organizationId: team.organization.id,
+        roleId: adminRole!.id,
+        status: 'ACTIVE',
+      });
+
+      const token = await generateTestToken({
+        userId: owner.public_id,
+        organizationPublicId: team.organization.public_id,
+      });
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/tenancy/organization/roles'),
+        token,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { data: Array<{ name: string; member_count: number }> };
+      const countByRole = new Map(body.data.map((role) => [role.name, role.member_count]));
+      expect(countByRole.get('Owner')).toBe(1); // the org owner's ACTIVE membership
+      expect(countByRole.get('Admin')).toBe(1); // the member assigned above
+      expect(countByRole.get('Member')).toBe(0); // unassigned system role
+      expect(countByRole.get('Viewer')).toBe(0); // unassigned system role
+      // Additive + always present: every role object carries a numeric member_count.
+      for (const role of body.data) {
+        expect(typeof role.member_count).toBe('number');
+      }
     });
   });
 
