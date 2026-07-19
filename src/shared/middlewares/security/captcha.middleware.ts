@@ -1,9 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { CircuitBreakerOpenError } from '@/infrastructure/resilience/circuit-breaker.js';
-import {
-  addSentryBreadcrumb,
-  captureMessage,
-} from '@/infrastructure/observability/sentry/sentry.js';
+import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import { getEnv } from '@/shared/config/env.config.js';
 import { UnauthorizedError } from '@/shared/errors/index.js';
 import { verifyTurnstileToken } from '@/shared/utils/security/turnstile-verifier.util.js';
@@ -12,31 +9,19 @@ import { verifyTurnstileToken } from '@/shared/utils/security/turnstile-verifier
 const CAPTCHA_PROVIDER_UNAVAILABLE_ALERT_INTERVAL_MS = 30_000;
 let lastCaptchaProviderUnavailableAlertAtMs = 0;
 
-/** Reasons the captcha pre-handler may surface to Sentry. */
-type CaptchaUnavailableReason = 'not_configured' | 'breaker_open' | 'verify_error';
+/** Outage-class reasons the captcha pre-handler surfaces to Sentry (turnstile path only). */
+type CaptchaUnavailableReason = 'breaker_open' | 'verify_error';
 
 /**
- * Surfaces the captcha provider (Cloudflare Turnstile) being unavailable as a Sentry event.
+ * Surfaces the captcha provider (Cloudflare Turnstile) being unavailable as a throttled Sentry event.
  *
  * @remarks
- * sec-C/M finding #16: the throttle is now reason-specific. The 30-second window is intended
- * for outage-class signals (`breaker_open`, `verify_error`) — a Turnstile outage that floods
- * Sentry once per minute is preferable to one event per request. Misconfiguration
- * (`not_configured`) is a different beast: there is no other observable signal beyond the
- * 401 spike, and the env-schema refine is supposed to prevent it from ever reaching
- * production. We still emit a throttled `captureMessage` for visibility, but ADDITIONALLY
- * emit a per-request breadcrumb so every blocked login is correlatable in the trace timeline
- * once an operator opens the case — without flooding `captureMessage` itself.
+ * sec-C/M finding #16: the 30-second throttle is for outage-class signals (`breaker_open`,
+ * `verify_error`) — a Turnstile outage that floods Sentry once per minute is preferable to one
+ * event per request. Misconfiguration cannot reach here: the always-on env-schema refine requires
+ * `CAPTCHA_SECRET` whenever `CAPTCHA_PROVIDER=turnstile`, so a secret-less turnstile fails at boot.
  */
 function alertCaptchaProviderUnavailable(reason: CaptchaUnavailableReason): void {
-  if (reason === 'not_configured') {
-    // Per-request breadcrumb (cheap, no rate limit) for forensic visibility.
-    addSentryBreadcrumb({
-      category: 'captcha',
-      message: 'captcha.provider_unavailable.not_configured',
-      level: 'error',
-    });
-  }
   const now = Date.now();
   if (
     now - lastCaptchaProviderUnavailableAlertAtMs <
@@ -57,16 +42,11 @@ function firstHeaderValue(rawHeader: string | string[] | undefined): string | un
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function isCaptchaEnforced(): boolean {
-  const environment = getEnv();
-  return environment.CAPTCHA_PROVIDER === 'turnstile' && Boolean(environment.CAPTCHA_SECRET);
-}
-
 function isCaptchaFailOpen(): boolean {
-  // Fail OPEN (skip captcha when Turnstile is unconfigured) is driven by CAPTCHA_FAIL_OPEN, whose
-  // default is true off production. The env-schema enforcement still requires CAPTCHA_PROVIDER=
-  // turnstile in production, so the fail-open path is only reached when a deployed instance
-  // is intentionally running without CAPTCHA.
+  // Safety valve for the TURNSTILE path: when CAPTCHA_PROVIDER=turnstile but the verify call errors
+  // (a Turnstile outage), fail OPEN (skip) vs CLOSED (block, the hardened default). It is NOT a
+  // co-flag for turning captcha off — `CAPTCHA_PROVIDER=disabled` does that on its own. The
+  // env-schema refine requires turnstile + secret in production, so this valve is dev/self-hosted only.
   return getEnv().CAPTCHA_FAIL_OPEN;
 }
 
@@ -89,21 +69,27 @@ function isCaptchaBypassAllowed(request: FastifyRequest): boolean {
 }
 
 /**
- * Validates Cloudflare Turnstile token from X-Captcha-Token on public auth routes.
- * Skipped when CAPTCHA_PROVIDER=disabled or secret unset (fail-open in dev/test only).
+ * Validates the Cloudflare Turnstile token from `X-Captcha-Token` on public auth routes.
+ * `CAPTCHA_PROVIDER=disabled` skips unconditionally (off is off — one flag, no co-flag); a
+ * misconfigured / erroring turnstile is governed by `CAPTCHA_FAIL_OPEN` (skip vs block).
+ * Production always enforces (the env-schema refine requires turnstile + secret there).
  */
 export async function captchaPreHandler(
   request: FastifyRequest,
   _reply: FastifyReply,
 ): Promise<void> {
-  if (!isCaptchaEnforced()) {
-    if (isCaptchaFailOpen()) {
-      return;
-    }
-    alertCaptchaProviderUnavailable('not_configured');
-    throw new UnauthorizedError('errors:captchaProviderUnavailable');
+  const environment = getEnv();
+
+  // `disabled` is an explicit operator choice to run WITHOUT captcha — one flag, one behaviour (no
+  // CAPTCHA_FAIL_OPEN co-flag). Never reachable in production: the env-schema refine requires
+  // CAPTCHA_PROVIDER=turnstile + CAPTCHA_SECRET there, so this early return only skips in
+  // dev / local / self-hosted.
+  if (environment.CAPTCHA_PROVIDER === 'disabled') {
+    return;
   }
 
+  // provider === 'turnstile' AND CAPTCHA_SECRET is set — both guaranteed at boot by the always-on
+  // env-schema refine (`turnstile` ⟹ secret). Enforce the token.
   if (isCaptchaBypassAllowed(request)) {
     return;
   }

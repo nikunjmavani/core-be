@@ -216,9 +216,11 @@ const envSchemaBase = z.object({
   //    an unsafe override in production. Relaxed dev/test values are set explicitly (env
   //    file / test harness) so nothing silently weakens on a deployed environment.
   /**
-   * Category-A. Captcha verification fails OPEN (skips) when Turnstile is unconfigured. Defaults
-   * false (fail closed, production-safe); development and the test harness set it true in `.env` so
-   * auth is not blocked when CAPTCHA_PROVIDER=disabled.
+   * Category-A. Safety valve for the TURNSTILE path only: when CAPTCHA_PROVIDER=turnstile but
+   * verification cannot complete (CAPTCHA_SECRET unset, or the verify call errors), fail OPEN (skip)
+   * instead of blocking auth. Defaults false (fail closed, production-safe); development and the
+   * test harness set it true in `.env`. `CAPTCHA_PROVIDER=disabled` turns captcha off on its own and
+   * does NOT require this flag (one behaviour, one variable).
    */
   CAPTCHA_FAIL_OPEN: booleanString('false'),
   /**
