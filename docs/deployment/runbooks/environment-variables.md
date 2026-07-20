@@ -18,6 +18,7 @@ invariant. This runbook covers the **per-key lifecycle**.
 | Sync one environment                 | `pnpm github:sync <environment>`              |
 | Preview without pushing              | `pnpm github:sync <environment> --dry-run`    |
 | Per-variable diff (default vs local vs remote vs decision) | `pnpm github:sync <environment> --diff` |
+| Fill missing keys as blank (no schema key silently absent) | `pnpm github:sync <environment> --fill-gaps` (a normal sync back-fills them too) |
 | Add a hosted environment             | edit `tooling/setup/setup.config.json`, then `pnpm tool:generate-project-identity` and `pnpm github:sync` |
 | Verify schema ↔ template parity      | `pnpm tool:sync-env-example`                  |
 | Verify branch/env/NODE_ENV invariant | `pnpm github:sync --check`                    |
@@ -206,8 +207,11 @@ Step by step:
    appended placeholders into the right half/sub-section by hand, with a
    description.
 
-4. **Update local `.env.<environment>` files manually** so they contain the new
-   key under the same half + sub-section. Do not overwrite real values.
+4. **Update local `.env.<environment>` files** so they contain the new key. Either
+   add it by hand under the same half + sub-section (do not overwrite real values),
+   or run `pnpm github:sync <env> --fill-gaps` to append it as a blank line — a normal
+   `pnpm github:sync` also back-fills any missing key automatically via its scaffold
+   step, so a schema key can never stay silently absent from an environment file.
 
 5. **Dry-run the GitHub sync for each hosted env:**
 

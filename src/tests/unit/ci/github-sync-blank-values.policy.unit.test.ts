@@ -1,4 +1,8 @@
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { fillEnvFileGaps, findEnvFileGaps } from '@tooling/setup/github/sync-config.js';
 import {
   findStaleRemoteKeys,
   formatSyncPreviewTable,
@@ -215,5 +219,61 @@ describe('planEnvironmentSyncPreview', () => {
     expect(table).toContain(`total=${rows.length}`);
     expect(table).toContain('skip+prune=1');
     expect(table).not.toContain('sk_live'); // secret values never leak into the table
+  });
+});
+
+describe('findEnvFileGaps', () => {
+  const referenceKeys = ['PORT', 'LOG_LEVEL', 'CAPTCHA_FAIL_OPEN', 'PERSONAL_ORGANIZATION_ENABLED'];
+
+  it('reports reference keys that have no line at all', () => {
+    expect(findEnvFileGaps({ contents: 'PORT=3000\nLOG_LEVEL=debug\n', referenceKeys })).toEqual([
+      'CAPTCHA_FAIL_OPEN',
+      'PERSONAL_ORGANIZATION_ENABLED',
+    ]);
+  });
+
+  it('treats a commented key as declared — no gap, so no duplicate and no silent uncommenting', () => {
+    const contents =
+      'PORT=3000\n# CAPTCHA_FAIL_OPEN=\nLOG_LEVEL=debug\nPERSONAL_ORGANIZATION_ENABLED=true\n';
+    expect(findEnvFileGaps({ contents, referenceKeys })).toEqual([]);
+  });
+
+  it('treats a blank-valued key as declared (already present)', () => {
+    const contents = 'PORT=\nLOG_LEVEL=\nCAPTCHA_FAIL_OPEN=\nPERSONAL_ORGANIZATION_ENABLED=\n';
+    expect(findEnvFileGaps({ contents, referenceKeys })).toEqual([]);
+  });
+
+  it('defaults to the real envSchemaKeys when none are passed', () => {
+    const gaps = findEnvFileGaps({ contents: 'PORT=3000\n' });
+    expect(gaps).not.toContain('PORT'); // declared → not a gap
+    expect(gaps).toContain('LOG_LEVEL'); // a real schema key absent from the file → gap
+  });
+});
+
+describe('fillEnvFileGaps', () => {
+  const referenceKeys = ['PORT', 'LOG_LEVEL', 'CAPTCHA_FAIL_OPEN', 'PERSONAL_ORGANIZATION_ENABLED'];
+
+  it('appends missing keys as blank lines, idempotently, without touching existing lines', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'env-gap-')), '.env.scratch');
+    writeFileSync(file, 'PORT=3000\nLOG_LEVEL=debug\n');
+
+    const first = fillEnvFileGaps({ envFilePath: file, referenceKeys });
+    expect(first.filled).toEqual(['CAPTCHA_FAIL_OPEN', 'PERSONAL_ORGANIZATION_ENABLED']);
+    const after = readFileSync(file, 'utf-8');
+    expect(after).toContain('PORT=3000'); // existing lines preserved verbatim
+    expect(after).toContain('LOG_LEVEL=debug');
+    expect(after).toContain('\nCAPTCHA_FAIL_OPEN=');
+    expect(after).toContain('\nPERSONAL_ORGANIZATION_ENABLED=');
+
+    // Idempotent: the appended blanks now count as declared, so a second run is a no-op.
+    const second = fillEnvFileGaps({ envFilePath: file, referenceKeys });
+    expect(second.filled).toEqual([]);
+    expect(readFileSync(file, 'utf-8')).toEqual(after);
+  });
+
+  it('returns nothing for a file that does not exist', () => {
+    expect(
+      fillEnvFileGaps({ envFilePath: join(tmpdir(), 'does-not-exist', '.env.x') }).filled,
+    ).toEqual([]);
   });
 });

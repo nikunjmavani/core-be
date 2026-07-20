@@ -17,14 +17,19 @@
  *   --check    — consistency + read-only remote drift; no writes.
  *   --dry-run  — consistency + preview remote and values; no writes.
  *   --diff     — read-only per-variable table (schema default vs local vs remote vs decision); no writes.
+ *   --fill-gaps — append any schema key missing from .env.<env> as a blank line; writes local files only.
  *   --yes      — skip values confirmation (automation).
+ *
+ * A normal sync also fills those gaps automatically (via the scaffold step), so `--fill-gaps` is just
+ * the standalone form for closing them without a full push.
  *
  * Usage:
  *   pnpm github:sync                  # reconcile ALL configured environments
  *   pnpm github:sync production       # reconcile a single environment
  *   pnpm github:sync --check
  *   pnpm github:sync --dry-run
- *   pnpm github:sync development --diff   # per-variable default/local/remote/decision table
+ *   pnpm github:sync development --diff        # per-variable default/local/remote/decision table
+ *   pnpm github:sync production --fill-gaps    # append missing keys as blank (no GitHub writes)
  *   pnpm github:sync --yes
  *
  * Adding or removing a hosted environment: edit tooling/setup/setup.config.json, NODE_ENV,
@@ -41,6 +46,7 @@ import { loadConfig } from '@tooling/setup/common/config.js';
 import type { SetupConfig } from '@tooling/setup/common/types.js';
 import { runGithubInit } from './init.js';
 import {
+  fillEnvFileGaps,
   printGithubSyncConsistencyReport,
   scaffoldGithubSyncFiles,
   validateGithubSyncConsistency,
@@ -59,6 +65,7 @@ interface CliOptions {
   readonly checkOnly: boolean;
   readonly dryRun: boolean;
   readonly diff: boolean;
+  readonly fillGaps: boolean;
   readonly skipConfirmation: boolean;
   readonly prune: boolean;
   readonly keepSchemaDefaults: boolean;
@@ -80,6 +87,10 @@ function parseArguments(): CliOptions {
     console.log('  --dry-run   Preview remote and values push (no writes)');
     console.log('  --diff      Read-only per-variable table: schema default vs local vs remote vs');
     console.log('              the decision the sync would make (no writes)');
+    console.log(
+      '  --fill-gaps Append any schema key missing from .env.<env> as a blank line, so no',
+    );
+    console.log('              variable is silently absent (writes local files only, no GitHub)');
     console.log('  --yes       Skip the values-push confirmation prompt');
     console.log('  --prune     Delete remote environments not in setup.config.json');
     console.log('  --keep-schema-defaults  Push variables equal to their env-schema default');
@@ -91,6 +102,7 @@ function parseArguments(): CliOptions {
     '--check',
     '--dry-run',
     '--diff',
+    '--fill-gaps',
     '--yes',
     '-y',
     '--prune',
@@ -107,12 +119,12 @@ function parseArguments(): CliOptions {
     environments.push(argument);
   }
 
-  const readOnlyModes = ['--check', '--dry-run', '--diff'].filter((flag) =>
+  const exclusiveModes = ['--check', '--dry-run', '--diff', '--fill-gaps'].filter((flag) =>
     argumentsList.includes(flag),
   );
-  if (readOnlyModes.length > 1) {
+  if (exclusiveModes.length > 1) {
     throw new Error(
-      `Use only one of --check / --dry-run / --diff (got ${readOnlyModes.join(', ')}).`,
+      `Use only one of --check / --dry-run / --diff / --fill-gaps (got ${exclusiveModes.join(', ')}).`,
     );
   }
 
@@ -120,6 +132,7 @@ function parseArguments(): CliOptions {
     checkOnly: argumentsList.includes('--check'),
     dryRun: argumentsList.includes('--dry-run'),
     diff: argumentsList.includes('--diff'),
+    fillGaps: argumentsList.includes('--fill-gaps'),
     skipConfirmation: argumentsList.includes('--yes') || argumentsList.includes('-y'),
     prune: argumentsList.includes('--prune'),
     keepSchemaDefaults: argumentsList.includes('--keep-schema-defaults'),
@@ -229,16 +242,26 @@ function printScaffoldResult(scaffoldResult: GitHubSyncScaffoldResult): void {
     ...scaffoldResult.createdGithubEnvironmentConfigs,
     ...scaffoldResult.createdRulesets,
   ];
-  if (created.length === 0) {
+  if (created.length > 0) {
+    console.log('Local GitHub sync files scaffolded:');
+    for (const filePath of created) {
+      console.log(`  + ${filePath}`);
+    }
+    console.log('');
+  }
+  if (scaffoldResult.filledEnvironmentGaps.length > 0) {
+    console.log(
+      `Filled ${scaffoldResult.filledEnvironmentGaps.length} missing key(s) as blank (so no schema key stays silently absent):`,
+    );
+    for (const entry of scaffoldResult.filledEnvironmentGaps) {
+      console.log(`  ~ ${entry}`);
+    }
+    console.log('');
+  }
+  if (created.length === 0 && scaffoldResult.filledEnvironmentGaps.length === 0) {
     console.log('Local GitHub sync files: already present.');
     console.log('');
-    return;
   }
-  console.log('Local GitHub sync files scaffolded:');
-  for (const filePath of created) {
-    console.log(`  + ${filePath}`);
-  }
-  console.log('');
 }
 
 async function askExactPhrase(question: string, expected: string): Promise<boolean> {
@@ -257,8 +280,16 @@ function isInteractiveShell(): boolean {
 }
 
 async function main(): Promise<void> {
-  const { checkOnly, dryRun, diff, skipConfirmation, prune, keepSchemaDefaults, environments } =
-    parseArguments();
+  const {
+    checkOnly,
+    dryRun,
+    diff,
+    fillGaps,
+    skipConfirmation,
+    prune,
+    keepSchemaDefaults,
+    environments,
+  } = parseArguments();
   const mode: SyncMode = checkOnly ? 'check' : dryRun ? 'dry-run' : 'sync';
   const config = loadConfig();
 
@@ -300,9 +331,45 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
+  // --fill-gaps closes gaps explicitly without a full sync: appends any schema key missing from each
+  // target .env.<env> as a blank line. Writes local files only — no GitHub calls. (A normal sync also
+  // does this automatically via the scaffold step, so this flag is just the standalone form.)
+  if (fillGaps) {
+    const localFiles = detectLocalEnvironmentFiles(environments, config);
+    if (localFiles.length === 0) {
+      console.log('No local .env.<environment> files found to fill.');
+      process.exit(0);
+    }
+    let totalFilled = 0;
+    for (const entry of localFiles) {
+      const { filled } = fillEnvFileGaps({
+        envFilePath: resolve(PROJECT_ROOT, `.env.${entry.environment}`),
+      });
+      totalFilled += filled.length;
+      if (filled.length === 0) {
+        console.log(`.env.${entry.environment}: already complete — no gaps.`);
+      } else {
+        console.log(`.env.${entry.environment}: filled ${filled.length} missing key(s) as blank:`);
+        for (const key of filled) console.log(`  ~ ${key}`);
+      }
+    }
+    console.log('');
+    console.log(
+      totalFilled === 0
+        ? 'No gaps found. Every schema key is already declared in each environment file.'
+        : `Filled ${totalFilled} gap(s). Review the appended blank lines and set values where an override is needed.`,
+    );
+    process.exit(0);
+  }
+
   const scaffoldResult =
     checkOnly || dryRun
-      ? { createdEnvironmentFiles: [], createdGithubEnvironmentConfigs: [], createdRulesets: [] }
+      ? {
+          createdEnvironmentFiles: [],
+          createdGithubEnvironmentConfigs: [],
+          createdRulesets: [],
+          filledEnvironmentGaps: [],
+        }
       : scaffoldGithubSyncFiles(config);
   printScaffoldResult(scaffoldResult);
 

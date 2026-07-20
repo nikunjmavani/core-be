@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { envSchemaKeys } from '@/shared/config/env-schema.js';
 import { resolveGitMetadata } from '@tooling/setup/codegen/project-identity.util.js';
 import { loadConfig, getEnvironmentNames } from '@tooling/setup/common/config.js';
 import type { SetupConfig } from '@tooling/setup/common/types.js';
@@ -15,6 +16,8 @@ export interface GitHubSyncScaffoldResult {
   readonly createdEnvironmentFiles: string[];
   readonly createdGithubEnvironmentConfigs: string[];
   readonly createdRulesets: string[];
+  /** Keys back-filled as blank into an existing `.env.<environment>` (`.env.<env>: KEY`), so no schema key is silently absent. */
+  readonly filledEnvironmentGaps: string[];
 }
 
 export interface GitHubSyncConsistencyIssue {
@@ -301,6 +304,60 @@ function writeIfMissing(filePath: string, contents: string): boolean {
   return true;
 }
 
+/** Matches `KEY=` at the start of a line, whether or not it is commented out (`# KEY=`). */
+const ENV_KEY_DECLARATION = /^\s*#?\s*([A-Z][A-Z0-9_]*)=/;
+
+const GAP_FILL_HEADER = [
+  '',
+  '# -----------------------------------------------------------------------------',
+  '# Gap-fill: keys declared in the schema / .env.example but previously missing here.',
+  '# Blank inherits the schema default at runtime; set a value to override.',
+  '# -----------------------------------------------------------------------------',
+];
+
+/**
+ * Returns the reference keys that have NO line in an env file's contents (a "gap").
+ *
+ * @remarks
+ * A key is treated as declared when a line for it exists — commented (`# KEY=`) or not — so only a
+ * key with no line at all is a gap. That keeps {@link fillEnvFileGaps} from duplicating a documented
+ * optional key or silently uncommenting one. `referenceKeys` defaults to {@link envSchemaKeys}, the
+ * schema's authoritative key set that every `.env.<environment>` is meant to mirror.
+ */
+export function findEnvFileGaps(options: {
+  readonly contents: string;
+  readonly referenceKeys?: readonly string[];
+}): string[] {
+  const referenceKeys = options.referenceKeys ?? (envSchemaKeys as readonly string[]);
+  const declared = new Set<string>();
+  for (const line of options.contents.split('\n')) {
+    const match = line.match(ENV_KEY_DECLARATION);
+    if (match?.[1]) declared.add(match[1]);
+  }
+  return referenceKeys.filter((key) => !declared.has(key));
+}
+
+/**
+ * Appends every schema key missing from `.env.<environment>` as a BLANK line, so no variable is
+ * silently absent. Additive and idempotent — never edits or removes existing lines. Returns the keys
+ * it added (empty when the file is already complete or does not exist).
+ */
+export function fillEnvFileGaps(options: {
+  readonly envFilePath: string;
+  readonly referenceKeys?: readonly string[];
+}): { readonly filled: string[] } {
+  if (!existsSync(options.envFilePath)) return { filled: [] };
+  const contents = readFileSync(options.envFilePath, 'utf-8');
+  const gaps = findEnvFileGaps(
+    options.referenceKeys ? { contents, referenceKeys: options.referenceKeys } : { contents },
+  );
+  if (gaps.length === 0) return { filled: [] };
+  const separator = contents.length === 0 || contents.endsWith('\n') ? '' : '\n';
+  const appended = [...GAP_FILL_HEADER, ...gaps.map((key) => `${key}=`), ''].join('\n');
+  writeFileSync(options.envFilePath, `${contents}${separator}${appended}`, 'utf-8');
+  return { filled: gaps };
+}
+
 function scaffoldGithubSyncEnvironment(
   env: SyncEnvironment,
   exampleContent: string,
@@ -309,11 +366,19 @@ function scaffoldGithubSyncEnvironment(
     createdEnvironmentFiles: [],
     createdGithubEnvironmentConfigs: [],
     createdRulesets: [],
+    filledEnvironmentGaps: [],
   };
 
   const envFilePath = resolve(projectRoot, `.env.${env.name}`);
   if (writeIfMissing(envFilePath, buildEnvironmentFile(env.name, exampleContent))) {
     result.createdEnvironmentFiles.push(`.env.${env.name}`);
+  }
+
+  // Back-fill any schema key missing from an EXISTING file as blank, so a var added to the schema
+  // after this env file was created can never stay silently absent. A just-created file mirrors
+  // .env.example and has no gaps, so this is a no-op for it.
+  for (const key of fillEnvFileGaps({ envFilePath }).filled) {
+    result.filledEnvironmentGaps.push(`.env.${env.name}: ${key}`);
   }
 
   const githubEnvPath = resolve(projectRoot, `.github/environments/${env.name}.json`);
@@ -341,6 +406,7 @@ export function scaffoldGithubSyncFiles(config?: SetupConfig): GitHubSyncScaffol
     createdEnvironmentFiles: [],
     createdGithubEnvironmentConfigs: [],
     createdRulesets: [],
+    filledEnvironmentGaps: [],
   };
 
   for (const env of syncEnvironments) {
@@ -348,6 +414,7 @@ export function scaffoldGithubSyncFiles(config?: SetupConfig): GitHubSyncScaffol
     result.createdEnvironmentFiles.push(...single.createdEnvironmentFiles);
     result.createdGithubEnvironmentConfigs.push(...single.createdGithubEnvironmentConfigs);
     result.createdRulesets.push(...single.createdRulesets);
+    result.filledEnvironmentGaps.push(...single.filledEnvironmentGaps);
   }
 
   return result;
