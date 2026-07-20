@@ -1,21 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import {
   findStaleRemoteKeys,
+  formatSyncPreviewTable,
   parseEnvContents,
+  planEnvironmentSyncPreview,
   splitDeclaredEntries,
 } from '@tooling/setup/github/sync-github-environments.js';
 
 /** Runs the real reconciliation the sync uses: parse → split → stale-detect. */
-function reconcile(localFileContents: string, remoteKeys: string[]) {
+function reconcile(
+  localFileContents: string,
+  remoteKeys: string[],
+  options: { schemaDefaults?: Record<string, string>; keepSchemaDefaults?: boolean } = {},
+) {
   const declared = parseEnvContents(localFileContents);
-  const { pushable, blank } = splitDeclaredEntries(declared);
+  const { pushable, blank, schemaDefault } = splitDeclaredEntries(declared, options);
+  // Mirror syncEnvironmentToGitHub: schema-default variables are EXCLUDED from the
+  // declared set so the prune removes any stale remote copy (runtime falls back to the
+  // identical default); blank keys stay declared so their live remote value is preserved.
+  const schemaDefaultNames = new Set(schemaDefault.map((entry) => entry.name));
   const stale = findStaleRemoteKeys({
-    declaredNames: new Set(declared.map((entry) => entry.name)),
+    declaredNames: new Set(
+      declared.map((entry) => entry.name).filter((name) => !schemaDefaultNames.has(name)),
+    ),
     remoteKeys,
   });
   return {
     pushed: pushable.map((entry) => entry.name),
     blank: blank.map((entry) => entry.name),
+    schemaDefault: schemaDefault.map((entry) => entry.name),
     deleted: stale,
   };
 }
@@ -63,6 +76,66 @@ describe('github:sync blank-value reconciliation', () => {
   });
 });
 
+describe('github:sync schema-default reconciliation', () => {
+  // Injected default map keeps these cases independent of the real schema's values.
+  const schemaDefaults = { RATE_LIMIT_MAX: '100', LOG_LEVEL: 'info' };
+
+  it('does not push a variable whose value equals its schema default', () => {
+    const result = reconcile('RATE_LIMIT_MAX=100\nWEBHOOK_MAX_PER_ORG=999\n', [], {
+      schemaDefaults,
+    });
+    expect(result.schemaDefault).toEqual(['RATE_LIMIT_MAX']);
+    expect(result.pushed).toEqual(['WEBHOOK_MAX_PER_ORG']);
+  });
+
+  it('prunes a default-equal variable that still exists on the remote', () => {
+    // Local value == default → treated as not-declared → the remote copy is stale and
+    // deleted, so the runtime falls back to the identical default.
+    const result = reconcile('RATE_LIMIT_MAX=100\n', ['RATE_LIMIT_MAX'], { schemaDefaults });
+    expect(result.deleted).toEqual(['RATE_LIMIT_MAX']);
+    expect(result.pushed).toEqual([]);
+  });
+
+  it('pushes an overriding value and keeps it declared (not pruned)', () => {
+    const result = reconcile('RATE_LIMIT_MAX=500\n', ['RATE_LIMIT_MAX'], { schemaDefaults });
+    expect(result.pushed).toEqual(['RATE_LIMIT_MAX']);
+    expect(result.schemaDefault).toEqual([]);
+    expect(result.deleted).toEqual([]);
+  });
+
+  it('is exact-string: an equivalent-but-differently-written value is treated as an override', () => {
+    // '100.0' coerces to the same number at runtime but is not string-equal to '100',
+    // so it is conservatively pushed — the tool can never wrongly drop a real override.
+    const result = reconcile('RATE_LIMIT_MAX=100.0\n', [], { schemaDefaults });
+    expect(result.pushed).toEqual(['RATE_LIMIT_MAX']);
+    expect(result.schemaDefault).toEqual([]);
+  });
+
+  it('never treats a secret as schema-default, even if a default map lists it', () => {
+    // The skip only applies to classifyKey === 'variable'; secrets are always pushed.
+    const result = reconcile('STRIPE_SECRET_KEY=sk_test_x\n', [], {
+      schemaDefaults: { STRIPE_SECRET_KEY: 'sk_test_x' },
+    });
+    expect(result.pushed).toEqual(['STRIPE_SECRET_KEY']);
+    expect(result.schemaDefault).toEqual([]);
+  });
+
+  it('--keep-schema-defaults pushes the default-equal variable verbatim and keeps it declared', () => {
+    const result = reconcile('RATE_LIMIT_MAX=100\n', ['RATE_LIMIT_MAX'], {
+      schemaDefaults,
+      keepSchemaDefaults: true,
+    });
+    expect(result.pushed).toEqual(['RATE_LIMIT_MAX']);
+    expect(result.schemaDefault).toEqual([]);
+    expect(result.deleted).toEqual([]);
+  });
+
+  it('uses the real envSchemaDefaults by default (PORT=3000 is the shipped default)', () => {
+    expect(reconcile('PORT=3000\n', []).schemaDefault).toEqual(['PORT']);
+    expect(reconcile('PORT=8080\n', []).pushed).toEqual(['PORT']);
+  });
+});
+
 describe('findStaleRemoteKeys', () => {
   it('treats a declared-but-blank name as present, not stale', () => {
     expect(
@@ -72,5 +145,75 @@ describe('findStaleRemoteKeys', () => {
 
   it('returns nothing when the remote has no keys', () => {
     expect(findStaleRemoteKeys({ declaredNames: new Set(['A']), remoteKeys: [] })).toEqual([]);
+  });
+});
+
+describe('planEnvironmentSyncPreview', () => {
+  const schemaDefaults = { RATE_LIMIT_MAX: '100', PORT: '3000' };
+  const declared = parseEnvContents(
+    [
+      'RATE_LIMIT_MAX=100', // == default, on remote → skip+prune
+      'PORT=3000', // == default, absent → skip
+      'LOG_LEVEL=debug', // override, on remote same → unchanged
+      'FRONTEND_URL=http://a', // override, on remote different → update
+      'WEBHOOK_MAX_PER_ORG=5', // override, absent → create
+      'STRIPE_SECRET_KEY=sk_live_do_not_print', // secret, on remote → secret
+      'JWT_SECRET=xyz', // secret, absent → secret-create
+      'OPTIONAL=', // blank
+    ].join('\n'),
+  );
+  const remoteVariables = new Map([
+    ['RATE_LIMIT_MAX', '100'],
+    ['LOG_LEVEL', 'debug'],
+    ['FRONTEND_URL', 'http://remote'],
+    ['OLD_VAR', 'gone'], // stale → prune-stale
+  ]);
+  const remoteSecretNames = new Set(['STRIPE_SECRET_KEY']);
+  const rows = planEnvironmentSyncPreview({
+    declared,
+    remoteVariables,
+    remoteSecretNames,
+    schemaDefaults,
+  });
+  const byName = new Map(rows.map((row) => [row.name, row]));
+
+  it('classifies each key with the same rules the sync uses', () => {
+    expect(byName.get('RATE_LIMIT_MAX')?.decision).toBe('skip+prune');
+    expect(byName.get('PORT')?.decision).toBe('skip');
+    expect(byName.get('LOG_LEVEL')?.decision).toBe('unchanged');
+    expect(byName.get('FRONTEND_URL')?.decision).toBe('update');
+    expect(byName.get('WEBHOOK_MAX_PER_ORG')?.decision).toBe('create');
+    expect(byName.get('STRIPE_SECRET_KEY')?.decision).toBe('secret');
+    expect(byName.get('JWT_SECRET')?.decision).toBe('secret-create');
+    expect(byName.get('OPTIONAL')?.decision).toBe('blank');
+  });
+
+  it('reports a remote key with no local line as prune-stale', () => {
+    expect(byName.get('OLD_VAR')?.decision).toBe('prune-stale');
+  });
+
+  it('never surfaces a secret value — local and remote are masked', () => {
+    const secret = byName.get('STRIPE_SECRET_KEY');
+    expect(secret?.local).not.toContain('sk_live');
+    expect(secret?.remote).not.toContain('sk_live');
+    expect(secret?.local).toBe('••••');
+    expect(secret?.remote).toBe('••••');
+    expect(secret?.schemaDefault).toBeNull();
+  });
+
+  it('emits a schema-default-on-remote variable exactly once (skip+prune, never also prune-stale)', () => {
+    const matches = rows.filter((row) => row.name === 'RATE_LIMIT_MAX');
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.decision).toBe('skip+prune');
+  });
+
+  it('formatSyncPreviewTable renders a header, the rows, and a per-decision summary', () => {
+    const table = formatSyncPreviewTable({ rows, environment: 'development' });
+    expect(table).toContain('VARIABLE');
+    expect(table).toContain('DECISION');
+    expect(table).toContain('development');
+    expect(table).toContain(`total=${rows.length}`);
+    expect(table).toContain('skip+prune=1');
+    expect(table).not.toContain('sk_live'); // secret values never leak into the table
   });
 });

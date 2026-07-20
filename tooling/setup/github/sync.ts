@@ -16,6 +16,7 @@
  *   <env>      — single environment reconcile.
  *   --check    — consistency + read-only remote drift; no writes.
  *   --dry-run  — consistency + preview remote and values; no writes.
+ *   --diff     — read-only per-variable table (schema default vs local vs remote vs decision); no writes.
  *   --yes      — skip values confirmation (automation).
  *
  * Usage:
@@ -23,6 +24,7 @@
  *   pnpm github:sync production       # reconcile a single environment
  *   pnpm github:sync --check
  *   pnpm github:sync --dry-run
+ *   pnpm github:sync development --diff   # per-variable default/local/remote/decision table
  *   pnpm github:sync --yes
  *
  * Adding or removing a hosted environment: edit tooling/setup/setup.config.json, NODE_ENV,
@@ -44,7 +46,11 @@ import {
   validateGithubSyncConsistency,
   type GitHubSyncScaffoldResult,
 } from './sync-config.js';
-import { syncEnvironmentToGitHub } from './sync-github-environments.js';
+import {
+  formatSyncPreviewTable,
+  previewEnvironmentSync,
+  syncEnvironmentToGitHub,
+} from './sync-github-environments.js';
 import type { SyncMode } from './rulesets.js';
 
 const PROJECT_ROOT = resolve(import.meta.dirname, '../../../');
@@ -52,8 +58,10 @@ const PROJECT_ROOT = resolve(import.meta.dirname, '../../../');
 interface CliOptions {
   readonly checkOnly: boolean;
   readonly dryRun: boolean;
+  readonly diff: boolean;
   readonly skipConfirmation: boolean;
   readonly prune: boolean;
+  readonly keepSchemaDefaults: boolean;
   readonly environments: string[];
 }
 
@@ -62,18 +70,32 @@ function parseArguments(): CliOptions {
   const environments: string[] = [];
 
   if (argumentsList.includes('--help') || argumentsList.includes('-h')) {
-    console.log('Usage: pnpm github:sync [environment...] [--check | --dry-run] [--yes] [--prune]');
+    console.log(
+      'Usage: pnpm github:sync [environment...] [--check | --dry-run] [--yes] [--prune] [--keep-schema-defaults]',
+    );
     console.log('');
     console.log('  (default)   All environments: scaffold + remote apply + full reconcile');
     console.log('  environment Optional environment name(s), e.g. production');
     console.log('  --check     Read-only consistency + remote drift (no writes)');
     console.log('  --dry-run   Preview remote and values push (no writes)');
+    console.log('  --diff      Read-only per-variable table: schema default vs local vs remote vs');
+    console.log('              the decision the sync would make (no writes)');
     console.log('  --yes       Skip the values-push confirmation prompt');
     console.log('  --prune     Delete remote environments not in setup.config.json');
+    console.log('  --keep-schema-defaults  Push variables equal to their env-schema default');
+    console.log('                          instead of skipping and pruning them');
     process.exit(0);
   }
 
-  const allowed = new Set(['--check', '--dry-run', '--yes', '-y', '--prune']);
+  const allowed = new Set([
+    '--check',
+    '--dry-run',
+    '--diff',
+    '--yes',
+    '-y',
+    '--prune',
+    '--keep-schema-defaults',
+  ]);
   for (const argument of argumentsList) {
     if (allowed.has(argument)) continue;
     if (argument.startsWith('--')) {
@@ -85,15 +107,22 @@ function parseArguments(): CliOptions {
     environments.push(argument);
   }
 
-  if (argumentsList.includes('--check') && argumentsList.includes('--dry-run')) {
-    throw new Error('Use either --check or --dry-run, not both.');
+  const readOnlyModes = ['--check', '--dry-run', '--diff'].filter((flag) =>
+    argumentsList.includes(flag),
+  );
+  if (readOnlyModes.length > 1) {
+    throw new Error(
+      `Use only one of --check / --dry-run / --diff (got ${readOnlyModes.join(', ')}).`,
+    );
   }
 
   return {
     checkOnly: argumentsList.includes('--check'),
     dryRun: argumentsList.includes('--dry-run'),
+    diff: argumentsList.includes('--diff'),
     skipConfirmation: argumentsList.includes('--yes') || argumentsList.includes('-y'),
     prune: argumentsList.includes('--prune'),
+    keepSchemaDefaults: argumentsList.includes('--keep-schema-defaults'),
     environments,
   };
 }
@@ -228,7 +257,8 @@ function isInteractiveShell(): boolean {
 }
 
 async function main(): Promise<void> {
-  const { checkOnly, dryRun, skipConfirmation, prune, environments } = parseArguments();
+  const { checkOnly, dryRun, diff, skipConfirmation, prune, keepSchemaDefaults, environments } =
+    parseArguments();
   const mode: SyncMode = checkOnly ? 'check' : dryRun ? 'dry-run' : 'sync';
   const config = loadConfig();
 
@@ -249,6 +279,26 @@ async function main(): Promise<void> {
   }
   console.log('Environment consistency: OK');
   console.log('');
+
+  // --diff is a read-only, per-variable preview: reads each local file, fetches the live GitHub
+  // Environment (fully paginated), and prints the default/local/remote/decision table. No scaffold,
+  // no rulesets, no writes — so it short-circuits before the remote-apply path below.
+  if (diff) {
+    const localFiles = detectLocalEnvironmentFiles(environments, config);
+    if (localFiles.length === 0) {
+      console.log('No local .env.<environment> files found to preview.');
+      process.exit(0);
+    }
+    for (const entry of localFiles) {
+      const rows = await previewEnvironmentSync({
+        environment: entry.environment,
+        keepSchemaDefaults,
+      });
+      console.log(formatSyncPreviewTable({ rows, environment: entry.environment }));
+      console.log('');
+    }
+    process.exit(0);
+  }
 
   const scaffoldResult =
     checkOnly || dryRun
@@ -313,6 +363,11 @@ async function main(): Promise<void> {
       console.log('  ! This reconciles GitHub Environments against local .env.<env> files.');
       console.log('  ! Items in the local files are pushed; items on GitHub NOT in the');
       console.log('  ! local files are DELETED. The local file is the source of truth.');
+      if (!keepSchemaDefaults) {
+        console.log('  ! Variables equal to their env-schema default are NOT pushed and are');
+        console.log('  ! pruned from GitHub (runtime uses the default). --keep-schema-defaults');
+        console.log('  ! pushes them verbatim.');
+      }
       console.log('  ! Type "sync" to proceed (anything else aborts).');
       console.log('');
       const confirmed = await askExactPhrase('  Confirm: ', 'sync');
@@ -331,6 +386,7 @@ async function main(): Promise<void> {
   let totalUnchanged = 0;
   let totalEmptySkipped = 0;
   let totalDeleted = 0;
+  let totalSchemaDefaultSkipped = 0;
 
   for (const entry of localFiles) {
     console.log(`--- ${entry.environment} ---`);
@@ -339,11 +395,13 @@ async function main(): Promise<void> {
         environment: entry.environment,
         dryRun,
         skipPreflight: true,
+        keepSchemaDefaults,
       });
       totalPushed += result.pushed;
       totalUnchanged += result.unchanged;
       totalEmptySkipped += result.emptySkipped;
       totalDeleted += result.deleted;
+      totalSchemaDefaultSkipped += result.schemaDefaultSkipped;
     } catch (error) {
       valueFailures += 1;
       console.error(`Sync for "${entry.environment}" failed.`);
@@ -364,11 +422,17 @@ async function main(): Promise<void> {
 
   console.log(
     `Sync complete — pushed ${totalPushed}, unchanged ${totalUnchanged}, ` +
-      `empty ${totalEmptySkipped}, deleted ${totalDeleted} across ${localFiles.length} environment(s).`,
+      `empty ${totalEmptySkipped}, schema-default ${totalSchemaDefaultSkipped}, ` +
+      `deleted ${totalDeleted} across ${localFiles.length} environment(s).`,
   );
   if (totalEmptySkipped > 0) {
     console.log(
       `  ${totalEmptySkipped} key(s) are declared but blank locally — not pushed, and their remote values were left intact.`,
+    );
+  }
+  if (totalSchemaDefaultSkipped > 0) {
+    console.log(
+      `  ${totalSchemaDefaultSkipped} variable(s) equal their env-schema default — not pushed, and pruned from GitHub so the runtime falls back to the same default (use --keep-schema-defaults to push them).`,
     );
   }
 }

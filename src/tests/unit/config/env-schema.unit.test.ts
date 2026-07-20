@@ -2,7 +2,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { envSchema, envSchemaKeys } from '@/shared/config/env-schema.js';
+import { envSchema, envSchemaDefaults, envSchemaKeys } from '@/shared/config/env-schema.js';
 
 const DATABASE_URL_FIXTURE = 'postgres://localhost:5432/core';
 const REDIS_URL_FIXTURE = 'redis://localhost:6379';
@@ -1045,5 +1045,49 @@ describe('env-schema', () => {
       const parsed = envSchema.safeParse({ ...productionRequiredBase });
       expect(parsed.success).toBe(true);
     });
+  });
+});
+
+describe('envSchemaDefaults', () => {
+  it('resolves concrete stringified defaults for keys that declare one', () => {
+    // Post-transform + stringified: booleanString → 'false', z.coerce.number().default(3000) →
+    // '3000', z.enum([...]).default('info') → 'info'.
+    expect(envSchemaDefaults.PORT).toBe('3000');
+    expect(envSchemaDefaults.HTTP_BIND_HOST).toBe('0.0.0.0');
+    expect(envSchemaDefaults.LOG_LEVEL).toBe('info');
+    expect(envSchemaDefaults.CAPTCHA_PROVIDER).toBe('disabled');
+    expect(envSchemaDefaults.CAPTCHA_FAIL_OPEN).toBe('false');
+    expect(envSchemaDefaults.ENABLE_MCP_SERVER).toBe('false');
+    expect(envSchemaDefaults.SECRETS_ENCRYPTION_CURRENT_VERSION).toBe('v1');
+  });
+
+  it('omits required and optional-without-default keys (they resolve to undefined)', () => {
+    // A key with no resolvable default is ABSENT from the map, so github:sync always pushes it —
+    // it can never be mistaken for a schema default and dropped.
+    expect(envSchemaDefaults).not.toHaveProperty('DATABASE_URL'); // required
+    expect(envSchemaDefaults).not.toHaveProperty('REDIS_URL'); // required
+    expect(envSchemaDefaults).not.toHaveProperty('JWT_PRIVATE_KEY'); // required
+    expect(envSchemaDefaults).not.toHaveProperty('CAPTCHA_SECRET'); // optional, no default
+    expect(envSchemaDefaults).not.toHaveProperty('SENTRY_DSN'); // optional, no default
+    expect(envSchemaDefaults).not.toHaveProperty('FASTIFY_KEEP_ALIVE_TIMEOUT_MS'); // optional, no default
+  });
+
+  it('matches the value the runtime actually falls back to for each defaulted key', () => {
+    // The whole point: an unset variable boots to exactly this value, so the github:sync skip is
+    // behaviour-preserving. Prove the map equals what envSchema.parse applies.
+    const parsed = envSchema.safeParse({ ...commonRequiredBase, NODE_ENV: 'development' });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(String(parsed.data.PORT)).toBe(envSchemaDefaults.PORT);
+      expect(String(parsed.data.RATE_LIMIT_MAX)).toBe(envSchemaDefaults.RATE_LIMIT_MAX);
+      expect(String(parsed.data.LOG_LEVEL)).toBe(envSchemaDefaults.LOG_LEVEL);
+      expect(String(parsed.data.CAPTCHA_FAIL_OPEN)).toBe(envSchemaDefaults.CAPTCHA_FAIL_OPEN);
+    }
+  });
+
+  it('every default is a plain string (safe to string-compare against a .env file value)', () => {
+    for (const value of Object.values(envSchemaDefaults)) {
+      expect(typeof value).toBe('string');
+    }
   });
 });
