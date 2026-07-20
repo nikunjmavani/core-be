@@ -16,6 +16,7 @@
  *   <env>      — single environment reconcile.
  *   --check    — consistency + read-only remote drift; no writes.
  *   --dry-run  — consistency + preview remote and values; no writes.
+ *   --diff     — read-only per-variable table (schema default vs local vs remote vs decision); no writes.
  *   --yes      — skip values confirmation (automation).
  *
  * Usage:
@@ -23,6 +24,7 @@
  *   pnpm github:sync production       # reconcile a single environment
  *   pnpm github:sync --check
  *   pnpm github:sync --dry-run
+ *   pnpm github:sync development --diff   # per-variable default/local/remote/decision table
  *   pnpm github:sync --yes
  *
  * Adding or removing a hosted environment: edit tooling/setup/setup.config.json, NODE_ENV,
@@ -44,7 +46,11 @@ import {
   validateGithubSyncConsistency,
   type GitHubSyncScaffoldResult,
 } from './sync-config.js';
-import { syncEnvironmentToGitHub } from './sync-github-environments.js';
+import {
+  formatSyncPreviewTable,
+  previewEnvironmentSync,
+  syncEnvironmentToGitHub,
+} from './sync-github-environments.js';
 import type { SyncMode } from './rulesets.js';
 
 const PROJECT_ROOT = resolve(import.meta.dirname, '../../../');
@@ -52,6 +58,7 @@ const PROJECT_ROOT = resolve(import.meta.dirname, '../../../');
 interface CliOptions {
   readonly checkOnly: boolean;
   readonly dryRun: boolean;
+  readonly diff: boolean;
   readonly skipConfirmation: boolean;
   readonly prune: boolean;
   readonly keepSchemaDefaults: boolean;
@@ -71,6 +78,8 @@ function parseArguments(): CliOptions {
     console.log('  environment Optional environment name(s), e.g. production');
     console.log('  --check     Read-only consistency + remote drift (no writes)');
     console.log('  --dry-run   Preview remote and values push (no writes)');
+    console.log('  --diff      Read-only per-variable table: schema default vs local vs remote vs');
+    console.log('              the decision the sync would make (no writes)');
     console.log('  --yes       Skip the values-push confirmation prompt');
     console.log('  --prune     Delete remote environments not in setup.config.json');
     console.log('  --keep-schema-defaults  Push variables equal to their env-schema default');
@@ -81,6 +90,7 @@ function parseArguments(): CliOptions {
   const allowed = new Set([
     '--check',
     '--dry-run',
+    '--diff',
     '--yes',
     '-y',
     '--prune',
@@ -97,13 +107,19 @@ function parseArguments(): CliOptions {
     environments.push(argument);
   }
 
-  if (argumentsList.includes('--check') && argumentsList.includes('--dry-run')) {
-    throw new Error('Use either --check or --dry-run, not both.');
+  const readOnlyModes = ['--check', '--dry-run', '--diff'].filter((flag) =>
+    argumentsList.includes(flag),
+  );
+  if (readOnlyModes.length > 1) {
+    throw new Error(
+      `Use only one of --check / --dry-run / --diff (got ${readOnlyModes.join(', ')}).`,
+    );
   }
 
   return {
     checkOnly: argumentsList.includes('--check'),
     dryRun: argumentsList.includes('--dry-run'),
+    diff: argumentsList.includes('--diff'),
     skipConfirmation: argumentsList.includes('--yes') || argumentsList.includes('-y'),
     prune: argumentsList.includes('--prune'),
     keepSchemaDefaults: argumentsList.includes('--keep-schema-defaults'),
@@ -241,7 +257,7 @@ function isInteractiveShell(): boolean {
 }
 
 async function main(): Promise<void> {
-  const { checkOnly, dryRun, skipConfirmation, prune, keepSchemaDefaults, environments } =
+  const { checkOnly, dryRun, diff, skipConfirmation, prune, keepSchemaDefaults, environments } =
     parseArguments();
   const mode: SyncMode = checkOnly ? 'check' : dryRun ? 'dry-run' : 'sync';
   const config = loadConfig();
@@ -263,6 +279,26 @@ async function main(): Promise<void> {
   }
   console.log('Environment consistency: OK');
   console.log('');
+
+  // --diff is a read-only, per-variable preview: reads each local file, fetches the live GitHub
+  // Environment (fully paginated), and prints the default/local/remote/decision table. No scaffold,
+  // no rulesets, no writes — so it short-circuits before the remote-apply path below.
+  if (diff) {
+    const localFiles = detectLocalEnvironmentFiles(environments, config);
+    if (localFiles.length === 0) {
+      console.log('No local .env.<environment> files found to preview.');
+      process.exit(0);
+    }
+    for (const entry of localFiles) {
+      const rows = await previewEnvironmentSync({
+        environment: entry.environment,
+        keepSchemaDefaults,
+      });
+      console.log(formatSyncPreviewTable({ rows, environment: entry.environment }));
+      console.log('');
+    }
+    process.exit(0);
+  }
 
   const scaffoldResult =
     checkOnly || dryRun

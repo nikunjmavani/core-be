@@ -50,6 +50,15 @@ const projectRoot = process.cwd();
 const RATE_LIMIT_BACKOFF_MS = [15_000, 30_000, 60_000, 120_000, 240_000] as const;
 
 /**
+ * Page size for the environment variables/secrets list endpoints. GitHub silently clamps this
+ * endpoint's `per_page` to 30 regardless of a higher request, so pagination MUST loop pages —
+ * a single `per_page=100` fetch returns only the first 30 items and hides the rest.
+ */
+const ENVIRONMENT_ITEMS_PER_PAGE = 30;
+/** Hard backstop on the pagination loop (30 × 200 = 6000 items) so a bad `total_count` cannot spin forever. */
+const MAX_ENVIRONMENT_PAGES = 200;
+
+/**
  * Minimum spacing between MUTATIVE requests (POST/PUT/PATCH/DELETE). GitHub's secondary
  * (abuse-detection) rate limit fires on bursts of writes even when the primary quota is healthy,
  * and its guidance is ≥1s between mutative calls. The primary-quota pacing can dip to ~250ms, so
@@ -135,6 +144,7 @@ interface GitHubEnvironmentPublicKey {
 }
 
 interface GitHubEnvironmentVariablesResponse {
+  readonly total_count: number;
   readonly variables: ReadonlyArray<{
     readonly name: string;
     readonly value: string;
@@ -142,6 +152,7 @@ interface GitHubEnvironmentVariablesResponse {
 }
 
 interface GitHubEnvironmentSecretsResponse {
+  readonly total_count: number;
   readonly secrets: ReadonlyArray<{
     readonly name: string;
   }>;
@@ -256,7 +267,15 @@ interface EnvEntry {
   value: string;
 }
 
-/** Rule-based classification — the file structure is for readability only. */
+/**
+ * Classifies an env key as a GitHub Secret or Variable purely by name.
+ *
+ * @remarks
+ * The `.env.example` section headers are for humans only — this strict, name-based rule is the
+ * authority, so a key can never leak as a plaintext Variable because it was filed under the wrong
+ * half. Also consumed by {@link planEnvironmentSyncPreview} so the `--diff` preview masks the same
+ * keys the sync treats as secrets.
+ */
 function classifyKey(key: string): 'secret' | 'variable' {
   // Credential / signing material suffixes → Secret
   if (key.endsWith('_API_KEY')) return 'secret';
@@ -463,13 +482,20 @@ async function fetchExistingSecrets(
   repositoryFullName: string,
   environment: string,
 ): Promise<Set<string>> {
+  const names = new Set<string>();
   try {
-    const response = await requestGitHub<GitHubEnvironmentSecretsResponse>(
-      token,
-      `fetch secrets for ${environment}`,
-      `repos/${repositoryFullName}/environments/${encodeURIComponent(environment)}/secrets?per_page=100`,
-    );
-    return new Set(response.secrets.map((s) => s.name));
+    for (let page = 1; page <= MAX_ENVIRONMENT_PAGES; page += 1) {
+      const response = await requestGitHub<GitHubEnvironmentSecretsResponse>(
+        token,
+        `fetch secrets for ${environment} (page ${page})`,
+        `repos/${repositoryFullName}/environments/${encodeURIComponent(environment)}/secrets?per_page=${ENVIRONMENT_ITEMS_PER_PAGE}&page=${page}`,
+      );
+      for (const secret of response.secrets) names.add(secret.name);
+      // Terminate on total_count (not page length): the endpoint silently clamps per_page to 30,
+      // so a "full" page can be shorter than requested — length-based stops would end early.
+      if (response.secrets.length === 0 || names.size >= response.total_count) break;
+    }
+    return names;
   } catch (error) {
     if (error instanceof GitHubApiError && error.status === 404) {
       return new Set();
@@ -483,13 +509,20 @@ async function fetchExistingVariables(
   repositoryFullName: string,
   environment: string,
 ): Promise<Map<string, string>> {
+  const variables = new Map<string, string>();
   try {
-    const response = await requestGitHub<GitHubEnvironmentVariablesResponse>(
-      token,
-      `fetch variables for ${environment}`,
-      `repos/${repositoryFullName}/environments/${encodeURIComponent(environment)}/variables?per_page=100`,
-    );
-    return new Map(response.variables.map((entry) => [entry.name, entry.value]));
+    for (let page = 1; page <= MAX_ENVIRONMENT_PAGES; page += 1) {
+      const response = await requestGitHub<GitHubEnvironmentVariablesResponse>(
+        token,
+        `fetch variables for ${environment} (page ${page})`,
+        `repos/${repositoryFullName}/environments/${encodeURIComponent(environment)}/variables?per_page=${ENVIRONMENT_ITEMS_PER_PAGE}&page=${page}`,
+      );
+      for (const entry of response.variables) variables.set(entry.name, entry.value);
+      // Terminate on total_count (not page length): the endpoint silently clamps per_page to 30,
+      // so a "full" page can be shorter than requested — length-based stops would end early.
+      if (response.variables.length === 0 || variables.size >= response.total_count) break;
+    }
+    return variables;
   } catch (error) {
     if (error instanceof GitHubApiError && error.status === 404) {
       return new Map();
@@ -853,6 +886,218 @@ export async function syncEnvironmentToGitHub(
     deleted,
     schemaDefaultSkipped: schemaDefaultEntries.length,
   };
+}
+
+/** Sentinel shown in place of a secret value in the read-only preview — secret values are never printed. */
+const PREVIEW_SECRET_MASK = '••••';
+
+/**
+ * The reconciliation decision `github:sync` would take for one key — the unit the `--diff` preview renders.
+ *
+ * @remarks
+ * Mirrors the buckets {@link syncEnvironmentToGitHub} acts on: `skip+prune`/`skip` are the
+ * schema-default outcomes, `create`/`update`/`unchanged` the variable outcomes, `secret`/`secret-create`
+ * the always-pushed secrets, `blank` the preserved empties, and `prune-stale` a remote key with no local line.
+ */
+export type SyncDecision =
+  | 'blank'
+  | 'secret'
+  | 'secret-create'
+  | 'skip+prune'
+  | 'skip'
+  | 'create'
+  | 'unchanged'
+  | 'update'
+  | 'prune-stale';
+
+/** One row of the `github:sync --diff` preview — a key with its schema default, local value, remote value, and decision. */
+export interface SyncPreviewRow {
+  readonly name: string;
+  readonly kind: 'secret' | 'variable' | 'blank';
+  readonly schemaDefault: string | null;
+  readonly local: string;
+  readonly remote: string;
+  readonly decision: SyncDecision;
+}
+
+/**
+ * Computes, per declared key, the exact decision `github:sync` would make against a given remote —
+ * the pure core of the `--diff` preview. No I/O.
+ *
+ * @remarks
+ * Reuses {@link splitDeclaredEntries}, {@link classifyKey}, and {@link findStaleRemoteKeys} so the
+ * preview can never drift from what {@link syncEnvironmentToGitHub} actually does. Secret values are
+ * replaced with {@link PREVIEW_SECRET_MASK} and never surfaced. A schema-default variable that is on
+ * the remote is reported once as `skip+prune` (the sync deletes it via the stale path); only a remote
+ * key with NO local line is reported as `prune-stale`.
+ */
+export function planEnvironmentSyncPreview(options: {
+  readonly declared: readonly EnvEntry[];
+  readonly remoteVariables: ReadonlyMap<string, string>;
+  readonly remoteSecretNames: ReadonlySet<string>;
+  readonly schemaDefaults?: Readonly<Record<string, string>>;
+  readonly keepSchemaDefaults?: boolean;
+}): SyncPreviewRow[] {
+  const { declared, remoteVariables, remoteSecretNames } = options;
+  const schemaDefaults = options.schemaDefaults ?? envSchemaDefaults;
+  const { blank, schemaDefault } = splitDeclaredEntries(declared, {
+    schemaDefaults,
+    keepSchemaDefaults: options.keepSchemaDefaults ?? false,
+  });
+  const blankNames = new Set(blank.map((entry) => entry.name));
+  const schemaDefaultNames = new Set(schemaDefault.map((entry) => entry.name));
+  const declaredNames = new Set(declared.map((entry) => entry.name));
+  const remoteHas = (key: string) => remoteVariables.has(key) || remoteSecretNames.has(key);
+
+  const rows: SyncPreviewRow[] = [];
+  for (const { name, value } of declared) {
+    const secret = classifyKey(name) === 'secret';
+    const onRemote = remoteHas(name);
+    let decision: SyncDecision;
+    if (blankNames.has(name)) decision = 'blank';
+    else if (schemaDefaultNames.has(name)) decision = onRemote ? 'skip+prune' : 'skip';
+    else if (secret) decision = onRemote ? 'secret' : 'secret-create';
+    else if (!onRemote) decision = 'create';
+    else decision = remoteVariables.get(name) === value ? 'unchanged' : 'update';
+    rows.push({
+      name,
+      kind: value === '' ? 'blank' : secret ? 'secret' : 'variable',
+      schemaDefault: secret ? null : (schemaDefaults[name] ?? null),
+      local: value === '' ? '' : secret ? PREVIEW_SECRET_MASK : value,
+      remote: secret ? (onRemote ? PREVIEW_SECRET_MASK : '') : (remoteVariables.get(name) ?? ''),
+      decision,
+    });
+  }
+
+  // Remote keys with NO local line → pruned as stale. Mirror the caller's kind-split; schema-default
+  // names are already emitted above as skip+prune, so filter anything still declared to avoid a
+  // duplicate row.
+  const localSecretNames = new Set(
+    declared.filter((entry) => classifyKey(entry.name) === 'secret').map((entry) => entry.name),
+  );
+  const localVariableNames = new Set(
+    declared
+      .filter(
+        (entry) => classifyKey(entry.name) === 'variable' && !schemaDefaultNames.has(entry.name),
+      )
+      .map((entry) => entry.name),
+  );
+  const staleVariables = findStaleRemoteKeys({
+    declaredNames: localVariableNames,
+    remoteKeys: [...remoteVariables.keys()],
+  }).filter((name) => !declaredNames.has(name));
+  const staleSecrets = findStaleRemoteKeys({
+    declaredNames: localSecretNames,
+    remoteKeys: [...remoteSecretNames],
+  }).filter((name) => !declaredNames.has(name));
+  for (const name of staleVariables)
+    rows.push({
+      name,
+      kind: 'variable',
+      schemaDefault: schemaDefaults[name] ?? null,
+      local: '',
+      remote: remoteVariables.get(name) ?? '',
+      decision: 'prune-stale',
+    });
+  for (const name of staleSecrets)
+    rows.push({
+      name,
+      kind: 'secret',
+      schemaDefault: null,
+      local: '',
+      remote: PREVIEW_SECRET_MASK,
+      decision: 'prune-stale',
+    });
+
+  return rows;
+}
+
+/** Decision sort order for the preview table — the outcomes that CHANGE remote state come first. */
+const PREVIEW_DECISION_ORDER: readonly SyncDecision[] = [
+  'prune-stale',
+  'update',
+  'skip+prune',
+  'create',
+  'secret-create',
+  'skip',
+  'unchanged',
+  'secret',
+  'blank',
+];
+
+/** Renders {@link planEnvironmentSyncPreview} rows as an aligned, column-wise text table plus a per-decision count summary. */
+export function formatSyncPreviewTable(options: {
+  readonly rows: readonly SyncPreviewRow[];
+  readonly environment: string;
+}): string {
+  const { rows, environment } = options;
+  const columns: ReadonlyArray<{
+    readonly header: string;
+    readonly width: number;
+    readonly value: (row: SyncPreviewRow) => string;
+  }> = [
+    { header: 'VARIABLE', width: 44, value: (row) => row.name },
+    { header: 'KIND', width: 8, value: (row) => row.kind },
+    { header: 'DEFAULT', width: 16, value: (row) => row.schemaDefault ?? '—' },
+    { header: 'LOCAL', width: 20, value: (row) => row.local || '""' },
+    { header: 'REMOTE', width: 20, value: (row) => row.remote || '—' },
+    { header: 'DECISION', width: 14, value: (row) => row.decision },
+  ];
+  const cell = (text: string, width: number) => {
+    const clean = text.replace(/\s+/g, ' ');
+    return (clean.length > width ? `${clean.slice(0, width - 1)}…` : clean).padEnd(width);
+  };
+  const rank = (decision: SyncDecision) => {
+    const index = PREVIEW_DECISION_ORDER.indexOf(decision);
+    return index === -1 ? PREVIEW_DECISION_ORDER.length : index;
+  };
+  const sorted = [...rows].sort(
+    (a, b) => rank(a.decision) - rank(b.decision) || a.name.localeCompare(b.name),
+  );
+
+  const lines = [
+    `github:sync ${environment} — preview (read-only, no changes made)`,
+    columns.map((column) => cell(column.header, column.width)).join('  '),
+    columns.map((column) => '-'.repeat(column.width)).join('  '),
+    ...sorted.map((row) =>
+      columns.map((column) => cell(column.value(row), column.width)).join('  '),
+    ),
+  ];
+
+  const counts = new Map<SyncDecision, number>();
+  for (const row of rows) counts.set(row.decision, (counts.get(row.decision) ?? 0) + 1);
+  const summary = PREVIEW_DECISION_ORDER.filter((decision) => counts.has(decision))
+    .map((decision) => `${decision}=${counts.get(decision)}`)
+    .join('  ');
+  lines.push('', `total=${rows.length}  ${summary}`);
+  return lines.join('\n');
+}
+
+/**
+ * Read-only preview: reads `.env.<environment>`, fetches the live GitHub Environment (fully paginated),
+ * and returns the per-key {@link SyncPreviewRow} decisions `github:sync` would make — writing nothing.
+ */
+export async function previewEnvironmentSync(options: {
+  readonly environment: string;
+  readonly keepSchemaDefaults?: boolean;
+}): Promise<SyncPreviewRow[]> {
+  const envFilePath = resolve(projectRoot, `.env.${options.environment}`);
+  if (!existsSync(envFilePath)) {
+    throw new Error(`Missing .env.${options.environment} at the repo root.`);
+  }
+  const declared = parseEnvFile(envFilePath);
+  const token = getGitHubToken();
+  const repositoryFullName = getRepositoryFullName();
+  const [remoteVariables, remoteSecretNames] = await Promise.all([
+    fetchExistingVariables(token, repositoryFullName, options.environment),
+    fetchExistingSecrets(token, repositoryFullName, options.environment),
+  ]);
+  return planEnvironmentSyncPreview({
+    declared,
+    remoteVariables,
+    remoteSecretNames,
+    keepSchemaDefaults: options.keepSchemaDefaults ?? false,
+  });
 }
 
 async function main(): Promise<void> {

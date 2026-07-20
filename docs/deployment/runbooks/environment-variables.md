@@ -17,6 +17,7 @@ invariant. This runbook covers the **per-key lifecycle**.
 | Full GitHub sync (rulesets + environments + env values) | `pnpm github:sync`              |
 | Sync one environment                 | `pnpm github:sync <environment>`              |
 | Preview without pushing              | `pnpm github:sync <environment> --dry-run`    |
+| Per-variable diff (default vs local vs remote vs decision) | `pnpm github:sync <environment> --diff` |
 | Add a hosted environment             | edit `tooling/setup/setup.config.json`, then `pnpm tool:generate-project-identity` and `pnpm github:sync` |
 | Verify schema ↔ template parity      | `pnpm tool:sync-env-example`                  |
 | Verify branch/env/NODE_ENV invariant | `pnpm github:sync --check`                    |
@@ -288,6 +289,7 @@ A rename is atomic — delete + add in the **same PR**:
 | `pnpm github:sync --check`              | `NODE_ENV` enum ↔ config ↔ rulesets ↔ workflow ↔ GitHub env JSON; remote ruleset/env drift | local before sync                    |
 | `pnpm validate:github-env-runtime` | Each `envSchemaRequiredKeys` key is present in the exported GitHub Environment   | deploy workflow (pre-deploy step) |
 | `pnpm github:sync <env> --dry-run`      | Local `.env.<env>` → GitHub plan; surfaces typos, Secret/Variable column, and which variables are skipped as `schema-default` | local before each sync               |
+| `pnpm github:sync <env> --diff`         | Read-only per-variable table — schema default vs local vs remote vs the decision (create/update/skip+prune/prune/unchanged); fetches the live env fully paginated, secrets masked | local, to see exact per-key outcomes before syncing |
 
 Run `pnpm github:sync --check`, `pnpm tool:sync-env-example`, and (when pushing values) `pnpm github:sync <env> --dry-run` before merging env plumbing changes.
 
