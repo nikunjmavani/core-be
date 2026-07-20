@@ -12,6 +12,7 @@
  */
 import { createHash, createPrivateKey, createPublicKey } from 'node:crypto';
 import { validateProductionRedisTopology } from '@/infrastructure/cache/redis-url.parse.util.js';
+import { type EnvVarSpec, envVar, toSchemaShape } from '@/shared/config/env-var-registry.js';
 import { PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { z } from 'zod';
 
@@ -116,51 +117,91 @@ const trustProxyHopCountSchema = z
     return z.NEVER;
   });
 
+/**
+ * Server & process variables — the first section migrated to the {@link EnvVarSpec} registry.
+ * Each entry pairs its inline Zod field (validation unchanged) with an allowed-values summary and a
+ * one-line description; {@link toSchemaShape} spreads them into {@link envSchemaBase}, and the same
+ * registry drives `pnpm env:catalog`. Migrating a field is a mechanical wrap — the Zod is untouched.
+ */
+const SERVER_VARS = {
+  PORT: envVar(z.coerce.number().int().min(1).max(65535).default(3000), {
+    allowed: 'integer 1–65535',
+    description: 'HTTP port the API server binds to.',
+  }),
+  HTTP_BIND_HOST: envVar(z.string().min(1).default('0.0.0.0'), {
+    allowed: 'non-empty string (host or IP)',
+    description: 'Fastify HTTP bind address (the worker health server also binds here).',
+  }),
+  NODE_ENV: envVar(nodeEnvSchema, {
+    allowed: 'local | development | production',
+    description:
+      'Runtime environment name; names the .env file and gates the production-only refines.',
+  }),
+  // sec-C9: enum-constrained so a typo (`info ` with trailing whitespace, `dbug`) fails at boot
+  // instead of silently degrading pino. Default `info`; a `debug` template value would 10–100x log
+  // volume in any environment scaffolded from it — including production.
+  LOG_LEVEL: envVar(
+    z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+    {
+      allowed: 'fatal | error | warn | info | debug | trace | silent',
+      description:
+        'Pino log level. Enum-constrained so a typo fails at boot instead of silently degrading.',
+    },
+  ),
+  TRUST_PROXY: envVar(trustProxyHopCountSchema, {
+    allowed: 'false | 0, or integer 1–10',
+    description: 'Number of reverse-proxy hops Fastify may trust for X-Forwarded-* headers.',
+  }),
+  FASTIFY_KEEP_ALIVE_TIMEOUT_MS: envVar(
+    z.coerce.number().int().min(1_000).max(600_000).optional(),
+    {
+      allowed: 'integer 1000–600000 (optional)',
+      description: 'Fastify keep-alive timeout in milliseconds.',
+    },
+  ),
+  FASTIFY_HEADERS_TIMEOUT_MS: envVar(z.coerce.number().int().min(1_000).max(600_000).optional(), {
+    allowed: 'integer 1000–600000 (optional)',
+    description: 'Fastify headers timeout in milliseconds.',
+  }),
+  FASTIFY_REQUEST_TIMEOUT_MS: envVar(z.coerce.number().int().min(1_000).max(600_000).optional(), {
+    allowed: 'integer 1000–600000 (optional)',
+    description: 'Fastify request timeout in milliseconds.',
+  }),
+  FASTIFY_CONNECTION_TIMEOUT_MS: envVar(
+    z.coerce.number().int().min(1_000).max(600_000).optional(),
+    {
+      allowed: 'integer 1000–600000 (optional)',
+      description: 'Fastify connection timeout in milliseconds.',
+    },
+  ),
+  // Network-independent latency for load tools (k6, curl) and browser devtools without scraping
+  // /metrics. Default on; set false to suppress the header (it is coarsened in production).
+  HTTP_SERVER_TIMING_ENABLED: envVar(booleanString('true'), {
+    allowed: 'true | false (or 1 | 0)',
+    description: 'Emit a Server-Timing response header carrying total server-side processing time.',
+  }),
+  // Dormant until the loop truly stalls (a long sync op / GC pause), since 250 ms is well above the
+  // tens-of-ms of normal load. Lower to shed sooner; raise to tolerate longer stalls.
+  OVERLOAD_MAX_EVENT_LOOP_DELAY_MS: envVar(
+    z.coerce.number().int().min(1).max(60_000).default(250),
+    {
+      allowed: 'integer 1–60000',
+      description:
+        'Overload-guard shed threshold: p99 event-loop delay (ms) above which requests get a 503.',
+    },
+  ),
+  // DB-pool exhaustion shows as awaiting-promise time (the loop stays idle), so the event-loop valve
+  // never trips on it; shedding at pool saturation bounds that tail. Set 0 to disable (loop valve stays on).
+  OVERLOAD_DB_POOL_SHED_RATIO: envVar(z.coerce.number().min(0).max(1).default(0.9), {
+    allowed: 'number 0–1',
+    description:
+      'Fraction of DATABASE_POOL_MAX in-flight RLS checkouts at which the overload guard sheds requests.',
+  }),
+} satisfies Record<string, EnvVarSpec>;
+
 const envSchemaBase = z.object({
-  // Server
-  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
-  /** Fastify HTTP bind address (worker health server also binds here). */
-  HTTP_BIND_HOST: z.string().min(1).default('0.0.0.0'),
-  NODE_ENV: nodeEnvSchema,
-  /**
-   * sec-C9: enum-constrained so a typo (`info ` with trailing whitespace,
-   * `dbug`) is caught at boot instead of silently degrading to whatever
-   * pino reads. Default `info` matches what the runtime expects; previously
-   * `.env.example` shipped `LOG_LEVEL=debug` which would 10-100x log volume
-   * in any environment scaffolded from the template — including production.
-   */
-  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
-  /** Number of reverse-proxy hops Fastify may trust for X-Forwarded-* headers. */
-  TRUST_PROXY: trustProxyHopCountSchema,
-  FASTIFY_KEEP_ALIVE_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).optional(),
-  FASTIFY_HEADERS_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).optional(),
-  /** Fastify request timeout (ms). Default: 30000. */
-  FASTIFY_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).optional(),
-  /** Fastify connection timeout (ms). Default: 10000. */
-  FASTIFY_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).optional(),
-  /**
-   * Emit a `Server-Timing: app;dur=<ms>` response header carrying total server-side processing
-   * time (Fastify's per-request timer). Network-independent latency for load tools (k6, curl) and
-   * browser devtools without scraping `/metrics`. Default on; set false to suppress the header.
-   */
-  HTTP_SERVER_TIMING_ENABLED: booleanString('true'),
-  /**
-   * Overload-guard shed threshold: recent p99 event-loop delay (ms) above which incoming requests
-   * are rejected with 503 (`Retry-After`) instead of queuing behind a saturated event loop. Default
-   * 250 ms — well above normal load (tens of ms), so the guard is dormant until the loop truly
-   * stalls (a long sync op / GC pause). Lower it to shed sooner; raise it to tolerate longer stalls.
-   */
-  OVERLOAD_MAX_EVENT_LOOP_DELAY_MS: z.coerce.number().int().min(1).max(60_000).default(250),
-  /**
-   * Fraction of `DATABASE_POOL_MAX` in-flight org-RLS checkouts at which the overload guard sheds
-   * new (non-health) requests with a fast 503 + Retry-After. DB-pool exhaustion manifests as
-   * awaiting-promise time (the event loop stays idle), so the event-loop valve alone never trips on
-   * it — requests instead queue behind postgres.js with no acquire deadline up to the request
-   * timeout. Shedding at saturation bounds that tail. Decoupled from the alerter's
-   * `DATABASE_POOL_ACTIVE_CRITICAL_RATIO` so shedding can be tuned independently; set to `0` to
-   * disable pool-saturation shedding (event-loop shedding stays active).
-   */
-  OVERLOAD_DB_POOL_SHED_RATIO: z.coerce.number().min(0).max(1).default(0.9),
+  // Server & process — declared in the SERVER_VARS registry above (allowed values + description).
+  ...toSchemaShape(SERVER_VARS),
 
   // Database (managed service)
   DATABASE_URL: z.string().min(1),
@@ -1570,6 +1611,16 @@ export const envSchema = envSchemaBase
       path: ['ENABLE_QUEUE_DASHBOARD'],
     },
   );
+
+/**
+ * Registry of variables migrated to the explicit {@link EnvVarSpec} manifest — each declared once
+ * with its allowed-values summary + description, the Zod field derived from it. Grows section by
+ * section (spread each `*_VARS` group here); `pnpm env:catalog` and the registry-coverage gate read
+ * it. Not yet the whole schema — coverage ratchets up via `tooling/env-registry/coverage-budget.json`.
+ */
+export const ENV_VAR_REGISTRY: Readonly<Record<string, EnvVarSpec>> = {
+  ...SERVER_VARS,
+};
 
 /** Ordered list of env var names from the schema (for .env.example sync and scripts). */
 export const envSchemaKeys = Object.keys(envSchemaBase.shape) as (keyof z.infer<
