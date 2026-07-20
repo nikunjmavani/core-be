@@ -18,6 +18,7 @@ invariant. This runbook covers the **per-key lifecycle**.
 | Sync one environment                 | `pnpm github:sync <environment>`              |
 | Preview without pushing              | `pnpm github:sync <environment> --dry-run`    |
 | Per-variable diff (default vs local vs remote vs decision) | `pnpm github:sync <environment> --diff` |
+| Catalog: every var's allowed values + default + description | `pnpm env:catalog` → [reference/env-catalog.md](../../reference/env-catalog.md) |
 | Add a hosted environment             | edit `tooling/setup/setup.config.json`, then `pnpm tool:generate-project-identity` and `pnpm github:sync` |
 | Verify schema ↔ template parity      | `pnpm tool:sync-env-example`                  |
 | Verify branch/env/NODE_ENV invariant | `pnpm github:sync --check`                    |
@@ -384,6 +385,8 @@ This section is specifically the **dev / load-test → production delta**.
 ## 12. Reference
 
 - **Schema:** `src/shared/config/env-schema.ts`
+- **Var registry (allowed values + description manifest, Zod derived):** `ENV_VAR_REGISTRY` in `src/shared/config/env-schema.ts` via the DSL in `src/shared/config/env-var-registry.ts`
+- **Catalog (generated):** [reference/env-catalog.md](../../reference/env-catalog.md) — every variable's allowed values · default · required/optional · description (`pnpm env:catalog`, verified in sync by the registry policy test)
 - **Template (committed):** `.env.example`
 - **Operator templates (gitignored):** `.env.development`, `.env.production`
 - **Loader:** `src/shared/config/load-env-files.ts`
