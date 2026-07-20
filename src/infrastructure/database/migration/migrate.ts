@@ -2,6 +2,7 @@ import '@/shared/config/load-env-files.js';
 import postgres from 'postgres';
 import { resolve } from 'node:path';
 import { readdir, readFile } from 'node:fs/promises';
+import { describeMigrationConnectionError } from '@/infrastructure/database/migration/migration-error-hint.js';
 import { parseMigrationExecutionMode } from '@/infrastructure/database/migration/migration-execution-mode.js';
 import { isNeonPoolerConnection } from '@/infrastructure/database/utils/connection-url.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -33,7 +34,28 @@ if (isNeonPoolerConnection(migrationUrl)) {
   );
 }
 
-const sql = postgres(migrationUrl, { max: 1 });
+/**
+ * Fail fast on a malformed URL (surrounding quotes, a trailing newline, or whitespace pasted into the
+ * secret) with a clear, secret-free message instead of a raw `TypeError: Invalid URL` from deep inside
+ * postgres.js.
+ */
+try {
+  new URL(migrationUrl);
+} catch {
+  throw new Error(
+    'DATABASE_MIGRATION_URL is not a valid URL. Common causes: surrounding quotes, a trailing ' +
+      'newline, or whitespace in the secret. Set it as the RAW connection string (no wrapping ' +
+      'quotes), e.g. postgresql://user:password@host:5432/db?sslmode=require.',
+  );
+}
+
+/**
+ * `connect_timeout` (seconds): fail fast when the host is unreachable — a wrong/internal host, a
+ * firewall, or an IP allowlist that silently drops packets — instead of hanging until the CI job's
+ * timeout (a ~30-minute silent stall). `max: 1` keeps every statement on the one backend that holds
+ * the migration advisory lock.
+ */
+const sql = postgres(migrationUrl, { max: 1, connect_timeout: 15 });
 
 /**
  * Postgres 17+ is required project-wide (docker-compose, CI services,
@@ -335,6 +357,10 @@ main()
   })
   .catch(async (error) => {
     logger.error({ error }, 'Migrations failed');
+    const hint = describeMigrationConnectionError(error);
+    if (hint) {
+      logger.error({ hint }, 'Migration connection hint');
+    }
     try {
       await sql.end({ timeout: 5_000 });
     } catch {
