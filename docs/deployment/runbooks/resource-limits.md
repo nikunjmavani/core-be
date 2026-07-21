@@ -284,3 +284,45 @@ flowchart TB
 ```
 
 Set platform limit → set matching `NODE_OPTIONS` → monitor RSS and heap behaviour → tune concurrency or replica count.
+
+---
+
+## Database runtime role (Row-Level Security safety)
+
+`DATABASE_URL` must connect as a **dedicated non-superuser login role** — never a superuser or a role with `BYPASSRLS`. PostgreSQL **skips Row-Level Security entirely** (even when `FORCE`d) for superusers and `BYPASSRLS` roles, so a misconfigured `DATABASE_URL` silently collapses tenant isolation on every RLS-only read path with **zero error**.
+
+At startup, `assertDatabaseRoleRlsSafety()` ([`assert-database-rls-safety.ts`](../../../src/infrastructure/database/safety/assert-database-rls-safety.ts)) reads `SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = session_user`. When `DATABASE_RLS_SAFETY_ENFORCED=true` (the default when deployed) and the role is unsafe, boot **fails closed**; locally (`false`) it only **warns**, so docker-compose's default `postgres` superuser keeps working.
+
+### Symptom
+
+The deploy's **"Deploy API and worker to Railway"** step fails: the image builds and migrations run, but the API/worker **crash-loop at boot** and the health check never passes:
+
+```text
+[ERROR] Server failed to start error="database.rls_safety.unsafe_role: DATABASE_URL connects as
+"neondb_owner" with rolsuper=false rolbypassrls=true. ..."
+```
+
+Common triggers: **Neon's `neondb_owner`** (`BYPASSRLS=true`) or **Railway's default `postgres`** superuser used directly as `DATABASE_URL`.
+
+### Fix — split the two database URLs by role
+
+| Env var | Role | Why |
+| --- | --- | --- |
+| `DATABASE_URL` (runtime) | dedicated **non-superuser** login role granted `core_be_app` (e.g. `<environment>_app_login`) | enforces RLS / tenant isolation |
+| `DATABASE_MIGRATION_URL` (migrations only) | the **owner** (`neondb_owner` / `postgres`) | DDL + role management need owner privileges |
+
+The intended runtime role is `core_be_app` (`NOLOGIN`, created by `migrations/00000000000000_init.sql`); a dedicated login role inherits its DML via membership. Provision it **as the owner** (through `DATABASE_MIGRATION_URL`) with SQL `CREATE ROLE` — not Neon's REST API, which taints roles with `BYPASSRLS`:
+
+```sql
+CREATE ROLE development_app_login LOGIN PASSWORD '<generated>';
+GRANT CONNECT ON DATABASE neondb TO development_app_login;
+GRANT core_be_app TO development_app_login;   -- inherits DML on the app schemas
+```
+
+Then point `DATABASE_URL` at that role (keep the pooler host and params; swap only `user:password`) and re-deploy. Confirm with `SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = session_user` — both must be `false`.
+
+> core-infra's Neon provisioning creates this `<environment>_app_login` role automatically (`setup-neon` → `ensureRuntimeRoleViaSql`). A database set up **outside** that flow (e.g. a hand-created Neon branch) must have the role created and wired manually as above.
+
+### Do NOT disable the guard to "fix" it
+
+Setting `DATABASE_RLS_SAFETY_ENFORCED=false` in a hosted environment silences the check and ships with tenant isolation **actually broken** — every tenant can read every other tenant's rows. The role is the only correct fix.
