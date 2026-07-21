@@ -1089,6 +1089,7 @@ src/
     │   │   └── worker-statement-timeout.util.ts
     │   ├── migration/
     │   │   ├── migrate.ts
+    │   │   ├── migration-error-hint.ts
     │   │   ├── migration-execution-mode.ts
     │   │   └── migration-version.ts
     │   ├── pool/
@@ -1412,6 +1413,7 @@ src/
     │   │   └── unit/
     │   │   │   └── worker-concurrency.util.unit.test.ts
     │   ├── env-schema.ts
+    │   ├── env-var-registry.ts
     │   ├── env.config.ts
     │   ├── load-env-files.ts
     │   └── worker-concurrency.util.ts
@@ -1965,6 +1967,7 @@ src/
     │   ├── config/
     │   │   ├── env-schema-boolean-coerce.unit.test.ts
     │   │   ├── env-schema.unit.test.ts
+    │   │   ├── env-var-registry.policy.unit.test.ts
     │   │   └── env.config.unit.test.ts
     │   ├── database/
     │   │   └── role-least-privilege-migration.policy.unit.test.ts
@@ -1996,10 +1999,11 @@ src/
     │   │   ├── queue/
     │   │   │   ├── bullmq-producer-connection.unit.test.ts
     │   │   │   └── scheduler.unit.test.ts
-    │   │   └── resilience/
+    │   │   ├── resilience/
     │   │   │   ├── circuit-breaker.state-machine.unit.test.ts
     │   │   │   ├── circuit-breaker.unit.test.ts
     │   │   │   └── retry-with-backoff.unit.test.ts
+    │   │   └── migration-error-hint.unit.test.ts
     │   ├── middleware/
     │   │   ├── api-key-auth.middleware.unit.test.ts
     │   │   ├── api-versioning.middleware.unit.test.ts
