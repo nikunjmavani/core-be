@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  classifyRetry,
   computeMutationDelayMs,
   findStaleRemoteKeys,
   formatSyncPreviewTable,
@@ -171,6 +172,85 @@ describe('computeMutationDelayMs (write jitter — anti secondary-rate-limit)', 
 
   it('is deterministic for a given draw — the same logic runs every time', () => {
     expect(computeMutationDelayMs(500, () => 0.5)).toBe(computeMutationDelayMs(500, () => 0.5));
+  });
+});
+
+describe('classifyRetry (5-minute hold on abuse-limit errors)', () => {
+  const FIVE_MIN_MS = 5 * 60_000;
+
+  it('holds a flat 5 minutes for a 429 secondary rate limit, with a long retry budget', () => {
+    const d = classifyRetry({
+      status: 429,
+      responseText: 'You have exceeded a secondary rate limit. Please wait a few minutes.',
+      attempt: 0,
+      retryAfterMs: null,
+    });
+    expect(d.retryable).toBe(true);
+    expect(d.secondaryRateLimit).toBe(true);
+    expect(d.waitMs).toBe(FIVE_MIN_MS);
+    expect(d.maxRetries).toBeGreaterThanOrEqual(12); // enough holds to ride out an ~hour penalty
+  });
+
+  it('treats a 403 "Too many requests" abuse page as a retryable secondary limit (not a perm error)', () => {
+    const d = classifyRetry({
+      status: 403,
+      responseText: '<html><title>Too many requests</title></html>',
+      attempt: 3,
+      retryAfterMs: null,
+    });
+    expect(d.retryable).toBe(true);
+    expect(d.secondaryRateLimit).toBe(true);
+    expect(d.waitMs).toBe(FIVE_MIN_MS);
+  });
+
+  it('holds the SAME 5 minutes on every secondary-limit attempt (a flat hold, never escalating away)', () => {
+    const body = 'secondary rate limit';
+    const first = classifyRetry({
+      status: 429,
+      responseText: body,
+      attempt: 0,
+      retryAfterMs: null,
+    });
+    const later = classifyRetry({
+      status: 429,
+      responseText: body,
+      attempt: 9,
+      retryAfterMs: null,
+    });
+    expect(first.waitMs).toBe(FIVE_MIN_MS);
+    expect(later.waitMs).toBe(FIVE_MIN_MS);
+  });
+
+  it('never waits less than the server Retry-After when it exceeds the 5-minute hold', () => {
+    const d = classifyRetry({
+      status: 429,
+      responseText: 'secondary rate limit',
+      attempt: 0,
+      retryAfterMs: 10 * 60_000,
+    });
+    expect(d.waitMs).toBe(10 * 60_000);
+  });
+
+  it('uses the short escalating backoff for a plain 5xx (not the 5-minute hold)', () => {
+    const d = classifyRetry({ status: 500, responseText: 'oops', attempt: 0, retryAfterMs: null });
+    expect(d.retryable).toBe(true);
+    expect(d.secondaryRateLimit).toBe(false);
+    expect(d.waitMs).toBeLessThan(FIVE_MIN_MS);
+  });
+
+  it('does not retry a real 403 permission error (no abuse body) or a 404', () => {
+    expect(
+      classifyRetry({
+        status: 403,
+        responseText: 'Resource not accessible',
+        attempt: 0,
+        retryAfterMs: null,
+      }).retryable,
+    ).toBe(false);
+    expect(
+      classifyRetry({ status: 404, responseText: 'Not Found', attempt: 0, retryAfterMs: null })
+        .retryable,
+    ).toBe(false);
   });
 });
 

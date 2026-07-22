@@ -79,8 +79,17 @@ const MUTATION_MIN_DELAY_MS = 1_100;
 const MUTATION_JITTER_MIN_MS = 400;
 const MUTATION_JITTER_MAX_MS = 2_400;
 
-/** Minimum wait when a 429 is the SECONDARY rate limit (no Retry-After header — needs a real pause). */
-const SECONDARY_RATE_LIMIT_MIN_WAIT_MS = 60_000;
+/**
+ * On a SECONDARY (abuse-detection) rate-limit error we HOLD a full 5 minutes before retrying, and
+ * repeat that hold up to {@link SECONDARY_RATE_LIMIT_MAX_RETRIES} times. GitHub's secondary limit
+ * for content creation carries no Retry-After and can persist "up to an hour"; a short (≤4 min)
+ * escalating backoff gives up too early AND repeated quick pokes ESCALATE the penalty. A flat
+ * 5-minute hold is exactly GitHub's "wait a few minutes" guidance, so the run rides the penalty out
+ * instead of hammering it. 12 holds ≈ up to an hour of patience. Written down here so every run
+ * follows the same policy.
+ */
+const SECONDARY_RATE_LIMIT_HOLD_MS = 5 * 60_000;
+const SECONDARY_RATE_LIMIT_MAX_RETRIES = 12;
 
 /**
  * Dynamic-delay tuning. Between every successful request we wait
@@ -169,6 +178,48 @@ export function computeMutationDelayMs(
   return flooredMs + jitterMs;
 }
 
+/** Retry policy decision for a failed GitHub response — see {@link classifyRetry}. */
+export interface RetryDecision {
+  readonly retryable: boolean;
+  readonly secondaryRateLimit: boolean;
+  readonly waitMs: number;
+  readonly maxRetries: number;
+}
+
+/**
+ * Pure retry policy for a non-2xx GitHub response: whether to retry, how long to HOLD first, and
+ * the per-error retry budget. A SECONDARY (abuse) rate limit — 429 OR 403 carrying a
+ * "too many requests" / "secondary rate limit" body and no Retry-After — HOLDS a flat
+ * {@link SECONDARY_RATE_LIMIT_HOLD_MS} (5 min) each attempt for up to
+ * {@link SECONDARY_RATE_LIMIT_MAX_RETRIES} tries, so the run waits the penalty out ("hold for 5
+ * minutes on error") instead of hammering it; every other retryable error (plain 429, 5xx) uses the
+ * short escalating {@link RATE_LIMIT_BACKOFF_MS} schedule. The wait is never below the server's
+ * Retry-After. A 403 without the abuse body stays non-retryable (it is a real permission error).
+ */
+export function classifyRetry(options: {
+  readonly status: number;
+  readonly responseText: string;
+  readonly attempt: number;
+  readonly retryAfterMs: number | null;
+}): RetryDecision {
+  const { status, responseText, attempt } = options;
+  const retryAfterMs =
+    options.retryAfterMs !== null && options.retryAfterMs > 0 ? options.retryAfterMs : 0;
+  const secondaryRateLimit =
+    (status === 429 || status === 403) &&
+    /secondary rate limit|too many requests|abuse/i.test(responseText);
+  const retryable = secondaryRateLimit || status === 429 || status >= 500;
+  const maxRetries = secondaryRateLimit
+    ? SECONDARY_RATE_LIMIT_MAX_RETRIES
+    : RATE_LIMIT_BACKOFF_MS.length;
+  const scheduledMs = secondaryRateLimit
+    ? SECONDARY_RATE_LIMIT_HOLD_MS
+    : (RATE_LIMIT_BACKOFF_MS[attempt] ??
+      RATE_LIMIT_BACKOFF_MS[RATE_LIMIT_BACKOFF_MS.length - 1] ??
+      1_000);
+  return { retryable, secondaryRateLimit, waitMs: Math.max(retryAfterMs, scheduledMs), maxRetries };
+}
+
 interface GitHubEnvironmentPublicKey {
   readonly key_id: string;
   readonly key: string;
@@ -250,33 +301,25 @@ async function requestGitHub<T>(
       return (await response.json()) as T;
     }
     const responseText = await response.text();
-    const retryable = response.status === 429 || response.status >= 500;
-    if (!retryable || attempt >= RATE_LIMIT_BACKOFF_MS.length) {
+    const decision = classifyRetry({
+      status: response.status,
+      responseText,
+      attempt,
+      retryAfterMs: rateLimitState.retryAfterMs,
+    });
+    if (!decision.retryable || attempt >= decision.maxRetries) {
       throw new GitHubApiError(
         response.status,
         `${label}: HTTP ${response.status} ${responseText}`,
       );
     }
-    const retryAfterMs = rateLimitState.retryAfterMs;
-    const fallbackBackoffMs =
-      RATE_LIMIT_BACKOFF_MS[attempt] ??
-      RATE_LIMIT_BACKOFF_MS[RATE_LIMIT_BACKOFF_MS.length - 1] ??
-      1000;
-    // Secondary (abuse) rate limit sends no Retry-After — back off at least a minute (and keep
-    // climbing via the backoff schedule) so it actually clears instead of hammering it.
-    const secondaryRateLimit =
-      response.status === 429 && /secondary rate limit/i.test(responseText);
-    const secondaryFloorMs = secondaryRateLimit ? SECONDARY_RATE_LIMIT_MIN_WAIT_MS : 0;
-    const waitMs = Math.max(
-      retryAfterMs !== null && retryAfterMs > 0 ? retryAfterMs : 0,
-      fallbackBackoffMs,
-      secondaryFloorMs,
-    );
+    // A SECONDARY (abuse) limit resolves to a flat 5-minute HOLD (SECONDARY_RATE_LIMIT_HOLD_MS);
+    // every other retryable error uses the short escalating backoff. "holding" mirrors the policy.
     console.warn(
-      `  ! GitHub API throttled "${label}" — backing off ${formatDuration(waitMs)} ` +
-        `(retry ${attempt + 1}/${RATE_LIMIT_BACKOFF_MS.length})`,
+      `  ! GitHub API throttled "${label}" — holding ${formatDuration(decision.waitMs)} ` +
+        `(retry ${attempt + 1}/${decision.maxRetries})`,
     );
-    await sleep(waitMs);
+    await sleep(decision.waitMs);
   }
 }
 
