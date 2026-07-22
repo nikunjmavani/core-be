@@ -1,4 +1,4 @@
-import { withGlobalAdminDatabaseContext } from '@/infrastructure/database/contexts/global-admin-database.context.js';
+import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { BILLING_PERMISSIONS } from '@/domains/billing/billing.permissions.js';
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
@@ -109,12 +109,16 @@ export interface ProvisionOrganizationResult {
  * role→membership join with no owner shortcut).
  *
  * @remarks
- * - **Algorithm:** runs the inserts inside a single `withGlobalAdminDatabaseContext`
- *   transaction. The global-admin context is required because the inserts span RLS
- *   boundaries (the org row is gated by `app.current_user_id`, while roles/memberships are
- *   gated by `app.current_organization_id`); doing them under one RLS-bypass transaction
- *   keeps the owner-bootstrap atomic — a partial failure can never leave an org whose owner
- *   has no access. TEAM organizations additionally insert the default {@link DEFAULT_TEAM_ROLES}
+ * - **Algorithm:** pre-generates the org `public_id` and runs every insert inside one
+ *   `withOrganizationDatabaseContext(publicId, …)` transaction, so `app.current_organization_id`
+ *   equals the org being created. The org row then satisfies its tenant-isolation WITH CHECK
+ *   (`public_id = app.current_organization_id`) and the child rows (roles, role_permissions,
+ *   memberships) satisfy theirs (`organization_id` → the just-inserted org) — all under the
+ *   non-superuser `core_be_app` role with NO admin escape hatch (the tenancy policies do not honor
+ *   `app.global_admin`; only `auth`/`audit` do, which is why the former global-admin path failed
+ *   its WITH CHECK with 42501 in deployed environments). One transaction keeps the owner-bootstrap
+ *   atomic — a partial failure can never leave an org whose owner has no access. TEAM
+ *   organizations additionally insert the default {@link DEFAULT_TEAM_ROLES}
  *   (Admin/Member/Viewer) and their grants so a new team can assign a role and invite members
  *   immediately; PERSONAL organizations get Owner only. This is a server-side bootstrap only;
  *   the inputs are not user-controlled beyond name/slug/type.
@@ -156,11 +160,20 @@ export async function provisionPersonalOrganization(
 async function provisionOrganization(
   input: ProvisionOrganizationInput,
 ): Promise<ProvisionOrganizationResult> {
-  return withGlobalAdminDatabaseContext(async (databaseHandle) => {
+  // Pre-generate the org public_id so the entire owner-bootstrap runs INSIDE the new org's own
+  // RLS context (`app.current_organization_id` = this id): every tenant-isolation WITH CHECK then
+  // passes naturally — the org row (`public_id = app.current_organization_id`) and its child rows
+  // (roles, role_permissions, memberships, all `organization_id`-scoped to the just-inserted org).
+  // This replaces `withGlobalAdminDatabaseContext`, which was both improper on a self-service
+  // login/signup path AND ineffective: the tenancy policies never honor `app.global_admin` (only
+  // auth/audit do), so the org INSERT failed its WITH CHECK with SQLSTATE 42501 under the
+  // non-superuser `core_be_app` role in deployed environments.
+  const organizationPublicId = generatePublicId('organization');
+  return withOrganizationDatabaseContext(organizationPublicId, async (databaseHandle) => {
     const [organization] = await databaseHandle
       .insert(organizations)
       .values({
-        public_id: generatePublicId('organization'),
+        public_id: organizationPublicId,
         name: input.name,
         slug: input.slug,
         type: input.type,
