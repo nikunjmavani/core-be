@@ -54,7 +54,17 @@ overrides:
   # DoS via !!omap in YAML11_SCHEMA (transitive via markdownlint-cli2). Fixed in 5.2.1.
   js-yaml: '>=5.2.1'
   fast-xml-parser: '>=5.7.0'
-  hono: '>=4.12.21'
+  # hono <4.12.27 — GHSA-xgm2-5f3f-mvvc / GHSA-hvrm-45r6-mjfj / GHSA-w62v-xxxg-mg59
+  # (moderate): API-gateway adapter dropping a distinct route, hono/jsx per-request
+  # context disclosure, and server-side XSS via the cx() JSX escaping bypass.
+  # Transitive via @modelcontextprotocol/sdk + @scalar/cli. Fixed in 4.12.27
+  # (raised from the earlier 4.12.21 floor as these advisories were newly disclosed).
+  hono: '>=4.12.27'
+  # @hono/node-server <2.0.10 — GHSA-frvp-7c67-39w9 (path traversal, <2.0.5) and
+  # GHSA-9mqv-5hh9-4cgg (unauthenticated memory-leak DoS via aborted WebSocket
+  # handshake, <=2.0.9). Transitive via @modelcontextprotocol/sdk + @scalar/cli.
+  # Fixed in 2.0.10.
+  '@hono/node-server': '>=2.0.10'
   markdown-it: '>=14.1.1'
   minimatch: 10.2.5
   # brace-expansion <5.0.7 — CVE-2026-13149 (HIGH): ReDoS via exponential-time
@@ -65,6 +75,10 @@ overrides:
   vite: '>=8.0.16 <9'
   fastify: '>=5.8.5'
   '@fastify/static': '>=9.1.1'
+  # fast-uri <3.1.4 — GHSA-4c8g-83qw-93j6 / GHSA-v2hh-gcrm-f6hx (high): host
+  # confusion via failed IDN parsing and via a literal-host bypass. Transitive via
+  # fastify's ajv/find-my-way URI handling. Fixed in 3.1.4.
+  fast-uri: '>=3.1.4'
   dompurify: '>=3.4.11'
   drizzle-orm: '>=0.45.2'
   i18next-fs-backend: '>=2.6.4'
