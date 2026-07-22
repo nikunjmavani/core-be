@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { FastifyServerOptions } from 'fastify';
+import { LogController, type FastifyServerOptions } from 'fastify';
 import type { IncomingMessage } from 'node:http';
 import { env } from '@/shared/config/env.config.js';
 import { DEFAULT_BODY_LIMIT_BYTES } from '@/shared/constants/limits.constants.js';
@@ -145,7 +145,12 @@ export function buildFastifyServerOptions(): FastifyServerOptions {
     // observability is preserved via Prometheus /metrics (counts, latency histograms, status),
     // the `Server-Timing` header, and the error handler (which logs failures). Explicit
     // `request.log.*` calls and error logging are unaffected.
-    disableRequestLogging: true,
+    //
+    // Passed via a `LogController` instance rather than the top-level `disableRequestLogging`
+    // flag, which fastify@5.10 deprecated (FSTDEP023) and fastify@6 removes. In 5.10 the option
+    // must be a `LogController` instance — a plain `{ disableRequestLogging: true }` object throws
+    // `FST_ERR_LOG_INVALID_LOG_CONTROLLER`.
+    logController: new LogController({ disableRequestLogging: true }),
     trustProxy: resolveTrustProxy(),
     genReqId: (request) => resolveIncomingRequestIdentifier(request),
     bodyLimit: DEFAULT_BODY_LIMIT_BYTES,

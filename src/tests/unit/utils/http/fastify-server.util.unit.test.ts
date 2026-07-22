@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { LogController } from 'fastify';
 import { IncomingMessage } from 'node:http';
 import {
   PINO_REDACT_PATHS,
@@ -45,6 +46,21 @@ describe('fastify-server.util', () => {
     expect(options.bodyLimit).toBe(1_048_576);
     expect(options.requestTimeout).toBe(30_000);
     expect(options.connectionTimeout).toBe(10_000);
+  });
+
+  it('suppresses per-request logs via a LogController instance, not the deprecated top-level flag (FSTDEP023)', async () => {
+    // fastify@5.10 deprecated the top-level `disableRequestLogging` option (FSTDEP023) and
+    // fastify@6 removes it; in 5.10 the replacement `logController` must be a `LogController`
+    // instance (a plain object throws FST_ERR_LOG_INVALID_LOG_CONTROLLER). Lock the wrapper
+    // shape so a refactor can't silently reintroduce the deprecated flag.
+    vi.resetModules();
+    const { buildFastifyServerOptions: build } = await import(
+      '@/shared/utils/http/fastify-server.util.js'
+    );
+    const options = build();
+    expect(options).not.toHaveProperty('disableRequestLogging');
+    expect(options.logController).toBeInstanceOf(LogController);
+    expect((options.logController as LogController).disableRequestLogging).toBe(true);
   });
 
   it('buildFastifyServerOptions honors FASTIFY_REQUEST_TIMEOUT_MS and FASTIFY_CONNECTION_TIMEOUT_MS', async () => {
