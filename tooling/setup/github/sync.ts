@@ -62,6 +62,7 @@ interface CliOptions {
   readonly skipConfirmation: boolean;
   readonly prune: boolean;
   readonly keepSchemaDefaults: boolean;
+  readonly skipExistingSecrets: boolean;
   readonly environments: string[];
 }
 
@@ -71,7 +72,7 @@ function parseArguments(): CliOptions {
 
   if (argumentsList.includes('--help') || argumentsList.includes('-h')) {
     console.log(
-      'Usage: pnpm github:sync [environment...] [--check | --dry-run] [--yes] [--prune] [--keep-schema-defaults]',
+      'Usage: pnpm github:sync [environment...] [--check | --dry-run] [--yes] [--prune] [--keep-schema-defaults] [--skip-existing-secrets]',
     );
     console.log('');
     console.log('  (default)   All environments: scaffold + remote apply + full reconcile');
@@ -84,6 +85,8 @@ function parseArguments(): CliOptions {
     console.log('  --prune     Delete remote environments not in setup.config.json');
     console.log('  --keep-schema-defaults  Push variables equal to their env-schema default');
     console.log('                          instead of skipping and pruning them');
+    console.log('  --skip-existing-secrets Do not re-push a secret already present on the remote');
+    console.log('                          (completion runs; a rotated secret needs a full run)');
     process.exit(0);
   }
 
@@ -95,6 +98,7 @@ function parseArguments(): CliOptions {
     '-y',
     '--prune',
     '--keep-schema-defaults',
+    '--skip-existing-secrets',
   ]);
   for (const argument of argumentsList) {
     if (allowed.has(argument)) continue;
@@ -123,6 +127,7 @@ function parseArguments(): CliOptions {
     skipConfirmation: argumentsList.includes('--yes') || argumentsList.includes('-y'),
     prune: argumentsList.includes('--prune'),
     keepSchemaDefaults: argumentsList.includes('--keep-schema-defaults'),
+    skipExistingSecrets: argumentsList.includes('--skip-existing-secrets'),
     environments,
   };
 }
@@ -257,8 +262,16 @@ function isInteractiveShell(): boolean {
 }
 
 async function main(): Promise<void> {
-  const { checkOnly, dryRun, diff, skipConfirmation, prune, keepSchemaDefaults, environments } =
-    parseArguments();
+  const {
+    checkOnly,
+    dryRun,
+    diff,
+    skipConfirmation,
+    prune,
+    keepSchemaDefaults,
+    skipExistingSecrets,
+    environments,
+  } = parseArguments();
   const mode: SyncMode = checkOnly ? 'check' : dryRun ? 'dry-run' : 'sync';
   const config = loadConfig();
 
@@ -396,6 +409,7 @@ async function main(): Promise<void> {
         dryRun,
         skipPreflight: true,
         keepSchemaDefaults,
+        skipExistingSecrets,
       });
       totalPushed += result.pushed;
       totalUnchanged += result.unchanged;

@@ -333,6 +333,15 @@ export interface SyncEnvironmentToGitHubOptions {
    * and pruning them. Restores the pre-schema-default reconciliation behaviour.
    */
   readonly keepSchemaDefaults?: boolean;
+  /**
+   * Skip re-pushing a secret ALREADY present on the GitHub Environment. Secrets are otherwise
+   * re-encrypted and pushed every run (GitHub hides their values, so the tool can't tell whether
+   * they changed) — a write burst that dominates the rate-limit budget and trips the secondary
+   * (abuse) limit. On a COMPLETION run, where the remote secrets are known-good, this skips that
+   * burst so only the changed variables are written. Trade-off: a secret whose VALUE changed is
+   * NOT updated in this mode — omit the flag (a full re-push) whenever you rotate a secret.
+   */
+  readonly skipExistingSecrets?: boolean;
 }
 
 interface EnvEntry {
@@ -730,6 +739,7 @@ export async function syncEnvironmentToGitHub(
     skipCreate = false,
     skipPreflight = false,
     keepSchemaDefaults = false,
+    skipExistingSecrets = false,
   } = options;
   const envFilePath = resolve(projectRoot, `.env.${environment}`);
 
@@ -864,6 +874,12 @@ export async function syncEnvironmentToGitHub(
 
   for (const entry of secrets) {
     await push('secret', entry.name, async () => {
+      // --skip-existing-secrets: a secret already on the remote is left as-is. We can't diff its
+      // value, but a completion run knows the remote is good — skipping avoids the secret write
+      // burst that trips the secondary rate limit. A ROTATED secret needs a full run to update.
+      if (skipExistingSecrets && existingSecrets.has(entry.name)) {
+        return 'skipped';
+      }
       await setSecret(token, repositoryFullName, environment, publicKey, entry.name, entry.value);
       return 'pushed';
     });
