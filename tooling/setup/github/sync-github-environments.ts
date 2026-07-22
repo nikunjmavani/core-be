@@ -66,6 +66,19 @@ const MAX_ENVIRONMENT_PAGES = 200;
  */
 const MUTATION_MIN_DELAY_MS = 1_100;
 
+/**
+ * Randomized jitter added on top of the mutative-write floor. A *fixed* cadence (exactly
+ * {@link MUTATION_MIN_DELAY_MS} between every write) is itself a burst signature: GitHub's
+ * secondary (abuse-detection) rate limiter keys on regular, machine-timed write streams and
+ * tripped every environment push at ~20-25 consecutive writes — outlasting even the retry
+ * backoff. Spacing each write by the floor PLUS a uniform-random delay in
+ * [{@link MUTATION_JITTER_MIN_MS}, {@link MUTATION_JITTER_MAX_MS}] makes the stream look organic
+ * ("not all at once"), lowers the effective write rate, and keeps the exact same logic on every
+ * run. Applied to mutations only — GETs use primary-quota pacing and are not burst-limited.
+ */
+const MUTATION_JITTER_MIN_MS = 400;
+const MUTATION_JITTER_MAX_MS = 2_400;
+
 /** Minimum wait when a 429 is the SECONDARY rate limit (no Retry-After header — needs a real pause). */
 const SECONDARY_RATE_LIMIT_MIN_WAIT_MS = 60_000;
 
@@ -138,6 +151,24 @@ function computeDynamicDelayMs(): number {
   return Math.min(Math.max(baseDelayMs, DYNAMIC_DELAY_MIN_MS), DYNAMIC_DELAY_MAX_MS);
 }
 
+/**
+ * Pre-request wait for a MUTATIVE (POST/PUT/PATCH/DELETE) GitHub call: the larger of the dynamic
+ * primary-quota pacing and the {@link MUTATION_MIN_DELAY_MS} floor, PLUS a uniform-random jitter in
+ * [{@link MUTATION_JITTER_MIN_MS}, {@link MUTATION_JITTER_MAX_MS}]. The jitter is what breaks the
+ * regular write cadence that trips GitHub's secondary (abuse) rate limit — see the constant docs.
+ * `random` is injectable (defaults to `Math.random`) solely so the jitter band is deterministically
+ * unit-testable; every real run passes real randomness, so no two writes share an identical cadence.
+ */
+export function computeMutationDelayMs(
+  dynamicDelayMs: number,
+  random: () => number = Math.random,
+): number {
+  const flooredMs = Math.max(dynamicDelayMs, MUTATION_MIN_DELAY_MS);
+  const jitterSpanMs = MUTATION_JITTER_MAX_MS - MUTATION_JITTER_MIN_MS;
+  const jitterMs = MUTATION_JITTER_MIN_MS + Math.floor(random() * (jitterSpanMs + 1));
+  return flooredMs + jitterMs;
+}
+
 interface GitHubEnvironmentPublicKey {
   readonly key_id: string;
   readonly key: string;
@@ -194,10 +225,9 @@ async function requestGitHub<T>(
   const method = options.method ?? 'GET';
   const isMutation = method !== 'GET';
   const dynamicDelayMs = computeDynamicDelayMs();
-  // Writes are floored at MUTATION_MIN_DELAY_MS to avoid tripping the secondary (abuse) limit.
-  const preRequestDelayMs = isMutation
-    ? Math.max(dynamicDelayMs, MUTATION_MIN_DELAY_MS)
-    : dynamicDelayMs;
+  // Writes are floored at MUTATION_MIN_DELAY_MS AND get randomized jitter (computeMutationDelayMs)
+  // so the cadence is never a fixed burst pattern that trips GitHub's secondary (abuse) limit.
+  const preRequestDelayMs = isMutation ? computeMutationDelayMs(dynamicDelayMs) : dynamicDelayMs;
   if (preRequestDelayMs > 0) {
     await sleep(preRequestDelayMs);
   }

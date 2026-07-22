@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computeMutationDelayMs,
   findStaleRemoteKeys,
   formatSyncPreviewTable,
   parseEnvContents,
@@ -133,6 +134,43 @@ describe('github:sync schema-default reconciliation', () => {
   it('uses the real envSchemaDefaults by default (PORT=3000 is the shipped default)', () => {
     expect(reconcile('PORT=3000\n', []).schemaDefault).toEqual(['PORT']);
     expect(reconcile('PORT=8080\n', []).pushed).toEqual(['PORT']);
+  });
+});
+
+describe('computeMutationDelayMs (write jitter — anti secondary-rate-limit)', () => {
+  const MIN_DRAW = () => 0; // lowest jitter
+  const MAX_DRAW = () => 0.999_999_999; // highest jitter (Math.random is [0, 1))
+
+  it('floors a sub-floor dynamic delay and always adds a positive jitter (never a fixed cadence)', () => {
+    // A bare fixed 1.1s cadence is what tripped GitHub's secondary abuse limit; every write must
+    // carry a strictly-positive random jitter on top of the floor.
+    const low = computeMutationDelayMs(0, MIN_DRAW);
+    const high = computeMutationDelayMs(0, MAX_DRAW);
+    expect(low).toBeGreaterThan(1_100); // floor(1_100) + minJitter(>0)
+    expect(high).toBeGreaterThan(low); // the jitter genuinely varies the spacing
+  });
+
+  it('lets a dynamic delay larger than the floor win, jitter unchanged for an equal draw', () => {
+    // Delta between a large base and the floor case, at the same random draw, is exactly
+    // base-minus-floor — proving the floor is 1_100 and the jitter term is identical.
+    const withFloor = computeMutationDelayMs(0, MIN_DRAW);
+    const withLargeBase = computeMutationDelayMs(10_000, MIN_DRAW);
+    expect(withLargeBase - withFloor).toBe(10_000 - 1_100);
+  });
+
+  it('keeps every delay inside a bounded band — no unbounded, zero, or negative waits', () => {
+    const lo = computeMutationDelayMs(0, MIN_DRAW);
+    const hi = computeMutationDelayMs(0, MAX_DRAW);
+    expect(hi - lo).toBeGreaterThan(0); // a real jitter span
+    for (let i = 0; i < 200; i += 1) {
+      const delay = computeMutationDelayMs(0, Math.random);
+      expect(delay).toBeGreaterThanOrEqual(lo);
+      expect(delay).toBeLessThanOrEqual(hi);
+    }
+  });
+
+  it('is deterministic for a given draw — the same logic runs every time', () => {
+    expect(computeMutationDelayMs(500, () => 0.5)).toBe(computeMutationDelayMs(500, () => 0.5));
   });
 });
 
