@@ -61,10 +61,12 @@ const MAX_ENVIRONMENT_PAGES = 200;
 /**
  * Minimum spacing between MUTATIVE requests (POST/PUT/PATCH/DELETE). GitHub's secondary
  * (abuse-detection) rate limit fires on bursts of writes even when the primary quota is healthy,
- * and its guidance is ≥1s between mutative calls. The primary-quota pacing can dip to ~250ms, so
- * writes are floored here to stay under the secondary limit.
+ * and its guidance is ≥1s between mutative calls. An env push is a SMALL write set (all secrets +
+ * only the changed non-default variables — a few dozen calls), so a generous multi-second floor
+ * costs only a couple minutes of total runtime while keeping the effective write rate well under
+ * the secondary limit. Deliberately conservative — the whole push is well worth the extra spacing.
  */
-const MUTATION_MIN_DELAY_MS = 1_100;
+const MUTATION_MIN_DELAY_MS = 3_000;
 
 /**
  * Randomized jitter added on top of the mutative-write floor. A *fixed* cadence (exactly
@@ -76,8 +78,8 @@ const MUTATION_MIN_DELAY_MS = 1_100;
  * ("not all at once"), lowers the effective write rate, and keeps the exact same logic on every
  * run. Applied to mutations only — GETs use primary-quota pacing and are not burst-limited.
  */
-const MUTATION_JITTER_MIN_MS = 400;
-const MUTATION_JITTER_MAX_MS = 2_400;
+const MUTATION_JITTER_MIN_MS = 1_000;
+const MUTATION_JITTER_MAX_MS = 4_000;
 
 /**
  * On a SECONDARY (abuse-detection) rate-limit error we HOLD a full 5 minutes before retrying, and

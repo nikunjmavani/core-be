@@ -147,16 +147,16 @@ describe('computeMutationDelayMs (write jitter — anti secondary-rate-limit)', 
     // carry a strictly-positive random jitter on top of the floor.
     const low = computeMutationDelayMs(0, MIN_DRAW);
     const high = computeMutationDelayMs(0, MAX_DRAW);
-    expect(low).toBeGreaterThan(1_100); // floor(1_100) + minJitter(>0)
+    expect(low).toBeGreaterThan(3_000); // floor(3_000) + minJitter(>0)
     expect(high).toBeGreaterThan(low); // the jitter genuinely varies the spacing
   });
 
   it('lets a dynamic delay larger than the floor win, jitter unchanged for an equal draw', () => {
     // Delta between a large base and the floor case, at the same random draw, is exactly
-    // base-minus-floor — proving the floor is 1_100 and the jitter term is identical.
+    // base-minus-floor — proving the floor is 3_000 and the jitter term is identical.
     const withFloor = computeMutationDelayMs(0, MIN_DRAW);
     const withLargeBase = computeMutationDelayMs(10_000, MIN_DRAW);
-    expect(withLargeBase - withFloor).toBe(10_000 - 1_100);
+    expect(withLargeBase - withFloor).toBe(10_000 - 3_000);
   });
 
   it('keeps every delay inside a bounded band — no unbounded, zero, or negative waits', () => {
