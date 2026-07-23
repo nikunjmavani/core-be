@@ -370,6 +370,22 @@ describe('EmailLoginService', () => {
     ).rejects.toThrow();
   });
 
+  it('login enforces the constant-time floor on the known-account wrong-code branch (anti-enumeration)', async () => {
+    const { enforceMinimumDuration } = await import(
+      '@/shared/utils/security/anti-enumeration.util.js'
+    );
+    // Known email + wrong code must be timing-indistinguishable from the unknown-email 401, else the
+    // latency delta is an account-existence oracle. The wrong-code throw is inside the code-consume
+    // transaction, so the floor is applied in the catch outside it.
+    vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
+    vi.mocked(redis.eval).mockResolvedValue(1);
+    vi.mocked(verificationTokenRepository.consumeOtpForUser).mockResolvedValue(null);
+    await expect(
+      service.login({ email: user.email, code: 'ZZZZZZ' }, '127.0.0.1'),
+    ).rejects.toThrow();
+    expect(vi.mocked(enforceMinimumDuration)).toHaveBeenCalledTimes(1);
+  });
+
   it('login propagates a downstream session/MFA failure so the code consume rolls back', async () => {
     vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
     vi.mocked(verificationTokenRepository.consumeOtpForUser).mockResolvedValue({
@@ -488,6 +504,18 @@ describe('EmailLoginService', () => {
         service.verifyCodeForStepUp({ userPublicId: passwordlessUser.public_id, code: 'ABC123' }),
       ).rejects.toMatchObject({ messageKey: 'errors:invalidOrExpiredVerificationCode' });
       expect(verificationTokenRepository.invalidateAllForUser).not.toHaveBeenCalled();
+    });
+
+    it('rejects once the per-user attempt cap is exceeded, before consuming any code (parity with login)', async () => {
+      vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(
+        passwordlessUser as never,
+      );
+      // Over the shared EMAIL_CODE_VERIFY_ATTEMPT cap → reject before touching the token store.
+      vi.mocked(redis.eval).mockResolvedValueOnce(99);
+      await expect(
+        service.verifyCodeForStepUp({ userPublicId: passwordlessUser.public_id, code: 'ABC123' }),
+      ).rejects.toMatchObject({ messageKey: 'errors:invalidOrExpiredVerificationCode' });
+      expect(verificationTokenRepository.consumeOtpForUser).not.toHaveBeenCalled();
     });
   });
 });

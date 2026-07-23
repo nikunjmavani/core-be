@@ -381,6 +381,7 @@ src/
     │   │   │       │   ├── subscription-period.util.unit.test.ts
     │   │   │       │   ├── subscription-routes-rate-limit.policy.unit.test.ts
     │   │   │       │   ├── subscription-seat-sync.processor.unit.test.ts
+    │   │   │       │   ├── subscription-seat-sync.queue.unit.test.ts
     │   │   │       │   ├── subscription.controller.auth-matrix.unit.test.ts
     │   │   │       │   ├── subscription.controller.unit.test.ts
     │   │   │       │   ├── subscription.repository.db.unit.test.ts

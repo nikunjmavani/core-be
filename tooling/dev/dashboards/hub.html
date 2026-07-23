@@ -291,7 +291,11 @@ function parseHttpRoutes(text) {
     const method = (labels.match(/method="([^"]*)"/) || [])[1] || '';
     const status = parseInt((labels.match(/status_code="([^"]*)"/) || [])[1] || '0', 10);
     const key = `${method} ${route}`;
-    const r = routes[key] || (routes[key] = { method, route, count: 0, sum: 0, errors: 0, clientErrors: 0, errStatuses: {} });
+    let r = routes[key];
+    if (!r) {
+      r = { method, route, count: 0, sum: 0, errors: 0, clientErrors: 0, errStatuses: {} };
+      routes[key] = r;
+    }
     if (m[1] === 'count') { r.count += val; if (status >= 400) { r.errStatuses[status] = (r.errStatuses[status] || 0) + val; if (status >= 500) r.errors += val; else r.clientErrors += val; } } else r.sum += val;
   }
   return Object.values(routes);
@@ -628,7 +632,7 @@ function renderQueues(queues, agg, sS, worker, opts) {
   const wrap = el('div', `space-y-3.5${stale ? ' stale' : ''}`);
   // KPI summary — these aggregate the queue list below, so they live with Queues
   const kpis = el('div', `grid grid-cols-2 gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]${stale ? ' stale' : ''}`);
-  JOBS.forEach((j) => kpis.appendChild(jobTile(j, agg, sS)));
+  JOBS.forEach((j) => { kpis.appendChild(jobTile(j, agg, sS)); });
   wrap.appendChild(kpis);
   const head = el('div', 'flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-0.5');
   const cap = el('div', 'flex items-center gap-2');
@@ -830,7 +834,7 @@ if (!window.GridStack) {
   try { const saved = JSON.parse(localStorage.getItem(GRID_LAYOUT_KEY) || 'null'); if (Array.isArray(saved) && saved.length) grid.load(saved, false); } catch { /* ignore a corrupt saved layout */ }
   let saveTimer;
   grid.on('change', () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { try { localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(grid.save(false))); } catch { /* storage unavailable */ } }, 400); });
-  document.querySelectorAll('.panel-head').forEach((head) => head.addEventListener('dblclick', () => { localStorage.removeItem(GRID_LAYOUT_KEY); location.reload(); }));
+  document.querySelectorAll('.panel-head').forEach((head) => { head.addEventListener('dblclick', () => { localStorage.removeItem(GRID_LAYOUT_KEY); location.reload(); }); });
 }
 tick(); setInterval(tick, 1000);
 setInterval(freshTick, 1000);

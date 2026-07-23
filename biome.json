@@ -137,7 +137,7 @@
       }
     },
     {
-      "includes": ["src/**/*.routes.ts", "src/**/workers/*.ts"],
+      "includes": ["src/**/*.routes.ts", "src/**/workers/*.ts", "src/**/*.handlers.ts"],
       "linter": {
         "rules": {
           "complexity": {
@@ -221,7 +221,7 @@
       }
     },
     {
-      "includes": ["tooling/**/*.ts"],
+      "includes": ["tooling/**/*.ts", "tooling/**/*.html"],
       "linter": {
         "rules": {
           "style": {
