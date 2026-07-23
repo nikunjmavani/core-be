@@ -393,7 +393,15 @@ export class EmailLoginService {
           authSessionService: this.authSessionService,
         });
       }),
-    );
+    ).catch(async (error: unknown) => {
+      // Anti-enumeration parity: the known-account failure paths (a wrong/expired code at the
+      // `if (!record) throw` above, or a suspended-account rejection) must be timing-indistinguishable
+      // from the floored unknown-email and attempt-cap branches — otherwise a fast known-email 401 vs
+      // a slow unknown-email 401 leaks account existence (this endpoint's documented guarantee). Floor
+      // before re-throwing, outside the transaction so no DB connection is held during the wait.
+      await enforceMinimumDuration(startedAtMillis);
+      throw error;
+    });
 
     // Clear the attempt counter so a verified user's later legitimate flows are never pre-throttled.
     await this.clearVerifyAttemptCounter(user.id);
@@ -446,6 +454,19 @@ export class EmailLoginService {
     if (user.password_hash) {
       throw new ForbiddenError('errors:passwordStepUpRequired');
     }
+    // Parity with `login` (sec-review): bound online code-guessing with the same per-user attempt cap
+    // (checked AFTER the MFA/password guards so a legitimate wrong-method rejection is not counted as
+    // a guess), not just the route rate limit. Shares the EMAIL_CODE_VERIFY_ATTEMPT counter so login
+    // and step-up draw from one budget.
+    const attemptKey = `${EMAIL_CODE_VERIFY_ATTEMPT_KEY_PREFIX}${user.id}`;
+    const attempts = await incrementWithExpiryOnFirst(
+      this.redis,
+      attemptKey,
+      VERIFICATION_CODE_TTL_MINUTES * 60,
+    );
+    if (attempts > VERIFICATION_CODE_MAX_VERIFY_ATTEMPTS) {
+      throw new UnauthorizedError('errors:invalidOrExpiredVerificationCode');
+    }
     const record = await this.verificationTokenRepository.consumeOtpForUser(
       user.id,
       EMAIL_CODE_TOKEN_TYPE,
@@ -457,5 +478,7 @@ export class EmailLoginService {
     );
     if (!record) throw new UnauthorizedError('errors:invalidOrExpiredVerificationCode');
     await this.verificationTokenRepository.invalidateAllForUser(user.id, EMAIL_CODE_TOKEN_TYPE);
+    // Clear the shared attempt counter so a later legitimate login/step-up is not pre-throttled.
+    await this.clearVerifyAttemptCounter(user.id);
   }
 }
