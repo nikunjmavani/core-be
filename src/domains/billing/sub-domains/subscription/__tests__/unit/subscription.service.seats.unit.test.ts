@@ -208,13 +208,16 @@ describe('SubscriptionService seat counters (REQ-4)', () => {
     expect(call.idempotencyKey).toMatch(/^seat-sync:org_public:/);
   });
 
-  it('enqueueSeatQuantitySync forwards an explicit caller key unchanged (changePlan path)', () => {
+  it('enqueueSeatQuantitySync namespaces an explicit caller key by org before Stripe (changePlan path)', () => {
     service.enqueueSeatQuantitySync('org_public', 'client-key-123');
     const call = vi.mocked(seatSyncMocks.enqueueSubscriptionSeatSyncBestEffort).mock
       .calls[0]![0] as {
       idempotencyKey?: string;
     };
-    expect(call.idempotencyKey).toBe('client-key-123');
+    // sec-review: the raw client key must be org-namespaced so two orgs reusing the same client-key
+    // string with the same resulting seat count cannot collide on ONE Stripe idempotency key
+    // (`${token}:qty:${n}`) across different subscriptions (Stripe 400 → retries exhaust → no sync).
+    expect(call.idempotencyKey).toBe('sub-seat-sync:org_public:client-key-123');
   });
 
   it('syncSeatQuantityForOrganization is a no-op when there is no active subscription', async () => {

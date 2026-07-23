@@ -274,22 +274,27 @@ export class SubscriptionService {
    * Best-effort enqueue of a Stripe seat-quantity reconciliation for an org (REQ-4).
    *
    * @remarks
-   * - **Algorithm:** fire-and-forget enqueue onto the seat-sync queue, coalesced per org. The
-   *   worker re-reads the authoritative member count and pushes it to Stripe.
+   * - **Algorithm:** fire-and-forget enqueue onto the seat-sync queue. Each enqueue is a distinct
+   *   durable job; the worker re-reads the authoritative member count and pushes it to Stripe.
    * - **Failure modes:** swallows enqueue errors (logged) — a Redis blip must never fail the
    *   member-management or change-plan request that triggered it.
-   * - **Side effects:** writes one (coalesced) job to the seat-sync queue.
+   * - **Side effects:** writes one job to the seat-sync queue.
    * - **Notes:** the cross-domain entry point tenancy's `MembershipService` calls after a member
    *   add/remove commits, and `changePlan` calls after a successful plan change.
    */
   enqueueSeatQuantitySync(organization_public_id: string, idempotencyKey?: string): void {
-    // audit #1: stamp a STABLE per-enqueue idempotency token when the caller (the member
-    // add/remove hot path) provides none. It is stored in the BullMQ job data, so every RETRY of
-    // the same job reuses it — the Stripe quantity update is then deduped at Stripe instead of
-    // re-issued (which, with proration/usage billing, would post duplicate proration line items).
-    // A separate enqueue gets a fresh token (avoids a stale idempotent replay on an N→M→N seat
-    // oscillation); `changePlan` keeps passing its own client-derived key.
-    const seatSyncToken = idempotencyKey ?? `seat-sync:${organization_public_id}:${randomUUID()}`;
+    // audit #1: stamp a STABLE idempotency token so every RETRY of the same job reuses it — the
+    // Stripe quantity update is then deduped at Stripe instead of re-issued (which, with
+    // proration/usage billing, would post duplicate proration line items). The member add/remove hot
+    // path passes no key and gets an org-scoped random token (a fresh one per enqueue avoids a stale
+    // idempotent replay on an N→M→N seat oscillation).
+    // sec-review: when the caller DOES supply a client key (`changePlan`), namespace it by org before
+    // it reaches Stripe as `${token}:qty:${n}` — otherwise two orgs reusing the same client-key string
+    // with the same resulting seat count collide on ONE Stripe idempotency key across different
+    // subscriptions (Stripe 400 param-mismatch → retries exhaust → seats never sync).
+    const seatSyncToken =
+      buildStripeIdempotencyKey('sub-seat-sync', organization_public_id, idempotencyKey) ??
+      `seat-sync:${organization_public_id}:${randomUUID()}`;
     enqueueSubscriptionSeatSyncBestEffort(
       omitUndefined({
         organizationPublicId: organization_public_id,

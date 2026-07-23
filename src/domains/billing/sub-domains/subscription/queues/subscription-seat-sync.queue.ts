@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Queue } from 'bullmq';
 import { getBullMQProducerConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { DEFAULT_JOB_RETENTION_COUNT } from '@/infrastructure/queue/queue.constants.js';
@@ -37,15 +38,20 @@ function getSubscriptionSeatSyncQueue(): Queue<SubscriptionSeatSyncJobData> {
 }
 
 /**
- * Enqueues a seat-quantity-sync job for an organization (REQ-4). Keyed by
- * `seat-sync-${organizationPublicId}` so a burst of member changes collapses to one pending job —
- * the worker always re-reads the current member count, so coalescing loses nothing.
+ * Enqueues a seat-quantity-sync job for an organization (REQ-4). Each enqueue gets a UNIQUE `jobId`
+ * (`seat-sync-${organizationPublicId}-${uuid}`) so a later member change always schedules a fresh
+ * run — the worker re-reads the live member count, so the newest job reconciles the final state.
  *
  * @remarks
- * - **Algorithm:** validates the payload, then `queue.add` with the per-org `jobId` for dedupe.
+ * - **Algorithm:** validates the payload, then `queue.add` with a per-enqueue unique `jobId`.
  * - **Failure modes:** propagates BullMQ enqueue errors; callers in the request path swallow them
  *   so a Redis blip never fails member management (the change already committed locally).
  * - **Side effects:** writes one job to the seat-sync queue.
+ * - **Notes:** a STABLE per-org jobId would be silently no-op'd by BullMQ whenever a prior job with
+ *   that id is still RETAINED (completed or failed) — the exact duplicate-jobId trap the Stripe
+ *   webhook reclaim path documents as sec-re-02 — leaving Stripe billing a stale seat count until the
+ *   retained job aged out. Retries of one job still reuse that job's stored idempotency token, so a
+ *   retried Stripe update is deduped, not duplicated.
  */
 export async function enqueueSubscriptionSeatSync(options: {
   organizationPublicId: string;
@@ -64,7 +70,7 @@ export async function enqueueSubscriptionSeatSync(options: {
     SUBSCRIPTION_SEAT_SYNC_QUEUE_NAME,
   );
   await queue.add('sync-subscription-seats', jobData, {
-    jobId: `seat-sync-${options.organizationPublicId}`,
+    jobId: `seat-sync-${options.organizationPublicId}-${randomUUID()}`,
   });
 }
 
