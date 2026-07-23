@@ -49,7 +49,9 @@ describe('release-deploy production policy', () => {
     // failed to deploy; it retags via imagetools (same manifest, no pull), api + worker.
     expect(workflow).toMatch(/retag:[\s\S]*?needs:\s*\[resolve,\s*deploy\]/);
     expect(workflow).toMatch(/retag:[\s\S]*?if:\s*success\(\)/);
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal shell variable in the workflow YAML — not a TS template.
     expect(workflow).toContain('docker buildx imagetools create --tag "${api_base}:${TAG}"');
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal shell variable in the workflow YAML — not a TS template.
     expect(workflow).toContain('docker buildx imagetools create --tag "${worker_base}:${TAG}"');
   });
 });
@@ -65,6 +67,7 @@ describe('reusable railway deploy concurrency', () => {
 
   it('keys the concurrency group on the environment only — never the sha', () => {
     expect(reusable).toContain(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: literal GitHub Actions expression in the workflow YAML — not a TS template.
       "group: railway-deploy-${{ inputs.github_environment || inputs.target || 'deploy' }}",
     );
     // no sha suffix on the group (would let different-sha deploys to one environment race)
