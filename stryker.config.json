@@ -48,6 +48,8 @@
     "configFile": "tooling/vitest/stryker.config.ts",
     "related": true
   },
+  "tsconfigFile": "tsconfig.stryker-noop.json",
+  "ignorePatterns": [".claude", ".cursor", ".codex", ".mcp.json"],
   "timeoutMS": 60000,
   "concurrency": 4
 }
