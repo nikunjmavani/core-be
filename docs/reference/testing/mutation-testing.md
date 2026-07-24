@@ -40,6 +40,7 @@ Workflow: [.github/workflows/scheduled-stryker-mutation.yml](../../../.github/wo
 
 - **Schedule:** Sundays 03:30 UTC
 - **Manual:** `workflow_dispatch`
+- **Services:** ephemeral Postgres + Redis — Stryker's dry run boots the mutated files' unit tests through the app stack (e.g. `i18n.middleware` locale cache), so the job provisions the same services + `test-env` action as the vitest lanes.
 - **Artifacts:** `reports/mutation/mutation-report.html` and `mutation-report.json` (14-day retention)
 - **Failure:** exit code 1 when mutation score &lt; 70%
 
@@ -50,7 +51,7 @@ Workflow: [.github/workflows/scheduled-stryker-mutation.yml](../../../.github/wo
 Two settings in `stryker.config.json` exist solely to keep Stryker working on the native **TypeScript 7** compiler (`typescript@7.x`), whose programmatic API drops the legacy compiler functions Stryker 9.x relies on:
 
 - **`tsconfigFile: "tsconfig.stryker-noop.json"`** (a path that intentionally does not exist). Stryker's `TsConfigPreprocessor` rewrites the tsconfig for its sandbox using `ts.parseConfigFileTextToJson`, which is `undefined` in TypeScript 7 → the run crashes before any mutant is tested. Pointing `tsconfigFile` at a non-existent file skips that preprocessor. It is safe because the Vitest runner resolves `@/` and `@tooling/` via the aliases in `tooling/vitest/stryker.config.ts`, not via tsconfig path rewriting — so mutation results are unaffected.
-- **`ignorePatterns: [".claude", ".cursor", ".codex", ".mcp.json"]`** — the agent-tooling directories contain committed **symlinks** (into `agent-os/`) that Stryker cannot copy into its sandbox (`ENOTSUP … copyfile`). They are irrelevant to mutation, so they are excluded from the sandbox.
+- **`ignorePatterns`** excludes paths that must not be copied into Stryker's sandbox and are irrelevant to mutation: the agent-tooling dirs `.claude` / `.cursor` / `.codex` / `.mcp.json` (committed **symlinks** into `agent-os/` → `ENOTSUP … copyfile`), the local `.codegraph` MCP database (a live SQLite dir whose WAL file rotates mid-copy → flaky `ENOENT`), and the `reports` / `coverage` output dirs. These are local-only concerns (absent in CI) but keep local runs deterministic.
 
 Revisit both once a Stryker release supports TypeScript 7's compiler API (latest is 9.6.1 as of this change), or if the repo moves back to a JS-based TypeScript.
 

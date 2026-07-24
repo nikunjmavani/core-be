@@ -49,7 +49,7 @@
     "related": true
   },
   "tsconfigFile": "tsconfig.stryker-noop.json",
-  "ignorePatterns": [".claude", ".cursor", ".codex", ".mcp.json"],
+  "ignorePatterns": [".claude", ".cursor", ".codex", ".codegraph", ".mcp.json", "reports", "coverage"],
   "timeoutMS": 60000,
   "concurrency": 4
 }
