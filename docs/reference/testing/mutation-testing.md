@@ -45,6 +45,17 @@ Workflow: [.github/workflows/scheduled-stryker-mutation.yml](../../../.github/wo
 
 ---
 
+## TypeScript 7 compatibility
+
+Two settings in `stryker.config.json` exist solely to keep Stryker working on the native **TypeScript 7** compiler (`typescript@7.x`), whose programmatic API drops the legacy compiler functions Stryker 9.x relies on:
+
+- **`tsconfigFile: "tsconfig.stryker-noop.json"`** (a path that intentionally does not exist). Stryker's `TsConfigPreprocessor` rewrites the tsconfig for its sandbox using `ts.parseConfigFileTextToJson`, which is `undefined` in TypeScript 7 → the run crashes before any mutant is tested. Pointing `tsconfigFile` at a non-existent file skips that preprocessor. It is safe because the Vitest runner resolves `@/` and `@tooling/` via the aliases in `tooling/vitest/stryker.config.ts`, not via tsconfig path rewriting — so mutation results are unaffected.
+- **`ignorePatterns: [".claude", ".cursor", ".codex", ".mcp.json"]`** — the agent-tooling directories contain committed **symlinks** (into `agent-os/`) that Stryker cannot copy into its sandbox (`ENOTSUP … copyfile`). They are irrelevant to mutation, so they are excluded from the sandbox.
+
+Revisit both once a Stryker release supports TypeScript 7's compiler API (latest is 9.6.1 as of this change), or if the repo moves back to a JS-based TypeScript.
+
+---
+
 ## Local troubleshooting
 
 1. Run `vitest run --config tooling/vitest/stryker.config.ts` — all tests must pass before Stryker starts.
