@@ -2,6 +2,96 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.0.0](https://github.com/nikunjmavani/core-be/compare/v4.10.5...v5.0.0) (2026-07-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* **notify:** replace the PUSH notification channel with WEB_PUSH ([#971](https://github.com/nikunjmavani/core-be/issues/971))
+
+### Added
+
+* **agent-os:** harden agent-guard enforcement — REVIEW.md, cross-platform hooks, Tier-4 guard evals ([#905](https://github.com/nikunjmavani/core-be/issues/905)) ([a5f9b6e](https://github.com/nikunjmavani/core-be/commit/a5f9b6ed7627424e5f5833507eb8179bd18160fc))
+* **agent-os:** relocate claude plugin into agent-os, single-source app wiring, add i18n-auditor ([#907](https://github.com/nikunjmavani/core-be/issues/907)) ([e5de060](https://github.com/nikunjmavani/core-be/commit/e5de060992bc2e023a618b7e18111735c51faad1))
+* **auth:** email verification-code as a bootstrap-only step-up factor ([#965](https://github.com/nikunjmavani/core-be/issues/965)) ([e781989](https://github.com/nikunjmavani/core-be/commit/e7819898a9d4f27760023d291a7d16c5f76cd08c))
+* **ci:** repo-owned Railway deploy tool + env validation — CI independent of core-infra ([#947](https://github.com/nikunjmavani/core-be/issues/947)) ([158ff26](https://github.com/nikunjmavani/core-be/commit/158ff261fe197fb92e9b302c33b1926e51ed4ed3))
+* **config:** add Category-L (local-only) env flags, rejected outside NODE_ENV=local ([#914](https://github.com/nikunjmavani/core-be/issues/914)) ([a777488](https://github.com/nikunjmavani/core-be/commit/a7774882e46ee3e807974b75739930ef62a072bf))
+* **config:** allow `local` as a valid NODE_ENV value ([#912](https://github.com/nikunjmavani/core-be/issues/912)) ([2277756](https://github.com/nikunjmavani/core-be/commit/227775629f26dc4200f2829adf1ac6bc58ad21c0))
+* **config:** force BLOCK_DISPOSABLE_EMAIL on in production; require prod-strict for security flags ([#911](https://github.com/nikunjmavani/core-be/issues/911)) ([21ed737](https://github.com/nikunjmavani/core-be/commit/21ed737dd6faf239ab5bef1b099564bd2fd4227c))
+* **drift:** periodic drift nets — cited-path gate, main canary, settings check, monthly audit ([#925](https://github.com/nikunjmavani/core-be/issues/925)) ([50b5ecc](https://github.com/nikunjmavani/core-be/commit/50b5ecc499351e5ae768415c87a879c3bd2fff20))
+* **env:** explicit env-var registry (allowed values + description, Zod derived) + catalog ([#987](https://github.com/nikunjmavani/core-be/issues/987)) ([a73d8ca](https://github.com/nikunjmavani/core-be/commit/a73d8ca82ee902ead43bd3a848bd31acbe051fd6))
+* **github-sync:** apply environment protection from committed JSON ([#937](https://github.com/nikunjmavani/core-be/issues/937)) ([89861b6](https://github.com/nikunjmavani/core-be/commit/89861b6353e3f643f8a7be6dab73f9f1aadf0117))
+* **github-sync:** skip+prune schema-default vars, paginate remote fetch, add --diff preview ([#984](https://github.com/nikunjmavani/core-be/issues/984)) ([aeb5616](https://github.com/nikunjmavani/core-be/commit/aeb56162e9a3b9f6e7dbe587bf72dcca40224fd3))
+* **notify:** canonical NOTIFICATION_TYPES vocabulary + edge validation ([#964](https://github.com/nikunjmavani/core-be/issues/964)) ([2368238](https://github.com/nikunjmavani/core-be/commit/23682383c2b471a1d6d0a6a2e31cdc1143e4a4e1))
+* **notify:** notify org managers when an invitation is accepted ([#967](https://github.com/nikunjmavani/core-be/issues/967)) ([556cee8](https://github.com/nikunjmavani/core-be/commit/556cee80c383979ace04cf3ac2b547a9ccebf622))
+* **notify:** replace the PUSH notification channel with WEB_PUSH ([#971](https://github.com/nikunjmavani/core-be/issues/971)) ([0242acb](https://github.com/nikunjmavani/core-be/commit/0242acbadc03027b8379eda7b00c6108b17ef00f))
+* **setup:** auto-install/upgrade external tools on macOS in setup:local ([#940](https://github.com/nikunjmavani/core-be/issues/940)) ([b301241](https://github.com/nikunjmavani/core-be/commit/b301241e70a461b45744eea201329a43eabcde80))
+* **storage:** wire S3_ENDPOINT / S3_FORCE_PATH_STYLE for S3-compatible endpoints ([#974](https://github.com/nikunjmavani/core-be/issues/974)) ([bed9b76](https://github.com/nikunjmavani/core-be/commit/bed9b76de199d68178e1c89b92399b5b4b572c81))
+* **tenancy:** add member_count to organization role responses ([#979](https://github.com/nikunjmavani/core-be/issues/979)) ([903f3cc](https://github.com/nikunjmavani/core-be/commit/903f3cce1b104fcda8191b4ec33944473bb0fd87))
+* **tenancy:** allow atomic role creation with an initial permission set ([#961](https://github.com/nikunjmavani/core-be/issues/961)) ([97415e1](https://github.com/nikunjmavani/core-be/commit/97415e1fa0983e0675d82e4d897571a4828049a6))
+* **tenancy:** cap pending member invitations per organization ([#972](https://github.com/nikunjmavani/core-be/issues/972)) ([4418691](https://github.com/nikunjmavani/core-be/commit/44186918742670a741bc1d7254d1a3f3bc59fcbf))
+* **tenancy:** seed default Admin/Member/Viewer roles on TEAM org provisioning ([#960](https://github.com/nikunjmavani/core-be/issues/960)) ([a01ba26](https://github.com/nikunjmavani/core-be/commit/a01ba26603ea15307d49c5cff375f36022fd331c))
+* **user:** onboarding_completed flag — unify onboarding across deployment modes ([#906](https://github.com/nikunjmavani/core-be/issues/906)) ([8d1cab3](https://github.com/nikunjmavani/core-be/commit/8d1cab3092ad6922aaca917993209e589f32ae62))
+
+
+### Fixed
+
+* audit findings — i18n middleware bug, hardening, doc/tooling sync ([#954](https://github.com/nikunjmavani/core-be/issues/954)) ([bdfa76a](https://github.com/nikunjmavani/core-be/commit/bdfa76a762b22f6cf0e8921e30d2c3e5e5a5aa16))
+* **auth:** guarantee a personal org in the login token on the non-pinned paths ([#963](https://github.com/nikunjmavani/core-be/issues/963)) ([953dd02](https://github.com/nikunjmavani/core-be/commit/953dd02b4717853d220e1e5f03ec0d5d5b590688))
+* **auth:** tag disposable-email rejections with a stable reason; deflake security tests ([#910](https://github.com/nikunjmavani/core-be/issues/910)) ([d6f97a5](https://github.com/nikunjmavani/core-be/commit/d6f97a505d877da600f22cd4bad2384734c8ad64))
+* **billing:** serialize concurrent subscription creates (B4) + correct mutable-state docs (B2) ([#918](https://github.com/nikunjmavani/core-be/issues/918)) ([b56fc35](https://github.com/nikunjmavani/core-be/commit/b56fc3556ab3bedb850a54846cf70109e7b33006))
+* **ci:** seed reference data on Railway deploy + drop dead target_branch input ([#957](https://github.com/nikunjmavani/core-be/issues/957)) ([6da44de](https://github.com/nikunjmavani/core-be/commit/6da44de9c2ab09fb6780a03f20222be28df691c5))
+* **deploy:** production env uses protectedBranches (Model A) — resolves [#924](https://github.com/nikunjmavani/core-be/issues/924), [#877](https://github.com/nikunjmavani/core-be/issues/877) ([#938](https://github.com/nikunjmavani/core-be/issues/938)) ([e76a76c](https://github.com/nikunjmavani/core-be/commit/e76a76c90605eb1d366c7f5c8c23d9fbced4a849))
+* **deps:** override find-my-way &gt;=9.6.1 to patch HTTP/2 DDoS advisory ([#1000](https://github.com/nikunjmavani/core-be/issues/1000)) ([fda7805](https://github.com/nikunjmavani/core-be/commit/fda780534ddab701ce92f97daebf78e61aaf4f49))
+* **deps:** patch 3 new advisories (brace-expansion, js-yaml, body-parser) ([#990](https://github.com/nikunjmavani/core-be/issues/990)) ([41383f1](https://github.com/nikunjmavani/core-be/commit/41383f1655757ef8084426573be1b22ad936d071))
+* **errors:** resolve error detail via i18next singleton so raw keys never leak ([#909](https://github.com/nikunjmavani/core-be/issues/909)) ([0f791aa](https://github.com/nikunjmavani/core-be/commit/0f791aa290d43a51e305568ce133736e78fcefa0))
+* **github-sync:** a blank local value must not delete the live remote secret ([#953](https://github.com/nikunjmavani/core-be/issues/953)) ([3795134](https://github.com/nikunjmavani/core-be/commit/3795134789a7c49c05321e311a79774f582c0f1a))
+* **i18n:** add missing error keys, remove dead ones, and gate code→JSON key existence ([#955](https://github.com/nikunjmavani/core-be/issues/955)) ([9cc2eea](https://github.com/nikunjmavani/core-be/commit/9cc2eea4b366b71ea2cdffe7f3d9047ec2297436))
+* **lint:** resolve Biome errors in dashboards/hub.html ([#930](https://github.com/nikunjmavani/core-be/issues/930)) ([5277c68](https://github.com/nikunjmavani/core-be/commit/5277c686c921865ef7c3f0fc33cae4fdbf37da16))
+* **logging:** replace deprecated disableRequestLogging with LogController (FSTDEP023) ([#995](https://github.com/nikunjmavani/core-be/issues/995)) ([dcf8bbf](https://github.com/nikunjmavani/core-be/commit/dcf8bbfd35bd77364276e4bf9a1868d331b635dc))
+* **migrate:** fail fast on bad/unreachable DB URL + actionable connection hints ([#988](https://github.com/nikunjmavani/core-be/issues/988)) ([3737717](https://github.com/nikunjmavani/core-be/commit/37377174e8f0c75d18b091c2670b9514f4c34076))
+* **platform:** parity sweep — dependabot post-merge CI, codegraph ignore, hooks/vscode/docs polish ([#908](https://github.com/nikunjmavani/core-be/issues/908)) ([6e3288b](https://github.com/nikunjmavani/core-be/commit/6e3288b709a250760f337e9ccc4a57c20c5c8ab9))
+* seat-sync mis-billing + auth timing/step-up hardening (from code review) ([#999](https://github.com/nikunjmavani/core-be/issues/999)) ([cb63044](https://github.com/nikunjmavani/core-be/commit/cb6304496e6036286a3b79e416b95de160397c88))
+* **security:** CAPTCHA_PROVIDER=disabled turns captcha off on its own ([#980](https://github.com/nikunjmavani/core-be/issues/980)) ([68ebf51](https://github.com/nikunjmavani/core-be/commit/68ebf516b90ff70578b8b8e69c209b0696f5a97a))
+* **security:** fail-closed field-secret decryption (drop plaintext passthrough) ([#920](https://github.com/nikunjmavani/core-be/issues/920)) ([d8dd932](https://github.com/nikunjmavani/core-be/commit/d8dd932fba40f3126d7d0c2605d9b7e8d16f6595))
+* **security:** resolve confirmed pre-launch review findings (H1, T0/T1/T3, T2, M1, M2, W1, W2, L1) ([#915](https://github.com/nikunjmavani/core-be/issues/915)) ([17ffecb](https://github.com/nikunjmavani/core-be/commit/17ffecbfa878aaee7db032b65a41f2273df84c76))
+* **seed:** guard full-seed CLI so importing runFullSeed is side-effect-free ([#969](https://github.com/nikunjmavani/core-be/issues/969)) ([ce0fc42](https://github.com/nikunjmavani/core-be/commit/ce0fc42337faa9f53ddbe0782563eb905cc7f3f1))
+* **seed:** mint tenancy seed public_ids with each row's own entity prefix ([#959](https://github.com/nikunjmavani/core-be/issues/959)) ([e8a0453](https://github.com/nikunjmavani/core-be/commit/e8a045372fcb0a8b1c5fdaf45295ce57cc426842))
+* **seed:** stamp onboarding_completed_at on the demo admin + allow Vite origin ([#958](https://github.com/nikunjmavani/core-be/issues/958)) ([b316793](https://github.com/nikunjmavani/core-be/commit/b31679335154a429b111a9853e75a3f1d91ed4d0))
+* **tenancy:** invitation email links to the frontend accept page, not the API route ([#966](https://github.com/nikunjmavani/core-be/issues/966)) ([a1d77cc](https://github.com/nikunjmavani/core-be/commit/a1d77cc4dd9c692afdabe19766b1882b5205a78e))
+* **tenancy:** provision organizations under the new org's RLS context, not global-admin ([#998](https://github.com/nikunjmavani/core-be/issues/998)) ([c28dc6b](https://github.com/nikunjmavani/core-be/commit/c28dc6b9663c486b1a2fbdc57647c9987588d07f))
+* **test:** repair validate:test-api-prefix drift red on main ([#935](https://github.com/nikunjmavani/core-be/issues/935)) ([652054c](https://github.com/nikunjmavani/core-be/commit/652054cac7c425fc10e4cbad26953a13ee9d0ce3))
+* **tooling:** hold 5 min per abuse-limit error in github:sync so a run rides out the penalty ([#997](https://github.com/nikunjmavani/core-be/issues/997)) ([1c5724c](https://github.com/nikunjmavani/core-be/commit/1c5724c1afc9e3ac2de56155d8b73d24aead0812))
+* **tooling:** jitter github:sync write spacing to dodge GitHub's secondary rate limit ([#996](https://github.com/nikunjmavani/core-be/issues/996)) ([c3c59b3](https://github.com/nikunjmavani/core-be/commit/c3c59b340692897311c283b6b2198e92552aab1f))
+* **tooling:** make Stryker mutation testing work on TypeScript 7 ([#1001](https://github.com/nikunjmavani/core-be/issues/1001)) ([db7f8ac](https://github.com/nikunjmavani/core-be/commit/db7f8ac39ec9b8fb65ecf438dafd6d519fe0f750))
+
+
+### Changed
+
+* **auth:** single-key RS256 JWT — remove keyring, legacy fallback, and rotation tool ([#921](https://github.com/nikunjmavani/core-be/issues/921)) ([6f08117](https://github.com/nikunjmavani/core-be/commit/6f0811731f7d35d4c1fbd481b64674cf642b607a))
+* **config:** default NODE_ENV to local (a fresh clone sets up as local) ([#926](https://github.com/nikunjmavani/core-be/issues/926)) ([362efda](https://github.com/nikunjmavani/core-be/commit/362efdafa8def2c9229c9472db4ce80a7c9a145a))
+* **config:** drop unused Category-L env flags + dead GIT_COMMIT_SHA fallback ([#927](https://github.com/nikunjmavani/core-be/issues/927)) ([40d9ab2](https://github.com/nikunjmavani/core-be/commit/40d9ab2806a634755c1c7f9fc46a79ae535c99d1))
+* **config:** one env flag per thing — wipe gates on TEST_MODE alone + documented principles ([#932](https://github.com/nikunjmavani/core-be/issues/932)) ([7d9fa28](https://github.com/nikunjmavani/core-be/commit/7d9fa2832168a30c3e1575b6bde4d9ab11e0a2d2))
+* **setup:** fold envs:sync:github into github:sync + propagate session changes to docs/skills/tests ([#951](https://github.com/nikunjmavani/core-be/issues/951)) ([3d34dd8](https://github.com/nikunjmavani/core-be/commit/3d34dd8037cc6a37628d74193b9b8b14b3c2b38d))
+* **test-env:** TEST_MODE gate, test-var consolidation, passwordless-signup load test ([#929](https://github.com/nikunjmavani/core-be/issues/929)) ([f378769](https://github.com/nikunjmavani/core-be/commit/f378769a3b16d6cb93ed6ace3a0d79e1e633f337))
+* **user:** drop the capabilities object from /users/me ([#956](https://github.com/nikunjmavani/core-be/issues/956)) ([941f075](https://github.com/nikunjmavani/core-be/commit/941f0755e6e2bba4b72a95386ce71a0e4aeee7ea))
+
+
+### Documentation
+
+* **agent-os:** always-applied skill-router rule + repeatable codebase-audit-loop (core-fe Tier 2) ([#899](https://github.com/nikunjmavani/core-be/issues/899)) ([e5710d3](https://github.com/nikunjmavani/core-be/commit/e5710d3807ff77095e8fabc524aac3b9690f9c2c))
+* **agent-os:** authoritative agent-behavior rule — full completion, one checkpoint (core-fe audit [#6](https://github.com/nikunjmavani/core-be/issues/6)) ([#903](https://github.com/nikunjmavani/core-be/issues/903)) ([9702845](https://github.com/nikunjmavani/core-be/commit/9702845d0fba6945ef6c26531f0cc9b2a7a407ab))
+* **core-infra:** frame extracted provisioning commands across all remaining docs ([#943](https://github.com/nikunjmavani/core-be/issues/943)) ([4085c8f](https://github.com/nikunjmavani/core-be/commit/4085c8f199089a5c17fd336d1c3edb9406b7e3b5))
+* **core-infra:** frame validate:github-environments in .github/environments/README ([#946](https://github.com/nikunjmavani/core-be/issues/946)) ([cf8f1a1](https://github.com/nikunjmavani/core-be/commit/cf8f1a1037b27f6ee21795952c3c9b12832daf4e))
+* fix 11 doc-vs-code drift items from deep audit ([#904](https://github.com/nikunjmavani/core-be/issues/904)) ([c9d16c5](https://github.com/nikunjmavani/core-be/commit/c9d16c53d0a5cb89c3115ba63318ec68603d4457))
+* **overviews:** add the 7 missing nested sub-domain overview docs ([#945](https://github.com/nikunjmavani/core-be/issues/945)) ([ffbba17](https://github.com/nikunjmavani/core-be/commit/ffbba17ec42193ec04e2a6c24509dd0d069e5ca6))
+* purge all external-provisioning references — core-be documents only itself ([#949](https://github.com/nikunjmavani/core-be/issues/949)) ([4625262](https://github.com/nikunjmavani/core-be/commit/46252628535d4b75da27831e2ab7172003b6c61c))
+* **runbook:** document DATABASE_URL runtime-role RLS-safety requirement ([#992](https://github.com/nikunjmavani/core-be/issues/992)) ([fd81082](https://github.com/nikunjmavani/core-be/commit/fd810829f8dd3e656dbad16f90b0e3f178f2740b))
+* **security:** reconcile authz review + testing-plan with the real route model ([#975](https://github.com/nikunjmavani/core-be/issues/975)) ([5a920bc](https://github.com/nikunjmavani/core-be/commit/5a920bc630886bb73374ece970c6a16806d29147))
+* **structure:** regenerate src-structure-tree (fixes [#991](https://github.com/nikunjmavani/core-be/issues/991) canary drift) ([#993](https://github.com/nikunjmavani/core-be/issues/993)) ([0c9b3b1](https://github.com/nikunjmavani/core-be/commit/0c9b3b12514e59eca2a19148c054a58af29fe6bb))
+* **tenancy:** clarify inviting a member is POST /memberships, not a phantom invitations resource ([#962](https://github.com/nikunjmavani/core-be/issues/962)) ([426d0f5](https://github.com/nikunjmavani/core-be/commit/426d0f592bc6d0970a08ef910039f3229472c78c))
+* **tenancy:** fix phantom POST /organization/invitations in the team-only route docs ([#970](https://github.com/nikunjmavani/core-be/issues/970)) ([b6b0ebc](https://github.com/nikunjmavani/core-be/commit/b6b0ebcb13cdb04f169355b502b2811e5e860163))
+
 ## [4.10.5](https://github.com/nikunjmavani/core-be/compare/v4.10.4...v4.10.5) (2026-07-09)
 
 
