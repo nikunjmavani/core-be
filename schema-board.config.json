@@ -1,0 +1,6 @@
+{
+  "name": "core-be",
+  "schema": "./src",
+  "migrations": "./migrations",
+  "port": 4000
+}

@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>schema·board · live Drizzle ER canvas</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='5' y='5' width='22' height='22' rx='6' fill='%23141d2c' stroke='%2347c1d6' stroke-width='2.5'/%3E%3Ccircle cx='12' cy='13' r='2.4' fill='%23f0b64b'/%3E%3Ccircle cx='12' cy='20' r='2.4' fill='%2347c1d6'/%3E%3Crect x='16.5' y='11' width='6.5' height='3.6' rx='1.8' fill='%235f6f8b'/%3E%3Crect x='16.5' y='18' width='6.5' height='3.6' rx='1.8' fill='%235f6f8b'/%3E%3C/svg%3E" />
+  <script>
+    // resolve theme before first paint to avoid a flash
+    try {
+      var p = localStorage.getItem('dbd:theme') || 'system';
+      var d = p === 'system' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : p;
+      document.documentElement.dataset.theme = d;
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="mark">schema<b>·</b>board</span>
+        <span class="path" id="path" title="">—</span>
+        <span class="stats" id="stats"></span>
+      </div>
+
+      <div class="spacer"></div>
+
+      <button class="search" id="search-launch">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <span class="search-ph">Search tables &amp; actions…</span>
+        <kbd>⌘K</kbd>
+      </button>
+      <input id="search" type="text" class="hidden-search" placeholder="Find table…" autocomplete="off" spellcheck="false" />
+
+      <div class="seg">
+        <button id="btn-diff" title="Highlight what changed vs the previous version">◧ Diff</button>
+        <button id="btn-only" title="Show only tables that changed" disabled>⧉ Changes only</button>
+      </div>
+
+      <button class="ghost-btn" id="btn-export" title="Export SQL or DBML">↧ Export</button>
+      <button class="ghost-btn" id="btn-tm" title="Time machine — replay how the schema evolved">⏱ Replay</button>
+
+      <button class="ghost-btn theme-btn" id="btn-theme" title="Theme" aria-label="Cycle theme"><span id="theme-ico">◐</span></button>
+      <button class="ghost-btn theme-btn" id="btn-help" title="Help & shortcuts ( ? )" aria-label="Help and shortcuts">?</button>
+
+      <div class="status">
+        <span class="dot off" id="conn-dot"></span>
+        <span id="conn-text">connecting…</span>
+      </div>
+    </header>
+
+    <div class="main">
+      <aside class="sidebar" id="sidebar">
+        <div class="side-sec versions-sec" id="versions-sec">
+          <h3>
+            <button type="button" id="versions-toggle" class="versions-head" aria-expanded="true" title="Collapse versions — show Latest only">
+              <span class="versions-chevron" aria-hidden="true">▾</span>
+              <span>Versions</span>
+              <span class="versions-count" id="versions-count"></span>
+            </button>
+            <button id="sidebar-collapse" class="side-icon" title="Hide panel" aria-label="Hide side panel">⟨</button>
+          </h3>
+          <div class="versions" id="versions"></div>
+        </div>
+        <div class="side-sec changes-sec">
+          <div class="side-tabs">
+            <button class="stab on" data-panel="changes">Changes <i class="tab-n" id="tab-changes-n"></i></button>
+            <button class="stab" data-panel="suggest">Review <i class="tab-n" id="tab-suggest-n"></i></button>
+            <button class="stab" data-panel="feedback">Feedback <i class="tab-n" id="tab-feedback-n"></i></button>
+          </div>
+
+          <div class="panel" id="panel-changes">
+            <div class="cmp-line"><span id="cmp-label"></span></div>
+            <div class="summary" id="summary"></div>
+            <div class="changelog" id="changelog"></div>
+          </div>
+
+          <div class="panel hidden" id="panel-suggest">
+            <div class="panel-note">SQL best-practice review of the version you're viewing. Click a finding to locate it; ＋ adds it to your feedback.</div>
+            <button id="deep-review" class="mbtn primary deep-btn">✨ Deep review with Claude</button>
+            <div class="review-output" id="review-output"></div>
+            <div class="suggest-list" id="suggest-list"></div>
+          </div>
+
+          <div class="panel hidden" id="panel-feedback">
+            <div class="panel-note">Collected notes for your coding agent. Edit freely, then copy as a ready-to-paste prompt.</div>
+            <textarea id="feedback-text" placeholder="e.g. Add an index on orders.user_id&#10;Rename products.category_id → category_ref"></textarea>
+            <div class="fb-actions">
+              <button id="fb-copy" class="mbtn primary">Copy prompt for agent</button>
+              <button id="fb-clear" class="mbtn">Clear</button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <button id="sidebar-show" class="sidebar-show" title="Show history panel" aria-label="Show side panel">☰</button>
+
+      <div class="stage" id="stage">
+      <div class="world" id="world">
+        <svg class="edges" id="edges"></svg>
+      </div>
+
+      <div class="empty-stage" id="empty-stage" hidden>
+        <div class="es-card">
+          <div class="es-mark">db<b>·</b>diagram</div>
+          <div class="es-title">No tables found yet</div>
+          <p>The watched file has no <code>pgTable</code> / <code>mysqlTable</code> / <code>sqliteTable</code> definitions — add one and save, the diagram appears instantly.</p>
+          <p>Or point the server at your real schema:</p>
+          <pre>node server.js path/to/schema.ts</pre>
+        </div>
+      </div>
+
+      <div class="minimap dock" id="minimap"><svg id="mm" viewBox="0 0 172 116"></svg></div>
+
+      <div class="controls dock">
+        <div class="ctl-group">
+          <button id="zoom-in" title="Zoom in" aria-label="Zoom in">＋</button>
+          <button class="zoom-label" id="zoom-label" title="Reset zoom to 100%" aria-label="Reset zoom">100%</button>
+          <button id="zoom-out" title="Zoom out" aria-label="Zoom out">－</button>
+        </div>
+        <div class="ctl-group">
+          <button id="fit" title="Fit to screen (F)" aria-label="Fit to screen">⤢</button>
+          <button id="relayout" title="Auto-arrange tables" aria-label="Auto-arrange tables">✦</button>
+          <button id="snap" title="Export diagram as PNG" aria-label="Export diagram as PNG">⬇</button>
+        </div>
+      </div>
+
+      <div class="legend dock" id="legend">
+        <h4>Diff</h4>
+        <div class="li"><span class="sw added"></span> added</div>
+        <div class="li"><span class="sw modified"></span> modified</div>
+        <div class="li"><span class="sw removed"></span> removed</div>
+      </div>
+
+      <div class="toast" id="toast"><span class="dot"></span><span id="toast-text"></span></div>
+
+      <div class="edge-tip" id="edge-tip"></div>
+      <div class="rubber" id="rubber" hidden></div>
+      <div class="focus-chip dock" id="focus-chip" hidden></div>
+
+      <div class="pathbar dock" id="pathbar">
+        <div class="pb-head">
+          <span class="pb-title">Join path</span>
+          <div class="pb-chain" id="pb-chain"></div>
+          <button id="pb-copy" class="mbtn">Copy SQL</button>
+          <button id="pb-close" class="mbtn icon" title="Close (Esc)">✕</button>
+        </div>
+        <pre class="pb-sql" id="pb-sql"></pre>
+      </div>
+
+      <div class="timemachine dock" id="timemachine">
+        <button class="tm-btn" id="tm-play" title="Play / pause (space)" aria-label="Play or pause replay">▶</button>
+        <button class="tm-btn tm-step" id="tm-prev" title="Previous version" aria-label="Previous version">⏮</button>
+        <div class="tm-track" id="tm-track">
+          <input type="range" id="tm-slider" min="1" max="1" step="1" value="1" aria-label="Version scrubber" />
+          <div class="tm-ticks" id="tm-ticks"></div>
+        </div>
+        <button class="tm-btn tm-step" id="tm-next" title="Next version" aria-label="Next version">⏭</button>
+        <div class="tm-info">
+          <span class="tm-v" id="tm-v">v1</span>
+          <span class="tm-reason" id="tm-reason"></span>
+        </div>
+        <button class="tm-btn tm-close" id="tm-close" title="Exit time machine" aria-label="Exit time machine">✕</button>
+      </div>
+
+      <aside class="inspector dock" id="inspector"></aside>
+      </div>
+    </div>
+
+    <div class="modal" id="export">
+      <div class="modal-card">
+        <div class="modal-head">
+          <div class="tabs">
+            <button class="tab on" data-tab="sql">SQL</button>
+            <button class="tab" data-tab="dbml">DBML</button>
+            <button class="tab" data-tab="migration">Migration</button>
+          </div>
+          <span class="modal-sub" id="export-sub">full schema of the version you're viewing</span>
+          <div class="modal-actions">
+            <button id="export-copy" class="mbtn">Copy</button>
+            <button id="export-download" class="mbtn primary">Download</button>
+            <button id="export-close" class="mbtn icon" title="Close">✕</button>
+          </div>
+        </div>
+        <pre class="modal-body"><code id="export-code"></code></pre>
+      </div>
+    </div>
+
+    <div class="palette" id="palette">
+      <div class="palette-box">
+        <div class="palette-input">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input id="palette-q" type="text" placeholder="Search tables and actions…" autocomplete="off" spellcheck="false" />
+          <kbd>esc</kbd>
+        </div>
+        <div class="palette-list" id="palette-list"></div>
+        <div class="palette-foot">
+          <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+          <span><kbd>↵</kbd> run</span>
+          <span><kbd>esc</kbd> close</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tour" id="tour" hidden>
+      <div class="tour-ring" id="tour-ring"></div>
+      <div class="tour-card" id="tour-card">
+        <div class="tour-step" id="tour-step">1 / 3</div>
+        <div class="tour-text" id="tour-text"></div>
+        <div class="tour-actions">
+          <button id="tour-skip" class="mbtn">Skip</button>
+          <button id="tour-next" class="mbtn primary">Next</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="help">
+      <div class="modal-card help-card">
+        <div class="modal-head">
+          <span class="help-title">schema·board — what it can do</span>
+          <div class="modal-actions">
+            <button id="help-close" class="mbtn icon" title="Close (Esc)">✕</button>
+          </div>
+        </div>
+        <div class="modal-body help-body">
+          <section class="help-sec">
+            <h4>Navigate the canvas</h4>
+            <div class="hrow"><span class="hg">drag background</span><span>Pan around</span></div>
+            <div class="hrow"><span class="hg">scroll</span><span>Zoom in / out (or the ＋ / － controls)</span></div>
+            <div class="hrow"><kbd>F</kbd><span>Fit everything to the screen</span></div>
+            <div class="hrow"><span class="hg">✦</span><span>Auto-arrange tables (crossing-reducing layout)</span></div>
+            <div class="hrow"><span class="hg">minimap</span><span>Bird's-eye overview, top-right</span></div>
+          </section>
+
+          <section class="help-sec">
+            <h4>Tables &amp; relationships</h4>
+            <div class="hrow"><span class="hg">drag header</span><span>Move a table (position is remembered per file)</span></div>
+            <div class="hrow"><span class="hg">click table</span><span>Open the inspector — columns, enum values, what references it, indexes</span></div>
+            <div class="hrow"><span class="hg"><kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd></span><span>Move selection to the nearest table (smoothly focuses it)</span></div>
+            <div class="hrow"><span class="hg">hover table</span><span>Highlight its relationships, dim the rest</span></div>
+            <div class="hrow"><span class="hg">double-click</span><span>Toggle inline "was → now" detail on changed columns</span></div>
+            <div class="hrow"><span class="hg">crow's-foot</span><span>Cardinality on wires: fork = many, bar = one, ○ = optional FK</span></div>
+            <div class="hrow"><span class="hg">⇧-click table</span><span>Join path: select one table, shift-click another — the path lights up and the JOIN SQL is written for you</span></div>
+            <div class="hrow"><span class="hg">hover wire</span><span>Tooltip with the exact relation (<code>orders.user_id → users.id · on delete cascade</code>)</span></div>
+            <div class="hrow"><span class="hg">⇧-drag canvas</span><span>Rubber-band select several tables, then drag any one to move the group</span></div>
+            <div class="hrow"><span class="hg">color tag</span><span>Click a table → pick a color in the inspector to group tables by domain</span></div>
+            <div class="hrow"><kbd>.</kbd><span>Focus mode: show only the selected table + its neighbors (press again for 2 hops, again to exit)</span></div>
+            <div class="hrow"><span class="hg"><kbd>⌘</kbd><kbd>Z</kbd></span><span>Undo the last layout change (drag or auto-arrange)</span></div>
+          </section>
+
+          <section class="help-sec">
+            <h4>Diff &amp; versions</h4>
+            <div class="hrow"><kbd>D</kbd><span>Toggle diff coloring (added / modified / removed)</span></div>
+            <div class="hrow"><span class="hg">Changes only</span><span>Hide everything that didn't change</span></div>
+            <div class="hrow"><span class="hg">click version</span><span>View that version in the diagram</span></div>
+            <div class="hrow"><span class="hg"><kbd>⌘</kbd>-click version</span><span>Set it as the comparison baseline</span></div>
+            <div class="hrow"><span class="hg">migrations / save</span><span>With a migrations folder, each SQL file is a version (+ Latest from Drizzle). Otherwise each save captures a version.</span></div>
+            <div class="hrow"><span class="hg">⏱ Replay</span><span>Time machine — watch the schema evolve version by version (<kbd>space</kbd> play/pause)</span></div>
+          </section>
+
+          <section class="help-sec">
+            <h4>Review &amp; feedback</h4>
+            <div class="hrow"><span class="hg">Review tab</span><span>SQL best-practice findings (missing FK indexes, money-as-float, …)</span></div>
+            <div class="hrow"><span class="hg">✨ Deep review</span><span>Full review by your local Claude Code CLI — no API key</span></div>
+            <div class="hrow"><span class="hg">＋</span><span>Add any change or finding to your feedback list</span></div>
+            <div class="hrow"><span class="hg">Feedback tab</span><span>Copy a ready-to-paste prompt for your coding agent</span></div>
+          </section>
+
+          <section class="help-sec">
+            <h4>Export</h4>
+            <div class="hrow"><span class="hg">SQL</span><span>Full <code>CREATE TABLE</code> DDL of the viewed version</span></div>
+            <div class="hrow"><span class="hg">DBML</span><span>dbdiagram.io format</span></div>
+            <div class="hrow"><span class="hg">Migration</span><span><code>ALTER</code> statements for the diff you're viewing</span></div>
+            <div class="hrow"><span class="hg">⬇ PNG</span><span>Snapshot the diagram as an image (canvas controls, bottom-left)</span></div>
+          </section>
+
+          <section class="help-sec">
+            <h4>Shortcuts &amp; appearance</h4>
+            <div class="hrow"><span class="hg"><kbd>⌘</kbd><kbd>K</kbd></span><span>Command palette — fuzzy-search tables, <b>columns</b> &amp; run any action</span></div>
+            <div class="hrow"><kbd>/</kbd><span>Open the command palette</span></div>
+            <div class="hrow"><kbd>?</kbd><span>Open this help</span></div>
+            <div class="hrow"><span class="hg">◐ ☀ ☾</span><span>Cycle theme: System / Light / Dark</span></div>
+            <div class="hrow"><span class="hg">⟨ / ☰</span><span>Collapse or show the side panel</span></div>
+            <div class="hrow"><span class="hg">terminal</span><span><code>node server.js &lt;file|folder&gt; -p PORT --fresh</code></span></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

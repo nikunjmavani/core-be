@@ -1,0 +1,444 @@
+#!/usr/bin/env node
+// schema·board — live, interactive ER diagram for Drizzle schemas.
+// Vendored into core-be at tooling/schema-board (no external package).
+//
+// Usage:
+//   node server.js <path-to-schema.ts | folder> [--port 4000] [--migrations dir] [--fresh] [--open]
+//   pnpm schema-board                   # from core-be root (preferred)
+//   node bin/schema-board.js            # cwd-aware CLI
+//
+// With --migrations (or auto-detected sibling migrations/), each SQL migration
+// becomes a version; a tip "Latest (Drizzle)" version tracks the watched schema.
+// Without migrations, every schema save still pushes a version (demo mode).
+
+'use strict';
+
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const { spawn } = require('child_process');
+const { parseSchema } = require('./lib/parser');
+const { diffSchemas } = require('./lib/diff');
+const { buildMigrationVersions, cloneSchema } = require('./lib/sql-migrations');
+const { openUrl } = require('./lib/open');
+
+const MAX_SAVE_VERSIONS = 40;
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
+
+function detectSiblingMigrations(schemaTarget) {
+  const base = fs.existsSync(schemaTarget) && fs.statSync(schemaTarget).isDirectory()
+    ? schemaTarget
+    : path.dirname(schemaTarget);
+  const candidates = [
+    path.join(base, 'migrations'),
+    path.join(base, '..', 'migrations'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c) && fs.statSync(c).isDirectory()) {
+      const hasSql = fs.readdirSync(c).some((f) => f.endsWith('.sql'));
+      if (hasSql) return path.resolve(c);
+    }
+  }
+  return null;
+}
+
+/**
+ * Start the schema·board HTTP server.
+ * @param {{
+ *   schemaTarget: string,
+ *   migrationsDir?: string|null,
+ *   port?: number,
+ *   fresh?: boolean,
+ *   open?: boolean,
+ *   projectName?: string|null,
+ *   projectRoot?: string|null,
+ * }} opts
+ */
+function startServer(opts = {}) {
+  let target = path.resolve(opts.schemaTarget);
+  let port = Number(opts.port) || 4000;
+  let fresh = !!opts.fresh;
+  let migrationsDir = opts.migrationsDir ? path.resolve(opts.migrationsDir) : detectSiblingMigrations(target);
+  const projectName = opts.projectName || null;
+  const projectRoot = opts.projectRoot ? path.resolve(opts.projectRoot) : null;
+  const shouldOpen = !!opts.open;
+  const migrationMode = !!(migrationsDir && fs.existsSync(migrationsDir));
+
+  // ---- schema sources -------------------------------------------------------
+  function walkFiles(dir, out) {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const ent of entries) {
+      if (ent.name === 'node_modules' || ent.name === '.git' || ent.name === 'dist' || ent.name === 'coverage') continue;
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) walkFiles(full, out);
+      else if (ent.isFile()) out.push(full);
+    }
+  }
+
+  function collectFiles(t) {
+    const stat = fs.existsSync(t) ? fs.statSync(t) : null;
+    if (!stat) return [];
+    if (stat.isDirectory()) {
+      const all = [];
+      walkFiles(t, all);
+      const schemaFiles = all.filter((f) => {
+        const base = path.basename(f);
+        if (base.endsWith('.job.schema.ts') || base.endsWith('.d.ts')) return false;
+        if (base.endsWith('.schema.ts') || base === 'pg-schemas.ts') return true;
+        return false;
+      });
+      if (schemaFiles.length) return schemaFiles.sort();
+      return all
+        .filter((f) => /\.(ts|js|mts|cts)$/.test(f) && !f.endsWith('.d.ts') && path.dirname(f) === t)
+        .sort();
+    }
+    return [t];
+  }
+
+  function readAll() {
+    const files = collectFiles(target);
+    return files.map((f) => {
+      try { return fs.readFileSync(f, 'utf8'); } catch { return ''; }
+    }).join('\n\n');
+  }
+
+  function parseDrizzleSchema() {
+    const source = readAll();
+    if (!source.trim()) return { dialect: 'postgres', enums: [], tables: [], relations: [] };
+    return parseSchema(source);
+  }
+
+  // ---- version history ------------------------------------------------------
+  let versions = [];
+  let clients = [];
+  let seq = 0;
+
+  const historyDir = path.join(process.cwd(), '.db-diagram');
+  const historyFile = path.join(historyDir, 'history-' + target.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) + '.json');
+
+  function loadHistory() {
+    if (fresh || migrationMode) return;
+    try {
+      const raw = JSON.parse(fs.readFileSync(historyFile, 'utf8'));
+      if (Array.isArray(raw.versions)) {
+        for (const v of raw.versions) versions.push(v);
+        seq = versions.reduce((m, v) => Math.max(m, v.id), 0);
+      }
+    } catch { /* no prior history */ }
+  }
+
+  let saveTimer = null;
+  function saveHistory() {
+    if (migrationMode) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try {
+        fs.mkdirSync(historyDir, { recursive: true });
+        fs.writeFileSync(historyFile, JSON.stringify({ target, versions }));
+      } catch { /* best effort */ }
+    }, 200);
+  }
+
+  function stableStringify(schema) {
+    return JSON.stringify({
+      tables: (schema.tables || []).map((t) => ({
+        name: t.name,
+        cols: t.columns.map((c) => c.key + c.type + c.pk + c.notNull + c.unique + c.default + (c.length ?? '') + JSON.stringify(c.references)),
+      })),
+      enums: schema.enums,
+    });
+  }
+
+  function displayTarget() {
+    if (projectName) return projectName;
+    const relBase = projectRoot || process.cwd();
+    return path.relative(relBase, target) || target;
+  }
+
+  function buildPayload() {
+    const list = versions.map((v) => ({
+      id: v.id,
+      at: v.at,
+      reason: v.reason,
+      tables: v.schema.tables.length,
+      kind: v.kind || 'save',
+      file: v.file || null,
+      structural: v.structural !== false,
+    }));
+    const current = versions[versions.length - 1];
+    const prev = versions[versions.length - 2];
+    const diff = current ? diffSchemas(prev ? prev.schema : { tables: [] }, current.schema) : null;
+    if (diff && (!diff.changelog || !diff.changelog.length) && current.kind === 'migration' && current.structural === false) {
+      diff.note = 'No structural table/column changes (RLS / index / function)';
+    }
+    return {
+      versions: list,
+      current: current ? current.id : null,
+      diff,
+      target: displayTarget(),
+      projectName,
+      migrationMode,
+      migrationsDir: migrationMode ? (path.relative(projectRoot || process.cwd(), migrationsDir) || migrationsDir) : null,
+    };
+  }
+
+  function broadcast(event, data) {
+    const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    clients = clients.filter((res) => {
+      try { res.write(payload); return true; } catch { return false; }
+    });
+  }
+
+  // ---- migration mode -------------------------------------------------------
+  function rebuildMigrationVersions() {
+    const migs = buildMigrationVersions(migrationsDir);
+    let drizzle;
+    try { drizzle = parseDrizzleSchema(); }
+    catch (e) {
+      broadcast('parse-error', { message: String(e && e.message || e) });
+      drizzle = migs.length ? cloneSchema(migs[migs.length - 1].schema) : { dialect: 'postgres', enums: [], tables: [], relations: [] };
+    }
+    const tipId = migs.length + 1;
+    versions = [
+      ...migs,
+      {
+        id: tipId,
+        at: new Date().toISOString(),
+        reason: 'Latest (Drizzle)',
+        kind: 'latest',
+        file: null,
+        structural: true,
+        schema: drizzle,
+      },
+    ];
+    seq = tipId;
+    broadcast('version', buildPayload());
+  }
+
+  function refreshLatestOnly() {
+    if (!migrationMode) return;
+    let drizzle;
+    try { drizzle = parseDrizzleSchema(); }
+    catch (e) { broadcast('parse-error', { message: String(e && e.message || e) }); return; }
+    const tip = versions[versions.length - 1];
+    if (tip && tip.kind === 'latest') {
+      if (stableStringify(tip.schema) === stableStringify(drizzle)) return;
+      tip.schema = drizzle;
+      tip.at = new Date().toISOString();
+    } else {
+      versions.push({
+        id: ++seq,
+        at: new Date().toISOString(),
+        reason: 'Latest (Drizzle)',
+        kind: 'latest',
+        structural: true,
+        schema: drizzle,
+      });
+    }
+    broadcast('version', buildPayload());
+  }
+
+  // ---- demo / save-history mode ---------------------------------------------
+  function snapshot(reason) {
+    const source = readAll();
+    if (!source.trim()) return;
+    let schema;
+    try { schema = parseSchema(source); }
+    catch (e) { broadcast('parse-error', { message: String(e && e.message || e) }); return; }
+
+    const last = versions[versions.length - 1];
+    if (last && stableStringify(last.schema) === stableStringify(schema)) return;
+
+    const id = ++seq;
+    const at = new Date().toISOString();
+    versions.push({ id, at, schema, reason, kind: 'save', structural: true });
+    if (versions.length > MAX_SAVE_VERSIONS) versions.shift();
+    saveHistory();
+    broadcast('version', buildPayload());
+  }
+
+  // ---- file watching (debounced) --------------------------------------------
+  let debounceSchema = null;
+  let debounceMig = null;
+
+  function watchPath(dir, recursive, onEvt) {
+    try {
+      fs.watch(dir, { recursive }, onEvt);
+    } catch {
+      try { fs.watch(dir, onEvt); } catch { /* ignore */ }
+    }
+  }
+
+  function watch() {
+    const isDir = fs.existsSync(target) && fs.statSync(target).isDirectory();
+    const watchTarget = isDir ? target : path.dirname(target);
+
+    watchPath(watchTarget, true, (_ev, filename) => {
+      if (filename && /\.(job\.schema\.ts|d\.ts)$/.test(filename)) return;
+      if (filename && !/\.(ts|js|mts|cts)$/.test(filename) && !/schema/i.test(filename)) return;
+      clearTimeout(debounceSchema);
+      debounceSchema = setTimeout(() => {
+        if (migrationMode) refreshLatestOnly();
+        else snapshot('file changed');
+      }, 120);
+    });
+
+    if (migrationMode) {
+      watchPath(migrationsDir, false, (_ev, filename) => {
+        if (filename && !filename.endsWith('.sql')) return;
+        clearTimeout(debounceMig);
+        debounceMig = setTimeout(() => rebuildMigrationVersions(), 200);
+      });
+    }
+  }
+
+  // ---- static + api ---------------------------------------------------------
+  const publicDir = path.join(__dirname, 'public');
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+
+    if (url.pathname === '/events') {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      });
+      res.write('retry: 1000\n\n');
+      clients.push(res);
+      res.write(`event: version\ndata: ${JSON.stringify(buildPayload())}\n\n`);
+      req.on('close', () => { clients = clients.filter((c) => c !== res); });
+      return;
+    }
+
+    if (url.pathname === '/api/review' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (c) => { body += c; if (body.length > 1e6) req.destroy(); });
+      req.on('end', () => {
+        let sql = '';
+        try { sql = JSON.parse(body).sql || ''; } catch {}
+        const reply = (obj) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
+        const prompt = [
+          'You are a senior database engineer. Review this Postgres/Drizzle schema for correctness, data integrity, indexing, normalization, naming, and likely footguns.',
+          'Give concise, high-signal, actionable feedback as short markdown bullets grouped by table. Skip praise — focus on what to change and why.',
+          '', '```sql', sql, '```',
+        ].join('\n');
+
+        let child;
+        try {
+          child = spawn('claude', ['-p'], { env: process.env });
+        } catch (e) {
+          return reply({ unavailable: true, error: String(e && e.message || e) });
+        }
+        let out = '', err = '';
+        const timer = setTimeout(() => { child.kill('SIGKILL'); }, 180000);
+        child.on('error', (e) => { clearTimeout(timer); reply(e && e.code === 'ENOENT' ? { unavailable: true } : { error: String(e.message || e) }); });
+        child.stdout.on('data', (d) => { out += d; });
+        child.stderr.on('data', (d) => { err += d; });
+        child.on('close', (code) => {
+          clearTimeout(timer);
+          if (res.writableEnded) return;
+          if (code === 0 && out.trim()) reply({ review: out.trim() });
+          else reply({ error: (err.trim() || `claude exited with code ${code}`) });
+        });
+        child.stdin.end(prompt);
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/diff') {
+      const from = versions.find((v) => v.id === Number(url.searchParams.get('from')));
+      const to = versions.find((v) => v.id === Number(url.searchParams.get('to')));
+      if (!to) { res.writeHead(404); res.end('{}'); return; }
+      const diff = diffSchemas(from ? from.schema : { tables: [] }, to.schema);
+      if ((!diff.changelog || !diff.changelog.length) && to.kind === 'migration' && to.structural === false) {
+        diff.note = 'No structural table/column changes (RLS / index / function)';
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ diff, from: from ? from.id : null, to: to.id }));
+      return;
+    }
+
+    let file = url.pathname === '/' ? '/index.html' : url.pathname;
+    const filePath = path.join(publicDir, path.normalize(file).replace(/^(\.\.[/\\])+/, ''));
+    fs.readFile(filePath, (err, data) => {
+      if (err) { res.writeHead(404); res.end('Not found'); return; }
+      res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
+      res.end(data);
+    });
+  });
+
+  server.listen(port, () => {
+    if (migrationMode) {
+      rebuildMigrationVersions();
+    } else {
+      loadHistory();
+      snapshot(versions.length ? 'changed since last run' : 'initial');
+    }
+    watch();
+    const url = `http://localhost:${port}`;
+    console.log(`\n  schema·board${projectName ? ` · ${projectName}` : ''} running`);
+    console.log(`  → ${url}`);
+    console.log(`  schema:     ${target}`);
+    if (migrationMode) {
+      console.log(`  migrations: ${migrationsDir} (${Math.max(0, versions.length - 1)} + Latest)`);
+    }
+    console.log(`  history:    ${versions.length} version(s)${fresh ? ' (fresh)' : ''}${migrationMode ? ' [migration mode]' : ''}\n`);
+    if (shouldOpen) openUrl(url);
+  });
+
+  return server;
+}
+
+function parseCliArgs(argv) {
+  let target = null;
+  let port = 4000;
+  let fresh = false;
+  let migrationsDir = null;
+  let open = false;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--port' || argv[i] === '-p') port = Number(argv[++i]);
+    else if (argv[i] === '--fresh') fresh = true;
+    else if (argv[i] === '--migrations') migrationsDir = argv[++i];
+    else if (argv[i] === '--open') open = true;
+    else if (argv[i] === '--no-open') open = false;
+    else if (!target) target = argv[i];
+  }
+  return { target, port, fresh, migrationsDir, open };
+}
+
+function main() {
+  const args = parseCliArgs(process.argv.slice(2));
+  if (args.target) {
+    startServer({
+      schemaTarget: path.resolve(args.target),
+      migrationsDir: args.migrationsDir,
+      port: args.port,
+      fresh: args.fresh,
+      open: args.open,
+    });
+    return;
+  }
+  // No path → resolve from cwd (schema-board.config.json / layout)
+  const { resolveProject } = require('./lib/project');
+  const project = resolveProject({ cwd: process.cwd(), port: args.port });
+  if (!project.schemaTarget) {
+    console.error('schema·board: pass a schema path, or add schema-board.config.json');
+    process.exit(1);
+  }
+  startServer({
+    schemaTarget: project.schemaTarget,
+    migrationsDir: args.migrationsDir || project.migrationsDir,
+    port: args.port || project.port,
+    fresh: args.fresh,
+    open: args.open,
+    projectName: project.name,
+    projectRoot: project.root,
+  });
+}
+
+module.exports = { startServer };
+
+if (require.main === module) {
+  main();
+}
