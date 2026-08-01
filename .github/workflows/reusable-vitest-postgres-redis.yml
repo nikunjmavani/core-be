@@ -71,6 +71,14 @@ jobs:
     needs: matrix-config
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # RESEND_API_KEY / TEST_RESULT_EMAIL_TO (test-result email, below) are held as
+    # environment secrets, so this job has to be environment-scoped to resolve
+    # them — an unscoped job reads the repository-level copies instead. A caller
+    # job that `uses:` a reusable workflow cannot declare `environment:`
+    # (GitHub allows only with/secrets/needs/if/permissions/strategy/concurrency
+    # there), so the scope must live here even though both callers pass
+    # `secrets: inherit`. `development` has no protection rules — no approval gate.
+    environment: development
 
     strategy:
       fail-fast: false
