@@ -2019,6 +2019,7 @@ src/
     │   │   ├── encryption.middleware.unit.test.ts
     │   │   ├── error-handler-i18n-fallback.middleware.unit.test.ts
     │   │   ├── error-handler-timeout.middleware.unit.test.ts
+    │   │   ├── error-handler.middleware.status-mapping.unit.test.ts
     │   │   ├── error-handler.middleware.unit.test.ts
     │   │   ├── health.middleware.unit.test.ts
     │   │   ├── i18n.middleware.db.unit.test.ts

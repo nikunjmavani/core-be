@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const enqueueWebhookDeliveryByAttemptIdMock = vi.fn();
 const findOrganizationPublicIdByDeliveryAttemptIdMock = vi.fn();
@@ -21,23 +21,33 @@ vi.mock(
 );
 
 describe('webhook delivery event handlers', () => {
-  beforeEach(async () => {
-    enqueueWebhookDeliveryByAttemptIdMock.mockReset();
-    findOrganizationPublicIdByDeliveryAttemptIdMock.mockReset();
-    findOrganizationPublicIdByDeliveryAttemptIdMock.mockResolvedValue('org_public_test_99');
-    vi.resetModules();
-  });
+  let eventBus: typeof import('@/core/events/event-bus.js').eventBus;
+  let runWithOnCommitScope: typeof import('@/core/events/event-bus.js').runWithOnCommitScope;
+  let NOTIFY_EVENT: typeof import('@/domains/notify/sub-domains/webhook/events/notify.events.js').NOTIFY_EVENT;
 
-  it('enqueues webhook delivery on notify.webhook_delivery.requested', async () => {
-    const { eventBus, runWithOnCommitScope } = await import('@/core/events/event-bus.js');
-    const { NOTIFY_EVENT } = await import(
+  beforeAll(async () => {
+    // One cold import + handler registration for the file — avoids per-test
+    // `vi.resetModules()` + event-bus re-import that flakes under parallel fork load.
+    const eventBusModule = await import('@/core/events/event-bus.js');
+    const notifyEvents = await import(
       '@/domains/notify/sub-domains/webhook/events/notify.events.js'
     );
     const { registerWebhookDeliveryEventHandlers } = await import(
       '@/domains/notify/sub-domains/webhook/webhook-delivery/events/webhook-delivery.event-handlers.js'
     );
+    eventBus = eventBusModule.eventBus;
+    runWithOnCommitScope = eventBusModule.runWithOnCommitScope;
+    NOTIFY_EVENT = notifyEvents.NOTIFY_EVENT;
     registerWebhookDeliveryEventHandlers();
+  });
 
+  beforeEach(() => {
+    enqueueWebhookDeliveryByAttemptIdMock.mockReset();
+    findOrganizationPublicIdByDeliveryAttemptIdMock.mockReset();
+    findOrganizationPublicIdByDeliveryAttemptIdMock.mockResolvedValue('org_public_test_99');
+  });
+
+  it('enqueues webhook delivery on notify.webhook_delivery.requested', async () => {
     await runWithOnCommitScope(async () => {
       await eventBus.emit({
         type: NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED,
@@ -52,15 +62,6 @@ describe('webhook delivery event handlers', () => {
   });
 
   it('enqueues webhook delivery immediately when no HTTP onCommit scope is active', async () => {
-    const { eventBus } = await import('@/core/events/event-bus.js');
-    const { NOTIFY_EVENT } = await import(
-      '@/domains/notify/sub-domains/webhook/events/notify.events.js'
-    );
-    const { registerWebhookDeliveryEventHandlers } = await import(
-      '@/domains/notify/sub-domains/webhook/webhook-delivery/events/webhook-delivery.event-handlers.js'
-    );
-    registerWebhookDeliveryEventHandlers();
-
     await eventBus.emit({
       type: NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED,
       payload: { delivery_attempt_id: 42 },
