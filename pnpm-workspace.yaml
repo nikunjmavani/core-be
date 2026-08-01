@@ -4,7 +4,7 @@ engineStrict: true
 # older Node (e.g. the Claude Code web sandbox defaults to Node 22) don't trip
 # the engineStrict gate — pnpm self-provisions this version. Keep in sync with
 # .nvmrc / .node-version / engines.node (>=24).
-useNodeVersion: 24.13.0
+useNodeVersion: 24.18.1
 
 allowBuilds:
   # Telemetry package pulled in transitively; deny its postinstall build so a

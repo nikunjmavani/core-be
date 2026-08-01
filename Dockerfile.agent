@@ -10,7 +10,7 @@
 # below) already gives us "rebuild only when lockfile changes", which is the
 # dominant speed-up.
 
-ARG NODE_VERSION=24.13.0
+ARG NODE_VERSION=24.18.1
 
 FROM node:${NODE_VERSION}-bookworm-slim
 
