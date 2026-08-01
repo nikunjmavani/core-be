@@ -52,7 +52,10 @@ overrides:
   '@grpc/grpc-js': '>=1.14.4'
   # js-yaml 5.0.0–5.2.0 — GHSA-724g-mxrg-4qvm (moderate): quadratic-complexity
   # DoS via !!omap in YAML11_SCHEMA (transitive via markdownlint-cli2). Fixed in 5.2.1.
-  js-yaml: '>=5.2.1'
+  # js-yaml 5.0.0–5.2.1 — GHSA-pm4m-ph32-ghv5 (high): exponential parsing time in
+  # flow collections leads to DoS (transitive via @commitlint/cli + markdownlint-cli2).
+  # Fixed in 5.2.2.
+  js-yaml: '>=5.2.2'
   fast-xml-parser: '>=5.7.0'
   # hono <4.12.27 — GHSA-xgm2-5f3f-mvvc / GHSA-hvrm-45r6-mjfj / GHSA-w62v-xxxg-mg59
   # (moderate): API-gateway adapter dropping a distinct route, hono/jsx per-request
@@ -69,12 +72,22 @@ overrides:
   minimatch: 10.2.5
   # brace-expansion <5.0.7 — CVE-2026-13149 (HIGH): ReDoS via exponential-time
   # complexity in expansion. Transitive (minimatch et al.); fixed in 5.0.7.
-  brace-expansion: '>=5.0.7'
+  # brace-expansion >=4.0.0 <5.0.8 — GHSA-mh99-v99m-4gvg (high): DoS via unbounded
+  # expansion length causing an out-of-memory crash. Fixed in 5.0.8.
+  brace-expansion: '>=5.0.8'
   micromatch>picomatch: 4.0.4
   rollup: '>=4.59.0'
   vite: '>=8.0.16 <9'
   fastify: '>=5.8.5'
-  '@fastify/static': '>=9.1.1'
+  # @fastify/static <=10.1.0 — GHSA-83w8-p2f5-377r (high): route-guard bypass via
+  # path traversal; <=10.1.1 — GHSA-8pvw-jcv7-9cmj (moderate): authorization bypass
+  # via non-canonical URL paths. Transitive via @bull-board/fastify + @scalar/cli.
+  # Fixed in 10.1.2.
+  '@fastify/static': '>=10.1.2'
+  # postcss <=8.5.17 — GHSA-r28c-9q8g-f849 (high): path traversal in previous
+  # source-map auto-loading (sourceMappingURL) discloses arbitrary .map files.
+  # Transitive via @scalar/cli > vue > @vue/compiler-sfc. Fixed in 8.5.18.
+  postcss: '>=8.5.18'
   # fast-uri <3.1.4 — GHSA-4c8g-83qw-93j6 / GHSA-v2hh-gcrm-f6hx (high): host
   # confusion via failed IDN parsing and via a literal-host bypass. Transitive via
   # fastify's ajv/find-my-way URI handling. Fixed in 3.1.4.

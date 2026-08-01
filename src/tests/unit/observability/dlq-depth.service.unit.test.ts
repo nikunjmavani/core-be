@@ -10,7 +10,7 @@ vi.mock('bullmq', () => ({
   },
 }));
 
-vi.mock('@/infrastructure/observability/sentry.js', () => ({
+vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
   captureMessage: vi.fn(),
 }));
 
