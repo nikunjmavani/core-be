@@ -20,6 +20,10 @@ jobs:
     name: k6 SLO gate and scenarios
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # RESEND_API_KEY / TEST_RESULT_EMAIL_TO are environment secrets; without this
+    # the job resolves the repository-level copies. `development` has no
+    # protection rules, so a scheduled run needs no approval.
+    environment: development
 
     services:
       postgres:
