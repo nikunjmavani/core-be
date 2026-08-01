@@ -38,6 +38,12 @@ jobs:
     name: Enable auto-merge for approved low-risk Dependabot updates
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # RELEASE_PLEASE_TOKEN is maintained as an ENVIRONMENT secret, so the job has
+    # to be scoped to that environment to resolve it; an unscoped job silently
+    # reads the repository-level copy instead, which nothing validates or
+    # rotates. `development` has no protection rules, so this adds no approval
+    # gate (same rationale as scheduled-release-guards.yml).
+    environment: development
     # Maintainer approved + Dependabot-authored + the non-major npm group only.
     # `npm-major` does not contain the substring `npm-non-major`, so majors never match.
     if: >-
@@ -56,4 +62,7 @@ jobs:
           # PAT-attributed and its push to main TRIGGERS post-merge CI. A
           # GITHUB_TOKEN merge produces no post-merge run — no SBOM, no release
           # processing for that commit. Same fix as core-fe / the release PRs.
+          # The fallback covers an ABSENT secret, not an expired one — an invalid
+          # PAT is passed through and fails auth, so this must resolve the
+          # environment copy (see `environment:` on the job).
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
