@@ -131,6 +131,13 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 6 * * 1'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Same environment as the release-token canary above, for the same reason:
+    # `secrets.RELEASE_PLEASE_TOKEN` only resolves to the environment copy that
+    # canary actually probes when the job is scoped to that environment. Without
+    # this the expression falls back to the repository-level secret, which no
+    # guard validates — an expired repo-level copy then fails `gh auth status`
+    # and reports a token problem as "settings drift" (issue #1006).
+    environment: development
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -143,7 +150,9 @@ jobs:
       # broader than the ruleset-liveness job's checks (it also covers environment protection).
       # `github:sync` shells out to `gh`, which authenticates via GH_TOKEN;
       # the PAT fallback keeps this runnable if the default token lacks a
-      # settings-read scope.
+      # settings-read scope. Note the fallback triggers on an EMPTY secret, not
+      # an invalid one — a set-but-expired PAT is used as-is and fails auth, so
+      # the token must come from the environment copy the canary probes.
       - name: Run github:sync --check (read-only)
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
