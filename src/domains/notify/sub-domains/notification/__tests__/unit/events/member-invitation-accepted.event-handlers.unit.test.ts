@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createAndDispatchNotificationMock = vi.fn();
 vi.mock('@/domains/notify/sub-domains/notification/notification-dispatch.service.js', () => ({
@@ -7,13 +7,11 @@ vi.mock('@/domains/notify/sub-domains/notification/notification-dispatch.service
 }));
 
 describe('member-invitation-accepted notification handler (item #10)', () => {
-  beforeEach(() => {
-    createAndDispatchNotificationMock.mockReset();
-    createAndDispatchNotificationMock.mockResolvedValue(undefined);
-    vi.resetModules();
-  });
+  let emitAccepted: (payload: unknown) => Promise<void>;
 
-  async function emitAccepted(payload: unknown): Promise<void> {
+  beforeAll(async () => {
+    // One cold import + handler registration for the file — avoids per-test
+    // `vi.resetModules()` + event-bus re-import that flakes under parallel fork load.
     const { eventBus } = await import('@/core/events/event-bus.js');
     const { MEMBER_INVITATION_EVENT } = await import(
       '@/domains/tenancy/sub-domains/membership/member-invitation/events/member-invitation.events.js'
@@ -22,8 +20,19 @@ describe('member-invitation-accepted notification handler (item #10)', () => {
       '@/domains/notify/sub-domains/notification/events/member-invitation-accepted.event-handlers.js'
     );
     registerMemberInvitationAcceptedNotificationHandlers();
-    await eventBus.emit({ type: MEMBER_INVITATION_EVENT.ACCEPTED, payload, timestamp: new Date() });
-  }
+    emitAccepted = async (payload: unknown) => {
+      await eventBus.emit({
+        type: MEMBER_INVITATION_EVENT.ACCEPTED,
+        payload,
+        timestamp: new Date(),
+      });
+    };
+  });
+
+  beforeEach(() => {
+    createAndDispatchNotificationMock.mockReset();
+    createAndDispatchNotificationMock.mockResolvedValue(undefined);
+  });
 
   it('fans out one in-app+email notification per manager recipient', async () => {
     await emitAccepted({

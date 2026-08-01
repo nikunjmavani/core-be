@@ -9,15 +9,19 @@ const dlqCloseMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('bullmq', () => ({
   Queue: class MockQueue {
-    add = sourceQueueAddMock;
-
-    getJob = dlqGetJobMock;
-
+    add?: typeof sourceQueueAddMock;
+    getJob?: typeof dlqGetJobMock;
     close: () => Promise<void>;
 
     constructor(name: string) {
-      // Distinguish source queue vs DLQ by name suffix so close-mocks don't cross-contaminate.
-      this.close = name.endsWith('-dlq') ? dlqCloseMock : sourceQueueCloseMock;
+      // Distinguish source queue vs DLQ by name suffix so mocks don't cross-contaminate.
+      if (name.endsWith('-dlq')) {
+        this.getJob = dlqGetJobMock;
+        this.close = dlqCloseMock;
+      } else {
+        this.add = sourceQueueAddMock;
+        this.close = sourceQueueCloseMock;
+      }
     }
   },
 }));
@@ -45,12 +49,11 @@ vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
 
 describe('autoReplayDeadLetterFromLedger — sec-Q DLQ jobId regression', () => {
   beforeEach(() => {
-    sourceQueueAddMock.mockClear();
-    sourceQueueCloseMock.mockClear();
-    dlqGetJobMock.mockClear().mockResolvedValue(null);
-    dlqRemoveMock.mockClear();
-    dlqCloseMock.mockClear();
-    vi.resetModules();
+    sourceQueueAddMock.mockReset().mockResolvedValue(undefined);
+    sourceQueueCloseMock.mockReset().mockResolvedValue(undefined);
+    dlqGetJobMock.mockReset().mockResolvedValue(null);
+    dlqRemoveMock.mockReset().mockResolvedValue(undefined);
+    dlqCloseMock.mockReset().mockResolvedValue(undefined);
   });
 
   it('re-enqueues to the source queue WITHOUT re-using the original jobId', async () => {
@@ -116,12 +119,11 @@ describe('autoReplayDeadLetterFromLedger — sec-Q DLQ jobId regression', () => 
 
 describe('replayDeadLetterJob — sec-Q DLQ jobId regression', () => {
   beforeEach(() => {
-    sourceQueueAddMock.mockClear();
-    sourceQueueCloseMock.mockClear();
-    dlqGetJobMock.mockClear();
-    dlqRemoveMock.mockClear();
-    dlqCloseMock.mockClear();
-    vi.resetModules();
+    sourceQueueAddMock.mockReset().mockResolvedValue(undefined);
+    sourceQueueCloseMock.mockReset().mockResolvedValue(undefined);
+    dlqGetJobMock.mockReset();
+    dlqRemoveMock.mockReset().mockResolvedValue(undefined);
+    dlqCloseMock.mockReset().mockResolvedValue(undefined);
   });
 
   it('re-enqueues to the source queue WITHOUT re-using the original jobId (operator path)', async () => {

@@ -50,7 +50,13 @@ function buildLegacyPlaceholderEntry(): string {
 
 describe('idempotency middleware fail-closed behavior', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // mockReset (not clearAllMocks) so a prior mockRejectedValue cannot leak into
+    // later describes under timeout races — fail-closed must re-arm its rejection.
+    mockRedisGet.mockReset();
+    mockRedisSet.mockReset();
+    mockRedisIncr.mockReset();
+    mockRedisDel.mockReset();
+    mockRedisEval.mockReset();
   });
 
   it('returns 503 when Redis is unavailable during claim', async () => {
@@ -166,13 +172,12 @@ async function registerIdempotencyHooks() {
 
 describe('idempotency middleware happy paths and conflicts', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    mockRedisGet.mockResolvedValue(null);
-    mockRedisSet.mockResolvedValue('OK');
-    mockRedisIncr.mockResolvedValue(1);
-    mockRedisDel.mockResolvedValue(1);
+    mockRedisGet.mockReset().mockResolvedValue(null);
+    mockRedisSet.mockReset().mockResolvedValue('OK');
+    mockRedisIncr.mockReset().mockResolvedValue(1);
+    mockRedisDel.mockReset().mockResolvedValue(1);
     // P0-#4: default to "under cap" — Lua returns the new count after INCR.
-    mockRedisEval.mockResolvedValue(1);
+    mockRedisEval.mockReset().mockResolvedValue(1);
   });
 
   it('replays completed cache entries when Redis already has an entry', async () => {
