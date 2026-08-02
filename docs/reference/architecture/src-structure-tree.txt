@@ -9,37 +9,6 @@ src/
     │   └── register-event-handlers.ts
     └── core.overview.md
 ├── domains/
-    ├── app/
-    │   ├── __tests__/
-    │   │   ├── e2e/
-    │   │   ├── factories/
-    │   │   ├── integration/
-    │   │   └── unit/
-    │   ├── seed/
-    │   └── sub-domains/
-    │   │   ├── activity/
-    │   │       └── __tests__/
-    │   │       │   ├── integration/
-    │   │       │   └── unit/
-    │   │   ├── capability/
-    │   │       └── __tests__/
-    │   │       │   ├── integration/
-    │   │       │   └── unit/
-    │   │   ├── case/
-    │   │       ├── __tests__/
-    │   │       │   ├── integration/
-    │   │       │   └── unit/
-    │   │       ├── case-commitment/
-    │   │       ├── case-event/
-    │   │       └── case-question/
-    │   │   ├── planner/
-    │   │       ├── __tests__/
-    │   │       │   └── integration/
-    │   │       └── workers/
-    │   │   └── recommendation/
-    │   │       ├── __tests__/
-    │   │           └── unit/
-    │   │       └── recommendation-draft/
     ├── audit/
     │   ├── __tests__/
     │   │   ├── integration/
@@ -1077,9 +1046,6 @@ src/
     │   └── user.validator.ts
     └── domain-containers.plugin.ts
 ├── infrastructure/
-    ├── agent/
-    │   └── hooks/
-    ├── ai/
     ├── api-reference/
     │   ├── api-reference.overview.md
     │   └── scalar-api-reference.ts
