@@ -49,6 +49,20 @@ Both helpers share the same logic: the prefix is always the real UTC `YYYYMMDDHH
 
 ---
 
+## Visualize schema + migration history
+
+```bash
+pnpm schema-board
+```
+
+Opens **schema·board** (vendored at `tooling/schema-board`, config
+`schema-board.config.json`): each `migrations/*.sql` is a version on the left
+rail, plus a tip **Latest (Drizzle)** from `src/domains/**/*.schema.ts`. Diff
+mode highlights added/changed tables and columns. No external package — copy
+`tooling/schema-board` to reuse in another project.
+
+---
+
 ## Forward apply (local / CI)
 
 ```bash

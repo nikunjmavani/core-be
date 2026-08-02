@@ -1,0 +1,14 @@
+{
+  "name": "schema-board",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Live Drizzle ER canvas with migration versions (vendored into core-be).",
+  "bin": {
+    "schema-board": "./bin/schema-board.js"
+  },
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
