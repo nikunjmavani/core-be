@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const drainRepositoryMock = vi.hoisted(() => ({
   claimPendingBatch: vi.fn(),
@@ -121,6 +121,14 @@ function buildOutboxRow(overrides: OutboxRowOverride = {}): Record<string, unkno
 }
 
 describe('runAuditOutboxDrainJob', () => {
+  let runAuditOutboxDrainJob: typeof import('@/domains/audit/workers/audit-outbox-drain.processor.js').runAuditOutboxDrainJob;
+
+  beforeAll(async () => {
+    ({ runAuditOutboxDrainJob } = await import(
+      '@/domains/audit/workers/audit-outbox-drain.processor.js'
+    ));
+  }, 60_000);
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -128,9 +136,6 @@ describe('runAuditOutboxDrainJob', () => {
   it('returns zero counts and writes nothing when no PENDING rows exist', async () => {
     drainRepositoryMock.claimPendingBatch.mockResolvedValueOnce([]);
     const databaseHandle = buildDatabaseHandle({}, {}, {});
-    const { runAuditOutboxDrainJob } = await import(
-      '@/domains/audit/workers/audit-outbox-drain.processor.js'
-    );
 
     const result = await runAuditOutboxDrainJob(databaseHandle as never);
 
@@ -147,9 +152,6 @@ describe('runAuditOutboxDrainJob', () => {
     });
     drainRepositoryMock.claimPendingBatch.mockResolvedValueOnce([row]);
     const databaseHandle = buildDatabaseHandle({ user_a: 5 }, { org_a: 10 }, {});
-    const { runAuditOutboxDrainJob } = await import(
-      '@/domains/audit/workers/audit-outbox-drain.processor.js'
-    );
 
     const result = await runAuditOutboxDrainJob(databaseHandle as never);
 
@@ -180,9 +182,6 @@ describe('runAuditOutboxDrainJob', () => {
     });
     drainRepositoryMock.claimPendingBatch.mockResolvedValueOnce([row]);
     const databaseHandle = buildDatabaseHandle({ user_a: 5 }, {}, {});
-    const { runAuditOutboxDrainJob } = await import(
-      '@/domains/audit/workers/audit-outbox-drain.processor.js'
-    );
 
     const result = await runAuditOutboxDrainJob(databaseHandle as never);
 
@@ -202,9 +201,6 @@ describe('runAuditOutboxDrainJob', () => {
     });
     drainRepositoryMock.claimPendingBatch.mockResolvedValueOnce([row]);
     const databaseHandle = buildDatabaseHandle({}, { org_a: 10 }, {});
-    const { runAuditOutboxDrainJob } = await import(
-      '@/domains/audit/workers/audit-outbox-drain.processor.js'
-    );
 
     const result = await runAuditOutboxDrainJob(databaseHandle as never);
 
@@ -227,9 +223,6 @@ describe('runAuditOutboxDrainJob', () => {
     const databaseHandle = buildDatabaseHandle({ user_a: 5 }, { org_a: 10 }, {}, async () => {
       throw new Error('rls-rejected');
     });
-    const { runAuditOutboxDrainJob } = await import(
-      '@/domains/audit/workers/audit-outbox-drain.processor.js'
-    );
 
     const result = await runAuditOutboxDrainJob(databaseHandle as never);
 
@@ -254,9 +247,6 @@ describe('runAuditOutboxDrainJob', () => {
     const databaseHandle = buildDatabaseHandle({ user_a: 5 }, { org_a: 10 }, {}, async () => {
       throw new Error('rls-rejected');
     });
-    const { runAuditOutboxDrainJob } = await import(
-      '@/domains/audit/workers/audit-outbox-drain.processor.js'
-    );
 
     const result = await runAuditOutboxDrainJob(databaseHandle as never);
 
@@ -293,9 +283,6 @@ describe('runAuditOutboxDrainJob', () => {
       if (row.action === 'poison.action') throw new Error('constraint-violation');
       return undefined;
     });
-    const { runAuditOutboxDrainJob } = await import(
-      '@/domains/audit/workers/audit-outbox-drain.processor.js'
-    );
 
     // The job RETURNS a result (does not throw) — the poison row did not wedge the batch.
     const result = await runAuditOutboxDrainJob(databaseHandle as never);
@@ -335,9 +322,6 @@ describe('runAuditOutboxDrainJob', () => {
         if (insertRow.action === 'poison.action') throw new Error('constraint-violation');
         return undefined;
       },
-    );
-    const { runAuditOutboxDrainJob } = await import(
-      '@/domains/audit/workers/audit-outbox-drain.processor.js'
     );
 
     const result = await runAuditOutboxDrainJob(databaseHandle as never);

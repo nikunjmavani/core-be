@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetMetricsRegistryForTests } from '@/infrastructure/observability/metrics/metrics-registry.js';
 
 vi.mock('@/infrastructure/mail/mail-outbox.repository.js', () => ({
@@ -10,6 +10,16 @@ vi.mock('@/infrastructure/observability/dlq-depth/dlq-depth.service.js', () => (
 }));
 
 describe('business-metrics', () => {
+  let refreshBusinessMetricsGauges: typeof import('@/infrastructure/observability/metrics/business-metrics.js').refreshBusinessMetricsGauges;
+  let renderMetrics: typeof import('@/infrastructure/observability/metrics/metrics.js').renderMetrics;
+
+  beforeAll(async () => {
+    ({ refreshBusinessMetricsGauges } = await import(
+      '@/infrastructure/observability/metrics/business-metrics.js'
+    ));
+    ({ renderMetrics } = await import('@/infrastructure/observability/metrics/metrics.js'));
+  }, 60_000);
+
   beforeEach(() => {
     vi.clearAllMocks();
     resetMetricsRegistryForTests();
@@ -17,11 +27,6 @@ describe('business-metrics', () => {
   });
 
   it('exports mail_outbox_pending and dlq_depth gauges on scrape refresh', async () => {
-    const { refreshBusinessMetricsGauges } = await import(
-      '@/infrastructure/observability/metrics/business-metrics.js'
-    );
-    const { renderMetrics } = await import('@/infrastructure/observability/metrics/metrics.js');
-
     await refreshBusinessMetricsGauges();
     const payload = await renderMetrics();
 

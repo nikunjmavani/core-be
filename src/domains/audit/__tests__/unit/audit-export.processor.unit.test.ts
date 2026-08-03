@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { brandWorkerContextDatabaseHandle } from '@/infrastructure/database/utils/database-handle.types.js';
 import type { PostgresDatabaseHandle } from '@/infrastructure/database/utils/database-handle.types.js';
 
@@ -28,12 +28,17 @@ vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
 }));
 
 describe('audit-export.processor', () => {
+  let runAuditExportJob: typeof import('@/domains/audit/workers/audit-export.processor.js').runAuditExportJob;
+
+  beforeAll(async () => {
+    ({ runAuditExportJob } = await import('@/domains/audit/workers/audit-export.processor.js'));
+  }, 60_000);
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('skips when export is disabled', async () => {
-    const { runAuditExportJob } = await import('@/domains/audit/workers/audit-export.processor.js');
     const mockDatabaseHandle = {
       selectDistinct: vi.fn(),
       select: vi.fn(),
