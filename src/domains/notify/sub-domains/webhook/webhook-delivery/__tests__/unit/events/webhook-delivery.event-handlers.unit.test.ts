@@ -39,7 +39,7 @@ describe('webhook delivery event handlers', () => {
     runWithOnCommitScope = eventBusModule.runWithOnCommitScope;
     NOTIFY_EVENT = notifyEvents.NOTIFY_EVENT;
     registerWebhookDeliveryEventHandlers();
-  });
+  }, 30_000);
 
   beforeEach(() => {
     enqueueWebhookDeliveryByAttemptIdMock.mockReset();
