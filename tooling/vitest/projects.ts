@@ -105,13 +105,14 @@ export const vitestProjects = [
    * concurrently. Includes `__tests__/unit/`, leaf event-handler suites, and any
    * `*.unit.test.ts` outside the DB-bound `*.db.unit.test.ts` suffix.
    *
-   * `testTimeout`/`hookTimeout` 15 s — many unit files use `vi.resetModules()` +
-   * dynamic `import()` of large graphs (event-bus, queue/DLQ, idempotency). Under
-   * parallel fork CPU contention the Vitest default 5 s surfaces as
-   * "Test timed out in 5000ms" even though the assertion would pass; timed-out
-   * work then races the next test and pollutes shared `vi.fn()` call counts
-   * (e.g. expected 1 call, got 2). 15 s keeps the suite honest without hiding
-   * real hangs the way a 60 s budget would.
+   * Many unit files use `vi.resetModules()` + dynamic `import()` of large graphs
+   * (event-bus, queue/DLQ, idempotency). Unbounded forks on multi-core machines
+   * starve those cold imports: hooks/tests hit the budget even though they would
+   * pass, then timed-out work races the next test and pollutes `vi.fn()` counts.
+   * Cap workers at 50% of CPUs on both `unit` and `global` (CI runs them in one
+   * vitest process — Vitest requires matching maxWorkers when groupOrder matches),
+   * and give tests 30 s / hooks 60 s — enough for contention without the old
+   * unlimited-fork + 5 s default, and without serializing the whole unit lane.
    */
   {
     extends: true,
@@ -120,8 +121,9 @@ export const vitestProjects = [
       include: ['src/**/__tests__/unit/**/*.test.ts', 'src/tests/unit/**/*.test.ts'],
       exclude: ['**/*.db.unit.test.ts', '**/*.property.unit.test.ts'],
       pool: 'forks',
-      testTimeout: 15_000,
-      hookTimeout: 15_000,
+      maxWorkers: '50%',
+      testTimeout: 30_000,
+      hookTimeout: 60_000,
     },
   },
 
@@ -143,6 +145,8 @@ export const vitestProjects = [
       include: ['src/tests/global/**/*.global.test.ts'],
       // Generate the gitignored OpenAPI spec if missing so openapi-*.global.test.ts pass on a fresh clone.
       globalSetup: ['./src/tests/global/ensure-openapi-spec.global-setup.ts'],
+      // Must match `unit.maxWorkers` — CI runs `--project unit --project global` together.
+      maxWorkers: '50%',
     },
   },
 

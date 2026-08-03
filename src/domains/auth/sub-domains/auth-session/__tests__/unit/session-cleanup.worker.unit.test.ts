@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const workerState = vi.hoisted(() => ({
   processor: undefined as (() => Promise<unknown>) | undefined,
@@ -51,6 +51,14 @@ vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
 }));
 
 describe('session-cleanup.worker', () => {
+  let createSessionCleanupWorker: typeof import('@/domains/auth/sub-domains/auth-session/workers/session-cleanup.worker.js').createSessionCleanupWorker;
+
+  beforeAll(async () => {
+    ({ createSessionCleanupWorker } = await import(
+      '@/domains/auth/sub-domains/auth-session/workers/session-cleanup.worker.js'
+    ));
+  }, 60_000);
+
   beforeEach(() => {
     workerState.processor = undefined;
     workerState.options = undefined;
@@ -64,10 +72,6 @@ describe('session-cleanup.worker', () => {
   });
 
   it('runs session cleanup inside the session retention database context', async () => {
-    const { createSessionCleanupWorker } = await import(
-      '@/domains/auth/sub-domains/auth-session/workers/session-cleanup.worker.js'
-    );
-
     const handle = createSessionCleanupWorker();
     const result = await workerState.processor?.();
 

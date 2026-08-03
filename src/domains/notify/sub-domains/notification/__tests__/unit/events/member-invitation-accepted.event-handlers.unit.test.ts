@@ -27,7 +27,7 @@ describe('member-invitation-accepted notification handler (item #10)', () => {
         timestamp: new Date(),
       });
     };
-  });
+  }, 60_000);
 
   beforeEach(() => {
     createAndDispatchNotificationMock.mockReset();

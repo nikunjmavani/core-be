@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Capture sourceQueue and deadLetterQueue interactions.
 const sourceQueueAddMock = vi.fn().mockResolvedValue(undefined);
@@ -6,6 +6,10 @@ const sourceQueueCloseMock = vi.fn().mockResolvedValue(undefined);
 const dlqGetJobMock = vi.fn().mockResolvedValue(null);
 const dlqRemoveMock = vi.fn().mockResolvedValue(undefined);
 const dlqCloseMock = vi.fn().mockResolvedValue(undefined);
+
+type DlqReplayModule = typeof import('@/infrastructure/queue/dlq/dlq-replay.util.js');
+let autoReplayDeadLetterFromLedger: DlqReplayModule['autoReplayDeadLetterFromLedger'];
+let replayDeadLetterJob: DlqReplayModule['replayDeadLetterJob'];
 
 vi.mock('bullmq', () => ({
   Queue: class MockQueue {
@@ -47,6 +51,14 @@ vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+beforeAll(async () => {
+  // One cold import for the file — per-test dynamic import flakes under parallel forks
+  // (timeout → next test sees polluted vi.fn() call counts).
+  const dlqReplay = await import('@/infrastructure/queue/dlq/dlq-replay.util.js');
+  autoReplayDeadLetterFromLedger = dlqReplay.autoReplayDeadLetterFromLedger;
+  replayDeadLetterJob = dlqReplay.replayDeadLetterJob;
+}, 60_000);
+
 describe('autoReplayDeadLetterFromLedger — sec-Q DLQ jobId regression', () => {
   beforeEach(() => {
     sourceQueueAddMock.mockReset().mockResolvedValue(undefined);
@@ -62,10 +74,6 @@ describe('autoReplayDeadLetterFromLedger — sec-Q DLQ jobId regression', () => 
     // the original id would turn replay into a silent no-op. App-layer idempotency
     // (Stripe ledger, mail outbox, webhook delivery, notification SET NX) is the
     // canonical dedup boundary.
-    const { autoReplayDeadLetterFromLedger } = await import(
-      '@/infrastructure/queue/dlq/dlq-replay.util.js'
-    );
-
     await autoReplayDeadLetterFromLedger({
       ledgerRow: {
         id: 1,
@@ -95,10 +103,6 @@ describe('autoReplayDeadLetterFromLedger — sec-Q DLQ jobId regression', () => 
     // snapshot rather than colliding with the prior failure (which BullMQ's duplicate
     // semantics would otherwise retain unchanged). The ledger row carries the same
     // `attempts_made`, so cleanup looks up the exact terminal-failure snapshot.
-    const { autoReplayDeadLetterFromLedger } = await import(
-      '@/infrastructure/queue/dlq/dlq-replay.util.js'
-    );
-
     await autoReplayDeadLetterFromLedger({
       ledgerRow: {
         id: 1,
@@ -144,8 +148,6 @@ describe('replayDeadLetterJob — sec-Q DLQ jobId regression', () => {
       remove: dlqRemoveMock,
     };
     dlqGetJobMock.mockResolvedValueOnce(dlqJobMock);
-
-    const { replayDeadLetterJob } = await import('@/infrastructure/queue/dlq/dlq-replay.util.js');
 
     await replayDeadLetterJob({
       deadLetterQueueName: 'notification-dlq',

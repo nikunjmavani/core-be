@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const valuesMock = vi.fn().mockResolvedValue(undefined);
 const insertMock = vi.fn((..._arguments: unknown[]) => ({ values: valuesMock }));
@@ -10,19 +10,24 @@ vi.mock('@/infrastructure/database/connection.js', () => ({
 }));
 
 describe('insertDeadLetterJob', () => {
+  let insertDeadLetterJob: typeof import('@/infrastructure/queue/dlq/dead-letter.repository.js').insertDeadLetterJob;
+  let dead_letter_jobs: typeof import('@/infrastructure/queue/dlq/dead-letter.schema.js').dead_letter_jobs;
+
+  beforeAll(async () => {
+    // One cold import — per-test resetModules + import timed out under parallel forks.
+    ({ insertDeadLetterJob } = await import(
+      '@/infrastructure/queue/dlq/dead-letter.repository.js'
+    ));
+    ({ dead_letter_jobs } = await import('@/infrastructure/queue/dlq/dead-letter.schema.js'));
+  }, 60_000);
+
   beforeEach(() => {
     insertMock.mockClear();
     valuesMock.mockClear();
     valuesMock.mockResolvedValue(undefined);
-    vi.resetModules();
   });
 
   it('inserts the dead-letter record into audit.dead_letter_jobs with mapped columns', async () => {
-    const { insertDeadLetterJob } = await import(
-      '@/infrastructure/queue/dlq/dead-letter.repository.js'
-    );
-    const { dead_letter_jobs } = await import('@/infrastructure/queue/dlq/dead-letter.schema.js');
-
     const failedAt = new Date('2026-05-29T12:00:00.000Z');
     await insertDeadLetterJob({
       source_queue: 'notification',
@@ -55,10 +60,6 @@ describe('insertDeadLetterJob', () => {
   });
 
   it('propagates a null job_id and error_stack without coercion', async () => {
-    const { insertDeadLetterJob } = await import(
-      '@/infrastructure/queue/dlq/dead-letter.repository.js'
-    );
-
     await insertDeadLetterJob({
       source_queue: 'mail',
       dead_letter_queue: 'mail-dlq',
@@ -79,9 +80,6 @@ describe('insertDeadLetterJob', () => {
 
   it('propagates database insert failures to the caller', async () => {
     valuesMock.mockRejectedValueOnce(new Error('postgres-down'));
-    const { insertDeadLetterJob } = await import(
-      '@/infrastructure/queue/dlq/dead-letter.repository.js'
-    );
 
     await expect(
       insertDeadLetterJob({
