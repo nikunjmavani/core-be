@@ -246,6 +246,15 @@
           }
         }
       }
+    },
+    {
+      "includes": ["tooling/db-schema/public/**"],
+      "formatter": {
+        "enabled": false
+      },
+      "linter": {
+        "enabled": false
+      }
     }
   ]
 }
