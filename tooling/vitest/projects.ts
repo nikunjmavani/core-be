@@ -105,13 +105,14 @@ export const vitestProjects = [
    * concurrently. Includes `__tests__/unit/`, leaf event-handler suites, and any
    * `*.unit.test.ts` outside the DB-bound `*.db.unit.test.ts` suffix.
    *
-   * `testTimeout`/`hookTimeout` 15 s — many unit files use `vi.resetModules()` +
-   * dynamic `import()` of large graphs (event-bus, queue/DLQ, idempotency). Under
-   * parallel fork CPU contention the Vitest default 5 s surfaces as
-   * "Test timed out in 5000ms" even though the assertion would pass; timed-out
-   * work then races the next test and pollutes shared `vi.fn()` call counts
-   * (e.g. expected 1 call, got 2). 15 s keeps the suite honest without hiding
-   * real hangs the way a 60 s budget would.
+   * `testTimeout` 15 s / `hookTimeout` 30 s — many unit files use
+   * `vi.resetModules()` + dynamic `import()` of large graphs (event-bus,
+   * queue/DLQ, idempotency). Under parallel fork CPU contention the Vitest
+   * default 5 s surfaces as "Test timed out in 5000ms" even though the
+   * assertion would pass; timed-out work then races the next test and pollutes
+   * shared `vi.fn()` call counts (e.g. expected 1 call, got 2). File-level
+   * `beforeAll` cold imports need more headroom than per-test bodies, so hooks
+   * get 30 s while tests stay at 15 s — honest for hangs without a 60 s blanket.
    */
   {
     extends: true,
@@ -121,7 +122,7 @@ export const vitestProjects = [
       exclude: ['**/*.db.unit.test.ts', '**/*.property.unit.test.ts'],
       pool: 'forks',
       testTimeout: 15_000,
-      hookTimeout: 15_000,
+      hookTimeout: 30_000,
     },
   },
 
