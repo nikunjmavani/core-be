@@ -57,7 +57,7 @@ beforeAll(async () => {
   const dlqReplay = await import('@/infrastructure/queue/dlq/dlq-replay.util.js');
   autoReplayDeadLetterFromLedger = dlqReplay.autoReplayDeadLetterFromLedger;
   replayDeadLetterJob = dlqReplay.replayDeadLetterJob;
-}, 30_000);
+}, 60_000);
 
 describe('autoReplayDeadLetterFromLedger — sec-Q DLQ jobId regression', () => {
   beforeEach(() => {
