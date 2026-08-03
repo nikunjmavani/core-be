@@ -109,9 +109,10 @@ export const vitestProjects = [
    * (event-bus, queue/DLQ, idempotency). Unbounded forks on multi-core machines
    * starve those cold imports: hooks/tests hit the budget even though they would
    * pass, then timed-out work races the next test and pollutes `vi.fn()` counts.
-   * Cap workers at 50% of CPUs, give tests 30 s / hooks 60 s — enough for
-   * contention without the old unlimited-fork + 5 s default, and without serializing
-   * the whole unit lane.
+   * Cap workers at 50% of CPUs on both `unit` and `global` (CI runs them in one
+   * vitest process — Vitest requires matching maxWorkers when groupOrder matches),
+   * and give tests 30 s / hooks 60 s — enough for contention without the old
+   * unlimited-fork + 5 s default, and without serializing the whole unit lane.
    */
   {
     extends: true,
@@ -144,6 +145,8 @@ export const vitestProjects = [
       include: ['src/tests/global/**/*.global.test.ts'],
       // Generate the gitignored OpenAPI spec if missing so openapi-*.global.test.ts pass on a fresh clone.
       globalSetup: ['./src/tests/global/ensure-openapi-spec.global-setup.ts'],
+      // Must match `unit.maxWorkers` — CI runs `--project unit --project global` together.
+      maxWorkers: '50%',
     },
   },
 
