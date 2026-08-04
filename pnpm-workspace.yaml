@@ -89,9 +89,11 @@ overrides:
   postcss: '>=8.5.18'
   # fast-uri <3.1.5 — GHSA-7p8r-x3mc-p8w7 (high): host confusion via backslash
   # authority introducer (also covers earlier GHSA-4c8g-83qw-93j6 /
-  # GHSA-v2hh-gcrm-f6hx). Transitive via fastify's ajv/find-my-way URI handling.
-  # Fixed in 3.1.5.
-  fast-uri: '>=3.1.5'
+  # GHSA-v2hh-gcrm-f6hx). Transitive via fastify's ajv/find-my-way URI handling
+  # (request validation + response serialization hot path). Cap <4 so the
+  # override stays on the patched 3.x line ajv declares (^3.x); do not let an
+  # uncapped floor silently major-bump to 4.x. Fixed in 3.1.5.
+  fast-uri: '>=3.1.5 <4'
   # find-my-way <=9.6.0 — GHSA-c96f-x56v-gq3h (high): DDoS via HTTP/2 request
   # smuggling in the router. Transitive via fastify (also fastify-type-provider-zod,
   # @scalar/cli). Fixed in 9.6.1.

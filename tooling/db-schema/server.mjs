@@ -150,7 +150,9 @@ function startServer(opts = {}) {
     try {
       const raw = JSON.parse(fs.readFileSync(historyFile, 'utf8'));
       if (Array.isArray(raw.versions)) {
-        for (const v of raw.versions) versions.push(v);
+        for (const v of raw.versions) {
+          if (Array.isArray(v?.schema?.tables)) versions.push(v);
+        }
         seq = versions.reduce((m, v) => Math.max(m, v.id), 0);
       }
     } catch {
@@ -175,6 +177,7 @@ function startServer(opts = {}) {
   function stableStringify(schema) {
     return JSON.stringify({
       tables: (schema.tables || []).map((t) => ({
+        schema: t.schema || 'public',
         name: t.name,
         cols: t.columns.map(
           (c) =>
@@ -467,17 +470,30 @@ function startServer(opts = {}) {
       if (reviewInFlight) {
         return json(res, 429, { error: 'Review already in progress' });
       }
-
+      // Claim the slot before body read so concurrent POSTs cannot both spawn.
+      reviewInFlight = true;
       let body = '';
+      let oversized = false;
+      let phase = 'reading';
       req.on('data', (c) => {
         body += c;
-        if (body.length > 1e6) req.destroy();
+        if (body.length > 1e6) {
+          oversized = true;
+          reviewInFlight = false;
+          if (!res.headersSent) json(res, 413, { error: 'Body too large (max 1 MB)' });
+          req.destroy();
+        }
+      });
+      req.on('aborted', () => {
+        if (phase === 'reading' && !oversized) reviewInFlight = false;
       });
       req.on('end', () => {
+        if (oversized || res.writableEnded) return;
         let sql = '';
         try {
           sql = JSON.parse(body).sql || '';
         } catch {
+          reviewInFlight = false;
           return json(res, 400, { error: 'Invalid JSON body' });
         }
         const prompt = [
@@ -489,7 +505,7 @@ function startServer(opts = {}) {
           '```',
         ].join('\n');
 
-        reviewInFlight = true;
+        phase = 'running';
         let child;
         try {
           child = spawn('claude', ['-p'], { env: childEnvAllowlist() });
@@ -528,6 +544,9 @@ function startServer(opts = {}) {
     }
 
     if (pathname === '/api/diff') {
+      if (req.method !== 'GET') {
+        return json(res, 405, { error: 'Method not allowed' });
+      }
       const from = versions.find((v) => v.id === Number(searchParams.get('from')));
       const to = versions.find((v) => v.id === Number(searchParams.get('to')));
       if (!to) {
@@ -544,6 +563,9 @@ function startServer(opts = {}) {
     }
 
     if (pathname === '/api/migration') {
+      if (req.method !== 'GET') {
+        return json(res, 405, { error: 'Method not allowed' });
+      }
       const id = Number(searchParams.get('id'));
       const v = versions.find((x) => x.id === id);
       if (!v) return json(res, 404, { error: 'Version not found' });
@@ -593,6 +615,8 @@ function startServer(opts = {}) {
       }
       res.writeHead(200, {
         'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream',
+        'Cache-Control': 'no-cache',
+        'X-Content-Type-Options': 'nosniff',
       });
       res.end(data);
     });

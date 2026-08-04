@@ -262,6 +262,40 @@ describe('db-schema skip counter', () => {
     const { skipped } = applyMigrationSql(emptySchema(), `ALTER TABLE public.t OWNER TO app_user;`);
     expect(skipped).toBeGreaterThanOrEqual(1);
   });
+
+  it('applies SET DATA TYPE (drizzle-kit form) and counts unknown ALTER COLUMN as skipped', () => {
+    const { schema: base } = applyMigrationSql(
+      emptySchema(),
+      `CREATE TABLE public.t (a varchar(32));`,
+    );
+    const { schema, skipped } = applyMigrationSql(
+      base,
+      `ALTER TABLE public.t ALTER COLUMN a SET DATA TYPE text;`,
+    );
+    expect(skipped).toBe(0);
+    expect(schema.tables[0]?.columns.find((c) => c.name === 'a')?.type).toBe('text');
+
+    const { skipped: skippedUnknown } = applyMigrationSql(
+      schema,
+      `ALTER TABLE public.t ALTER COLUMN a SET STATISTICS 100;`,
+    );
+    expect(skippedUnknown).toBeGreaterThanOrEqual(1);
+  });
+
+  it('applies every action in a multi ALTER COLUMN statement', () => {
+    const { schema: base } = applyMigrationSql(
+      emptySchema(),
+      `CREATE TABLE public.t (a text, b text);`,
+    );
+    const { schema, skipped } = applyMigrationSql(
+      base,
+      `ALTER TABLE public.t ALTER COLUMN a SET NOT NULL, ALTER COLUMN b SET NOT NULL;`,
+    );
+    expect(skipped).toBe(0);
+    const cols = schema.tables[0]?.columns ?? [];
+    expect(cols.find((c) => c.name === 'a')?.notNull).toBe(true);
+    expect(cols.find((c) => c.name === 'b')?.notNull).toBe(true);
+  });
 });
 
 describe('db-schema project detect', () => {

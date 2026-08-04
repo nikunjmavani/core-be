@@ -526,18 +526,8 @@ function applyRenameTable(schema, stmt) {
   return true;
 }
 
-function applyAlterColumn(schema, stmt) {
-  const m = stmt.match(
-    /^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(.+?)\s+ALTER\s+COLUMN\s+(?:"([^"]+)"|([A-Za-z_][\w$]*))\s+([\s\S]+)$/i,
-  );
-  if (!m) return false;
-  const table = findTable(schema, m[1]);
-  if (!table) return false;
-  const col = table.columns.find((c) => c.key === (m[2] || m[3]));
-  if (!col) return true;
-  const rest = m[4].trim();
-
-  const typeM = rest.match(/^TYPE\s+([\s\S]+?)(?:\s+USING\s+[\s\S]+)?$/i);
+function applyAlterColumnAction(col, rest) {
+  const typeM = rest.match(/^(?:SET\s+DATA\s+)?TYPE\s+([\s\S]+?)(?:\s+USING\s+[\s\S]+)?$/i);
   if (typeM) {
     const parsed = parseTypeAndFlags(typeM[1]);
     col.type = parsed.type;
@@ -564,6 +554,43 @@ function applyAlterColumn(schema, stmt) {
     col.default = null;
     return true;
   }
+  return false;
+}
+
+function applyAlterColumn(schema, stmt) {
+  // Support multi-action: ALTER TABLE t ALTER COLUMN a …, ALTER COLUMN b …;
+  // Mixed non-ALTER-COLUMN siblings fail closed (→ skipped). Unrecognized
+  // ALTER COLUMN forms (including future dialect) return false so skipped bumps.
+  const m = stmt.match(/^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(.+?)\s+([\s\S]+)$/i);
+  if (!(m && /\bALTER\s+COLUMN\b/i.test(m[2]))) return false;
+  const table = findTable(schema, m[1]);
+  if (!table) return false;
+
+  const pending = [];
+  let otherStructural = 0;
+  for (const action of splitTopLevelComma(m[2])) {
+    const trimmed = action.trim();
+    if (!trimmed) continue;
+    const colM = trimmed.match(/^ALTER\s+COLUMN\s+(?:"([^"]+)"|([A-Za-z_][\w$]*))\s+([\s\S]+)$/i);
+    if (colM) {
+      pending.push({ name: colM[1] || colM[2], rest: colM[3].trim() });
+      continue;
+    }
+    if (/^(ADD|DROP|ALTER|RENAME)\b/i.test(trimmed)) otherStructural += 1;
+  }
+  if (otherStructural > 0 || pending.length === 0) return false;
+
+  // Validate every action first so we never partially apply then bail.
+  const ops = [];
+  for (const p of pending) {
+    const col = table.columns.find((c) => c.key === p.name);
+    if (!col) continue; // column gone — no-op, same as prior single-action behaviour
+    // Probe without mutating: clone flags via a dry-run on a shallow copy.
+    const probe = { ...col };
+    if (!applyAlterColumnAction(probe, p.rest)) return false;
+    ops.push({ col, rest: p.rest });
+  }
+  for (const op of ops) applyAlterColumnAction(op.col, op.rest);
   return true;
 }
 
