@@ -1,16 +1,17 @@
 #!/usr/bin/env node
-// Local db schema CLI for core-be.
+// DB Schema Viewer CLI for core-be.
 //
 //   pnpm db:schema
 //   node tooling/db-schema/cli.mjs --no-open
 //   DB_SCHEMA_PORT=4990 pnpm db:schema
+//   DB_SCHEMA_REVIEW=1 pnpm db:schema   # opt-in Claude review endpoint
 
 import { resolveProject, DEFAULT_PORT } from './lib/project.mjs';
 import { startServer } from './server.mjs';
 
 function usage() {
   console.log(`
-  db schema — local Drizzle ER canvas (core-be tooling)
+  DB Schema Viewer — local Drizzle ER canvas (core-be tooling)
 
   Usage:
     pnpm db:schema
@@ -24,7 +25,20 @@ function usage() {
     --open                 Open the browser (default)
     --fresh                Ignore saved version history (save mode)
     -h, --help             Show help
+
+  Env:
+    DB_SCHEMA_PORT=4990    Override port
+    DB_SCHEMA_REVIEW=1     Enable POST /api/review (loopback + Origin checks; spawns claude)
 `);
+}
+
+function takeValue(argv, i, flag) {
+  const v = argv[i + 1];
+  if (v == null || v.startsWith('-')) {
+    console.error(`Missing value for ${flag}`);
+    return { error: true, value: null, next: i };
+  }
+  return { error: false, value: v, next: i + 1 };
 }
 
 function parseArgs(argv) {
@@ -35,6 +49,7 @@ function parseArgs(argv) {
     open: true,
     fresh: false,
     help: false,
+    bad: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -42,11 +57,37 @@ function parseArgs(argv) {
     else if (a === '--no-open') out.open = false;
     else if (a === '--open') out.open = true;
     else if (a === '--fresh') out.fresh = true;
-    else if (a === '--port' || a === '-p') out.port = Number(argv[++i]);
-    else if (a === '--schema') out.schema = argv[++i];
-    else if (a === '--migrations') out.migrations = argv[++i];
-    else {
+    else if (a === '--port' || a === '-p') {
+      const { error, value, next } = takeValue(argv, i, a);
+      i = next;
+      if (error) {
+        out.bad = true;
+        out.help = true;
+        continue;
+      }
+      const n = Number(value);
+      if (!Number.isFinite(n) || n <= 0) {
+        console.error(`Invalid port: ${value}`);
+        out.bad = true;
+        out.help = true;
+      } else out.port = n;
+    } else if (a === '--schema') {
+      const { error, value, next } = takeValue(argv, i, a);
+      i = next;
+      if (error) {
+        out.bad = true;
+        out.help = true;
+      } else out.schema = value;
+    } else if (a === '--migrations') {
+      const { error, value, next } = takeValue(argv, i, a);
+      i = next;
+      if (error) {
+        out.bad = true;
+        out.help = true;
+      } else out.migrations = value;
+    } else {
       console.error(`Unknown argument: ${a}`);
+      out.bad = true;
       out.help = true;
     }
   }
@@ -57,7 +98,7 @@ function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     usage();
-    process.exit(0);
+    process.exit(args.bad ? 1 : 0);
   }
 
   const project = resolveProject({
@@ -67,9 +108,14 @@ function main() {
     port: args.port || undefined,
   });
 
+  if (project.configError) {
+    console.error(`\n  DB Schema Viewer: ${project.configError}\n`);
+    process.exit(1);
+  }
+
   if (!project.schemaTarget) {
     console.error(`
-  db schema: could not find a Drizzle schema under ${project.root}
+  DB Schema Viewer: could not find a Drizzle schema under ${project.root}
 
   Check tooling/db-schema/config.json, or pass --schema / --migrations.
 `);

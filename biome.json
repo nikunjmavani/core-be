@@ -249,11 +249,40 @@
     },
     {
       "includes": ["tooling/db-schema/public/**"],
-      "formatter": {
-        "enabled": false
-      },
       "linter": {
-        "enabled": false
+        "rules": {
+          "a11y": {
+            "useButtonType": "off",
+            "noSvgWithoutTitle": "off",
+            "useSemanticElements": "off"
+          },
+          "nursery": {
+            "noFloatingPromises": "off"
+          },
+          "complexity": {
+            "noExcessiveCognitiveComplexity": "off",
+            "noExcessiveLinesPerFunction": "off",
+            "useSimplifiedLogicExpression": "off",
+            "useOptionalChain": "off"
+          },
+          "style": {
+            "useTemplate": "off",
+            "useExponentiationOperator": "off",
+            "noParameterAssign": "off",
+            "useConst": "warn"
+          },
+          "suspicious": {
+            "useIterableCallbackReturn": "off",
+            "noAssignInExpressions": "off",
+            "noRedundantUseStrict": "off",
+            "noVar": "off"
+          },
+          "correctness": {
+            "noInnerDeclarations": "off",
+            "noUnusedVariables": "warn",
+            "noUnusedFunctionParameters": "off"
+          }
+        }
       }
     }
   ]

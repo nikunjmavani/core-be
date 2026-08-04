@@ -46,8 +46,9 @@ function hasSqlMigrations(dir) {
 function hasSchemaFiles(dir) {
   if (!isDir(dir)) return false;
   const stack = [dir];
-  let seen = 0;
-  while (stack.length && seen < 400) {
+  let seenTs = 0;
+  const MAX_TS = 5000;
+  while (stack.length && seenTs < MAX_TS) {
     const d = stack.pop();
     let entries;
     try {
@@ -60,7 +61,8 @@ function hasSchemaFiles(dir) {
         ent.name === 'node_modules' ||
         ent.name === '.git' ||
         ent.name === 'dist' ||
-        ent.name === 'coverage'
+        ent.name === 'coverage' ||
+        ent.name === '__tests__'
       ) {
         continue;
       }
@@ -70,8 +72,10 @@ function hasSchemaFiles(dir) {
         continue;
       }
       if (!ent.isFile()) continue;
-      seen++;
       const base = ent.name;
+      // Only count TypeScript candidates toward the cap — ignore .md/.json noise.
+      if (!/\.(ts|mts|cts)$/.test(base)) continue;
+      seenTs++;
       if (base.endsWith('.job.schema.ts') || base.endsWith('.d.ts')) continue;
       if (base.endsWith('.schema.ts') || base === 'pg-schemas.ts' || base === 'schema.ts')
         return true;
@@ -82,15 +86,15 @@ function hasSchemaFiles(dir) {
 
 function readJson(file) {
   try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch {
-    return null;
+    return { ok: true, value: JSON.parse(fs.readFileSync(file, 'utf8')) };
+  } catch (e) {
+    return { ok: false, error: e, value: null };
   }
 }
 
 function packageName(root) {
   const pkg = readJson(path.join(root, 'package.json'));
-  return pkg?.name || path.basename(root);
+  return pkg.value?.name || path.basename(root);
 }
 
 /** Walk up from start looking for package.json (project root). */
@@ -148,10 +152,17 @@ function detectSchema(root) {
  */
 function loadModuleConfig(root) {
   const coLocated = path.join(root, 'tooling', 'db-schema', 'config.json');
-  if (exists(coLocated)) return { cfg: readJson(coLocated) || {}, configPath: coLocated };
-  if (exists(MODULE_CONFIG))
-    return { cfg: readJson(MODULE_CONFIG) || {}, configPath: MODULE_CONFIG };
-  return { cfg: {}, configPath: null };
+  const pathToUse = exists(coLocated) ? coLocated : exists(MODULE_CONFIG) ? MODULE_CONFIG : null;
+  if (!pathToUse) return { cfg: {}, configPath: null, configError: null };
+  const parsed = readJson(pathToUse);
+  if (!parsed.ok) {
+    return {
+      cfg: {},
+      configPath: pathToUse,
+      configError: `Malformed JSON in ${pathToUse}: ${parsed.error?.message || parsed.error}`,
+    };
+  }
+  return { cfg: parsed.value || {}, configPath: pathToUse, configError: null };
 }
 
 /**
@@ -164,7 +175,7 @@ function resolveProject(opts = {}) {
     : path.resolve(opts.cwd || process.cwd());
 
   const root = findProjectRoot(start);
-  const { cfg, configPath } = loadModuleConfig(root);
+  const { cfg, configPath, configError } = loadModuleConfig(root);
 
   const name = opts.name || cfg.name || packageName(root);
   const envPort = process.env.DB_SCHEMA_PORT ? Number(process.env.DB_SCHEMA_PORT) : null;
@@ -198,6 +209,7 @@ function resolveProject(opts = {}) {
     schemaTarget,
     migrationsDir,
     configPath,
+    configError,
     source,
   };
 }

@@ -193,10 +193,13 @@ function parseQualifiedName(raw) {
 function findTable(schema, q) {
   const { schema: sch, name } = typeof q === 'string' ? parseQualifiedName(q) : q;
   if (sch) {
-    const hit = schema.tables.find((t) => t.name === name && t.schema === sch);
-    if (hit) return hit;
+    // Strict: never fall back to bare name when a schema qualifier was provided.
+    return schema.tables.find((t) => t.name === name && (t.schema || 'public') === sch) || null;
   }
-  return schema.tables.find((t) => t.name === name) || null;
+  const hits = schema.tables.filter((t) => t.name === name);
+  if (hits.length === 1) return hits[0];
+  // Ambiguous bare name across pg schemas — refuse to guess.
+  return null;
 }
 
 function parseTypeAndFlags(rest) {
@@ -249,11 +252,17 @@ function parseTypeAndFlags(rest) {
     }
   }
   if (!matched) {
-    const m = input.match(/^([A-Za-z_][\w$]*)/);
-    if (m) {
-      type = m[1].toLowerCase();
-      i = m[0].length;
-    } else type = 'unknown';
+    const quoted = input.match(/^"([^"]+)"/);
+    if (quoted) {
+      type = quoted[1].toLowerCase();
+      i = quoted[0].length;
+    } else {
+      const m = input.match(/^([A-Za-z_][\w$]*)/);
+      if (m) {
+        type = m[1].toLowerCase();
+        i = m[0].length;
+      } else type = 'unknown';
+    }
   }
 
   let after = input.slice(i).trim();
@@ -280,14 +289,15 @@ function parseTypeAndFlags(rest) {
   if (length != null) col.length = length;
   if (withTimezone) col.withTimezone = true;
 
-  // flags
+  // flags — strip string literals so DEFAULT 'x NOT NULL y' cannot set notNull
   const flags = after;
-  if (/\bPRIMARY\s+KEY\b/i.test(flags)) {
+  const flagsBare = flags.replace(/'(?:[^']|'')*'/g, "''").replace(/"(?:[^"]|"")*"/g, '""');
+  if (/\bPRIMARY\s+KEY\b/i.test(flagsBare)) {
     col.pk = true;
     col.notNull = true;
   }
-  if (/\bNOT\s+NULL\b/i.test(flags)) col.notNull = true;
-  if (/\bUNIQUE\b/i.test(flags)) col.unique = true;
+  if (/\bNOT\s+NULL\b/i.test(flagsBare)) col.notNull = true;
+  if (/\bUNIQUE\b/i.test(flagsBare)) col.unique = true;
   if (/\[\]/.test(flags.slice(0, 4))) col.array = true;
 
   const defM = flags.match(
@@ -322,7 +332,8 @@ function parseTypeAndFlags(rest) {
 
 function parseColumnDef(line) {
   const trimmed = line.trim().replace(/,\s*$/, '');
-  if (!trimmed || /^(CONSTRAINT|CHECK|PRIMARY\s+KEY|UNIQUE|FOREIGN\s+KEY)/i.test(trimmed)) {
+  // Word-boundary required — otherwise UNIQUE/CHECK/CONSTRAINT eat columns like unique_code.
+  if (!trimmed || /^(CONSTRAINT|CHECK|PRIMARY\s+KEY|UNIQUE|FOREIGN\s+KEY)\b/i.test(trimmed)) {
     return null;
   }
   const m = trimmed.match(/^(?:"([^"]+)"|([A-Za-z_][\w$]*))\s+([\s\S]+)$/);
@@ -387,8 +398,10 @@ function applyCreateTable(schema, stmt) {
     const col = parseColumnDef(part);
     if (col) columns.push(col);
     else {
-      // table-level PRIMARY KEY (col)
-      const pk = part.match(/^\s*PRIMARY\s+KEY\s*\(\s*([^)]+)\)/i);
+      // table-level PRIMARY KEY — bare or CONSTRAINT "name" PRIMARY KEY (...)
+      const pk = part.match(
+        /^\s*(?:CONSTRAINT\s+(?:"[^"]+"|[A-Za-z_][\w$]*)\s+)?PRIMARY\s+KEY\s*\(\s*([^)]+)\)/i,
+      );
       if (pk) {
         const names = pk[1].split(',').map((x) => unquote(x.trim()));
         for (const c of columns)
@@ -397,7 +410,9 @@ function applyCreateTable(schema, stmt) {
             c.notNull = true;
           }
       }
-      const uq = part.match(/^\s*UNIQUE\s*\(\s*([^)]+)\)/i);
+      const uq = part.match(
+        /^\s*(?:CONSTRAINT\s+(?:"[^"]+"|[A-Za-z_][\w$]*)\s+)?UNIQUE\s*\(\s*([^)]+)\)/i,
+      );
       if (uq) {
         const names = uq[1].split(',').map((x) => unquote(x.trim()));
         for (const c of columns) if (names.includes(c.key)) c.unique = true;
@@ -438,16 +453,19 @@ function applyDropTable(schema, stmt) {
 }
 
 function applyAddColumn(schema, stmt) {
-  const m = stmt.match(
-    /^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(.+?)\s+ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?([\s\S]+)$/i,
-  );
-  if (!m) return false;
+  // Support multi-action: ALTER TABLE t ADD COLUMN a int, ADD COLUMN b text;
+  const m = stmt.match(/^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(.+?)\s+([\s\S]+)$/i);
+  if (!(m && /\bADD\s+COLUMN\b/i.test(m[2]))) return false;
   const table = findTable(schema, m[1]);
   if (!table) return true;
-  const col = parseColumnDef(m[2]);
-  if (!col) return true;
-  if (table.columns.some((c) => c.key === col.key)) return true;
-  table.columns.push(col);
+  for (const action of splitTopLevelComma(m[2])) {
+    const colM = action.trim().match(/^ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?([\s\S]+)$/i);
+    if (!colM) continue;
+    const col = parseColumnDef(colM[1]);
+    if (!col) continue;
+    if (table.columns.some((c) => c.key === col.key)) continue;
+    table.columns.push(col);
+  }
   return true;
 }
 
@@ -568,44 +586,112 @@ function applyFkMatch(schema, m) {
   return true;
 }
 
+function applyAddUniqueConstraint(schema, stmt) {
+  const m = stmt.match(
+    /^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(.+?)\s+ADD\s+CONSTRAINT\s+(?:"[^"]+"|[A-Za-z_][\w$]*)\s+UNIQUE\s*\(\s*([^)]+)\)/i,
+  );
+  if (!m) return false;
+  const table = findTable(schema, m[1]);
+  if (!table) return true;
+  const names = m[2].split(',').map((x) => unquote(x.trim()));
+  for (const c of table.columns) if (names.includes(c.key)) c.unique = true;
+  return true;
+}
+
+function applyAddPrimaryKeyConstraint(schema, stmt) {
+  const m = stmt.match(
+    /^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(.+?)\s+ADD\s+CONSTRAINT\s+(?:"[^"]+"|[A-Za-z_][\w$]*)\s+PRIMARY\s+KEY\s*\(\s*([^)]+)\)/i,
+  );
+  if (!m) return false;
+  const table = findTable(schema, m[1]);
+  if (!table) return true;
+  const names = m[2].split(',').map((x) => unquote(x.trim()));
+  for (const c of table.columns)
+    if (names.includes(c.key)) {
+      c.pk = true;
+      c.notNull = true;
+    }
+  return true;
+}
+
+/**
+ * Expand DO $$ … $$ bodies into inner statements (idempotent constraint idiom).
+ * Returns null when not a DO block.
+ */
+function expandDoBlock(stmt) {
+  const m = stmt.match(/^DO\s+(\$[A-Za-z0-9_]*\$)([\s\S]*)\1\s*;?\s*$/i);
+  if (!m) return null;
+  let body = m[2];
+  body = body.replace(/EXCEPTION\s+WHEN[\s\S]*$/i, '');
+  body = body.replace(/^\s*BEGIN\s+/i, '').replace(/\s*END\s*;?\s*$/i, '');
+  return splitStatements(body);
+}
+
+/**
+ * Apply one statement. Returns:
+ *   'applied' | 'ignored' | 'unhandled'
+ */
 function applyStatement(schema, stmt) {
   const s = stmt.trim();
-  if (!s) return false;
+  if (!s) return 'ignored';
+
+  const doInner = expandDoBlock(s);
+  if (doInner) {
+    let any = false;
+    for (const inner of doInner) {
+      const r = applyStatement(schema, inner);
+      if (r === 'applied') any = true;
+    }
+    return any ? 'applied' : 'ignored';
+  }
+
   // Skip non-structural noise early
   if (
     /^(CREATE|DROP|ALTER)\s+(EXTENSION|SCHEMA|ROLE|POLICY|INDEX|UNIQUE\s+INDEX|FUNCTION|PROCEDURE|TRIGGER|TYPE|VIEW|MATERIALIZED|SEQUENCE)\b/i.test(
       s,
     )
   )
-    return false;
+    return 'ignored';
   if (
-    /^GRANT\b|^REVOKE\b|^COMMENT\b|^ANALYZE\b|^VACUUM\b|^SELECT\b|^INSERT\b|^UPDATE\b|^DELETE\b|^DO\b/i.test(
+    /^GRANT\b|^REVOKE\b|^COMMENT\b|^ANALYZE\b|^VACUUM\b|^SELECT\b|^INSERT\b|^UPDATE\b|^DELETE\b/i.test(
       s,
     )
   )
-    return false;
+    return 'ignored';
   if (
     /\bENABLE\s+ROW\s+LEVEL\s+SECURITY\b|\bFORCE\s+ROW\s+LEVEL\s+SECURITY\b|\bDISABLE\s+ROW\s+LEVEL\s+SECURITY\b/i.test(
       s,
     )
   )
-    return false;
-  if (/\bADD\s+CONSTRAINT\b/i.test(s) && !/\bFOREIGN\s+KEY\b/i.test(s)) return false;
-  if (/\bDROP\s+CONSTRAINT\b|\bVALIDATE\s+CONSTRAINT\b/i.test(s)) return false;
+    return 'ignored';
+  if (/\bDROP\s+CONSTRAINT\b|\bVALIDATE\s+CONSTRAINT\b/i.test(s)) return 'ignored';
+  // CHECK / other non-PK-UNIQUE-FK constraints are intentionally ignored (not in model)
+  if (/\bADD\s+CONSTRAINT\b/i.test(s) && /\bCHECK\b/i.test(s)) return 'ignored';
 
-  if (/^CREATE\s+TABLE\b/i.test(s)) return applyCreateTable(schema, s);
-  if (/^DROP\s+TABLE\b/i.test(s)) return applyDropTable(schema, s);
-  if (/^ALTER\s+TABLE\b/i.test(s) && /\bADD\s+COLUMN\b/i.test(s)) return applyAddColumn(schema, s);
+  if (/^CREATE\s+TABLE\b/i.test(s)) return applyCreateTable(schema, s) ? 'applied' : 'unhandled';
+  if (/^DROP\s+TABLE\b/i.test(s)) return applyDropTable(schema, s) ? 'applied' : 'unhandled';
+  if (/^ALTER\s+TABLE\b/i.test(s) && /\bADD\s+COLUMN\b/i.test(s))
+    return applyAddColumn(schema, s) ? 'applied' : 'unhandled';
   if (/^ALTER\s+TABLE\b/i.test(s) && /\bDROP\s+COLUMN\b/i.test(s))
-    return applyDropColumn(schema, s);
+    return applyDropColumn(schema, s) ? 'applied' : 'unhandled';
   if (/^ALTER\s+TABLE\b/i.test(s) && /\bRENAME\s+COLUMN\b/i.test(s))
-    return applyRenameColumn(schema, s);
-  if (/^ALTER\s+TABLE\b/i.test(s) && /\bRENAME\s+TO\b/i.test(s)) return applyRenameTable(schema, s);
+    return applyRenameColumn(schema, s) ? 'applied' : 'unhandled';
+  if (/^ALTER\s+TABLE\b/i.test(s) && /\bRENAME\s+TO\b/i.test(s))
+    return applyRenameTable(schema, s) ? 'applied' : 'unhandled';
   if (/^ALTER\s+TABLE\b/i.test(s) && /\bALTER\s+COLUMN\b/i.test(s))
-    return applyAlterColumn(schema, s);
+    return applyAlterColumn(schema, s) ? 'applied' : 'unhandled';
   if (/^ALTER\s+TABLE\b/i.test(s) && /\bFOREIGN\s+KEY\b/i.test(s))
-    return applyAddForeignKey(schema, s);
-  return false;
+    return applyAddForeignKey(schema, s) ? 'applied' : 'unhandled';
+  if (/^ALTER\s+TABLE\b/i.test(s) && /\bADD\s+CONSTRAINT\b/i.test(s) && /\bUNIQUE\b/i.test(s))
+    return applyAddUniqueConstraint(schema, s) ? 'applied' : 'unhandled';
+  if (
+    /^ALTER\s+TABLE\b/i.test(s) &&
+    /\bADD\s+CONSTRAINT\b/i.test(s) &&
+    /\bPRIMARY\s+KEY\b/i.test(s)
+  )
+    return applyAddPrimaryKeyConstraint(schema, s) ? 'applied' : 'unhandled';
+  if (/^ALTER\s+TABLE\b/i.test(s) || /^CREATE\s+TABLE\b/i.test(s)) return 'unhandled';
+  return 'ignored';
 }
 
 function schemaSignature(schema) {
@@ -630,13 +716,15 @@ function schemaSignature(schema) {
 function applyMigrationSql(schema, sql) {
   const next = cloneSchema(schema);
   let structural = false;
+  let skipped = 0;
   const before = schemaSignature(next);
   for (const stmt of splitStatements(sql)) {
-    applyStatement(next, stmt);
+    const result = applyStatement(next, stmt);
+    if (result === 'unhandled') skipped += 1;
   }
   rebuildRelations(next);
   if (schemaSignature(next) !== before) structural = true;
-  return { schema: next, structural };
+  return { schema: next, structural, skipped };
 }
 
 function parseMigrationFilename(filePath) {
@@ -685,15 +773,17 @@ function buildMigrationVersions(migrationsDir) {
   const versions = [];
   let state = emptySchema();
   let id = 0;
+  let unreadFiles = 0;
   for (const filePath of files) {
     const meta = parseMigrationFilename(filePath);
     let sql = '';
     try {
       sql = fs.readFileSync(filePath, 'utf8');
     } catch {
+      unreadFiles += 1;
       continue;
     }
-    const { schema, structural } = applyMigrationSql(state, sql);
+    const { schema, structural, skipped } = applyMigrationSql(state, sql);
     state = schema;
     id += 1;
     versions.push({
@@ -703,10 +793,11 @@ function buildMigrationVersions(migrationsDir) {
       file: meta.file,
       kind: 'migration',
       structural,
+      skipped: skipped || 0,
       schema: cloneSchema(state),
     });
   }
-  return versions;
+  return { versions, unreadFiles };
 }
 
 export {
@@ -716,4 +807,10 @@ export {
   listMigrationFiles,
   applyMigrationSql,
   parseMigrationFilename,
+  findTable,
+  parseColumnDef,
+  parseQualifiedName,
+  applyStatement,
+  splitStatements,
+  stripSqlComments,
 };

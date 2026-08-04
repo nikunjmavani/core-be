@@ -312,13 +312,16 @@ function parseTableExtras(extrasSrc, table) {
   }
 
   // index('name').on(t.a, t.b) / uniqueIndex(...)
+  // Bound the forward search at the next index() so a missing .on() cannot steal columns.
   const indexRe = /\b(uniqueIndex|index)\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g;
   let im;
   while ((im = indexRe.exec(body))) {
     const unique = im[1] === 'uniqueIndex';
     const name = im[2];
-    const after = body.slice(im.index + im[0].length, im.index + im[0].length + 500);
-    const onM = after.match(/\.on\s*\(([\s\S]*?)\)/);
+    const after = body.slice(im.index + im[0].length);
+    const nextIdx = after.search(/\b(uniqueIndex|index)\s*\(/);
+    const window = nextIdx >= 0 ? after.slice(0, nextIdx) : after.slice(0, 500);
+    const onM = window.match(/\.on\s*\(([\s\S]*?)\)/);
     const onCols = onM ? [...onM[1].matchAll(/\.([A-Za-z_$][\w$]*)/g)].map((y) => y[1]) : [];
     table.indexes.push({ name, unique, columns: onCols });
   }

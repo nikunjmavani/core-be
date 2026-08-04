@@ -2,31 +2,40 @@
 // Produces per-table and per-column status: added | removed | modified | unchanged
 // plus a flat changelog ("was X → now Y") for the change feed.
 
+import { tableKey, normalizeColumn, normalizeOnDelete, normalizeSchema } from './normalize.mjs';
+
 function colSignature(c) {
+  const n = normalizeColumn(c);
   return JSON.stringify({
-    type: c.type,
-    pk: c.pk,
-    notNull: c.notNull,
-    unique: c.unique,
-    default: c.default,
-    isEnum: c.isEnum,
-    array: c.array,
-    references: c.references
-      ? { table: c.references.table, column: c.references.column, onDelete: c.references.onDelete }
-      : null,
-    length: c.length ?? null,
+    type: n.type,
+    pk: n.pk,
+    notNull: n.notNull,
+    unique: n.unique,
+    default: n.default,
+    isEnum: n.isEnum,
+    array: n.array,
+    references: n.references,
+    length: n.length ?? null,
   });
 }
 
 function describeColumn(c) {
-  const bits = [c.type];
-  if (c.length) bits[0] = `${c.type}(${c.length})`;
-  if (c.pk) bits.push('PK');
-  if (c.notNull) bits.push('NOT NULL');
-  if (c.unique) bits.push('UNIQUE');
-  if (c.references) bits.push(`→ ${c.references.table}.${c.references.column}`);
-  if (c.default != null) bits.push(`default ${c.default}`);
+  const n = normalizeColumn(c);
+  const bits = [n.type];
+  if (n.length) bits[0] = `${n.type}(${n.length})`;
+  if (n.pk) bits.push('PK');
+  if (n.notNull) bits.push('NOT NULL');
+  if (n.unique) bits.push('UNIQUE');
+  if (n.references) bits.push(`→ ${n.references.table}.${n.references.column}`);
+  if (n.default != null) bits.push(`default ${n.default}`);
   return bits.join(' ');
+}
+
+function refLabel(ref) {
+  if (!ref) return '∅';
+  const n = normalizeColumn({ references: ref }).references;
+  const od = n.onDelete ? ` ON DELETE ${n.onDelete}` : '';
+  return `${n.table}.${n.column}${od}`;
 }
 
 function diffColumns(oldCols = [], newCols = [], changelog, tableName) {
@@ -45,36 +54,42 @@ function diffColumns(oldCols = [], newCols = [], changelog, tableName) {
         detail: describeColumn(c),
       });
     } else if (colSignature(prev) !== colSignature(c)) {
+      const pn = normalizeColumn(prev);
+      const cn = normalizeColumn(c);
       const changes = [];
-      if (prev.type !== c.type) changes.push(`type ${prev.type} → ${c.type}`);
-      if ((prev.length ?? null) !== (c.length ?? null))
-        changes.push(`length ${prev.length ?? '∅'} → ${c.length ?? '∅'}`);
-      if (prev.notNull !== c.notNull) changes.push(c.notNull ? 'now NOT NULL' : 'now nullable');
-      if (prev.pk !== c.pk) changes.push(c.pk ? 'now PK' : 'no longer PK');
-      if (prev.unique !== c.unique) changes.push(c.unique ? 'now UNIQUE' : 'no longer UNIQUE');
-      if (prev.default !== c.default)
-        changes.push(`default ${prev.default ?? '∅'} → ${c.default ?? '∅'}`);
-      const pr = prev.references ? `${prev.references.table}.${prev.references.column}` : '∅';
-      const nr = c.references ? `${c.references.table}.${c.references.column}` : '∅';
+      if (pn.type !== cn.type) changes.push(`type ${pn.type} → ${cn.type}`);
+      if ((pn.length ?? null) !== (cn.length ?? null))
+        changes.push(`length ${pn.length ?? '∅'} → ${cn.length ?? '∅'}`);
+      if (pn.notNull !== cn.notNull) changes.push(cn.notNull ? 'now NOT NULL' : 'now nullable');
+      if (pn.pk !== cn.pk) changes.push(cn.pk ? 'now PK' : 'no longer PK');
+      if (pn.unique !== cn.unique) changes.push(cn.unique ? 'now UNIQUE' : 'no longer UNIQUE');
+      if (pn.default !== cn.default)
+        changes.push(`default ${pn.default ?? '∅'} → ${cn.default ?? '∅'}`);
+      const pr = refLabel(prev.references);
+      const nr = refLabel(c.references);
       if (pr !== nr) changes.push(`ref ${pr} → ${nr}`);
-      // structured delta (old→new) so a migration generator can emit precise ALTERs
+      else {
+        const pod = normalizeOnDelete(prev.references?.onDelete);
+        const nod = normalizeOnDelete(c.references?.onDelete);
+        if (pod !== nod) changes.push(`onDelete ${pod ?? '∅'} → ${nod ?? '∅'}`);
+      }
       const delta = {};
       if (
-        prev.type !== c.type ||
-        (prev.length ?? null) !== (c.length ?? null) ||
-        !!prev.array !== !!c.array
+        pn.type !== cn.type ||
+        (pn.length ?? null) !== (cn.length ?? null) ||
+        !!pn.array !== !!cn.array
       )
         delta.type = true;
-      if (prev.notNull !== c.notNull) delta.notNull = c.notNull;
-      if (prev.unique !== c.unique) delta.unique = c.unique;
-      if (prev.default !== c.default) delta.default = c.default;
-      if (pr !== nr) delta.references = c.references || null;
+      if (pn.notNull !== cn.notNull) delta.notNull = cn.notNull;
+      if (pn.unique !== cn.unique) delta.unique = cn.unique;
+      if (pn.default !== cn.default) delta.default = cn.default;
+      if (pr !== nr) delta.references = cn.references || null;
       result.push({ ...c, status: 'modified', changes, delta });
       changelog.push({
         kind: 'column-modified',
         table: tableName,
         column: c.name,
-        detail: changes.join(', '),
+        detail: changes.join(', ') || 'normalized fields differ',
       });
     } else {
       result.push({ ...c, status: 'unchanged' });
@@ -95,25 +110,31 @@ function diffColumns(oldCols = [], newCols = [], changelog, tableName) {
 }
 
 function diffSchemas(oldSchema, newSchema) {
+  const oldN = normalizeSchema(oldSchema);
+  const newN = normalizeSchema(newSchema);
   const changelog = [];
-  const oldTables = new Map((oldSchema?.tables || []).map((t) => [t.name, t]));
-  const newTables = new Map((newSchema?.tables || []).map((t) => [t.name, t]));
+  const oldTables = new Map((oldN.tables || []).map((t) => [tableKey(t), t]));
+  const newTables = new Map((newN.tables || []).map((t) => [tableKey(t), t]));
   const tables = [];
 
-  for (const t of newSchema.tables) {
-    const prev = oldTables.get(t.name);
+  for (const t of newN.tables) {
+    const key = tableKey(t);
+    const prev = oldTables.get(key);
+    // Changelog/UI still use bare table name (canvas keys on t.name); maps use schema.name.
+    const label = t.name;
     if (!prev) {
-      const cols = diffColumns([], t.columns, [], t.name).map((c) => ({ ...c, status: 'added' }));
+      const cols = diffColumns([], t.columns, [], label).map((c) => ({ ...c, status: 'added' }));
       tables.push({ ...t, status: 'added', columns: cols });
-      changelog.push({ kind: 'table-added', table: t.name, detail: `${t.columns.length} columns` });
+      changelog.push({ kind: 'table-added', table: label, detail: `${t.columns.length} columns` });
     } else {
-      const cols = diffColumns(prev.columns, t.columns, changelog, t.name);
+      const cols = diffColumns(prev.columns, t.columns, changelog, label);
       const changed = cols.some((c) => c.status !== 'unchanged');
       tables.push({ ...t, status: changed ? 'modified' : 'unchanged', columns: cols });
     }
   }
-  for (const t of oldSchema?.tables || []) {
-    if (!newTables.has(t.name)) {
+  for (const t of oldN.tables || []) {
+    const key = tableKey(t);
+    if (!newTables.has(key)) {
       tables.push({
         ...t,
         status: 'removed',
@@ -127,10 +148,9 @@ function diffSchemas(oldSchema, newSchema) {
     }
   }
 
-  // enums — added / removed / value changes
-  const oldEnums = new Map((oldSchema?.enums || []).map((e) => [e.name, e]));
-  const newEnums = new Map((newSchema.enums || []).map((e) => [e.name, e]));
-  for (const e of newSchema.enums || []) {
+  const oldEnums = new Map((oldN.enums || []).map((e) => [e.name, e]));
+  const newEnums = new Map((newN.enums || []).map((e) => [e.name, e]));
+  for (const e of newN.enums || []) {
     const prev = oldEnums.get(e.name);
     if (!prev) {
       changelog.push({
@@ -156,7 +176,7 @@ function diffSchemas(oldSchema, newSchema) {
       }
     }
   }
-  for (const e of oldSchema?.enums || []) {
+  for (const e of oldN.enums || []) {
     if (!newEnums.has(e.name))
       changelog.push({ kind: 'enum-removed', enum: e.name, detail: `${e.values.length} values` });
   }
@@ -171,12 +191,12 @@ function diffSchemas(oldSchema, newSchema) {
   };
   return {
     tables,
-    relations: newSchema.relations,
-    enums: newSchema.enums,
-    dialect: newSchema.dialect,
+    relations: newN.relations,
+    enums: newN.enums,
+    dialect: newN.dialect,
     changelog,
     counts,
   };
 }
 
-export { diffSchemas, describeColumn };
+export { diffSchemas, describeColumn, colSignature };

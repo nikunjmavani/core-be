@@ -130,7 +130,7 @@ function startServer(opts = {}) {
   let clients = [];
   let seq = 0;
 
-  const historyDir = path.join(__dirname, '.history');
+  const historyDir = path.join(__dirname, '.db-schema-history');
   const historyFile = path.join(
     historyDir,
     'history-' +
@@ -140,6 +140,10 @@ function startServer(opts = {}) {
         .slice(0, 80) +
       '.json',
   );
+  let skippedStatements = 0;
+  let reviewInFlight = false;
+  const BIND_HOST = '127.0.0.1';
+  const reviewEnabled = process.env.DB_SCHEMA_REVIEW === '1';
 
   function loadHistory() {
     if (fresh || migrationMode) return;
@@ -222,6 +226,8 @@ function startServer(opts = {}) {
       target: displayTarget(),
       projectName,
       migrationMode,
+      skippedStatements,
+      reviewEnabled,
       migrationsDir: migrationMode
         ? path.relative(projectRoot || process.cwd(), migrationsDir) || migrationsDir
         : null,
@@ -242,7 +248,10 @@ function startServer(opts = {}) {
 
   // ---- migration mode -------------------------------------------------------
   function rebuildMigrationVersions() {
-    const migs = buildMigrationVersions(migrationsDir);
+    const built = buildMigrationVersions(migrationsDir);
+    const migs = built.versions || built; // tolerate legacy array return
+    skippedStatements =
+      (migs || []).reduce((n, v) => n + (v.skipped || 0), 0) + (built.unreadFiles || 0);
     let drizzle;
     try {
       drizzle = parseDrizzleSchema();
@@ -360,10 +369,66 @@ function startServer(opts = {}) {
 
   // ---- static + api ---------------------------------------------------------
   const publicDir = path.join(__dirname, 'public');
-  const server = http.createServer((req, res) => {
-    const url = new URL(req.url, `http://${req.headers.host}`);
 
-    if (url.pathname === '/events') {
+  function parseRequestUrl(req) {
+    const raw = req.url || '/';
+    const q = raw.indexOf('?');
+    const pathname = q === -1 ? raw : raw.slice(0, q);
+    const search = q === -1 ? '' : raw.slice(q + 1);
+    return { pathname, searchParams: new URLSearchParams(search) };
+  }
+
+  function json(res, status, obj) {
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(obj));
+  }
+
+  function isLocalOrigin(origin, portNum) {
+    if (!origin) return true; // same-origin / non-browser clients omit Origin
+    try {
+      const u = new URL(origin);
+      const hostOk = u.hostname === '127.0.0.1' || u.hostname === 'localhost';
+      const portOk = !u.port || Number(u.port) === Number(portNum);
+      return hostOk && portOk && (u.protocol === 'http:' || u.protocol === 'https:');
+    } catch {
+      return false;
+    }
+  }
+
+  function isLocalHostHeader(host, portNum) {
+    if (!host || typeof host !== 'string') return false;
+    const h = host.trim().toLowerCase();
+    return (
+      h === `127.0.0.1:${portNum}` ||
+      h === `localhost:${portNum}` ||
+      h === '127.0.0.1' ||
+      h === 'localhost'
+    );
+  }
+
+  function childEnvAllowlist() {
+    const allow = ['PATH', 'HOME', 'USER', 'LOGNAME', 'TMPDIR', 'LANG', 'LC_ALL', 'TERM'];
+    const env = {};
+    for (const k of allow) if (process.env[k] != null) env[k] = process.env[k];
+    // Optional Claude-related vars only — never pass DATABASE_URL / secrets.
+    for (const [k, v] of Object.entries(process.env)) {
+      if (/^CLAUDE_/i.test(k) && v != null) env[k] = v;
+    }
+    return env;
+  }
+
+  const server = http.createServer((req, res) => {
+    let pathname;
+    let searchParams;
+    try {
+      ({ pathname, searchParams } = parseRequestUrl(req));
+    } catch {
+      res.writeHead(400);
+      res.end('Bad request');
+      return;
+    }
+
+    if (pathname === '/events') {
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
@@ -378,7 +443,27 @@ function startServer(opts = {}) {
       return;
     }
 
-    if (url.pathname === '/api/review' && req.method === 'POST') {
+    if (pathname === '/api/review' && req.method === 'POST') {
+      if (!reviewEnabled) {
+        return json(res, 403, {
+          unavailable: true,
+          error: 'Deep review disabled. Set DB_SCHEMA_REVIEW=1 to enable (loopback only).',
+        });
+      }
+      if (!isLocalHostHeader(req.headers.host, port)) {
+        return json(res, 403, { error: 'Invalid Host' });
+      }
+      if (!isLocalOrigin(req.headers.origin, port)) {
+        return json(res, 403, { error: 'Origin not allowed' });
+      }
+      const ct = String(req.headers['content-type'] || '');
+      if (!ct.includes('application/json')) {
+        return json(res, 415, { error: 'Content-Type must be application/json' });
+      }
+      if (reviewInFlight) {
+        return json(res, 429, { error: 'Review already in progress' });
+      }
+
       let body = '';
       req.on('data', (c) => {
         body += c;
@@ -388,11 +473,9 @@ function startServer(opts = {}) {
         let sql = '';
         try {
           sql = JSON.parse(body).sql || '';
-        } catch {}
-        const reply = (obj) => {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(obj));
-        };
+        } catch {
+          return json(res, 400, { error: 'Invalid JSON body' });
+        }
         const prompt = [
           'You are a senior database engineer. Review this Postgres/Drizzle schema for correctness, data integrity, indexing, normalization, naming, and likely footguns.',
           'Give concise, high-signal, actionable feedback as short markdown bullets grouped by table. Skip praise — focus on what to change and why.',
@@ -402,20 +485,26 @@ function startServer(opts = {}) {
           '```',
         ].join('\n');
 
+        reviewInFlight = true;
         let child;
         try {
-          child = spawn('claude', ['-p'], { env: process.env });
+          child = spawn('claude', ['-p'], { env: childEnvAllowlist() });
         } catch (e) {
-          return reply({ unavailable: true, error: String(e?.message || e) });
+          reviewInFlight = false;
+          return json(res, 200, { unavailable: true, error: String(e?.message || e) });
         }
         let out = '',
           err = '';
         const timer = setTimeout(() => {
           child.kill('SIGKILL');
         }, 180000);
-        child.on('error', (e) => {
+        const done = (obj) => {
+          reviewInFlight = false;
           clearTimeout(timer);
-          reply(
+          if (!res.writableEnded) json(res, 200, obj);
+        };
+        child.on('error', (e) => {
+          done(
             e && e.code === 'ENOENT' ? { unavailable: true } : { error: String(e.message || e) },
           );
         });
@@ -426,19 +515,17 @@ function startServer(opts = {}) {
           err += d;
         });
         child.on('close', (code) => {
-          clearTimeout(timer);
-          if (res.writableEnded) return;
-          if (code === 0 && out.trim()) reply({ review: out.trim() });
-          else reply({ error: err.trim() || `claude exited with code ${code}` });
+          if (code === 0 && out.trim()) done({ review: out.trim() });
+          else done({ error: err.trim() || `claude exited with code ${code}` });
         });
         child.stdin.end(prompt);
       });
       return;
     }
 
-    if (url.pathname === '/api/diff') {
-      const from = versions.find((v) => v.id === Number(url.searchParams.get('from')));
-      const to = versions.find((v) => v.id === Number(url.searchParams.get('to')));
+    if (pathname === '/api/diff') {
+      const from = versions.find((v) => v.id === Number(searchParams.get('from')));
+      const to = versions.find((v) => v.id === Number(searchParams.get('to')));
       if (!to) {
         res.writeHead(404);
         res.end('{}');
@@ -448,21 +535,16 @@ function startServer(opts = {}) {
       if (!diff.changelog?.length && to.kind === 'migration' && to.structural === false) {
         diff.note = 'No structural table/column changes (RLS / index / function)';
       }
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ diff, from: from ? from.id : null, to: to.id }));
+      json(res, 200, { diff, from: from ? from.id : null, to: to.id });
       return;
     }
 
-    if (url.pathname === '/api/migration') {
-      const id = Number(url.searchParams.get('id'));
+    if (pathname === '/api/migration') {
+      const id = Number(searchParams.get('id'));
       const v = versions.find((x) => x.id === id);
-      const reply = (status, obj) => {
-        res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(obj));
-      };
-      if (!v) return reply(404, { error: 'Version not found' });
+      if (!v) return json(res, 404, { error: 'Version not found' });
       if (v.kind === 'latest' || !v.file) {
-        return reply(200, {
+        return json(res, 200, {
           id: v.id,
           kind: v.kind || 'save',
           reason: v.reason,
@@ -472,21 +554,22 @@ function startServer(opts = {}) {
           note: v.kind === 'latest' ? 'Latest has no migration SQL file' : 'No migration file',
         });
       }
-      if (!(migrationMode && migrationsDir)) return reply(404, { error: 'Not in migration mode' });
+      if (!(migrationMode && migrationsDir))
+        return json(res, 404, { error: 'Not in migration mode' });
       const filePath = path.resolve(migrationsDir, path.basename(v.file));
       if (
         !filePath.startsWith(path.resolve(migrationsDir) + path.sep) &&
         filePath !== path.resolve(migrationsDir)
       ) {
-        return reply(400, { error: 'Invalid migration path' });
+        return json(res, 400, { error: 'Invalid migration path' });
       }
       let content = '';
       try {
         content = fs.readFileSync(filePath, 'utf8');
       } catch (e) {
-        return reply(404, { error: String(e?.message || e) });
+        return json(res, 404, { error: String(e?.message || e) });
       }
-      return reply(200, {
+      return json(res, 200, {
         id: v.id,
         kind: v.kind,
         reason: v.reason,
@@ -496,7 +579,7 @@ function startServer(opts = {}) {
       });
     }
 
-    const file = url.pathname === '/' ? '/index.html' : url.pathname;
+    const file = pathname === '/' ? '/index.html' : pathname;
     const filePath = path.join(publicDir, path.normalize(file).replace(/^(\.\.[/\\])+/, ''));
     fs.readFile(filePath, (err, data) => {
       if (err) {
@@ -511,7 +594,18 @@ function startServer(opts = {}) {
     });
   });
 
-  server.listen(port, () => {
+  server.on('error', (err) => {
+    if (err && err.code === 'EADDRINUSE') {
+      console.error(
+        `\n  DB Schema Viewer: port ${port} is already in use.\n  Try: pnpm db:schema -- --port ${port + 1}\n`,
+      );
+      process.exit(1);
+    }
+    console.error('DB Schema Viewer server error:', err);
+    process.exit(1);
+  });
+
+  server.listen(port, BIND_HOST, () => {
     if (migrationMode) {
       rebuildMigrationVersions();
     } else {
@@ -519,13 +613,16 @@ function startServer(opts = {}) {
       snapshot(versions.length ? 'changed since last run' : 'initial');
     }
     watch();
-    const url = `http://localhost:${port}`;
-    console.log(`\n  DB Schema${projectName ? ` · ${projectName}` : ''} running`);
-    console.log(`  → ${url}`);
+    const url = `http://${BIND_HOST}:${port}`;
+    console.log(`\n  DB Schema Viewer${projectName ? ` · ${projectName}` : ''} running`);
+    console.log(`  → ${url} (loopback only)`);
     console.log(`  schema:     ${target}`);
     if (migrationMode) {
       console.log(`  migrations: ${migrationsDir} (${Math.max(0, versions.length - 1)} + Latest)`);
+      if (skippedStatements)
+        console.log(`  skipped:    ${skippedStatements} unhandled statement(s) during replay`);
     }
+    if (reviewEnabled) console.log('  review:     enabled (DB_SCHEMA_REVIEW=1)');
     console.log(
       `  history:    ${versions.length} version(s)${fresh ? ' (fresh)' : ''}${migrationMode ? ' [migration mode]' : ''}\n`,
     );
