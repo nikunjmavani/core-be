@@ -27,7 +27,7 @@ export const dead_letter_jobs = auditSchema.table(
     dead_letter_queue: text('dead_letter_queue').notNull(),
     job_id: text('job_id'),
     job_name: text('job_name').notNull(),
-    payload_summary: jsonb('payload_summary').notNull(),
+    payload_summary: jsonb('payload_summary').notNull().default({}),
     failed_reason: text('failed_reason').notNull(),
     error_stack: text('error_stack'),
     attempts_made: integer('attempts_made').notNull(),

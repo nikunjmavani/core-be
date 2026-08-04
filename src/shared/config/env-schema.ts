@@ -1649,7 +1649,23 @@ export const envSchemaDefaults: Readonly<Record<string, string>> = (() => {
   for (const [key, schema] of Object.entries(envSchemaBase.shape)) {
     const parsed = (schema as z.ZodTypeAny).safeParse(undefined);
     if (parsed.success && parsed.data !== undefined && parsed.data !== null) {
-      defaults[key] = String(parsed.data);
+      const value = parsed.data;
+      // Never String(object) — that yields "[object Object]" (Sonar S6551). Arrays keep
+      // the historical String(array) shape ('' for [], comma-join otherwise) so
+      // env-catalog / github:sync exact-match defaults stay stable.
+      if (typeof value === 'string') defaults[key] = value;
+      else if (
+        typeof value === 'number' ||
+        typeof value === 'boolean' ||
+        typeof value === 'bigint'
+      ) {
+        defaults[key] = String(value);
+      } else if (Array.isArray(value)) {
+        defaults[key] = value.length === 0 ? '' : value.map(String).join(',');
+      } else if (typeof value === 'object') {
+        defaults[key] = JSON.stringify(value);
+      }
+      // symbol / function / etc. — omit; no schema default uses those types.
     }
   }
   return defaults;
