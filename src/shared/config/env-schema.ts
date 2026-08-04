@@ -1628,6 +1628,26 @@ export const envSchemaKeys = Object.keys(envSchemaBase.shape) as (keyof z.infer<
 >)[];
 
 /**
+ * Serialize a parsed Zod default to the exact string form stored in `.env.example`.
+ *
+ * @remarks
+ * Never `String(object)` — that yields `"[object Object]"` (Sonar S6551). Scalars use `String`;
+ * arrays keep the historical `String(array)` shape (`''` for `[]`, comma-join otherwise) so
+ * env-catalog / github:sync exact-match defaults stay stable; objects are JSON-serialized; and
+ * unrepresentable values (`null`/`undefined`/symbol/function) return `undefined` so the caller
+ * omits the key rather than storing a garbage default.
+ */
+export function formatEnvSchemaDefault(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+  if (Array.isArray(value)) return value.length === 0 ? '' : value.map(String).join(',');
+  if (typeof value === 'object' && value !== null) return JSON.stringify(value);
+  return undefined;
+}
+
+/**
  * Resolved default value — stringified — for every schema key that HAS one, keyed by env var name.
  *
  * @remarks
@@ -1648,24 +1668,9 @@ export const envSchemaDefaults: Readonly<Record<string, string>> = (() => {
   const defaults: Record<string, string> = {};
   for (const [key, schema] of Object.entries(envSchemaBase.shape)) {
     const parsed = (schema as z.ZodTypeAny).safeParse(undefined);
-    if (parsed.success && parsed.data !== undefined && parsed.data !== null) {
-      const value = parsed.data;
-      // Never String(object) — that yields "[object Object]" (Sonar S6551). Arrays keep
-      // the historical String(array) shape ('' for [], comma-join otherwise) so
-      // env-catalog / github:sync exact-match defaults stay stable.
-      if (typeof value === 'string') defaults[key] = value;
-      else if (
-        typeof value === 'number' ||
-        typeof value === 'boolean' ||
-        typeof value === 'bigint'
-      ) {
-        defaults[key] = String(value);
-      } else if (Array.isArray(value)) {
-        defaults[key] = value.length === 0 ? '' : value.map(String).join(',');
-      } else if (typeof value === 'object') {
-        defaults[key] = JSON.stringify(value);
-      }
-      // symbol / function / etc. — omit; no schema default uses those types.
+    if (parsed.success) {
+      const formatted = formatEnvSchemaDefault(parsed.data);
+      if (formatted !== undefined) defaults[key] = formatted;
     }
   }
   return defaults;
