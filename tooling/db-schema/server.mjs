@@ -428,6 +428,16 @@ function startServer(opts = {}) {
       return;
     }
 
+    // DNS-rebinding guard for every non-static path (read APIs + SSE + review).
+    if (pathname.startsWith('/api/') || pathname === '/events') {
+      if (!isLocalHostHeader(req.headers.host, port)) {
+        return json(res, 403, { error: 'Invalid Host' });
+      }
+      if (!isLocalOrigin(req.headers.origin, port)) {
+        return json(res, 403, { error: 'Origin not allowed' });
+      }
+    }
+
     if (pathname === '/events') {
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
@@ -449,12 +459,6 @@ function startServer(opts = {}) {
           unavailable: true,
           error: 'Deep review disabled. Set DB_SCHEMA_REVIEW=1 to enable (loopback only).',
         });
-      }
-      if (!isLocalHostHeader(req.headers.host, port)) {
-        return json(res, 403, { error: 'Invalid Host' });
-      }
-      if (!isLocalOrigin(req.headers.origin, port)) {
-        return json(res, 403, { error: 'Origin not allowed' });
       }
       const ct = String(req.headers['content-type'] || '');
       if (!ct.includes('application/json')) {

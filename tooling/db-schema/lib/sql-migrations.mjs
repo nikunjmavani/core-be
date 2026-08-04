@@ -454,17 +454,31 @@ function applyDropTable(schema, stmt) {
 
 function applyAddColumn(schema, stmt) {
   // Support multi-action: ALTER TABLE t ADD COLUMN a int, ADD COLUMN b text;
+  // Mixed ADD+ALTER/DROP siblings must fail closed (→ skipped, no partial apply).
   const m = stmt.match(/^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(.+?)\s+([\s\S]+)$/i);
   if (!(m && /\bADD\s+COLUMN\b/i.test(m[2]))) return false;
   const table = findTable(schema, m[1]);
-  if (!table) return true;
+  if (!table) return false;
+  const pending = [];
+  let otherStructural = 0;
   for (const action of splitTopLevelComma(m[2])) {
-    const colM = action.trim().match(/^ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?([\s\S]+)$/i);
-    if (!colM) continue;
-    const col = parseColumnDef(colM[1]);
-    if (!col) continue;
-    if (table.columns.some((c) => c.key === col.key)) continue;
-    table.columns.push(col);
+    const trimmed = action.trim();
+    if (!trimmed) continue;
+    const colM = trimmed.match(/^ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?([\s\S]+)$/i);
+    if (colM) {
+      const col = parseColumnDef(colM[1]);
+      if (!col) {
+        otherStructural += 1;
+        continue;
+      }
+      pending.push(col);
+      continue;
+    }
+    if (/^(ADD|DROP|ALTER|RENAME)\b/i.test(trimmed)) otherStructural += 1;
+  }
+  if (otherStructural > 0 || pending.length === 0) return false;
+  for (const col of pending) {
+    if (!table.columns.some((c) => c.key === col.key)) table.columns.push(col);
   }
   return true;
 }
@@ -475,7 +489,7 @@ function applyDropColumn(schema, stmt) {
   );
   if (!m) return false;
   const table = findTable(schema, m[1]);
-  if (!table) return true;
+  if (!table) return false;
   const name = m[2] || m[3];
   table.columns = table.columns.filter((c) => c.key !== name);
   return true;
@@ -487,7 +501,7 @@ function applyRenameColumn(schema, stmt) {
   );
   if (!m) return false;
   const table = findTable(schema, m[1]);
-  if (!table) return true;
+  if (!table) return false;
   const from = m[2] || m[3];
   const to = m[4] || m[5];
   const col = table.columns.find((c) => c.key === from);
@@ -505,7 +519,7 @@ function applyRenameTable(schema, stmt) {
   if (!m) return false;
   if (/\bRENAME\s+COLUMN\b/i.test(stmt)) return false;
   const table = findTable(schema, m[1]);
-  if (!table) return true;
+  if (!table) return false;
   const to = m[2] || m[3];
   table.name = to;
   table.var = to;
@@ -518,7 +532,7 @@ function applyAlterColumn(schema, stmt) {
   );
   if (!m) return false;
   const table = findTable(schema, m[1]);
-  if (!table) return true;
+  if (!table) return false;
   const col = table.columns.find((c) => c.key === (m[2] || m[3]));
   if (!col) return true;
   const rest = m[4].trim();
@@ -571,7 +585,7 @@ function applyAddForeignKey(schema, stmt) {
 
 function applyFkMatch(schema, m) {
   const table = findTable(schema, m[1]);
-  if (!table) return true;
+  if (!table) return false;
   const local = m[2] || m[3];
   const refQ = parseQualifiedName(m[4]);
   const col = table.columns.find((c) => c.key === local);
@@ -592,7 +606,7 @@ function applyAddUniqueConstraint(schema, stmt) {
   );
   if (!m) return false;
   const table = findTable(schema, m[1]);
-  if (!table) return true;
+  if (!table) return false;
   const names = m[2].split(',').map((x) => unquote(x.trim()));
   for (const c of table.columns) if (names.includes(c.key)) c.unique = true;
   return true;
@@ -604,7 +618,7 @@ function applyAddPrimaryKeyConstraint(schema, stmt) {
   );
   if (!m) return false;
   const table = findTable(schema, m[1]);
-  if (!table) return true;
+  if (!table) return false;
   const names = m[2].split(',').map((x) => unquote(x.trim()));
   for (const c of table.columns)
     if (names.includes(c.key)) {

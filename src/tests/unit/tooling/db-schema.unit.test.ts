@@ -234,6 +234,36 @@ describe('db-schema diffSchemas', () => {
   });
 });
 
+describe('db-schema skip counter', () => {
+  it('counts ALTER on a missing table as skipped (not silently applied)', () => {
+    const { schema, skipped } = applyMigrationSql(
+      emptySchema(),
+      `ALTER TABLE public.does_not_exist ADD COLUMN oops text;`,
+    );
+    expect(schema.tables).toHaveLength(0);
+    expect(skipped).toBeGreaterThanOrEqual(1);
+  });
+
+  it('counts mixed ADD COLUMN + ALTER COLUMN as skipped when sibling is dropped', () => {
+    const seed = `
+      CREATE TABLE public.t (id int, b text);
+    `;
+    const { schema: base } = applyMigrationSql(emptySchema(), seed);
+    const { schema, skipped } = applyMigrationSql(
+      base,
+      `ALTER TABLE public.t ADD COLUMN a int, ALTER COLUMN b SET NOT NULL;`,
+    );
+    // Whole statement fails closed so we don't pretend partial apply succeeded.
+    expect(skipped).toBeGreaterThanOrEqual(1);
+    expect(schema.tables[0]?.columns.find((c) => c.name === 'a')).toBeUndefined();
+  });
+
+  it('counts genuinely unhandled structural DDL as skipped', () => {
+    const { skipped } = applyMigrationSql(emptySchema(), `ALTER TABLE public.t OWNER TO app_user;`);
+    expect(skipped).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe('db-schema project detect', () => {
   it('finds schema files in this repo src/ despite file count >> 400', () => {
     const src = path.resolve(process.cwd(), 'src');
