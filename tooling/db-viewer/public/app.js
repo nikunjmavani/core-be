@@ -3,6 +3,12 @@
 
 const $ = (s) => document.querySelector(s);
 const SVGNS = 'http://www.w3.org/2000/svg';
+
+// Per-boot session token from the URL the CLI opened — required on /api/* and /events.
+// Kept in the address bar (never stripped) so reloads keep working.
+const SESSION_TOKEN = new URLSearchParams(location.search).get('token') || '';
+const withToken = (url) =>
+  `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(SESSION_TOKEN)}`;
 const ROW_H = 30,
   HEAD_H = 44,
   CARD_W = 268;
@@ -1594,7 +1600,9 @@ async function loadComparison(opts = {}) {
     const ac = new AbortController();
     state._diffAbort = ac;
     try {
-      const res = await fetch(`/api/diff?from=${from}&to=${state.target}`, { signal: ac.signal });
+      const res = await fetch(withToken(`/api/diff?from=${from}&to=${state.target}`), {
+        signal: ac.signal,
+      });
       const j = await res.json();
       if (reqToken !== state._diffReq) return; // stale response
       state._diff = j.diff;
@@ -1743,7 +1751,9 @@ async function refreshMigrationPanel() {
   const ac = new AbortController();
   state._migAbort = ac;
   try {
-    const res = await fetch(`/api/migration?id=${encodeURIComponent(v.id)}`, { signal: ac.signal });
+    const res = await fetch(withToken(`/api/migration?id=${encodeURIComponent(v.id)}`), {
+      signal: ac.signal,
+    });
     const j = await res.json();
     if (reqToken !== state._migReq) return;
     if (!res.ok) {
@@ -1877,7 +1887,7 @@ function setupToolbar() {
 
 // ---------------- live connection ----------------
 function connect() {
-  const es = new EventSource('/events');
+  const es = new EventSource(withToken('/events'));
   es.addEventListener('open', () => setConn(true));
   es.addEventListener('error', () => setConn(false));
   es.addEventListener('version', (ev) => {
@@ -2398,7 +2408,7 @@ function setupDeepReview() {
     out.classList.add('on');
     out.innerHTML = '<div class="rv-loading">Asking Claude to review your schema…</div>';
     try {
-      const res = await fetch('/api/review', {
+      const res = await fetch(withToken('/api/review'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ sql: toSQL(diff) }),

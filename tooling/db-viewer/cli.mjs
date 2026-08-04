@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // DB Schema Viewer CLI for core-be.
 //
-//   pnpm db:schema
-//   node tooling/db-schema/cli.mjs --no-open
-//   DB_SCHEMA_PORT=4990 pnpm db:schema
-//   DB_SCHEMA_REVIEW=1 pnpm db:schema   # opt-in Claude review endpoint
+//   pnpm db:viewer
+//   node tooling/db-viewer/cli.mjs --no-open
+//   DB_SCHEMA_PORT=4990 pnpm db:viewer
+//   DB_SCHEMA_REVIEW=1 pnpm db:viewer   # opt-in Claude review endpoint
 
 import { resolveProject, DEFAULT_PORT } from './lib/project.mjs';
 import { startServer } from './server.mjs';
@@ -14,8 +14,8 @@ function usage() {
   DB Schema Viewer — local Drizzle ER canvas (core-be tooling)
 
   Usage:
-    pnpm db:schema
-    node tooling/db-schema/cli.mjs [options]
+    pnpm db:viewer
+    node tooling/db-viewer/cli.mjs [options]
 
   Options:
     -p, --port <n>         Port (default ${DEFAULT_PORT}, or DB_SCHEMA_PORT / config.json)
@@ -117,7 +117,7 @@ function main() {
     console.error(`
   DB Schema Viewer: could not find a Drizzle schema under ${project.root}
 
-  Check tooling/db-schema/config.json, or pass --schema / --migrations.
+  Check tooling/db-viewer/config.json, or pass --schema / --migrations.
 `);
     process.exit(1);
   }

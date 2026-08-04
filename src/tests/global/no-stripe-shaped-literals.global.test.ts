@@ -89,7 +89,7 @@ describe('Global: no Stripe-shaped literals in source (sec-r5-secret-scanning)',
     'coverage',
     '.git',
     '__snapshots__',
-    '.db-schema-history',
+    '.db-viewer-history',
   ]);
 
   async function* walkSourceFiles(directory: string): AsyncGenerator<string> {

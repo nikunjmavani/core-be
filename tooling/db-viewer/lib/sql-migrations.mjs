@@ -375,6 +375,26 @@ function splitTopLevelComma(src) {
   return parts;
 }
 
+/**
+ * Index of the ')' matching the '(' at openIndex, honoring the same quote rules as
+ * splitTopLevelComma. -1 when unbalanced.
+ */
+function findMatchingParen(src, openIndex) {
+  let depth = 0;
+  let str = null;
+  for (let i = openIndex; i < src.length; i++) {
+    const c = src[i];
+    if (str) {
+      if (c === str && src[i - 1] !== '\\') str = null;
+      continue;
+    }
+    if (c === "'" || c === '"') str = c;
+    else if (c === '(') depth++;
+    else if (c === ')' && --depth === 0) return i;
+  }
+  return -1;
+}
+
 function makeTable(schemaName, tableName, columns) {
   return {
     var: tableName,
@@ -387,10 +407,14 @@ function makeTable(schemaName, tableName, columns) {
 }
 
 function applyCreateTable(schema, stmt) {
-  const m = stmt.match(
-    /^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\s\S]+?)\s*\(([\s\S]*)\)\s*$/i,
-  );
-  if (!m) return false;
+  // Balanced-paren walk (not a greedy regex to the last ')') so trailing clauses —
+  // `PARTITION BY LIST (…)`, `WITH (…)` — never bleed into the column-def block.
+  const head = stmt.match(/^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\s\S]+?)\s*\(/i);
+  if (!head) return false;
+  const open = head[0].length - 1;
+  const close = findMatchingParen(stmt, open);
+  if (close === -1) return false;
+  const m = [null, head[1], stmt.slice(open + 1, close)];
   const q = parseQualifiedName(m[1]);
   if (findTable(schema, q)) return true; // IF NOT EXISTS
   const columns = [];

@@ -248,7 +248,7 @@
       }
     },
     {
-      "includes": ["tooling/db-schema/public/**"],
+      "includes": ["tooling/db-viewer/public/**"],
       "linter": {
         "rules": {
           "a11y": {

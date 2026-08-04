@@ -42,7 +42,7 @@ describe('Global: no NODE_ENV branching, no removed env values (env-driven-confi
     '.git',
     '__snapshots__',
     // Runtime-generated DB Schema Viewer history — not source, can be large.
-    '.db-schema-history',
+    '.db-viewer-history',
   ]);
 
   // NODE_ENV comparisons are legitimate ONLY inside env-schema.ts: the enum + the production

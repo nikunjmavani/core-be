@@ -1,5 +1,5 @@
 // Resolve schema + migrations for core-be (cwd-aware).
-// Order: CLI opts → tooling/db-schema/config.json → drizzle.config hint → conventional layout.
+// Order: CLI opts → tooling/db-viewer/config.json → drizzle.config hint → conventional layout.
 // Port: CLI → DB_SCHEMA_PORT → config → 4984.
 
 import fs from 'node:fs';
@@ -151,7 +151,7 @@ function detectSchema(root) {
  * Falls back to empty object (detection only).
  */
 function loadModuleConfig(root) {
-  const coLocated = path.join(root, 'tooling', 'db-schema', 'config.json');
+  const coLocated = path.join(root, 'tooling', 'db-viewer', 'config.json');
   const pathToUse = exists(coLocated) ? coLocated : exists(MODULE_CONFIG) ? MODULE_CONFIG : null;
   if (!pathToUse) return { cfg: {}, configPath: null, configError: null };
   const parsed = readJson(pathToUse);

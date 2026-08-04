@@ -5,17 +5,18 @@ import {
   findTable,
   parseColumnDef,
   type SchemaSnapshot,
-} from '@tooling/db-schema/lib/sql-migrations.mjs';
-import { diffSchemas } from '@tooling/db-schema/lib/diff.mjs';
+} from '@tooling/db-viewer/lib/sql-migrations.mjs';
+import { diffSchemas } from '@tooling/db-viewer/lib/diff.mjs';
 import {
   normalizeDefault,
   normalizeOnDelete,
   tableKey,
-} from '@tooling/db-schema/lib/normalize.mjs';
-import { hasSchemaFiles } from '@tooling/db-schema/lib/project.mjs';
+} from '@tooling/db-viewer/lib/normalize.mjs';
+import { hasSchemaFiles } from '@tooling/db-viewer/lib/project.mjs';
+import { parseSchema } from '@tooling/db-viewer/lib/parser.mjs';
 import path from 'node:path';
 
-describe('db-schema normalize', () => {
+describe('db-viewer normalize', () => {
   it('treats null and no action onDelete as equivalent', () => {
     expect(normalizeOnDelete(null)).toBeNull();
     expect(normalizeOnDelete('no action')).toBeNull();
@@ -34,7 +35,7 @@ describe('db-schema normalize', () => {
   });
 });
 
-describe('db-schema SQL constraints', () => {
+describe('db-viewer SQL constraints', () => {
   it('applies named CONSTRAINT PRIMARY KEY / UNIQUE', () => {
     const sql = `
       CREATE TABLE "tenancy"."role_permissions" (
@@ -124,9 +125,29 @@ describe('db-schema SQL constraints', () => {
     const col = parseColumnDef(`a text DEFAULT 'x NOT NULL y'`);
     expect(col?.notNull).toBe(false);
   });
+
+  it('keeps PARTITION BY out of the column-def block', () => {
+    const { schema, skipped } = applyMigrationSql(
+      emptySchema(),
+      `CREATE TABLE public.events (id bigint PRIMARY KEY, occurred_at timestamptz NOT NULL) PARTITION BY RANGE (occurred_at);`,
+    );
+    expect(skipped).toBe(0);
+    const t = findTable(schema, 'public.events');
+    expect(t!.columns.map((c) => c.name).sort()).toEqual(['id', 'occurred_at']);
+  });
 });
 
-describe('db-schema diffSchemas', () => {
+describe('db-viewer drizzle parser', () => {
+  it('does not treat // inside a TS regex literal as a comment', () => {
+    // Single line on purpose: pre-fix, the `//` inside the regex stripped the rest of
+    // the line, silently dropping the second table.
+    const source = `export const users = pgTable('users', { id: text('id').primaryKey() }); const collapse = (v) => v.replace(/\\/\\//g, '/'); export const posts = pgTable('posts', { id: text('id').primaryKey() });`;
+    const schema = parseSchema(source);
+    expect(schema.tables.map((t) => t.name).sort()).toEqual(['posts', 'users']);
+  });
+});
+
+describe('db-viewer diffSchemas', () => {
   it('does not report false positives for onDelete null vs no action', () => {
     const a = {
       dialect: 'postgres',
@@ -234,7 +255,7 @@ describe('db-schema diffSchemas', () => {
   });
 });
 
-describe('db-schema skip counter', () => {
+describe('db-viewer skip counter', () => {
   it('counts ALTER on a missing table as skipped (not silently applied)', () => {
     const { schema, skipped } = applyMigrationSql(
       emptySchema(),
@@ -298,7 +319,7 @@ describe('db-schema skip counter', () => {
   });
 });
 
-describe('db-schema project detect', () => {
+describe('db-viewer project detect', () => {
   it('finds schema files in this repo src/ despite file count >> 400', () => {
     const src = path.resolve(process.cwd(), 'src');
     expect(hasSchemaFiles(src)).toBe(true);

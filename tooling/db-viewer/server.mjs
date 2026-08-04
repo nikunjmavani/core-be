@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-// Local ER board for Drizzle schemas + migrations/*.sql (tooling/db-schema).
-// Prefer: pnpm db:schema
+// Local ER board for Drizzle schemas + migrations/*.sql (tooling/db-viewer).
+// Prefer: pnpm db:viewer
 
 import http from 'node:http';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { parseSchema } from './lib/parser.mjs';
 import { diffSchemas } from './lib/diff.mjs';
@@ -130,7 +132,7 @@ function startServer(opts = {}) {
   let clients = [];
   let seq = 0;
 
-  const historyDir = path.join(__dirname, '.db-schema-history');
+  const historyDir = path.join(__dirname, '.db-viewer-history');
   const historyFile = path.join(
     historyDir,
     'history-' +
@@ -144,6 +146,15 @@ function startServer(opts = {}) {
   let reviewInFlight = false;
   const BIND_HOST = '127.0.0.1';
   const reviewEnabled = process.env.DB_SCHEMA_REVIEW === '1';
+  // Loopback is shared by every local user/process: a per-boot random token — embedded in
+  // the URL the CLI prints/opens — gates /api/* and /events so an unrelated local process
+  // cannot read the schema or trigger reviews (token spend).
+  const sessionToken = randomBytes(16).toString('hex');
+
+  function isValidSessionToken(provided) {
+    if (typeof provided !== 'string' || provided.length !== sessionToken.length) return false;
+    return timingSafeEqual(Buffer.from(provided), Buffer.from(sessionToken));
+  }
 
   function loadHistory() {
     if (fresh || migrationMode) return;
@@ -439,6 +450,11 @@ function startServer(opts = {}) {
       if (!isLocalOrigin(req.headers.origin, port)) {
         return json(res, 403, { error: 'Origin not allowed' });
       }
+      // Query param because EventSource cannot set headers; header kept for curl ergonomics.
+      const provided = req.headers['x-session-token'] || searchParams.get('token') || '';
+      if (!isValidSessionToken(provided)) {
+        return json(res, 403, { error: 'Missing or invalid session token' });
+      }
     }
 
     if (pathname === '/events') {
@@ -484,7 +500,9 @@ function startServer(opts = {}) {
           req.destroy();
         }
       });
-      req.on('aborted', () => {
+      // 'close' (not the deprecated 'aborted') so a mid-body disconnect can never leave the
+      // in-flight flag stuck; after a normal 'end' the phase is 'running', so this is a no-op.
+      req.on('close', () => {
         if (phase === 'reading' && !oversized) reviewInFlight = false;
       });
       req.on('end', () => {
@@ -508,7 +526,9 @@ function startServer(opts = {}) {
         phase = 'running';
         let child;
         try {
-          child = spawn('claude', ['-p'], { env: childEnvAllowlist() });
+          // Neutral cwd: schema text flows into the prompt, so a poisoned migration comment
+          // must not be able to steer the child into reading repo files from its cwd.
+          child = spawn('claude', ['-p'], { env: childEnvAllowlist(), cwd: os.tmpdir() });
         } catch (e) {
           reviewInFlight = false;
           return json(res, 200, { unavailable: true, error: String(e?.message || e) });
@@ -625,7 +645,7 @@ function startServer(opts = {}) {
   server.on('error', (err) => {
     if (err && err.code === 'EADDRINUSE') {
       console.error(
-        `\n  DB Schema Viewer: port ${port} is already in use.\n  Try: pnpm db:schema -- --port ${port + 1}\n`,
+        `\n  DB Schema Viewer: port ${port} is already in use.\n  Try: pnpm db:viewer -- --port ${port + 1}\n`,
       );
       process.exit(1);
     }
@@ -641,9 +661,10 @@ function startServer(opts = {}) {
       snapshot(versions.length ? 'changed since last run' : 'initial');
     }
     watch();
-    const url = `http://${BIND_HOST}:${port}`;
+    // The token stays in the URL (not stripped client-side) so reloads keep working.
+    const url = `http://${BIND_HOST}:${port}/?token=${sessionToken}`;
     console.log(`\n  DB Schema Viewer${projectName ? ` · ${projectName}` : ''} running`);
-    console.log(`  → ${url} (loopback only)`);
+    console.log(`  → ${url} (loopback only, session token required)`);
     console.log(`  schema:     ${target}`);
     if (migrationMode) {
       console.log(`  migrations: ${migrationsDir} (${Math.max(0, versions.length - 1)} + Latest)`);

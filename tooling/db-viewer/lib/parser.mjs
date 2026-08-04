@@ -9,7 +9,21 @@ const ENUM_FNS = ['pgEnum', 'mysqlEnum'];
 
 // ---- low-level scanning helpers -------------------------------------------
 
-// Strip // line comments and /* */ block comments without touching string bodies.
+// A '/' after any of these (as the last significant token) starts a regex literal, not
+// division — the standard operand-position heuristic.
+const REGEX_KEYWORD_BEFORE =
+  /(?:^|[^\w$])(?:return|case|typeof|instanceof|in|of|new|delete|void|do|else|yield|await)\s*$/;
+
+function regexCanFollow(out) {
+  const trimmed = out.replace(/\s+$/, '');
+  if (!trimmed) return true;
+  const prev = trimmed[trimmed.length - 1];
+  if ('=(,[!&|?:;{}+-*%~^<>'.includes(prev)) return true;
+  return REGEX_KEYWORD_BEFORE.test(trimmed);
+}
+
+// Strip // line comments and /* */ block comments without touching string bodies or
+// regex literals (a `//` inside e.g. `replace(/\/\//g, …)` is not a comment).
 function stripComments(src) {
   let out = '';
   let i = 0;
@@ -43,6 +57,29 @@ function stripComments(src) {
       i += 2;
       while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i++;
       i += 2;
+      continue;
+    }
+    if (c === '/' && regexCanFollow(out)) {
+      // Copy the whole regex literal through verbatim (escapes + [] char classes,
+      // where '/' needs no escape) so its body can never be mistaken for a comment.
+      out += c;
+      i++;
+      let inClass = false;
+      while (i < n && src[i] !== '\n') {
+        out += src[i];
+        if (src[i] === '\\') {
+          out += src[i + 1] ?? '';
+          i += 2;
+          continue;
+        }
+        if (src[i] === '[') inClass = true;
+        else if (src[i] === ']') inClass = false;
+        else if (src[i] === '/' && !inClass) {
+          i++;
+          break;
+        }
+        i++;
+      }
       continue;
     }
     out += c;
