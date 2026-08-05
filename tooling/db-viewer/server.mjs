@@ -145,7 +145,7 @@ function startServer(opts = {}) {
   let skippedStatements = 0;
   let reviewInFlight = false;
   const BIND_HOST = '127.0.0.1';
-  const reviewEnabled = process.env.DB_SCHEMA_REVIEW === '1';
+  const reviewEnabled = process.env.DB_VIEWER_REVIEW === '1';
   // Loopback is shared by every local user/process: a per-boot random token — embedded in
   // the URL the CLI prints/opens — gates /api/* and /events so an unrelated local process
   // cannot read the schema or trigger reviews (token spend).
@@ -476,7 +476,7 @@ function startServer(opts = {}) {
       if (!reviewEnabled) {
         return json(res, 403, {
           unavailable: true,
-          error: 'Deep review disabled. Set DB_SCHEMA_REVIEW=1 to enable (loopback only).',
+          error: 'Deep review disabled. Set DB_VIEWER_REVIEW=1 to enable (loopback only).',
         });
       }
       const ct = String(req.headers['content-type'] || '');
@@ -645,11 +645,11 @@ function startServer(opts = {}) {
   server.on('error', (err) => {
     if (err && err.code === 'EADDRINUSE') {
       console.error(
-        `\n  DB Schema Viewer: port ${port} is already in use.\n  Try: pnpm db:viewer -- --port ${port + 1}\n`,
+        `\n  DB Viewer: port ${port} is already in use.\n  Try: pnpm db:viewer -- --port ${port + 1}\n`,
       );
       process.exit(1);
     }
-    console.error('DB Schema Viewer server error:', err);
+    console.error('DB Viewer server error:', err);
     process.exit(1);
   });
 
@@ -663,7 +663,7 @@ function startServer(opts = {}) {
     watch();
     // The token stays in the URL (not stripped client-side) so reloads keep working.
     const url = `http://${BIND_HOST}:${port}/?token=${sessionToken}`;
-    console.log(`\n  DB Schema Viewer${projectName ? ` · ${projectName}` : ''} running`);
+    console.log(`\n  DB Viewer${projectName ? ` · ${projectName}` : ''} running`);
     console.log(`  → ${url} (loopback only, session token required)`);
     console.log(`  schema:     ${target}`);
     if (migrationMode) {
@@ -671,7 +671,7 @@ function startServer(opts = {}) {
       if (skippedStatements)
         console.log(`  skipped:    ${skippedStatements} unhandled statement(s) during replay`);
     }
-    if (reviewEnabled) console.log('  review:     enabled (DB_SCHEMA_REVIEW=1)');
+    if (reviewEnabled) console.log('  review:     enabled (DB_VIEWER_REVIEW=1)');
     console.log(
       `  history:    ${versions.length} version(s)${fresh ? ' (fresh)' : ''}${migrationMode ? ' [migration mode]' : ''}\n`,
     );

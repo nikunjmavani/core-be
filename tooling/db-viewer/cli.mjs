@@ -1,24 +1,24 @@
 #!/usr/bin/env node
-// DB Schema Viewer CLI for core-be.
+// DB Viewer CLI for core-be.
 //
 //   pnpm db:viewer
 //   node tooling/db-viewer/cli.mjs --no-open
-//   DB_SCHEMA_PORT=4990 pnpm db:viewer
-//   DB_SCHEMA_REVIEW=1 pnpm db:viewer   # opt-in Claude review endpoint
+//   DB_VIEWER_PORT=4990 pnpm db:viewer
+//   DB_VIEWER_REVIEW=1 pnpm db:viewer   # opt-in Claude review endpoint
 
 import { resolveProject, DEFAULT_PORT } from './lib/project.mjs';
 import { startServer } from './server.mjs';
 
 function usage() {
   console.log(`
-  DB Schema Viewer — local Drizzle ER canvas (core-be tooling)
+  DB Viewer — local Drizzle ER canvas (core-be tooling)
 
   Usage:
     pnpm db:viewer
     node tooling/db-viewer/cli.mjs [options]
 
   Options:
-    -p, --port <n>         Port (default ${DEFAULT_PORT}, or DB_SCHEMA_PORT / config.json)
+    -p, --port <n>         Port (default ${DEFAULT_PORT}, or DB_VIEWER_PORT / config.json)
     --schema <path>        Schema file or folder (relative to project root)
     --migrations <path>    Migrations folder with .sql files
     --no-open              Do not open the browser
@@ -27,8 +27,8 @@ function usage() {
     -h, --help             Show help
 
   Env:
-    DB_SCHEMA_PORT=4990    Override port
-    DB_SCHEMA_REVIEW=1     Enable POST /api/review (loopback + Origin checks; spawns claude)
+    DB_VIEWER_PORT=4990    Override port
+    DB_VIEWER_REVIEW=1     Enable POST /api/review (loopback + Origin checks; spawns claude)
 `);
 }
 
@@ -109,13 +109,13 @@ function main() {
   });
 
   if (project.configError) {
-    console.error(`\n  DB Schema Viewer: ${project.configError}\n`);
+    console.error(`\n  DB Viewer: ${project.configError}\n`);
     process.exit(1);
   }
 
   if (!project.schemaTarget) {
     console.error(`
-  DB Schema Viewer: could not find a Drizzle schema under ${project.root}
+  DB Viewer: could not find a Drizzle schema under ${project.root}
 
   Check tooling/db-viewer/config.json, or pass --schema / --migrations.
 `);

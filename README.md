@@ -124,7 +124,7 @@ src/
   core/                          # In-process event bus
   scripts/                       # Build-time + operational scripts (codegen, seed, ops, validators)
   tests/                         # Cross-cutting test suites
-tooling/                         # CI guards, validate/vitest/openapi, setup, DB Schema Viewer, dev helpers
+tooling/                         # CI guards, validate/vitest/openapi, setup, DB Viewer, dev helpers
 migrations/                      # SQL migrations
 docs/                            # Hand-written guides + generated OpenAPI
 ```

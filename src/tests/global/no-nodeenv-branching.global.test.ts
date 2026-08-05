@@ -41,7 +41,7 @@ describe('Global: no NODE_ENV branching, no removed env values (env-driven-confi
     'coverage',
     '.git',
     '__snapshots__',
-    // Runtime-generated DB Schema Viewer history — not source, can be large.
+    // Runtime-generated DB Viewer history — not source, can be large.
     '.db-viewer-history',
   ]);
 

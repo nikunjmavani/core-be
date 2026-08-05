@@ -25,7 +25,7 @@ paths-ignore:
   # of the repo; never analyze them.
   - .claude/**
   # Dev/CI utilities under tooling/ (project setup, codegen, migration/ops scripts,
-  # and loopback-bound local HTTP helpers such as the DB Schema Viewer). These run
+  # and loopback-bound local HTTP helpers such as the DB Viewer). These run
   # on a developer machine or in CI with trusted inputs (argv, local .env / git
   # output, provider-setup responses) or loopback-only sockets that are not the
   # deployed attack surface, so security-extended taint queries — command injection,

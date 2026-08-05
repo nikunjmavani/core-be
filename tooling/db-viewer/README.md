@@ -1,4 +1,4 @@
-# DB Schema Viewer (local tooling)
+# DB Viewer (local tooling)
 
 Zero-dependency live ER diagram for Drizzle `*.schema.ts` files and hand-written `migrations/*.sql`.
 
@@ -19,7 +19,7 @@ require (loopback is shared by every local process) — always use the URL the C
 Optional overrides:
 
 ```bash
-DB_SCHEMA_PORT=4990 pnpm db:viewer
+DB_VIEWER_PORT=4990 pnpm db:viewer
 pnpm db:viewer -- --no-open
 pnpm db:viewer -- --port 4990
 ```
@@ -29,7 +29,7 @@ pnpm db:viewer -- --port 4990
 `POST /api/review` spawns the local `claude` CLI. It is **off by default**.
 
 ```bash
-DB_SCHEMA_REVIEW=1 pnpm db:viewer
+DB_VIEWER_REVIEW=1 pnpm db:viewer
 ```
 
 When enabled it still requires loopback bind, a local `Host`, a local `Origin` (if present), the per-boot session token, `Content-Type: application/json`, and at most one in-flight child. The child gets an allow-listed env (not your full `.env`) and a neutral cwd (`os.tmpdir()`), so schema text in the prompt cannot steer it into reading repo files.
@@ -47,7 +47,7 @@ When enabled it still requires loopback bind, a local `Host`, a local `Origin` (
 }
 ```
 
-Paths are relative to the repo root. Port can also come from `DB_SCHEMA_PORT` (local process env only — not in env-schema). A malformed config fails loud instead of silently falling back.
+Paths are relative to the repo root. Port can also come from `DB_VIEWER_PORT` (local process env only — not in env-schema). A malformed config fails loud instead of silently falling back.
 
 Runtime history (save mode) lands in `tooling/db-viewer/.db-viewer-history/` (gitignored in-module).
 

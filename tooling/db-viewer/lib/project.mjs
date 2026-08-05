@@ -1,6 +1,6 @@
 // Resolve schema + migrations for core-be (cwd-aware).
 // Order: CLI opts → tooling/db-viewer/config.json → drizzle.config hint → conventional layout.
-// Port: CLI → DB_SCHEMA_PORT → config → 4984.
+// Port: CLI → DB_VIEWER_PORT → config → 4984.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -178,7 +178,7 @@ function resolveProject(opts = {}) {
   const { cfg, configPath, configError } = loadModuleConfig(root);
 
   const name = opts.name || cfg.name || packageName(root);
-  const envPort = process.env.DB_SCHEMA_PORT ? Number(process.env.DB_SCHEMA_PORT) : null;
+  const envPort = process.env.DB_VIEWER_PORT ? Number(process.env.DB_VIEWER_PORT) : null;
   const port = Number(opts.port || envPort || cfg.port || DEFAULT_PORT) || DEFAULT_PORT;
 
   let schemaTarget = opts.schema || cfg.schema || null;
