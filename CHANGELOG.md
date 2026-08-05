@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.1.0](https://github.com/nikunjmavani/core-be/compare/v5.0.0...v5.1.0) (2026-08-05)
+
+
+### Added
+
+* **tooling:** add local DB Viewer (db-viewer) ([#1022](https://github.com/nikunjmavani/core-be/issues/1022)) ([8a238a4](https://github.com/nikunjmavani/core-be/commit/8a238a4000f2fe77de7659e93370fc4139d1beb8))
+
+
+### Fixed
+
+* **deps:** raise hono/fast-uri/undici override floors for new advisories ([#1021](https://github.com/nikunjmavani/core-be/issues/1021)) ([9904a61](https://github.com/nikunjmavani/core-be/commit/9904a619abda30ad253f04ee964a8ca029b42122))
+* **infra:** dead_letter payload_summary default + safe env-default stringify ([#1023](https://github.com/nikunjmavani/core-be/issues/1023)) ([f2d645a](https://github.com/nikunjmavani/core-be/commit/f2d645aee4fe423e81bc1fc6b218f97393ec3190))
+* **test:** give unit beforeAll cold imports more hook headroom ([#1016](https://github.com/nikunjmavani/core-be/issues/1016)) ([61800d9](https://github.com/nikunjmavani/core-be/commit/61800d908ffec44949ff46c47e79f70017b373e4))
+
 ## [5.0.0](https://github.com/nikunjmavani/core-be/compare/v4.10.5...v5.0.0) (2026-08-01)
 
 
