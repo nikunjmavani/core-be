@@ -31,6 +31,7 @@ Worker process (optional): `pnpm dev:worker`
 | [`tooling/setup/`](tooling/setup/)                     | GitHub/env sync (`pnpm github:sync`) + Railway deploy tooling; config in `tooling/setup/setup.config.json`                                                        |
 | [`tooling/ci/`](tooling/ci/)                           | Build/CI guards — Dockerfile sync, `dist/` `@/` alias check (`pnpm docker:check-sync`, `pnpm build:check`)                     |
 | [`tooling/dev/`](tooling/dev/)                         | Local dev helpers — e.g. `pnpm compose:wait` (Postgres readiness)                                                              |
+| [`tooling/db-viewer/`](tooling/db-viewer/)             | Local **DB Viewer** (`pnpm db:viewer`) — live ER canvas over Drizzle schemas + `migrations/*.sql`                       |
 | [`src/scripts/`](src/scripts/)                         | Repo tooling invoked via `pnpm` — OpenAPI generation, route catalog, DB seeds, `verify-base`                                   |
 | [`src/domains/<domain>/`](src/domains/)                | Business domains; route tests and domain unit tests live in `__tests__/` under each domain                                     |
 | [`src/domains/<domain>/__tests__/unit/`](src/domains/) | Domain validator/serializer unit tests (not under `src/tests/unit/`)                                                           |

@@ -1968,6 +1968,7 @@ src/
     │   │   └── worker-containers.unit.test.ts
     │   ├── config/
     │   │   ├── env-schema-boolean-coerce.unit.test.ts
+    │   │   ├── env-schema-default-format.unit.test.ts
     │   │   ├── env-schema.unit.test.ts
     │   │   ├── env-var-registry.policy.unit.test.ts
     │   │   └── env.config.unit.test.ts
@@ -2106,6 +2107,7 @@ src/
     │   │   │   └── schema-enricher.unit.test.ts
     │   │   ├── agent-docker-daemon-script.unit.test.ts
     │   │   ├── check-patch-coverage.unit.test.ts
+    │   │   ├── db-viewer.unit.test.ts
     │   │   ├── project-identity.policy.unit.test.ts
     │   │   ├── railway-deploy-image.unit.test.ts
     │   │   ├── route-catalog-auth.unit.test.ts
