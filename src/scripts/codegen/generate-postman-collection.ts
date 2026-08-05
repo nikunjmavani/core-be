@@ -10,6 +10,11 @@ import { join } from 'node:path';
 
 // openapi-to-postmanv2 ships CJS — use createRequire for ESM compat
 import { createRequire } from 'node:module';
+import {
+  POSTMAN_COLLECTION_PREFIX,
+  PROJECT_DISPLAY_NAME,
+  SCALAR_SLUG_DEFAULT,
+} from '@/shared/constants/project-identity.constants.js';
 
 const require = createRequire(import.meta.url);
 const Converter = require('openapi-to-postmanv2');
@@ -38,7 +43,7 @@ function getPackageVersion(): string {
 
 function buildScalarRegistryUrl(): string | undefined {
   const namespace = process.env.SCALAR_NAMESPACE;
-  const slug = process.env.SCALAR_SLUG ?? 'core-be';
+  const slug = process.env.SCALAR_SLUG ?? SCALAR_SLUG_DEFAULT;
   if (!namespace) {
     return undefined;
   }
@@ -106,10 +111,10 @@ function main(): void {
       ];
 
       // Stamp version into collection info for traceability
-      collectionData.info.name = `core-be API v${version}`;
+      collectionData.info.name = `${POSTMAN_COLLECTION_PREFIX} v${version}`;
       const scalarRegistryUrl = buildScalarRegistryUrl();
       const scalarRegistryLine = scalarRegistryUrl ? `\nScalar Registry: ${scalarRegistryUrl}` : '';
-      collectionData.info.description = `Auto-generated Postman Collection for core-be v${version}.\nSource: docs/openapi/openapi.json (regenerate with pnpm docs:postman)${scalarRegistryLine}`;
+      collectionData.info.description = `Auto-generated Postman Collection for ${PROJECT_DISPLAY_NAME} v${version}.\nSource: docs/openapi/openapi.json (regenerate with pnpm docs:postman)${scalarRegistryLine}`;
 
       writeFileSync(OUTPUT_PATH, JSON.stringify(collectionData, null, 2), 'utf-8');
 

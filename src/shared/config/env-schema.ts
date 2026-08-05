@@ -569,7 +569,7 @@ const envSchemaBase = z.object({
    * plaintext. Refine enforced below.
    */
   OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
-  /** OpenTelemetry service.name override (defaults: core-be-api / core-be-worker). */
+  /** OpenTelemetry service.name override (defaults to the generated API / worker service names). */
   OTEL_SERVICE_NAME: z.string().min(1).optional(),
 
   // S3 / Object Storage
@@ -1029,9 +1029,9 @@ const envSchemaBase = z.object({
   // Railway deploy (GitHub Actions only — consumed by .github/workflows/reusable-railway-deploy.yml)
   /** Railway project token used by the deploy job to call `railway redeploy`. GitHub Environment secret via `pnpm github:sync`. */
   RAILWAY_TOKEN: z.string().min(1).optional(),
-  /** Railway API service ID for the `core-be-api` service (target of `railway redeploy --service`). */
+  /** Railway API service ID for the API service (target of `railway redeploy --service`). */
   RAILWAY_SERVICE_ID: z.string().min(1).optional(),
-  /** Railway worker service ID for the `core-be-worker` service (target of `railway redeploy --service`). */
+  /** Railway worker service ID for the worker service (target of `railway redeploy --service`). */
   RAILWAY_WORKER_SERVICE_ID: z.string().min(1).optional(),
 
   // Postman API documentation publishing (GitHub Actions only — consumed by .github/workflows/reusable-openapi-postman-publish.yml and `pnpm docs:upload`)
@@ -1050,7 +1050,7 @@ const envSchemaBase = z.object({
   SCALAR_API_KEY: z.string().min(1).optional(),
   /** Scalar team namespace the OpenAPI document is published under (registry URL `@<namespace>/apis/<slug>`). Non-sensitive → GitHub Environment Variable (read via `vars.SCALAR_NAMESPACE`); pushed by `pnpm github:sync`. */
   SCALAR_NAMESPACE: z.string().min(1).optional(),
-  /** Scalar Registry slug for the published OpenAPI document; the upload script defaults to `core-be` when unset. Non-sensitive → GitHub Environment Variable (read via `vars.SCALAR_SLUG`); pushed by `pnpm github:sync`. */
+  /** Scalar Registry slug for the published OpenAPI document; the upload script defaults to the project slug when unset. Non-sensitive → GitHub Environment Variable (read via `vars.SCALAR_SLUG`); pushed by `pnpm github:sync`. */
   SCALAR_SLUG: z.string().min(1).optional(),
 
   // Release automation (GitHub Actions only — consumed by .github/workflows/post-merge-ci.yml)

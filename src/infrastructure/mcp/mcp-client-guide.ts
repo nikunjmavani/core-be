@@ -1,5 +1,11 @@
+import {
+  MCP_OPENAPI_RESOURCE_URI,
+  MCP_ROUTES_RESOURCE_URI,
+  PROJECT_DISPLAY_NAME,
+} from '@/shared/constants/project-identity.constants.js';
+
 /**
- * Canonical client integration guide served as the `core-be://client-guide` MCP
+ * Canonical client integration guide served as the `{slug}://client-guide` MCP
  * resource. It tells any frontend or API client how to authenticate, how the
  * active organization is carried (the signed `org` JWT claim — never a URL path
  * segment or the legacy `X-Organization-Id` header), how to switch the active
@@ -9,13 +15,14 @@
  * Keep this in sync with the auth routes (`auth.routes.ts`), the active-org token
  * model (`docs/reference/architecture/personal-vs-team-organizations.md`), and the
  * API-contract rule. It is intentionally a hand-written narrative — the machine-
- * readable surface lives in the `core-be://openapi` and `core-be://routes`
- * resources, which clients should read alongside this guide.
+ * readable surface lives in the OpenAPI and route-catalog MCP resources, which
+ * clients should read alongside this guide. Resource URIs are built from the
+ * generated project identity, so a rebrand reaches them automatically.
  */
-export const MCP_CLIENT_GUIDE = `# core-be — client integration guide
+export const MCP_CLIENT_GUIDE = `# ${PROJECT_DISPLAY_NAME} — client integration guide
 
 How a frontend or API client should authenticate and call this API. Read this
-alongside \`core-be://openapi\` (full spec) and \`core-be://routes\` (route list).
+alongside \`${MCP_OPENAPI_RESOURCE_URI}\` (full spec) and \`${MCP_ROUTES_RESOURCE_URI}\` (route list).
 
 ## 1. Authentication
 
@@ -99,5 +106,5 @@ The active organization is implicit (from the token), so routes are flat:
 2. \`GET /users/me\` + \`GET /tenancy/organizations\` → render the org switcher.
 3. To act in a different org, call a switch endpoint, replace the stored token
    with the returned one, then call the flat org-scoped routes.
-4. Discover exact request/response shapes from \`core-be://openapi\`.
+4. Discover exact request/response shapes from \`${MCP_OPENAPI_RESOURCE_URI}\`.
 `;

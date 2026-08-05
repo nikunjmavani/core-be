@@ -8,8 +8,8 @@ import { registerEventHandlers } from '@/core/events/register-event-handlers.js'
 import { registerRoutes } from '@/routes.js';
 import { buildFastifyServerOptions } from '@/shared/utils/http/fastify-server.util.js';
 import { isStripeWebhookRawBodyRoute } from '@/domains/billing/sub-domains/stripe-webhook/stripe-webhook-raw-body.registry.js';
+import { API_SERVER_NAME } from '@/shared/constants/project-identity.constants.js';
 
-const API_SERVER_NAME = 'core-be';
 const API_SERVER_VERSION = '1.0.0';
 const STRIPE_SIGNATURE_HEADER = 'stripe-signature';
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-shot cloud-session bring-up for core-be cloud agents.
+# One-shot cloud-session bring-up for this project's cloud agents.
 #
 # Runs every agent setup helper in order — Node, gh, Docker CLI/Compose, Docker
 # daemon, Docker images (registry mirror), CodeGraph, Headroom, gitleaks — scaffolds a
@@ -43,7 +43,7 @@ stop_app() {
   done
 }
 
-echo "core-be cloud bring-up — $(date -u '+%Y-%m-%d %H:%M:%SZ')"
+echo "cloud bring-up — $(date -u '+%Y-%m-%d %H:%M:%SZ')"
 
 # 1) Node runtime ------------------------------------------------------------
 step "[1/${TOTAL}] Node runtime"

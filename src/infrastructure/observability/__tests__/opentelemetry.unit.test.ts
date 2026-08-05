@@ -87,7 +87,7 @@ describe('initOpenTelemetry / shutdownOpenTelemetry', () => {
   it('starts NodeSDK with OTLP exporter when endpoint is configured', async () => {
     getEnvMock.mockReturnValue({
       OTEL_EXPORTER_OTLP_ENDPOINT: 'https://otel.example.com',
-      OTEL_SERVICE_NAME: 'core-be-test',
+      OTEL_SERVICE_NAME: 'otel-service-test',
       SENTRY_ENVIRONMENT: 'staging',
       NODE_ENV: 'development',
     });

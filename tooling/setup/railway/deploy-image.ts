@@ -36,8 +36,8 @@
  * Inputs (all CLI flags):
  *   --service <id>                Railway service id (required).
  *   --image <ref>                 Container image, e.g.
- *                                 ghcr.io/owner/repo/core-be-api:<sha> or
- *                                 ghcr.io/owner/repo/core-be-api@sha256:...
+ *                                 ghcr.io/owner/repo/<api-image>:<sha> or
+ *                                 ghcr.io/owner/repo/<api-image>@sha256:...
  *                                 (required).
  *   --label <name>                Human label for log lines (default: service id).
  *   --environment-name <name>     Railway environment name to deploy into

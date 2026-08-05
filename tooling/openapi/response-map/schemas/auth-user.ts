@@ -1,4 +1,9 @@
 /** Auth and user resource schemas. */
+import { loadConfig } from '@tooling/setup/common/config.js';
+
+/** TOTP issuer used in example provisioning URIs — matches the runtime issuer. */
+const TOTP_ISSUER_EXAMPLE = loadConfig().project.name;
+
 // ── User ──
 export const userSchema = {
   type: 'object',
@@ -146,8 +151,7 @@ export const mfaEnrollSchema = {
 
 export const mfaEnrollExample = {
   secret: 'JBSWY3DPEHPK3PXP',
-  provisioning_uri:
-    'otpauth://totp/core-be:john.doe%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=core-be',
+  provisioning_uri: `otpauth://totp/${TOTP_ISSUER_EXAMPLE}:john.doe%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=${TOTP_ISSUER_EXAMPLE}`,
   method_id: 1,
 };
 

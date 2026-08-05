@@ -60,6 +60,7 @@ flowchart TB
 | Doc                                                                                          | Description                                                                                                 |
 | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | [SETUP.md](../SETUP.md)                                                                       | Local setup, env vars, cloud infra, testing, CI/CD, troubleshooting.                                        |
+| [getting-started/adopting-as-template.md](getting-started/adopting-as-template.md)           | Start a **new** product from this codebase: `pnpm init:project`, identity generation, the identity gate.    |
 | [getting-started/prerequisites.md](getting-started/prerequisites.md)                         | External tools (Homebrew, Node, gitleaks, codegraph, headroom, …) auto-installed on macOS by `pnpm setup:local`. |
 | [getting-started/api-testing.md](getting-started/api-testing.md)                             | Manual API checklist and smoke after `pnpm db:seed:full`.                                                   |
 | [getting-started/requirement-intake.md](getting-started/requirement-intake.md)               | Format for new requirements; which skills and rules to run.                                                 |

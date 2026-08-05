@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConflictError } from '@/shared/errors/index.js';
+import { WEBAUTHN_RP_NAME_DEFAULT } from '@/shared/constants/project-identity.constants.js';
 import { MAX_WEBAUTHN_CREDENTIALS_PER_USER } from '@/shared/constants/security.constants.js';
 import { WebauthnService } from '@/domains/auth/sub-domains/auth-webauthn/webauthn.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
@@ -23,7 +24,7 @@ vi.mock('@/domains/auth/sub-domains/auth-webauthn/webauthn-challenge.js', () => 
 vi.mock('@/domains/auth/sub-domains/auth-webauthn/webauthn.config.js', () => ({
   resolveWebauthnExpectedOrigin: vi.fn(() => 'https://app.example.com'),
   resolveWebauthnRelyingPartyId: vi.fn(() => 'app.example.com'),
-  resolveWebauthnRelyingPartyName: vi.fn(() => 'core-be'),
+  resolveWebauthnRelyingPartyName: vi.fn(() => WEBAUTHN_RP_NAME_DEFAULT),
 }));
 
 vi.mock('@/domains/auth/sub-domains/auth-webauthn/webauthn.validator.js', () => ({

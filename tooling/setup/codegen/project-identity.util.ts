@@ -1,3 +1,4 @@
+import { repositoryName, repositoryOwner } from '@tooling/setup/common/config.js';
 import type { SetupConfig } from '@tooling/setup/common/types.js';
 
 /** Docker/GHCR artifact names derived from {@link SetupConfig}. */
@@ -19,16 +20,63 @@ export interface ProjectGitMetadata {
 
 export type BranchEnvironmentMap = Record<string, string>;
 
+/** GitHub repository coordinates and the CODEOWNERS roster derived from them. */
+export interface ProjectRepositoryMetadata {
+  /** Full `owner/repo` slug from `providers.github.repository`. */
+  readonly slug: string;
+  /** Owner segment — a GitHub user or organization login. */
+  readonly owner: string;
+  /** Repository segment. */
+  readonly name: string;
+  /** CODEOWNERS handles WITHOUT the leading `@`, in reviewer-preference order. */
+  readonly owners: readonly string[];
+}
+
+/**
+ * Names derived from the project slug that appear outside TypeScript constants —
+ * Docker container names, external service keys, and generated artifact paths.
+ *
+ * @remarks
+ * These exist because a rebrand must reach files that cannot import a constant
+ * (compose YAML, `sonar-project.properties`). Deriving rather than configuring
+ * them keeps `setup.config.json` small: one slug change renames all of them.
+ */
+export interface ProjectDerivedNames {
+  /** `name`/`version` reported by the MCP server handshake. */
+  readonly apiServerName: string;
+  /** `User-Agent` prefix on outbound webhook deliveries. */
+  readonly webhookUserAgent: string;
+  /** Default Scalar registry slug when `SCALAR_SLUG` is unset. */
+  readonly scalarSlug: string;
+  /** Postman collection name prefix (also the generated collection's `info.name`). */
+  readonly postmanCollectionPrefix: string;
+  /** SonarQube `sonar.projectKey` / `sonar.projectName`. */
+  readonly sonarProjectKey: string;
+  /** SonarQube local-gate token name. */
+  readonly sonarTokenName: string;
+  /** Repository-relative path of the generated DBML diagram. */
+  readonly dbmlPath: string;
+  /** Local Docker Compose container names, keyed by service. */
+  readonly containers: Readonly<Record<ContainerService, string>>;
+}
+
+/** Local Compose services whose `container_name` carries the project slug. */
+export type ContainerService = 'postgres' | 'redis' | 'toxiproxy' | 'sonarqube' | 'sonarScanner';
+
 export interface ProjectIdentitySnapshot {
   readonly slug: string;
   readonly displayName: string;
+  readonly packageName: string;
+  readonly description?: string | undefined;
   readonly artifacts: ProjectArtifacts;
   readonly git: ProjectGitMetadata;
+  readonly repository: ProjectRepositoryMetadata;
+  readonly derived: ProjectDerivedNames;
   readonly branchEnvironmentMap: BranchEnvironmentMap;
   readonly environments: SetupConfig['environments'];
 }
 
-/** Default artifact names from a project slug (`core-be` → `core-be-api`, etc.). */
+/** Default artifact names from a project slug (`<slug>` → `<slug>-api`, etc.). */
 export function buildDefaultArtifacts(projectSlug: string): ProjectArtifacts {
   return {
     apiImage: `${projectSlug}-api`,
@@ -73,12 +121,49 @@ export function resolveGitMetadata(config: SetupConfig): ProjectGitMetadata {
   };
 }
 
+/** GitHub coordinates plus the CODEOWNERS roster (defaulting to the repo owner). */
+export function resolveRepositoryMetadata(config: SetupConfig): ProjectRepositoryMetadata {
+  const slug = config.providers.github.repository;
+  const owner = repositoryOwner(slug);
+  return {
+    slug,
+    owner,
+    name: repositoryName(slug),
+    owners: config.providers.github.owners ?? [owner],
+  };
+}
+
+/** Every slug-derived name that a rebrand must reach outside TypeScript constants. */
+export function resolveDerivedNames(config: SetupConfig): ProjectDerivedNames {
+  const slug = config.project.name;
+  return {
+    apiServerName: slug,
+    webhookUserAgent: `${slug}-webhook`,
+    scalarSlug: slug,
+    postmanCollectionPrefix: `${config.project.displayName} API`,
+    sonarProjectKey: slug,
+    sonarTokenName: `${slug}-local-gate`,
+    dbmlPath: `docs/database/${slug}.dbml`,
+    containers: {
+      postgres: `${slug}-postgres`,
+      redis: `${slug}-redis`,
+      toxiproxy: `${slug}-toxiproxy`,
+      sonarqube: `${slug}-sonarqube`,
+      sonarScanner: `${slug}-sonar-scanner`,
+    },
+  };
+}
+
 export function buildProjectIdentitySnapshot(config: SetupConfig): ProjectIdentitySnapshot {
   return {
     slug: config.project.name,
     displayName: config.project.displayName,
+    packageName: config.project.packageName ?? config.project.name,
+    description: config.project.description,
     artifacts: resolveArtifacts(config),
     git: resolveGitMetadata(config),
+    repository: resolveRepositoryMetadata(config),
+    derived: resolveDerivedNames(config),
     branchEnvironmentMap: buildBranchEnvironmentMap(config),
     environments: config.environments,
   };

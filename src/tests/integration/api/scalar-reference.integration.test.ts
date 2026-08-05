@@ -4,6 +4,11 @@ import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 import Fastify from 'fastify';
 import { createTestApp } from '@/tests/helpers/test-app.js';
+import {
+  MCP_OPENAPI_RESOURCE_URI,
+  MCP_ROUTES_RESOURCE_URI,
+  MCP_URI_SCHEME,
+} from '@/shared/constants/project-identity.constants.js';
 import { injectUnauthenticated } from '@/tests/helpers/test-http-inject.helper.js';
 import { resetEnvCacheForTests } from '@/shared/config/env.config.js';
 import { registerScalarApiReference } from '@/infrastructure/api-reference/scalar-api-reference.js';
@@ -95,11 +100,13 @@ describe('Integration: Scalar API reference', () => {
 
       expect(specification?.paths['/api/v1/mcp']).toBeDefined();
       expect(specification?.['x-mcp']?.tools.map((tool) => tool.name)).toEqual(['call_api']);
-      expect(specification?.['x-mcp']?.resources.map((resource) => resource.uri).sort()).toEqual([
-        'core-be://client-guide',
-        'core-be://openapi',
-        'core-be://routes',
-      ]);
+      expect(specification?.['x-mcp']?.resources.map((resource) => resource.uri).sort()).toEqual(
+        [
+          `${MCP_URI_SCHEME}://client-guide`,
+          MCP_OPENAPI_RESOURCE_URI,
+          MCP_ROUTES_RESOURCE_URI,
+        ].sort(),
+      );
     });
   });
 

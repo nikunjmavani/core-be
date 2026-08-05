@@ -2,7 +2,7 @@
 /**
  * `pnpm mcp:setup` — scaffold the project MCP config (`.mcp.json`).
  *
- * The full set of MCP servers (context7, core-be:api, neon, sentry, railway, aws,
+ * The full set of MCP servers (context7, the project API server, neon, sentry, railway, aws,
  * stripe, semgrep, sonarqube, redis, postman, resend, codegraph, headroom) lives in the
  * committed template `.mcp.example.json`; the default auto-start pair (codegraph +
  * headroom) lives in `.mcp.default.json`. This command copies them into a local,

@@ -11,6 +11,14 @@ import { fileURLToPath } from 'node:url';
 
 import { loadConfig } from '@tooling/setup/common/config.js';
 import { buildProjectIdentitySnapshot } from './project-identity.util.js';
+import {
+  renderCodeowners,
+  renderComposeContainerNames,
+  renderPackageJson,
+  renderProductionEnvironment,
+  renderSonarProperties,
+} from './repository-identity-artifacts.js';
+import { scanProjectIdentityLiterals } from './validate-project-identity-literals.js';
 import { validateWorkflowLiteralsAgainstManifest } from './validate-project-identity-workflows.js';
 
 const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -26,6 +34,19 @@ const OUTPUT_PATHS = {
   dockerBake: resolve(REPOSITORY_ROOT, 'docker-bake.hcl'),
   openApiLocaleEn: resolve(REPOSITORY_ROOT, 'src/shared/locales/en/openapi.json'),
   openApiLocaleEs: resolve(REPOSITORY_ROOT, 'src/shared/locales/es/openapi.json'),
+  codeowners: resolve(REPOSITORY_ROOT, '.github/CODEOWNERS'),
+} as const;
+
+/**
+ * Files that are RECONCILED rather than emitted: the generator rewrites only the
+ * identity-bearing fields and preserves everything else the file owns.
+ */
+const RECONCILED_PATHS = {
+  packageJson: resolve(REPOSITORY_ROOT, 'package.json'),
+  sonarProperties: resolve(REPOSITORY_ROOT, 'sonar-project.properties'),
+  productionEnvironment: resolve(REPOSITORY_ROOT, '.github/environments/production.json'),
+  dockerCompose: resolve(REPOSITORY_ROOT, 'docker-compose.yml'),
+  dockerComposeSonar: resolve(REPOSITORY_ROOT, 'docker-compose.sonar.yml'),
 } as const;
 
 const WORKFLOW_FILES_TO_PATCH = [
@@ -58,11 +79,32 @@ const LEGACY_CLEANUP_CACHE_BRANCH_GUARD =
   '                fi';
 
 function renderConstants(snapshot: ReturnType<typeof buildProjectIdentitySnapshot>): string {
-  const { slug, displayName, artifacts, git, branchEnvironmentMap } = snapshot;
+  const { slug, displayName, artifacts, git, branchEnvironmentMap, repository, derived } = snapshot;
   const escapedDisplay = displayName.replace(/'/g, "\\'");
   return `${GENERATED_BANNER}
 /** Canonical project slug (Neon, Sentry, JWT issuer, MCP URI scheme). */
 export const PROJECT_SLUG = '${slug}';
+
+/** GitHub \`owner/repo\` slug backing CODEOWNERS and environment reviewers. */
+export const PROJECT_REPOSITORY = '${repository.slug}';
+
+/** GitHub owner (user or organization login) that owns the repository. */
+export const PROJECT_REPOSITORY_OWNER = '${repository.owner}';
+
+/** Server name reported in the MCP handshake. */
+export const API_SERVER_NAME = '${derived.apiServerName}';
+
+/** \`User-Agent\` prefix on outbound webhook deliveries. */
+export const WEBHOOK_USER_AGENT_PREFIX = '${derived.webhookUserAgent}';
+
+/** Default Scalar registry slug when \`SCALAR_SLUG\` is unset. */
+export const SCALAR_SLUG_DEFAULT = '${derived.scalarSlug}';
+
+/** Postman collection name prefix (\`{displayName} API\`). */
+export const POSTMAN_COLLECTION_PREFIX = '${derived.postmanCollectionPrefix.replace(/'/g, "\\'")}';
+
+/** Repository-relative path of the generated DBML diagram. */
+export const DBML_OUTPUT_PATH = '${derived.dbmlPath}';
 
 /** Human-facing product name for OpenAPI and emails. */
 export const PROJECT_DISPLAY_NAME = '${escapedDisplay}';
@@ -401,8 +443,11 @@ function patchWorkflowFile(
     );
   }
   if (relativePath === 'scheduled-monthly-restore-rto.yml') {
+    // Match the SHAPE of the sentence, not the current slug/branches. Anchoring
+    // on the literal values makes the rewrite self-disabling: after the first
+    // rename the pattern no longer matches and the message silently goes stale.
     contents = contents.replace(
-      /ensure Neon project core-be and branch names match git refs \(main\/dev\)/g,
+      /ensure Neon project \S+ and branch names match git refs \([^)]*\)/g,
       `ensure Neon project ${snapshot.slug} and branch names match git refs (${snapshot.git.protectedBranches.join('/')})`,
     );
   }
@@ -439,6 +484,29 @@ export function generateAllProjectIdentityArtifacts(options?: { checkOnly?: bool
   if (openApiLocaleEs) {
     outputs.push({ path: OUTPUT_PATHS.openApiLocaleEs, contents: openApiLocaleEs });
   }
+  outputs.push({ path: OUTPUT_PATHS.codeowners, contents: renderCodeowners(snapshot) });
+
+  for (const reconciled of [
+    { path: RECONCILED_PATHS.packageJson, render: renderPackageJson },
+    { path: RECONCILED_PATHS.sonarProperties, render: renderSonarProperties },
+    { path: RECONCILED_PATHS.productionEnvironment, render: renderProductionEnvironment },
+    {
+      path: RECONCILED_PATHS.dockerCompose,
+      render: (currentSnapshot: typeof snapshot, existing: string) =>
+        renderComposeContainerNames(currentSnapshot, existing),
+    },
+    {
+      path: RECONCILED_PATHS.dockerComposeSonar,
+      render: (currentSnapshot: typeof snapshot, existing: string) =>
+        renderComposeContainerNames(currentSnapshot, existing),
+    },
+  ]) {
+    if (!existsSync(reconciled.path)) {
+      continue;
+    }
+    const existing = readFileSync(reconciled.path, 'utf-8');
+    outputs.push({ path: reconciled.path, contents: reconciled.render(snapshot, existing) });
+  }
 
   let stale = false;
   for (const output of outputs) {
@@ -473,6 +541,39 @@ export function generateAllProjectIdentityArtifacts(options?: { checkOnly?: bool
     console.error('Workflow project-identity literal violations:');
     for (const violation of workflowViolations) {
       console.error(`  ${violation.file}: ${violation.detail}`);
+    }
+    return false;
+  }
+
+  // Generator targets are exempt by construction: pass the paths this run owns
+  // rather than restating them in the scanner, so the two cannot drift.
+  const generatedPaths = [
+    ...Object.values(OUTPUT_PATHS),
+    ...Object.values(RECONCILED_PATHS),
+    ...WORKFLOW_FILES_TO_PATCH.map((file) => resolve(REPOSITORY_ROOT, '.github/workflows', file)),
+  ];
+  const { violations, staleAllowances } = scanProjectIdentityLiterals({
+    snapshot,
+    projectRoot: REPOSITORY_ROOT,
+    generatedPaths,
+  });
+  if (violations.length > 0) {
+    console.error(
+      `Hardcoded project-identity literals found (${violations.length}). Import the generated constants from src/shared/constants/project-identity.constants.ts, or read the manifest in tooling/:`,
+    );
+    for (const violation of violations) {
+      console.error(
+        `  ${violation.file}:${violation.line}  [${violation.literal}]  ${violation.text}`,
+      );
+    }
+    return false;
+  }
+  if (staleAllowances.length > 0) {
+    console.error(
+      'Stale entries in IDENTITY_LITERAL_ALLOWLIST — the literal is gone, so remove the entry:',
+    );
+    for (const allowance of staleAllowances) {
+      console.error(`  ${allowance.file} — ${allowance.reason}`);
     }
     return false;
   }

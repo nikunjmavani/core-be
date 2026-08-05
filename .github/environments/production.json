@@ -2,7 +2,9 @@
   "name": "production",
   "protection": {
     "requiredReviewers": {
-      "users": ["nikunjmavani"],
+      "users": [
+        "nikunjmavani"
+      ],
       "teams": [],
       "preventSelfReview": false
     },
