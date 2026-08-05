@@ -24,7 +24,7 @@ The hook in `.husky/pre-commit` delegates to **`pnpm guard:pre-commit`** (labele
 
 | Step | Command / check | What to do if it fails |
 | ---- | --------------- | ---------------------- |
-| 1 | `pnpm lint-staged` | Biome on staged `src/**/*.ts` and `tooling/**/*.{ts,mjs}`; Biome format on `*.{json,yaml,yml}`; `markdownlint-cli2 --fix` on `*.md`. Run `pnpm lint` / `pnpm format`; for markdown run `pnpm docs:lint:fix`. Fix per **code-smells-and-best-practices**. |
+| 1 | `pnpm lint-staged` | Biome on staged `src/**/*.ts` and `tooling/**/*.{ts,mjs,js}`; Biome format on `*.{json,yaml,yml}`; `markdownlint-cli2 --fix` on `*.md`. Run `pnpm lint` / `pnpm format`; for markdown run `pnpm docs:lint:fix`. Fix per **code-smells-and-best-practices**. |
 | 1b | When `package.json` / `pnpm-lock.yaml` / `pnpm-workspace.yaml` staged: `pnpm validate:lockfile` | Lockfile out of sync with the manifest — run `pnpm install` and stage `pnpm-lock.yaml`. |
 | 2 | `pnpm typecheck` | TypeScript errors in `src/`. Fix types (no `any`, correct imports). |
 | 3 | `pnpm validate:domain:strict` | Domain structure; warnings fail. Fix per **domain-generator** and CLAUDE.md. |

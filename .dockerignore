@@ -20,3 +20,5 @@ docs/
 vitest.config.ts
 eslint.config.mjs
 drizzle.config.ts
+# Local DB Viewer runtime history (gitignored in-module; keep out of build context)
+tooling/db-viewer/.db-viewer-history/

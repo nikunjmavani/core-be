@@ -41,6 +41,8 @@ describe('Global: no NODE_ENV branching, no removed env values (env-driven-confi
     'coverage',
     '.git',
     '__snapshots__',
+    // Runtime-generated DB Viewer history — not source, can be large.
+    '.db-viewer-history',
   ]);
 
   // NODE_ENV comparisons are legitimate ONLY inside env-schema.ts: the enum + the production
@@ -121,7 +123,7 @@ describe('Global: no NODE_ENV branching, no removed env values (env-driven-confi
       );
     }
     expect(violations).toEqual([]);
-  });
+  }, 30_000);
 
   it('never sets or compares NODE_ENV to test / staging (enum is local | development | production)', async () => {
     const scanFiles = [
@@ -154,5 +156,5 @@ describe('Global: no NODE_ENV branching, no removed env values (env-driven-confi
       );
     }
     expect(violations).toEqual([]);
-  });
+  }, 30_000);
 });
