@@ -57,12 +57,11 @@ overrides:
   # Fixed in 5.2.2.
   js-yaml: '>=5.2.2'
   fast-xml-parser: '>=5.7.0'
-  # hono <4.12.27 — GHSA-xgm2-5f3f-mvvc / GHSA-hvrm-45r6-mjfj / GHSA-w62v-xxxg-mg59
-  # (moderate): API-gateway adapter dropping a distinct route, hono/jsx per-request
-  # context disclosure, and server-side XSS via the cx() JSX escaping bypass.
-  # Transitive via @modelcontextprotocol/sdk + @scalar/cli. Fixed in 4.12.27
-  # (raised from the earlier 4.12.21 floor as these advisories were newly disclosed).
-  hono: '>=4.12.27'
+  # hono <4.12.34 — GHSA-8j4g-w8fx-2239 (moderate): ReDoS in CORS middleware via
+  # Access-Control-Request-Headers. Also covers earlier GHSA-xgm2-5f3f-mvvc /
+  # GHSA-hvrm-45r6-mjfj / GHSA-w62v-xxxg-mg59. Transitive via
+  # @modelcontextprotocol/sdk + @scalar/cli. Fixed in 4.12.34.
+  hono: '>=4.12.34'
   # @hono/node-server <2.0.10 — GHSA-frvp-7c67-39w9 (path traversal, <2.0.5) and
   # GHSA-9mqv-5hh9-4cgg (unauthenticated memory-leak DoS via aborted WebSocket
   # handshake, <=2.0.9). Transitive via @modelcontextprotocol/sdk + @scalar/cli.
@@ -88,10 +87,13 @@ overrides:
   # source-map auto-loading (sourceMappingURL) discloses arbitrary .map files.
   # Transitive via @scalar/cli > vue > @vue/compiler-sfc. Fixed in 8.5.18.
   postcss: '>=8.5.18'
-  # fast-uri <3.1.4 — GHSA-4c8g-83qw-93j6 / GHSA-v2hh-gcrm-f6hx (high): host
-  # confusion via failed IDN parsing and via a literal-host bypass. Transitive via
-  # fastify's ajv/find-my-way URI handling. Fixed in 3.1.4.
-  fast-uri: '>=3.1.4'
+  # fast-uri <3.1.5 — GHSA-7p8r-x3mc-p8w7 (high): host confusion via backslash
+  # authority introducer (also covers earlier GHSA-4c8g-83qw-93j6 /
+  # GHSA-v2hh-gcrm-f6hx). Transitive via fastify's ajv/find-my-way URI handling
+  # (request validation + response serialization hot path). Cap <4 so the
+  # override stays on the patched 3.x line ajv declares (^3.x); do not let an
+  # uncapped floor silently major-bump to 4.x. Fixed in 3.1.5.
+  fast-uri: '>=3.1.5 <4'
   # find-my-way <=9.6.0 — GHSA-c96f-x56v-gq3h (high): DDoS via HTTP/2 request
   # smuggling in the router. Transitive via fastify (also fastify-type-provider-zod,
   # @scalar/cli). Fixed in 9.6.1.
@@ -102,6 +104,9 @@ overrides:
   i18next-http-middleware: '>=3.9.3'
   qs: '>=6.15.2'
   tmp: '>=0.2.6'
-  undici: '>=7.28.0 <8'
+  # undici <7.29.0 — GHSA-8xcm-r25x-g524 / GHSA-m8rv-5g2x-5cg5 /
+  # GHSA-jr45-8vmc-qm54 / GHSA-v3r7-h72x-cjcm (moderate–high): various
+  # injection / disclosure issues. Transitive via @scalar/cli. Fixed in 7.29.0.
+  undici: '>=7.29.0 <8'
   uuid: '>=11.1.1'
   yaml@1.10.2: 1.10.3
