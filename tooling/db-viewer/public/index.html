@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DB Schema Viewer · live Drizzle ER canvas</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='5' y='5' width='22' height='22' rx='6' fill='%23141d2c' stroke='%2347c1d6' stroke-width='2.5'/%3E%3Ccircle cx='12' cy='13' r='2.4' fill='%23f0b64b'/%3E%3Ccircle cx='12' cy='20' r='2.4' fill='%2347c1d6'/%3E%3Crect x='16.5' y='11' width='6.5' height='3.6' rx='1.8' fill='%235f6f8b'/%3E%3Crect x='16.5' y='18' width='6.5' height='3.6' rx='1.8' fill='%235f6f8b'/%3E%3C/svg%3E" />
+  <script>
+    // resolve theme before first paint to avoid a flash
+    try {
+      const p = localStorage.getItem('dbd:theme') || 'system';
+      const d = p === 'system' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : p;
+      document.documentElement.dataset.theme = d;
+    } catch {}
+  </script>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">
+          <svg viewBox="0 0 32 32">
+            <rect x="5" y="5" width="22" height="22" rx="6" fill="none" stroke="currentColor" stroke-width="2.4"/>
+            <circle cx="12" cy="13" r="2.2" fill="var(--gold)"/>
+            <circle cx="12" cy="20" r="2.2" fill="currentColor"/>
+            <rect x="16.5" y="11.2" width="6.5" height="3.4" rx="1.6" fill="var(--ink-faint)"/>
+            <rect x="16.5" y="18.2" width="6.5" height="3.4" rx="1.6" fill="var(--ink-faint)"/>
+          </svg>
+        </span>
+        <div class="brand-copy">
+          <span class="mark">DB Schema <b>Viewer</b></span>
+          <div class="brand-meta">
+            <span class="path" id="path" title="">—</span>
+            <span class="stats" id="stats"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="tb-tools">
+        <button class="search" id="search-launch" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <span class="search-ph">Search tables &amp; actions…</span>
+          <kbd>⌘K</kbd>
+        </button>
+        <input id="search" type="text" class="hidden-search" placeholder="Find table…" autocomplete="off" spellcheck="false" />
+
+        <div class="seg" role="group" aria-label="Diff view">
+          <button id="btn-diff" type="button" title="Highlight what changed vs the previous version">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2" width="13" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 2v12" stroke="currentColor" stroke-width="1.4"/><path d="M3.5 6.5h3M9.5 9.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+            <span>Diff</span>
+          </button>
+          <button id="btn-only" type="button" title="Show only tables that changed" disabled>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="3" width="9" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="2.5" y="4.5" width="9" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+            <span>Changes only</span>
+          </button>
+          <button id="btn-mig" type="button" title="Show the migration SQL file for the version you're viewing">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5h5.5L13 6v7.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M9.5 2.5V6H13M5.5 9h5M5.5 11.5h3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+            <span>Migration</span>
+          </button>
+        </div>
+
+        <div class="tb-actions">
+          <button class="ghost-btn" id="btn-export" type="button" title="Export SQL or DBML">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v7.5M5 7.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12.5h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            <span>Export</span>
+          </button>
+          <button class="ghost-btn" id="btn-tm" type="button" title="Time machine — replay how the schema evolved">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.2l2 1.3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Replay</span>
+          </button>
+        </div>
+
+        <div class="tb-icons">
+          <button class="ghost-btn icon-btn" id="btn-theme" type="button" title="Theme" aria-label="Cycle theme"><span id="theme-ico">◐</span></button>
+          <button class="ghost-btn icon-btn" id="btn-help" type="button" title="Help & shortcuts ( ? )" aria-label="Help and shortcuts">?</button>
+        </div>
+
+        <div class="status" title="Live schema connection">
+          <span class="dot off" id="conn-dot"></span>
+          <span id="conn-text">connecting…</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="main">
+      <aside class="sidebar" id="sidebar">
+        <div class="side-sec versions-sec" id="versions-sec">
+          <h3>
+            <span class="versions-label">Versions <span class="versions-count" id="versions-count"></span></span>
+            <button id="sidebar-collapse" class="side-icon" title="Hide panel" aria-label="Hide side panel">⟨</button>
+          </h3>
+          <div class="versions" id="versions"></div>
+          <button type="button" class="versions-more" id="versions-more" aria-expanded="false">
+            <span class="versions-chevron" aria-hidden="true">
+              <svg viewBox="0 0 16 16"><path d="M4 6.2L8 10l4-3.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <span class="vm-label">View all migrations</span>
+            <span class="versions-count" id="versions-more-n"></span>
+          </button>
+        </div>
+        <div class="side-sec changes-sec">
+          <div class="side-tabs">
+            <button class="stab on" data-panel="changes">Changes <i class="tab-n" id="tab-changes-n"></i></button>
+            <button class="stab" data-panel="suggest">Review <i class="tab-n" id="tab-suggest-n"></i></button>
+          </div>
+
+          <div class="panel" id="panel-changes">
+            <div class="cmp-line"><span id="cmp-label"></span></div>
+            <div class="summary" id="summary"></div>
+            <div class="changelog" id="changelog"></div>
+          </div>
+
+          <div class="panel hidden" id="panel-suggest">
+            <div class="panel-note">SQL best-practice review of the version you're viewing. Click a finding to locate it on the canvas.</div>
+            <button id="deep-review" class="mbtn primary deep-btn">✨ Deep review with Claude</button>
+            <div class="review-output" id="review-output"></div>
+            <div class="suggest-list" id="suggest-list"></div>
+          </div>
+        </div>
+      </aside>
+
+      <button id="sidebar-show" class="sidebar-show" title="Show history panel" aria-label="Show side panel">☰</button>
+
+      <div class="stage" id="stage">
+      <div class="world" id="world">
+        <svg class="edges" id="edges"></svg>
+      </div>
+
+      <div class="empty-stage" id="empty-stage" hidden>
+        <div class="es-card">
+          <div class="es-mark">DB <b>Schema</b></div>
+          <div class="es-title">No tables found yet</div>
+          <p>The watched file has no <code>pgTable</code> / <code>mysqlTable</code> / <code>sqliteTable</code> definitions — add one and save, the diagram appears instantly.</p>
+          <p>Or point the server at your real schema:</p>
+          <pre>node server.js path/to/schema.ts</pre>
+        </div>
+      </div>
+
+      <div class="minimap dock" id="minimap"><svg id="mm" viewBox="0 0 172 116"></svg></div>
+
+      <div class="controls dock">
+        <div class="ctl-group">
+          <button id="zoom-in" title="Zoom in" aria-label="Zoom in">＋</button>
+          <button class="zoom-label" id="zoom-label" title="Reset zoom to 100%" aria-label="Reset zoom">100%</button>
+          <button id="zoom-out" title="Zoom out" aria-label="Zoom out">－</button>
+        </div>
+        <div class="ctl-group">
+          <button id="fit" title="Fit to screen (F)" aria-label="Fit to screen">⤢</button>
+          <button id="relayout" title="Auto-arrange tables" aria-label="Auto-arrange tables">✦</button>
+          <button id="snap" title="Export diagram as PNG" aria-label="Export diagram as PNG">⬇</button>
+        </div>
+      </div>
+
+      <div class="legend dock" id="legend">
+        <h4>Diff</h4>
+        <div class="li"><span class="sw added"></span> added</div>
+        <div class="li"><span class="sw modified"></span> modified</div>
+        <div class="li"><span class="sw removed"></span> removed</div>
+      </div>
+
+      <div class="toast" id="toast"><span class="dot"></span><span id="toast-text"></span></div>
+
+      <div class="edge-tip" id="edge-tip"></div>
+      <div class="rubber" id="rubber" hidden></div>
+      <div class="focus-chip dock" id="focus-chip" hidden></div>
+
+      <div class="pathbar dock" id="pathbar">
+        <div class="pb-head">
+          <span class="pb-title">Join path</span>
+          <div class="pb-chain" id="pb-chain"></div>
+          <button id="pb-copy" class="mbtn">Copy SQL</button>
+          <button id="pb-close" class="mbtn icon" title="Close (Esc)">✕</button>
+        </div>
+        <pre class="pb-sql" id="pb-sql"></pre>
+      </div>
+
+      <div class="timemachine dock" id="timemachine">
+        <button class="tm-btn" id="tm-play" title="Play / pause (space)" aria-label="Play or pause replay">▶</button>
+        <button class="tm-btn tm-step" id="tm-prev" title="Previous version" aria-label="Previous version">⏮</button>
+        <div class="tm-track" id="tm-track">
+          <input type="range" id="tm-slider" min="1" max="1" step="1" value="1" aria-label="Version scrubber" />
+          <div class="tm-ticks" id="tm-ticks"></div>
+        </div>
+        <button class="tm-btn tm-step" id="tm-next" title="Next version" aria-label="Next version">⏭</button>
+        <div class="tm-info">
+          <span class="tm-v" id="tm-v">v1</span>
+          <span class="tm-reason" id="tm-reason"></span>
+        </div>
+        <button class="tm-btn tm-close" id="tm-close" title="Exit time machine" aria-label="Exit time machine">✕</button>
+      </div>
+
+      <aside class="inspector dock" id="inspector"></aside>
+      <aside class="mig-panel dock" id="mig-panel" hidden>
+        <div class="mig-head">
+          <div class="mig-title-wrap">
+            <span class="mig-title" id="mig-title">Migration file</span>
+            <span class="mig-sub" id="mig-sub"></span>
+          </div>
+          <button class="ins-close" id="mig-close" type="button" title="Close">✕</button>
+        </div>
+        <pre class="mig-body"><code id="mig-code"></code></pre>
+      </aside>
+      </div>
+    </div>
+
+    <div class="modal" id="export">
+      <div class="modal-card">
+        <div class="modal-head">
+          <div class="tabs">
+            <button class="tab on" data-tab="sql">SQL</button>
+            <button class="tab" data-tab="dbml">DBML</button>
+            <button class="tab" data-tab="migration">Migration</button>
+          </div>
+          <span class="modal-sub" id="export-sub">full schema of the version you're viewing</span>
+          <div class="modal-actions">
+            <button id="export-copy" class="mbtn">Copy</button>
+            <button id="export-download" class="mbtn primary">Download</button>
+            <button id="export-close" class="mbtn icon" title="Close">✕</button>
+          </div>
+        </div>
+        <pre class="modal-body"><code id="export-code"></code></pre>
+      </div>
+    </div>
+
+    <div class="palette" id="palette">
+      <div class="palette-box">
+        <div class="palette-input">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input id="palette-q" type="text" placeholder="Search tables and actions…" autocomplete="off" spellcheck="false" />
+          <kbd>esc</kbd>
+        </div>
+        <div class="palette-list" id="palette-list"></div>
+        <div class="palette-foot">
+          <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+          <span><kbd>↵</kbd> run</span>
+          <span><kbd>esc</kbd> close</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tour" id="tour" hidden>
+      <div class="tour-ring" id="tour-ring"></div>
+      <div class="tour-card" id="tour-card">
+        <div class="tour-step" id="tour-step">1 / 3</div>
+        <div class="tour-text" id="tour-text"></div>
+        <div class="tour-actions">
+          <button id="tour-skip" class="mbtn">Skip</button>
+          <button id="tour-next" class="mbtn primary">Next</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="help">
+      <div class="modal-card help-card">
+        <div class="modal-head help-head">
+          <div class="help-heading">
+            <span class="help-title">DB Schema Viewer</span>
+            <span class="help-sub">Shortcuts &amp; capabilities</span>
+          </div>
+          <div class="modal-actions">
+            <button id="help-close" class="mbtn icon" title="Close (Esc)">✕</button>
+          </div>
+        </div>
+        <div class="modal-body help-body">
+          <section class="help-sec">
+            <h4>Canvas</h4>
+            <div class="hrow"><span class="hg">Drag background</span><span class="hd">Pan the board</span></div>
+            <div class="hrow"><span class="hg">Scroll</span><span class="hd">Zoom in or out (also ＋ / －)</span></div>
+            <div class="hrow"><kbd>F</kbd><span class="hd">Fit all tables to the screen</span></div>
+            <div class="hrow"><span class="hg">✦</span><span class="hd">Auto-arrange tables</span></div>
+            <div class="hrow"><span class="hg">Minimap</span><span class="hd">Bird’s-eye overview (top-right)</span></div>
+            <div class="hrow"><span class="hg">⇧-drag</span><span class="hd">Rubber-band select tables, then drag any one to move the group</span></div>
+          </section>
+
+          <section class="help-sec">
+            <h4>Tables</h4>
+            <div class="hrow"><span class="hg">Drag header</span><span class="hd">Move a table (layout is remembered)</span></div>
+            <div class="hrow"><span class="hg">Click table</span><span class="hd">Open inspector — columns, indexes, references</span></div>
+            <div class="hrow"><span class="hg">Hover table</span><span class="hd">Highlight its relationships, dim the rest</span></div>
+            <div class="hrow"><span class="hg">Double-click</span><span class="hd">Toggle “was → now” detail on changed columns</span></div>
+            <div class="hrow"><span class="hg">Module color</span><span class="hd">Tables in the same schema/module share a header color</span></div>
+            <div class="hrow"><kbd>.</kbd><span class="hd">Focus mode — selected table + neighbors (again = 2 hops, again = exit)</span></div>
+            <div class="hrow"><span class="hg"><kbd>⌘</kbd><kbd>Z</kbd></span><span class="hd">Undo last layout change</span></div>
+            <div class="hrow"><span class="hg"><kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd></span><span class="hd">Jump selection to the nearest table</span></div>
+          </section>
+
+          <section class="help-sec">
+            <h4>Relationships</h4>
+            <div class="hrow"><span class="hg">Crow’s-foot</span><span class="hd">Fork = many, bar = one, ○ = optional FK</span></div>
+            <div class="hrow"><span class="hg">Hover wire</span><span class="hd">Tooltip with the exact relation and on-delete</span></div>
+            <div class="hrow"><span class="hg">⇧-click table</span><span class="hd">Join path — pick two tables to light the path and copy JOIN SQL</span></div>
+          </section>
+
+          <section class="help-sec">
+            <h4>Diff &amp; versions</h4>
+            <div class="hrow"><kbd>D</kbd><span class="hd">Toggle diff colors (added / modified / removed)</span></div>
+            <div class="hrow"><span class="hg">Changes only</span><span class="hd">Hide tables that did not change</span></div>
+            <div class="hrow"><span class="hg">Click version</span><span class="hd">View that version (closes the table inspector)</span></div>
+            <div class="hrow"><span class="hg"><kbd>⌘</kbd>-click</span><span class="hd">Set a version as the comparison baseline</span></div>
+            <div class="hrow"><span class="hg">Migrations</span><span class="hd">Each SQL file is a version; tip is Latest</span></div>
+            <div class="hrow"><span class="hg">⏱ Replay</span><span class="hd">Time machine — watch versions evolve (<kbd>Space</kbd> play/pause)</span></div>
+          </section>
+
+          <section class="help-sec">
+            <h4>Review &amp; export</h4>
+            <div class="hrow"><span class="hg">Review</span><span class="hd">SQL best-practice findings</span></div>
+            <div class="hrow"><span class="hg">Deep review</span><span class="hd">Full review via local Claude Code CLI</span></div>
+            <div class="hrow"><span class="hg">SQL / DBML</span><span class="hd">Export the viewed schema</span></div>
+            <div class="hrow"><span class="hg">Migration</span><span class="hd">Export ALTER statements for the current diff</span></div>
+            <div class="hrow"><span class="hg">⬇ PNG</span><span class="hd">Snapshot the diagram (bottom-left controls)</span></div>
+          </section>
+
+          <section class="help-sec">
+            <h4>Shortcuts &amp; run</h4>
+            <div class="hrow"><span class="hg"><kbd>⌘</kbd><kbd>K</kbd></span><span class="hd">Command palette — search tables, columns, actions</span></div>
+            <div class="hrow"><kbd>/</kbd><span class="hd">Open the command palette</span></div>
+            <div class="hrow"><kbd>?</kbd><span class="hd">Open this help</span></div>
+            <div class="hrow"><span class="hg">Theme</span><span class="hd">Cycle System / Light / Dark</span></div>
+            <div class="hrow"><span class="hg">⟨ / ☰</span><span class="hd">Collapse or show the side panel</span></div>
+            <div class="hrow"><span class="hg">Run</span><span class="hd"><code>pnpm db:viewer</code></span></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

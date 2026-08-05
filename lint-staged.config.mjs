@@ -55,7 +55,7 @@ export default {
       .join(' ');
     return [`biome check --write --no-errors-on-unmatched ${quoted}`];
   },
-  'tooling/**/*.{ts,mjs}': ['biome check --write --no-errors-on-unmatched'],
+  'tooling/**/*.{ts,mjs,js}': ['biome check --write --no-errors-on-unmatched'],
   '*.{json,yaml,yml}': ['biome format --write --no-errors-on-unmatched'],
   '*.md': (paths) => {
     const filtered = filterMarkdown(paths);
