@@ -73,50 +73,22 @@ const EXCLUDED_FILES: readonly string[] = [
   'tooling/setup/setup.config.json',
 ];
 
-/** Files that legitimately carry the literal but are not generator outputs. */
-export const IDENTITY_LITERAL_ALLOWLIST: readonly IdentityLiteralAllowance[] = [
-  {
-    file: '.env.example',
-    reason: 'Documents the shipped default values for OTEL_SERVICE_NAME and the Scalar slug.',
-  },
-  {
-    file: '.mcp.example.json',
-    reason: 'MCP server key naming this project\'s API server ("<slug>:api").',
-  },
-  {
-    file: '.gitleaks.toml',
-    reason: 'Config title naming the project.',
-  },
-  {
-    file: '.codacy.yaml',
-    reason: 'Comment naming the project.',
-  },
-  {
-    file: '.github/codeql/codeql-config.yml',
-    reason: 'CodeQL config display name.',
-  },
-  {
-    file: '.github/release-please/config.json',
-    reason: 'release-please package-name, which must equal package.json name.',
-  },
-  {
-    file: 'tooling/db-viewer/config.json',
-    reason: 'DB Viewer display name for the local ER board.',
-  },
-  {
-    file: 'tooling/ci/restore-drill-neon.sh',
-    reason:
-      'Last-resort fallback for the Neon project name; PROJECT_SLUG from the generated composite action wins when set.',
-  },
-  {
-    file: 'src/tests/load/k6/setup-loadtest.sh',
-    reason: 'docker exec/restart against the Compose container names.',
-  },
-  {
-    file: 'src/tests/load/k6/check-prereqs.mjs',
-    reason: 'Operator guidance strings naming the Compose containers.',
-  },
-];
+/**
+ * Files that legitimately carry the literal but are not generator outputs.
+ *
+ * @remarks
+ * Intentionally EMPTY. Every non-prose file that names the project is a
+ * generator target — either a whole-file output, a reconciled file, or a
+ * shape-matched span in `text-identity-rewrites.ts`. An allowlist entry is
+ * strictly worse than a rewrite rule: the file keeps the BASE project's name
+ * after a fork, so the adopting team ships someone else's brand. Prefer adding
+ * a rewrite rule; add an entry here only when a literal genuinely must survive
+ * a rename, and say why.
+ *
+ * Entries are validated: one whose literal no longer appears fails the gate, so
+ * a stale exemption cannot rot silently.
+ */
+export const IDENTITY_LITERAL_ALLOWLIST: readonly IdentityLiteralAllowance[] = [];
 
 function isExcluded(repositoryRelativePath: string): boolean {
   if (EXCLUDED_FILES.includes(repositoryRelativePath)) return true;

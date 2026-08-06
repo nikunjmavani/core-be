@@ -18,6 +18,11 @@ import {
   renderProductionEnvironment,
   renderSonarProperties,
 } from '@tooling/setup/codegen/repository-identity-artifacts.js';
+import {
+  applyTextRewrites,
+  mcpTemplateRules,
+  TEXT_REWRITE_TARGETS,
+} from '@tooling/setup/codegen/text-identity-rewrites.js';
 import { identityLiterals } from '@tooling/setup/codegen/validate-project-identity-literals.js';
 import type { SetupConfig } from '@tooling/setup/common/types.js';
 
@@ -174,5 +179,86 @@ describe('project identity — rename safety', () => {
     expect(properties).toContain('sonar.projectKey=acme-api');
     expect(properties).toContain('sonar.projectName=acme-api');
     expect(properties).toContain('sonar.sources=src');
+  });
+});
+
+describe('project identity — text rewrites', () => {
+  const snapshot = buildProjectIdentitySnapshot(buildConfig({ name: 'acme-api' }));
+
+  /**
+   * Regression: `docker-compose.yml` is touched by TWO rules — container names
+   * and the Toxiproxy image tag. When each transform was computed from a fresh
+   * read of the file, the second silently discarded the first, so container
+   * names kept the base project's slug after an otherwise successful adoption.
+   * Transforms must compose.
+   */
+  it('composes multiple rewrites of the same file instead of clobbering', () => {
+    const original = [
+      'services:',
+      '  postgres:',
+      '    container_name: old-postgres',
+      '  toxiproxy:',
+      '    image: old-toxiproxy:2.12.0',
+      '    container_name: old-toxiproxy',
+      '',
+    ].join('\n');
+
+    const toxiproxyRules = TEXT_REWRITE_TARGETS.find(
+      (target) => target.path === 'docker-compose.yml',
+    )?.rules;
+    expect(toxiproxyRules).toBeDefined();
+
+    // Same order the generator applies them: container names, then text rules,
+    // each building on the previous result.
+    const afterContainers = renderComposeContainerNames(snapshot, original);
+    const composed = applyTextRewrites(afterContainers, toxiproxyRules ?? [], snapshot);
+
+    expect(composed).toContain('container_name: acme-api-postgres');
+    expect(composed).toContain('container_name: acme-api-toxiproxy');
+    expect(composed).toContain('image: acme-api-toxiproxy:2.12.0');
+    expect(composed).not.toContain('old-');
+  });
+
+  it('rewrites every target from an arbitrary previous slug and is idempotent', () => {
+    const samples: ReadonlyArray<readonly [string, string, string]> = [
+      ['.gitleaks.toml', 'title = "whatever gitleaks config"\n', 'acme-api gitleaks config'],
+      ['.codacy.yaml', '# Codacy analysis scope for whatever.\n', 'scope for acme-api.'],
+      ['.github/release-please/config.json', '{ "package-name": "whatever" }', '"acme-api"'],
+      ['tooling/db-viewer/config.json', '{ "name": "whatever" }', '"acme-api"'],
+      [
+        'src/tests/load/k6/setup-loadtest.sh',
+        'docker exec whatever-postgres pg_isready\n',
+        'docker exec acme-api-postgres',
+      ],
+    ];
+
+    for (const [path, original, expected] of samples) {
+      const rules = TEXT_REWRITE_TARGETS.find((target) => target.path === path)?.rules ?? [];
+      const once = applyTextRewrites(original, rules, snapshot);
+      expect(once, `${path} should be rewritten`).toContain(expected);
+      expect(applyTextRewrites(once, rules, snapshot), `${path} should be idempotent`).toBe(once);
+    }
+  });
+
+  it('renames the MCP server key from any previous slug', () => {
+    const once = applyTextRewrites('{ "whatever:api": {} }', mcpTemplateRules(), snapshot);
+    expect(once).toContain('"acme-api:api"');
+    expect(applyTextRewrites(once, mcpTemplateRules(), snapshot)).toBe(once);
+  });
+
+  it('never anchors a rewrite pattern on the current project slug', () => {
+    // A pattern containing the live slug is self-disabling: after the first
+    // rename it stops matching and the rewrite silently no longer applies.
+    const live = identityLiterals(buildProjectIdentitySnapshot(buildConfig()));
+    for (const target of TEXT_REWRITE_TARGETS) {
+      for (const rule of target.rules) {
+        for (const literal of live) {
+          expect(
+            rule.pattern.source,
+            `${target.path} pattern must not contain "${literal}"`,
+          ).not.toContain(literal);
+        }
+      }
+    }
   });
 });

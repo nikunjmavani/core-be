@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
@@ -156,4 +157,16 @@ export function getEnvironmentNames(config: z.infer<typeof setupConfigSchema>): 
  */
 export function saveConfig(config: z.infer<typeof setupConfigSchema>): void {
   writeFileSync(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
+  // `JSON.stringify` and Biome disagree on array wrapping, so an unformatted
+  // manifest fails `pnpm lint` — the first gate an adopting team runs after
+  // `pnpm init:project`. Best-effort: the write already succeeded, and `pnpm
+  // format` fixes any residue, so a missing Biome must not fail the save.
+  try {
+    execFileSync('npx', ['biome', 'format', '--write', CONFIG_PATH], {
+      cwd: resolve(import.meta.dirname, '../../..'),
+      stdio: 'ignore',
+    });
+  } catch {
+    // Formatting is cosmetic; leave the valid JSON in place.
+  }
 }

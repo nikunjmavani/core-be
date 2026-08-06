@@ -19,7 +19,7 @@
  * script is typically run once, on a fresh clone, by someone who has not read it.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import { resolve } from 'node:path';
 
@@ -197,11 +197,29 @@ function reportResidualLiterals(previousSlug: string, previousOwner: string): vo
   for (const literal of stale) {
     let output = '';
     try {
-      output = execFileSync('git', ['grep', '-rniI', '--', literal], {
-        cwd: REPOSITORY_ROOT,
-        encoding: 'utf-8',
-        maxBuffer: 32 * 1024 * 1024,
-      });
+      // Exclude the historical record. CHANGELOG entries and the release-notes
+      // archive DESCRIBE work done on the base project under its old name and
+      // cite its issue URLs — rewriting them would falsify history, so listing
+      // them here is pure noise that buries the lines a human must actually act
+      // on. Prose in docs/ is still reported: it describes the fork now.
+      output = execFileSync(
+        'git',
+        [
+          'grep',
+          '-rniI',
+          '--',
+          literal,
+          ':!CHANGELOG.md',
+          ':!docs/reviews/',
+          ':!docs/superpowers/',
+          ':!pnpm-lock.yaml',
+        ],
+        {
+          cwd: REPOSITORY_ROOT,
+          encoding: 'utf-8',
+          maxBuffer: 32 * 1024 * 1024,
+        },
+      );
     } catch {
       // git grep exits 1 when there are no matches — that is the success case.
       continue;
