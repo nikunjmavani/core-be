@@ -60,15 +60,15 @@ vi.mock('@/infrastructure/cache/redis.client.js', () => ({
   redisConnection: {},
 }));
 
-vi.mock('@/domains/tenancy/sub-domains/organization/organization-provisioning.js', () => ({
-  provisionPersonalOrganization: vi.fn().mockResolvedValue(undefined),
+vi.mock('@/domains/tenancy/sub-domains/organization/resolve-active-organization.js', () => ({
+  ensurePersonalOrganization: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { eventBus } from '@/core/events/event-bus.js';
 import { env } from '@/shared/config/env.config.js';
 import { AUTH_EVENT } from '@/domains/auth/sub-domains/auth-method/events/auth.events.js';
 import { completeFirstFactorAuth } from '@/domains/auth/shared/complete-first-factor-auth.js';
-import { provisionPersonalOrganization } from '@/domains/tenancy/sub-domains/organization/organization-provisioning.js';
+import { ensurePersonalOrganization } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
@@ -416,7 +416,7 @@ describe('EmailLoginService', () => {
 
       await service.login({ email: user.email, code: 'ABCDEF' }, '127.0.0.1', 'vitest');
 
-      expect(vi.mocked(provisionPersonalOrganization)).toHaveBeenCalledWith(user.id);
+      expect(vi.mocked(ensurePersonalOrganization)).toHaveBeenCalledWith(user.id);
     } finally {
       env.PERSONAL_ORGANIZATION_ENABLED = false;
     }
@@ -436,7 +436,7 @@ describe('EmailLoginService', () => {
 
       await service.login({ email: user.email, code: 'ABCDEF' }, '127.0.0.1', 'vitest');
 
-      expect(vi.mocked(provisionPersonalOrganization)).not.toHaveBeenCalled();
+      expect(vi.mocked(ensurePersonalOrganization)).not.toHaveBeenCalled();
     } finally {
       env.PERSONAL_ORGANIZATION_ENABLED = false;
     }
@@ -446,7 +446,7 @@ describe('EmailLoginService', () => {
     vi.mocked(userService.findByEmail).mockResolvedValue(null);
     vi.mocked(userService.createForEmailCode).mockResolvedValue(user as never);
     await service.sendCode({ email: 'team-only@example.com' });
-    expect(vi.mocked(provisionPersonalOrganization)).not.toHaveBeenCalled();
+    expect(vi.mocked(ensurePersonalOrganization)).not.toHaveBeenCalled();
   });
 
   describe('verifyCodeForStepUp (bootstrap-only email-code step-up, item #8)', () => {

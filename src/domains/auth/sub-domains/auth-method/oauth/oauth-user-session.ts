@@ -19,7 +19,7 @@ import {
   type FirstFactorAuthResult,
 } from '@/domains/auth/shared/complete-first-factor-auth.js';
 import { env } from '@/shared/config/env.config.js';
-import { provisionPersonalOrganization } from '@/domains/tenancy/sub-domains/organization/organization-provisioning.js';
+import { ensurePersonalOrganization } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 import type { OAuthProfile, OAuthProvider } from './oauth.types.js';
 import type { UserAuthRecord } from '@/domains/user/user.types.js';
 
@@ -168,7 +168,7 @@ export async function completeOAuthUserSession(parameters: {
   // and tool:backfill-personal-orgs recovers a miss). Team-only mode skips it.
   if ((isNewUser || claimedBareAccount) && env.PERSONAL_ORGANIZATION_ENABLED) {
     try {
-      await provisionPersonalOrganization(user.id);
+      await ensurePersonalOrganization(user.id);
       logger.info({ userId: user.public_id, provider }, 'oauth.user.personal_org_provisioned');
     } catch (error) {
       logger.error(
