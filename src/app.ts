@@ -1,5 +1,9 @@
 import Fastify from 'fastify';
-import { Sentry, isSentryInitialized } from '@/infrastructure/observability/sentry/sentry.js';
+import {
+  Sentry,
+  isSentryInitialized,
+  shouldCaptureErrorInSentry,
+} from '@/infrastructure/observability/sentry/sentry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { env, getEnv } from '@/shared/config/env.config.js';
 import { registerMiddleware } from '@/shared/middlewares/index.js';
@@ -210,10 +214,7 @@ export async function buildApp(options?: BuildAppOptions) {
   // errors are captured, matching the app error handler's own >=500 policy.
   if (isSentryInitialized()) {
     Sentry.setupFastifyErrorHandler(app, {
-      shouldHandleError(error) {
-        const statusCode = (error as { statusCode?: unknown }).statusCode;
-        return typeof statusCode !== 'number' || statusCode >= 500;
-      },
+      shouldHandleError: shouldCaptureErrorInSentry,
     });
   }
 
