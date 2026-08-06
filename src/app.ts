@@ -189,7 +189,10 @@ export async function buildApp(options?: BuildAppOptions) {
   if (getEnv().ENABLE_MCP_SERVER) {
     try {
       const { registerMcpRoute } = await import('@/infrastructure/mcp/mcp-server.js');
-      await registerMcpRoute(app, { name: API_SERVER_NAME, version: API_SERVER_VERSION });
+      await registerMcpRoute(app, {
+        name: API_SERVER_NAME,
+        version: API_SERVER_VERSION,
+      });
     } catch (error) {
       logger.error({ error }, 'Failed to load MCP server module');
       throw new Error(
@@ -200,10 +203,18 @@ export async function buildApp(options?: BuildAppOptions) {
   }
 
   // Sentry Fastify error handler — gives Sentry full route context
-  // (method, url, params, query, headers) on every captured error.
+  // (method, url, params, query, headers) on captured errors.
   // Must be registered after all routes and middleware.
+  // Expected client outcomes (4xx AppErrors — missing/invalid auth, validation,
+  // not-found) are handled responses, not defects: only 5xx and status-less
+  // errors are captured, matching the app error handler's own >=500 policy.
   if (isSentryInitialized()) {
-    Sentry.setupFastifyErrorHandler(app);
+    Sentry.setupFastifyErrorHandler(app, {
+      shouldHandleError(error) {
+        const statusCode = (error as { statusCode?: unknown }).statusCode;
+        return typeof statusCode !== 'number' || statusCode >= 500;
+      },
+    });
   }
 
   return app;
