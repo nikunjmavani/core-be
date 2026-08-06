@@ -11,6 +11,7 @@
  *   pnpm init:project --name acme-api --repository acme/acme-api --yes
  *   pnpm init:project --dry-run             # show the plan, write nothing
  *   pnpm init:project --reset-history       # ALSO perform the destructive fork reset
+ *   pnpm init:project --keep-docs           # leave prose naming the base project
  *
  * @remarks
  * Identity-only by default. `--reset-history` is what truncates the changelog and
@@ -19,11 +20,12 @@
  * script is typically run once, on a fresh clone, by someone who has not read it.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import { resolve } from 'node:path';
 
 import { generateAllProjectIdentityArtifacts } from '@tooling/setup/codegen/generate-project-identity.js';
+import { resolveFrontendSlug } from '@tooling/setup/codegen/project-identity.util.js';
 import { loadConfigIfExists, saveConfig } from '@tooling/setup/common/config.js';
 import type { SetupConfig } from '@tooling/setup/common/types.js';
 import * as log from '@tooling/setup/common/logger.js';
@@ -33,9 +35,58 @@ const REPOSITORY_ROOT = resolve(import.meta.dirname, '../..');
 /** Phrase the operator must type to authorize the irreversible fork reset. */
 const RESET_CONFIRMATION_PHRASE = 'reset';
 
+/**
+ * Files whose project-name mentions are left alone by the prose rewrite.
+ *
+ * @remarks
+ * These RECORD what happened to the base project under its own name and link to
+ * its issues and commits. Rewriting them would invent a history the new project
+ * never had and leave every citation pointing at a URL that does not resolve,
+ * because the issue lives in the BASE repository. A fork that wants them gone
+ * should DELETE them (`--reset-history`), not relabel them.
+ */
+const PROSE_REWRITE_EXCLUDED: readonly string[] = [
+  'CHANGELOG.md',
+  'docs/reviews/',
+  'docs/superpowers/',
+  'pnpm-lock.yaml',
+];
+
+/**
+ * Directories whose files are rewritten regardless of extension.
+ *
+ * @remarks
+ * Git hooks are extensionless by convention (`.husky/pre-push`), so the
+ * extension filter alone would skip them and leave the base project's name in a
+ * script every developer runs on every push.
+ */
+const PROSE_REWRITE_EXTENSIONLESS_DIRECTORIES: readonly string[] = ['.husky/'];
+
+/** Extensions the prose rewrite will open; everything else is left untouched. */
+const PROSE_REWRITE_EXTENSIONS: readonly string[] = [
+  '.md',
+  '.mdc',
+  '.txt',
+  '.json',
+  '.jsonc',
+  '.yml',
+  '.yaml',
+  '.ts',
+  '.mjs',
+  '.js',
+  '.sh',
+  '.toml',
+  '.properties',
+  '.example',
+];
+
 /** Paths deleted by `--reset-history` — artifacts describing the BASE project's history. */
 const FORK_RESET_PATHS: ReadonlyArray<{ path: string; description: string }> = [
   { path: 'docs/reviews', description: "the base project's archived review reports" },
+  {
+    path: 'docs/superpowers',
+    description: "the base project's completed implementation plans and specs",
+  },
   {
     path: 'tooling/route-coverage/route-success-coverage-budget.json',
     description: 'observed route-coverage budget (regenerated on the next full test run)',
@@ -50,6 +101,8 @@ interface InitOptions {
   readonly repository?: string | undefined;
   readonly owners?: string[] | undefined;
   readonly resetHistory: boolean;
+  /** Leave prose naming the BASE project untouched (default: rewrite it). */
+  readonly keepDocs: boolean;
   readonly dryRun: boolean;
   readonly assumeYes: boolean;
 }
@@ -70,6 +123,7 @@ function parseArguments(argv: readonly string[]): InitOptions {
     repository: value('--repository'),
     ...(owners ? { owners: owners.split(',').map((owner) => owner.trim()) } : {}),
     resetHistory: argv.includes('--reset-history'),
+    keepDocs: argv.includes('--keep-docs'),
     dryRun: argv.includes('--dry-run'),
     assumeYes: argv.includes('--yes'),
   };
@@ -190,6 +244,109 @@ function runCommand(command: string, args: readonly string[]): void {
  * values, so the residual sweep belongs here. Reported, never auto-edited —
  * most hits are prose that a human should reword.
  */
+/**
+ * Replace the base project's name and owner throughout prose and non-generated
+ * config, so the adopted repository refers only to the new product.
+ *
+ * @remarks
+ * The generator owns the files where identity is load-bearing; this pass covers
+ * everything else a reader sees — the README, the setup guide, the AI-agent
+ * instructions in `.claude`/`.cursor`/`agent-os`, and the reference docs. Left
+ * alone, those tell a new teammate (and every coding agent) that they are
+ * working on a different project.
+ *
+ * Substring replacement is deliberate and safe here because the slug is
+ * hyphenated and specific: a sibling repository sharing only the first segment
+ * (a paired frontend, an infrastructure repo) does not match the full slug, and
+ * compounds such as the `-api` image tag and repository URLs rewrite correctly.
+ *
+ * This file is itself rewritten by the pass it defines, so nothing here may cite
+ * the project by name — an illustrative literal would be rewritten into a real
+ * hardcoded identity and fail the literal gate on the adopted repository.
+ *
+ * Returns the paths it changed.
+ */
+function rewriteProseIdentity(options: {
+  readonly previousSlug: string;
+  readonly previousOwner: string;
+  readonly previousFrontend: string;
+  readonly nextSlug: string;
+  readonly nextOwner: string;
+  readonly nextFrontend: string;
+  readonly dryRun: boolean;
+}): string[] {
+  const basePairs = (
+    [
+      // Frontend FIRST: the pair names share a stem, and rewriting the backend
+      // slug first would leave the frontend mention half-renamed when one is a
+      // prefix of the other.
+      [options.previousFrontend, options.nextFrontend],
+      [options.previousSlug, options.nextSlug],
+      [options.previousOwner, options.nextOwner],
+    ] as Array<[string, string]>
+  ).filter(([from, to]) => from && to && from !== to);
+
+  // Prose capitalizes the slug at the start of a sentence ("Core-be records…"),
+  // so the lowercase pass alone leaves those behind. Each pair therefore gets a
+  // sentence-case variant, applied BEFORE the lowercase one so the longer,
+  // more specific form wins.
+  const replacements = basePairs.flatMap(([from, to]): Array<[string, string]> => {
+    const sentenceCase = (value: string): string => value.charAt(0).toUpperCase() + value.slice(1);
+    const capitalizedFrom = sentenceCase(from);
+    return capitalizedFrom === from
+      ? [[from, to]]
+      : [
+          [capitalizedFrom, sentenceCase(to)],
+          [from, to],
+        ];
+  });
+  if (replacements.length === 0) {
+    return [];
+  }
+
+  const tracked = execFileSync('git', ['ls-files', '-z'], {
+    cwd: REPOSITORY_ROOT,
+    encoding: 'utf-8',
+    maxBuffer: 64 * 1024 * 1024,
+  })
+    .split('\0')
+    .filter((entry) => entry.length > 0);
+
+  const changed: string[] = [];
+  for (const relativePath of tracked) {
+    if (PROSE_REWRITE_EXCLUDED.some((excluded) => relativePath.startsWith(excluded))) continue;
+    const alwaysRewrite = PROSE_REWRITE_EXTENSIONLESS_DIRECTORIES.some((directory) =>
+      relativePath.startsWith(directory),
+    );
+    if (
+      !(
+        alwaysRewrite ||
+        PROSE_REWRITE_EXTENSIONS.some((extension) => relativePath.endsWith(extension))
+      )
+    ) {
+      continue;
+    }
+
+    const absolutePath = resolve(REPOSITORY_ROOT, relativePath);
+    let contents: string;
+    try {
+      contents = readFileSync(absolutePath, 'utf-8');
+    } catch {
+      continue;
+    }
+    let updated = contents;
+    for (const [from, to] of replacements) {
+      updated = updated.split(from).join(to);
+    }
+    if (updated === contents) continue;
+    changed.push(relativePath);
+    if (!options.dryRun) {
+      writeFileSync(absolutePath, updated, 'utf-8');
+    }
+  }
+  return changed;
+}
+
 function reportResidualLiterals(previousSlug: string, previousOwner: string): void {
   const stale = [previousSlug, previousOwner].filter(
     (literal, index, all) => literal.length > 0 && all.indexOf(literal) === index,
@@ -274,6 +431,7 @@ async function main(): Promise<void> {
 
   const previousSlug = current.project.name;
   const previousOwner = current.providers.github.repository.split('/')[0] ?? '';
+  const previousFrontendSlug = resolveFrontendSlug(current);
 
   log.blank();
   log.info('Adopting this repository as a new project.');
@@ -357,6 +515,23 @@ async function main(): Promise<void> {
         `Removed stale docs/database/${previousSlug}.dbml (regenerated under the new name)`,
       );
     }
+  }
+
+  if (options.keepDocs) {
+    log.warn('--keep-docs: prose still refers to the base project by name.');
+  } else {
+    const rewritten = rewriteProseIdentity({
+      previousSlug,
+      previousOwner,
+      previousFrontend: previousFrontendSlug,
+      nextSlug: identity.name,
+      nextOwner: identity.repository.split('/')[0] ?? previousOwner,
+      nextFrontend: resolveFrontendSlug(updated),
+      dryRun: false,
+    });
+    log.success(
+      `Rewrote the project name across ${rewritten.length} prose and config file(s) — docs, agent instructions, reference material and paired-frontend references now name this project.`,
+    );
   }
 
   log.blank();

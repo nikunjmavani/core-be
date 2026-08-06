@@ -68,6 +68,8 @@ export interface ProjectIdentitySnapshot {
   readonly displayName: string;
   readonly packageName: string;
   readonly description?: string | undefined;
+  /** Paired frontend repository name (see {@link resolveFrontendSlug}). */
+  readonly frontendSlug: string;
   readonly artifacts: ProjectArtifacts;
   readonly git: ProjectGitMetadata;
   readonly repository: ProjectRepositoryMetadata;
@@ -133,6 +135,25 @@ export function resolveRepositoryMetadata(config: SetupConfig): ProjectRepositor
   };
 }
 
+/**
+ * Name of the paired frontend repository.
+ *
+ * @remarks
+ * Docs and comments describe a BE↔FE contract — CORS origins, the invitation
+ * accept page, a shared local Sonar server — so the pair name is part of this
+ * project's identity even though no backend code reads it. Derived by swapping a
+ * trailing `-be` for `-fe` (`acme-be` → `acme-fe`), or appending `-fe` when the
+ * slug carries no suffix. Override with `project.frontendName` when the pair does
+ * not follow that convention.
+ */
+export function resolveFrontendSlug(config: SetupConfig): string {
+  if (config.project.frontendName) {
+    return config.project.frontendName;
+  }
+  const slug = config.project.name;
+  return slug.endsWith('-be') ? `${slug.slice(0, -'-be'.length)}-fe` : `${slug}-fe`;
+}
+
 /** Every slug-derived name that a rebrand must reach outside TypeScript constants. */
 export function resolveDerivedNames(config: SetupConfig): ProjectDerivedNames {
   const slug = config.project.name;
@@ -160,6 +181,7 @@ export function buildProjectIdentitySnapshot(config: SetupConfig): ProjectIdenti
     displayName: config.project.displayName,
     packageName: config.project.packageName ?? config.project.name,
     description: config.project.description,
+    frontendSlug: resolveFrontendSlug(config),
     artifacts: resolveArtifacts(config),
     git: resolveGitMetadata(config),
     repository: resolveRepositoryMetadata(config),

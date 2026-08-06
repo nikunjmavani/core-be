@@ -53,6 +53,10 @@ export const setupConfigSchema = z.object({
     // package.json `description`. Defaults to the committed description when
     // omitted so an adopting fork is not forced to invent one immediately.
     description: z.string().min(1).optional(),
+    // Paired frontend repository name, referenced by docs and comments that
+    // describe the BE↔FE contract (CORS origins, invitation links, shared Sonar
+    // server). Defaults to this slug with a `-be` suffix swapped for `-fe`.
+    frontendName: z.string().min(1).optional(),
     artifacts: projectArtifactsSchema.optional(),
   }),
   git: projectGitSchema.optional(),
