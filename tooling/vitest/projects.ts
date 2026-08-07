@@ -134,6 +134,10 @@ export const vitestProjects = [
       name: 'property',
       include: ['src/**/*.property.unit.test.ts'],
       pool: 'forks',
+      // Must match `unit`/`global` — `pnpm test:fast` (and the `fast` lane of
+      // `pnpm test`) runs all three in one vitest process, and Vitest refuses to
+      // start when projects sharing a `sequence.groupOrder` disagree on maxWorkers.
+      maxWorkers: '50%',
     },
   },
 

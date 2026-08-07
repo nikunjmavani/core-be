@@ -22,17 +22,12 @@
  * `tooling/ci/coverage-thresholds.json`.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
+import { LANES, type Lane } from '@tooling/vitest/lanes.js';
 import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { ROUTE_COVERAGE_OBSERVED_DIRECTORY_NAME } from '@tooling/route-coverage/constants.js';
 
-type Lane = {
-  name: string;
-  args: string[];
-  /** Lanes that run sequentially together — useful when DB cleanup races would happen across forks. */
-  serial?: boolean;
-};
 type LaneResult = { name: string; code: number; ms: number };
 
 const COVERAGE_FLAG = '--coverage';
@@ -45,39 +40,6 @@ const COVERAGE_DISABLE_THRESHOLD_FLAGS = [
 
 const passthroughArgs = process.argv.slice(2);
 const coverageEnabled = passthroughArgs.includes(COVERAGE_FLAG);
-
-const LANES: Lane[] = [
-  /**
-   * Parallel-safe: pure-unit, property, global — files run concurrently inside Vitest.
-   * No shared Postgres cleanup.
-   */
-  {
-    name: 'fast',
-    args: ['run', '--project', 'unit', '--project', 'property', '--project', 'global'],
-  },
-  /**
-   * DB-bound: unit-db, e2e, integration, security, performance.
-   * Each project enforces serial file execution; lanes run after `fast` so a single
-   * local Postgres is not hammered by two processes at once.
-   */
-  {
-    name: 'db-bound',
-    args: [
-      'run',
-      '--project',
-      'unit-db',
-      '--project',
-      'e2e',
-      '--project',
-      'integration',
-      '--project',
-      'security',
-      '--project',
-      'performance',
-    ],
-    serial: true,
-  },
-];
 
 function buildLaneArgs(lane: Lane): string[] {
   if (!coverageEnabled) return lane.args;

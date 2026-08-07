@@ -284,4 +284,20 @@ export function isSentryInitialized(): boolean {
   return initialized;
 }
 
+/**
+ * Capture policy for the Fastify error handler: only server faults are defects.
+ *
+ * A 4xx is a handled outcome the API deliberately returns (missing bearer token,
+ * validation failure, unknown id) — routing those to Sentry buries real faults in
+ * attacker- and client-controllable noise, and burns the error budget. Anything
+ * without a numeric `statusCode` is an unclassified throw, so it is captured.
+ *
+ * Mirrors the app error handler's own `statusCode >= 500` capture rule, so the
+ * two paths cannot disagree about what counts as an incident.
+ */
+export function shouldCaptureErrorInSentry(error: unknown): boolean {
+  const statusCode = (error as { statusCode?: unknown } | null | undefined)?.statusCode;
+  return typeof statusCode !== 'number' || statusCode >= 500;
+}
+
 export { Sentry };

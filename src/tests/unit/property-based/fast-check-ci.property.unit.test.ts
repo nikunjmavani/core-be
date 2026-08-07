@@ -5,6 +5,7 @@ import {
   PROPERTY_TEST_NUM_RUNS,
   propertyAssertOptions,
 } from '@/tests/helpers/fast-check-property.util.js';
+import { vitestProjects } from '@tooling/vitest/projects.js';
 
 const propertyTestFiles = [
   'src/tests/unit/validators/idempotency-key.property.unit.test.ts',
@@ -31,8 +32,13 @@ describe('fast-check property testing policy (#69)', () => {
     expect(packageJson.scripts['test:property']).toContain('--project property');
     expect(packageJson.scripts['ci:quality']).toContain('pnpm test:property');
 
-    const vitestProjects = readFileSync(join(process.cwd(), 'tooling/vitest/projects.ts'), 'utf8');
-    expect(vitestProjects).toContain("name: 'property'");
+    // Read the config, don't grep its source: asserting on `name: 'property'` as
+    // text made this fail the moment a formatter switched the file to double
+    // quotes — a green-to-red with nothing actually broken.
+    const projectNames = vitestProjects.map(
+      (project) => (project as { test?: { name?: string } }).test?.name,
+    );
+    expect(projectNames).toContain('property');
 
     const prCi = readFileSync(join(process.cwd(), '.github/workflows/pr-ci.yml'), 'utf8');
     expect(prCi).toContain('pnpm test:property');
