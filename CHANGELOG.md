@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.1.1](https://github.com/nikunjmavani/core-be/compare/v5.1.0...v5.1.1) (2026-08-07)
+
+
+### Fixed
+
+* idempotent personal-org provisioning + Sentry 4xx capture policy ([#1026](https://github.com/nikunjmavani/core-be/issues/1026)) ([3021846](https://github.com/nikunjmavani/core-be/commit/302184691f5678a91e94615d833c2453fc5b150d))
+* **test:** repair the broken fast test lane + close Sentry/OAuth coverage gaps ([#1029](https://github.com/nikunjmavani/core-be/issues/1029)) ([0a5bffb](https://github.com/nikunjmavani/core-be/commit/0a5bffb025d8ec527ded62fc18ffac7d0e2e5ec4))
+
+
+### Documentation
+
+* **github:** restructure the PR template and align it with the paired repo ([#1027](https://github.com/nikunjmavani/core-be/issues/1027)) ([4bac5e8](https://github.com/nikunjmavani/core-be/commit/4bac5e83b1bc8da18b3628f522696014c22fe9e7))
+
 ## [5.1.0](https://github.com/nikunjmavani/core-be/compare/v5.0.0...v5.1.0) (2026-08-05)
 
 
