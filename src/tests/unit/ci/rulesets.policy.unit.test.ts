@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
  * would silently ship to the live branch protection on the next sync.
  *
  * Central invariant: `bypass_actors` is EMPTY. A repo-admin `pull_request` bypass once
- * let a red `Quality gate` merge through the merge API (core-be #911). With no bypass
+ * let a red `Quality gate` merge through the merge API (#911). With no bypass
  * actors, a failing/pending required check blocks the merge for everyone — the repo
  * owner included. This test fails the build if the bypass is ever re-added.
  */

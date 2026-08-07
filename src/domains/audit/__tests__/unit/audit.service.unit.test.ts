@@ -93,7 +93,7 @@ describe('AuditService', () => {
         resource_type: 'user',
         organization_public_id: 'org_public',
         ip_address: '203.0.113.10',
-        user_agent: 'core-be-test/1.0',
+        user_agent: 'test-agent/1.0',
         metadata: { sessionId: 'sess_1' },
       });
 
@@ -106,7 +106,7 @@ describe('AuditService', () => {
         resourceType: 'user',
         resourceId: null,
         ipAddress: '203.0.113.10',
-        userAgent: 'core-be-test/1.0',
+        userAgent: 'test-agent/1.0',
         severity: 'INFO',
         metadata: { sessionId: 'sess_1' },
       });

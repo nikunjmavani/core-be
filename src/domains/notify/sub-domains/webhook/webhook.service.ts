@@ -23,6 +23,7 @@ import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgre
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { safeWebhookUrlForLogs } from '@/shared/utils/security/safe-webhook-url-for-logs.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { WEBHOOK_USER_AGENT_PREFIX } from '@/shared/constants/project-identity.constants.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { WEBHOOK_ORGANIZATION_FANOUT_CONCURRENCY } from '@/domains/notify/sub-domains/webhook/webhook-delivery/webhook-delivery.constants.js';
 import { PAGINATION } from '@/shared/constants/pagination.constants.js';
@@ -488,7 +489,7 @@ export class WebhookService {
 
     const requestHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
-      'User-Agent': 'core-be-webhook/1.0',
+      'User-Agent': `${WEBHOOK_USER_AGENT_PREFIX}/1.0`,
       'X-Webhook-Event': 'webhook.test',
       'X-Webhook-Timestamp': String(signatureTimestamp),
       'X-Webhook-Signature': signatureHeader,

@@ -1,6 +1,6 @@
 /* eslint-disable security/detect-unsafe-regex -- bounded SQL migration parsing; inputs are repo-controlled files */
 /**
- * Generates docs/database/core-be.dbml (dbdiagram.io / DBML) by replaying migrations/*.sql in order.
+ * Generates the DBML diagram (see DBML_OUTPUT_PATH) by replaying migrations/*.sql in order.
  *
  * Captured artifacts:
  *  - Columns (name, type, nullability, identity/auto-increment)
@@ -17,10 +17,11 @@
  */
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { DBML_OUTPUT_PATH } from '@/shared/constants/project-identity.constants.js';
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dirname, '../../..');
 const MIGRATIONS_DIRECTORY = path.join(REPOSITORY_ROOT, 'migrations');
-const OUTPUT_PATH = path.join(REPOSITORY_ROOT, 'docs/database/core-be.dbml');
+const OUTPUT_PATH = path.join(REPOSITORY_ROOT, DBML_OUTPUT_PATH);
 
 type ForeignKeyReference = {
   targetSchema: string;

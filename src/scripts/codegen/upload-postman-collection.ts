@@ -3,7 +3,7 @@
  *
  * Behaviour:
  *   1. Lists collections in the target workspace.
- *   2. If a collection with a matching name prefix ("core-be API") exists → updates it (PUT).
+ *   2. If a collection with a matching name prefix (the generated collection prefix) exists → updates it (PUT).
  *   3. Otherwise → creates a new collection (POST).
  *   Postman keeps full change history on every PUT, so versions are tracked automatically.
  *
@@ -17,11 +17,12 @@ import '@/shared/config/load-env-files.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { shouldSkipHostedUpload } from './hosted-docs-upload.util.js';
+import { POSTMAN_COLLECTION_PREFIX } from '@/shared/constants/project-identity.constants.js';
 
 const POSTMAN_UPLOAD_REQUIRED_VARIABLES = ['POSTMAN_API_KEY', 'POSTMAN_WORKSPACE_ID'] as const;
 const POSTMAN_API_BASE = 'https://api.getpostman.com';
 const COLLECTION_PATH = join(process.cwd(), 'docs', 'postman-collection.json');
-const COLLECTION_NAME_PREFIX = 'core-be API';
+const COLLECTION_NAME_PREFIX = POSTMAN_COLLECTION_PREFIX;
 
 interface PostmanCollectionInfo {
   name: string;

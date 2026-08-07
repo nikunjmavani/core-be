@@ -33,11 +33,16 @@ import { resolve } from 'node:path';
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { ensureDefaultMcpServers } from './mcp-config.js';
+import { resolveDerivedNames } from '@tooling/setup/codegen/project-identity.util.js';
+import { loadConfig } from '@tooling/setup/common/config.js';
 
 const PROJECT_ROOT = process.cwd();
 const REQUIRED_NODE_MAJOR = 24;
-const POSTGRES_CONTAINER = 'core-be-postgres';
-const REDIS_CONTAINER = 'core-be-redis';
+const SETUP_CONFIG = loadConfig();
+const PROJECT_DISPLAY_NAME = SETUP_CONFIG.project.displayName;
+const { containers: LOCAL_CONTAINERS } = resolveDerivedNames(SETUP_CONFIG);
+const POSTGRES_CONTAINER = LOCAL_CONTAINERS.postgres;
+const REDIS_CONTAINER = LOCAL_CONTAINERS.redis;
 const DEFAULT_DEV_PORT = 3000;
 
 type StepStatus = 'done' | 'skipped' | 'warning' | 'failed';
@@ -98,10 +103,14 @@ function logHeading(message: string): void {
 }
 
 function logBanner(): void {
-  const line = '═'.repeat(58);
+  const width = 58;
+  const line = '═'.repeat(width);
+  // Pad on the visible text only — the ANSI escapes occupy no display columns,
+  // so they must be added after padEnd or the box edge drifts.
+  const title = `${PROJECT_DISPLAY_NAME} — local bootstrap (pnpm setup:local)`;
   process.stdout.write(`\n╔${line}╗\n`);
   process.stdout.write(
-    `║  ${ANSI.bold}core-be — local bootstrap (pnpm setup:local)${ANSI.reset}            ║\n`,
+    `║  ${ANSI.bold}${title}${ANSI.reset}${' '.repeat(Math.max(0, width - title.length - 3))}║\n`,
   );
   process.stdout.write(`║  Docker + env + migrate + dev in one command             ║\n`);
   process.stdout.write(`╚${line}╝\n`);

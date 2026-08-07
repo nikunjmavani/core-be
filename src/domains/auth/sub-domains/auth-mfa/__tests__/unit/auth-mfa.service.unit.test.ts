@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UnauthorizedError } from '@/shared/errors/index.js';
+import { TOTP_ISSUER } from '@/shared/constants/project-identity.constants.js';
 import { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-method.service.js';
@@ -8,7 +9,7 @@ import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 
 vi.mock('otplib', () => ({
   generateSecret: () => 'TESTSECRET',
-  generateURI: () => 'otpauth://totp/core-be:user@example.com?secret=TESTSECRET',
+  generateURI: () => `otpauth://totp/${TOTP_ISSUER}:user@example.com?secret=TESTSECRET`,
   verify: vi.fn().mockResolvedValue({ valid: true }),
 }));
 

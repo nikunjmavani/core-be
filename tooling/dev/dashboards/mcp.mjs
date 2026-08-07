@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// MCP server exposing the local core-be dashboards data as read-only tools, so an agent
+// MCP server exposing the local dashboards data as read-only tools, so an agent
 // (Claude Code / Cursor / Codex) can check the running stack without curl. It reads from the
 // dashboards auth proxy on :3010 — run `pnpm dashboards:up` (or `pnpm dashboards:proxy`) first.
 //
@@ -30,7 +30,7 @@ const TOOLS = [
   {
     name: 'local_stack_status',
     description:
-      'Live up/down state and latency (ms) for every local core-be dashboard service: API, worker, queues (Bull Board), metrics, SonarQube, Drizzle Studio. Use this to check if the local stack is healthy.',
+      'Live up/down state and latency (ms) for every local dashboard service: API, worker, queues (Bull Board), metrics, SonarQube, Drizzle Studio. Use this to check if the local stack is healthy.',
     inputSchema: EMPTY,
     run: async () => {
       const s = await get('/_status');
@@ -123,7 +123,7 @@ const TOOLS = [
 ];
 
 const server = new Server(
-  { name: 'core-be-dashboards', version: '1.0.0' },
+  { name: 'local-dashboards', version: '1.0.0' },
   { capabilities: { tools: {} } },
 );
 server.setRequestHandler(ListToolsRequestSchema, async () => ({

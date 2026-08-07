@@ -85,7 +85,7 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
       jsonrpc: '2.0',
       id: 1,
       result: {
-        tools: [{ name: 'call_api', description: 'Call any core-be REST API endpoint' }],
+        tools: [{ name: 'call_api', description: 'Call any REST API endpoint on this server' }],
       },
     },
   },

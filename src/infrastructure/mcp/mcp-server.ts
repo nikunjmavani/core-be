@@ -1,10 +1,11 @@
 /**
- * MCP (Model Context Protocol) server that exposes core-be APIs as tools and resources.
+ * MCP (Model Context Protocol) server that exposes this project's APIs as tools and resources.
  * When the backend is running, frontends (or AI agents) can connect to the MCP endpoint
  * to discover and call APIs without separate API documentation.
  *
- * - Resource `core-be://openapi`: OpenAPI 3.0 spec (paths, schemas, request/response)
- * - Resource `core-be://routes`: route catalog (method, path, access)
+ * Resource URIs are `{PROJECT_SLUG}://…`, built from the generated project identity:
+ * - Resource {@link MCP_OPENAPI_RESOURCE_URI}: OpenAPI 3.0 spec (paths, schemas, request/response)
+ * - Resource {@link MCP_ROUTES_RESOURCE_URI}: route catalog (method, path, access)
  * - Tool `call_api`: call any API endpoint (method, path, optional body/headers); forwards auth via headers
  *
  * The @modelcontextprotocol/sdk package is an optional dependency; load it via loadMcpSdk() only when MCP is enabled.
@@ -395,8 +396,7 @@ export async function registerMcpRouteHandlers(
       ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'MCP streamable HTTP (GET)',
-        description:
-          'Model Context Protocol endpoint when `ENABLE_MCP_SERVER=true`. Exposes resources `core-be://openapi` and `core-be://routes`, plus the `call_api` tool for in-process API invocation. Requires JWT with global `admin` or `super_admin` role. See docs/integrations/cursor-backend-mcp.md.',
+        description: `Model Context Protocol endpoint when \`ENABLE_MCP_SERVER=true\`. Exposes resources \`${MCP_OPENAPI_RESOURCE_URI}\` and \`${MCP_ROUTES_RESOURCE_URI}\`, plus the \`call_api\` tool for in-process API invocation. Requires JWT with global \`admin\` or \`super_admin\` role. See docs/integrations/cursor-backend-mcp.md.`,
         tags: ['MCP'],
       },
     },

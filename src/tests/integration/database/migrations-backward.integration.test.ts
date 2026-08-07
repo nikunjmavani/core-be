@@ -11,7 +11,7 @@ function isDownMigrationFilename(filename: string): boolean {
 }
 
 /**
- * core-be uses forward-only SQL migrations in production; optional `.down.sql` files are
+ * This project uses forward-only SQL migrations in production; optional `.down.sql` files are
  * allowed only when the up migration declares `migration-rollback: requires down`.
  */
 describe('Integration: migrations backward (forward-only + optional down companions)', () => {

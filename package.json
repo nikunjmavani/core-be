@@ -188,6 +188,7 @@
     "ops:stripe:reconcile": "tsx src/scripts/ops/stripe-subscription-reconcile.ts",
     "ops:worker:drain": "tsx src/scripts/ops/worker-drain.ts",
     "setup:local": "tsx tooling/dev/setup-local.ts",
+    "init:project": "tsx tooling/setup/init-project.ts",
     "setup:mac-tools": "bash tooling/dev/setup-mac-tools.sh",
     "mcp:setup": "tsx tooling/dev/setup-mcp.ts",
     "mcp:setup:default": "tsx tooling/dev/setup-mcp.ts --default",
@@ -290,5 +291,13 @@
     "tsx": "^4.23.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nikunjmavani/core-be.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nikunjmavani/core-be/issues"
+  },
+  "homepage": "https://github.com/nikunjmavani/core-be#readme"
 }

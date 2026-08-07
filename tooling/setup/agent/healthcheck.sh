@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Health-check the running core-be app after the stack is live — the last step of a
+# Health-check the running app after the stack is live — the last step of a
 # Claude Code on the web (cloud agent) bring-up. Probes the two public health
 # endpoints and fails loudly if the app or any dependency is unhealthy:
 #

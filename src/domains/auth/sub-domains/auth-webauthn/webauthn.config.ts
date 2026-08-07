@@ -46,7 +46,7 @@ export function resolveWebauthnRelyingPartyId(): string {
   return 'localhost';
 }
 
-/** Resolves the user-visible Relying Party name shown by the authenticator: `WEBAUTHN_RP_NAME` when set, otherwise the literal `'core-be'`. */
+/** Resolves the user-visible Relying Party name shown by the authenticator: `WEBAUTHN_RP_NAME` when set, otherwise {@link WEBAUTHN_RP_NAME_DEFAULT} (the project slug). */
 export function resolveWebauthnRelyingPartyName(): string {
   return env.WEBAUTHN_RP_NAME && env.WEBAUTHN_RP_NAME.length > 0
     ? env.WEBAUTHN_RP_NAME

@@ -1,3 +1,4 @@
+import { loadConfig } from '@tooling/setup/common/config.js';
 import { DOMAIN_LABELS, METHOD_ORDER } from './constants.js';
 import { loadPermissionConstantMap } from './prefix-map.js';
 import type { ParsedRoute } from './types.js';
@@ -99,7 +100,7 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
 
   const lines: string[] = [
     SEPARATOR,
-    '  ROUTE CATALOG — core-be',
+    `  ROUTE CATALOG — ${loadConfig().project.displayName}`,
     `  Total routes: ${sortedRoutes.length}`,
     SEPARATOR,
     '',
