@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { ForbiddenError } from '@/shared/errors/index.js';
 import { completeOAuthUserSession } from '@/domains/auth/sub-domains/auth-method/oauth/oauth-user-session.js';
+import { ensurePersonalOrganization } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 
 vi.mock('@/shared/utils/text/email.util.js', () => ({
   isDisposableEmailBlocked: vi.fn(() => false),
@@ -18,6 +19,10 @@ vi.mock('@/infrastructure/database/transaction.js', () => ({
 
 vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => ({
   runWithPinnedDatabaseHandle: (_handle: unknown, callback: () => Promise<unknown>) => callback(),
+}));
+
+vi.mock('@/domains/tenancy/sub-domains/organization/resolve-active-organization.js', () => ({
+  ensurePersonalOrganization: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/domains/auth/shared/complete-first-factor-auth.js', () => ({
@@ -224,6 +229,28 @@ describe('completeOAuthUserSession', () => {
     const result = await callCompleteOAuthUserSession();
 
     expect(userService.createFromOAuth).toHaveBeenCalledTimes(1);
+    expect('session_public_id' in result && result.session_public_id).toBe('session_public');
+  });
+
+  it('provisions the personal org through the idempotent resolver on first-time signup', async () => {
+    // Must be `ensurePersonalOrganization`, not raw `provisionPersonalOrganization`:
+    // the raw insert trips `idx_org_one_personal_per_owner` (23505) whenever the org
+    // already exists, which logged a spurious ERROR on every such login.
+    userService.findByEmail.mockResolvedValue(null);
+
+    await callCompleteOAuthUserSession();
+
+    expect(vi.mocked(ensurePersonalOrganization)).toHaveBeenCalledWith(1);
+  });
+
+  it('still issues a session when personal-org provisioning fails (best-effort)', async () => {
+    // Provisioning is deliberately best-effort — `tool:backfill-personal-orgs` and the
+    // self-heal path recover a miss. A failure here must never cost the user their login.
+    userService.findByEmail.mockResolvedValue(null);
+    vi.mocked(ensurePersonalOrganization).mockRejectedValueOnce(new Error('provisioning down'));
+
+    const result = await callCompleteOAuthUserSession();
+
     expect('session_public_id' in result && result.session_public_id).toBe('session_public');
   });
 

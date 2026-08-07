@@ -14,7 +14,7 @@ import { incrementWithExpiryOnFirst } from '@/shared/utils/infrastructure/redis-
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
 import { env } from '@/shared/config/env.config.js';
-import { provisionPersonalOrganization } from '@/domains/tenancy/sub-domains/organization/organization-provisioning.js';
+import { ensurePersonalOrganization } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 import {
   VERIFICATION_CODE_MAX_VERIFY_ATTEMPTS,
   VERIFICATION_CODE_RESEND_COOLDOWN_SECONDS,
@@ -217,7 +217,7 @@ export class EmailLoginService {
 
     if (env.PERSONAL_ORGANIZATION_ENABLED) {
       try {
-        await provisionPersonalOrganization(user.id);
+        await ensurePersonalOrganization(user.id);
       } catch (error) {
         logger.error(
           { err: error, userId: user.public_id },
@@ -414,7 +414,7 @@ export class EmailLoginService {
     // force-provision. Best-effort + idempotent (partial unique index), matching signup / OAuth.
     if (isFirstVerification && env.PERSONAL_ORGANIZATION_ENABLED) {
       try {
-        await provisionPersonalOrganization(user.id);
+        await ensurePersonalOrganization(user.id);
       } catch (error) {
         logger.error(
           { err: error, userId: user.public_id },

@@ -1702,6 +1702,7 @@ src/
     │   ├── service-cross-domain-boundary.global.test.ts
     │   ├── stryker-mutate-paths.global.test.ts
     │   ├── system-validation.global.test.ts
+    │   ├── vitest-project-grouping.global.test.ts
     │   └── worker-readiness.global.test.ts
     ├── helpers/
     │   ├── __tests__/
@@ -2055,6 +2056,7 @@ src/
     │   │   ├── idempotency-cardinality.service.unit.test.ts
     │   │   ├── observability-workers.unit.test.ts
     │   │   ├── redis-saturation.service.unit.test.ts
+    │   │   ├── sentry-capture-policy.unit.test.ts
     │   │   └── sentry-redaction.unit.test.ts
     │   ├── property-based/
     │   │   ├── billing-money.property.unit.test.ts
