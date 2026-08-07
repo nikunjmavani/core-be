@@ -78,6 +78,10 @@ const PROSE_REWRITE_EXTENSIONS: readonly string[] = [
   '.toml',
   '.properties',
   '.example',
+  // Migrations name the Postgres roles the app connects as; without this the
+  // baseline migration is rewritten by the generator while every later migration
+  // keeps the base project's role, and the two disagree.
+  '.sql',
 ];
 
 /** Paths deleted by `--reset-history` — artifacts describing the BASE project's history. */
@@ -266,10 +270,27 @@ function runCommand(command: string, args: readonly string[]): void {
  *
  * Returns the paths it changed.
  */
+/** `acme_be` → `AcmeBe`, for identifiers embedded in TypeScript symbol names. */
+function pascalCase(identifierStem: string): string {
+  return identifierStem
+    .split(/[_-]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('');
+}
+
+/** `acme_be` → `acmeBe`, for local identifiers in shipped source. */
+function lowerCamelCase(identifierStem: string): string {
+  const pascal = pascalCase(identifierStem);
+  return pascal.charAt(0).toLowerCase() + pascal.slice(1);
+}
+
 function rewriteProseIdentity(options: {
   readonly previousSlug: string;
   readonly previousOwner: string;
   readonly previousFrontend: string;
+  readonly previousSqlStem: string;
+  readonly nextSqlStem: string;
   readonly nextSlug: string;
   readonly nextOwner: string;
   readonly nextFrontend: string;
@@ -281,6 +302,23 @@ function rewriteProseIdentity(options: {
       // slug first would leave the frontend mention half-renamed when one is a
       // prefix of the other.
       [options.previousFrontend, options.nextFrontend],
+      // The slug in identifier form, in both casings. Underscored names never
+      // match the hyphenated slug pass, and they appear in two shapes: lower
+      // (`<stem>_app` Postgres roles, the Docker volume) and UPPER (env vars such
+      // as `<STEM>_RUNTIME`). One pair per casing covers every such name, present
+      // and future.
+      [options.previousSqlStem.toUpperCase(), options.nextSqlStem.toUpperCase()],
+      // PascalCase, for identifiers embedded in TypeScript symbol names such as
+      // `grantCoreBeAppRoleForTests`. A rename that misses this leaves helper
+      // functions named after the base project in the fork's own test suite.
+      [pascalCase(options.previousSqlStem), pascalCase(options.nextSqlStem)],
+      // lowerCamel, for local identifiers such as `coreBeAppRole` in shipped
+      // source. PascalCase does not cover it — the leading character differs.
+      [lowerCamelCase(options.previousSqlStem), lowerCamelCase(options.nextSqlStem)],
+      // Fully concatenated, for identifiers that keep no separator at all
+      // (mermaid node ids). Listed last so the separated forms match first.
+      [options.previousSqlStem.replace(/_/g, ''), options.nextSqlStem.replace(/_/g, '')],
+      [options.previousSqlStem, options.nextSqlStem],
       [options.previousSlug, options.nextSlug],
       [options.previousOwner, options.nextOwner],
     ] as Array<[string, string]>
@@ -524,6 +562,8 @@ async function main(): Promise<void> {
       previousSlug,
       previousOwner,
       previousFrontend: previousFrontendSlug,
+      previousSqlStem: previousSlug.replace(/-/g, '_'),
+      nextSqlStem: identity.name.replace(/-/g, '_'),
       nextSlug: identity.name,
       nextOwner: identity.repository.split('/')[0] ?? previousOwner,
       nextFrontend: resolveFrontendSlug(updated),

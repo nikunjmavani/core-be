@@ -24,7 +24,7 @@ function generateRsaPemKeyPair(): { privateKey: string; publicKey: string } {
 describe('jwt.util', () => {
   it('exports issuer, audience, and expiry constants', () => {
     expect(JWT_ISSUER).toBe(PROJECT_SLUG);
-    expect(JWT_AUDIENCE).toBe('core-api');
+    expect(JWT_AUDIENCE).toBe(`${PROJECT_SLUG.replace(/-be$/, '')}-api`);
     expect(ACCESS_TOKEN_EXPIRY_SECONDS).toBe(900);
   });
 

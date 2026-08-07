@@ -56,6 +56,18 @@ export interface ProjectDerivedNames {
   readonly sonarTokenName: string;
   /** Repository-relative path of the generated DBML diagram. */
   readonly dbmlPath: string;
+  /** JWT `aud` claim naming the API tier — a security-critical identity value. */
+  readonly jwtAudience: string;
+  /** Local Postgres database, user and password (all the product stem). */
+  readonly databaseName: string;
+  /** Throwaway database the CI migration dry-run creates. */
+  readonly dryRunDatabaseName: string;
+  /** Restricted Postgres role the app connects as, under RLS. */
+  readonly databaseAppRole: string;
+  /** Postgres role owning runtime objects. */
+  readonly databaseRuntimeRole: string;
+  /** Default Redis key-prefix stem (`<stem>:<NODE_ENV>:`). */
+  readonly redisKeyPrefix: string;
   /** Local Docker Compose container names, keyed by service. */
   readonly containers: Readonly<Record<ContainerService, string>>;
 }
@@ -154,10 +166,37 @@ export function resolveFrontendSlug(config: SetupConfig): string {
   return slug.endsWith('-be') ? `${slug.slice(0, -'-be'.length)}-fe` : `${slug}-fe`;
 }
 
+/**
+ * The product stem: the slug with its tier suffix removed (`acme-be` → `acme`).
+ *
+ * @remarks
+ * Several names are built from the PRODUCT rather than the repository — the JWT
+ * audience names the API tier, and the local database, its user and the Redis key
+ * prefix are per-product, not per-repo. Deriving them from the stem keeps a
+ * backend and its paired frontend agreeing on one product name.
+ */
+export function resolveProductStem(config: SetupConfig): string {
+  const slug = config.project.name;
+  return slug.endsWith('-be') ? slug.slice(0, -'-be'.length) : slug;
+}
+
+/** The slug in SQL-identifier form (`acme-be` → `acme_be`). */
+export function resolveSqlIdentifierStem(config: SetupConfig): string {
+  return config.project.name.replace(/-/g, '_');
+}
+
 /** Every slug-derived name that a rebrand must reach outside TypeScript constants. */
 export function resolveDerivedNames(config: SetupConfig): ProjectDerivedNames {
   const slug = config.project.name;
+  const stem = resolveProductStem(config);
+  const sqlStem = resolveSqlIdentifierStem(config);
   return {
+    jwtAudience: `${stem}-api`,
+    databaseName: stem,
+    dryRunDatabaseName: `${stem}_dryrun`,
+    databaseAppRole: `${sqlStem}_app`,
+    databaseRuntimeRole: `${sqlStem}_runtime`,
+    redisKeyPrefix: stem,
     apiServerName: slug,
     webhookUserAgent: `${slug}-webhook`,
     scalarSlug: slug,

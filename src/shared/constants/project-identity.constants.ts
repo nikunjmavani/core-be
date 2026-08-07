@@ -24,6 +24,15 @@ export const POSTMAN_COLLECTION_PREFIX = 'core-be API';
 /** Repository-relative path of the generated DBML diagram. */
 export const DBML_OUTPUT_PATH = 'docs/database/core-be.dbml';
 
+/** JWT `aud` claim — changing this invalidates outstanding tokens. */
+export const JWT_AUDIENCE = 'core-api';
+
+/** Restricted Postgres role the app connects as, under RLS. */
+export const DATABASE_APP_ROLE = 'core_be_app';
+
+/** Postgres role owning runtime objects. */
+export const DATABASE_RUNTIME_ROLE = 'core_be_runtime';
+
 /** Human-facing product name for OpenAPI and emails. */
 export const PROJECT_DISPLAY_NAME = 'core-be';
 

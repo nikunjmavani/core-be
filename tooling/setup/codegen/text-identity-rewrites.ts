@@ -118,16 +118,22 @@ export const TEXT_REWRITE_TARGETS: readonly TextRewriteTarget[] = [
         pattern: /(the upload script defaults to `)[^`]*(`)/,
         replace: (snapshot) => `$1${snapshot.derived.scalarSlug}$2`,
       },
+      {
+        pattern: /(Default `)[a-z0-9_-]+(:<NODE_ENV>:`)/,
+        replace: (snapshot) => `$1${snapshot.derived.redisKeyPrefix}$2`,
+      },
+      ...localDatabaseRules(),
     ],
   },
   {
     path: 'docker-compose.yml',
-    reason: 'Locally built Toxiproxy image tag.',
+    reason: 'Toxiproxy image tag and the local Postgres credentials.',
     rules: [
       {
         pattern: /^(\s*image:\s*)\S+-toxiproxy:/m,
         replace: (snapshot) => `$1${snapshot.derived.containers.toxiproxy}:`,
       },
+      ...localDatabaseRules(),
     ],
   },
   {
@@ -156,13 +162,23 @@ export const TEXT_REWRITE_TARGETS: readonly TextRewriteTarget[] = [
   },
   {
     path: 'src/tests/load/k6/setup-loadtest.sh',
-    reason: 'docker exec/restart against the Compose container names.',
-    rules: containerCommandRules(),
+    reason: 'docker exec/restart container names and psql database arguments.',
+    rules: [...containerCommandRules(), ...localDatabaseRules()],
   },
   {
     path: 'src/tests/load/k6/check-prereqs.mjs',
     reason: 'Operator guidance strings naming the Compose containers.',
     rules: containerCommandRules(),
+  },
+  {
+    path: 'migrations/00000000000000_init.sql',
+    reason: 'Postgres roles the app and migrations connect as.',
+    rules: sqlIdentityRules(),
+  },
+  {
+    path: '.github/workflows/pr-migration-verify.yml',
+    reason: 'Dry-run database name and the local Postgres connection string.',
+    rules: [...sqlIdentityRules(), ...localDatabaseRules()],
   },
 ];
 
@@ -185,6 +201,61 @@ export function mcpTemplateRules(): readonly TextRewriteRule[] {
     {
       pattern: /"[a-z0-9][a-z0-9-]*:api":/g,
       replace: (snapshot) => `"${snapshot.slug}:api":`,
+    },
+  ];
+}
+
+/**
+ * Postgres identifiers built from the slug: the two roles, the local database,
+ * its user and password, and the CI dry-run database.
+ *
+ * @remarks
+ * The roles live in the baseline migration, so a fork's FIRST migration run
+ * creates them under the fork's own name — there is no rename of a live database.
+ * For this repository the derived values equal the committed ones, so the
+ * generator produces no diff here.
+ *
+ * Matched by SHAPE (`<anything>_app`, `postgresql://x:y@host/db`) rather than by
+ * the current stem, so the rules survive a rename and stay idempotent.
+ */
+export function sqlIdentityRules(): readonly TextRewriteRule[] {
+  return [
+    {
+      pattern: /\b[a-z][a-z0-9]*_be_app\b/g,
+      replace: (snapshot) => snapshot.derived.databaseAppRole,
+    },
+    {
+      pattern: /\b[a-z][a-z0-9]*_be_runtime\b/g,
+      replace: (snapshot) => snapshot.derived.databaseRuntimeRole,
+    },
+    {
+      pattern: /\b[a-z][a-z0-9]*_dryrun\b/g,
+      replace: (snapshot) => snapshot.derived.dryRunDatabaseName,
+    },
+  ];
+}
+
+/** Local Postgres credentials in Compose and the env template. */
+export function localDatabaseRules(): readonly TextRewriteRule[] {
+  return [
+    {
+      pattern: /(POSTGRES_(?:USER|PASSWORD|DB):\s*)\S+/g,
+      replace: (snapshot) => `$1${snapshot.derived.databaseName}`,
+    },
+    {
+      // postgresql://user:password@host:port/database — all three are the stem.
+      // The trailing `(_[a-z0-9_]+)?` PRESERVES a database suffix such as
+      // `_dryrun`; without it this rule silently rewrote the CI dry-run database
+      // back to the primary one, destroying the isolation the workflow relies on.
+      pattern: /postgresql:\/\/[^:@/\s]+:[^@/\s]+@([^:/\s]+):(\d+)\/[a-z0-9]+(_[a-z0-9_]+)?/g,
+      replace: (snapshot) => {
+        const name = snapshot.derived.databaseName;
+        return `postgresql://${name}:${name}@$1:$2/${name}$3`;
+      },
+    },
+    {
+      pattern: /(pg_isready -U )[a-zA-Z0-9_]+( -d )[a-zA-Z0-9_]+/g,
+      replace: (snapshot) => `$1${snapshot.derived.databaseName}$2${snapshot.derived.databaseName}`,
     },
   ];
 }
