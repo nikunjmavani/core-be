@@ -261,8 +261,8 @@ describe('project identity — text rewrites', () => {
     // asymmetry is exactly what a repo-wide gate must not have.
     //
     // Built as a throwaway repo rather than asserted against this one: the fixture slug is
-    // `acme-api`, which appears nowhere in core-be, so scanning the real tree would pass no matter
-    // what the scanner does. A test that cannot fail is worse than no test.
+    // `acme-api`, which appears nowhere in this repository, so scanning the real tree would pass
+    // no matter what the scanner does. A test that cannot fail is worse than no test.
     const scratch = mkdtempSync(join(tmpdir(), 'identity-symlink-'));
     try {
       const git = (...arguments_: string[]): void => {
