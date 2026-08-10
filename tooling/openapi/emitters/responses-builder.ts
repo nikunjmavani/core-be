@@ -25,9 +25,17 @@ function withCapturedExample(
   if (captured === undefined) {
     return content;
   }
+  // OpenAPI 3.0 declares `example` and `examples` mutually exclusive on a Media Type
+  // Object and enforces it as `not: { required: ['example','examples'] }`. Spreading
+  // content that already carries `example` alongside `examples` produced 416 spec
+  // violations. Demote the schema-derived sample into the map so neither is lost.
+  const { example: generatedExample, ...contentWithoutExample } = content;
   return {
-    ...content,
+    ...contentWithoutExample,
     examples: {
+      ...(generatedExample !== undefined
+        ? { generated: { summary: 'Generated from the response schema', value: generatedExample } }
+        : {}),
       captured: {
         summary: 'Captured from a live API call in the test suite (sanitized)',
         value: captured,

@@ -20,7 +20,10 @@ import {
 import { translateRequestMessage } from '@/shared/utils/i18n/translate-request.util.js';
 import { getRequestIdentifier } from '@/shared/utils/http/request.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
-import { assertIdempotencyKeyPresentWhenRequired } from '@/shared/utils/idempotency/idempotency-required.util.js';
+import {
+  assertIdempotencyKeyPresentWhenRequired,
+  isIdempotencyKeyRequiredForRequest,
+} from '@/shared/utils/idempotency/idempotency-required.util.js';
 import {
   IDEMPOTENCY_CACHED_BODY_BYTES,
   IDEMPOTENCY_PLACEHOLDER_TTL_SECONDS,
@@ -390,6 +393,10 @@ async function idempotencyClaimPreHandler(
 ): Promise<void> {
   if (reply.sent) return;
 
+  // Must precede the missing-key early return below: an absent key on a required route
+  // is exactly what this asserts, and running post-auth means anonymous callers get 401.
+  assertIdempotencyKeyPresentWhenRequired(request);
+
   const requestWithIdempotency = request as RequestWithIdempotency;
   const idempotencyKey = requestWithIdempotency._idempotencyKey;
   if (!idempotencyKey) return;
@@ -577,11 +584,18 @@ async function handleIdempotencyClaimRace(
 async function idempotencyOnRequest(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
   if (!WRITE_METHODS.has(request.method)) return;
 
-  assertIdempotencyKeyPresentWhenRequired(request);
+  // Fastify runs GLOBAL onRequest hooks before a route's own `onRequest: [authenticate]`,
+  // so rejecting here tells an anonymous caller about the route's idempotency contract
+  // instead of returning 401. Both rejections are therefore deferred to the preHandler,
+  // which is appended AFTER the route's auth preHandlers.
+  const idempotencyRequired = isIdempotencyKeyRequiredForRequest(request);
 
   const parsed = parseIdempotencyKeyHeader(request.headers['x-idempotency-key']);
   if (parsed.kind === 'absent') return;
   if (parsed.kind === 'invalid') {
+    // Routes that never opted in keep the 400: there the key is optional, so a malformed
+    // one is ordinary request validation rather than a violated contract.
+    if (idempotencyRequired) return;
     throw new ValidationError('errors:idempotencyKeyInvalid');
   }
 

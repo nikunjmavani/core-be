@@ -58,7 +58,6 @@ const PATH_PREFIXES = [
 /** Generated or gitignored targets a doc may cite without them existing on a fresh clone. */
 const GENERATED_PATH_PREFIXES = [
   'docs/openapi/',
-  'docs/postman-collection.json',
   'docs/ONBOARDING.md', // optional output of /understand-onboard
   'agent-os/mcp/mcp.json', // gitignored live MCP config (scaffold via pnpm mcp:setup)
   'agent-os/hooks/.telemetry.log', // gitignored runtime hook telemetry log
@@ -90,6 +89,12 @@ const INTENTIONALLY_ABSENT = new Set<string>([
   'tooling/feature-docs', // retired DOCS.md aggregator, cited historically
   '.github/sync.config.json', // dead reference the evals README quotes as a past finding
   'docs/reference/load-testing.md', // docs-audit skill cites it as the example of a stale flat path
+  // `init:project --reset-history` deletes the BASE project's audit history, so these are
+  // legitimately empty in a freshly adopted repo. Restoring them would import another
+  // product's history; leaving the links unguarded made this gate permanently red after
+  // any adoption. Both `ci:local` and `ci:quality` run it.
+  'docs/reviews',
+  'docs/superpowers',
 ]);
 
 /**

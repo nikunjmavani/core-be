@@ -57,7 +57,7 @@ function buildUserUploadValues(userId: number) {
 
 describe('Security: Upload RLS', () => {
   beforeAll(async () => {
-    await sql`GRANT core_be_app TO core`.catch(() => undefined);
+    await sql`GRANT core_be_app TO CURRENT_USER`.catch(() => undefined);
   });
 
   beforeEach(async () => {

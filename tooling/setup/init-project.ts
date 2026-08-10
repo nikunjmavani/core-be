@@ -20,12 +20,15 @@
  * script is typically run once, on a fresh clone, by someone who has not read it.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import { resolve } from 'node:path';
 
 import { generateAllProjectIdentityArtifacts } from '@tooling/setup/codegen/generate-project-identity.js';
-import { resolveFrontendSlug } from '@tooling/setup/codegen/project-identity.util.js';
+import {
+  resolveDerivedNames,
+  resolveFrontendSlug,
+} from '@tooling/setup/codegen/project-identity.util.js';
 import { loadConfigIfExists, saveConfig } from '@tooling/setup/common/config.js';
 import type { SetupConfig } from '@tooling/setup/common/types.js';
 import * as log from '@tooling/setup/common/logger.js';
@@ -90,10 +93,6 @@ const FORK_RESET_PATHS: ReadonlyArray<{ path: string; description: string }> = [
   {
     path: 'docs/superpowers',
     description: "the base project's completed implementation plans and specs",
-  },
-  {
-    path: 'tooling/route-coverage/route-success-coverage-budget.json',
-    description: 'observed route-coverage budget (regenerated on the next full test run)',
   },
 ];
 
@@ -291,6 +290,7 @@ function rewriteProseIdentity(options: {
   readonly previousFrontend: string;
   readonly previousSqlStem: string;
   readonly nextSqlStem: string;
+  readonly nextDatabaseName: string;
   readonly nextSlug: string;
   readonly nextOwner: string;
   readonly nextFrontend: string;
@@ -376,6 +376,16 @@ function rewriteProseIdentity(options: {
     for (const [from, to] of replacements) {
       updated = updated.split(from).join(to);
     }
+    // Connection strings carry the LOCAL DATABASE name, which is the product stem rather
+    // than the slug, so no string pair above matches them. Copy-pasteable setup commands
+    // in docs would otherwise keep naming a database the adopted stack never creates —
+    // the same `28P01: password authentication failed` that blocks a first bootstrap.
+    // Shape-matched, and the trailing group preserves a `_dryrun`-style suffix.
+    updated = updated.replace(
+      /postgresql:\/\/[^:@/\s]+:[^@/\s]+@([^:/\s]+):(\d+)\/[a-z0-9]+(_[a-z0-9_]+)?/g,
+      (_match, host: string, port: string, suffix = '') =>
+        `postgresql://${options.nextDatabaseName}:${options.nextDatabaseName}@${host}:${port}/${options.nextDatabaseName}${suffix}`,
+    );
     if (updated === contents) continue;
     changed.push(relativePath);
     if (!options.dryRun) {
@@ -383,6 +393,84 @@ function rewriteProseIdentity(options: {
     }
   }
   return changed;
+}
+
+/**
+ * Rename tracked files whose NAME carries the project slug.
+ *
+ * @remarks
+ * The prose pass rewrites file CONTENTS; nothing renamed the files themselves. That gap
+ * was not cosmetic — a migration whose body was rebranded while its filename was not left
+ * its own regression test unable to load, and the parallel runner breaks out of its lane
+ * loop on the first failure, so one ENOENT suppressed an entire database-bound lane.
+ *
+ * Uses `git mv` so history follows the file. Matches the slug in both hyphenated and
+ * underscored forms, since filenames use both conventions.
+ */
+function renameSlugNamedFiles(options: {
+  readonly previousSlug: string;
+  readonly nextSlug: string;
+  readonly dryRun: boolean;
+}): string[] {
+  const previousForms = [options.previousSlug, options.previousSlug.replace(/-/g, '_')];
+  const nextForms = [options.nextSlug, options.nextSlug.replace(/-/g, '_')];
+
+  const tracked = execFileSync('git', ['ls-files', '-z'], {
+    cwd: REPOSITORY_ROOT,
+    encoding: 'utf-8',
+    maxBuffer: 64 * 1024 * 1024,
+  })
+    .split('\0')
+    .filter((entry) => entry.length > 0);
+
+  const renamed: string[] = [];
+  for (const relativePath of tracked) {
+    const segments = relativePath.split('/');
+    const fileName = segments[segments.length - 1] ?? '';
+    let nextFileName = fileName;
+    for (const [index, form] of previousForms.entries()) {
+      const replacement = nextForms[index];
+      if (replacement && nextFileName.includes(form)) {
+        nextFileName = nextFileName.split(form).join(replacement);
+      }
+    }
+    if (nextFileName === fileName) continue;
+
+    // `git ls-files` lists tracked paths even when the working tree no longer has them —
+    // the fork reset deletes files earlier in this run, and the stale DBML is removed by
+    // name. Renaming those would fail with ENOENT and abort the adoption.
+    if (!existsSync(resolve(REPOSITORY_ROOT, relativePath))) continue;
+
+    const nextPath = [...segments.slice(0, -1), nextFileName].join('/');
+    renamed.push(`${relativePath} → ${nextPath}`);
+    if (options.dryRun) continue;
+    try {
+      execFileSync('git', ['mv', relativePath, nextPath], { cwd: REPOSITORY_ROOT });
+    } catch {
+      // Untracked-by-git checkouts fall back to a plain rename.
+      renameSync(resolve(REPOSITORY_ROOT, relativePath), resolve(REPOSITORY_ROOT, nextPath));
+    }
+  }
+  return renamed;
+}
+
+/**
+ * Re-lock the vendored agent-os skills.
+ *
+ * @remarks
+ * `agent-os/skills-lock.json` records a sha256 per vendored `SKILL.md`. The prose pass
+ * rewrites those files, invalidating every hash, so `agent-os:check` fails on a freshly
+ * adopted repo with one integrity error per skill. Regenerating is the remedy the failure
+ * itself names — the rename simply never ran it.
+ */
+function relockAgentOsSkills(dryRun: boolean): boolean {
+  if (dryRun) return false;
+  try {
+    execFileSync('pnpm', ['agent-os:lock'], { cwd: REPOSITORY_ROOT, stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function reportResidualLiterals(previousSlug: string, previousOwner: string): void {
@@ -555,6 +643,16 @@ async function main(): Promise<void> {
     }
   }
 
+  const renamedFiles = renameSlugNamedFiles({
+    previousSlug,
+    nextSlug: identity.name,
+    dryRun: false,
+  });
+  if (renamedFiles.length > 0) {
+    log.success(`Renamed ${renamedFiles.length} file(s) whose name carried the project slug`);
+    for (const rename of renamedFiles) log.infoRaw(`    ${rename}`);
+  }
+
   if (options.keepDocs) {
     log.warn('--keep-docs: prose still refers to the base project by name.');
   } else {
@@ -564,6 +662,7 @@ async function main(): Promise<void> {
       previousFrontend: previousFrontendSlug,
       previousSqlStem: previousSlug.replace(/-/g, '_'),
       nextSqlStem: identity.name.replace(/-/g, '_'),
+      nextDatabaseName: resolveDerivedNames(updated).databaseName,
       nextSlug: identity.name,
       nextOwner: identity.repository.split('/')[0] ?? previousOwner,
       nextFrontend: resolveFrontendSlug(updated),
@@ -572,6 +671,31 @@ async function main(): Promise<void> {
     log.success(
       `Rewrote the project name across ${rewritten.length} prose and config file(s) — docs, agent instructions, reference material and paired-frontend references now name this project.`,
     );
+    // Must follow the prose pass: it rewrites every vendored SKILL.md, invalidating the
+    // recorded hashes. Without this, `agent-os:check` fails on a freshly adopted repo.
+    // Derived artifacts embed the project name, so a rebrand leaves them stale and their
+    // drift gates red. Regenerate rather than leaving the adopter to discover each one.
+    for (const [label, script] of [
+      ['route catalog', 'routes:catalog'],
+      ['database diagram', 'tool:generate-dbdiagram'],
+      ['source tree', 'tool:project-structure-tree'],
+      // OpenAPI + Postman: gitignored generated artifacts. Without them `docs:links:check`
+      // is red on a fresh adoption, because docs/README.md cites the collection by name.
+      ['API documents', 'docs:all'],
+    ] as const) {
+      try {
+        execFileSync('pnpm', [script], { cwd: REPOSITORY_ROOT, stdio: 'ignore' });
+        log.success(`Regenerated the ${label}`);
+      } catch {
+        log.warn(`Could not regenerate the ${label} — run \`pnpm ${script}\` before committing.`);
+      }
+    }
+
+    if (relockAgentOsSkills(false)) {
+      log.success('Re-locked agent-os skill hashes (pnpm agent-os:lock)');
+    } else {
+      log.warn('Could not re-lock agent-os skills — run `pnpm agent-os:lock` before committing.');
+    }
   }
 
   log.blank();

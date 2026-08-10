@@ -27,6 +27,12 @@ export const DBML_OUTPUT_PATH = 'docs/database/core-be.dbml';
 /** JWT `aud` claim — changing this invalidates outstanding tokens. */
 export const JWT_AUDIENCE = 'core-api';
 
+/** Local Postgres database, user and password for the `compose:up` stack. */
+export const LOCAL_DATABASE_NAME = 'core';
+
+/** Redis key-prefix stem (`<stem>:<NODE_ENV>:`), isolating one product's keyspace. */
+export const REDIS_KEY_PREFIX_STEM = 'core';
+
 /** Restricted Postgres role the app connects as, under RLS. */
 export const DATABASE_APP_ROLE = 'core_be_app';
 

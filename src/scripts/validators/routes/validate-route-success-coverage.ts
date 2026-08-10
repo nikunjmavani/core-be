@@ -111,9 +111,14 @@ function main(): void {
     observedLines,
   });
 
-  const budget = JSON.parse(
-    readFileSync(resolve(process.cwd(), ROUTE_SUCCESS_COVERAGE_BUDGET_PATH), 'utf-8'),
-  ) as CoverageBudget;
+  // `init:project --reset-history` deletes this budget, so a freshly adopted repo has
+  // none. Reading it unguarded killed the gate with a raw ENOENT; an absent budget now
+  // means the documented target of zero uncovered routes — the strictest reading, so a
+  // missing file can never be laxer than a present one.
+  const budgetPath = resolve(process.cwd(), ROUTE_SUCCESS_COVERAGE_BUDGET_PATH);
+  const budget: CoverageBudget = existsSync(budgetPath)
+    ? (JSON.parse(readFileSync(budgetPath, 'utf-8')) as CoverageBudget)
+    : { maxUncoveredRoutes: 0 };
 
   console.log(
     `Observed files: ${observedFiles.length} · covered routes: ${result.coveredRoutes.length} · ` +

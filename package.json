@@ -197,8 +197,8 @@
     "db:migrate:new": "tsx src/scripts/codegen/generate-migration.ts",
     "security:secrets": "gitleaks detect --source . --verbose --redact",
     "security:sast": "semgrep --config auto src/",
-    "sbom:generate": "npx @cyclonedx/cyclonedx-npm --output-file sbom.cyclonedx.json .",
-    "sbom:verify": "npx @cyclonedx/cyclonedx-npm --validate --output-file sbom.cyclonedx.json .",
+    "sbom:generate": "npx -y @cyclonedx/cdxgen -t js --no-recurse -o sbom.cyclonedx.json .",
+    "sbom:verify": "npx -y @cyclonedx/cdxgen -t js --no-recurse -o node_modules/.cache/sbom-verify.cyclonedx.json .",
     "deps:audit": "pnpm audit",
     "deps:audit:prod": "pnpm audit --prod",
     "deps:update": "pnpm update --recursive",
@@ -207,7 +207,8 @@
     "chaos:provision": "tsx src/tests/chaos/provision-proxies.ts",
     "load:bench": "pnpm test:bench",
     "commitlint": "commitlint",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:smoke": "vitest run --config tooling/vitest/smoke.config.ts"
   },
   "packageManager": "pnpm@11.1.1+sha512.d1fdf5f73c617b64fa1a56a81c3c8dfe0e966e33a6010aa256b517ae77be21d93e05affc0de1a83b0e4f29d569f68b446ae8f068cd7247c0bb3df0fb4d7bdf9a",
   "dependencies": {

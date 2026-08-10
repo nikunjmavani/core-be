@@ -171,6 +171,18 @@ export const TEXT_REWRITE_TARGETS: readonly TextRewriteTarget[] = [
     rules: containerCommandRules(),
   },
   {
+    path: 'src/tests/chaos/bootstrap-env.ts',
+    reason:
+      'Chaos DB/Redis URLs, forced with `=` so traffic cannot bypass Toxiproxy. This module must resolve before Vitest wires `@/` aliases, so it cannot import the generated constants.',
+    rules: [
+      ...localDatabaseRules(),
+      {
+        pattern: /(REDIS_KEY_PREFIX \?\?= ')[a-z0-9_-]+(:test:')/,
+        replace: (snapshot) => `$1${snapshot.derived.redisKeyPrefix}$2`,
+      },
+    ],
+  },
+  {
     path: 'migrations/00000000000000_init.sql',
     reason: 'Postgres roles the app and migrations connect as.',
     rules: sqlIdentityRules(),

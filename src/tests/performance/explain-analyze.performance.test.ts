@@ -11,7 +11,7 @@ describe.runIf(runExplainTests)('Performance: EXPLAIN ANALYZE', () => {
   const auditRepository = new AuditRepository();
 
   beforeAll(async () => {
-    await sql`GRANT core_be_app TO core`.catch(() => undefined);
+    await sql`GRANT core_be_app TO CURRENT_USER`.catch(() => undefined);
     await sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`;
     await sql`
       CREATE INDEX IF NOT EXISTS idx_users_email_trgm

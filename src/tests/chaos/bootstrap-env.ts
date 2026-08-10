@@ -11,6 +11,9 @@ import '../../shared/config/load-env-files.js';
 // cleanupDatabase/cleanupTestRedis guards) via the explicit flags below.
 process.env.NODE_ENV = 'development';
 // Isolate the chaos Redis keyspace from a running `pnpm dev` (both are NODE_ENV=development).
+// Literal, not an import: this module must resolve BEFORE Vitest wires `@/` aliases,
+// and the import-paths policy forbids `../` in a `from` clause. It is instead a
+// generator target (see text-identity-rewrites.ts), so a rebrand rewrites it in place.
 process.env.REDIS_KEY_PREFIX ??= 'core:test:';
 // Skip process-level shared-singleton teardown under the per-worker Vitest harness.
 process.env.SHUTDOWN_SKIP_SHARED_TEARDOWN = 'true';
@@ -83,7 +86,7 @@ const chaosHostedOnGithubActionsContinuousIntegration = process.env.CI === 'true
  * would bypass proxies, so toxins and administrative proxy disables would not affect the app.
  */
 process.env.DATABASE_URL = chaosHostedOnGithubActionsContinuousIntegration
-  ? 'postgresql://postgres:postgres@127.0.0.1:25432/core'
+  ? 'postgresql://core:core@127.0.0.1:25432/core'
   : 'postgresql://core:core@127.0.0.1:25432/core';
 
 process.env.REDIS_URL = 'redis://127.0.0.1:26379';

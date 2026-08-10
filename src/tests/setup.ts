@@ -1,6 +1,10 @@
 import '@/shared/config/load-env-files.js';
+import {
+  LOCAL_DATABASE_NAME,
+  REDIS_KEY_PREFIX_STEM,
+} from '@/shared/constants/project-identity.constants.js';
 
-const LOCAL_TEST_DATABASE_URL = 'postgresql://core:core@localhost:5432/core';
+const LOCAL_TEST_DATABASE_URL = `postgresql://${LOCAL_DATABASE_NAME}:${LOCAL_DATABASE_NAME}@localhost:5432/${LOCAL_DATABASE_NAME}`;
 
 function isLocalDatabaseUrl(value: string | undefined): boolean {
   if (!value) return false;
@@ -114,7 +118,7 @@ process.env.OAUTH_GITHUB_CLIENT_ID ??= 'test-github-client-id';
 process.env.OAUTH_GITHUB_CLIENT_SECRET ??= 'test-github-client-secret';
 // Isolate the test Redis keyspace from a running `pnpm dev` (both are NODE_ENV=development); a hard
 // set (not the developer's `.env.local` value) keeps the test prefix deterministic and isolated.
-process.env.REDIS_KEY_PREFIX = 'core:test:';
+process.env.REDIS_KEY_PREFIX = `${REDIS_KEY_PREFIX_STEM}:test:`;
 delete process.env.WEBHOOK_URL_ALLOWLIST;
 // CAPTCHA mirrors CI (`reusable-vitest-postgres-redis.yml` leaves CAPTCHA_PROVIDER unset →
 // schema default `disabled`). A developer `.env.local` that enables Cloudflare Turnstile

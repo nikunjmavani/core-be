@@ -89,7 +89,7 @@ export const RLS_MATRIX_SKIP_CRUD_TABLES = new Set([
 ]);
 
 export async function grantCoreBeAppRoleForTests(): Promise<void> {
-  await sql`GRANT core_be_app TO core`.catch(() => undefined);
+  await sql`GRANT core_be_app TO CURRENT_USER`.catch(() => undefined);
 }
 
 /**

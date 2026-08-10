@@ -125,17 +125,29 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
           content: {
             'application/json': {
               schema,
-              ...(schema.example ? { example: schema.example } : {}),
-              ...(capturedRequestBody !== undefined
-                ? {
+              // OAS 3.0 forbids `example` and `examples` together on a Media Type Object.
+              // With a captured sample present, the schema-derived one is demoted into the
+              // map under `generated` rather than dropped.
+              ...(capturedRequestBody === undefined
+                ? schema.example
+                  ? { example: schema.example }
+                  : {}
+                : {
                     examples: {
+                      ...(schema.example
+                        ? {
+                            generated: {
+                              summary: 'Generated from the request schema',
+                              value: schema.example,
+                            },
+                          }
+                        : {}),
                       captured: {
                         summary: 'Captured from a live API call in the test suite (sanitized)',
                         value: capturedRequestBody,
                       },
                     },
-                  }
-                : {}),
+                  }),
             },
           },
         };
