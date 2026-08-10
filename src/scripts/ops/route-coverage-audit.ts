@@ -26,7 +26,7 @@
  *   etc. The path is normalised by stripping `/api/v1/` and lowercasing.
  */
 import { readFileSync } from 'node:fs';
-import { readdirSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 interface RouteEntry {
@@ -336,9 +336,16 @@ async function main(): Promise<void> {
   );
   reportLines.push('');
 
-  const outputPath = join(REPO_ROOT, 'docs', 'reviews', 'route-coverage-audit-2026-06-08.md');
-  writeFileSync(outputPath, reportLines.join('\n'));
-  console.log(`Wrote ${outputPath}`);
+  // `--check` is read-only: writing from it mutated the repository AND crashed, because
+  // `init:project --reset-history` purges `docs/reviews/`, so the unconditional write hit
+  // ENOENT before the gap verdict below could run. Create the directory when we do write.
+  if (!CHECK_MODE) {
+    const outputDirectory = join(REPO_ROOT, 'docs', 'reviews');
+    const outputPath = join(outputDirectory, 'route-coverage-audit-2026-06-08.md');
+    mkdirSync(outputDirectory, { recursive: true });
+    writeFileSync(outputPath, reportLines.join('\n'));
+    console.log(`Wrote ${outputPath}`);
+  }
 
   console.log('');
   console.log(`Covered: ${covered.length}`);
