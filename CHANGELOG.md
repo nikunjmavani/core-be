@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2.0](https://github.com/nikunjmavani/core-be/compare/v5.1.0...v5.2.0) (2026-08-10)
+
+
+### Added
+
+* **tooling:** generate full project identity and add template adoption flow ([#1025](https://github.com/nikunjmavani/core-be/issues/1025)) ([3f34497](https://github.com/nikunjmavani/core-be/commit/3f34497d09c1635727e3bb6de8a3990235486b18))
+
+
+### Fixed
+
+* **ci:** enforce the identity gate on PRs, not only post-merge ([#1037](https://github.com/nikunjmavani/core-be/issues/1037)) ([4fad0f0](https://github.com/nikunjmavani/core-be/commit/4fad0f04376d5868332e72ba3fd0c05893daa037))
+* **db-viewer:** clear the lint failures blocking the tooling lane ([#1033](https://github.com/nikunjmavani/core-be/issues/1033)) ([0f5d681](https://github.com/nikunjmavani/core-be/commit/0f5d681fa74d21c94b36e3f4e15f1b7581a3e519))
+* idempotent personal-org provisioning + Sentry 4xx capture policy ([#1026](https://github.com/nikunjmavani/core-be/issues/1026)) ([3021846](https://github.com/nikunjmavani/core-be/commit/302184691f5678a91e94615d833c2453fc5b150d))
+* **test:** repair the broken fast test lane + close Sentry/OAuth coverage gaps ([#1029](https://github.com/nikunjmavani/core-be/issues/1029)) ([0a5bffb](https://github.com/nikunjmavani/core-be/commit/0a5bffb025d8ec527ded62fc18ffac7d0e2e5ec4))
+* **tooling:** stop the identity gate reading developer-private config ([#1035](https://github.com/nikunjmavani/core-be/issues/1035)) ([dd74a2e](https://github.com/nikunjmavani/core-be/commit/dd74a2e360e88a94d74e43b01f237e73191f27ea))
+
+
+### Dependencies
+
+* **ioredis:** upgraded 5.10.1 → 6.0.0 ([#1034](https://github.com/nikunjmavani/core-be/issues/1034)) ([2a10bc4](https://github.com/nikunjmavani/core-be/commit/2a10bc47)). ioredis 6 changes its default RESP wire protocol from 2 to 3; this project pins it back to **RESP2** (`REDIS_PROTOCOL_VERSION`) on every connection, including all BullMQ queues and workers, because BullMQ declares no RESP3 support. Redis behaviour is therefore unchanged by this release.
+* bumped 15 packages in the non-major group, including fastify 5.11.0 → 5.11.2, bullmq 6.0.5 → 6.0.9 and jose 6.2.7 → 6.2.8 ([#1031](https://github.com/nikunjmavani/core-be/issues/1031)) ([530bd4d](https://github.com/nikunjmavani/core-be/commit/530bd4d1f158e9b6f5b26effb57e5e8f22b6607a))
+
+
+### Documentation
+
+* **github:** restructure the PR template and align it with the paired repo ([#1027](https://github.com/nikunjmavani/core-be/issues/1027)) ([4bac5e8](https://github.com/nikunjmavani/core-be/commit/4bac5e83b1bc8da18b3628f522696014c22fe9e7))
+
 ## [5.1.0](https://github.com/nikunjmavani/core-be/compare/v5.0.0...v5.1.0) (2026-08-05)
 
 
