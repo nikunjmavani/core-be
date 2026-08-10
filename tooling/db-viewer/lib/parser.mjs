@@ -24,6 +24,60 @@ function regexCanFollow(out) {
 
 // Strip // line comments and /* */ block comments without touching string bodies or
 // regex literals (a `//` inside e.g. `replace(/\/\//g, …)` is not a comment).
+/** Index just past a `//` line comment. Its text is dropped. */
+function skipLineComment(src, i) {
+  let cursor = i;
+  while (cursor < src.length && src[cursor] !== '\n') cursor++;
+  return cursor;
+}
+
+/** Index just past a block comment. Its text is dropped. */
+function skipBlockComment(src, i) {
+  let cursor = i + 2;
+  while (cursor < src.length && !(src[cursor] === '*' && src[cursor + 1] === '/')) cursor++;
+  return cursor + 2;
+}
+
+/**
+ * Copy one character of an in-progress string literal.
+ *
+ * Returns the text to emit, the next index, and the delimiter still in force
+ * (null once the literal closes). A backslash consumes the character after it,
+ * so an escaped quote cannot end the string.
+ */
+function copyStringCharacter(src, i, delimiter) {
+  const c = src[i];
+  if (c === '\\') return { text: c + (src[i + 1] ?? ''), next: i + 2, delimiter };
+  return { text: c, next: i + 1, delimiter: c === delimiter ? null : delimiter };
+}
+
+/**
+ * Copy a whole regex literal through verbatim — escapes and `[]` character
+ * classes, inside which `/` needs no escape — so its body can never be mistaken
+ * for a comment.
+ */
+function copyRegexLiteral(src, i) {
+  let out = src[i];
+  let cursor = i + 1;
+  let inClass = false;
+  while (cursor < src.length && src[cursor] !== '\n') {
+    out += src[cursor];
+    if (src[cursor] === '\\') {
+      out += src[cursor + 1] ?? '';
+      cursor += 2;
+      continue;
+    }
+    if (src[cursor] === '[') inClass = true;
+    else if (src[cursor] === ']') inClass = false;
+    else if (src[cursor] === '/' && !inClass) {
+      cursor++;
+      break;
+    }
+    cursor++;
+  }
+  return { text: out, next: cursor };
+}
+
 function stripComments(src) {
   let out = '';
   let i = 0;
@@ -32,15 +86,12 @@ function stripComments(src) {
   while (i < n) {
     const c = src[i];
     const c2 = src[i + 1];
+
     if (str) {
-      out += c;
-      if (c === '\\') {
-        out += c2 ?? '';
-        i += 2;
-        continue;
-      }
-      if (c === str) str = null;
-      i++;
+      const step = copyStringCharacter(src, i, str);
+      out += step.text;
+      i = step.next;
+      str = step.delimiter;
       continue;
     }
     if (c === '"' || c === "'" || c === '`') {
@@ -50,36 +101,17 @@ function stripComments(src) {
       continue;
     }
     if (c === '/' && c2 === '/') {
-      while (i < n && src[i] !== '\n') i++;
+      i = skipLineComment(src, i);
       continue;
     }
     if (c === '/' && c2 === '*') {
-      i += 2;
-      while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i++;
-      i += 2;
+      i = skipBlockComment(src, i);
       continue;
     }
     if (c === '/' && regexCanFollow(out)) {
-      // Copy the whole regex literal through verbatim (escapes + [] char classes,
-      // where '/' needs no escape) so its body can never be mistaken for a comment.
-      out += c;
-      i++;
-      let inClass = false;
-      while (i < n && src[i] !== '\n') {
-        out += src[i];
-        if (src[i] === '\\') {
-          out += src[i + 1] ?? '';
-          i += 2;
-          continue;
-        }
-        if (src[i] === '[') inClass = true;
-        else if (src[i] === ']') inClass = false;
-        else if (src[i] === '/' && !inClass) {
-          i++;
-          break;
-        }
-        i++;
-      }
+      const step = copyRegexLiteral(src, i);
+      out += step.text;
+      i = step.next;
       continue;
     }
     out += c;
@@ -118,6 +150,21 @@ function matchBracket(src, open) {
 }
 
 // Split a string on a separator char, but only at bracket-depth 0 and outside strings.
+/**
+ * Bracket and generic nesting after consuming one character.
+ *
+ * Angle brackets count only when they look like a generic (`foo<…>`), and the
+ * `>` of an arrow (`=>`) is never treated as a closer.
+ */
+function updateNesting(src, i, depth, angle) {
+  const c = src[i];
+  if (c === '(' || c === '[' || c === '{') return { depth: depth + 1, angle };
+  if (c === ')' || c === ']' || c === '}') return { depth: depth - 1, angle };
+  if (c === '<' && /[A-Za-z0-9_$]/.test(src[i - 1] || '')) return { depth, angle: angle + 1 };
+  if (c === '>' && src[i - 1] !== '=' && angle > 0) return { depth, angle: angle - 1 };
+  return { depth, angle };
+}
+
 function splitTopLevel(src, sep = ',') {
   const parts = [];
   let depth = 0; // () [] {}
@@ -127,13 +174,10 @@ function splitTopLevel(src, sep = ',') {
   for (let i = 0; i < src.length; i++) {
     const c = src[i];
     if (str) {
-      cur += c;
-      if (c === '\\') {
-        cur += src[i + 1] ?? '';
-        i++;
-        continue;
-      }
-      if (c === str) str = null;
+      const step = copyStringCharacter(src, i, str);
+      cur += step.text;
+      str = step.delimiter;
+      i = step.next - 1; // the loop's own i++ supplies the final advance
       continue;
     }
     if (c === '"' || c === "'" || c === '`') {
@@ -141,12 +185,11 @@ function splitTopLevel(src, sep = ',') {
       cur += c;
       continue;
     }
-    if (c === '(' || c === '[' || c === '{') depth++;
-    else if (c === ')' || c === ']' || c === '}') depth--;
-    // Count angle brackets only when they look like a generic (`foo<…>`), and
-    // never treat the `>` of an arrow (`=>`) as a closer.
-    else if (c === '<' && /[A-Za-z0-9_$]/.test(src[i - 1] || '')) angle++;
-    else if (c === '>' && src[i - 1] !== '=' && angle > 0) angle--;
+
+    const nesting = updateNesting(src, i, depth, angle);
+    depth = nesting.depth;
+    angle = nesting.angle;
+
     if (c === sep && depth === 0 && angle === 0) {
       parts.push(cur);
       cur = '';
@@ -168,6 +211,52 @@ function firstStringLiteral(argsSrc) {
 // Parse a column expression like:
 //   varchar('email', { length: 255 }).notNull().unique()
 // into { type, args, methods: [{ name, args }] }
+/**
+ * Drop a leading TypeScript generic argument list, e.g. the `<Record<string, X>>`
+ * in `.$type<…>()`.
+ *
+ * Without this the generic's `>` would swallow the rest of the chain
+ * (.primaryKey(), .notNull(), …).
+ */
+function skipGenericArguments(after) {
+  let depth = 0;
+  let j = 0;
+  for (; j < after.length; j++) {
+    if (after[j] === '<') depth++;
+    else if (after[j] === '>') {
+      depth--;
+      if (depth === 0) {
+        j++;
+        break;
+      }
+    }
+  }
+  return after.slice(j).replace(/^\s+/, '');
+}
+
+/** The `.a().b()` tail of a column expression, as `{ name, args }` entries. */
+function parseMethodChain(tail) {
+  const methods = [];
+  let rest = tail;
+  while (true) {
+    const m = rest.match(/^\s*\.\s*([A-Za-z_$][\w$]*)\s*/);
+    if (!m) break;
+    const name = m[1];
+    let after = rest.slice(m[0].length);
+    if (after[0] === '<') after = skipGenericArguments(after);
+
+    if (after[0] !== '(') {
+      methods.push({ name, args: '' });
+      rest = after;
+      continue;
+    }
+    const closeIdx = matchBracket(after, 0);
+    methods.push({ name, args: after.slice(1, closeIdx) });
+    rest = after.slice(closeIdx + 1);
+  }
+  return methods;
+}
+
 function parseChain(expr) {
   const source = expr.trim();
   const typeMatch = source.match(/^([A-Za-z_$][\w$]*)\s*\(/);
@@ -179,43 +268,11 @@ function parseChain(expr) {
   const type = typeMatch[1];
   const i = source.indexOf('(', typeMatch.index);
   const close = matchBracket(source, i);
-  const args = source.slice(i + 1, close);
-  const methods = [];
-  let rest = source.slice(close + 1);
-  while (true) {
-    const m = rest.match(/^\s*\.\s*([A-Za-z_$][\w$]*)\s*/);
-    if (!m) break;
-    const name = m[1];
-    let after = rest.slice(m[0].length);
-    // Skip a TypeScript generic type argument, e.g. `.$type<Record<string, X>>()`,
-    // so it doesn't swallow the rest of the chain (.primaryKey(), .notNull(), …).
-    if (after[0] === '<') {
-      let depth = 0,
-        j = 0;
-      for (; j < after.length; j++) {
-        if (after[j] === '<') depth++;
-        else if (after[j] === '>') {
-          depth--;
-          if (depth === 0) {
-            j++;
-            break;
-          }
-        }
-      }
-      after = after.slice(j).replace(/^\s+/, '');
-    }
-    if (after[0] === '(') {
-      const openIdx = 0;
-      const closeIdx = matchBracket(after, openIdx);
-      const mArgs = after.slice(1, closeIdx);
-      methods.push({ name, args: mArgs });
-      rest = after.slice(closeIdx + 1);
-    } else {
-      methods.push({ name, args: '' });
-      rest = after;
-    }
-  }
-  return { type, args, methods };
+  return {
+    type,
+    args: source.slice(i + 1, close),
+    methods: parseMethodChain(source.slice(close + 1)),
+  };
 }
 
 // ---- enums ----------------------------------------------------------------
@@ -227,8 +284,7 @@ function parseEnums(src) {
     `(?:export\\s+)?const\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*(${ENUM_FNS.join('|')})\\s*\\(`,
     'g',
   );
-  let m;
-  while ((m = re.exec(src))) {
+  for (const m of src.matchAll(re)) {
     const varName = m[1];
     const openIdx = src.indexOf('(', m.index + m[0].length - 1);
     const close = matchBracket(src, openIdx);
@@ -253,10 +309,80 @@ function parseEnums(src) {
 
 // ---- tables ---------------------------------------------------------------
 
+/**
+ * The column record as declared by its constructor, before any chained builder
+ * calls are applied.
+ */
+function baseColumn(key, chain, ctx) {
+  const declaredEnum = ctx.enumVarByName[chain.type];
+  const col = {
+    key,
+    name: firstStringLiteral(chain.args) || key,
+    type: chain.type,
+    isEnum: !!declaredEnum,
+    enumName: declaredEnum?.name || null,
+    enumValues: declaredEnum?.values || null,
+    pk: false,
+    notNull: false,
+    unique: false,
+    array: false,
+    default: null,
+    references: null,
+  };
+
+  // Precision/length hints live in the constructor args (e.g. varchar length).
+  const lengthM = chain.args.match(/length\s*:\s*(\d+)/);
+  if (lengthM) col.length = Number(lengthM[1]);
+  if (/withTimezone\s*:\s*true/.test(chain.args)) col.withTimezone = true;
+  return col;
+}
+
+/** Apply one chained builder call (`.notNull()`, `.references(…)`, …) to a column. */
+function applyColumnMethod(col, meth) {
+  switch (meth.name) {
+    case 'primaryKey':
+      col.pk = true;
+      col.notNull = true;
+      break;
+    case 'notNull':
+      col.notNull = true;
+      break;
+    case 'unique':
+      col.unique = true;
+      break;
+    case 'array':
+      col.array = true;
+      break;
+    case 'default':
+      col.default = meth.args.trim();
+      break;
+    case 'defaultNow':
+      col.default = 'now()';
+      break;
+    case 'defaultRandom':
+      col.default = 'random()';
+      break;
+    case '$defaultFn':
+    case '$default':
+      col.default = 'fn()';
+      break;
+    case 'references': {
+      const refM = meth.args.match(/=>\s*([A-Za-z_$][\w$]*)\s*\.\s*([A-Za-z_$][\w$]*)/);
+      if (!refM) break;
+      const onDelete = meth.args.match(/onDelete\s*:\s*['"`]([^'"`]+)['"`]/);
+      col.references = {
+        tableVar: refM[1],
+        column: refM[2],
+        onDelete: onDelete ? onDelete[1] : null,
+      };
+      break;
+    }
+  }
+}
+
 function parseColumns(objSrc, ctx) {
   const columns = [];
-  const entries = splitTopLevel(objSrc);
-  for (const entry of entries) {
+  for (const entry of splitTopLevel(objSrc)) {
     const idx = entry.indexOf(':');
     if (idx === -1) continue;
     const key = entry
@@ -264,73 +390,11 @@ function parseColumns(objSrc, ctx) {
       .trim()
       .replace(/^['"`]|['"`]$/g, '');
     if (!(key && /^[A-Za-z_$][\w$]*$/.test(key))) continue;
-    const expr = entry.slice(idx + 1).trim();
-    const chain = parseChain(expr);
+    const chain = parseChain(entry.slice(idx + 1).trim());
     if (!chain.type) continue;
 
-    const dbName = firstStringLiteral(chain.args) || key;
-    const col = {
-      key,
-      name: dbName,
-      type: chain.type,
-      isEnum: !!ctx.enumVarByName[chain.type],
-      enumName: ctx.enumVarByName[chain.type]?.name || null,
-      enumValues: ctx.enumVarByName[chain.type]?.values || null,
-      pk: false,
-      notNull: false,
-      unique: false,
-      array: false,
-      default: null,
-      references: null,
-    };
-
-    // Extract precision/length hints from the constructor args (e.g. varchar length).
-    const lengthM = chain.args.match(/length\s*:\s*(\d+)/);
-    if (lengthM) col.length = Number(lengthM[1]);
-    if (/withTimezone\s*:\s*true/.test(chain.args)) col.withTimezone = true;
-
-    for (const meth of chain.methods) {
-      switch (meth.name) {
-        case 'primaryKey':
-          col.pk = true;
-          col.notNull = true;
-          break;
-        case 'notNull':
-          col.notNull = true;
-          break;
-        case 'unique':
-          col.unique = true;
-          break;
-        case 'array':
-          col.array = true;
-          break;
-        case 'default':
-          col.default = meth.args.trim();
-          break;
-        case 'defaultNow':
-          col.default = 'now()';
-          break;
-        case 'defaultRandom':
-          col.default = 'random()';
-          break;
-        case '$defaultFn':
-        case '$default':
-          col.default = 'fn()';
-          break;
-        case 'references': {
-          const refM = meth.args.match(/=>\s*([A-Za-z_$][\w$]*)\s*\.\s*([A-Za-z_$][\w$]*)/);
-          if (refM) {
-            const onDelete = meth.args.match(/onDelete\s*:\s*['"`]([^'"`]+)['"`]/);
-            col.references = {
-              tableVar: refM[1],
-              column: refM[2],
-              onDelete: onDelete ? onDelete[1] : null,
-            };
-          }
-          break;
-        }
-      }
-    }
+    const col = baseColumn(key, chain, ctx);
+    for (const meth of chain.methods) applyColumnMethod(col, meth);
     columns.push(col);
   }
   return columns;
@@ -351,8 +415,7 @@ function parseTableExtras(extrasSrc, table) {
   // index('name').on(t.a, t.b) / uniqueIndex(...)
   // Bound the forward search at the next index() so a missing .on() cannot steal columns.
   const indexRe = /\b(uniqueIndex|index)\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g;
-  let im;
-  while ((im = indexRe.exec(body))) {
+  for (const im of body.matchAll(indexRe)) {
     const unique = im[1] === 'uniqueIndex';
     const name = im[2];
     const after = body.slice(im.index + im[0].length);
@@ -385,8 +448,7 @@ function parsePgSchemas(src) {
   const map = {};
   const re =
     /(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*=\s*pgSchema\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g;
-  let m;
-  while ((m = re.exec(src))) map[m[1]] = m[2];
+  for (const m of src.matchAll(re)) map[m[1]] = m[2];
   return map;
 }
 
@@ -401,8 +463,7 @@ function parseTables(src, ctx) {
     `(?:export\\s+)?const\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*(?:(${TABLE_FNS.join('|')})|([A-Za-z_$][\\w$]*)\\s*\\.\\s*table)\\s*\\(`,
     'g',
   );
-  let m;
-  while ((m = re.exec(src))) {
+  for (const m of src.matchAll(re)) {
     const varName = m[1];
     const fn = m[2] || null;
     const schemaVar = m[3] || null;

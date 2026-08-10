@@ -41,6 +41,35 @@ function takeValue(argv, i, flag) {
   return { error: false, value: v, next: i + 1 };
 }
 
+/**
+ * Switches that take no value. Keyed by flag; each applies its effect to the
+ * accumulating result.
+ *
+ * A Map rather than an object literal so an argument like `--constructor`
+ * cannot resolve to an inherited `Object.prototype` member.
+ */
+const BOOLEAN_FLAGS = new Map([
+  ['-h', ['help', true]],
+  ['--help', ['help', true]],
+  ['--no-open', ['open', false]],
+  ['--open', ['open', true]],
+  ['--fresh', ['fresh', true]],
+]);
+
+/** Options that consume the following argv entry, keyed by flag → result property. */
+const VALUE_OPTIONS = new Map([
+  ['--port', 'port'],
+  ['-p', 'port'],
+  ['--schema', 'schema'],
+  ['--migrations', 'migrations'],
+]);
+
+/** A bad argument aborts startup and prints usage. */
+function rejectArgs(out) {
+  out.bad = true;
+  out.help = true;
+}
+
 function parseArgs(argv) {
   const out = {
     port: null,
@@ -53,42 +82,39 @@ function parseArgs(argv) {
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '-h' || a === '--help') out.help = true;
-    else if (a === '--no-open') out.open = false;
-    else if (a === '--open') out.open = true;
-    else if (a === '--fresh') out.fresh = true;
-    else if (a === '--port' || a === '-p') {
-      const { error, value, next } = takeValue(argv, i, a);
-      i = next;
-      if (error) {
-        out.bad = true;
-        out.help = true;
-        continue;
-      }
-      const n = Number(value);
-      if (!Number.isFinite(n) || n <= 0) {
-        console.error(`Invalid port: ${value}`);
-        out.bad = true;
-        out.help = true;
-      } else out.port = n;
-    } else if (a === '--schema') {
-      const { error, value, next } = takeValue(argv, i, a);
-      i = next;
-      if (error) {
-        out.bad = true;
-        out.help = true;
-      } else out.schema = value;
-    } else if (a === '--migrations') {
-      const { error, value, next } = takeValue(argv, i, a);
-      i = next;
-      if (error) {
-        out.bad = true;
-        out.help = true;
-      } else out.migrations = value;
-    } else {
+
+    const booleanFlag = BOOLEAN_FLAGS.get(a);
+    if (booleanFlag) {
+      const [property, value] = booleanFlag;
+      out[property] = value;
+      continue;
+    }
+
+    const property = VALUE_OPTIONS.get(a);
+    if (!property) {
       console.error(`Unknown argument: ${a}`);
-      out.bad = true;
-      out.help = true;
+      rejectArgs(out);
+      continue;
+    }
+
+    const { error, value, next } = takeValue(argv, i, a);
+    i = next;
+    if (error) {
+      rejectArgs(out);
+      continue;
+    }
+
+    if (property !== 'port') {
+      out[property] = value;
+      continue;
+    }
+
+    const port = Number(value);
+    if (Number.isFinite(port) && port > 0) {
+      out.port = port;
+    } else {
+      console.error(`Invalid port: ${value}`);
+      rejectArgs(out);
     }
   }
   return out;

@@ -33,67 +33,106 @@ function rebuildRelations(schema) {
   return schema;
 }
 
+/**
+ * Copy a `$tag$…$tag$` dollar-quoted body verbatim.
+ *
+ * Returns null when `$` does not in fact open one; an unterminated body runs to
+ * end of input.
+ */
+function copyDollarQuoted(src, i) {
+  const m = src.slice(i).match(/^(\$[A-Za-z0-9_]*\$)/);
+  if (!m) return null;
+  const tag = m[1];
+  const end = src.indexOf(tag, i + tag.length);
+  if (end === -1) return { text: src.slice(i), next: src.length };
+  return { text: src.slice(i, end + tag.length), next: end + tag.length };
+}
+
+/** Copy a single-quoted SQL literal, honouring the doubled-quote (`''`) escape. */
+function copySingleQuoted(src, i) {
+  let out = src[i];
+  let cursor = i + 1;
+  while (cursor < src.length) {
+    out += src[cursor];
+    if (src[cursor] === "'" && src[cursor + 1] === "'") {
+      cursor++;
+      out += src[cursor];
+      cursor++;
+      continue;
+    }
+    if (src[cursor] === "'") {
+      cursor++;
+      break;
+    }
+    cursor++;
+  }
+  return { text: out, next: cursor };
+}
+
+/** Copy a double-quoted identifier. */
+function copyDoubleQuoted(src, i) {
+  let out = src[i];
+  let cursor = i + 1;
+  while (cursor < src.length) {
+    out += src[cursor];
+    if (src[cursor] === '"') {
+      cursor++;
+      break;
+    }
+    cursor++;
+  }
+  return { text: out, next: cursor };
+}
+
+/**
+ * Copy whichever verbatim-preserving literal starts at `i` — a dollar-quoted
+ * body, a single-quoted string, or a double-quoted identifier.
+ *
+ * Returns null when the character at `i` opens none of them. Shared by the
+ * comment stripper and the statement splitter, which must both step over these
+ * regions without interpreting their contents.
+ */
+function copyVerbatimLiteral(src, i) {
+  const c = src[i];
+  if (c === '$') return copyDollarQuoted(src, i);
+  if (c === "'") return copySingleQuoted(src, i);
+  if (c === '"') return copyDoubleQuoted(src, i);
+  return null;
+}
+
+/** Index just past a `--` line comment. */
+function skipSqlLineComment(src, i) {
+  let cursor = i;
+  while (cursor < src.length && src[cursor] !== '\n') cursor++;
+  return cursor;
+}
+
+/** Index just past a block comment. */
+function skipSqlBlockComment(src, i) {
+  let cursor = i + 2;
+  while (cursor < src.length && !(src[cursor] === '*' && src[cursor + 1] === '/')) cursor++;
+  return cursor + 2;
+}
+
 function stripSqlComments(src) {
   let out = '';
   let i = 0;
   const n = src.length;
   while (i < n) {
+    const literal = copyVerbatimLiteral(src, i);
+    if (literal) {
+      out += literal.text;
+      i = literal.next;
+      continue;
+    }
     const c = src[i];
     const c2 = src[i + 1];
-    // dollar-quote body — keep intact
-    if (c === '$') {
-      const m = src.slice(i).match(/^(\$[A-Za-z0-9_]*\$)/);
-      if (m) {
-        const tag = m[1];
-        const end = src.indexOf(tag, i + tag.length);
-        if (end === -1) {
-          out += src.slice(i);
-          break;
-        }
-        out += src.slice(i, end + tag.length);
-        i = end + tag.length;
-        continue;
-      }
-    }
-    if (c === "'") {
-      out += c;
-      i++;
-      while (i < n) {
-        out += src[i];
-        if (src[i] === "'" && src[i + 1] === "'") {
-          out += src[++i];
-          i++;
-          continue;
-        }
-        if (src[i] === "'") {
-          i++;
-          break;
-        }
-        i++;
-      }
-      continue;
-    }
-    if (c === '"') {
-      out += c;
-      i++;
-      while (i < n) {
-        out += src[i];
-        if (src[i] === '"') {
-          i++;
-          break;
-        }
-        i++;
-      }
-      continue;
-    }
     if (c === '-' && c2 === '-') {
-      while (i < n && src[i] !== '\n') i++;
+      i = skipSqlLineComment(src, i);
       continue;
     }
     if (c === '/' && c2 === '*') {
-      i += 2;
-      while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i++;
-      i += 2;
+      i = skipSqlBlockComment(src, i);
       continue;
     }
     out += c;
@@ -109,60 +148,20 @@ function splitStatements(src) {
   let i = 0;
   const n = cleaned.length;
   while (i < n) {
-    const c = cleaned[i];
-    if (c === '$') {
-      const m = cleaned.slice(i).match(/^(\$[A-Za-z0-9_]*\$)/);
-      if (m) {
-        const tag = m[1];
-        const end = cleaned.indexOf(tag, i + tag.length);
-        if (end === -1) {
-          cur += cleaned.slice(i);
-          break;
-        }
-        cur += cleaned.slice(i, end + tag.length);
-        i = end + tag.length;
-        continue;
-      }
-    }
-    if (c === "'") {
-      cur += c;
-      i++;
-      while (i < n) {
-        cur += cleaned[i];
-        if (cleaned[i] === "'" && cleaned[i + 1] === "'") {
-          cur += cleaned[++i];
-          i++;
-          continue;
-        }
-        if (cleaned[i] === "'") {
-          i++;
-          break;
-        }
-        i++;
-      }
+    const literal = copyVerbatimLiteral(cleaned, i);
+    if (literal) {
+      cur += literal.text;
+      i = literal.next;
       continue;
     }
-    if (c === '"') {
-      cur += c;
-      i++;
-      while (i < n) {
-        cur += cleaned[i];
-        if (cleaned[i] === '"') {
-          i++;
-          break;
-        }
-        i++;
-      }
-      continue;
-    }
-    if (c === ';') {
+    if (cleaned[i] === ';') {
       const t = cur.trim();
       if (t) stmts.push(t);
       cur = '';
       i++;
       continue;
     }
-    cur += c;
+    cur += cleaned[i];
     i++;
   }
   const t = cur.trim();
@@ -202,71 +201,115 @@ function findTable(schema, q) {
   return null;
 }
 
+/**
+ * SQL type spellings mapped to the viewer's canonical name, as
+ * `[pattern, canonicalType, carriesTimezone]`.
+ *
+ * Order matters: multi-word spellings come first so `timestamp with time zone`
+ * wins over bare `timestamp`, and `int` never shadows `integer`.
+ */
+const SQL_TYPE_PATTERNS = [
+  [/^timestamp\s+with\s+time\s+zone\b/i, 'timestamp', true],
+  [/^timestamptz\b/i, 'timestamp', true],
+  [/^timestamp\s+without\s+time\s+zone\b/i, 'timestamp', false],
+  [/^timestamp\b/i, 'timestamp', false],
+  [/^time\s+with\s+time\s+zone\b/i, 'time', true],
+  [/^double\s+precision\b/i, 'doublePrecision', false],
+  [/^character\s+varying\b/i, 'varchar', false],
+  [/^bigint\b/i, 'bigint', false],
+  [/^bigserial\b/i, 'bigserial', false],
+  [/^smallint\b/i, 'smallint', false],
+  [/^smallserial\b/i, 'smallserial', false],
+  [/^serial\b/i, 'serial', false],
+  [/^integer\b/i, 'integer', false],
+  [/^int\b/i, 'integer', false],
+  [/^boolean\b/i, 'boolean', false],
+  [/^bool\b/i, 'boolean', false],
+  [/^text\b/i, 'text', false],
+  [/^jsonb\b/i, 'jsonb', false],
+  [/^json\b/i, 'json', false],
+  [/^uuid\b/i, 'uuid', false],
+  [/^date\b/i, 'date', false],
+  [/^real\b/i, 'real', false],
+  [/^numeric\b/i, 'numeric', false],
+  [/^decimal\b/i, 'numeric', false],
+  [/^varchar\b/i, 'varchar', false],
+  [/^char\b/i, 'char', false],
+  [/^bytea\b/i, 'bytea', false],
+];
+
+/**
+ * Canonical type for a column definition tail, plus how many characters of
+ * `input` the type spelling consumed.
+ *
+ * Falls back to a quoted identifier, then a bare one, then `unknown` — which
+ * consumes nothing, leaving the whole tail to be read as flags.
+ */
+function resolveColumnType(input) {
+  for (const [re, name, tz] of SQL_TYPE_PATTERNS) {
+    const m = input.match(re);
+    if (m) return { type: name, withTimezone: !!tz, next: m[0].length };
+  }
+  const quoted = input.match(/^"([^"]+)"/);
+  if (quoted) return { type: quoted[1].toLowerCase(), withTimezone: false, next: quoted[0].length };
+  const bare = input.match(/^([A-Za-z_][\w$]*)/);
+  if (bare) return { type: bare[1].toLowerCase(), withTimezone: false, next: bare[0].length };
+  return { type: 'unknown', withTimezone: false, next: 0 };
+}
+
+/** Read the `DEFAULT …` clause, normalizing the common Postgres spellings. */
+function applyColumnDefault(col, flags) {
+  const defM = flags.match(
+    /\bDEFAULT\s+((?:'(?:[^']|'')*')|(?:"(?:[^"]|"")*")|(?:\([^)]*\))|(?:[^\s,]+(?:\s+[^\s,]+)*?)(?=\s+(?:NOT\s+NULL|NULL|PRIMARY|UNIQUE|REFERENCES|CHECK|COLLATE)|$))/i,
+  );
+  if (!defM) return;
+  let d = defM[1].trim();
+  if (/^now\(\)$/i.test(d) || /^CURRENT_TIMESTAMP$/i.test(d)) d = 'now()';
+  else if (/^gen_random_uuid\(\)$/i.test(d)) d = 'random()';
+  col.default = d;
+}
+
+/** Read an inline `REFERENCES …` clause and its optional `ON DELETE` action. */
+function applyColumnReference(col, flags) {
+  const refM = flags.match(
+    /\bREFERENCES\s+((?:"[^"]+"|[A-Za-z_][\w$]*)(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][\w$]*))?)\s*\(\s*(?:"([^"]+)"|([A-Za-z_][\w$]*))\s*\)/i,
+  );
+  if (!refM) return;
+  const q = parseQualifiedName(refM[1]);
+  const onDel = flags.match(
+    /\bON\s+DELETE\s+(cascade|set\s+null|set\s+default|restrict|no\s+action)/i,
+  );
+  col.references = {
+    tableVar: q.name,
+    table: q.name,
+    column: refM[2] || refM[3],
+    onDelete: onDel ? onDel[1].toLowerCase().replace(/\s+/g, ' ') : null,
+  };
+}
+
+/** Constraints, DEFAULT and REFERENCES from the tail following the column type. */
+function applyColumnFlags(col, flags) {
+  // Strip string literals first so `DEFAULT 'x NOT NULL y'` cannot set notNull.
+  const flagsBare = flags.replace(/'(?:[^']|'')*'/g, "''").replace(/"(?:[^"]|"")*"/g, '""');
+  if (/\bPRIMARY\s+KEY\b/i.test(flagsBare)) {
+    col.pk = true;
+    col.notNull = true;
+  }
+  if (/\bNOT\s+NULL\b/i.test(flagsBare)) col.notNull = true;
+  if (/\bUNIQUE\b/i.test(flagsBare)) col.unique = true;
+  if (/\[\]/.test(flags.slice(0, 4))) col.array = true;
+
+  applyColumnDefault(col, flags);
+  applyColumnReference(col, flags);
+}
+
 function parseTypeAndFlags(rest) {
   const input = rest.trim();
-  // type may be "timestamp with time zone", "double precision", "character varying(N)"
-  let type = '';
-  let length = null;
-  let withTimezone = false;
-  let i = 0;
+  const { type, withTimezone, next } = resolveColumnType(input);
 
-  const typePatterns = [
-    [/^timestamp\s+with\s+time\s+zone\b/i, 'timestamp', true],
-    [/^timestamptz\b/i, 'timestamp', true],
-    [/^timestamp\s+without\s+time\s+zone\b/i, 'timestamp', false],
-    [/^timestamp\b/i, 'timestamp', false],
-    [/^time\s+with\s+time\s+zone\b/i, 'time', true],
-    [/^double\s+precision\b/i, 'doublePrecision', false],
-    [/^character\s+varying\b/i, 'varchar', false],
-    [/^bigint\b/i, 'bigint', false],
-    [/^bigserial\b/i, 'bigserial', false],
-    [/^smallint\b/i, 'smallint', false],
-    [/^smallserial\b/i, 'smallserial', false],
-    [/^serial\b/i, 'serial', false],
-    [/^integer\b/i, 'integer', false],
-    [/^int\b/i, 'integer', false],
-    [/^boolean\b/i, 'boolean', false],
-    [/^bool\b/i, 'boolean', false],
-    [/^text\b/i, 'text', false],
-    [/^jsonb\b/i, 'jsonb', false],
-    [/^json\b/i, 'json', false],
-    [/^uuid\b/i, 'uuid', false],
-    [/^date\b/i, 'date', false],
-    [/^real\b/i, 'real', false],
-    [/^numeric\b/i, 'numeric', false],
-    [/^decimal\b/i, 'numeric', false],
-    [/^varchar\b/i, 'varchar', false],
-    [/^char\b/i, 'char', false],
-    [/^bytea\b/i, 'bytea', false],
-  ];
-
-  let matched = false;
-  for (const [re, tname, tz] of typePatterns) {
-    const m = input.match(re);
-    if (m) {
-      type = tname;
-      withTimezone = !!tz;
-      i = m[0].length;
-      matched = true;
-      break;
-    }
-  }
-  if (!matched) {
-    const quoted = input.match(/^"([^"]+)"/);
-    if (quoted) {
-      type = quoted[1].toLowerCase();
-      i = quoted[0].length;
-    } else {
-      const m = input.match(/^([A-Za-z_][\w$]*)/);
-      if (m) {
-        type = m[1].toLowerCase();
-        i = m[0].length;
-      } else type = 'unknown';
-    }
-  }
-
-  let after = input.slice(i).trim();
+  let after = input.slice(next).trim();
   const lenM = after.match(/^\(\s*(\d+)\s*\)/);
+  let length = null;
   if (lenM) {
     length = Number(lenM[1]);
     after = after.slice(lenM[0].length).trim();
@@ -289,44 +332,7 @@ function parseTypeAndFlags(rest) {
   if (length != null) col.length = length;
   if (withTimezone) col.withTimezone = true;
 
-  // flags — strip string literals so DEFAULT 'x NOT NULL y' cannot set notNull
-  const flags = after;
-  const flagsBare = flags.replace(/'(?:[^']|'')*'/g, "''").replace(/"(?:[^"]|"")*"/g, '""');
-  if (/\bPRIMARY\s+KEY\b/i.test(flagsBare)) {
-    col.pk = true;
-    col.notNull = true;
-  }
-  if (/\bNOT\s+NULL\b/i.test(flagsBare)) col.notNull = true;
-  if (/\bUNIQUE\b/i.test(flagsBare)) col.unique = true;
-  if (/\[\]/.test(flags.slice(0, 4))) col.array = true;
-
-  const defM = flags.match(
-    /\bDEFAULT\s+((?:'(?:[^']|'')*')|(?:"(?:[^"]|"")*")|(?:\([^)]*\))|(?:[^\s,]+(?:\s+[^\s,]+)*?)(?=\s+(?:NOT\s+NULL|NULL|PRIMARY|UNIQUE|REFERENCES|CHECK|COLLATE)|$))/i,
-  );
-  if (defM) {
-    let d = defM[1].trim();
-    // normalize common defaults
-    if (/^now\(\)$/i.test(d) || /^CURRENT_TIMESTAMP$/i.test(d)) d = 'now()';
-    else if (/^gen_random_uuid\(\)$/i.test(d)) d = 'random()';
-    col.default = d;
-  }
-
-  const refM = flags.match(
-    /\bREFERENCES\s+((?:"[^"]+"|[A-Za-z_][\w$]*)(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][\w$]*))?)\s*\(\s*(?:"([^"]+)"|([A-Za-z_][\w$]*))\s*\)/i,
-  );
-  if (refM) {
-    const q = parseQualifiedName(refM[1]);
-    const onDel = flags.match(
-      /\bON\s+DELETE\s+(cascade|set\s+null|set\s+default|restrict|no\s+action)/i,
-    );
-    col.references = {
-      tableVar: q.name,
-      table: q.name,
-      column: refM[2] || refM[3],
-      onDelete: onDel ? onDel[1].toLowerCase().replace(/\s+/g, ' ') : null,
-    };
-  }
-
+  applyColumnFlags(col, after);
   return col;
 }
 
@@ -406,6 +412,60 @@ function makeTable(schemaName, tableName, columns) {
   };
 }
 
+/** Table-level `PRIMARY KEY (a, b)` — bare, or named via `CONSTRAINT "x"`. */
+function applyTableLevelPrimaryKey(part, columns) {
+  const pk = part.match(
+    /^\s*(?:CONSTRAINT\s+(?:"[^"]+"|[A-Za-z_][\w$]*)\s+)?PRIMARY\s+KEY\s*\(\s*([^)]+)\)/i,
+  );
+  if (!pk) return;
+  const names = pk[1].split(',').map((x) => unquote(x.trim()));
+  for (const c of columns) {
+    if (!names.includes(c.key)) continue;
+    c.pk = true;
+    c.notNull = true;
+  }
+}
+
+/** Table-level `UNIQUE (a, b)` — bare, or named via `CONSTRAINT "x"`. */
+function applyTableLevelUnique(part, columns) {
+  const uq = part.match(
+    /^\s*(?:CONSTRAINT\s+(?:"[^"]+"|[A-Za-z_][\w$]*)\s+)?UNIQUE\s*\(\s*([^)]+)\)/i,
+  );
+  if (!uq) return;
+  const names = uq[1].split(',').map((x) => unquote(x.trim()));
+  for (const c of columns) if (names.includes(c.key)) c.unique = true;
+}
+
+/** Table-level `FOREIGN KEY (…) REFERENCES …`, recorded on the local column. */
+function applyTableLevelForeignKey(part, columns) {
+  const fk = part.match(
+    /FOREIGN\s+KEY\s*\(\s*(?:"([^"]+)"|([A-Za-z_][\w$]*))\s*\)\s*REFERENCES\s+((?:"[^"]+"|[A-Za-z_][\w$]*)(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][\w$]*))?)\s*\(\s*(?:"([^"]+)"|([A-Za-z_][\w$]*))\s*\)(?:\s*ON\s+DELETE\s+(cascade|set\s+null|set\s+default|restrict|no\s+action))?/i,
+  );
+  if (!fk) return;
+  const local = fk[1] || fk[2];
+  const c = columns.find((x) => x.key === local);
+  if (!c) return;
+  const refQ = parseQualifiedName(fk[3]);
+  c.references = {
+    tableVar: refQ.name,
+    table: refQ.name,
+    column: fk[4] || fk[5],
+    onDelete: fk[6] ? fk[6].toLowerCase().replace(/\s+/g, ' ') : null,
+  };
+}
+
+/**
+ * Apply one entry from a CREATE TABLE body that is not a column definition.
+ *
+ * Each form is tried independently — a single entry declares only one of them,
+ * and a non-match is simply a no-op.
+ */
+function applyTableConstraint(part, columns) {
+  applyTableLevelPrimaryKey(part, columns);
+  applyTableLevelUnique(part, columns);
+  applyTableLevelForeignKey(part, columns);
+}
+
 function applyCreateTable(schema, stmt) {
   // Balanced-paren walk (not a greedy regex to the last ')') so trailing clauses —
   // `PARTITION BY LIST (…)`, `WITH (…)` — never bleed into the column-def block.
@@ -414,50 +474,15 @@ function applyCreateTable(schema, stmt) {
   const open = head[0].length - 1;
   const close = findMatchingParen(stmt, open);
   if (close === -1) return false;
-  const m = [null, head[1], stmt.slice(open + 1, close)];
-  const q = parseQualifiedName(m[1]);
+
+  const q = parseQualifiedName(head[1]);
   if (findTable(schema, q)) return true; // IF NOT EXISTS
+
   const columns = [];
-  for (const part of splitTopLevelComma(m[2])) {
+  for (const part of splitTopLevelComma(stmt.slice(open + 1, close))) {
     const col = parseColumnDef(part);
     if (col) columns.push(col);
-    else {
-      // table-level PRIMARY KEY — bare or CONSTRAINT "name" PRIMARY KEY (...)
-      const pk = part.match(
-        /^\s*(?:CONSTRAINT\s+(?:"[^"]+"|[A-Za-z_][\w$]*)\s+)?PRIMARY\s+KEY\s*\(\s*([^)]+)\)/i,
-      );
-      if (pk) {
-        const names = pk[1].split(',').map((x) => unquote(x.trim()));
-        for (const c of columns)
-          if (names.includes(c.key)) {
-            c.pk = true;
-            c.notNull = true;
-          }
-      }
-      const uq = part.match(
-        /^\s*(?:CONSTRAINT\s+(?:"[^"]+"|[A-Za-z_][\w$]*)\s+)?UNIQUE\s*\(\s*([^)]+)\)/i,
-      );
-      if (uq) {
-        const names = uq[1].split(',').map((x) => unquote(x.trim()));
-        for (const c of columns) if (names.includes(c.key)) c.unique = true;
-      }
-      const fk = part.match(
-        /FOREIGN\s+KEY\s*\(\s*(?:"([^"]+)"|([A-Za-z_][\w$]*))\s*\)\s*REFERENCES\s+((?:"[^"]+"|[A-Za-z_][\w$]*)(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][\w$]*))?)\s*\(\s*(?:"([^"]+)"|([A-Za-z_][\w$]*))\s*\)(?:\s*ON\s+DELETE\s+(cascade|set\s+null|set\s+default|restrict|no\s+action))?/i,
-      );
-      if (fk) {
-        const local = fk[1] || fk[2];
-        const refQ = parseQualifiedName(fk[3]);
-        const c = columns.find((x) => x.key === local);
-        if (c) {
-          c.references = {
-            tableVar: refQ.name,
-            table: refQ.name,
-            column: fk[4] || fk[5],
-            onDelete: fk[6] ? fk[6].toLowerCase().replace(/\s+/g, ' ') : null,
-          };
-        }
-      }
-    }
+    else applyTableConstraint(part, columns);
   }
   schema.tables.push(makeTable(q.schema, q.name, columns));
   return true;
@@ -696,65 +721,72 @@ function expandDoBlock(stmt) {
  * Apply one statement. Returns:
  *   'applied' | 'ignored' | 'unhandled'
  */
+/** Statements carrying no structure the viewer models. */
+const IGNORED_STATEMENT_PATTERNS = [
+  /^(CREATE|DROP|ALTER)\s+(EXTENSION|SCHEMA|ROLE|POLICY|INDEX|UNIQUE\s+INDEX|FUNCTION|PROCEDURE|TRIGGER|TYPE|VIEW|MATERIALIZED|SEQUENCE)\b/i,
+  /^GRANT\b|^REVOKE\b|^COMMENT\b|^ANALYZE\b|^VACUUM\b|^SELECT\b|^INSERT\b|^UPDATE\b|^DELETE\b/i,
+  /\bENABLE\s+ROW\s+LEVEL\s+SECURITY\b|\bFORCE\s+ROW\s+LEVEL\s+SECURITY\b|\bDISABLE\s+ROW\s+LEVEL\s+SECURITY\b/i,
+  /\bDROP\s+CONSTRAINT\b|\bVALIDATE\s+CONSTRAINT\b/i,
+];
+
+/**
+ * True for statements deliberately skipped rather than left unhandled.
+ *
+ * CHECK and other constraints outside the PK/UNIQUE/FK model are ignored on
+ * purpose — counting them as unhandled would inflate the skip counter.
+ */
+function isIgnoredStatement(s) {
+  if (IGNORED_STATEMENT_PATTERNS.some((re) => re.test(s))) return true;
+  return /\bADD\s+CONSTRAINT\b/i.test(s) && /\bCHECK\b/i.test(s);
+}
+
+/**
+ * Structural DDL the viewer replays. Every marker must match for a handler to
+ * run, and the first match wins — so order is behaviour, not style. `FOREIGN
+ * KEY` precedes the `ADD CONSTRAINT` entries so a named FK constraint routes to
+ * the FK handler, and `UNIQUE` precedes `PRIMARY KEY`.
+ */
+const STATEMENT_HANDLERS = [
+  { markers: [/^CREATE\s+TABLE\b/i], apply: applyCreateTable },
+  { markers: [/^DROP\s+TABLE\b/i], apply: applyDropTable },
+  { markers: [/^ALTER\s+TABLE\b/i, /\bADD\s+COLUMN\b/i], apply: applyAddColumn },
+  { markers: [/^ALTER\s+TABLE\b/i, /\bDROP\s+COLUMN\b/i], apply: applyDropColumn },
+  { markers: [/^ALTER\s+TABLE\b/i, /\bRENAME\s+COLUMN\b/i], apply: applyRenameColumn },
+  { markers: [/^ALTER\s+TABLE\b/i, /\bRENAME\s+TO\b/i], apply: applyRenameTable },
+  { markers: [/^ALTER\s+TABLE\b/i, /\bALTER\s+COLUMN\b/i], apply: applyAlterColumn },
+  { markers: [/^ALTER\s+TABLE\b/i, /\bFOREIGN\s+KEY\b/i], apply: applyAddForeignKey },
+  {
+    markers: [/^ALTER\s+TABLE\b/i, /\bADD\s+CONSTRAINT\b/i, /\bUNIQUE\b/i],
+    apply: applyAddUniqueConstraint,
+  },
+  {
+    markers: [/^ALTER\s+TABLE\b/i, /\bADD\s+CONSTRAINT\b/i, /\bPRIMARY\s+KEY\b/i],
+    apply: applyAddPrimaryKeyConstraint,
+  },
+];
+
+/** Replay the statements lifted out of a `DO $$ … $$` block. */
+function applyDoBlock(schema, inners) {
+  let any = false;
+  for (const inner of inners) {
+    if (applyStatement(schema, inner) === 'applied') any = true;
+  }
+  return any ? 'applied' : 'ignored';
+}
+
 function applyStatement(schema, stmt) {
   const s = stmt.trim();
   if (!s) return 'ignored';
 
   const doInner = expandDoBlock(s);
-  if (doInner) {
-    let any = false;
-    for (const inner of doInner) {
-      const r = applyStatement(schema, inner);
-      if (r === 'applied') any = true;
-    }
-    return any ? 'applied' : 'ignored';
-  }
+  if (doInner) return applyDoBlock(schema, doInner);
 
-  // Skip non-structural noise early
-  if (
-    /^(CREATE|DROP|ALTER)\s+(EXTENSION|SCHEMA|ROLE|POLICY|INDEX|UNIQUE\s+INDEX|FUNCTION|PROCEDURE|TRIGGER|TYPE|VIEW|MATERIALIZED|SEQUENCE)\b/i.test(
-      s,
-    )
-  )
-    return 'ignored';
-  if (
-    /^GRANT\b|^REVOKE\b|^COMMENT\b|^ANALYZE\b|^VACUUM\b|^SELECT\b|^INSERT\b|^UPDATE\b|^DELETE\b/i.test(
-      s,
-    )
-  )
-    return 'ignored';
-  if (
-    /\bENABLE\s+ROW\s+LEVEL\s+SECURITY\b|\bFORCE\s+ROW\s+LEVEL\s+SECURITY\b|\bDISABLE\s+ROW\s+LEVEL\s+SECURITY\b/i.test(
-      s,
-    )
-  )
-    return 'ignored';
-  if (/\bDROP\s+CONSTRAINT\b|\bVALIDATE\s+CONSTRAINT\b/i.test(s)) return 'ignored';
-  // CHECK / other non-PK-UNIQUE-FK constraints are intentionally ignored (not in model)
-  if (/\bADD\s+CONSTRAINT\b/i.test(s) && /\bCHECK\b/i.test(s)) return 'ignored';
+  if (isIgnoredStatement(s)) return 'ignored';
 
-  if (/^CREATE\s+TABLE\b/i.test(s)) return applyCreateTable(schema, s) ? 'applied' : 'unhandled';
-  if (/^DROP\s+TABLE\b/i.test(s)) return applyDropTable(schema, s) ? 'applied' : 'unhandled';
-  if (/^ALTER\s+TABLE\b/i.test(s) && /\bADD\s+COLUMN\b/i.test(s))
-    return applyAddColumn(schema, s) ? 'applied' : 'unhandled';
-  if (/^ALTER\s+TABLE\b/i.test(s) && /\bDROP\s+COLUMN\b/i.test(s))
-    return applyDropColumn(schema, s) ? 'applied' : 'unhandled';
-  if (/^ALTER\s+TABLE\b/i.test(s) && /\bRENAME\s+COLUMN\b/i.test(s))
-    return applyRenameColumn(schema, s) ? 'applied' : 'unhandled';
-  if (/^ALTER\s+TABLE\b/i.test(s) && /\bRENAME\s+TO\b/i.test(s))
-    return applyRenameTable(schema, s) ? 'applied' : 'unhandled';
-  if (/^ALTER\s+TABLE\b/i.test(s) && /\bALTER\s+COLUMN\b/i.test(s))
-    return applyAlterColumn(schema, s) ? 'applied' : 'unhandled';
-  if (/^ALTER\s+TABLE\b/i.test(s) && /\bFOREIGN\s+KEY\b/i.test(s))
-    return applyAddForeignKey(schema, s) ? 'applied' : 'unhandled';
-  if (/^ALTER\s+TABLE\b/i.test(s) && /\bADD\s+CONSTRAINT\b/i.test(s) && /\bUNIQUE\b/i.test(s))
-    return applyAddUniqueConstraint(schema, s) ? 'applied' : 'unhandled';
-  if (
-    /^ALTER\s+TABLE\b/i.test(s) &&
-    /\bADD\s+CONSTRAINT\b/i.test(s) &&
-    /\bPRIMARY\s+KEY\b/i.test(s)
-  )
-    return applyAddPrimaryKeyConstraint(schema, s) ? 'applied' : 'unhandled';
+  const handler = STATEMENT_HANDLERS.find((h) => h.markers.every((re) => re.test(s)));
+  if (handler) return handler.apply(schema, s) ? 'applied' : 'unhandled';
+
+  // Recognised as table DDL but not modelled — counted as skipped, not ignored.
   if (/^ALTER\s+TABLE\b/i.test(s) || /^CREATE\s+TABLE\b/i.test(s)) return 'unhandled';
   return 'ignored';
 }
