@@ -10,6 +10,7 @@ import { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-m
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthMethodRepository } from '@/domains/auth/sub-domains/auth-method/auth-method.repository.js';
 import type { Redis } from 'ioredis';
+import { mockedRedisSet } from '@/tests/helpers/redis-mock.helper.js';
 import type { VerificationTokenRepository } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.repository.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
 import type * as EventBusModule from '@/core/events/event-bus.js';
@@ -130,7 +131,7 @@ describe('AuthMethodService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(user as never);
-    vi.mocked(redis.set).mockResolvedValue('OK');
+    mockedRedisSet(redis.set).mockResolvedValue('OK');
   });
 
   it('throws NotFoundError when user record is missing', async () => {
@@ -287,7 +288,7 @@ describe('AuthMethodService', () => {
   });
 
   it('forgotPassword skips issuing a reset when the per-email cooldown is already held', async () => {
-    vi.mocked(redis.set).mockResolvedValueOnce(null);
+    mockedRedisSet(redis.set).mockResolvedValueOnce(null);
     const result = await service.forgotPassword({ email: user.email });
     expect(result.messageKey).toBe('success:passwordResetEmailSent');
     // On cooldown the user is never looked up and no token is issued (no email), but the uniform

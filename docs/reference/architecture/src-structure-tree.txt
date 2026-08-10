@@ -1712,6 +1712,7 @@ src/
     │   ├── audit-log-partition.helper.ts
     │   ├── fast-check-property.util.ts
     │   ├── object-storage-mock.helper.ts
+    │   ├── redis-mock.helper.ts
     │   ├── registered-route.util.ts
     │   ├── rls-matrix.helper.ts
     │   ├── route-authorization-model.ts

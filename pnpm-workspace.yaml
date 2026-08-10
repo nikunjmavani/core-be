@@ -47,11 +47,11 @@ overrides:
   # silently disables size enforcement (transitive via @modelcontextprotocol/sdk
   # > express). Fixed in 2.3.0.
   body-parser: '>=2.3.0'
-  # Keep ioredis deduplicated against BullMQ, which pins an exact ioredis version in its
-  # `dependencies` (currently 5.10.1). Two ioredis copies caused TS type errors in workers/queues
-  # (docs/reviews/full-codebase-review-deliverables.md). Bump ONLY in lockstep with BullMQ's pin —
-  # check `node_modules/bullmq/package.json` before raising this.
-  ioredis: 5.10.1
+  # Keep ioredis deduplicated so workers/queues see exactly one copy — two copies caused TS type
+  # errors (docs/reviews/full-codebase-review-deliverables.md). The old exact pin existed because
+  # BullMQ pinned an exact ioredis in its `dependencies`; as of BullMQ 6 ioredis is an OPTIONAL PEER
+  # (`>=5.0.0`), so the lockstep rule no longer applies and a range is enough to dedupe.
+  ioredis: '>=6.0.0'
   esbuild: '>=0.28.1'
   '@esbuild-kit/core-utils>esbuild': '>=0.28.1'
   lodash: '>=4.17.24'

@@ -43,12 +43,28 @@ function hasSqlMigrations(dir) {
   }
 }
 
+/** Directories that never hold Drizzle schemas — skipped without descending. */
+const SKIPPED_SCAN_DIRECTORIES = new Set(['node_modules', '.git', 'dist', 'coverage', '__tests__']);
+
+/** Upper bound on TypeScript files inspected before giving up the search. */
+const MAX_SCANNED_TS_FILES = 5000;
+
+/** Only TypeScript candidates count toward the cap — `.md`/`.json` noise does not. */
+function isTypeScriptCandidate(base) {
+  return /\.(ts|mts|cts)$/.test(base);
+}
+
+/** True when the filename is one of the Drizzle schema shapes the viewer reads. */
+function isSchemaFileName(base) {
+  if (base.endsWith('.job.schema.ts') || base.endsWith('.d.ts')) return false;
+  return base.endsWith('.schema.ts') || base === 'pg-schemas.ts' || base === 'schema.ts';
+}
+
 function hasSchemaFiles(dir) {
   if (!isDir(dir)) return false;
   const stack = [dir];
   let seenTs = 0;
-  const MAX_TS = 5000;
-  while (stack.length && seenTs < MAX_TS) {
+  while (stack.length && seenTs < MAX_SCANNED_TS_FILES) {
     const d = stack.pop();
     let entries;
     try {
@@ -57,28 +73,14 @@ function hasSchemaFiles(dir) {
       continue;
     }
     for (const ent of entries) {
-      if (
-        ent.name === 'node_modules' ||
-        ent.name === '.git' ||
-        ent.name === 'dist' ||
-        ent.name === 'coverage' ||
-        ent.name === '__tests__'
-      ) {
-        continue;
-      }
-      const full = path.join(d, ent.name);
+      if (SKIPPED_SCAN_DIRECTORIES.has(ent.name)) continue;
       if (ent.isDirectory()) {
-        stack.push(full);
+        stack.push(path.join(d, ent.name));
         continue;
       }
-      if (!ent.isFile()) continue;
-      const base = ent.name;
-      // Only count TypeScript candidates toward the cap — ignore .md/.json noise.
-      if (!/\.(ts|mts|cts)$/.test(base)) continue;
+      if (!(ent.isFile() && isTypeScriptCandidate(ent.name))) continue;
       seenTs++;
-      if (base.endsWith('.job.schema.ts') || base.endsWith('.d.ts')) continue;
-      if (base.endsWith('.schema.ts') || base === 'pg-schemas.ts' || base === 'schema.ts')
-        return true;
+      if (isSchemaFileName(ent.name)) return true;
     }
   }
   return false;

@@ -2040,8 +2040,6 @@ function toSQL(diff) {
 function toMigration(diff) {
   const cl = diff.changelog || [];
   if (!cl.length) return `-- no schema changes in this comparison\n`;
-  const enumByName = new Map((diff.enums || []).map((e) => [e.name, e]));
-  const tableByName = new Map((diff.tables || []).map((t) => [t.name, t]));
   const up = [];
   const label =
     state.base && state.target

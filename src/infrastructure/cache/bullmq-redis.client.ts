@@ -6,7 +6,10 @@ import {
 } from '@/infrastructure/cache/redis-url.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { FIVE_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
-import { REDIS_RECONNECT_DELAY_STEP_MS } from '@/infrastructure/cache/redis.constants.js';
+import {
+  REDIS_PROTOCOL_VERSION,
+  REDIS_RECONNECT_DELAY_STEP_MS,
+} from '@/infrastructure/cache/redis.constants.js';
 
 const bullMqRedisUrl = resolveBullMqRedisUrl();
 
@@ -16,6 +19,8 @@ const bullMqRedisUrl = resolveBullMqRedisUrl();
  */
 export const bullmqRedisConnection = new Redis(bullMqRedisUrl, {
   maxRetriesPerRequest: null,
+  /** Keep the RESP2 wire protocol ioredis 5 defaulted to — see {@link REDIS_PROTOCOL_VERSION}. */
+  protocol: REDIS_PROTOCOL_VERSION,
   lazyConnect: true,
   /**
    * Disabled under `test` (#786): like the shared cache client, this per-worker singleton is churned

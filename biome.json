@@ -137,6 +137,16 @@
       }
     },
     {
+      "includes": ["tooling/**/*.mjs", "tooling/**/*.js"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveLinesPerFunction": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": ["src/**/*.routes.ts", "src/**/workers/*.ts", "src/**/*.handlers.ts"],
       "linter": {
         "rules": {
