@@ -32,6 +32,12 @@ packageExtensions:
       esbuild: ^0.25.0
 
 overrides:
+  # Transitive advisories with no direct upgrade path (`deps:audit` is a required
+  # PR-CI gate). CARET-BOUNDED on purpose: an open-ended `>=3.3.17` resolves to the
+  # highest match and silently moves postcss onto the ESM-only 5.x major. Verify in
+  # the lockfile, not the audit summary.
+  'nanoid@<3.3.17': '^3.3.17'
+  'nanoid@>=4.0.0 <5.1.16': '^5.1.16'
   # Hold Biome at 2.5.2 — 2.5.3 crashes `biome check` with an upstream panic in
   # the module-graph resolver (biome_module_graph module_resolver.rs:500:33).
   # Remove this pin once a fixed Biome (2.5.4+) is released.
