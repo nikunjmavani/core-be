@@ -23,7 +23,14 @@ import {
   mcpTemplateRules,
   TEXT_REWRITE_TARGETS,
 } from '@tooling/setup/codegen/text-identity-rewrites.js';
-import { identityLiterals } from '@tooling/setup/codegen/validate-project-identity-literals.js';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  identityLiterals,
+  scanProjectIdentityLiterals,
+} from '@tooling/setup/codegen/validate-project-identity-literals.js';
 import type { SetupConfig } from '@tooling/setup/common/types.js';
 
 function buildConfig(overrides?: {
@@ -244,6 +251,43 @@ describe('project identity — text rewrites', () => {
     const once = applyTextRewrites('{ "whatever:api": {} }', mcpTemplateRules(), snapshot);
     expect(once).toContain('"acme-api:api"');
     expect(applyTextRewrites(once, mcpTemplateRules(), snapshot)).toBe(once);
+  });
+
+  it('never follows a tracked symlink into an untracked file', () => {
+    // `.mcp.json` is a tracked symlink to the gitignored, developer-specific
+    // `agent-os/mcp/mcp.json`. A stat() that follows links made this gate read a private config
+    // (possibly holding API keys) and fail `pnpm ci:quality` on every machine that had scaffolded
+    // one — while passing in CI, where the target is absent and the link dangles. That local-only
+    // asymmetry is exactly what a repo-wide gate must not have.
+    //
+    // Built as a throwaway repo rather than asserted against this one: the fixture slug is
+    // `acme-api`, which appears nowhere in core-be, so scanning the real tree would pass no matter
+    // what the scanner does. A test that cannot fail is worse than no test.
+    const scratch = mkdtempSync(join(tmpdir(), 'identity-symlink-'));
+    try {
+      const git = (...arguments_: string[]): void => {
+        execFileSync('git', arguments_, { cwd: scratch, stdio: 'ignore' });
+      };
+      git('init', '-q');
+
+      writeFileSync(join(scratch, 'private.json'), '{ "server": "acme-api" }\n');
+      writeFileSync(join(scratch, '.gitignore'), 'private.json\n');
+      symlinkSync('private.json', join(scratch, 'link.json'));
+      git('add', '-A');
+
+      const { violations } = scanProjectIdentityLiterals({
+        snapshot: buildProjectIdentitySnapshot(buildConfig()),
+        projectRoot: scratch,
+        generatedPaths: [],
+      });
+
+      // Sanity: the literal really is reachable through the link, so a passing assertion below
+      // means the scanner skipped it — not that the fixture was inert.
+      expect(readFileSync(join(scratch, 'link.json'), 'utf-8')).toContain('acme-api');
+      expect(violations.map((violation) => violation.file)).not.toContain('link.json');
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   });
 
   it('never anchors a rewrite pattern on the current project slug', () => {
