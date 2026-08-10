@@ -184,13 +184,13 @@ jobs:
           skip-files: /app/package.json,/app/pnpm-lock.yaml
 
       - name: Upload API Trivy SARIF
-        uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v3
+        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v3
         with:
           sarif_file: trivy-api.sarif
           category: trivy-api
 
       - name: Upload worker Trivy SARIF
-        uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v3
+        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v3
         with:
           sarif_file: trivy-worker.sarif
           category: trivy-worker
@@ -279,7 +279,7 @@ jobs:
 
       - name: Attest API build provenance
         if: contains(fromJSON(env.PROTECTED_BRANCHES_JSON), env.TARGET_BRANCH)
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ${{ steps.push.outputs.api_image_base }}
           subject-digest: ${{ steps.push.outputs.api_digest }}
@@ -287,7 +287,7 @@ jobs:
 
       - name: Attest worker build provenance
         if: contains(fromJSON(env.PROTECTED_BRANCHES_JSON), env.TARGET_BRANCH)
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ${{ steps.push.outputs.worker_image_base }}
           subject-digest: ${{ steps.push.outputs.worker_digest }}
