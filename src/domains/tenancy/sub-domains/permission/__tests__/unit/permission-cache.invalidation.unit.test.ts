@@ -15,6 +15,7 @@ vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
 }));
 
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
+import { mockedRedisSet } from '@/tests/helpers/redis-mock.helper.js';
 import { captureException } from '@/infrastructure/observability/sentry/sentry.js';
 import {
   getCachedPermissions,
@@ -49,10 +50,10 @@ describe('permission-cache service invalidation', () => {
 
   it('setCachedPermissions stores JSON-encoded codes with TTL and version key (replaces "does nothing when version read fails" — version reader silently returns 0 on Redis errors, so SET still happens with version 0)', async () => {
     vi.mocked(redisConnection.get).mockResolvedValue('3');
-    vi.mocked(redisConnection.set).mockResolvedValue('OK');
+    mockedRedisSet(redisConnection.set).mockResolvedValue('OK');
     await setCachedPermissions('user_public_id', 'org_public_id', ['tenancy:read']);
     expect(redisConnection.set).toHaveBeenCalledTimes(1);
-    const callArgs = vi.mocked(redisConnection.set).mock.calls[0]!;
+    const callArgs = mockedRedisSet(redisConnection.set).mock.calls[0]!;
     expect(callArgs[0]).toBe('perm:3:user_public_id:org_public_id');
     expect(callArgs[1]).toBe(JSON.stringify(['tenancy:read']));
     expect(callArgs[2]).toBe('EX');
@@ -73,7 +74,7 @@ describe('permission-cache service invalidation', () => {
   it('commits the recomputed value via the lock-guarded Lua (closing the invalidation race)', async () => {
     // Lock acquired, cache empty: the happy path must write through the compare-and-set Lua
     // (guarded on the lock nonce), never a bare SET that could clobber a concurrent invalidation.
-    vi.mocked(redisConnection.set).mockResolvedValue('OK');
+    mockedRedisSet(redisConnection.set).mockResolvedValue('OK');
     vi.mocked(redisConnection.get).mockImplementation(async (key) => {
       if (String(key).startsWith('perm:org:')) return '0';
       return null;
@@ -105,7 +106,7 @@ describe('permission-cache service invalidation', () => {
 
   it('withPermissionCacheRecomputeLock only runs one concurrent recomputation per user+org', async () => {
     /** First caller acquires lock; second caller sees NX-fail (null) and polls for the cached value. */
-    vi.mocked(redisConnection.set)
+    mockedRedisSet(redisConnection.set)
       .mockResolvedValueOnce('OK')
       .mockResolvedValueOnce(null)
       .mockResolvedValue('OK');
@@ -135,7 +136,7 @@ describe('permission-cache service invalidation', () => {
   });
 
   it('commit binds to the org version captured BEFORE recompute, so an org-wide invalidation mid-recompute orphans the stale commit (audit-#H1)', async () => {
-    vi.mocked(redisConnection.set).mockResolvedValue('OK');
+    mockedRedisSet(redisConnection.set).mockResolvedValue('OK');
     vi.mocked(redisConnection.eval).mockResolvedValue(1 as never);
     // The org version is 0 when the recompute starts; a concurrent org-wide invalidation bumps
     // it to 1 while the recompute runs. The commit must still target the CAPTURED version 0.
@@ -185,7 +186,7 @@ describe('permission-cache service invalidation', () => {
     // A read-path caller (setCachedPermissions) must NOT write under perm:0 when the version
     // read fails — it degrades to a safe no-op instead of caching under the wrong namespace.
     vi.mocked(redisConnection.get).mockRejectedValue(new Error('redis down'));
-    vi.mocked(redisConnection.set).mockResolvedValue('OK');
+    mockedRedisSet(redisConnection.set).mockResolvedValue('OK');
     await setCachedPermissions('user_public_id', 'org_public_id', ['tenancy:read']);
     expect(redisConnection.set).not.toHaveBeenCalled();
   });

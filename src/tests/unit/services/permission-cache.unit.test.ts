@@ -15,6 +15,7 @@ vi.mock('@/infrastructure/cache/redis.client.js', () => {
 });
 
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
+import { mockedRedisSet } from '@/tests/helpers/redis-mock.helper.js';
 import {
   getCachedPermissions,
   setCachedPermissions,
@@ -57,10 +58,10 @@ describe('PermissionCacheService', () => {
   describe('setCachedPermissions', () => {
     it('stores codes in Redis with TTL plus jitter', async () => {
       vi.mocked(redisConnection.get).mockResolvedValue(null); // org version unset → 0
-      vi.mocked(redisConnection.set).mockResolvedValue('OK');
+      mockedRedisSet(redisConnection.set).mockResolvedValue('OK');
       await setCachedPermissions('user-1', 'org-1', ['billing:read'], 600);
       expect(redisConnection.set).toHaveBeenCalledTimes(1);
-      const args = vi.mocked(redisConnection.set).mock.calls[0]!;
+      const args = mockedRedisSet(redisConnection.set).mock.calls[0]!;
       expect(args[0]).toBe('perm:0:user-1:org-1');
       expect(args[1]).toBe('["billing:read"]');
       expect(args[2]).toBe('EX');

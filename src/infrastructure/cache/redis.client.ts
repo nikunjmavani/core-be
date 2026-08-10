@@ -6,6 +6,7 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { FIVE_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
 import {
   REDIS_COMMAND_TIMEOUT_MS,
+  REDIS_PROTOCOL_VERSION,
   REDIS_RECONNECT_DELAY_STEP_MS,
 } from '@/infrastructure/cache/redis.constants.js';
 
@@ -18,6 +19,8 @@ import {
  */
 export const redisConnection = new Redis(env.REDIS_URL, {
   maxRetriesPerRequest: null,
+  /** Keep the RESP2 wire protocol ioredis 5 defaulted to — see {@link REDIS_PROTOCOL_VERSION}. */
+  protocol: REDIS_PROTOCOL_VERSION,
   lazyConnect: true,
   keyPrefix: resolveRedisKeyPrefix(),
   /**

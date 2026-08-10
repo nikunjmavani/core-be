@@ -1,4 +1,5 @@
 import { resolveRedisKeyPrefix } from '@/infrastructure/cache/redis-prefix.util.js';
+import { REDIS_PROTOCOL_VERSION } from '@/infrastructure/cache/redis.constants.js';
 import { parseRedisUrl, resolveBullMqRedisUrl } from '@/infrastructure/cache/redis-url.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { TEN_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
@@ -32,6 +33,7 @@ export function getBullMQConnectionOptions(): {
   maxRetriesPerRequest: null;
   enableReadyCheck: boolean;
   prefix: string;
+  protocol: number;
 } {
   const bullMqRedisUrl = resolveBullMqRedisUrl();
   const parsed = parseRedisUrl(bullMqRedisUrl);
@@ -52,6 +54,10 @@ export function getBullMQConnectionOptions(): {
     // mock is required, matching the existing `process.env.RUN_REDIS_TESTS` test gate.
     enableReadyCheck: process.env.REDIS_READY_CHECK_ENABLED !== 'false',
     prefix: resolveRedisKeyPrefix(),
+    // BullMQ declares no RESP3 support, and ioredis 6 flipped the default to RESP3. Queue traffic
+    // carries mail and billing jobs, so the wire protocol stays where it has been running in
+    // production rather than moving as a side effect of a version bump — see REDIS_PROTOCOL_VERSION.
+    protocol: REDIS_PROTOCOL_VERSION,
   });
 }
 
