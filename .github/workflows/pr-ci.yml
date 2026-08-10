@@ -156,6 +156,12 @@ jobs:
         run: |
           pnpm tool:sync-env-example || (echo "::error::.env.example is out of sync with env schema or is missing the # GitHub Secrets / # GitHub Variables top-level halves. See log above. Run pnpm tool:sync-env-example (with --fix if needed)." && exit 1)
 
+      # Ran only inside `ci:quality` (the post-merge canary), so a PR could go green and
+      # redden main — which is exactly what happened twice in a row while landing the gate
+      # itself. Enforcing it here makes the failure land on the PR that causes it.
+      - name: Project identity artifacts in sync
+        run: pnpm tool:generate-project-identity:check
+
   unit-tests:
     needs: [changes]
     if: |
