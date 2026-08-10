@@ -28,7 +28,8 @@ import { resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { ROUTE_COVERAGE_OBSERVED_DIRECTORY_NAME } from '@tooling/route-coverage/constants.js';
 
-type LaneResult = { name: string; code: number; ms: number };
+/** One lane's outcome: its display name, process exit code, and wall-clock duration. */
+export type LaneResult = { name: string; code: number; ms: number };
 
 const COVERAGE_FLAG = '--coverage';
 const COVERAGE_DISABLE_THRESHOLD_FLAGS = [
@@ -140,6 +141,40 @@ async function runMergedCoverageGate(): Promise<number> {
   return result.code;
 }
 
+/**
+ * Renders the end-of-run lane table, including the exit code the process will actually use.
+ *
+ * @remarks
+ * **Why it is a function:** the total row previously hardcoded `exit=0`, so a run whose
+ * `integration` lane read `exit=1` still printed `total (wall) … exit=0` on the line directly
+ * beneath it — the one line a human scans first. The process exit was always correct; only
+ * the summary lied. Exported so that stays pinned by a test rather than by eyeballing.
+ *
+ * **Notes:** lanes run in sequence and the caller stops at the first failure, so lanes after
+ * it never run and have no row. The trailing note says so, rather than leaving a reader to
+ * conclude a lane silently vanished.
+ */
+export function formatRunSummary(results: readonly LaneResult[], overallMs: number): string {
+  const widestName = Math.max(...results.map((result) => result.name.length));
+  const formatLine = (name: string, ms: number, code: number): string =>
+    `${name.padEnd(widestName)}  ${(ms / 1000).toFixed(1).padStart(7)}s  exit=${code}`;
+
+  const failedLane = results.find((result) => result.code !== 0);
+  const lines = [
+    '\n────────── parallel test summary ──────────',
+    ...results.map((result) => formatLine(result.name, result.ms, result.code)),
+    formatLine('total (wall)', overallMs, failedLane?.code ?? 0),
+  ];
+
+  if (failedLane) {
+    lines.push(
+      `\nStopped after the first failing lane (${failedLane.name}); later lanes did not run.`,
+    );
+  }
+
+  return `${lines.join('\n')}\n`;
+}
+
 async function main(): Promise<void> {
   const overallStart = performance.now();
   const results: LaneResult[] = [];
@@ -161,17 +196,9 @@ async function main(): Promise<void> {
 
   const overallMs = performance.now() - overallStart;
 
-  const widestName = Math.max(...results.map((r) => r.name.length));
-  const formatLine = (name: string, ms: number, code: number): string =>
-    `${name.padEnd(widestName)}  ${(ms / 1000).toFixed(1).padStart(7)}s  exit=${code}`;
+  const failedLane = results.find((result) => result.code !== 0);
+  process.stdout.write(formatRunSummary(results, overallMs));
 
-  process.stdout.write('\n────────── parallel test summary ──────────\n');
-  for (const result of results) {
-    process.stdout.write(`${formatLine(result.name, result.ms, result.code)}\n`);
-  }
-  process.stdout.write(`${formatLine('total (wall)', overallMs, 0)}\n`);
-
-  const failedLane = results.find((r) => r.code !== 0);
   if (failedLane) {
     process.exit(failedLane.code);
   }
@@ -184,4 +211,8 @@ async function main(): Promise<void> {
   }
 }
 
-void main();
+// Guarded so a test can import `formatRunSummary` without the import launching the entire
+// test suite as a side effect. Matches tooling/agent-os/skills-lock.ts.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  void main();
+}

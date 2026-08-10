@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { vitestProjects } from '@tooling/vitest/projects.js';
 import { LANES } from '@tooling/vitest/lanes.js';
+import { formatRunSummary } from '@tooling/vitest/run-parallel.js';
 
 /**
  * Policy: any set of Vitest projects launched in ONE process must agree on
@@ -98,5 +99,43 @@ describe('Global: vitest project grouping', () => {
           'Vitest aborts the run before any test executes — give them the same maxWorkers.',
       ).toBe(1);
     }
+  });
+});
+
+describe('Global: parallel run summary', () => {
+  it('reports the failing exit code on the total row, not a hardcoded 0', () => {
+    // Regression: the total row hardcoded `exit=0`, so a run whose integration lane read
+    // `exit=1` still printed `total (wall) … exit=0` directly beneath it. The process exit was
+    // always correct, but the summary is the line a human reads first — and it said "passed".
+    const summary = formatRunSummary(
+      [
+        { name: 'fast', code: 0, ms: 1000 },
+        { name: 'db-bound:integration', code: 1, ms: 2000 },
+      ],
+      3000,
+    );
+
+    expect(summary).toMatch(/total \(wall\)\s+3\.0s\s+exit=1/);
+  });
+
+  it('says later lanes did not run, so a missing row is not read as a vanished lane', () => {
+    // Lanes run in sequence and the runner stops at the first failure, so every lane after it
+    // is simply absent from the table. Without this note the omission looks like a lost lane.
+    const summary = formatRunSummary(
+      [
+        { name: 'fast', code: 0, ms: 1000 },
+        { name: 'db-bound:integration', code: 1, ms: 2000 },
+      ],
+      3000,
+    );
+
+    expect(summary).toContain('Stopped after the first failing lane (db-bound:integration)');
+  });
+
+  it('keeps the total row at 0 when every lane passed', () => {
+    const summary = formatRunSummary([{ name: 'fast', code: 0, ms: 1000 }], 1500);
+
+    expect(summary).toMatch(/total \(wall\)\s+1\.5s\s+exit=0/);
+    expect(summary).not.toContain('Stopped after the first failing lane');
   });
 });

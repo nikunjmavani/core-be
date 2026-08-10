@@ -124,6 +124,20 @@ These settings match the committed [`main.json`](../../../.github/rulesets/main.
 
 > **Enforced peer review is off by design** while CODEOWNERS is single-owner. This is the **personal** governance mode; switch to **team** with one command once the roster grows — see [Governance mode — personal ↔ team](#governance-mode--personal--team-one-switch) below.
 
+### Squash commit message — repository setting, not in a committed file
+
+The repository is set to **`PR_TITLE` + `COMMIT_MESSAGES`**. This is a GitHub *repository* setting; `pnpm github:sync` manages environments, rulesets and env values, but **not** repository settings, so this one is not reconstructable from any committed file. It is recorded here so it is reviewable.
+
+```bash
+gh api repos/OWNER/REPO --jq '{squash_merge_commit_title, squash_merge_commit_message}'
+```
+
+**Why not the `PR_BODY` default.** Dependabot embeds each dependency's full upstream changelog as HTML in its PR body — often 1000+ lines. With `PR_BODY`, that becomes the squash commit message, and release-please then parses conventional-commit fragments out of it. The v5.2.0 notes shipped a `Changed` entry reading `index the JWS and JWE regis…` — a truncated line from **`jose`'s** changelog, attributed to this project, with no PR link.
+
+**Why not `BLANK`.** It would also fix the pollution, but it discards authored commit bodies and `Co-Authored-By` trailers. Dependabot's *own* commit message is ~20 lines of links and metadata with no embedded changelog, so `COMMIT_MESSAGES` removes the noise while keeping real authorship.
+
+> Only four title/message combinations are accepted: `PR_TITLE`+`PR_BODY`, `PR_TITLE`+`BLANK`, `PR_TITLE`+`COMMIT_MESSAGES`, `COMMIT_OR_PR_TITLE`+`COMMIT_MESSAGES`. Anything else returns HTTP 422 `invalid_squash_commit_setting_combo`.
+
 **Signed commits on `main`:** `required_signatures` is intentionally **not** in the ruleset — branch commits are unsigned, and once `bypass_actors` was removed the rule would deadlock every PR. The commit that lands on `main` is signed regardless, because GitHub signs the squash-merge commit it creates (verify: `gh api repos/OWNER/REPO/commits/main --jq .commit.verification`). To require signed **branch** commits, set up [commit signing](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification) first, then re-add `required_signatures`.
 
 ---
