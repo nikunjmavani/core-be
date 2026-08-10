@@ -3,7 +3,7 @@
 # web (cloud agent) sessions.
 #
 # Why this exists: the cloud image ships Node 20/21/22 (under /opt/nodeXX via
-# nvm), but core-be requires the version pinned in .nvmrc (>=24). This installs
+# nvm), but this project requires the version pinned in .nvmrc (>=24). This installs
 # that version into /opt/node<major> — the same layout the image uses and exactly
 # where agent-os/hooks/session-start.sh looks — so the SessionStart hook switches
 # PATH to it and runs `pnpm install` automatically. No repo changes required.

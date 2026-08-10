@@ -7,7 +7,7 @@
  * Optional:
  *   SCALAR_NAMESPACE     — Scalar team namespace (auto-resolved from the token's active team
  *                          when omitted)
- *   SCALAR_SLUG          — Registry slug (default: core-be)
+ *   SCALAR_SLUG          — Registry slug (defaults to the project slug)
  *   OPENAPI_SPEC_PATH    — Path to OpenAPI JSON (default: docs/openapi/openapi.json)
  *   SCALAR_VERSION       — Registry version label (default: package.json version)
  *
@@ -18,10 +18,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { shouldSkipHostedUpload } from './hosted-docs-upload.util.js';
+import { SCALAR_SLUG_DEFAULT } from '@/shared/constants/project-identity.constants.js';
 
 const PACKAGE_JSON_PATH = join(process.cwd(), 'package.json');
 const DEFAULT_OPENAPI_SPEC_PATH = join(process.cwd(), 'docs', 'openapi', 'openapi.json');
-const DEFAULT_SCALAR_SLUG = 'core-be';
+const DEFAULT_SCALAR_SLUG = SCALAR_SLUG_DEFAULT;
 const SCALAR_REGISTRY_BASE_URL = 'https://registry.scalar.com';
 
 const SCALAR_UPLOAD_REQUIRED_VARIABLES = ['SCALAR_API_KEY'] as const;

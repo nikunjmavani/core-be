@@ -1,4 +1,4 @@
-// Resolve schema + migrations for core-be (cwd-aware).
+// Resolve schema + migrations for this project (cwd-aware).
 // Order: CLI opts → tooling/db-viewer/config.json → drizzle.config hint → conventional layout.
 // Port: CLI → DB_VIEWER_PORT → config → 4984.
 

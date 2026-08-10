@@ -4,6 +4,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import {
+  MCP_OPENAPI_RESOURCE_URI,
+  MCP_ROUTES_RESOURCE_URI,
+  MCP_URI_SCHEME,
+} from '@/shared/constants/project-identity.constants.js';
 
 const OPENAPI_PATH = join(process.cwd(), 'docs', 'openapi', 'openapi.json');
 
@@ -28,18 +33,20 @@ describe('OpenAPI MCP', () => {
   it('embeds x-mcp tools and resources for docs UI and MCP clients', () => {
     expect(spec['x-mcp']).toBeDefined();
     expect(spec['x-mcp']?.tools.map((tool) => tool.name)).toEqual(['call_api']);
-    expect(spec['x-mcp']?.resources.map((resource) => resource.uri).sort()).toEqual([
-      'core-be://client-guide',
-      'core-be://openapi',
-      'core-be://routes',
-    ]);
+    expect(spec['x-mcp']?.resources.map((resource) => resource.uri).sort()).toEqual(
+      [
+        `${MCP_URI_SCHEME}://client-guide`,
+        MCP_OPENAPI_RESOURCE_URI,
+        MCP_ROUTES_RESOURCE_URI,
+      ].sort(),
+    );
   });
 
   it('documents MCP capabilities in operation descriptions', () => {
     const postDescription = spec.paths['/api/v1/mcp']?.post?.description ?? '';
     expect(postDescription).toContain('### MCP tools');
     expect(postDescription).toContain('call_api');
-    expect(postDescription).toContain('core-be://openapi');
+    expect(postDescription).toContain(MCP_OPENAPI_RESOURCE_URI);
   });
 
   it('documents call_api input under components.schemas', () => {

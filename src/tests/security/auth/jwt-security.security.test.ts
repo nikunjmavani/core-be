@@ -27,7 +27,7 @@ describe('Security: JWT', () => {
 
   it('should include correct issuer and audience claims', async () => {
     expect(JWT_ISSUER).toBe(PROJECT_SLUG);
-    expect(JWT_AUDIENCE).toBe('core-api');
+    expect(JWT_AUDIENCE).toBe(`${PROJECT_SLUG.replace(/-be$/, '')}-api`);
   });
 
   it('should enforce 15-minute access token expiry', () => {

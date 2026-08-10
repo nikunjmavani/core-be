@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local dashboards orchestrator for core-be.
+# Local dashboards orchestrator for this project.
 #
 # Brings up Postgres / Redis / SonarQube (via OrbStack or Docker Desktop), then starts the
 # API + worker + Drizzle Studio + an auth proxy DETACHED (nohup) so they survive your

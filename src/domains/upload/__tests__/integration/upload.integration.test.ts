@@ -160,7 +160,7 @@ describe('Upload Domain — Integration', () => {
           mime_type: 'image/png',
           file_size: 1024,
           storage_provider: 's3',
-          bucket: 'core-be-uploads',
+          bucket: 'test-uploads',
           status: 'UPLOADED',
           metadata: { purpose: 'AVATAR', target: 'USER' },
           uploaded_at: new Date(),

@@ -25,7 +25,7 @@ describe('Security: Organization RLS session', () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
-    await sql`GRANT core_be_app TO core`.catch(() => undefined);
+    await sql`GRANT core_be_app TO CURRENT_USER`.catch(() => undefined);
     const testApp = await createTestApp();
     app = testApp.app;
   });

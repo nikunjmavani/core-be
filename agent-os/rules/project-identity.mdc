@@ -52,11 +52,34 @@ Import from `@/shared/constants/project-identity.constants.js`:
 - Scripts: source `.github/project-identity.env` when the slug is needed (see `tooling/ci/restore-drill-neon.sh`).
 - `src/shared/locales/{en,es}/openapi.json` — `info.title` is updated by codegen; keep in sync via generate, do not set a one-off product name by hand.
 
+## Also generated (do not hand-edit)
+
+`package.json` (`name`, `repository`, `bugs`, `homepage`), `.github/CODEOWNERS`,
+`.github/environments/production.json` reviewer handles, `sonar-project.properties`, and the
+`container_name:` values in `docker-compose*.yml` are all written by
+`pnpm tool:generate-project-identity`. Change `providers.github.owners` / `project.packageName` in
+the manifest and regenerate. CODEOWNERS remains the roster that
+`pnpm github:tool:governance-mode` reads; the generator owns only the handles, never the
+mode-coupled fields.
+
+Additional runtime constants: `API_SERVER_NAME`, `WEBHOOK_USER_AGENT_PREFIX`,
+`SCALAR_SLUG_DEFAULT`, `POSTMAN_COLLECTION_PREFIX`, `DBML_OUTPUT_PATH`, `PROJECT_REPOSITORY`,
+`PROJECT_REPOSITORY_OWNER`.
+
 ## OK to keep literal (exceptions)
 
-- Repository folder name, `package.json` `"name"`, historical CHANGELOG / review docs
+- Repository folder name, historical CHANGELOG / review docs, Markdown prose naming the base project
 - External URLs or IDs already provisioned under a fixed slug in a third-party console
 - Generic prose that is not the product name (e.g. “backend API” in a description)
+- Anything listed in `IDENTITY_LITERAL_ALLOWLIST`
+  (`tooling/setup/codegen/validate-project-identity-literals.ts`) — entries are self-validating: a
+  stale one fails the gate
+
+## Enforcement
+
+`pnpm tool:generate-project-identity:check` (in `pnpm ci:quality` and the pre-commit guard) fails on
+drift, on any hardcoded slug/owner outside the generated targets and the allowlist, and on a stale
+allowlist entry. Adoption flow: `docs/getting-started/adopting-as-template.md` (`pnpm init:project`).
 
 ## Related
 

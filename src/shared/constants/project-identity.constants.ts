@@ -3,6 +3,42 @@
 /** Canonical project slug (Neon, Sentry, JWT issuer, MCP URI scheme). */
 export const PROJECT_SLUG = 'core-be';
 
+/** GitHub `owner/repo` slug backing CODEOWNERS and environment reviewers. */
+export const PROJECT_REPOSITORY = 'nikunjmavani/core-be';
+
+/** GitHub owner (user or organization login) that owns the repository. */
+export const PROJECT_REPOSITORY_OWNER = 'nikunjmavani';
+
+/** Server name reported in the MCP handshake. */
+export const API_SERVER_NAME = 'core-be';
+
+/** `User-Agent` prefix on outbound webhook deliveries. */
+export const WEBHOOK_USER_AGENT_PREFIX = 'core-be-webhook';
+
+/** Default Scalar registry slug when `SCALAR_SLUG` is unset. */
+export const SCALAR_SLUG_DEFAULT = 'core-be';
+
+/** Postman collection name prefix (`{displayName} API`). */
+export const POSTMAN_COLLECTION_PREFIX = 'core-be API';
+
+/** Repository-relative path of the generated DBML diagram. */
+export const DBML_OUTPUT_PATH = 'docs/database/core-be.dbml';
+
+/** JWT `aud` claim — changing this invalidates outstanding tokens. */
+export const JWT_AUDIENCE = 'core-api';
+
+/** Local Postgres database, user and password for the `compose:up` stack. */
+export const LOCAL_DATABASE_NAME = 'core';
+
+/** Redis key-prefix stem (`<stem>:<NODE_ENV>:`), isolating one product's keyspace. */
+export const REDIS_KEY_PREFIX_STEM = 'core';
+
+/** Restricted Postgres role the app connects as, under RLS. */
+export const DATABASE_APP_ROLE = 'core_be_app';
+
+/** Postgres role owning runtime objects. */
+export const DATABASE_RUNTIME_ROLE = 'core_be_runtime';
+
 /** Human-facing product name for OpenAPI and emails. */
 export const PROJECT_DISPLAY_NAME = 'core-be';
 

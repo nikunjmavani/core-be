@@ -5,12 +5,27 @@
  *   pnpm tool:generate-project-identity
  *   pnpm tool:generate-project-identity:check
  */
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { loadConfig } from '@tooling/setup/common/config.js';
 import { buildProjectIdentitySnapshot } from './project-identity.util.js';
+import {
+  renderCodeowners,
+  renderComposeContainerNames,
+  renderPackageJson,
+  renderProductionEnvironment,
+  renderSonarProperties,
+} from './repository-identity-artifacts.js';
+import { scanProjectIdentityLiterals } from './validate-project-identity-literals.js';
+import {
+  applyTextRewrites,
+  MCP_TEMPLATE_PATHS,
+  mcpTemplateRules,
+  TEXT_REWRITE_TARGETS,
+} from './text-identity-rewrites.js';
 import { validateWorkflowLiteralsAgainstManifest } from './validate-project-identity-workflows.js';
 
 const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -26,6 +41,19 @@ const OUTPUT_PATHS = {
   dockerBake: resolve(REPOSITORY_ROOT, 'docker-bake.hcl'),
   openApiLocaleEn: resolve(REPOSITORY_ROOT, 'src/shared/locales/en/openapi.json'),
   openApiLocaleEs: resolve(REPOSITORY_ROOT, 'src/shared/locales/es/openapi.json'),
+  codeowners: resolve(REPOSITORY_ROOT, '.github/CODEOWNERS'),
+} as const;
+
+/**
+ * Files that are RECONCILED rather than emitted: the generator rewrites only the
+ * identity-bearing fields and preserves everything else the file owns.
+ */
+const RECONCILED_PATHS = {
+  packageJson: resolve(REPOSITORY_ROOT, 'package.json'),
+  sonarProperties: resolve(REPOSITORY_ROOT, 'sonar-project.properties'),
+  productionEnvironment: resolve(REPOSITORY_ROOT, '.github/environments/production.json'),
+  dockerCompose: resolve(REPOSITORY_ROOT, 'docker-compose.yml'),
+  dockerComposeSonar: resolve(REPOSITORY_ROOT, 'docker-compose.sonar.yml'),
 } as const;
 
 const WORKFLOW_FILES_TO_PATCH = [
@@ -58,11 +86,47 @@ const LEGACY_CLEANUP_CACHE_BRANCH_GUARD =
   '                fi';
 
 function renderConstants(snapshot: ReturnType<typeof buildProjectIdentitySnapshot>): string {
-  const { slug, displayName, artifacts, git, branchEnvironmentMap } = snapshot;
+  const { slug, displayName, artifacts, git, branchEnvironmentMap, repository, derived } = snapshot;
   const escapedDisplay = displayName.replace(/'/g, "\\'");
   return `${GENERATED_BANNER}
 /** Canonical project slug (Neon, Sentry, JWT issuer, MCP URI scheme). */
 export const PROJECT_SLUG = '${slug}';
+
+/** GitHub \`owner/repo\` slug backing CODEOWNERS and environment reviewers. */
+export const PROJECT_REPOSITORY = '${repository.slug}';
+
+/** GitHub owner (user or organization login) that owns the repository. */
+export const PROJECT_REPOSITORY_OWNER = '${repository.owner}';
+
+/** Server name reported in the MCP handshake. */
+export const API_SERVER_NAME = '${derived.apiServerName}';
+
+/** \`User-Agent\` prefix on outbound webhook deliveries. */
+export const WEBHOOK_USER_AGENT_PREFIX = '${derived.webhookUserAgent}';
+
+/** Default Scalar registry slug when \`SCALAR_SLUG\` is unset. */
+export const SCALAR_SLUG_DEFAULT = '${derived.scalarSlug}';
+
+/** Postman collection name prefix (\`{displayName} API\`). */
+export const POSTMAN_COLLECTION_PREFIX = '${derived.postmanCollectionPrefix.replace(/'/g, "\\'")}';
+
+/** Repository-relative path of the generated DBML diagram. */
+export const DBML_OUTPUT_PATH = '${derived.dbmlPath}';
+
+/** JWT \`aud\` claim — changing this invalidates outstanding tokens. */
+export const JWT_AUDIENCE = '${derived.jwtAudience}';
+
+/** Local Postgres database, user and password for the \`compose:up\` stack. */
+export const LOCAL_DATABASE_NAME = '${derived.databaseName}';
+
+/** Redis key-prefix stem (\`<stem>:<NODE_ENV>:\`), isolating one product's keyspace. */
+export const REDIS_KEY_PREFIX_STEM = '${derived.redisKeyPrefix}';
+
+/** Restricted Postgres role the app connects as, under RLS. */
+export const DATABASE_APP_ROLE = '${derived.databaseAppRole}';
+
+/** Postgres role owning runtime objects. */
+export const DATABASE_RUNTIME_ROLE = '${derived.databaseRuntimeRole}';
 
 /** Human-facing product name for OpenAPI and emails. */
 export const PROJECT_DISPLAY_NAME = '${escapedDisplay}';
@@ -401,8 +465,11 @@ function patchWorkflowFile(
     );
   }
   if (relativePath === 'scheduled-monthly-restore-rto.yml') {
+    // Match the SHAPE of the sentence, not the current slug/branches. Anchoring
+    // on the literal values makes the rewrite self-disabling: after the first
+    // rename the pattern no longer matches and the message silently goes stale.
     contents = contents.replace(
-      /ensure Neon project core-be and branch names match git refs \(main\/dev\)/g,
+      /ensure Neon project \S+ and branch names match git refs \([^)]*\)/g,
       `ensure Neon project ${snapshot.slug} and branch names match git refs (${snapshot.git.protectedBranches.join('/')})`,
     );
   }
@@ -416,6 +483,34 @@ function patchWorkflowFile(
 function writeGeneratedFile(path: string, contents: string): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, contents, 'utf-8');
+}
+
+/**
+ * Run Biome over the files this run wrote, so generation leaves a lint-clean tree.
+ *
+ * @remarks
+ * `JSON.stringify(value, null, 2)` and Biome disagree on array wrapping, so a
+ * freshly adopted project would otherwise fail `pnpm lint` on its own generated
+ * manifest — the first gate an adopting team runs. Formatting here rather than
+ * hand-matching Biome's output keeps the renderers simple and cannot drift when
+ * the formatter's rules change.
+ *
+ * Best-effort: a missing or failing Biome must not fail generation, because the
+ * identity rewrite itself succeeded and `pnpm lint` reports any residue anyway.
+ */
+function formatGeneratedFiles(paths: readonly string[]): void {
+  const formattable = paths.filter((path) => /\.(json|ts|mjs)$/.test(path));
+  if (formattable.length === 0) {
+    return;
+  }
+  try {
+    execFileSync('npx', ['biome', 'format', '--write', ...formattable], {
+      cwd: REPOSITORY_ROOT,
+      stdio: 'ignore',
+    });
+  } catch {
+    console.warn('Could not run Biome on the generated files — run `pnpm format` if lint fails.');
+  }
 }
 
 export function generateAllProjectIdentityArtifacts(options?: { checkOnly?: boolean }): boolean {
@@ -439,18 +534,70 @@ export function generateAllProjectIdentityArtifacts(options?: { checkOnly?: bool
   if (openApiLocaleEs) {
     outputs.push({ path: OUTPUT_PATHS.openApiLocaleEs, contents: openApiLocaleEs });
   }
+  outputs.push({ path: OUTPUT_PATHS.codeowners, contents: renderCodeowners(snapshot) });
+
+  // A file may be touched by more than one rule (docker-compose.yml carries both
+  // container names and the Toxiproxy image tag). Each transform must therefore
+  // build on the PREVIOUS transform's result, not on a fresh read of the file —
+  // otherwise the last writer silently discards every earlier rewrite.
+  const reconciledContents = new Map<string, string>();
+  const reconcile = (targetPath: string, render: (existing: string) => string): void => {
+    if (!existsSync(targetPath)) {
+      return;
+    }
+    const base = reconciledContents.get(targetPath) ?? readFileSync(targetPath, 'utf-8');
+    reconciledContents.set(targetPath, render(base));
+  };
+
+  reconcile(RECONCILED_PATHS.packageJson, (existing) => renderPackageJson(snapshot, existing));
+  reconcile(RECONCILED_PATHS.sonarProperties, (existing) =>
+    renderSonarProperties(snapshot, existing),
+  );
+  reconcile(RECONCILED_PATHS.productionEnvironment, (existing) =>
+    renderProductionEnvironment(snapshot, existing),
+  );
+  reconcile(RECONCILED_PATHS.dockerCompose, (existing) =>
+    renderComposeContainerNames(snapshot, existing),
+  );
+  reconcile(RECONCILED_PATHS.dockerComposeSonar, (existing) =>
+    renderComposeContainerNames(snapshot, existing),
+  );
+
+  // Files naming the project in free text (comments, titles, config keys, shell
+  // commands). Shape-matched spans rather than whole-file templates — see
+  // text-identity-rewrites.ts for why the patterns never reference the slug.
+  for (const target of TEXT_REWRITE_TARGETS) {
+    reconcile(resolve(REPOSITORY_ROOT, target.path), (existing) =>
+      applyTextRewrites(existing, target.rules, snapshot),
+    );
+  }
+
+  // MCP templates are pinned as exact mirrors by the mcp-config global test, so
+  // one shared rule set drives all three rather than three drifting entries.
+  for (const mcpPath of MCP_TEMPLATE_PATHS) {
+    reconcile(resolve(REPOSITORY_ROOT, mcpPath), (existing) =>
+      applyTextRewrites(existing, mcpTemplateRules(), snapshot),
+    );
+  }
+
+  for (const [path, contents] of reconciledContents) {
+    outputs.push({ path, contents });
+  }
 
   let stale = false;
+  const writtenPaths: string[] = [];
   for (const output of outputs) {
     const existing = existsSync(output.path) ? readFileSync(output.path, 'utf-8') : '';
     if (existing !== output.contents) {
       stale = true;
       if (!checkOnly) {
         writeGeneratedFile(output.path, output.contents);
+        writtenPaths.push(output.path);
         console.log(`Wrote ${output.path.replace(`${REPOSITORY_ROOT}/`, '')}`);
       }
     }
   }
+  formatGeneratedFiles(writtenPaths);
 
   for (const workflowFile of WORKFLOW_FILES_TO_PATCH) {
     const filePath = resolve(REPOSITORY_ROOT, '.github/workflows', workflowFile);
@@ -473,6 +620,41 @@ export function generateAllProjectIdentityArtifacts(options?: { checkOnly?: bool
     console.error('Workflow project-identity literal violations:');
     for (const violation of workflowViolations) {
       console.error(`  ${violation.file}: ${violation.detail}`);
+    }
+    return false;
+  }
+
+  // Generator targets are exempt by construction: pass the paths this run owns
+  // rather than restating them in the scanner, so the two cannot drift.
+  const generatedPaths = [
+    ...Object.values(OUTPUT_PATHS),
+    ...Object.values(RECONCILED_PATHS),
+    ...TEXT_REWRITE_TARGETS.map((target) => resolve(REPOSITORY_ROOT, target.path)),
+    ...MCP_TEMPLATE_PATHS.map((path) => resolve(REPOSITORY_ROOT, path)),
+    ...WORKFLOW_FILES_TO_PATCH.map((file) => resolve(REPOSITORY_ROOT, '.github/workflows', file)),
+  ];
+  const { violations, staleAllowances } = scanProjectIdentityLiterals({
+    snapshot,
+    projectRoot: REPOSITORY_ROOT,
+    generatedPaths,
+  });
+  if (violations.length > 0) {
+    console.error(
+      `Hardcoded project-identity literals found (${violations.length}). Import the generated constants from src/shared/constants/project-identity.constants.ts, or read the manifest in tooling/:`,
+    );
+    for (const violation of violations) {
+      console.error(
+        `  ${violation.file}:${violation.line}  [${violation.literal}]  ${violation.text}`,
+      );
+    }
+    return false;
+  }
+  if (staleAllowances.length > 0) {
+    console.error(
+      'Stale entries in IDENTITY_LITERAL_ALLOWLIST — the literal is gone, so remove the entry:',
+    );
+    for (const allowance of staleAllowances) {
+      console.error(`  ${allowance.file} — ${allowance.reason}`);
     }
     return false;
   }

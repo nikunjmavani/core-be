@@ -6,10 +6,11 @@ import { execSync, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DBML_OUTPUT_PATH } from '@/shared/constants/project-identity.constants.js';
 
 const ROUTES_CATALOG_PATH = 'docs/routes.txt';
 const SRC_STRUCTURE_TREE_PATH = 'docs/reference/architecture/src-structure-tree.txt';
-const DBML_PATH = 'docs/database/core-be.dbml';
+const DBML_PATH = DBML_OUTPUT_PATH;
 const ONE_MEGABYTE = 1048576;
 
 /** One labeled step in the pre-commit guard sequence. */

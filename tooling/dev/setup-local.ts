@@ -33,11 +33,17 @@ import { resolve } from 'node:path';
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { ensureDefaultMcpServers } from './mcp-config.js';
+import { resolveDerivedNames } from '@tooling/setup/codegen/project-identity.util.js';
+import { loadConfig } from '@tooling/setup/common/config.js';
 
 const PROJECT_ROOT = process.cwd();
 const REQUIRED_NODE_MAJOR = 24;
-const POSTGRES_CONTAINER = 'core-be-postgres';
-const REDIS_CONTAINER = 'core-be-redis';
+const SETUP_CONFIG = loadConfig();
+const PROJECT_DISPLAY_NAME = SETUP_CONFIG.project.displayName;
+const { containers: LOCAL_CONTAINERS, databaseName: LOCAL_DATABASE_NAME } =
+  resolveDerivedNames(SETUP_CONFIG);
+const POSTGRES_CONTAINER = LOCAL_CONTAINERS.postgres;
+const REDIS_CONTAINER = LOCAL_CONTAINERS.redis;
 const DEFAULT_DEV_PORT = 3000;
 
 type StepStatus = 'done' | 'skipped' | 'warning' | 'failed';
@@ -98,10 +104,14 @@ function logHeading(message: string): void {
 }
 
 function logBanner(): void {
-  const line = '═'.repeat(58);
+  const width = 58;
+  const line = '═'.repeat(width);
+  // Pad on the visible text only — the ANSI escapes occupy no display columns,
+  // so they must be added after padEnd or the box edge drifts.
+  const title = `${PROJECT_DISPLAY_NAME} — local bootstrap (pnpm setup:local)`;
   process.stdout.write(`\n╔${line}╗\n`);
   process.stdout.write(
-    `║  ${ANSI.bold}core-be — local bootstrap (pnpm setup:local)${ANSI.reset}            ║\n`,
+    `║  ${ANSI.bold}${title}${ANSI.reset}${' '.repeat(Math.max(0, width - title.length - 3))}║\n`,
   );
   process.stdout.write(`║  Docker + env + migrate + dev in one command             ║\n`);
   process.stdout.write(`╚${line}╝\n`);
@@ -375,21 +385,16 @@ function upsertEnvAssignment(content: string, key: string, value: string): strin
   return content.endsWith('\n') ? `${content}${line}\n` : `${content}\n${line}\n`;
 }
 
-// Localhost DB/Redis values for the `pnpm compose:up` stack. Credentials match
-// docker-compose.yml (POSTGRES_USER/PASSWORD/DB = core); local Postgres/Redis are
-// plaintext (no TLS).
+// Localhost DB/Redis values for the `pnpm compose:up` stack. Credentials are
+// DERIVED from the manifest, matching the POSTGRES_USER/PASSWORD/DB that
+// docker-compose.yml provisions from the same source — hardcoding them here made
+// `setup:local` write credentials the compose stack does not accept, so a freshly
+// adopted project could never migrate. Local Postgres/Redis are plaintext (no TLS).
+const LOCAL_DATABASE_URL = `postgresql://${LOCAL_DATABASE_NAME}:${LOCAL_DATABASE_NAME}@localhost:5432/${LOCAL_DATABASE_NAME}`;
 function injectLocalhostOverrides(content: string): string {
   let updated = content;
-  updated = upsertEnvAssignment(
-    updated,
-    'DATABASE_URL',
-    'postgresql://core:core@localhost:5432/core',
-  );
-  updated = upsertEnvAssignment(
-    updated,
-    'DATABASE_MIGRATION_URL',
-    'postgresql://core:core@localhost:5432/core',
-  );
+  updated = upsertEnvAssignment(updated, 'DATABASE_URL', LOCAL_DATABASE_URL);
+  updated = upsertEnvAssignment(updated, 'DATABASE_MIGRATION_URL', LOCAL_DATABASE_URL);
   updated = upsertEnvAssignment(updated, 'REDIS_URL', 'redis://localhost:6379');
   updated = upsertEnvAssignment(updated, 'DATABASE_SSL_ENABLED', 'false');
   updated = upsertEnvAssignment(updated, 'DATABASE_SSL_REJECT_UNAUTHORIZED', 'false');

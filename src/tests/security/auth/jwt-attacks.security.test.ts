@@ -4,6 +4,7 @@ import { createHmac, generateKeyPairSync } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import { createTestApp } from '@/tests/helpers/test-app.js';
+import { JWT_AUDIENCE, PROJECT_SLUG } from '@/shared/constants/project-identity.constants.js';
 import {
   injectUnauthenticated,
   injectAuthenticated,
@@ -19,8 +20,8 @@ import { generateTestToken } from '@/tests/helpers/test-auth.js';
  * regression guard that the defense holds: every forged or tampered token must be
  * rejected (401) on a normal authenticated endpoint, before any session lookup.
  */
-const ISSUER = 'core-be';
-const AUDIENCE = 'core-api';
+const ISSUER = PROJECT_SLUG;
+const AUDIENCE = JWT_AUDIENCE;
 const PROTECTED = '/auth/me/sessions';
 
 function normalizePem(value: string): string {

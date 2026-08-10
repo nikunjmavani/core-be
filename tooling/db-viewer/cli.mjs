@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// DB Viewer CLI for core-be.
+// DB Viewer CLI for this project.
 //
 //   pnpm db:viewer
 //   node tooling/db-viewer/cli.mjs --no-open
@@ -11,7 +11,7 @@ import { startServer } from './server.mjs';
 
 function usage() {
   console.log(`
-  DB Viewer — local Drizzle ER canvas (core-be tooling)
+  DB Viewer — local Drizzle ER canvas (repo tooling)
 
   Usage:
     pnpm db:viewer

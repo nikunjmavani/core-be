@@ -13,12 +13,15 @@ import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { resolveDerivedNames } from '@tooling/setup/codegen/project-identity.util.js';
+import { loadConfig } from '@tooling/setup/common/config.js';
 
+const DERIVED_NAMES = resolveDerivedNames(loadConfig());
 const SONAR_URL = process.env.SONAR_HOST_URL ?? 'http://localhost:9000';
-const PROJECT_KEY = 'core-be';
+const PROJECT_KEY = DERIVED_NAMES.sonarProjectKey;
 const COMPOSE_FILE = 'docker-compose.sonar.yml';
 const ENV_LOCAL = '.env.local';
-const TOKEN_NAME = 'core-be-local-gate';
+const TOKEN_NAME = DERIVED_NAMES.sonarTokenName;
 const ADMIN_LOGIN = 'admin';
 const SERVER_READY_TIMEOUT_MS = 240_000;
 const CE_TIMEOUT_MS = 240_000;

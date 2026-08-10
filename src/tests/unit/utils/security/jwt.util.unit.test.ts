@@ -2,6 +2,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { SignJWT, decodeProtectedHeader, importPKCS8 } from 'jose';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetEnvCacheForTests } from '@/shared/config/env.config.js';
+import { PROJECT_SLUG } from '@/shared/constants/project-identity.constants.js';
 import * as envConfigModule from '@/shared/config/env.config.js';
 import {
   ACCESS_TOKEN_EXPIRY_SECONDS,
@@ -22,8 +23,8 @@ function generateRsaPemKeyPair(): { privateKey: string; publicKey: string } {
 
 describe('jwt.util', () => {
   it('exports issuer, audience, and expiry constants', () => {
-    expect(JWT_ISSUER).toBe('core-be');
-    expect(JWT_AUDIENCE).toBe('core-api');
+    expect(JWT_ISSUER).toBe(PROJECT_SLUG);
+    expect(JWT_AUDIENCE).toBe(`${PROJECT_SLUG.replace(/-be$/, '')}-api`);
     expect(ACCESS_TOKEN_EXPIRY_SECONDS).toBe(900);
   });
 

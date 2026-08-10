@@ -6,8 +6,9 @@
 import '@/shared/config/load-env-files.js';
 import { execSync } from 'node:child_process';
 import postgres from 'postgres';
+import { LOCAL_DATABASE_NAME } from '@/shared/constants/project-identity.constants.js';
 
-const LOCAL_TEST_DATABASE_URL = 'postgresql://core:core@localhost:5432/core';
+const LOCAL_TEST_DATABASE_URL = `postgresql://${LOCAL_DATABASE_NAME}:${LOCAL_DATABASE_NAME}@localhost:5432/${LOCAL_DATABASE_NAME}`;
 
 function isLocalDatabaseUrl(value: string | undefined): boolean {
   if (!value) return false;

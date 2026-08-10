@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
@@ -39,13 +40,23 @@ export const setupConfigSchema = z.object({
   //                             alias maps like dev→development only NORMALIZE input)
   // Change a name here and re-run `pnpm tool:generate-project-identity`.
   //
-  // Scope: this file configures core-be's OWN tooling only — project identity
+  // Scope: this file configures this repository's OWN tooling only — project identity
   // (`pnpm tool:generate-project-identity`) and GitHub repo/environment sync
   // (`pnpm github:sync`). It is NOT runtime config: the app reads `.env.<environment>`
   // validated by `src/shared/config/env-schema.ts` and never loads this file.
   project: z.object({
     name: z.string().min(1),
     displayName: z.string().min(1),
+    // npm package name. Defaults to `name`; set explicitly only when the npm
+    // name must differ from the project slug (e.g. a scoped `@org/api` name).
+    packageName: z.string().min(1).optional(),
+    // package.json `description`. Defaults to the committed description when
+    // omitted so an adopting fork is not forced to invent one immediately.
+    description: z.string().min(1).optional(),
+    // Paired frontend repository name, referenced by docs and comments that
+    // describe the BE↔FE contract (CORS origins, invitation links, shared Sonar
+    // server). Defaults to this slug with a `-be` suffix swapped for `-fe`.
+    frontendName: z.string().min(1).optional(),
     artifacts: projectArtifactsSchema.optional(),
   }),
   git: projectGitSchema.optional(),
@@ -54,6 +65,10 @@ export const setupConfigSchema = z.object({
     github: z.object({
       enabled: z.boolean(),
       repository: z.string().regex(/^[^/]+\/[^/]+$/),
+      // CODEOWNERS roster. Defaults to the owner segment of `repository`, which
+      // is correct for a personal repo. Set explicitly for an organization repo
+      // or to seed the ≥2 owners that `github:tool:governance-mode team` needs.
+      owners: z.array(z.string().min(1)).min(1).optional(),
     }),
   }),
 });
@@ -78,12 +93,29 @@ function normalizeLoadedConfig(config: ParsedSetupConfig): ParsedSetupConfig {
   const artifacts = config.project.artifacts ?? buildDefaultArtifacts(config.project.name);
   const defaultBranch = config.git?.defaultBranch ?? 'main';
   const protectedBranches = config.git?.protectedBranches ?? [defaultBranch];
+  const { github } = config.providers;
+  const owners = github.owners ?? [repositoryOwner(github.repository)];
 
   return {
     ...config,
-    project: { ...config.project, artifacts },
+    project: {
+      ...config.project,
+      artifacts,
+      packageName: config.project.packageName ?? config.project.name,
+    },
     git: { protectedBranches, defaultBranch },
+    providers: { ...config.providers, github: { ...github, owners } },
   };
+}
+
+/** The `owner` segment of an `owner/repo` slug. */
+export function repositoryOwner(repository: string): string {
+  return repository.split('/')[0] ?? repository;
+}
+
+/** The `repo` segment of an `owner/repo` slug. */
+export function repositoryName(repository: string): string {
+  return repository.split('/')[1] ?? repository;
 }
 
 export function getConfigPath(): string {
@@ -129,4 +161,16 @@ export function getEnvironmentNames(config: z.infer<typeof setupConfigSchema>): 
  */
 export function saveConfig(config: z.infer<typeof setupConfigSchema>): void {
   writeFileSync(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
+  // `JSON.stringify` and Biome disagree on array wrapping, so an unformatted
+  // manifest fails `pnpm lint` — the first gate an adopting team runs after
+  // `pnpm init:project`. Best-effort: the write already succeeded, and `pnpm
+  // format` fixes any residue, so a missing Biome must not fail the save.
+  try {
+    execFileSync('npx', ['biome', 'format', '--write', CONFIG_PATH], {
+      cwd: resolve(import.meta.dirname, '../../..'),
+      stdio: 'ignore',
+    });
+  } catch {
+    // Formatting is cosmetic; leave the valid JSON in place.
+  }
 }
