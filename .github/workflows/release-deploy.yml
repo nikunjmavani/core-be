@@ -118,6 +118,16 @@ jobs:
   build-if-missing:
     name: Build tag image (only if missing)
     needs: [resolve]
+    # Must match what reusable-docker-build-trivy's `run` job requests. A called workflow
+    # cannot elevate beyond the CALLING JOB's grant, and the workflow-level default here is
+    # `contents: read` (everything else `none`) — so omitting this block fails the whole run
+    # at startup, before any job exists. Mirrors post-merge-ci.yml's docker-build-push job.
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
     if: needs.resolve.outputs.image_present != 'true'
     uses: ./.github/workflows/reusable-docker-build-trivy.yml
     secrets: inherit
@@ -142,6 +152,11 @@ jobs:
   deploy:
     name: Deploy production
     needs: [resolve, build-if-missing, docs]
+    # Matches reusable-railway-deploy's `deploy` job (it pulls the GHCR image).
+    # Same startup-failure rule as build-if-missing above.
+    permissions:
+      contents: read
+      packages: write
     if: |
       always() &&
       (needs.build-if-missing.result == 'success' || needs.build-if-missing.result == 'skipped') &&
