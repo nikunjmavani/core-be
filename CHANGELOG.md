@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2.1](https://github.com/nikunjmavani/core-be/compare/v5.2.0...v5.2.1) (2026-08-10)
+
+
+### Fixed
+
+* **ci:** grant release-deploy's jobs the permissions their reusables need ([#1038](https://github.com/nikunjmavani/core-be/issues/1038)) ([dc4c479](https://github.com/nikunjmavani/core-be/commit/dc4c479561b383acec75501ccbc1ed16b1cf8188))
+* **tooling:** stop the test summary reporting a failing run as exit=0 ([#1039](https://github.com/nikunjmavani/core-be/issues/1039)) ([758702a](https://github.com/nikunjmavani/core-be/commit/758702a9079152cfd241f3faae829b40c7fd96a7))
+
 ## [5.2.0](https://github.com/nikunjmavani/core-be/compare/v5.1.0...v5.2.0) (2026-08-10)
 
 
