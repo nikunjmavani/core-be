@@ -12,6 +12,11 @@
   "globs": ["**/*.md"],
   "ignores": [
     "node_modules/**",
+    // Stryker's sandbox copies the whole tree, node_modules included, and a crashed or
+    // cancelled mutation run leaves it behind. Its nested node_modules escape the
+    // `node_modules/**` glob above (they sit under `.stryker-tmp/sandbox-*/`), so a stale
+    // sandbox makes `pnpm docs:lint` fail on third-party markdown the repo does not own.
+    ".stryker-tmp/**",
     "dist/**",
     "coverage/**",
     "coverage-*/**",
