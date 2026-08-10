@@ -45,13 +45,14 @@ describe('OpenAPI cursor pagination', () => {
     }
   });
 
-  it.each(
-    CURSOR_PAGINATED_LIST_ROUTE_KEYS,
-  )('documents limit and after query parameters on %s', (routeKey) => {
-    const queryNames = getQueryParameterNames(spec, routeKey);
-    expect(queryNames, `${routeKey} query params: ${queryNames.join(', ')}`).toContain('limit');
-    expect(queryNames, `${routeKey} query params: ${queryNames.join(', ')}`).toContain('after');
-  });
+  it.each(CURSOR_PAGINATED_LIST_ROUTE_KEYS)(
+    'documents limit and after query parameters on %s',
+    (routeKey) => {
+      const queryNames = getQueryParameterNames(spec, routeKey);
+      expect(queryNames, `${routeKey} query params: ${queryNames.join(', ')}`).toContain('limit');
+      expect(queryNames, `${routeKey} query params: ${queryNames.join(', ')}`).toContain('after');
+    },
+  );
 
   it('does not expose legacy page parameter on cursor list routes', () => {
     for (const routeKey of CURSOR_PAGINATED_LIST_ROUTE_KEYS) {

@@ -65,64 +65,60 @@ describe('Security: tenant-isolation WITH CHECK propagation confines cross-org w
     organizationBInternalId = await resolveOrganizationInternalId(fixture.organizationBPublicId);
   });
 
-  it.each(
-    ORG_SCOPED_TABLES,
-  )('rejects a retention-context write that sets a foreign organization_id on $tableName (explicit WITH CHECK)', async ({
-    schemaName,
-    tableName,
-  }) => {
-    const rowIds = fixture.rowIdsByTable.get(tableKey(schemaName, tableName));
-    expect(rowIds, `fixture seeds a ${tableName} row for both orgs`).toBeDefined();
+  it.each(ORG_SCOPED_TABLES)(
+    'rejects a retention-context write that sets a foreign organization_id on $tableName (explicit WITH CHECK)',
+    async ({ schemaName, tableName }) => {
+      const rowIds = fixture.rowIdsByTable.get(tableKey(schemaName, tableName));
+      expect(rowIds, `fixture seeds a ${tableName} row for both orgs`).toBeDefined();
 
-    let caught: unknown;
-    try {
-      await withGlobalRetentionCleanupDatabaseContext(
-        async (databaseHandle) =>
-          databaseHandle.execute(
-            drizzleSql.raw(
-              `UPDATE "${schemaName}"."${tableName}" SET organization_id = ${organizationAInternalId} WHERE id = ${rowIds!.organizationB} RETURNING id`,
+      let caught: unknown;
+      try {
+        await withGlobalRetentionCleanupDatabaseContext(
+          async (databaseHandle) =>
+            databaseHandle.execute(
+              drizzleSql.raw(
+                `UPDATE "${schemaName}"."${tableName}" SET organization_id = ${organizationAInternalId} WHERE id = ${rowIds!.organizationB} RETURNING id`,
+              ),
             ),
-          ),
-        { useApplicationDatabaseRole: true },
-      );
-    } catch (error) {
-      caught = error;
-    }
-
-    expect(
-      caught,
-      `expected explicit WITH CHECK to reject a retention-context cross-org write on ${tableName}`,
-    ).toBeDefined();
-    expect(flattenErrorChain(caught)).toMatch(/row-level security/i);
-  });
-
-  it.each(
-    ORG_SCOPED_TABLES,
-  )('rejects reassigning an org-B $tableName row to org A under the org-B tenant context', async ({
-    schemaName,
-    tableName,
-  }) => {
-    const rowIds = fixture.rowIdsByTable.get(tableKey(schemaName, tableName))!;
-
-    let caught: unknown;
-    try {
-      await executeAsCoreBeAppTenant(fixture.organizationBPublicId, async (transaction) => {
-        await transaction.execute(
-          drizzleSql.raw(
-            `UPDATE "${schemaName}"."${tableName}" SET organization_id = ${organizationAInternalId} WHERE id = ${rowIds.organizationB} RETURNING id`,
-          ),
+          { useApplicationDatabaseRole: true },
         );
-      });
-    } catch (error) {
-      caught = error;
-    }
+      } catch (error) {
+        caught = error;
+      }
 
-    expect(
-      caught,
-      `expected RLS to reject reassigning ${tableName} to a foreign org`,
-    ).toBeDefined();
-    expect(flattenErrorChain(caught)).toMatch(/row-level security/i);
-  });
+      expect(
+        caught,
+        `expected explicit WITH CHECK to reject a retention-context cross-org write on ${tableName}`,
+      ).toBeDefined();
+      expect(flattenErrorChain(caught)).toMatch(/row-level security/i);
+    },
+  );
+
+  it.each(ORG_SCOPED_TABLES)(
+    'rejects reassigning an org-B $tableName row to org A under the org-B tenant context',
+    async ({ schemaName, tableName }) => {
+      const rowIds = fixture.rowIdsByTable.get(tableKey(schemaName, tableName))!;
+
+      let caught: unknown;
+      try {
+        await executeAsCoreBeAppTenant(fixture.organizationBPublicId, async (transaction) => {
+          await transaction.execute(
+            drizzleSql.raw(
+              `UPDATE "${schemaName}"."${tableName}" SET organization_id = ${organizationAInternalId} WHERE id = ${rowIds.organizationB} RETURNING id`,
+            ),
+          );
+        });
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(
+        caught,
+        `expected RLS to reject reassigning ${tableName} to a foreign org`,
+      ).toBeDefined();
+      expect(flattenErrorChain(caught)).toMatch(/row-level security/i);
+    },
+  );
 
   it('still allows a retention-context DELETE via the USING bypass (positive control)', async () => {
     const rowIds = fixture.rowIdsByTable.get(tableKey('tenancy', 'api_keys'))!;

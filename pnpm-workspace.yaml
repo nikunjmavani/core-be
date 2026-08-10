@@ -38,10 +38,6 @@ overrides:
   # the lockfile, not the audit summary.
   'nanoid@<3.3.17': '^3.3.17'
   'nanoid@>=4.0.0 <5.1.16': '^5.1.16'
-  # Hold Biome at 2.5.2 — 2.5.3 crashes `biome check` with an upstream panic in
-  # the module-graph resolver (biome_module_graph module_resolver.rs:500:33).
-  # Remove this pin once a fixed Biome (2.5.4+) is released.
-  '@biomejs/biome': 2.5.2
   '@babel/core': '>=7.29.1'
   # body-parser <2.3.0 — GHSA-v422-hmwv-36x6 (low): DoS when an invalid limit
   # silently disables size enforcement (transitive via @modelcontextprotocol/sdk

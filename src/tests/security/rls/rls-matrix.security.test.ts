@@ -102,116 +102,116 @@ describe('Security: RLS matrix (all FORCE RLS tables)', () => {
     (table) => !RLS_MATRIX_SKIP_CRUD_TABLES.has(tableKey(table.schemaName, table.tableName)),
   );
 
-  describe.each(crudMatrixTables)('tenant isolation CRUD ($schemaName.$tableName)', ({
-    schemaName,
-    tableName,
-  }) => {
-    const key = tableKey(schemaName, tableName);
+  describe.each(crudMatrixTables)(
+    'tenant isolation CRUD ($schemaName.$tableName)',
+    ({ schemaName, tableName }) => {
+      const key = tableKey(schemaName, tableName);
 
-    it('should not read other tenant rows (SELECT count)', async () => {
-      const fixture = await seedRlsMatrixFixtures();
-      const rowIds = fixture.rowIdsByTable.get(key);
-      if (!rowIds) {
-        const countForA = await countRowsAsTenant(
+      it('should not read other tenant rows (SELECT count)', async () => {
+        const fixture = await seedRlsMatrixFixtures();
+        const rowIds = fixture.rowIdsByTable.get(key);
+        if (!rowIds) {
+          const countForA = await countRowsAsTenant(
+            schemaName,
+            tableName,
+            fixture.organizationAPublicId,
+          );
+          const countForB = await countRowsAsTenant(
+            schemaName,
+            tableName,
+            fixture.organizationBPublicId,
+          );
+          expect(countForA).toBeGreaterThanOrEqual(0);
+          expect(countForB).toBeGreaterThanOrEqual(0);
+          return;
+        }
+
+        const visibleForA = await countRowsAsTenant(
           schemaName,
           tableName,
           fixture.organizationAPublicId,
         );
-        const countForB = await countRowsAsTenant(
+        expect(visibleForA).toBeGreaterThan(0);
+
+        await executeAsCoreBeAppTenant(fixture.organizationAPublicId, async (transaction) => {
+          const qualified = `"${schemaName}"."${tableName}"`;
+          const result = await transaction.execute(
+            drizzleSql.raw(
+              `SELECT count(*)::int AS count FROM ${qualified} WHERE id = ${rowIds.organizationB}`,
+            ),
+          );
+          const rows = Array.isArray(result)
+            ? result
+            : ((result as { rows?: { count: number }[] }).rows ?? []);
+          expect(Number(rows[0]?.count ?? 0)).toBe(0);
+        });
+      });
+
+      it('should not UPDATE other tenant rows', async () => {
+        const fixture = await seedRlsMatrixFixtures();
+        const rowIds = fixture.rowIdsByTable.get(key);
+        if (!rowIds) return;
+
+        const updated = await updateRowAsTenant(
           schemaName,
           tableName,
-          fixture.organizationBPublicId,
+          rowIds.organizationB,
+          fixture.organizationAPublicId,
         );
-        expect(countForA).toBeGreaterThanOrEqual(0);
-        expect(countForB).toBeGreaterThanOrEqual(0);
-        return;
-      }
-
-      const visibleForA = await countRowsAsTenant(
-        schemaName,
-        tableName,
-        fixture.organizationAPublicId,
-      );
-      expect(visibleForA).toBeGreaterThan(0);
-
-      await executeAsCoreBeAppTenant(fixture.organizationAPublicId, async (transaction) => {
-        const qualified = `"${schemaName}"."${tableName}"`;
-        const result = await transaction.execute(
-          drizzleSql.raw(
-            `SELECT count(*)::int AS count FROM ${qualified} WHERE id = ${rowIds.organizationB}`,
-          ),
-        );
-        const rows = Array.isArray(result)
-          ? result
-          : ((result as { rows?: { count: number }[] }).rows ?? []);
-        expect(Number(rows[0]?.count ?? 0)).toBe(0);
+        expect(updated).toBe(0);
       });
-    });
 
-    it('should not UPDATE other tenant rows', async () => {
-      const fixture = await seedRlsMatrixFixtures();
-      const rowIds = fixture.rowIdsByTable.get(key);
-      if (!rowIds) return;
+      it('should not DELETE other tenant rows', async () => {
+        const fixture = await seedRlsMatrixFixtures();
+        const rowIds = fixture.rowIdsByTable.get(key);
+        if (!rowIds) return;
 
-      const updated = await updateRowAsTenant(
-        schemaName,
-        tableName,
-        rowIds.organizationB,
-        fixture.organizationAPublicId,
-      );
-      expect(updated).toBe(0);
-    });
-
-    it('should not DELETE other tenant rows', async () => {
-      const fixture = await seedRlsMatrixFixtures();
-      const rowIds = fixture.rowIdsByTable.get(key);
-      if (!rowIds) return;
-
-      const deleted = await deleteRowAsTenant(
-        schemaName,
-        tableName,
-        rowIds.organizationB,
-        fixture.organizationAPublicId,
-      );
-      expect(deleted).toBe(0);
-    });
-  });
-
-  describe.each(USER_SCOPED_FORCE_RLS_TABLES)('user-scoped isolation ($schemaName.$tableName)', ({
-    schemaName,
-    tableName,
-  }) => {
-    it('returns zero rows when the user context is unset', async () => {
-      await seedUserScopedRlsFixtures();
-      const count = await countRowsAsUser(schemaName, tableName, null);
-      expect(count, `${tableKey(schemaName, tableName)} with unset user context`).toBe(0);
-    });
-
-    it('shows only the current user rows and none of another user (cross-user denial)', async () => {
-      const fixture = await seedUserScopedRlsFixtures();
-
-      const visibleForA = await countRowsAsUser(schemaName, tableName, fixture.userAPublicId);
-      expect(visibleForA, `${tableKey(schemaName, tableName)} own rows`).toBe(1);
-
-      // User A must not see user B's row even by primary key.
-      const rowIds = fixture.rowIdsByTable.get(tableKey(schemaName, tableName))!;
-      await executeAsCoreBeAppUser(fixture.userAPublicId, async (transaction) => {
-        const qualified = `"${schemaName}"."${tableName}"`;
-        const idColumn = tableName === 'user_settings' ? 'user_id' : 'id';
-        const result = await transaction.execute(
-          drizzleSql.raw(
-            `SELECT count(*)::int AS count FROM ${qualified} WHERE ${idColumn} = ${rowIds.userB}`,
-          ),
+        const deleted = await deleteRowAsTenant(
+          schemaName,
+          tableName,
+          rowIds.organizationB,
+          fixture.organizationAPublicId,
         );
-        const rows = Array.isArray(result)
-          ? result
-          : ((result as { rows?: { count: number }[] }).rows ?? []);
-        expect(Number(rows[0]?.count ?? 0), `${tableKey(schemaName, tableName)} cross-user`).toBe(
-          0,
-        );
+        expect(deleted).toBe(0);
       });
-    });
-  });
+    },
+  );
+
+  describe.each(USER_SCOPED_FORCE_RLS_TABLES)(
+    'user-scoped isolation ($schemaName.$tableName)',
+    ({ schemaName, tableName }) => {
+      it('returns zero rows when the user context is unset', async () => {
+        await seedUserScopedRlsFixtures();
+        const count = await countRowsAsUser(schemaName, tableName, null);
+        expect(count, `${tableKey(schemaName, tableName)} with unset user context`).toBe(0);
+      });
+
+      it('shows only the current user rows and none of another user (cross-user denial)', async () => {
+        const fixture = await seedUserScopedRlsFixtures();
+
+        const visibleForA = await countRowsAsUser(schemaName, tableName, fixture.userAPublicId);
+        expect(visibleForA, `${tableKey(schemaName, tableName)} own rows`).toBe(1);
+
+        // User A must not see user B's row even by primary key.
+        const rowIds = fixture.rowIdsByTable.get(tableKey(schemaName, tableName))!;
+        await executeAsCoreBeAppUser(fixture.userAPublicId, async (transaction) => {
+          const qualified = `"${schemaName}"."${tableName}"`;
+          const idColumn = tableName === 'user_settings' ? 'user_id' : 'id';
+          const result = await transaction.execute(
+            drizzleSql.raw(
+              `SELECT count(*)::int AS count FROM ${qualified} WHERE ${idColumn} = ${rowIds.userB}`,
+            ),
+          );
+          const rows = Array.isArray(result)
+            ? result
+            : ((result as { rows?: { count: number }[] }).rows ?? []);
+          expect(Number(rows[0]?.count ?? 0), `${tableKey(schemaName, tableName)} cross-user`).toBe(
+            0,
+          );
+        });
+      });
+    },
+  );
 
   describe('auth.users / auth.auth_methods under FORCE RLS (audit #7)', () => {
     it('global-admin context sees every auth.users and auth.auth_methods row (admin path)', async () => {

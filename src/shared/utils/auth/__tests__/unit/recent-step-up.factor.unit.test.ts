@@ -26,14 +26,14 @@ describe('recent-step-up util — factor gating', () => {
     vi.clearAllMocks();
   });
 
-  it.each([
-    'password',
-    'mfa',
-  ] as const)('a %s step-up satisfies both the normal and the strong gate', async (factor) => {
-    await recordRecentStepUp(mockRedis, 'u', 's', factor);
-    await expect(hasRecentStepUp(mockRedis, 'u', 's')).resolves.toBe(true);
-    await expect(hasRecentStrongStepUp(mockRedis, 'u', 's')).resolves.toBe(true);
-  });
+  it.each(['password', 'mfa'] as const)(
+    'a %s step-up satisfies both the normal and the strong gate',
+    async (factor) => {
+      await recordRecentStepUp(mockRedis, 'u', 's', factor);
+      await expect(hasRecentStepUp(mockRedis, 'u', 's')).resolves.toBe(true);
+      await expect(hasRecentStrongStepUp(mockRedis, 'u', 's')).resolves.toBe(true);
+    },
+  );
 
   it('an email_code step-up satisfies the normal (enroll) gate but NOT the strong gate', async () => {
     await recordRecentStepUp(mockRedis, 'u', 's', 'email_code');

@@ -39,21 +39,19 @@ describe('Global: tenancy seed public-id entities', () => {
     return next === -1 ? source.slice(start) : source.slice(start, next);
   }
 
-  it.each(
-    HELPER_ENTITY,
-  )('$helper mints its public_id with the $entity entity (never another entity)', ({
-    helper,
-    entity,
-  }) => {
-    const body = bodyOf(helper);
-    expect(body, `${helper} must call generatePublicId('${entity}')`).toContain(
-      `generatePublicId('${entity}')`,
-    );
-    for (const other of HELPER_ENTITY) {
-      if (other.entity === entity) continue;
-      expect(body, `${helper} must not mint a ${other.entity} id`).not.toContain(
-        `generatePublicId('${other.entity}')`,
+  it.each(HELPER_ENTITY)(
+    '$helper mints its public_id with the $entity entity (never another entity)',
+    ({ helper, entity }) => {
+      const body = bodyOf(helper);
+      expect(body, `${helper} must call generatePublicId('${entity}')`).toContain(
+        `generatePublicId('${entity}')`,
       );
-    }
-  });
+      for (const other of HELPER_ENTITY) {
+        if (other.entity === entity) continue;
+        expect(body, `${helper} must not mint a ${other.entity} id`).not.toContain(
+          `generatePublicId('${other.entity}')`,
+        );
+      }
+    },
+  );
 });

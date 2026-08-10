@@ -63,31 +63,32 @@ interface BranchRuleset {
   }[];
 }
 
-describe.each([
-  DEFAULT_BRANCH,
-])('the %s ruleset gates RLS through the quality-gate aggregate', (branch) => {
-  it('requires the Quality gate aggregate context', () => {
-    const ruleset = JSON.parse(
-      readFileSync(join(process.cwd(), `.github/rulesets/${branch}.json`), 'utf8'),
-    ) as BranchRuleset;
+describe.each([DEFAULT_BRANCH])(
+  'the %s ruleset gates RLS through the quality-gate aggregate',
+  (branch) => {
+    it('requires the Quality gate aggregate context', () => {
+      const ruleset = JSON.parse(
+        readFileSync(join(process.cwd(), `.github/rulesets/${branch}.json`), 'utf8'),
+      ) as BranchRuleset;
 
-    const requiredContexts = ruleset.rules
-      .find((rule) => rule.type === 'required_status_checks')
-      ?.parameters?.required_status_checks?.map((check) => check.context);
+      const requiredContexts = ruleset.rules
+        .find((rule) => rule.type === 'required_status_checks')
+        ?.parameters?.required_status_checks?.map((check) => check.context);
 
-    expect(requiredContexts, `${branch}.json must declare required_status_checks`).toBeDefined();
-    expect(requiredContexts).toContain(REQUIRED_AGGREGATE_CONTEXT);
-  });
+      expect(requiredContexts, `${branch}.json must declare required_status_checks`).toBeDefined();
+      expect(requiredContexts).toContain(REQUIRED_AGGREGATE_CONTEXT);
+    });
 
-  it('makes the quality-gate aggregate depend on the rls-security lane', () => {
-    // quality-gate is the final job in pr-ci.yml — slice from its header to EOF so
-    // the `- rls-security` match is scoped to the aggregate's `needs:` list.
-    const prCiText = readFileSync(prCiPath, 'utf8');
-    const start = prCiText.indexOf('\n  quality-gate:');
-    expect(start, 'pr-ci.yml must declare the quality-gate aggregate job').toBeGreaterThan(-1);
-    expect(prCiText.slice(start)).toContain(`- ${RLS_LANE}`);
-  });
-});
+    it('makes the quality-gate aggregate depend on the rls-security lane', () => {
+      // quality-gate is the final job in pr-ci.yml — slice from its header to EOF so
+      // the `- rls-security` match is scoped to the aggregate's `needs:` list.
+      const prCiText = readFileSync(prCiPath, 'utf8');
+      const start = prCiText.indexOf('\n  quality-gate:');
+      expect(start, 'pr-ci.yml must declare the quality-gate aggregate job').toBeGreaterThan(-1);
+      expect(prCiText.slice(start)).toContain(`- ${RLS_LANE}`);
+    });
+  },
+);
 
 /**
  * Single-trunk: the trunk is maintained solo, so its ruleset requires status checks but

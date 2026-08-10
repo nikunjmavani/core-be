@@ -30,17 +30,19 @@ describe('evaluateCallApiPolicy (R14)', () => {
     if (!result.allowed) expect(result.message).toMatch(/must start with \/api\/v1\//);
   });
 
-  it.each([
-    'POST',
-    'PATCH',
-    'PUT',
-    'DELETE',
-  ])('rejects %s by default (read-only unless MCP_CALL_API_ALLOW_MUTATIONS)', (method) => {
-    const result = evaluateCallApiPolicy({ ...base, method, path: '/api/v1/tenancy/organization' });
-    expect(result.allowed).toBe(false);
-    if (!result.allowed)
-      expect(result.message).toMatch(/read-only unless MCP_CALL_API_ALLOW_MUTATIONS/);
-  });
+  it.each(['POST', 'PATCH', 'PUT', 'DELETE'])(
+    'rejects %s by default (read-only unless MCP_CALL_API_ALLOW_MUTATIONS)',
+    (method) => {
+      const result = evaluateCallApiPolicy({
+        ...base,
+        method,
+        path: '/api/v1/tenancy/organization',
+      });
+      expect(result.allowed).toBe(false);
+      if (!result.allowed)
+        expect(result.message).toMatch(/read-only unless MCP_CALL_API_ALLOW_MUTATIONS/);
+    },
+  );
 
   it('allows mutating methods only when allowMutations is true', () => {
     expect(

@@ -54,22 +54,21 @@ describe('Security: global-role admin routes reject non-admins (model: global-ro
     },
   ];
 
-  it.each(adminRouteCases)('regular user $label → denied (401/403)', async ({
-    method,
-    path,
-    body,
-  }) => {
-    const regularUser = await createTestUser();
-    const targetUser = await createTestUser();
-    const token = await generateTestToken({ userId: regularUser.public_id });
-    const response = await injectAuthenticated(app, {
-      method,
-      url: testApiPath(path(targetUser.public_id)),
-      token,
-      ...(body ? { payload: body } : {}),
-    });
-    expect([401, 403]).toContain(response.statusCode);
-  });
+  it.each(adminRouteCases)(
+    'regular user $label → denied (401/403)',
+    async ({ method, path, body }) => {
+      const regularUser = await createTestUser();
+      const targetUser = await createTestUser();
+      const token = await generateTestToken({ userId: regularUser.public_id });
+      const response = await injectAuthenticated(app, {
+        method,
+        url: testApiPath(path(targetUser.public_id)),
+        token,
+        ...(body ? { payload: body } : {}),
+      });
+      expect([401, 403]).toContain(response.statusCode);
+    },
+  );
 
   it('baseline: global admin GET /users/:user_id → not 403', async () => {
     // SUPER_ADMIN is re-derived per request from GLOBAL_ADMIN_EMAILS (sec-A6): the actor's

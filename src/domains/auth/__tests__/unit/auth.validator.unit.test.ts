@@ -53,15 +53,12 @@ describe('auth.validator', () => {
 
   // route-#3: only EMAIL_CODE is a functional credential-less row; PASSWORD/MFA_*/OAUTH would be
   // non-functional phantom rows that defeat the last-login-capable-credential guard.
-  it.each([
-    'PASSWORD',
-    'OAUTH',
-    'MFA_TOTP',
-    'MFA_SMS',
-    'MFA_EMAIL',
-  ])('validateCreateAuthMethod rejects credential-bearing type %s (phantom-row lockout)', (methodType) => {
-    expect(() => validateCreateAuthMethod({ method_type: methodType })).toThrow(ValidationError);
-  });
+  it.each(['PASSWORD', 'OAUTH', 'MFA_TOTP', 'MFA_SMS', 'MFA_EMAIL'])(
+    'validateCreateAuthMethod rejects credential-bearing type %s (phantom-row lockout)',
+    (methodType) => {
+      expect(() => validateCreateAuthMethod({ method_type: methodType })).toThrow(ValidationError);
+    },
+  );
 
   it('validateCreateAuthMethod accepts EMAIL_CODE (the only valid bare-row type)', () => {
     expect(validateCreateAuthMethod({ method_type: 'EMAIL_CODE' })).toMatchObject({
