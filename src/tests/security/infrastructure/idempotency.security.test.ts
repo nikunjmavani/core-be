@@ -107,7 +107,7 @@ describe('Security: Idempotency', () => {
     // POST /tenancy/organizations is one of the 13 `idempotencyRequired` writes (the `I`/`req`
     // column in docs/routes.txt; organization.routes.ts sets config.idempotencyRequired = true).
     // The middleware is route-agnostic, so this one representative route proves the missing-key gate
-    // for all 13 (the other 12 share the identical onRequest path). Omitting the header must
+    // for all 13 (the other 12 share the identical preHandler path). Omitting the header must
     // fail closed with 422 — proving the requirement is enforced on a real required route, not
     // only that malformed keys are rejected. Without this, a regression dropping the flag would
     // let a duplicate create slip through and no test would catch it.
@@ -119,6 +119,55 @@ describe('Security: Idempotency', () => {
       url: testApiPath('/tenancy/organizations'),
       token,
       payload: { name: 'Requires Key Org', slug: uniqueSlug('requires-key-org') },
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect((response.json() as { error?: { code?: string } }).error?.code).toBe(
+      'unprocessable_entity',
+    );
+  });
+
+  it('answers an ANONYMOUS caller with 401, not the 422 idempotency contract', async () => {
+    // Ordering guard. Fastify runs GLOBAL onRequest hooks before a route's own auth, so asserting
+    // the key requirement there told an unauthenticated stranger which writes are idempotency-
+    // required — route metadata leaked pre-auth. The assertion therefore lives in a preHandler
+    // appended AFTER the route's auth preHandlers, and authentication must answer first.
+    // Both idempotency rejections are exercised below so a regression that moves the check back
+    // into onRequest fails here rather than silently re-opening the disclosure.
+    const missingKey = await injectUnauthenticated(app, {
+      method: 'POST',
+      url: testApiPath('/tenancy/organizations'),
+      payload: { name: 'Anonymous Org', slug: uniqueSlug('anonymous-org') },
+    });
+
+    expect(missingKey.statusCode).toBe(401);
+
+    const malformedKey = await injectUnauthenticated(app, {
+      method: 'POST',
+      url: testApiPath('/tenancy/organizations'),
+      headers: { 'X-Idempotency-Key': 'short' },
+      payload: { name: 'Anonymous Org', slug: uniqueSlug('anonymous-org') },
+    });
+
+    expect(malformedKey.statusCode).toBe(401);
+  });
+
+  it('rejects a MALFORMED X-Idempotency-Key on an idempotency-required write (422, not 400)', async () => {
+    // Companion to the anonymous case above. A malformed key on a REQUIRED route returns early from
+    // onRequest (the rejection is deferred to the post-auth preHandler), so this proves the deferral
+    // does not open a hole: the request must still fail closed with 422 rather than reaching the
+    // handler with no idempotency protection. Required routes answer 422 — the 400 that
+    // `errors:idempotencyKeyInvalid` raises is reserved for routes where the key is optional and a
+    // bad one is ordinary request validation.
+    const user = await createTestUser();
+    const token = await generateTestToken({ userId: user.public_id });
+
+    const response = await injectAuthenticated(app, {
+      method: 'POST',
+      url: testApiPath('/tenancy/organizations'),
+      token,
+      headers: { 'X-Idempotency-Key': 'has spaces and is long enough' },
+      payload: { name: 'Malformed Key Org', slug: uniqueSlug('malformed-key-org') },
     });
 
     expect(response.statusCode).toBe(422);
