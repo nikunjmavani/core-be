@@ -19,7 +19,7 @@
  * Side effects: none; reads the working tree and returns findings.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
 import type { ProjectIdentitySnapshot } from './project-identity.util.js';
@@ -143,7 +143,15 @@ export function scanProjectIdentityLiterals(options: {
   for (const file of listTrackedFiles(projectRoot)) {
     if (isExcluded(file) || generated.has(file)) continue;
     const absolute = resolve(projectRoot, file);
-    if (!(existsSync(absolute) && statSync(absolute).isFile())) continue;
+    // lstat, NOT stat: a tracked symlink's git content is its target PATH, so scanning it says
+    // nothing about identity, while stat() follows the link and reads whatever sits at the other
+    // end. `.mcp.json` is exactly that — a tracked symlink to the gitignored, developer-specific
+    // `agent-os/mcp/mcp.json`. Following it made this gate read a private config that may hold API
+    // keys, and fail `pnpm ci:quality` on every machine that has scaffolded one, while passing in
+    // CI where the target is absent and the link dangles. A tracked target is scanned via its own
+    // entry; an untracked one is out of scope by definition.
+    if (!existsSync(absolute)) continue;
+    if (!lstatSync(absolute).isFile()) continue;
 
     const contents = readFileSync(absolute, 'utf-8');
     const matched = literals.filter((literal) => contents.includes(literal));
