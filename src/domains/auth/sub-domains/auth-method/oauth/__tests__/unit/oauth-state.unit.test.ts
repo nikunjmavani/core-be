@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Redis } from 'ioredis';
+import { mockedRedisSet } from '@/tests/helpers/redis-mock.helper.js';
 import { NotFoundError, UnauthorizedError } from '@/shared/errors/index.js';
 import {
   assertOAuthProviderSupported,
@@ -32,7 +33,7 @@ describe('oauth-state', () => {
   } as unknown as Redis;
 
   beforeEach(() => {
-    vi.mocked(redis.set).mockReset();
+    mockedRedisSet(redis.set).mockReset();
     vi.mocked(redis.getdel).mockReset();
   });
 
@@ -46,7 +47,7 @@ describe('oauth-state', () => {
     expect(result.codeVerifier.length).toBeGreaterThan(0);
     expect(result.nonce.length).toBeGreaterThan(0);
 
-    const [, storedValue, expiryFlag, ttl] = vi.mocked(redis.set).mock.calls[0] ?? [];
+    const [, storedValue, expiryFlag, ttl] = mockedRedisSet(redis.set).mock.calls[0] ?? [];
     expect(expiryFlag).toBe('EX');
     expect(ttl).toBe(600);
     const payload = JSON.parse(storedValue as string) as {
@@ -161,7 +162,7 @@ describe('oauth-state', () => {
   });
 
   it('createOAuthState generates unique state tokens across invocations', async () => {
-    vi.mocked(redis.set).mockResolvedValue('OK' as never);
+    mockedRedisSet(redis.set).mockResolvedValue('OK' as never);
     const stateA = await createOAuthState(redis, 'google');
     const stateB = await createOAuthState(redis, 'google');
     expect(stateA.state).not.toBe(stateB.state);

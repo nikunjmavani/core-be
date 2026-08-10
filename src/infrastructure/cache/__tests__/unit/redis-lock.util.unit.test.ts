@@ -12,6 +12,7 @@ vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
 }));
 
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
+import { mockedRedisSet } from '@/tests/helpers/redis-mock.helper.js';
 import {
   RedisLockUnavailableError,
   withRedisLock,
@@ -24,12 +25,12 @@ describe('withRedisLock', () => {
   });
 
   it('acquires the lock, runs fn, and releases via the nonce-guarded Lua', async () => {
-    vi.mocked(redisConnection.set).mockResolvedValue('OK');
+    mockedRedisSet(redisConnection.set).mockResolvedValue('OK');
 
     const result = await withRedisLock({ key: 'lock:a', ttlSeconds: 10 }, async () => 'value');
 
     expect(result).toBe('value');
-    const setArgs = vi.mocked(redisConnection.set).mock.calls[0]!;
+    const setArgs = mockedRedisSet(redisConnection.set).mock.calls[0]!;
     expect(setArgs[0]).toBe('lock:a');
     expect(setArgs[2]).toBe('EX');
     expect(setArgs[3]).toBe(10);
@@ -42,7 +43,7 @@ describe('withRedisLock', () => {
   });
 
   it('releases the lock even when fn throws', async () => {
-    vi.mocked(redisConnection.set).mockResolvedValue('OK');
+    mockedRedisSet(redisConnection.set).mockResolvedValue('OK');
 
     await expect(
       withRedisLock({ key: 'lock:b', ttlSeconds: 10 }, async () => {
@@ -54,7 +55,7 @@ describe('withRedisLock', () => {
   });
 
   it('fails fast with RedisLockUnavailableError on contention when waitTimeoutMs is 0', async () => {
-    vi.mocked(redisConnection.set).mockResolvedValue(null); // NX fails — lock held
+    mockedRedisSet(redisConnection.set).mockResolvedValue(null); // NX fails — lock held
 
     await expect(
       withRedisLock({ key: 'lock:c', ttlSeconds: 10 }, async () => 'never'),
@@ -64,7 +65,7 @@ describe('withRedisLock', () => {
   });
 
   it('waits and acquires once the lock frees within waitTimeoutMs', async () => {
-    vi.mocked(redisConnection.set).mockResolvedValueOnce(null).mockResolvedValue('OK');
+    mockedRedisSet(redisConnection.set).mockResolvedValueOnce(null).mockResolvedValue('OK');
 
     const result = await withRedisLock(
       { key: 'lock:d', ttlSeconds: 10, waitTimeoutMs: 200, pollIntervalMs: 10 },
@@ -72,6 +73,6 @@ describe('withRedisLock', () => {
     );
 
     expect(result).toBe('acquired');
-    expect(vi.mocked(redisConnection.set).mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(mockedRedisSet(redisConnection.set).mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 });

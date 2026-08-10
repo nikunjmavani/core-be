@@ -240,7 +240,7 @@
     "i18next": "^26.3.6",
     "i18next-fs-backend": "^2.6.7",
     "i18next-http-middleware": "^3.9.8",
-    "ioredis": "5.11.1",
+    "ioredis": "6.0.0",
     "ipaddr.js": "^2.5.0",
     "isomorphic-dompurify": "^3.22.0",
     "jose": "^6.2.8",

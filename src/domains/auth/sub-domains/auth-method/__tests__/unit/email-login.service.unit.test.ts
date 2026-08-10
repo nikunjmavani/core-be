@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Redis } from 'ioredis';
+import { mockedRedisSet } from '@/tests/helpers/redis-mock.helper.js';
 import { EmailLoginService } from '@/domains/auth/sub-domains/auth-method/email-login.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 
@@ -138,7 +139,7 @@ describe('EmailLoginService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(redis.eval).mockResolvedValue(1);
-    vi.mocked(redis.set).mockResolvedValue('OK');
+    mockedRedisSet(redis.set).mockResolvedValue('OK');
   });
 
   it('sendCode auto-signs-up an unknown email then issues a code', async () => {
@@ -207,7 +208,7 @@ describe('EmailLoginService', () => {
   });
 
   it('sendCode omits debug_verification_code when no code is issued (cooldown held) even under TEST_MODE', async () => {
-    vi.mocked(redis.set).mockResolvedValueOnce(null); // cooldown already held → no issue, no code
+    mockedRedisSet(redis.set).mockResolvedValueOnce(null); // cooldown already held → no issue, no code
     vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
 
     const result = await service.sendCode({ email: user.email });
@@ -242,7 +243,7 @@ describe('EmailLoginService', () => {
   });
 
   it('sendCode skips issuing (no signup, no email) when the per-email cooldown is already held', async () => {
-    vi.mocked(redis.set).mockResolvedValueOnce(null);
+    mockedRedisSet(redis.set).mockResolvedValueOnce(null);
     vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
 
     const result = await service.sendCode({ email: user.email });
@@ -255,7 +256,7 @@ describe('EmailLoginService', () => {
   });
 
   it('sendCode fails open and still issues a code when the cooldown Redis SET rejects (Redis down)', async () => {
-    vi.mocked(redis.set).mockRejectedValueOnce(new Error("Stream isn't writeable"));
+    mockedRedisSet(redis.set).mockRejectedValueOnce(new Error("Stream isn't writeable"));
     vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
 
     const result = await service.sendCode({ email: user.email });
