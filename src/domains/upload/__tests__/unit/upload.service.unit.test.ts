@@ -586,7 +586,13 @@ describe('UploadService', () => {
     const putArgs = vi.mocked(objectStorage.putObject).mock.calls[0]?.[0];
     expect(putArgs?.key).toBe(finalKey);
     expect(putArgs?.contentType).toBe('image/svg+xml');
-    const rewritten = (putArgs?.body as Buffer).toString('utf8');
+    // Assert the body is a Buffer instead of optional-chaining into it: `putArgs?.body`
+    // short-circuits to undefined, and the cast cannot stop `.toString()` throwing a bare
+    // TypeError that hides which expectation actually failed. This is the SVG-sanitization
+    // test — if the upload never happened it must say so, not die on a null dereference.
+    const uploadedBody = putArgs?.body;
+    expect(Buffer.isBuffer(uploadedBody)).toBe(true);
+    const rewritten = (uploadedBody as Buffer).toString('utf8');
     expect(rewritten).not.toMatch(/<script/i);
     expect(rewritten).not.toMatch(/\bon\w+\s*=/i);
     expect(result.status).toBe('UPLOADED');

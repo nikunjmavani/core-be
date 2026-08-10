@@ -10,14 +10,12 @@ describe('assertUserAccountActive', () => {
     expect(() => assertUserAccountActive('ACTIVE')).not.toThrow();
   });
 
-  it.each([
-    'SUSPENDED',
-    'LOCKED',
-    'DELETED',
-    '',
-  ])('rejects non-active status %s with UnauthorizedError', (status) => {
-    expect(() => assertUserAccountActive(status)).toThrow(UnauthorizedError);
-  });
+  it.each(['SUSPENDED', 'LOCKED', 'DELETED', ''])(
+    'rejects non-active status %s with UnauthorizedError',
+    (status) => {
+      expect(() => assertUserAccountActive(status)).toThrow(UnauthorizedError);
+    },
+  );
 
   it('throws the accountNotActive i18n key', () => {
     try {

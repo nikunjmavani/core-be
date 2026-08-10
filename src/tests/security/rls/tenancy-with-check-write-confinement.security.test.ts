@@ -84,31 +84,29 @@ describe('Security: tenancy RLS WITH CHECK confines cross-org writes', () => {
     organizationBInternalId = await resolveOrganizationInternalId(fixture.organizationBPublicId);
   });
 
-  it.each(
-    TENANCY_ORG_SCOPED_TABLES,
-  )('rejects reassigning a $tableName row from org B to org A (WITH CHECK)', async ({
-    schemaName,
-    tableName,
-  }) => {
-    const rowIds = fixture.rowIdsByTable.get(tableKey(schemaName, tableName));
-    expect(rowIds, `fixture seeds a ${tableName} row for both orgs`).toBeDefined();
+  it.each(TENANCY_ORG_SCOPED_TABLES)(
+    'rejects reassigning a $tableName row from org B to org A (WITH CHECK)',
+    async ({ schemaName, tableName }) => {
+      const rowIds = fixture.rowIdsByTable.get(tableKey(schemaName, tableName));
+      expect(rowIds, `fixture seeds a ${tableName} row for both orgs`).toBeDefined();
 
-    let caught: unknown;
-    try {
-      await updateReturningCountAsTenant(
-        fixture.organizationBPublicId,
-        `UPDATE "${schemaName}"."${tableName}" SET organization_id = ${organizationAInternalId} WHERE id = ${rowIds!.organizationB} RETURNING id`,
-      );
-    } catch (error) {
-      caught = error;
-    }
+      let caught: unknown;
+      try {
+        await updateReturningCountAsTenant(
+          fixture.organizationBPublicId,
+          `UPDATE "${schemaName}"."${tableName}" SET organization_id = ${organizationAInternalId} WHERE id = ${rowIds!.organizationB} RETURNING id`,
+        );
+      } catch (error) {
+        caught = error;
+      }
 
-    expect(
-      caught,
-      `expected RLS to reject reassigning ${tableName} to a foreign org`,
-    ).toBeDefined();
-    expect(flattenErrorChain(caught)).toMatch(/row-level security/i);
-  });
+      expect(
+        caught,
+        `expected RLS to reject reassigning ${tableName} to a foreign org`,
+      ).toBeDefined();
+      expect(flattenErrorChain(caught)).toMatch(/row-level security/i);
+    },
+  );
 
   it('allows a same-org reassignment under the matching tenant context (positive control)', async () => {
     const rowIds = fixture.rowIdsByTable.get(tableKey('tenancy', 'memberships'))!;

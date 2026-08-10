@@ -214,24 +214,21 @@ describe('Security: cross-organization mutation isolation (model: org — writes
     },
   ];
 
-  it.each(
-    mutationCases,
-  )('member of org A $label on an org B resource → 404 (no cross-org write)', async ({
-    method,
-    target,
-    body,
-  }) => {
-    const orgA = await orgWithResources();
-    const orgB = await orgWithResources();
-    const res = await injectAuthenticated(app, {
-      method,
-      url: testApiPath(target(orgB)),
-      token: orgA.memberToken,
-      extraHeaders: { 'x-idempotency-key': randomUUID() },
-      ...(body ? { payload: body } : {}),
-    });
-    expect(res.statusCode).toBe(404);
-  });
+  it.each(mutationCases)(
+    'member of org A $label on an org B resource → 404 (no cross-org write)',
+    async ({ method, target, body }) => {
+      const orgA = await orgWithResources();
+      const orgB = await orgWithResources();
+      const res = await injectAuthenticated(app, {
+        method,
+        url: testApiPath(target(orgB)),
+        token: orgA.memberToken,
+        extraHeaders: { 'x-idempotency-key': randomUUID() },
+        ...(body ? { payload: body } : {}),
+      });
+      expect(res.statusCode).toBe(404);
+    },
+  );
 
   // Subscriptions live in the billing domain and need a real (active) plan for
   // change-plan; they use the dedicated two-org-with-subscriptions fixture. The
@@ -249,30 +246,27 @@ describe('Security: cross-organization mutation isolation (model: org — writes
     { label: 'change-plan', method: 'POST', suffix: '/change-plan', usesPlan: true },
   ];
 
-  it.each(
-    subscriptionCases,
-  )("member of org A $label org B's subscription → 404 (no cross-org write)", async ({
-    method,
-    suffix,
-    usesPlan,
-  }) => {
-    const fixture = await seedTwoOrganizationsWithSubscriptions();
-    const tokenScopedToOrgA = await generateTestToken({
-      userId: fixture.userA.public_id,
-      organizationPublicId: fixture.organizationA.public_id,
-    });
-    // change-plan resolves the (real, active) plan before the subscription, so
-    // pass the fixture's real plan id — the resulting 404 is then the
-    // subscription scoped-lookup miss, proving cross-org isolation.
-    const payload = usesPlan ? { plan_id: fixture.plan.public_id } : {};
-    const res = await injectAuthenticated(app, {
-      method,
-      url: testApiPath(`/billing/subscriptions/${fixture.subscriptionInB.public_id}${suffix}`),
-      token: tokenScopedToOrgA,
-      organizationPublicId: fixture.organizationA.public_id,
-      extraHeaders: { 'x-idempotency-key': randomUUID() },
-      payload,
-    });
-    expect(res.statusCode).toBe(404);
-  });
+  it.each(subscriptionCases)(
+    "member of org A $label org B's subscription → 404 (no cross-org write)",
+    async ({ method, suffix, usesPlan }) => {
+      const fixture = await seedTwoOrganizationsWithSubscriptions();
+      const tokenScopedToOrgA = await generateTestToken({
+        userId: fixture.userA.public_id,
+        organizationPublicId: fixture.organizationA.public_id,
+      });
+      // change-plan resolves the (real, active) plan before the subscription, so
+      // pass the fixture's real plan id — the resulting 404 is then the
+      // subscription scoped-lookup miss, proving cross-org isolation.
+      const payload = usesPlan ? { plan_id: fixture.plan.public_id } : {};
+      const res = await injectAuthenticated(app, {
+        method,
+        url: testApiPath(`/billing/subscriptions/${fixture.subscriptionInB.public_id}${suffix}`),
+        token: tokenScopedToOrgA,
+        organizationPublicId: fixture.organizationA.public_id,
+        extraHeaders: { 'x-idempotency-key': randomUUID() },
+        payload,
+      });
+      expect(res.statusCode).toBe(404);
+    },
+  );
 });
