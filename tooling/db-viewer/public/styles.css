@@ -176,7 +176,9 @@ button {
   border: 1px solid color-mix(in srgb, var(--trace) 28%, var(--hair));
   box-shadow: 0 1px 0 color-mix(in srgb, #fff 7%, transparent) inset;
 }
-.brand .logo svg {
+/* `.logo` is unique to the header, so the `.brand` qualifier added specificity
+   without selecting anything extra — and outranked every later `… svg` rule. */
+.logo svg {
   width: 20px;
   height: 20px;
   display: block;
@@ -195,7 +197,8 @@ button {
   color: var(--ink);
   line-height: 1.1;
 }
-.brand .mark b {
+/* Same as `.logo` above — `.mark` is unique, so `.brand` only inflated specificity. */
+.mark b {
   color: var(--trace);
 }
 .brand-meta {
@@ -454,7 +457,9 @@ button {
   .brand .path {
     max-width: 140px;
   }
-  .tb-actions .ghost-btn span {
+  /* Every `.ghost-btn` lives in `.tb-actions`, so the qualifier only inflated
+     specificity above the later `… span` rules in this same media query. */
+  .ghost-btn span {
     display: none;
   }
   .tb-actions .ghost-btn {
@@ -1268,11 +1273,6 @@ body.sidebar-collapsed .sidebar-show {
   align-items: center;
   gap: 8px;
 }
-.side-sec h3 #cmp-label {
-  color: var(--trace);
-  text-transform: none;
-  letter-spacing: 0;
-}
 .side-icon {
   margin-left: auto;
   width: 22px;
@@ -1779,10 +1779,6 @@ body.sidebar-collapsed .sidebar-show {
   margin-top: 10px;
   flex: 0 0 auto;
 }
-.fb-actions .mbtn {
-  flex: 1;
-}
-
 .summary {
   display: flex;
   gap: 7px;
@@ -2143,8 +2139,10 @@ textarea:focus-visible {
   cursor: default;
   user-select: text;
 }
+/* `[hidden]` outranks the bare `.mig-panel` rule above on specificity and comes
+   after it, so `display: none` wins without `!important`. */
 .mig-panel[hidden] {
-  display: none !important;
+  display: none;
 }
 .mig-head {
   display: flex;
@@ -3171,6 +3169,10 @@ textarea:focus-visible {
 }
 @media (prefers-reduced-motion: reduce) {
   * {
+    /* biome-ignore lint/complexity/noImportantStyles: `*` has the lowest possible
+       specificity (0,0,0), so every class-based animation rule in this file would
+       outrank it. `!important` is what makes the reduced-motion opt-out actually
+       apply — removing it silently breaks the accessibility behaviour. */
     animation: none !important;
   }
   .edge.flow {
