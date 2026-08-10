@@ -19,9 +19,10 @@ All notable changes to this project will be documented in this file.
 * **tooling:** stop the identity gate reading developer-private config ([#1035](https://github.com/nikunjmavani/core-be/issues/1035)) ([dd74a2e](https://github.com/nikunjmavani/core-be/commit/dd74a2e360e88a94d74e43b01f237e73191f27ea))
 
 
-### Changed
+### Dependencies
 
-* index the JWS and JWE regis… ([530bd4d](https://github.com/nikunjmavani/core-be/commit/530bd4d1f158e9b6f5b26effb57e5e8f22b6607a))
+* **ioredis:** upgraded 5.10.1 → 6.0.0 ([#1034](https://github.com/nikunjmavani/core-be/issues/1034)) ([2a10bc4](https://github.com/nikunjmavani/core-be/commit/2a10bc47)). ioredis 6 changes its default RESP wire protocol from 2 to 3; this project pins it back to **RESP2** (`REDIS_PROTOCOL_VERSION`) on every connection, including all BullMQ queues and workers, because BullMQ declares no RESP3 support. Redis behaviour is therefore unchanged by this release.
+* bumped 15 packages in the non-major group, including fastify 5.11.0 → 5.11.2, bullmq 6.0.5 → 6.0.9 and jose 6.2.7 → 6.2.8 ([#1031](https://github.com/nikunjmavani/core-be/issues/1031)) ([530bd4d](https://github.com/nikunjmavani/core-be/commit/530bd4d1f158e9b6f5b26effb57e5e8f22b6607a))
 
 
 ### Documentation
