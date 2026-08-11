@@ -17,6 +17,11 @@ export const options = {
   },
   thresholds: {
     ...THRESHOLDS,
+    // Two requests per 1.5s of sleep, over a ramp averaging ~6.7 of 10 VUs, caps this
+    // scenario at ~8.9 req/s — structurally under the shared `rate>10` floor, which it
+    // only ever cleared by rounding. Floor set to the rate the scenario can actually
+    // sustain rather than deleting the throughput check.
+    http_reqs: ['rate>5'],
     'http_req_duration{name:list-webhooks}': ['p(95)<500', 'p(99)<1000'],
     'http_req_duration{name:list-webhook-events}': ['p(95)<500', 'p(99)<1000'],
   },

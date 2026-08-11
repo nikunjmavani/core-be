@@ -253,11 +253,21 @@ function phaseWebhooksAndWrites(authed, json) {
   const createWebhookRes = http.post(
     `${API_PREFIX}/notify/webhooks`,
     JSON.stringify({
-      url: `https://httpbin.org/post?k6=${suffix}`,
+      // No `description`: the webhook DTO is strict, so the key it no longer accepts
+      // made every create 400 ("Unrecognized key").
+      //
+      // example.com, not httpbin.org: the documented load-test setup sets
+      // WEBHOOK_URL_ALLOWLIST=example.com, so the old host was rejected by the SSRF
+      // allowlist — and a load test should not depend on a third-party host anyway.
+      url: `https://example.com/k6-webhook?k6=${suffix}`,
       events: ['*'],
-      description: `k6 journey ${suffix}`,
     }),
-    { headers: { ...authed, ...json }, tags: { name: 'create-webhook' } },
+    {
+      // POST /notify/webhooks is an idempotencyRequired write (the `I` column in
+      // docs/routes.txt); without the header it is 422, and the key must be 16+ chars.
+      headers: { ...authed, ...json, 'X-Idempotency-Key': `k6-journey-webhook-${suffix}` },
+      tags: { name: 'create-webhook' },
+    },
   );
   check(createWebhookRes, { 'create-webhook 2xx': (r) => r.status >= 200 && r.status < 300 });
   checkResponseTime(createWebhookRes, 600, 'create-webhook');
@@ -281,8 +291,16 @@ function phaseWebhooksAndWrites(authed, json) {
       file_name: `k6-${randomString(6)}.jpg`,
       content_type: 'image/jpeg',
       purpose: 'avatar',
+      // `for` and `file_size` are required by the upload DTO; omitting them 400'd
+      // every request-upload in the journey.
+      for: 'user',
+      file_size: 1024,
     }),
-    { headers: { ...authed, ...json }, tags: { name: 'request-upload' } },
+    {
+      // POST /uploads is likewise an idempotencyRequired write.
+      headers: { ...authed, ...json, 'X-Idempotency-Key': `k6-journey-upload-${suffix}` },
+      tags: { name: 'request-upload' },
+    },
   );
   check(uploadRes, { 'request-upload 2xx': (r) => r.status >= 200 && r.status < 300 });
   checkResponseTime(uploadRes, 600, 'request-upload');
@@ -291,7 +309,9 @@ function phaseWebhooksAndWrites(authed, json) {
   // Patch user settings
   const patchSettingsRes = http.patch(
     `${API_PREFIX}/users/me/settings`,
-    JSON.stringify({ marketing_emails_enabled: false }),
+    // `marketing_emails_enabled` is not a field of the user-settings DTO, so the strict
+    // schema rejected every patch with 400.
+    JSON.stringify({ is_dark_mode_enabled: false }),
     { headers: { ...authed, ...json }, tags: { name: 'patch-me-settings' } },
   );
   checkOk(patchSettingsRes, 'patch-me-settings');

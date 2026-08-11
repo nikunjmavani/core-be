@@ -1,6 +1,6 @@
 import http from 'k6/http';
 import { sleep } from 'k6';
-import { API_PREFIX, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
+import { API_PREFIX, SMOKE_THRESHOLDS, SCENARIOS } from '../helpers/config.js';
 import { checkOk, checkResponseTime } from '../helpers/checks.js';
 import { authHeaders } from '../helpers/auth.js';
 
@@ -17,7 +17,10 @@ export const options = {
     smoke: { ...SCENARIOS.smoke, exec: 'adminOps' },
   },
   thresholds: {
-    ...THRESHOLDS,
+    // SMOKE_THRESHOLDS, not THRESHOLDS: this runs SCENARIOS.smoke (1 VU with 2s of sleep
+    // per iteration), so the shared `http_reqs: rate>10` floor is unreachable by design —
+    // the observed rate is ~1.5/s. SMOKE_THRESHOLDS omits that floor for exactly this case.
+    ...SMOKE_THRESHOLDS,
     'http_req_duration{name:list-users}': ['p(95)<500', 'p(99)<1000'],
     'http_req_duration{name:list-audit-logs}': ['p(95)<500', 'p(99)<1000'],
     'http_req_duration{name:list-permissions}': ['p(95)<200', 'p(99)<400'],
@@ -53,8 +56,10 @@ export function adminOps() {
 
   sleep(0.5);
 
-  // Permissions (public)
+  // Permissions — authenticated (routes.txt: AUTH), not public. Without the header
+  // every request 401s and the check fails on 100% of iterations.
   const permResponse = http.get(`${API_PREFIX}/tenancy/permissions`, {
+    headers,
     tags: { name: 'list-permissions' },
   });
   checkOk(permResponse, 'list-permissions');

@@ -14,7 +14,10 @@ export function login(email, password) {
     headers: { 'Content-Type': 'application/json' },
   });
 
-  if (response.status === 200) {
+  // POST → 201 under the method→status policy. This accepted only 200 while the sibling
+  // switch helpers below already took both, so every login returned null: user-journey's
+  // VUs all bailed before their first journey request and the run reported 0 checks.
+  if (response.status === 201 || response.status === 200) {
     const body = JSON.parse(response.body);
     return body.data?.access_token || body.data?.token || null;
   }
