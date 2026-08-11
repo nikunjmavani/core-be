@@ -42,6 +42,127 @@ flowchart LR
 **What we are explicitly *not* building:** a message bus, a collaborative-editing CRDT, a chat product,
 a general RPC channel, or a second read API. Those are separate decisions with separate designs.
 
+### 1.1 The three-sided picture — where the socket actually sits
+
+`core-rt` sits in the middle, with `core-fe` on one side and `core-be` on the other. But it sits
+*beside* the request path, not inside it — which is the single most important thing to understand
+about this design.
+
+```mermaid
+flowchart LR
+  subgraph FE["🖥️ core-fe · React (browser)"]
+    direction TB
+    UI["UI components"]
+    RQ["TanStack Query<br/>owns ALL server state"]
+    WSC["Realtime client<br/>shared/realtime/"]
+    UI --- RQ
+  end
+
+  subgraph RT["⚡ core-rt · Go (the socket edge)"]
+    direction TB
+    ING["Stream ingest<br/>XREAD all 16 shards"]
+    POL["Tier policy<br/>full · summary · drop"]
+    HUB["Registry<br/>org → user → sockets"]
+    ING --> POL --> HUB
+  end
+
+  subgraph BE["🧠 core-be · Fastify (source of truth)"]
+    direction TB
+    API["REST routes"]
+    SVC["Services"]
+    API --> SVC
+  end
+
+  PG[("Postgres")]
+  RD[("Redis Streams<br/>rt:events:0..15")]
+
+  RQ ===|"① REST — every read and every write<br/>THE DATA PATH"| API
+  SVC ==>|"② commit FIRST"| PG
+  SVC -->|"③ then announce<br/>(post-commit)"| RD
+  RD -->|"④ every instance<br/>reads every shard"| ING
+  HUB -->|"⑤ ONE frame<br/>ids + counts, no bulk data"| WSC
+  WSC -.->|"⑥ invalidate → refetch<br/>closes the loop back to ①"| RQ
+  RT -->|"⑦ handshake: who is this?<br/>(once per connection)"| BE
+
+  style RT fill:#7aa2ff,color:#0f1117,stroke:none
+  style PG fill:#4cc38a,color:#0f1117,stroke:none
+  style RD fill:#e5a54b,color:#0f1117,stroke:none
+```
+
+**The diagram in one sentence:** data always travels the thick line ① between the browser and
+`core-be`; `core-rt` only ever whispers "something changed, ask again" down arrow ⑤.
+
+#### The three sides, and what each is forbidden from doing
+
+| | `core-fe` (left) | `core-rt` (middle) | `core-be` (right) |
+|---|---|---|---|
+| **Owns** | Rendering, the query cache, the URL (which drives org context) | Open connections, the registry, delivery tiering | Truth: Postgres, auth, RLS, validation, business rules |
+| **Never does** | Store server data in Zustand | Touch Postgres · hold business logic · accept a write | Hold a WebSocket |
+| **If it dies** | — | **Product still fully works**, just not live | Everything is down (as today) |
+| **Language** | TypeScript | Go | TypeScript |
+| **Scales with** | — | Logged-in users | Request rate |
+
+`core-rt` having **no database access at all** is not an oversight — it is what makes the service
+safe to scale, deploy and restart carelessly. It holds no truth, so it can lose everything it holds.
+
+#### The seven arrows
+
+| # | Arrow | Carries | Why it exists |
+|---|-------|---------|---------------|
+| ① | `core-fe` ⟷ `core-be` | **All** reads and writes, over normal HTTPS | The socket is not a data channel. Every byte of business data crosses here, through the auth, RLS, validation, idempotency and audit machinery you already have. |
+| ② | `core-be` → Postgres | The committed row | **Truth is persisted before anyone is told.** If every socket on earth died at this instant, nothing is lost. |
+| ③ | `core-be` → Redis | A small envelope: ids, type, counts | Fires *after commit*, never inside the transaction. Fire-and-forget with a timeout — a Redis outage must never fail the user's request. |
+| ④ | Redis → `core-rt` | The same envelope | Every instance reads every shard and filters locally, so no instance needs to know which user is connected where. This is what makes instances interchangeable and removes sticky sessions. |
+| ⑤ | `core-rt` → `core-fe` | **One frame.** Ids and counts, plus payload *only* for the active org | The whole reason the system exists — and deliberately the thinnest arrow on the diagram. |
+| ⑥ | `core-fe` → itself | A cache invalidation | The frame does not update the UI. It marks a query stale, and TanStack Query refetches over ① — so the **server response always wins**. |
+| ⑦ | `core-rt` → `core-be` | One internal call per connection | "Here is a ticket — who is this, which orgs, which permissions?" Authorization logic stays in TypeScript; `core-rt` never re-implements it. |
+
+#### The loop is the point
+
+Follow ① → ② → ③ → ④ → ⑤ → ⑥ → back to ①. The path **returns to REST**. That circularity is
+deliberate and buys three properties that are otherwise expensive:
+
+- **Ordering stops mattering.** "Something changed, refetch" is idempotent and commutative. Deltas
+  applied in sequence are not — and that is where realtime UIs rot.
+- **A lost frame costs nothing** beyond staleness until the next refetch. So we can accept
+  at-least-once delivery instead of building exactly-once, which does not exist anyway.
+- **Turning the feature off is safe.** Cut arrows ③–⑥ entirely and the product degrades to exactly
+  today's behaviour: refetch on navigate. That is the kill switch, and it is a property of the
+  shape, not a feature bolted on.
+
+#### What each boundary refuses to carry
+
+| Boundary | Crosses | Deliberately does **not** cross |
+|---|---|---|
+| `core-fe` ⟷ `core-be` (①) | Everything | — |
+| `core-be` → Redis (③) | Ids, type, counts, org | Row contents · PII · anything large |
+| `core-rt` → `core-fe` (⑤) | Ids, counts; payload **only** for the active org | Another org's data · titles from an inactive org · bulk lists |
+| `core-rt` → Postgres | **Nothing.** No connection exists | — |
+| `core-fe` → `core-rt` | 4 control frames (auth refresh, active-org, resync ack, ping) | **Any write.** `mark-as-read` is a REST `PATCH` |
+
+The row that matters most is the last-but-one: an inactive organisation's event is serialised
+**server-side** into a different, smaller envelope with `payload` absent. The privileged fields never
+leave `core-rt`. Cross-tenant isolation is therefore a property of the encoder, not a rendering
+choice the frontend could get wrong.
+
+### 1.2 Failure matrix
+
+What actually happens when each piece breaks. The design's value is mostly visible here.
+
+| What fails | Live updates | REST reads/writes | User-visible effect | Recovery |
+|---|---|---|---|---|
+| **`core-rt` instance dies** | Pause for that instance's users | ✅ fine | Badge stops moving | Client reconnects with jittered backoff, refetches |
+| **All of `core-rt` down** | ❌ stopped | ✅ fine | Product works, just not live | Restart; clients reconnect and refetch |
+| **Redis Streams unavailable** | ❌ stopped | ✅ fine | As above | Events published during the outage are lost; the next refetch repairs the UI |
+| **`core-be` down** | ❌ stopped | ❌ down | Total outage | Same as today — realtime changes nothing here |
+| **Postgres down** | ❌ stopped | ❌ down | Total outage | Same as today |
+| **One slow client** | Only that client | ✅ fine | That client gets `resync.required` and refetches | Bounded queue; nobody else is affected |
+| **Deploy of `core-rt`** | ~1–15 s gap | ✅ fine | Brief "reconnecting" state | Jittered `reconnect_after_ms` prevents a stampede |
+
+The pattern across every row: **realtime failures degrade to today's behaviour; they never create a
+new class of outage.** Any future change that breaks this property should be treated as a
+regression, not a trade-off.
+
 ---
 
 ## 2 · Why Go, and why a separate service
