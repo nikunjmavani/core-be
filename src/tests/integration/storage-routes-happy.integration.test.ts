@@ -99,9 +99,9 @@ async function createUploadAndConfirm(options: {
 
 /**
  * Happy paths for the storage-backed routes (S3 adapter mocked at the
- * ObjectStoragePort seam): upload delete (204), avatar attach (200), and
- * organization logo attach (200) — the three routes whose declared success
- * needs object storage to respond.
+ * ObjectStoragePort seam): upload delete (204), avatar attach (200), avatar
+ * detach (204), and organization logo attach (200) — the routes whose declared
+ * success needs object storage to respond.
  */
 describe('Storage-backed routes — happy paths (mocked S3 port)', () => {
   let app: FastifyInstance;
@@ -154,6 +154,31 @@ describe('Storage-backed routes — happy paths (mocked S3 port)', () => {
       payload: { avatar_key: key },
     });
     expect(response.statusCode, response.body).toBe(200);
+  });
+
+  it('DELETE /users/me/avatar detaches the attached avatar', async () => {
+    const user = await createTestUser();
+    const token = await generateTestToken({ userId: user.public_id });
+    const { key } = await createUploadAndConfirm({
+      app,
+      token,
+      purpose: 'avatar',
+      target: 'user',
+    });
+    const attach = await injectAuthenticated(app, {
+      method: 'PUT',
+      url: testApiPath('/users/me/avatar'),
+      token,
+      payload: { avatar_key: key },
+    });
+    expect(attach.statusCode, attach.body).toBe(200);
+
+    const response = await injectAuthenticated(app, {
+      method: 'DELETE',
+      url: testApiPath('/users/me/avatar'),
+      token,
+    });
+    expect(response.statusCode, response.body).toBe(204);
   });
 
   it('PUT /tenancy/organization/logo attaches a confirmed logo upload', async () => {

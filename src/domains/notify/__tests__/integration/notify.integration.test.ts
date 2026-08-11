@@ -139,6 +139,21 @@ describe('Notify Domain — Integration', () => {
       });
       expect(response.statusCode).toBe(401);
     });
+
+    it('marks the authenticated user notifications read and returns updated_count', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/notify/notifications/mark-all-read'),
+        token,
+      });
+
+      expect(response.statusCode, response.body).toBe(201);
+      const body = response.json() as { data: { updated_count: number } };
+      expect(typeof body.data.updated_count).toBe('number');
+    });
   });
 
   describe('GET /api/v1/notify/notifications/unread-count', () => {

@@ -181,6 +181,47 @@ describe('User Domain — Integration', () => {
     });
   });
 
+  describe('POST /api/v1/users/me/onboarding/complete', () => {
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/users/me/onboarding/complete'),
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('stamps onboarding complete and returns the refreshed profile', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/users/me/onboarding/complete'),
+        token,
+      });
+
+      expect(response.statusCode, response.body).toBe(201);
+      const body = response.json() as { data: { id: string } };
+      expect(body.data.id).toBe(user.public_id);
+    });
+
+    it('is idempotent — a repeat call still succeeds', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const request = {
+        method: 'POST' as const,
+        url: testApiPath('/users/me/onboarding/complete'),
+        token,
+      };
+
+      const first = await injectAuthenticated(app, request);
+      const second = await injectAuthenticated(app, request);
+
+      expect(first.statusCode, first.body).toBe(201);
+      expect(second.statusCode, second.body).toBe(201);
+    });
+  });
+
   describe('DELETE /api/v1/users/me', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {

@@ -9,6 +9,10 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateTestTokenWithActiveSession } from '@/tests/helpers/test-auth.js';
 import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
+import { eq } from 'drizzle-orm';
+import { database } from '@/infrastructure/database/connection.js';
+import { webauthn_credentials } from '@/domains/auth/sub-domains/auth-webauthn/webauthn-credential.schema.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { FastifyInstance } from 'fastify';
 
 describe('Auth WebAuthn — Integration', () => {
@@ -184,6 +188,50 @@ describe('Auth WebAuthn — Integration', () => {
         token,
       });
       expect(response.statusCode).toBe(404);
+    });
+
+    it('revokes an owned passkey and returns 204 (with step-up)', async () => {
+      const user = await createTestUser({ isEmailVerified: true });
+      const { token, sessionPublicId } = await generateTestTokenWithActiveSession(
+        app,
+        user.public_id,
+      );
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
+      // The registration ceremony needs a real authenticator, so rows are seeded
+      // directly — the same approach the ownership security suite uses. Two are
+      // needed: revoking the *only* active passkey is refused with 409 unless the
+      // user keeps another login-capable method.
+      const [credential] = await database
+        .insert(webauthn_credentials)
+        .values([
+          {
+            public_id: generatePublicId('webauthnCredential'),
+            user_id: user.id,
+            credential_id: `raw-${generatePublicId('webauthnCredential')}`,
+            public_key: 'owned-key',
+          },
+          {
+            public_id: generatePublicId('webauthnCredential'),
+            user_id: user.id,
+            credential_id: `raw-${generatePublicId('webauthnCredential')}`,
+            public_key: 'spare-key',
+          },
+        ])
+        .returning();
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/auth/me/webauthn/credentials/${credential!.public_id}`),
+        token,
+      });
+
+      expect(response.statusCode, response.body).toBe(204);
+      // Revocation is soft — the row stays, stamped with `revoked_at`.
+      const [row] = await database
+        .select()
+        .from(webauthn_credentials)
+        .where(eq(webauthn_credentials.public_id, credential!.public_id));
+      expect(row?.revoked_at).not.toBeNull();
     });
   });
 
