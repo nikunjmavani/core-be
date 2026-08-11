@@ -109,6 +109,42 @@ const ARCHIVE_FILE_SUFFIX = '-archive.md';
 /** Placeholder / glob / prose markers that mean a token is not a literal path. */
 const NON_LITERAL_TOKEN = /[*?<>{}|,()\s€£§]|\.{3}|…/;
 
+/**
+ * Branch types accepted by the naming policy — mirrors `BRANCH_TYPES` in
+ * `.husky/pre-push`. Kept in sync by the `git-branch-naming` rule.
+ */
+const BRANCH_TYPES = [
+  'feat',
+  'feature',
+  'fix',
+  'hotfix',
+  'refactor',
+  'docs',
+  'test',
+  'chore',
+  'ci',
+  'perf',
+  'build',
+  'style',
+  'revert',
+];
+
+/**
+ * Branch-name examples cited in inline code (`docs/american-spelling-organization`)
+ * collide with the `docs/` path prefix. The policy grammar is `<type>/<slug>` where
+ * the slug is 2–5 kebab-case words, so a token whose first segment is a branch type
+ * and whose only remaining segment is multi-word kebab-case with no file extension
+ * is a branch name, not a repo path.
+ *
+ * Only `docs/` overlaps `PATH_PREFIXES` today; the full type list is mirrored anyway
+ * so adding a future prefix cannot silently re-introduce the false positive.
+ *
+ * Trade-off: a citation of a genuinely missing *multi-word* `docs/<directory>` is no
+ * longer flagged. Single-word directories and every `*.md` file citation (the dot
+ * excludes them from the slug pattern) stay fully checked.
+ */
+const BRANCH_NAME_CITATION = new RegExp(`^(?:${BRANCH_TYPES.join('|')})/[a-z0-9]+(?:-[a-z0-9]+)+$`);
+
 function collectMarkdownFiles(path: string, out: string[]): void {
   if (!statSync(path, { throwIfNoEntry: false })?.isDirectory()) {
     if (path.endsWith('.md') || path.endsWith('.mdc')) out.push(path);
@@ -161,6 +197,7 @@ function extractCitedPath(rawToken: string): string | null {
     .replace(/:\d+(?:-\d+)?$/, '')
     .replace(/#L\d+(?:-L?\d+)?$/, '');
   if (NON_LITERAL_TOKEN.test(token)) return null;
+  if (BRANCH_NAME_CITATION.test(token)) return null;
   if (!PATH_PREFIXES.some((prefix) => token.startsWith(prefix))) return null;
   if (GENERATED_PATH_PREFIXES.some((prefix) => token.startsWith(prefix))) return null;
   if (INTENTIONALLY_ABSENT.has(token.replace(/\/$/, ''))) return null;

@@ -1788,7 +1788,8 @@ src/
     │   │   │   ├── checks.js
     │   │   │   ├── config.js
     │   │   │   ├── data.js
-    │   │   │   └── pool.js
+    │   │   │   ├── pool.js
+    │   │   │   └── random.js
     │   │   ├── scenarios/
     │   │   │   ├── admin.js
     │   │   │   ├── api-stress.js
@@ -1938,6 +1939,7 @@ src/
     │   ├── ci/
     │   │   ├── codegraph-git-hooks.policy.unit.test.ts
     │   │   ├── dependabot-ci-triage.policy.unit.test.ts
+    │   │   ├── dist-assets.policy.unit.test.ts
     │   │   ├── github-actions-node24.policy.unit.test.ts
     │   │   ├── github-actions-workflow-run-references.policy.unit.test.ts
     │   │   ├── github-environment-protection.policy.unit.test.ts
@@ -2076,6 +2078,7 @@ src/
     │   │   │   ├── modules.unit.test.ts
     │   │   │   ├── production-guard.unit.test.ts
     │   │   │   └── seed-contract.unit.test.ts
+    │   │   ├── docs-links-branch-grammar.unit.test.ts
     │   │   ├── generate-project-structure-tree.unit.test.ts
     │   │   ├── generate-route-catalog.unit.test.ts
     │   │   ├── lint-migrations-concurrent-index.unit.test.ts
