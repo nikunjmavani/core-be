@@ -451,6 +451,7 @@ Local SonarQube quality gate (pre-commit): `pnpm sonar:up` / `sonar:scan` / `son
 - `pnpm test:contract` — outbound HTTP contracts for Stripe, Resend, S3 (`tooling/vitest/contract.config.ts`; see `docs/reference/testing/contract-tests.md`)
 - `pnpm chaos:up` / `pnpm chaos:down` — start/stop the Toxiproxy sidecar (`docker compose --profile chaos`)
 - `pnpm chaos:provision` — register Postgres + Redis listener proxies (`src/tests/chaos/provision-proxies.ts`)
+- `pnpm test:smoke` — critical-path smoke tier (`tooling/vitest/smoke.config.ts`); in-process by default, `SMOKE_EXTERNAL=true` drives a live server at `SMOKE_BASE_URL`
 - `pnpm test:api-smoke` — live API smoke (server running + seed)
 - `pnpm verify:base` — end-to-end gate: migrate → seed (minimal + full) → API smoke (auto-detects/launches server + worker) → validate
 - `pnpm routes:catalog` / `pnpm routes:catalog:check` — regenerate or verify `docs/routes.txt`

@@ -8,7 +8,7 @@ Vitest, `fastify.inject()`, domain co-located tests, and naming tiers. For manua
 
 - **Vitest** — runner, assertions, coverage (`pnpm test`, `pnpm test:unit`, `pnpm test:e2e`, …)
 - **`fastify.inject()`** — in-process HTTP via `injectRoute` / `injectAuthenticated` in `src/tests/helpers/test-http-inject.helper.ts` and `createTestApp()` in `src/tests/helpers/test-app.ts`
-- **Smoke** — native `fetch()` against `SMOKE_BASE_URL` under `src/tests/smoke/*.smoke.test.ts`
+- **Smoke** — `src/tests/smoke/*.smoke.test.ts` via `pnpm test:smoke`. Runs in-process through `fastify.inject()` by default; set `SMOKE_EXTERNAL=true` to drive a live server with native `fetch()` against `SMOKE_BASE_URL`
 
 Use `injectWithCookies` when session cookies matter.
 
@@ -48,7 +48,7 @@ src/tests/
   global/           # route catalog, domain consistency
   chaos/            # Toxiproxy (see chaos-testing.md)
   contract/         # outbound HTTP contracts
-  smoke/            # deployed URL fetch tests
+  smoke/            # critical-path checks (in-process; SMOKE_EXTERNAL=true for a live URL)
 ```
 
 Do not put full domain route suites here.
@@ -86,7 +86,8 @@ src/domains/<domain>/sub-domains/<resource>/__tests__/
 | **Security**           | `pnpm test:security`    | Auth, CORS, JWT, RLS                      |
 | **Performance**        | `pnpm test:performance` | N+1, concurrency                          |
 | **Load**               | `pnpm load:*`           | k6 against running API                    |
-| **Smoke**              | `pnpm test:api-smoke`   | Live API after seed                       |
+| **Smoke**              | `pnpm test:smoke`       | Critical-path checks per domain           |
+| **Live API smoke**     | `pnpm test:api-smoke`   | Live API after seed                       |
 | **Global**             | `pnpm test:global`      | Route catalog, consistency                |
 | **Coverage**           | `pnpm test:coverage`    | Full suite + Stage 5 thresholds           |
 
