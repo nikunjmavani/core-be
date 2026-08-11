@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { sleep } from 'k6';
 import { API_PREFIX, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
-import { checkResponseTime } from '../helpers/checks.js';
+import { checkStatus, checkResponseTime } from '../helpers/checks.js';
 import { authHeaders } from '../helpers/auth.js';
 
 export const options = {
@@ -22,6 +22,8 @@ export function userDataExportOps() {
     ...authHeaders(token),
     tags: { name: 'user-data-export' },
   });
+  // 409 is legitimate: a prior export for this user may still be in flight.
+  checkStatus(response, [200, 201, 202, 409], 'user-data-export');
   if ([200, 201, 202, 409].includes(response.status)) {
     checkResponseTime(response, 5000, 'user-data-export');
   }

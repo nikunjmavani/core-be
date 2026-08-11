@@ -28,10 +28,11 @@ export function loginSmoke() {
     headers: { 'Content-Type': 'application/json' },
     tags: { name: 'login-smoke-login' },
   });
-  checkStatus(loginResponse, 200, 'login');
+  // POST → 201 under the method→status policy (method-status-policy.middleware.ts).
+  checkStatus(loginResponse, 201, 'login');
   checkResponseTime(loginResponse, 800, 'login');
 
-  if (loginResponse.status !== 200) {
+  if (loginResponse.status !== 201) {
     sleep(1);
     return;
   }

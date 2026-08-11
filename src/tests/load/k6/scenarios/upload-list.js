@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { sleep } from 'k6';
 import { API_PREFIX, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
-import { checkResponseTime } from '../helpers/checks.js';
+import { checkStatus, checkResponseTime } from '../helpers/checks.js';
 import { authHeaders } from '../helpers/auth.js';
 
 export const options = {
@@ -23,6 +23,8 @@ export function uploadListOps() {
     ...authHeaders(token),
     tags: { name: 'get-upload' },
   });
+  // 404 is legitimate: TEST_UPLOAD_PUBLIC_ID may point at a soft-deleted row.
+  checkStatus(response, [200, 404], 'get-upload');
   if (response.status === 200 || response.status === 404) {
     checkResponseTime(response, 500, 'get-upload');
   }

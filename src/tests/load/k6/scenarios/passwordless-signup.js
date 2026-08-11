@@ -39,9 +39,10 @@ export function passwordlessSignup() {
     headers,
     tags: { name: 'signup-send-code' },
   });
-  checkStatus(sendResponse, 200, 'send-code');
+  // POST → 201 under the method→status policy (method-status-policy.middleware.ts).
+  checkStatus(sendResponse, 201, 'send-code');
   checkResponseTime(sendResponse, 800, 'send-code');
-  if (sendResponse.status !== 200) {
+  if (sendResponse.status !== 201) {
     sleep(1);
     return;
   }
@@ -60,9 +61,9 @@ export function passwordlessSignup() {
     JSON.stringify({ email, code }),
     { headers, tags: { name: 'signup-code-login' } },
   );
-  checkStatus(loginResponse, 200, 'code-login');
+  checkStatus(loginResponse, 201, 'code-login');
   checkResponseTime(loginResponse, 800, 'code-login');
-  if (loginResponse.status !== 200) {
+  if (loginResponse.status !== 201) {
     sleep(1);
     return;
   }

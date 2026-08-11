@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { sleep } from 'k6';
 import { API_PREFIX, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
-import { checkResponseTime } from '../helpers/checks.js';
+import { checkStatus, checkResponseTime } from '../helpers/checks.js';
 import { authHeaders } from '../helpers/auth.js';
 
 /**
@@ -38,6 +38,7 @@ export function webhookOps() {
     headers,
     tags: { name: 'list-webhooks' },
   });
+  checkStatus(webhooksResponse, 200, 'list-webhooks');
   checkResponseTime(webhooksResponse, 500, 'list-webhooks');
 
   sleep(0.5);
@@ -47,6 +48,7 @@ export function webhookOps() {
     headers,
     tags: { name: 'list-webhook-events' },
   });
+  checkStatus(eventsResponse, 200, 'list-webhook-events');
   checkResponseTime(eventsResponse, 500, 'list-webhook-events');
 
   sleep(1);

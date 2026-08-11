@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { sleep } from 'k6';
 import { API_PREFIX, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
-import { checkOk, checkResponseTime } from '../helpers/checks.js';
+import { checkOk, checkStatus, checkResponseTime } from '../helpers/checks.js';
 import { authHeaders } from '../helpers/auth.js';
 
 /**
@@ -60,7 +60,8 @@ export function dailyOps() {
     headers,
     tags: { name: 'list-members' },
   });
-  // May get 403 if no permission — that's expected in load test
+  // 403 is legitimate: the load-test token may lack the membership-read permission.
+  checkStatus(membersResponse, [200, 403], 'list-members');
   checkResponseTime(membersResponse, 500, 'list-members');
 
   sleep(1);

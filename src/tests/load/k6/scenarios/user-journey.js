@@ -34,7 +34,7 @@
  */
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { randomString } from 'https://jslib.k6.io/k6-utils/1.4.0/index.js';
+import { randomString } from '../helpers/random.js';
 import { API_PREFIX, SCENARIOS, STRICT_THRESHOLDS } from '../helpers/config.js';
 import { checkOk, checkResponseTime } from '../helpers/checks.js';
 import { authHeaders, switchToOrganization } from '../helpers/auth.js';

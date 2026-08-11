@@ -4,21 +4,32 @@
 export const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
 export const API_PREFIX = `${BASE_URL}/api/v1`;
 
+/**
+ * Every preset below carries a `checks` rate so a scenario cannot exit 0 while its
+ * own assertions fail. Without it k6 reports check failures in the summary but still
+ * exits green — `passwordless-signup` exited 0 with a check failing 23/23, and only
+ * `http_req_failed` caught `webhooks` returning 403 on 100% of requests.
+ */
+const CHECKS_MUST_PASS = ['rate>0.99'];
+
 export const THRESHOLDS = {
   http_req_duration: ['p(95)<500', 'p(99)<1000'],
   http_req_failed: ['rate<0.01'], // Less than 1% failure rate
   http_reqs: ['rate>10'], // At least 10 requests/second
+  checks: CHECKS_MUST_PASS,
 };
 
 export const SMOKE_THRESHOLDS = {
   http_req_duration: ['p(95)<1000'],
   http_req_failed: ['rate<0.05'],
+  checks: CHECKS_MUST_PASS,
 };
 
 /** Stricter global preset for scenarios that define per-route thresholds. */
 export const STRICT_THRESHOLDS = {
   http_req_duration: ['p(95)<400', 'p(99)<800'],
   http_req_failed: ['rate<0.01'],
+  checks: CHECKS_MUST_PASS,
 };
 
 /**

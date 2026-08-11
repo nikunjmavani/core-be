@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { sleep } from 'k6';
 import { API_PREFIX, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
-import { checkOk, checkResponseTime } from '../helpers/checks.js';
+import { checkOk, checkStatus, checkResponseTime } from '../helpers/checks.js';
 import { authHeaders, switchToOrganization } from '../helpers/auth.js';
 
 export const options = {
@@ -40,6 +40,8 @@ export function billingSubscriptionsRlsOps() {
       headers,
       tags: { name: 'get-subscription-rls' },
     });
+    // 404 is the RLS-correct answer when the row belongs to another organization.
+    checkStatus(getResponse, [200, 404], 'get-subscription-rls');
     if (getResponse.status === 200 || getResponse.status === 404) {
       checkResponseTime(getResponse, 500, 'get-subscription-rls');
     }

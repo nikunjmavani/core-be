@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { sleep } from 'k6';
 import { API_PREFIX, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
-import { checkOk, checkResponseTime } from '../helpers/checks.js';
+import { checkOk, checkStatus, checkResponseTime } from '../helpers/checks.js';
 import { authHeaders, switchToOrganization } from '../helpers/auth.js';
 
 /**
@@ -48,6 +48,8 @@ export function tenancyRoleWriteOps() {
       tags: { name: 'create-role' },
     },
   );
+  // 409 is legitimate: role names repeat across re-runs of the same VU/iteration pair.
+  checkStatus(createResponse, [201, 409], 'create-role');
   checkResponseTime(createResponse, 700, 'create-role');
 
   if (createResponse.status !== 201 && createResponse.status !== 200) {

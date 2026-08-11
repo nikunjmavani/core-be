@@ -3,9 +3,17 @@ import { check } from 'k6';
 /**
  * Standard response assertions for k6 tests.
  */
+/**
+ * Asserts an exact status, or membership of an allowed set when several statuses are
+ * legitimate (`checkStatus(r, [200, 404], 'get-upload')`).
+ *
+ * The set form is why this takes an array: `idempotency-storm` already passed one, and
+ * strict `===` against an array is never true, so that check could not pass at all.
+ */
 export function checkStatus(response, expectedStatus, name) {
+  const allowed = Array.isArray(expectedStatus) ? expectedStatus : [expectedStatus];
   return check(response, {
-    [`${name || 'response'} status is ${expectedStatus}`]: (r) => r.status === expectedStatus,
+    [`${name || 'response'} status is ${allowed.join('|')}`]: (r) => allowed.includes(r.status),
   });
 }
 

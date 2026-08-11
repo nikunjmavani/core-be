@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { sleep } from 'k6';
 import { API_PREFIX, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
-import { checkOk, checkResponseTime } from '../helpers/checks.js';
+import { checkOk, checkStatus, checkResponseTime } from '../helpers/checks.js';
 import { authHeaders } from '../helpers/auth.js';
 
 /**
@@ -43,6 +43,7 @@ export function billingOps() {
     headers,
     tags: { name: 'list-subscriptions' },
   });
+  checkStatus(subsResponse, 200, 'list-subscriptions');
   checkResponseTime(subsResponse, 500, 'list-subscriptions');
 
   sleep(1);

@@ -1,4 +1,4 @@
-import { randomString } from 'https://jslib.k6.io/k6-utils/1.4.0/index.js';
+import { randomString } from './random.js';
 
 /**
  * Generate random test data for load tests.

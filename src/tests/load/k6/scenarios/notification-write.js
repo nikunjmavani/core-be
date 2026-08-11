@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { sleep } from 'k6';
 import { API_PREFIX, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
-import { checkResponseTime } from '../helpers/checks.js';
+import { checkStatus, checkResponseTime } from '../helpers/checks.js';
 import { authHeaders } from '../helpers/auth.js';
 
 /**
@@ -32,6 +32,8 @@ export function notificationWriteOps() {
     headers,
     tags: { name: 'mark-all-read' },
   });
+  // POST → 201 under the method→status policy (method-status-policy.middleware.ts).
+  checkStatus(markAllResponse, 201, 'mark-all-read');
   checkResponseTime(markAllResponse, 500, 'mark-all-read');
 
   sleep(1);
