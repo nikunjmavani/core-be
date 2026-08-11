@@ -5,8 +5,11 @@
 # (docs/process/trunk-based-workflow.md). Single trunk: the only long-lived branch is
 # main. Hotfixes are ordinary short-lived working branches (`fix/*` or `hotfix/*`
 # via BRANCH_TYPES) that fix-forward to main — there is no protected release/*
-# branch. Claude Code web session branches (claude/*) are allowlisted (the cloud
-# git proxy pins a web session to push only its claude/* branch). Bypass once with:
+# branch. Claude Code web session branches (claude/*) are allowlisted as a
+# FALLBACK — the cloud git proxy does NOT pin a session to its claude/* branch (a
+# push under any conventional name succeeds), but it does refuse every form of
+# branch delete, so rename before the first push. See
+# agent-os/rules/git-branch-naming.mdc. Bypass once with:
 #   SKIP_BRANCH_CHECK=1 git push
 BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)
 # The trunk is resolved from tooling/setup/setup.config.json (git.defaultBranch),
