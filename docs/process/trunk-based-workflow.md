@@ -28,9 +28,11 @@ flowchart TB
 | --------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------- |
 | `main`          | The trunk. Always releasable. Protected (squash-only, required checks).                                     | permanent                     |
 | `<type>/<slug>` | Working branch for one change (`feat`/`fix`/`chore`/`refactor`/`docs`/`test`/`ci`/`build`/`perf`/`hotfix`). | short-lived, deleted on merge |
-| `claude/*`      | Claude Code web session branches.                                                                           | short-lived                   |
+| `claude/*`      | Fallback for AI web sessions — the platform-assigned name. Rename to `<type>/<slug>` before the first push. | short-lived                   |
 
-Enforced by [`.husky/pre-push`](../../.husky/pre-push) and the `git-branch-naming` rule.
+Enforced by [`.husky/pre-push`](../../.husky/pre-push) and the [`git-branch-naming`](../../agent-os/rules/git-branch-naming.mdc) rule.
+
+Name the branch after the change: `<type>` is its conventional-commit type, `<slug>` is 2–5 kebab-case words (≤ 40 chars) matching the commit subject and PR title — `docs/american-spelling-organization`, `feat/billing-invoice-route`, `fix/webhook-event-rls-scope`. AI web sessions boot on a platform-generated `claude/<slug>` that carries no meaning; rename it with `git branch -m <type>/<slug>` **before** the first push, because the cloud git proxy allows branch creates but refuses deletes.
 
 ## The loop
 

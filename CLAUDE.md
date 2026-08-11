@@ -389,6 +389,30 @@ See [docs/reference/architecture/documentation-system.md](docs/reference/archite
 - **Contract tests**: `src/tests/contract/**` — see **`docs/reference/testing/contract-tests.md`**
 - **k6 load tests**: `src/tests/load/k6/scenarios/` — see **`docs/reference/testing/load-testing.md`**
 
+## Git branch naming
+
+Working branches are `<type>/<short-description>`; `main` is the only long-lived branch. Enforced by [`.husky/pre-push`](.husky/pre-push) (rule: `agent-os/rules/git-branch-naming.mdc`, owner: **code-quality-guard**).
+
+**AI web sessions start on a throwaway name.** Claude Code web assigns `claude/<platform-slug>` (e.g. `claude/session-request-wx3euu`) before the container boots. The slug is generated platform-side and is **not configurable from this repo** — no file here changes it. Rename it to a meaningful name rather than shipping it.
+
+**Name the branch before the first push.** The cloud git proxy accepts a push to *any* branch name but **rejects every form of delete** (`git push --delete`, `git push :ref`, and `DELETE /git/refs/...` → 403). A `claude/*` branch that has already been pushed therefore cannot be cleaned up from inside the session. Renaming first means the throwaway name never reaches the remote:
+
+```sh
+git branch -m docs/american-spelling-organization      # rename in place, BEFORE any push
+git push -u origin docs/american-spelling-organization
+```
+
+Already pushed as `claude/*`? Leave it — it auto-deletes when the PR squash-merges. Never open a second PR just to fix a branch name.
+
+**Deriving the name** — `<type>` is the change's conventional-commit type (`feat`, `fix`, `hotfix`, `refactor`, `docs`, `test`, `chore`, `ci`, `perf`, `build`, `style`, `revert`, matching `BRANCH_TYPES` in `.husky/pre-push`); `<short-description>` is kebab-case, 2–5 words, ≤ 40 chars, naming the change itself (never a ticket id or a date). Keep it aligned with the commit subject and PR title.
+
+| Change | Branch |
+| ------ | ------ |
+| Fix British spelling in a doc | `docs/american-spelling-organization` |
+| Add `POST /billing/invoices` | `feat/billing-invoice-route` |
+| RLS scope bug on `webhook_event` | `fix/webhook-event-rls-scope` |
+| Bump Fastify to 5.3 | `chore/bump-fastify-5-3` |
+
 ## Commands
 
 Script namespaces: `ci:*`, `compose:*`, `test:*`, `validate:*`, `db:*`, `docs:*`, `routes:*`, `load:*`, `chaos:*`, `tool:*`, `setup:*`, `mcp:*`, `security:*`, `sonar:*`, `deps:*`, `agent-os:*`, `github:*`, `tsdoc:*`, `docker:*`, `dashboards:*`, `ops:*`, `sbom:*`, `guard:*`, `dev:*`, `build:*`, `lint:*`, `format:*`, `health:*`, `coverage:*`, `env:*`, `start:*`, `verify:*`. List all: `pnpm run`.
