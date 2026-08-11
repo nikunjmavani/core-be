@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2.2](https://github.com/nikunjmavani/core-be/compare/v5.2.1...v5.2.2) (2026-08-11)
+
+
+### Documentation
+
+* add branch-naming guidance for AI web sessions ([#1043](https://github.com/nikunjmavani/core-be/issues/1043)) ([36240ee](https://github.com/nikunjmavani/core-be/commit/36240ee3d809dc3eba944661b8e691089bc716a7))
+
 ## [5.2.1](https://github.com/nikunjmavani/core-be/compare/v5.2.0...v5.2.1) (2026-08-10)
 
 
