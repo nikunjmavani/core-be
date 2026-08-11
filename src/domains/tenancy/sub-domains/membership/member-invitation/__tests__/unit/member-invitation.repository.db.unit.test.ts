@@ -7,6 +7,7 @@ import { createTestOrganization } from '@/tests/factories/organization.factory.j
 import {
   createMembership,
   createRoleWithPermissions,
+  seedAllPermissions,
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import { MemberInvitationRepository } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.repository.js';
 import { member_invitations } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.schema.js';
@@ -59,6 +60,11 @@ describe('MemberInvitationRepository.findByOrganizationId (keyset cursor paginat
 
   beforeEach(async () => {
     await cleanupDatabase();
+    // `tenancy.permissions` is reference data that NO migration seeds, and
+    // `cleanupDatabase()` exempts the table from its TRUNCATE. Without this the suite
+    // passes only when an earlier file happened to seed it, and fails on a fresh
+    // database with a role_permissions -> permissions FK violation.
+    await seedAllPermissions();
   });
 
   it('returns has_more=true with opaque next_cursor when more pages exist (no total by default)', async () => {

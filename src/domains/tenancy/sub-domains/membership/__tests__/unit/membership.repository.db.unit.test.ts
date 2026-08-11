@@ -5,6 +5,7 @@ import { createTestOrganization } from '@/tests/factories/organization.factory.j
 import {
   createMembership,
   createRoleWithPermissions,
+  seedAllPermissions,
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import { MembershipRepository } from '@/domains/tenancy/sub-domains/membership/membership.repository.js';
 
@@ -13,6 +14,11 @@ describe('MembershipRepository (database)', () => {
 
   beforeEach(async () => {
     await cleanupDatabase();
+    // `tenancy.permissions` is reference data that NO migration seeds, and
+    // `cleanupDatabase()` exempts the table from its TRUNCATE. Without this the suite
+    // passes only when an earlier file happened to seed it, and fails on a fresh
+    // database with a role_permissions -> permissions FK violation.
+    await seedAllPermissions();
   });
 
   it('creates and queries memberships by organization and user', async () => {
