@@ -1180,3 +1180,221 @@ sequenceDiagram
 **The switch never reconnects.** `active_org.set` is a presentation hint that can only select an org
 already in the handshake-issued membership set. Authorization was settled at handshake, and the new
 token — not the frame — is what authorizes the REST reads that follow.
+
+---
+
+## Appendix C — Putting the socket inside `core-be`, fully costed
+
+The fair version of this question, costed both ways. §2.1 gives the short answer; this is the long
+one, because it is the decision with the largest blast radius in the whole plan and it deserves more
+than three bullet points.
+
+Everything below assumes the honest framing: **putting sockets in `core-be` is a legitimate
+architecture that many successful products run.** The question is not whether it works. It is where
+it stops working, and what it costs to find out.
+
+### C.1 · What it actually looks like
+
+```mermaid
+flowchart LR
+  subgraph BE["core-be · ONE Node process — one event loop"]
+    direction TB
+    API["REST handlers<br/>(request/response)"]
+    WS["WebSocket handlers<br/>(long-lived sockets)"]
+    REG["In-process registry"]
+    SVC["Services · DB · permissions"]
+    API --> SVC
+    WS --> REG
+    WS -.->|"direct in-process call —<br/>no internal API needed"| SVC
+  end
+
+  FE["core-fe"] --> API
+  FE <-->|"WebSocket"| WS
+  RD[("Redis pub/sub<br/>cross-instance only")] <--> REG
+  PG[("Postgres")] --- SVC
+
+  style BE fill:#e5a54b,color:#0f1117,stroke:none
+  style WS fill:#C2410C,color:#fff,stroke:none
+```
+
+The appeal is immediately visible: **the dotted arrow disappears as a problem.** No handshake
+endpoint, no shared secret, no ticket, no contract fixtures, no second repo. The socket handler
+calls `AuthorizationService` directly, the same way a controller does.
+
+Concretely, in this codebase it is roughly:
+
+- `pnpm add @fastify/websocket`
+- one route file with an `{ websocket: true }` handler
+- an in-process `Map<orgId, Map<userId, Set<socket>>>` registry
+- Redis pub/sub to reach sockets held by *other* instances
+- a ping/pong interval and a shutdown hook
+
+**Perhaps 300–400 lines**, against ~2,000 for the Go service. That difference is real and should not
+be waved away.
+
+### C.2 · What you genuinely gain
+
+| Gain | Why it is real |
+|------|----------------|
+| **~5× less code** | 300–400 lines versus ~2,000, and none of it is concurrency primitives you have to get right under a race detector. |
+| **No second language** | Nobody learns Go. Your `agent-os` rules, skills, Biome config, tsdoc gate and CI all keep applying. |
+| **No handshake round-trip** | Authorization is an in-process function call, not an HTTP request. Connect latency drops by ~5 ms and one failure mode disappears entirely. |
+| **No internal endpoint to secure** | `/internal/realtime/handshake`, `REALTIME_INTERNAL_SECRET` and the private-networking requirement all evaporate. |
+| **No wire contract to keep in sync** | The envelope is a TypeScript type shared by construction. No golden fixtures, no three-repo drift test. |
+| **One deploy, one dashboard, one on-call surface** | Realtime failures show up in the traces and logs you already read. |
+| **Days, not weeks** | Realistically 3–5 days to a working end-to-end path, versus 2–3 weeks. |
+
+If your connection count is small, that list wins outright. Say so plainly rather than pretending
+otherwise.
+
+### C.3 · What it costs
+
+| Cost | Severity | Detail |
+|------|----------|--------|
+| **Fan-out blocks the event loop** | 🔴 decisive at scale | §C.4.1 — the argument that actually settles this |
+| **Every API deploy drops every socket** | 🔴 decisive at scale | §C.4.2 — and the reconnect herd lands on the instance you just restarted |
+| **Coupled scaling** | 🟠 real | You size API instances by connection count, not request rate. Two workloads with unrelated growth curves, one dial. |
+| **Memory per connection** | 🟠 real | ~40–150 KB in Node against ~25 KB in Go, depending heavily on buffering and compression settings. Roughly 2–5×. **Measure before sizing** — published figures vary enormously. |
+| **Harder graceful shutdown** | 🟠 real | HTTP drains in seconds. Sockets must be closed deliberately, with jitter, while requests are still finishing. Two drain semantics in one lifecycle. |
+| **Clustering makes it worse** | 🟡 latent | §C.5 — specific to this repo |
+| **Blast radius** | 🟡 latent | A socket-handling bug (a leaked listener, an unbounded buffer) now takes down your API, not a sidecar. |
+
+### C.4 · The two arguments that actually decide it
+
+Everything above is a trade. These two are different in kind: they get worse as you succeed.
+
+#### C.4.1 · Fan-out is a synchronous loop on the only thread you have
+
+An org-wide broadcast to *N* connected members is, in Node:
+
+```js
+for (const socket of socketsInOrg) socket.send(payload);   // synchronous, one thread
+```
+
+Each `send()` builds a frame and issues a write. Call it **3–10 µs**. So:
+
+| Connected members in one org | Event loop blocked for | What happens to your API during it |
+|---|---|---|
+| 200 | ~1–2 ms | Nothing measurable |
+| 2 000 | ~6–20 ms | A visible bump in p99 |
+| 10 000 | ~30–100 ms | **Every in-flight request stalls.** At 500 rps that is 15–50 requests queued behind a notification |
+| 50 000 | ~150–500 ms | Health checks start failing |
+
+The same fan-out in Go is a loop of channel sends (~100 ns each) that hands the actual writes to
+goroutines spread across every core. The loop itself finishes in well under a millisecond, and
+crucially it **blocks nothing else** — there is no shared thread to block.
+
+You can mitigate the Node version by chunking with `setImmediate`, and you should. But note what you
+have then built: a userland scheduler that trades broadcast latency for API latency, with a tuning
+knob nobody will remember exists in six months. That is the moment the "300 lines" estimate stops
+being true.
+
+> **Treat the microsecond figures as an order of magnitude, not a measurement.** They depend on
+> payload size, `perMessageDeflate`, and Node version. If this decision is close for you, benchmark
+> `ws.send()` on your actual payload before choosing — it is an afternoon's work and it settles the
+> argument with your own numbers.
+
+#### C.4.2 · Deploys become a self-inflicted load spike
+
+Today a `core-be` deploy is invisible: connections are short, in-flight requests drain in seconds.
+
+Put sockets in the same process and every deploy becomes a **full disconnect event for every logged-in
+user**. With 10 000 concurrent users and five deploys a day:
+
+```text
+per deploy   10 000 disconnects
+           → 10 000 reconnects (ticket + handshake)
+           → ~30 000 refetches (each client re-validates its caches)
+           ≈ 40 000 extra requests, arriving in a burst
+
+           …against the instance that just cold-started, with empty caches
+           and a cold JIT — the worst possible moment.
+
+per day      ~200 000 requests of pure deploy churn
+```
+
+That load is entirely manufactured by the architecture. With a separate socket service, deploying
+`core-be` does not touch a single connection — and deploying the socket service is a rare event you
+control, with jittered reconnect built in.
+
+There is a second-order effect worth naming: **teams respond to this by deploying less often.** A
+deploy that visibly disturbs every user acquires ceremony. Coupling your release cadence to your
+socket architecture is a bad trade that nobody makes deliberately — it just happens.
+
+### C.5 · The clustering trap, specific to this repo
+
+`cluster-run.mjs` exists at the repo root and forks `CLUSTER_WORKERS || 8` workers. It is **not**
+currently wired into `package.json` or the `Dockerfile` — production runs a single
+`node dist/src/server.js` per container — but its presence says clustering has been considered.
+
+If it is ever switched on with in-process sockets:
+
+- Each forked worker gets its **own registry**. The OS decides which worker accepts each connection.
+- A socket on worker 3 and the API request that should notify it on worker 7 are **different
+  processes**. The in-process shortcut — the single biggest advantage in §C.2 — stops applying for
+  7 out of 8 events.
+- Redis fan-out now has to reach **workers × instances** subscribers instead of instances. Eight
+  workers across four instances is 32 subscribers, not 4.
+- Connection counts per worker become uneven and hard to reason about.
+
+None of this is fatal, but it quietly deletes the main reason for choosing in-process in the first
+place. The Go service is indifferent to it — one process, all cores, one registry.
+
+### C.6 · The three options, side by side
+
+The honest comparison has **three** columns, not two. A separate Node service solves both decisive
+problems without adding a language, and it is the option most teams should actually weigh.
+
+| | **A · Inside `core-be`** | **B · Separate Node service** | **C · Separate Go service** |
+|---|---|---|---|
+| New language | — | — | **Go** |
+| New repo | — | ✅ | ✅ |
+| Lines of code | ~350 | ~900 | ~2 000 |
+| Time to working path | 3–5 days | 1–1.5 weeks | 2–3 weeks |
+| Handshake needed | — (in-process) | ✅ | ✅ |
+| Event-loop contention with API | 🔴 **yes** | ✅ no | ✅ no |
+| API deploy drops sockets | 🔴 **yes** | ✅ no | ✅ no |
+| Scales independently | ❌ | ✅ | ✅ |
+| Fan-out uses all cores | ❌ | ❌ (still one loop) | ✅ |
+| Connections per instance | ~2–5 k comfortably | ~10–20 k (`ws`), more with `uWebSockets.js` | ~50 k |
+| Memory per connection | ~40–150 KB | ~40–150 KB | ~25 KB |
+| Ops surface | 1 service | 2 services | 2 services, 2 toolchains |
+
+Option B is genuinely underrated. It keeps every TypeScript convention you have, and a separate
+process is what fixes both 🔴 rows — **not** the choice of language. Go buys density and multi-core
+fan-out on top of that, which matters only above roughly 20 000 concurrent connections.
+
+### C.7 · Where the line actually falls
+
+| Your situation | Choose |
+|---|---|
+| < 2 000 concurrent connections · rare broadcasts · shipping speed is the constraint | **A — inside `core-be`.** The costs are theoretical at this size, and 350 lines beats 2 000. |
+| 2 000 – 20 000 connections · TypeScript-only team · no Go experience | **B — separate Node service.** Fixes both decisive problems for a fraction of C's cost. |
+| > 20 000 connections · frequent org-wide broadcasts · someone knows Go | **C — separate Go service.** Density and true parallel fan-out start paying for the second language. |
+| Uncertain, and it is early | **A**, deliberately and with an exit plan — see §C.8. |
+
+The number that decides this is **concurrent connections at peak**, which is roughly *daily active
+users × the fraction with a tab open × tabs per user*. If you do not know it within a factor of
+three, that measurement is worth more than any further discussion of this appendix.
+
+### C.8 · Starting inside `core-be` without painting yourself into a corner
+
+If you pick A, four decisions keep the door to B or C open at a cost of about a day:
+
+1. **Keep the envelope contract explicit.** Define it once, version it (`v: 1`), and never let a
+   handler reach into a Drizzle row directly. This is the single most important one — it is what
+   makes the socket layer replaceable rather than entangled.
+2. **Publish through an indirection.** Route every publish through one
+   `publishRealtimeEvent(envelope)` function, even when the destination is the in-process registry.
+   Swapping its body for an `XADD` is then a one-file change.
+3. **Never write to Postgres from a socket handler** (D4). Once a socket frame can mutate state, the
+   layer stops being extractable and becomes a second API.
+4. **Put the tiering rule in a pure function.** `tierFor(envelope, connection)` with no I/O ports to
+   Go or a second Node service unchanged, and it is the one piece where a bug is a cross-tenant leak.
+
+Follow those four and the migration is: stand up the new service, move the registry and the tiering
+function, point `publishRealtimeEvent` at Redis, change the client URL. **The `core-be` domain code
+never changes**, because it only ever knew about `publishRealtimeEvent`.
+
+That is a genuinely cheap option to hold, and it is what makes A a defensible starting point rather
+than a decision you have to get right today.
