@@ -24,24 +24,31 @@ It is excluded from `pnpm test` and from CI. Nothing runs unless you opt in.
 
 ### Setup
 
-Two layers, and the order matters:
-
-1. **Provider credentials go in `.env.local`, not the shell.** The env loader deletes any key that is
-   present-but-blank in the file, so `CAPTCHA_SECRET=… pnpm test:contract:live` is silently discarded
-   when `.env.local` carries a blank `CAPTCHA_SECRET=`. Set the value in the file.
-2. **The `CONTRACT_LIVE_*` switches can be shell env**, because they do not appear in `.env.local`.
+Set the provider credentials wherever your environment normally injects them — a hosted
+environment's variable settings, CI secrets, or your shell — then opt in per provider:
 
 ```bash
-# Opt in per provider — naming a provider is also how you accept its side effects.
+# Naming a provider is also how you accept its side effects.
 CONTRACT_LIVE_PROVIDERS=stripe,s3 pnpm test:contract:live
 ```
+
+**Injected credentials win here, by design.** For running the *application*, the machine-local env
+file deliberately beats the process environment — `load-env-files` layers it on with
+`override: true` whenever `NODE_ENV` names a deploy target, and deletes any key written blank in it.
+Both behaviours are correct for the app and destructive for a live contract check: a scaffolded
+placeholder `sk_test_xxx` silently replaces a real injected key, and a blank `CAPTCHA_SECRET=`
+erases an injected secret outright. So `live/live-setup.ts` snapshots the injected provider
+credentials before the loader runs and restores them afterwards. Nothing else is affected.
+
+If a live spec appears to authenticate with the wrong account, that snapshot list is the first
+place to look.
 
 | Provider | Set in `.env.local` | Side effect of a run | Notes |
 | --- | --- | --- | --- |
 | **stripe** | `STRIPE_SECRET_KEY=sk_test_…` | Creates and deletes test-mode customers | `sk_live_` is refused outright. Test-mode objects are free and isolated |
 | **resend** | `RESEND_API_KEY=re_…`, `EMAIL_FROM_ADDRESS=` (verified domain) | **Sends a real email** | Also set `CONTRACT_LIVE_EMAIL_TO` to a throwaway inbox |
 | **s3** | `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Writes and deletes objects under `contract-live/` | Use a throwaway bucket, or point `S3_ENDPOINT` at MinIO / LocalStack |
-| **turnstile** | `CAPTCHA_PROVIDER=turnstile`, `CAPTCHA_SECRET=1x0000000000000000000000000000000AA` | None | Cloudflare's published always-pass testing secret — no account needed. `2x…` always fails, `3x…` returns "already used" |
+| **turnstile** | `CAPTCHA_SECRET=1x0000000000000000000000000000000AA` | None | Cloudflare's published always-pass testing secret — no account needed. `2x…` always fails, `3x…` returns "already used". `CAPTCHA_PROVIDER` is irrelevant: it gates the middleware, while the verifier reads only the secret |
 
 Prerequisites: Redis reachable (the outbound circuit breaker reads it — `pnpm compose:up`), and
 network egress to the provider. No database is needed.

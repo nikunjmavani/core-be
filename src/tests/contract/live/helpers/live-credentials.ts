@@ -69,10 +69,16 @@ export function hasS3LiveCredentials(): boolean {
   );
 }
 
-/** Turnstile secret. Cloudflare publishes fixed testing secrets, so this needs no account. */
+/**
+ * Turnstile secret. Cloudflare publishes fixed testing secrets, so this needs no account.
+ *
+ * Deliberately does **not** require `CAPTCHA_PROVIDER=turnstile`: that flag gates the captcha
+ * *middleware*, while `verifyTurnstileToken` reads only `CAPTCHA_SECRET`. Requiring it would
+ * skip this check on every environment that keeps captcha disabled at the middleware layer.
+ */
 export function hasTurnstileLiveCredentials(): boolean {
   if (!isProviderOptedIn('turnstile')) return false;
-  return process.env.CAPTCHA_PROVIDER === 'turnstile' && Boolean(process.env.CAPTCHA_SECRET);
+  return Boolean(process.env.CAPTCHA_SECRET);
 }
 
 /** Why a provider slice did not run — surfaced by the skipped-branch spec in each file. */
