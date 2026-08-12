@@ -13,6 +13,356 @@
 
 ---
 
+## 0 · Answers to the architecture review
+
+Twelve questions were raised in design review. Each is answered directly below, with a pointer to
+the section carrying the detail. **Two terms in Q9 could not be resolved from the codebase and are
+flagged rather than guessed.**
+
+| # | Question | Short answer | Detail |
+|---|---|---|---|
+| 1 | Separate realtime core, or inside the existing one? | **Separate process, same repository.** Not a separate repo | §0.1 |
+| 2 | Pros and cons of splitting api / worker / socket | Table of both, honestly | §0.2 |
+| 3 | How does it scale independently? How many instances? | By concurrent connections; formula + worked example | §0.3 |
+| 4 | How is socket different from api and worker? | Different resource, different lifetime, different failure mode | §0.4 |
+| 5 | Redis changes → how does the frontend update? | Seven hops; the socket **announces**, REST **delivers** | §0.5 |
+| 6 | The realtime login flow | Login → REST paint → ticket → upgrade → handshake | §0.6 · §5 |
+| 7 | Multi-organization routing | One socket, every membership; tiering by active org | §0.7 · §7 |
+| 8 | Which event is handled where? | Backend emits, socket routes, frontend invalidates | §0.8 |
+| 9 | Redis / exchanges / publishing | Answered for Redis; **two terms need clarification** | §0.9 |
+| 10 | Can it run locally? | Yes — three terminals, no Docker required | §0.10 |
+| 11 | Was the decision deeply considered? | Four options compared, two reversals recorded | §0.11 |
+| 12 | Which flows must be documented? | All five, written | §0.12 |
+
+### 0.1 · Why a separate realtime service at all
+
+**Short answer:** because a WebSocket is a fundamentally different resource from an HTTP request,
+and putting both in one process couples two things that should move independently.
+
+Concretely, two problems appear the moment sockets live inside `api`:
+
+1. **Fan-out blocks the event loop.** Node is one thread. Broadcasting to 10 000 connected members
+   is a synchronous loop of ~10 000 `send()` calls — roughly 30–100 ms during which **no API request
+   is processed**. Your p99 becomes hostage to your notification volume.
+2. **Every API deploy disconnects every user.** At 10 000 users and five deploys a day that is
+   ~200 000 manufactured reconnect requests, landing on the instance that just cold-started. The
+   second-order effect is worse: teams start deploying less often.
+
+Both are fixed by a **separate process**. Neither requires a separate *repository* — which is why we
+land on "separate service, same repo" (§1.1). The full costing, including the case *for* keeping it
+inside `api`, is in [`realtime-go-service-plan.md`](realtime-go-service-plan.md) Appendix C.
+
+### 0.2 · Splitting into api / worker / socket — pros and cons
+
+**Pros**
+
+- Each service scales on its own signal (§0.3) instead of one dial serving three workloads.
+- An `api` deploy no longer drops sockets; a socket deploy no longer interrupts requests.
+- A socket bug (leaked goroutine, unbounded buffer) cannot take down the API.
+- The socket service holds **no database credentials** — it is disposable by construction.
+- It matches a pattern the repo already runs: `worker` is already a separate process, own Docker
+  target, own Railway service.
+
+**Cons — stated plainly**
+
+- **Three services to deploy, monitor and page on** instead of two.
+- **A second language** in the repo. Real onboarding cost; mitigated by `socket/` being invisible to
+  every TypeScript gate (§2.1) and by `pnpm dev:socket`-style passthroughs (§3 Step 6).
+- **An internal handshake endpoint** exists now, because Go cannot import `AuthorizationService`
+  (§1.2). One more hop, one more thing to secure.
+- **A wire contract** two languages must agree on — mitigated by shared fixtures in one directory
+  (§4.5), which is the main reason same-repo beats separate-repo.
+- **More local moving parts** — three processes instead of two (§0.10).
+
+**Net:** the cons are one-time setup costs. The pros compound with traffic.
+
+### 0.3 · Independent scaling, and how many instances
+
+Each service scales on a different signal:
+
+| Service | Scale on | Bound by |
+|---|---|---|
+| `api` | Request rate, p99 latency | CPU |
+| `worker` | Queue depth, job lag | CPU / job concurrency |
+| **`socket`** | **`realtime_connections_active`** | **Memory** |
+
+**Sizing formula:**
+
+```text
+peak_concurrent_connections = daily_active_users
+                            × fraction_with_a_tab_open      (typically 0.2–0.4 in B2B SaaS)
+                            × tabs_per_user                 (typically 1.5–2.5)
+
+instances = ceil(peak_concurrent / connections_per_instance) + 1   (+1 = headroom for a rolling deploy)
+```
+
+**Worked example — 20 000 DAU:**
+
+```text
+20 000 × 0.3 × 2   = 12 000 peak concurrent connections
+12 000 / 50 000    = 0.24  → 1 instance is enough on capacity
+                   → run 2 for availability, 3 during a deploy window
+```
+
+At **10× that traffic (200 000 DAU → 120 000 concurrent)** it is 3 instances + 1 = **4**. That is the
+point worth making in review: **the socket tier stays small even at large user counts**, because idle
+connections are cheap in Go (~25 KB each). The `api` tier at that scale would be far larger.
+
+**What happens when socket traffic increases** — three regimes, in order:
+
+1. **More connections** → add replicas. Linear, no coordination, no sticky sessions (§2.3).
+2. **More events/second** → every replica decodes every event, so this cost is
+   `events/s × replicas`. Watch `realtime_broadcast_duration_seconds`. Past ~10 000 events/s, shard
+   the stream so each replica reads only the shards it has members for.
+3. **Bigger single broadcasts** → chunk the fan-out and yield to the scheduler; already in the design.
+
+**Autoscale target:** 70% of the *measured* per-instance ceiling. Treat 50 000 as a hypothesis to
+falsify with a load test in week one, not a number to size production on.
+
+### 0.4 · How socket differs from api and worker
+
+| | `api` | `worker` | **`socket`** |
+|---|---|---|---|
+| Unit of work | A request (~50 ms) | A job (seconds–minutes) | **A connection (hours)** |
+| Concurrency | Hundreds in flight | Tens | **Tens of thousands idle** |
+| Bound by | CPU | CPU / IO | **Memory + file descriptors** |
+| Triggered by | The user | A queue | **Another user's action** |
+| If it stops | Total outage | Jobs backlog, catch up later | **Product still works, just not live** |
+| State held | None (per request) | None (per job) | **The connection registry** |
+| Deploy impact | Requests retry | Jobs resume | **Every client reconnects** |
+
+They differ in **every row**. That is the argument for separation — not a preference for
+microservices, but the observation that a process tuned for 50 ms request bursts and a process
+holding 50 000 idle sockets for hours want different memory profiles, different scaling triggers and
+different deploy semantics.
+
+**The honest counter-argument:** at very low connection counts (< ~2 000) none of this is
+measurable, and one fewer service is genuinely simpler. That case is made properly in Appendix C of
+the sibling document — it was considered, not dismissed.
+
+### 0.5 · Redis changes → how the frontend updates
+
+**The exact flow, seven hops.** The critical detail is hop 2: **Postgres commits before anything is
+announced.**
+
+```mermaid
+flowchart LR
+  A["1 · Write<br/>POST /tasks/7/assign"] --> B["2 · Postgres COMMIT<br/><b>truth persisted FIRST</b>"]
+  B --> C["3 · commit-dispatch<br/>task → Redis before<br/>the response returns"]
+  C --> D["4 · XADD rt:events<br/>~200-byte envelope"]
+  D --> E["5 · XREAD<br/>every socket replica"]
+  E --> F["6 · registry + tierFor()<br/>→ ONE frame"]
+  F --> G["7 · invalidateQueries<br/>→ REST refetch"]
+  G -.->|"the data arrives HERE"| A
+  style B fill:#4cc38a,color:#0f1117,stroke:none
+  style F fill:#7aa2ff,color:#0f1117,stroke:none
+```
+
+**The part that surprises people:** the socket frame does **not** carry the data. It carries ids and
+a counter — "notification `ntf_4k2…` happened, unread +1". The browser then refetches over normal
+REST, through auth, RLS, serialization and pagination.
+
+Three consequences, all good:
+
+- **Ordering stops mattering.** "Refetch" is idempotent and commutative; applying deltas in order is
+  not, and that is where realtime UIs rot.
+- **A lost frame costs one stale panel**, repaired on the next refetch — so at-least-once delivery is
+  sufficient and exactly-once (which does not exist) is not needed.
+- **Turning it off is safe.** Cut hops 3–7 and the product degrades to today's refetch-on-navigate.
+
+Full payloads for every hop: §6.
+
+> **Note on the question's framing.** Redis is not the source of truth and nothing watches Redis for
+> *data* changes. Postgres is the truth; Redis carries an **announcement** written after the commit.
+> If a Redis key changed without a Postgres commit, nothing would or should be published — that is
+> deliberate.
+
+### 0.6 · The realtime login flow
+
+Login itself is **unchanged** — plain HTTP, no sockets. The socket opens *afterwards*, and
+deliberately last:
+
+1. `POST /auth/login` → access token + `session_id` cookie.
+2. `GET /notify/notifications` → **the UI is fully usable at this point.**
+3. `POST /realtime/ticket` → a 30-second, single-use ticket.
+4. `GET /v1/socket?ticket=…` → `Origin` checked, ticket redeemed with `GETDEL`.
+5. Socket service calls `POST /internal/realtime/handshake` on `api` → memberships + permissions.
+6. `101 Switching Protocols` → `connection.ready` frame with per-org unread counts.
+
+**Why a ticket rather than the token?** Browsers cannot set headers on `new WebSocket()`, and a token
+in a query string lands in access logs, proxy logs and `Referer`. A 30-second single-use ticket
+bounds the exposure to something already spent.
+
+**Why open the socket last?** Steps 1–2 are a complete working application. If step 3–6 fail, the
+user sees a status dot and nothing else. Realtime is an enhancement, never a dependency.
+
+Full payloads including the handshake exchange and every close code: §5.
+
+### 0.7 · Multiple organizations
+
+**The rule:** *delivery follows membership; presentation follows the active organization.*
+
+One socket is registered under **every** active membership, with one flagged active:
+
+| Situation | What crosses the wire | What the user sees |
+|---|---|---|
+| Event in the **active** org | `summary` + `payload` | Toast, badge, live list update |
+| Event in an **inactive** org they belong to | `summary` **only** — ids and counts | A quiet dot: "Globex (3)" |
+| Event in a **non-member** org | *nothing* — no registry entry exists | Nothing |
+
+Two properties worth stating in review:
+
+- **The summary tier is enforced by the encoder, not the renderer.** In Go the summary path marshals
+  a **different struct with no `Payload` field at all** — not `omitempty`, *absent from the type*.
+  Nothing can assign it and nothing can serialise it. A frontend bug cannot leak another tenant's
+  title, because it never arrives.
+- **Non-membership is structural silence.** There is no filter that could have a bug; there is simply
+  no registry entry, therefore no code path that could deliver.
+
+Switching orgs re-mints the token via `/auth/switch-to-organization` and sends one `active_org.set`
+frame — **same socket, no reconnect**. Full payloads: §7.
+
+### 0.8 · Where each event is handled
+
+| Stage | Where | What it does | What it must NOT do |
+|---|---|---|---|
+| **Emit** | `api` (TS) — `notification-dispatch.service.ts`, post-commit | Build the envelope, schedule it on `commit-dispatch` | Emit before commit; block the request on Redis |
+| **Transport** | Redis Streams | Durable, bounded announcement channel | Carry row data or PII |
+| **Route** | `socket` (Go) — `hub` + `policy` | Membership lookup, `tierFor()`, serialise, send | Touch Postgres; apply business rules |
+| **Apply** | `core-fe` — `realtime-router.ts` | Dedupe, bump the badge, `invalidateQueries` | Write server data into a store |
+| **Deliver** | `api` (TS) — normal REST | Return the authoritative record | — |
+
+**One rule per layer, and they are the comments worth writing:**
+
+```ts
+// api: publish AFTER commit, never inside the transaction, never blocking the request.
+// socket: routing only — no business logic, no database, no writes.
+// frontend: the frame marks a query stale; the REST refetch is what updates the UI.
+```
+
+**Documentation surfaces this repo already enforces**, and where each belongs:
+
+- **TSDoc `@remarks`** on `realtime-publisher.ts` and `realtime.service.ts` — *Algorithm / Failure
+  modes / Side effects*. Gated at 0/0 by `pnpm tsdoc:check`.
+- **Route `schema.summary` / `description` / `tags`** on both new routes — drives OpenAPI, gated by
+  `validate:route-schema-docs`.
+- **`realtime.overview.md`** in each new module folder — the per-folder overview convention.
+- **`src/FLOWS.md`** — the end-to-end flow narrative.
+- **Go doc comments** on every exported symbol in `socket/internal/**`.
+
+### 0.9 · Redis, exchanges and publishing
+
+**What is answerable from the codebase:**
+
+This repo has **no AMQP broker** — no RabbitMQ, no exchanges, no bindings. The messaging substrate
+is **Redis**, used two ways, and it is worth separating them because they are often conflated:
+
+| Use | Mechanism | Purpose |
+|---|---|---|
+| **BullMQ queues** | Redis lists/sorted sets, separate logical DB | Durable *work* — email, webhooks, retention. Pull-based, retried, DLQ'd |
+| **Realtime stream** 🆕 | Redis **Streams** (`XADD` / `XREAD`) | Durable *announcements* — fan-out to socket replicas |
+
+If you are thinking in AMQP terms, the mapping is:
+
+| AMQP concept | Here |
+|---|---|
+| Exchange | The stream key `rt:events` |
+| Routing key | `organization_id` + `scope` **inside** the envelope — every replica reads everything and filters locally |
+| Queue per consumer | Each replica's own cursor into the stream |
+| Ack | Not used — delivery is at-least-once and the client dedupes on the envelope ULID |
+
+**Publishing** is deliberately not a new mechanism: it reuses `scheduleCommitDispatch`, which already
+persists a validated task to Redis **before the HTTP response returns** and replays it via
+`commit-dispatch-recovery.worker` if the process dies. That is a transactional outbox in all but
+name, and building a second durability path alongside it would be a mistake.
+
+> **⚠ Two terms could not be resolved and are not guessed here.** The review notes mention *"BEE
+> exchanges"* and *"GoMakhi publishing"*. Neither appears anywhere in `core-be`, `core-fe`, the
+> dependency tree, or the docs — they may be transcription artifacts, or systems outside these two
+> repositories. **Please confirm what they map to.** If either is a real external broker or
+> publishing pipeline the platform must integrate with, it changes §0.9 and possibly the transport
+> choice, and should be resolved before implementation starts.
+
+### 0.10 · Running it locally
+
+**Yes, and it needs no Docker beyond what you already run.**
+
+```sh
+pnpm compose:up      # Postgres + Redis — already your normal setup
+pnpm dev             # terminal 1 — api
+pnpm dev:worker      # terminal 2 — worker
+pnpm dev:socket      # terminal 3 — socket (Go, hot reload via air)
+```
+
+One-time setup: `brew install go golangci-lint`, plus two `go install` commands (§3 Steps 1–3).
+About ten minutes.
+
+**Is it difficult?** Two genuine friction points, both handled:
+
+1. **Go must be installed.** Mitigated by the `pnpm dev:socket` / `test:socket` / `lint:socket`
+   passthroughs — a TypeScript developer never types a `go` command, and anyone not touching
+   `socket/` never needs the toolchain at all.
+2. **`REDIS_KEY_PREFIX` must match** what `core-be` computes (`core:local:`). `ioredis` applies the
+   prefix transparently; `go-redis` does not. Get it wrong and **nothing is delivered, with no error
+   anywhere** — both processes look healthy. This is the single most likely local-setup failure;
+   `pnpm setup:local` should write the value into the socket service's env file so it cannot drift.
+
+**The checkpoint to aim for first:** with only the socket service running, a hand-written
+`redis-cli XADD core:local:rt:events '*' …` should produce a frame in your browser. That proves
+stream → ingest → registry → tier → socket with `api` not yet involved, and makes every later bug a
+much smaller haystack.
+
+### 0.11 · Whether the decision was actually interrogated
+
+Four options were costed, and **the recommendation changed twice** during the analysis — which is
+the evidence that it was not accepted blindly:
+
+| Option | Verdict | Why |
+|---|---|---|
+| A · Sockets inside `api` | Rejected | Event-loop contention; every deploy drops every socket |
+| B · Separate **Node** service | Viable | Fixes both, no new language. **Best choice below ~20 k connections** |
+| C · Separate **Go** repo (`core-rt`) | Rejected | Contract fixtures in 3 repos, 3 PRs per envelope change |
+| **D · Go service in the `core-be` repo** | **Chosen** | Fixes both, one PR per change, one fixtures directory |
+
+**Two reversals worth recording**, because they came from reading the code rather than reasoning
+from principle:
+
+1. I initially specified a `SETNX`-guarded worker backstop for durable publishing. Reading
+   `commit-dispatch.types.ts` showed the task is **already** persisted to Redis before the response
+   returns and replayed on crash — the backstop was redundant. **Removed.**
+2. I initially proposed protecting the internal handshake with the existing
+   `api-key-auth.middleware.ts`. Reading it showed it resolves an **organization-scoped customer
+   credential** and sets tenant context from it — binding the socket service to an arbitrary tenant.
+   **Replaced** with a dedicated shared secret.
+
+**Open questions that should be answered before or during implementation** — this design is not
+claimed to be finished:
+
+- Peak concurrent connections (§0.3). Without it, instance sizing is guesswork.
+- The two unresolved terms in §0.9.
+- Whether `REALTIME_MAX_SOCKETS_PER_USER = 10` matches real tab behaviour.
+- Presence ("who is online") is **out of scope** — it needs cross-replica state aggregation and is a
+  materially different problem.
+
+**The strongest argument against this design** is that it adds a second language for a service that
+Node could run at your likely scale. That is true, and Option B remains the right answer if the
+connection count turns out to be small. The load test in week one should be treated as a genuine
+decision point, not a formality.
+
+### 0.12 · The flows that were asked for
+
+All five, written with real payloads:
+
+| Flow | Where |
+|---|---|
+| Login → live connection | §5 (payloads) · Appendix B.1 of the sibling doc (diagram) |
+| Realtime data update | §6 |
+| Multi-organization notification + switching | §7 |
+| Event handling points | §0.8 |
+| Frontend update behaviour | §0.5 · §11 |
+
+---
+
 ## 1 · The shape
 
 Three services, two languages, **one repository**:
