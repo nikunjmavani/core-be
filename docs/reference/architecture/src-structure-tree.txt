@@ -1549,7 +1549,8 @@ src/
     │   ├── security/
     │   │   ├── __tests__/
     │   │   │   └── unit/
-    │   │   │   │   └── safe-webhook-url-for-logs.util.unit.test.ts
+    │   │   │   │   ├── safe-webhook-url-for-logs.util.unit.test.ts
+    │   │   │   │   └── webhook-signature.util.unit.test.ts
     │   │   ├── allowed-origins.util.ts
     │   │   ├── anti-enumeration.util.ts
     │   │   ├── bearer-token.util.ts
@@ -2183,6 +2184,7 @@ src/
     │   │   │   ├── bullmq-job-validation.unit.test.ts
     │   │   │   ├── file-magic.util.unit.test.ts
     │   │   │   ├── parse-with-schema.util.unit.test.ts
+    │   │   │   ├── storage-key-traversal.util.unit.test.ts
     │   │   │   └── validation.util.unit.test.ts
     │   ├── validators/
     │   │   ├── idempotency-key.property.unit.test.ts
