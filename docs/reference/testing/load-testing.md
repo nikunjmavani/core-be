@@ -133,8 +133,51 @@ The same signals are observable live via `GET /readyz` (verbose), `GET /metrics`
 
 - **Server**: Run the API with `pnpm dev` (and optionally `pnpm dev:worker` for background jobs).
 - **Postgres + Redis**: Required for auth and org-dependent scenarios. Start with `docker compose up -d` or your own instances.
-- **Database**: Migrations applied (`pnpm db:migrate`). For auth and org scenarios, run full seed: `pnpm db:seed:full` (creates demo user `demo@example.com` / `DemoPassword123!` and a demo organization).
+- **Database**: Migrations applied (`pnpm db:migrate`). For auth and org scenarios, run full seed: `pnpm db:seed:full` (creates demo user `demo@example.com` / `DemoPassword123!` and a demo organization). Set `DEMO_PASSWORD` when seeding — without it the seeder generates a **random** demo password and `pnpm tool:load-test-credentials` then fails with a bare `401 Invalid email or password`.
+- **Pooled identities**: Scenarios that ramp multiple VUs (`user-journey`, `daily-ops`) authenticate as a distinct user per VU from `src/tests/load/k6/data/credential-pool.json`. Generate it with `pnpm db:seed:loadtest`, which bulk-seeds users and stamps a known password on them.
 - **k6**: Install [k6](https://k6.io/docs/get-started/installation/) for scenario runs.
+
+### Required environment for authenticated scenarios
+
+These are **not optional** — without them a scenario fails for reasons unrelated to the health of
+the system under test.
+
+| Variable | Value | Why |
+| --- | --- | --- |
+| `RATE_LIMIT_MAX` | `100000` | The **global** limiter keys on `request.ip`, so **every VU shares one bucket**. At the stock 100/min a journey issuing ~28 requests per iteration is throttled to ~200 of 3,400 requests — a 94% 429 rate. This ceiling is driven by `RATE_LIMIT_MAX` alone; raising it is the supported way to run load. |
+| `RATE_LIMIT_RELAXED_CAPS` | `true` | Lifts the per-route caps that honour it — `STRICT_PUBLIC`, `STRICT_PUBLIC_PER_EMAIL`, `STRICT_AUTHED`, `MODERATE_AUTHED`, `WEBHOOK`. Needed so `setup()` can mint the token pool (120 logins in a row). Forbidden in production by the env schema. `EXPENSIVE_AUTHED` (5 req / 5 min) and `ORGANIZATION_SCOPED_AUTHED` (100 / min) deliberately do **not** honour it; scenarios must stay within those caps rather than have them lifted. |
+| `WEBHOOK_URL_ALLOWLIST` | `example.com` | `user-journey` creates a webhook against `https://example.com`. The SSRF guard checks the allowlist **and resolves the hostname**, so the shipped `hooks.example.com` default cannot work — that host does not exist in DNS. |
+| `NODE_USE_ENV_PROXY` | `1` | Only where outbound traffic goes through a proxy. Node's `fetch` ignores `HTTPS_PROXY` by default, so outbound calls bypass the proxy and receive its block page — which surfaces as a confusing JSON parse error. |
+
+> **Set these in the environment file, not as shell exports.** When `NODE_ENV` names a deploy
+> target, `load-env-files` layers the machine-local file on top with `override: true`, so an
+> exported value loses to whatever that file contains. Running with `NODE_ENV=local` instead makes
+> the machine-local file the primary (loaded with `override: false`), at which point exports win —
+> but then any `DATABASE_URL` / `REDIS_URL` already in your environment also win, so pin those to
+> your local stack in the same command.
+
+A known-good invocation against a local Docker Compose stack:
+
+```bash
+env NODE_ENV=local \
+  DATABASE_URL='postgresql://core:core@localhost:5432/core?sslmode=disable' \
+  REDIS_URL='redis://localhost:6379' \
+  RATE_LIMIT_MAX=100000 \
+  RATE_LIMIT_RELAXED_CAPS=true \
+  WEBHOOK_URL_ALLOWLIST=example.com \
+  pnpm dev
+```
+
+### Pending-upload quota
+
+`user-journey` requests a presigned upload URL each iteration and then deletes it. Each request
+reserves a slot against `UPLOAD_MAX_PENDING_PER_ORGANIZATION` (100); a run that leaks them exhausts
+the cap and every later `request-upload` returns `400 Too many pending uploads`. `pnpm db:seed:bulk`
+also creates pending uploads, so clear the backlog before a long run:
+
+```sql
+DELETE FROM upload.uploads WHERE status = 'PENDING';
+```
 
 ## Quick commands (no auth)
 

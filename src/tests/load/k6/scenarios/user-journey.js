@@ -256,9 +256,13 @@ function phaseWebhooksAndWrites(authed, json) {
       // No `description`: the webhook DTO is strict, so the key it no longer accepts
       // made every create 400 ("Unrecognized key").
       //
-      // example.com, not httpbin.org: the documented load-test setup sets
-      // WEBHOOK_URL_ALLOWLIST=example.com, so the old host was rejected by the SSRF
-      // allowlist — and a load test should not depend on a third-party host anyway.
+      // example.com, not httpbin.org: a load test should not depend on a third-party host.
+      //
+      // This create needs WEBHOOK_URL_ALLOWLIST to contain `example.com`, and the value must be
+      // set in the environment FILE — an exported shell value is overridden by the machine-local
+      // file, which ships `hooks.example.com,*.partner.example.com`. Those defaults cannot work
+      // here either way: the SSRF guard resolves the hostname first, and `hooks.example.com` does
+      // not exist in DNS. See docs/reference/testing/load-testing.md.
       url: `https://example.com/k6-webhook?k6=${suffix}`,
       events: ['*'],
     }),
@@ -304,6 +308,21 @@ function phaseWebhooksAndWrites(authed, json) {
   );
   check(uploadRes, { 'request-upload 2xx': (r) => r.status >= 200 && r.status < 300 });
   checkResponseTime(uploadRes, 600, 'request-upload');
+
+  // Release the pending upload, mirroring the webhook create→delete above. Each request
+  // reserves a slot against a per-scope cap of 100 pending uploads; a journey that only ever
+  // requests URLs exhausts that quota mid-run and every later request-upload 400s with
+  // "Too many pending uploads". Deleting also exercises DELETE /uploads/:upload_id and is
+  // what a real client does when the user abandons an upload.
+  const createdUpload = parseData(uploadRes);
+  if (createdUpload?.id) {
+    const deleteUploadRes = http.del(`${API_PREFIX}/uploads/${createdUpload.id}`, null, {
+      headers: authed,
+      tags: { name: 'delete-upload' },
+    });
+    checkOk(deleteUploadRes, 'delete-upload');
+    checkResponseTime(deleteUploadRes, 400, 'delete-upload');
+  }
   sleep(0.3);
 
   // Patch user settings
