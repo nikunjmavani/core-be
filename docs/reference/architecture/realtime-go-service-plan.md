@@ -92,6 +92,10 @@ flowchart LR
 **The diagram in one sentence:** data always travels the thick line ① between the browser and
 `core-be`; `core-rt` only ever whispers "something changed, ask again" down arrow ⑤.
 
+> **The three end-to-end flows — login, a data update, and multi-org notification with
+> switching — are drawn step by step in [Appendix B](#appendix-b--the-three-end-to-end-flows).**
+> Read them when you want the wire-level ordering; read this section for the shape.
+
 #### The three sides, and what each is forbidden from doing
 
 | | `core-fe` (left) | `core-rt` (middle) | `core-be` (right) |
@@ -990,3 +994,189 @@ Everything else — commit before announce, REST for state and sockets for chang
 publishers targeting people rather than servers, per-instance registries, ping-based liveness, and
 membership-based delivery with active-org presentation — is carried through unchanged, because it is
 correct.
+
+---
+
+## Appendix B — The three end-to-end flows
+
+The same three journeys as the source sequence diagrams, redrawn against **this** design — so every
+step below is one you can actually implement, with the five corrections from Appendix A already
+applied. Read these when you want to know what happens, in order, on the wire.
+
+### B.1 · Login → live connection
+
+From typing a password to holding an authenticated socket. Note that the socket is opened **last**,
+after the first paint — the UI is usable before the live pipe exists, and stays usable if it never
+does.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor U as User
+  participant FE as core-fe
+  participant BE as core-be
+  participant PG as Postgres
+  participant RD as Redis
+  participant RT as core-rt
+
+  rect rgba(122,162,255,0.08)
+    Note over U,PG: PHASE 1 — AUTH (plain HTTP, no sockets involved)
+    U->>FE: email + password
+    FE->>BE: POST /api/v1/auth/login
+    BE->>PG: verify credentials, load memberships
+    PG-->>BE: usr_42 · acme (admin) · globex (member)
+    BE->>PG: create session row
+    BE-->>FE: 201 { access_token · org claim = acme } + session cookie
+    FE->>FE: setAccessToken (memory only) + scheduleTokenRefresh
+  end
+
+  rect rgba(199,146,234,0.09)
+    Note over FE,BE: PHASE 2 — FIRST PAINT (REST, never the socket)
+    FE->>BE: GET /api/v1/notify/notifications (Bearer)
+    BE-->>FE: 200 list → TanStack Query cache
+    Note over FE: UI is fully usable here. Everything below is enhancement.
+  end
+
+  rect rgba(76,195,138,0.09)
+    Note over FE,RT: PHASE 3 — OPEN THE PIPE
+    FE->>BE: POST /api/v1/realtime/ticket (Bearer)
+    BE->>RD: SETEX rt:ticket:abc 30s
+    BE-->>FE: 201 { ticket, socket_url }
+    FE->>RT: GET /v1/socket?ticket=abc + Upgrade + Origin
+    RT->>RT: validate Origin against allowlist (WS is NOT covered by CORS)
+    RT->>BE: POST /internal/realtime/handshake { ticket }
+    BE->>RD: GETDEL rt:ticket:abc — single use, cannot be replayed
+    BE->>PG: verifyActiveAccessToken + memberships + permissions
+    BE-->>RT: 201 { user, expires_at, memberships[], limits }
+    RT->>RT: register socket under EVERY membership; acme = ACTIVE
+    RT-->>FE: 101 Switching Protocols
+    RT-->>FE: frame connection.ready { unread_by_org }
+  end
+
+  Note over FE,RT: Steady state — ping every 25 s.<br/>Connection deadline = token exp + 60 s grace.
+```
+
+**Why the ticket exists.** Browsers cannot set headers on `new WebSocket()`, so the access token
+cannot travel as one. A 30-second single-use ticket keeps the real credential out of URLs, logs and
+`Referer` headers, and `GETDEL` makes redemption atomic — a stolen ticket is already spent.
+
+**Why the socket is opened last.** Phases 1 and 2 give a complete, working application. Phase 3 adds
+liveness. If it fails, the user never notices anything beyond a status dot.
+
+### B.2 · A data update, end to end
+
+The payoff path: a teammate's click reaching your screen. The critical ordering is steps 4–7 —
+Postgres commits **before** anything is announced.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor TM as Teammate
+  participant BE as core-be
+  participant PG as Postgres
+  participant CD as commit-dispatch
+  participant RD as Redis Streams
+  participant RT as core-rt
+  participant FE as core-fe (you)
+
+  TM->>BE: POST /api/v1/tasks/7/assign → usr_42
+  BE->>BE: auth + permission check
+  BE->>PG: BEGIN · UPDATE task · INSERT notification
+  PG-->>BE: COMMIT ✔ — truth persisted FIRST
+  BE->>CD: scheduleCommitDispatch { realtime_event, envelope }
+  CD->>RD: task persisted to Redis BEFORE the response returns
+  BE-->>TM: 201 Created — teammate is done, knows nothing about sockets
+
+  Note over CD,RD: Post-commit. A crash here is replayed by<br/>commit-dispatch-recovery.worker — durable, not fire-and-forget.
+  CD->>RD: XADD rt:events:{shard(acme)}
+
+  RD-->>RT: XREAD — every instance reads every shard
+  RT->>RT: registry: usr_42 in acme → socket #s9
+  RT->>RT: policy: acme IS the active org → TierFull
+  RT-->>FE: ONE frame { id, notification.created, summary, payload }
+
+  FE->>FE: dedupe on envelope id (at-least-once is expected)
+  FE->>FE: setQueryData(unreadCount, +1) ← instant badge
+  FE->>BE: invalidateQueries → GET /notify/notifications
+  BE-->>FE: 200 authoritative list — the server response WINS
+
+  opt user opens the notification
+    FE->>BE: PATCH /notify/notifications/{notification_id}/read
+    Note over FE,BE: A REST write, NOT a socket frame — it needs<br/>validation, idempotency, rate limits, audit and RLS.
+    BE->>PG: read_at = now()
+  end
+```
+
+**Read steps 12–15 carefully — they are the whole frontend design.** The frame does not carry the
+task. It bumps a counter for instant feedback and marks a query stale; the refetch over REST is what
+actually updates the UI. That is why a dropped, duplicated or out-of-order frame costs at most one
+extra refetch, and why we never had to build exactly-once delivery.
+
+**Total latency:** commit → frame on the wire is typically 5–30 ms. The refetch that follows is a
+normal API call, so the badge moves instantly and the list follows within one round trip.
+
+### B.3 · Multi-organization notification and switching
+
+Dakshil is a member of **Acme** (admin, currently active) and **Globex** (member, inactive). He is
+not a member of **Initech**. One socket serves all of it.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor CG as Colleague in Globex
+  participant BE as core-be
+  participant RD as Redis
+  participant RT as core-rt
+  participant FE as core-fe
+  actor U as Dakshil (working in Acme)
+
+  Note over RT: Socket #s9 is registered under BOTH memberships.<br/>acme = ACTIVE · globex = inactive · initech = NO ENTRY AT ALL
+
+  rect rgba(199,146,234,0.10)
+    Note over CG,U: EVENT IN AN INACTIVE ORG — the quiet path
+    CG->>BE: POST /api/v1/docs/9/mention → usr_42 (in Globex)
+    BE->>RD: commit, then XADD rt:events:{shard(globex)}
+    RD-->>RT: XREAD
+    RT->>RT: usr_42 IS a member of globex → deliver
+    RT->>RT: globex ≠ active org → TierSummary
+    RT-->>FE: frame { org_id: globex, summary { resource_id, unread_delta } }
+    Note over RT,FE: payload ABSENT. No title, no document data.<br/>Another tenant's text never crosses the wire.
+    FE->>FE: org_id ≠ activeOrg → badge only; Acme's caches untouched
+    FE-->>U: quiet dot on the switcher — Globex (3)
+  end
+
+  rect rgba(229,165,75,0.10)
+    Note over U,BE: THE SWITCH — new token, same socket
+    U->>FE: click "Globex (3)"
+    FE->>FE: navigate /organization/globex/… (the URL leads)
+    FE->>BE: POST /api/v1/auth/switch-to-organization
+    BE->>BE: verify ACTIVE membership in globex
+    BE-->>FE: 201 new access_token · org = globex · role = member
+    FE->>FE: setAccessToken (guarded by switchGeneration)
+    FE->>RT: frame active_org.set { org_id: globex }
+    RT->>RT: rebuild connState → ONE atomic pointer swap
+    RT-->>FE: frame active_org.changed ✔
+    FE->>BE: GET /api/v1/notify/notifications (globex token)
+    BE-->>FE: 200 globex list → deep-link opens the mention
+    Note over FE,RT: SAME socket throughout. No reconnect, no re-handshake.<br/>Roles now reversed: globex loud, acme quiet.
+  end
+
+  rect rgba(229,101,75,0.09)
+    Note over RT: ISOLATION — an Initech event arrives on its shard.
+    Note over RT: usr_42 has no membership → no registry entry →<br/>no lookup can match. Not filtered out. UNREACHABLE.
+  end
+```
+
+**Three things this flow guarantees:**
+
+1. **Delivery follows membership; presentation follows the active org.** He is reachable in every
+   org he belongs to, but only the active one gets the full experience.
+2. **The summary tier is enforced by the encoder, not the renderer.** `TierSummary` marshals a
+   different, smaller envelope — the privileged fields are never serialized. A frontend bug cannot
+   leak them, because they never arrive.
+3. **Non-membership is structural silence.** Initech is not filtered out by a check that could have
+   a bug; there is simply no registry entry, so no code path exists that could deliver to him.
+
+**The switch never reconnects.** `active_org.set` is a presentation hint that can only select an org
+already in the handshake-issued membership set. Authorization was settled at handshake, and the new
+token — not the frame — is what authorizes the REST reads that follow.
