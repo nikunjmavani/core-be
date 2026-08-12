@@ -7,9 +7,58 @@ Vitest specs under **`src/tests/contract/`** assert our wrappers stay aligned wi
 | Command                     | Purpose                                                                                                          |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `pnpm test:contract`        | Run the contract slice only (`CONTRACT_TESTS_ONLY=true`, dedicated Vitest config, `NODE_OPTIONS=--import=nock`). |
+| `pnpm test:contract:live`   | **Opt-in** run against the real sandbox APIs — see [Live mode](#live-mode-real-provider-apis).                   |
 | `pnpm test:contract:record` | Placeholder hook for optional future **record** mode (see script help).                                          |
 
 Default **`pnpm test`** **excludes** `src/tests/contract/**` so the main suite does not require nock preload ordering.
+
+## Live mode (real provider APIs)
+
+The offline tier proves **our** side of the contract: the request we build and the way we map a
+response. It cannot prove the provider still behaves that way — the fixtures are frozen and the
+network is disabled, so a provider changing its API leaves every test green. `pnpm test:contract:live`
+closes that gap by calling the same wrappers against the real sandbox endpoints and validating the
+responses with the **same Zod contracts** under `schemas/`.
+
+It is excluded from `pnpm test` and from CI. Nothing runs unless you opt in.
+
+### Setup
+
+Two layers, and the order matters:
+
+1. **Provider credentials go in `.env.local`, not the shell.** The env loader deletes any key that is
+   present-but-blank in the file, so `CAPTCHA_SECRET=… pnpm test:contract:live` is silently discarded
+   when `.env.local` carries a blank `CAPTCHA_SECRET=`. Set the value in the file.
+2. **The `CONTRACT_LIVE_*` switches can be shell env**, because they do not appear in `.env.local`.
+
+```bash
+# Opt in per provider — naming a provider is also how you accept its side effects.
+CONTRACT_LIVE_PROVIDERS=stripe,s3 pnpm test:contract:live
+```
+
+| Provider | Set in `.env.local` | Side effect of a run | Notes |
+| --- | --- | --- | --- |
+| **stripe** | `STRIPE_SECRET_KEY=sk_test_…` | Creates and deletes test-mode customers | `sk_live_` is refused outright. Test-mode objects are free and isolated |
+| **resend** | `RESEND_API_KEY=re_…`, `EMAIL_FROM_ADDRESS=` (verified domain) | **Sends a real email** | Also set `CONTRACT_LIVE_EMAIL_TO` to a throwaway inbox |
+| **s3** | `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Writes and deletes objects under `contract-live/` | Use a throwaway bucket, or point `S3_ENDPOINT` at MinIO / LocalStack |
+| **turnstile** | `CAPTCHA_PROVIDER=turnstile`, `CAPTCHA_SECRET=1x0000000000000000000000000000000AA` | None | Cloudflare's published always-pass testing secret — no account needed. `2x…` always fails, `3x…` returns "already used" |
+
+Prerequisites: Redis reachable (the outbound circuit breaker reads it — `pnpm compose:up`), and
+network egress to the provider. No database is needed.
+
+### Safety model
+
+- `CONTRACT_LIVE=true` (set by the script) **and** the provider named in `CONTRACT_LIVE_PROVIDERS`.
+  Credential presence alone is deliberately not enough — developer `.env.local` files routinely carry
+  placeholder `sk_test_…` values, and gating on presence fired real Stripe calls off one.
+- A provider that is not opted in **skips**, it does not fail, so a partial setup is a valid setup.
+  Each spec file carries a companion test that reports *why* it skipped.
+- Never wired into `pnpm test`, `pnpm ci:local`, or any workflow.
+
+### What it does not do
+
+It does not re-record fixtures. `pnpm test:contract:record` is still a placeholder that prints manual
+instructions; refreshing `fixtures/**` from a live run remains a separate piece of work.
 
 ## Runtime wiring
 

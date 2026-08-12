@@ -89,6 +89,7 @@
     "test:all-projects": "vitest run",
     "test:parallel": "tsx tooling/vitest/run-parallel.ts",
     "test:contract": "CONTRACT_TESTS_ENABLED=true NODE_OPTIONS=--import=nock vitest run --config tooling/vitest/contract.config.ts --no-file-parallelism",
+    "test:contract:live": "CONTRACT_LIVE=true vitest run --config tooling/vitest/contract-live.config.ts",
     "test:contract:record": "CONTRACT_RECORD=1 tsx src/scripts/ops/record-contract-fixtures.ts",
     "test:property": "PROPERTY_TESTS_ENABLED=true FAST_CHECK_NUM_RUNS=${FAST_CHECK_NUM_RUNS:-100} vitest run --project property",
     "test:integration": "vitest run --project integration",
