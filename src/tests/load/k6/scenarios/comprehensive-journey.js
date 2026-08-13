@@ -68,6 +68,16 @@ export const options = {
       ],
     },
   },
+  // Deliberately GENEROUS guard rails, not an SLO. This scenario sweeps VUS=1 to VUS=100 and
+  // intentionally brushes the per-org write cap, so 429s are expected traffic rather than
+  // breakage — a tight bound here would fail nightly for reasons unrelated to system health.
+  // Their job is narrower: without any threshold at all k6 exits 0 no matter how badly the API
+  // behaves, so the journey could never fail. Per-operation latency stays on the custom Trend
+  // metrics (mid/sid/wid), which are named dynamically and cannot be declared statically.
+  thresholds: {
+    http_req_failed: ['rate<0.05'],
+    http_req_duration: ['p(95)<2000', 'p(99)<5000'],
+  },
 };
 
 /**

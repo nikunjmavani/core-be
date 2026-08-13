@@ -1814,6 +1814,7 @@ src/
     │   │   │   ├── idempotency-storm.js
     │   │   │   ├── login-smoke.js
     │   │   │   ├── member-role-permission-list.js
+    │   │   │   ├── noisy-neighbour.js
     │   │   │   ├── notification-policy-crud.js
     │   │   │   ├── notification-write.js
     │   │   │   ├── org-membership-list.js
@@ -1822,6 +1823,7 @@ src/
     │   │   │   ├── permission-cached.js
     │   │   │   ├── permission-write.js
     │   │   │   ├── rls-concurrency-beyond-pool.js
+    │   │   │   ├── soak.js
     │   │   │   ├── stripe-webhook-ingest.js
     │   │   │   ├── tenancy-role-write.js
     │   │   │   ├── upload-list.js
@@ -1954,6 +1956,7 @@ src/
     │   │   ├── governance-mode.policy.unit.test.ts
     │   │   ├── hosted-docs-publish.policy.unit.test.ts
     │   │   ├── k6-coverage.policy.unit.test.ts
+    │   │   ├── k6-scenarios.policy.unit.test.ts
     │   │   ├── openapi-drift-check.policy.unit.test.ts
     │   │   ├── password-hashing-dependency.policy.unit.test.ts
     │   │   ├── post-merge-ci.policy.unit.test.ts
