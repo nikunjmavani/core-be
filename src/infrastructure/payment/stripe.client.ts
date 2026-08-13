@@ -18,7 +18,11 @@ let stripeInstance: Stripe | null = null;
  * the fetch-based client only there so production keeps the Node HTTP stack.
  */
 function shouldUseStripeFetchHttpClientForContractOutboundTests(): boolean {
-  return process.env.CONTRACT_TESTS_ENABLED === 'true';
+  // CONTRACT_LIVE covers the live tier as well: the SDK's default client uses Node's `https`
+  // module, which ignores the proxy configuration that `fetch` honours, so a live run behind an
+  // egress proxy receives the proxy's plain-text block page and reports it as
+  // "Invalid JSON received from the Stripe API".
+  return process.env.CONTRACT_TESTS_ENABLED === 'true' || process.env.CONTRACT_LIVE === 'true';
 }
 
 /**
