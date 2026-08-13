@@ -8,6 +8,12 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:
 
+# Least privilege, matching every other scheduled workflow. The run only checks out the repo
+# and uploads a summary artifact (actions/upload-artifact authenticates with the runtime token,
+# not a GITHUB_TOKEN scope), so no write scope is needed.
+permissions:
+  contents: read
+
 concurrency:
   group: load-tests-${{ github.ref }}
   cancel-in-progress: false

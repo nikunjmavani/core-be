@@ -1944,6 +1944,7 @@ src/
     │   │   ├── github-sync-blank-values.policy.unit.test.ts
     │   │   ├── governance-mode.policy.unit.test.ts
     │   │   ├── hosted-docs-publish.policy.unit.test.ts
+    │   │   ├── husky-hooks.policy.unit.test.ts
     │   │   ├── k6-coverage.policy.unit.test.ts
     │   │   ├── openapi-drift-check.policy.unit.test.ts
     │   │   ├── password-hashing-dependency.policy.unit.test.ts
@@ -1960,9 +1961,12 @@ src/
     │   │   ├── reusable-workflow-permissions.policy.unit.test.ts
     │   │   ├── route-param-schemas.policy.unit.test.ts
     │   │   ├── rulesets.policy.unit.test.ts
+    │   │   ├── scheduled-jobs.policy.unit.test.ts
     │   │   ├── setup-mac-tools.policy.unit.test.ts
+    │   │   ├── source-is-text.policy.unit.test.ts
     │   │   ├── stryker-config.policy.unit.test.ts
-    │   │   └── supply-chain-sbom.policy.unit.test.ts
+    │   │   ├── supply-chain-sbom.policy.unit.test.ts
+    │   │   └── test-env-hermeticity.policy.unit.test.ts
     │   ├── composition-root/
     │   │   ├── domain-containers-boot.unit.test.ts
     │   │   ├── domain-services-object-storage.policy.unit.test.ts
