@@ -81,6 +81,9 @@ src/
     │   │   │   ├── refresh-preserves-active-organization.integration.test.ts
     │   │   │   └── refresh-rotates-token-hash.integration.test.ts
     │   │   ├── unit/
+    │   │   │   ├── handlers/
+    │   │   │   │   ├── auth-login.handlers.unit.test.ts
+    │   │   │   │   └── auth-me-context.handlers.unit.test.ts
     │   │   │   ├── auth-me-context.serializer.unit.test.ts
     │   │   │   ├── auth-me-context.service.unit.test.ts
     │   │   │   ├── auth-mfa.validator.unit.test.ts
@@ -454,6 +457,7 @@ src/
     │   │   │   │   │   ├── notification-dispatch.service.unit.test.ts
     │   │   │   │   │   ├── notification-email-content.unit.test.ts
     │   │   │   │   │   ├── notification.controller.unit.test.ts
+    │   │   │   │   │   ├── notification.dto.unit.test.ts
     │   │   │   │   │   ├── notification.job.schema.unit.test.ts
     │   │   │   │   │   ├── notification.queue.unit.test.ts
     │   │   │   │   │   ├── notification.repository.db.unit.test.ts
@@ -942,6 +946,7 @@ src/
     │   │   │   ├── user-routes-rate-limit.policy.unit.test.ts
     │   │   │   ├── user.controller.admin-audit.unit.test.ts
     │   │   │   ├── user.controller.unit.test.ts
+    │   │   │   ├── user.dto.unit.test.ts
     │   │   │   ├── user.repository.db.unit.test.ts
     │   │   │   ├── user.repository.unit.test.ts
     │   │   │   ├── user.serializer.unit.test.ts
