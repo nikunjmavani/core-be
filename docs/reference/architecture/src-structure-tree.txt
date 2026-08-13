@@ -83,9 +83,13 @@ src/
     │   │   │   └── refresh-rotates-token-hash.integration.test.ts
     │   │   ├── unit/
     │   │   │   ├── handlers/
+    │   │   │   │   ├── auth-auth-method.handlers.unit.test.ts
     │   │   │   │   ├── auth-login.handlers.unit.test.ts
     │   │   │   │   ├── auth-me-context.handlers.unit.test.ts
-    │   │   │   │   └── auth-session.handlers.unit.test.ts
+    │   │   │   │   ├── auth-mfa.handlers.unit.test.ts
+    │   │   │   │   ├── auth-oauth.handlers.unit.test.ts
+    │   │   │   │   ├── auth-session.handlers.unit.test.ts
+    │   │   │   │   └── auth-webauthn.handlers.unit.test.ts
     │   │   │   ├── auth-me-context.serializer.unit.test.ts
     │   │   │   ├── auth-me-context.service.unit.test.ts
     │   │   │   ├── auth-mfa.validator.unit.test.ts
@@ -253,6 +257,7 @@ src/
     │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.db.unit.test.ts
     │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.unit.test.ts
     │   │   │       │   ├── webauthn-user-verification.policy.unit.test.ts
+    │   │   │       │   ├── webauthn.dto.unit.test.ts
     │   │   │       │   ├── webauthn.serializer.unit.test.ts
     │   │   │       │   ├── webauthn.service.authenticate-options.unit.test.ts
     │   │   │       │   ├── webauthn.service.credential-management.unit.test.ts
@@ -307,6 +312,7 @@ src/
     │   │   │   │   │   └── plan.integration.test.ts
     │   │   │   │   └── unit/
     │   │   │   │   │   ├── plan.controller.unit.test.ts
+    │   │   │   │   │   ├── plan.dto.unit.test.ts
     │   │   │   │   │   ├── plan.repository.db.unit.test.ts
     │   │   │   │   │   ├── plan.serializer.shape.unit.test.ts
     │   │   │   │   │   ├── plan.serializer.unit.test.ts
@@ -977,6 +983,7 @@ src/
     │   │   │   │   ├── unit/
     │   │   │   │   │   ├── user-data-export-retention.processor.unit.test.ts
     │   │   │   │   │   ├── user-data-export.controller.unit.test.ts
+    │   │   │   │   │   ├── user-data-export.dto.unit.test.ts
     │   │   │   │   │   ├── user-data-export.processor.unit.test.ts
     │   │   │   │   │   ├── user-data-export.serializer.unit.test.ts
     │   │   │   │   │   ├── user-data-export.service.db.unit.test.ts
