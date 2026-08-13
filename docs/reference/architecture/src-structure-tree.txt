@@ -1633,7 +1633,8 @@ src/
     │   ├── live/
     │   │   ├── helpers/
     │   │   │   └── live-credentials.ts
-    │   │   └── live-setup.ts
+    │   │   ├── live-setup.ts
+    │   │   └── stripe.live.contract.test.ts
     │   ├── schemas/
     │   │   ├── resend.schemas.ts
     │   │   ├── s3.schemas.ts
@@ -1645,6 +1646,7 @@ src/
     │   ├── resend.contract.test.ts
     │   ├── s3-object-storage-adapter.contract.test.ts
     │   ├── s3.contract.test.ts
+    │   ├── stripe-webhook-signature.contract.test.ts
     │   ├── stripe-webhook.contract.test.ts
     │   ├── stripe.contract.test.ts
     │   ├── turnstile.contract.test.ts
