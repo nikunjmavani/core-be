@@ -7,9 +7,9 @@ import { hasS3LiveCredentials, describeSkipReason } from './helpers/live-credent
  * adapter the application uses, so a permissions, region, or SDK-behaviour change surfaces
  * here rather than in production.
  *
- * Requires an explicit `CONTRACT_LIVE_S3_ALLOW_WRITES=true` because it writes objects. Point
- * `S3_BUCKET` at a throwaway bucket, or `S3_ENDPOINT` at MinIO / LocalStack. Every key it
- * writes is prefixed `contract-live/` and deleted in `afterAll`.
+ * This run **writes and deletes real objects**, so opting `s3` into `CONTRACT_LIVE_PROVIDERS` is
+ * how you accept that. Point `S3_BUCKET` at a throwaway bucket, or `S3_ENDPOINT` at MinIO /
+ * LocalStack. Every key it writes is prefixed `contract-live/` and deleted in `afterAll`.
  */
 const KEY_PREFIX = 'contract-live/';
 const writtenKeys: string[] = [];
