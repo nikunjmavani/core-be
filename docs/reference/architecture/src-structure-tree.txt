@@ -247,6 +247,7 @@ src/
     │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.db.unit.test.ts
     │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.unit.test.ts
     │   │   │       │   ├── webauthn-user-verification.policy.unit.test.ts
+    │   │   │       │   ├── webauthn.serializer.unit.test.ts
     │   │   │       │   ├── webauthn.service.authenticate-options.unit.test.ts
     │   │   │       │   ├── webauthn.service.credential-management.unit.test.ts
     │   │   │       │   ├── webauthn.service.registration-cap.unit.test.ts
@@ -341,6 +342,7 @@ src/
     │   │   │   │   │   ├── stripe-webhook.job.schema.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook.processor-race.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook.processor.unit.test.ts
+    │   │   │   │   │   ├── stripe-webhook.serializer.unit.test.ts
     │   │   │   │   │   └── stripe-webhook.service.unit.test.ts
     │   │   │   ├── queues/
     │   │   │   │   ├── stripe-webhook-backoff.util.ts
@@ -2166,6 +2168,7 @@ src/
     │   │   ├── infrastructure/
     │   │   │   ├── audit-request-context.util.unit.test.ts
     │   │   │   ├── error-and-agent-helpers.util.unit.test.ts
+    │   │   │   ├── health-operational-metrics.util.unit.test.ts
     │   │   │   ├── list-cap.util.unit.test.ts
     │   │   │   ├── logger.util.unit.test.ts
     │   │   │   ├── postgres-error.util.unit.test.ts
