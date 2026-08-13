@@ -41,14 +41,48 @@ export function hasStripeLiveCredentials(): boolean {
   return process.env.STRIPE_SECRET_KEY?.startsWith('sk_test_') === true;
 }
 
-/** Resend key, a verified sender, and a recipient — a run sends real mail. */
+/**
+ * Resend key, a verified sender, and an explicit recipient — a run sends REAL mail.
+ *
+ * @remarks
+ * This is the only provider in the slice whose side effect reaches a third party who did not opt
+ * in: a message arrives in someone's inbox, from the production verified sending domain, and
+ * cannot be recalled. Resend has no test-mode key prefix to gate on, so the interlock is the
+ * recipient instead — `CONTRACT_LIVE_EMAIL_TO` must be set, and must not be a real user's address
+ * on a domain this deployment sends to in production.
+ *
+ * The required-recipient rule is what makes the blast radius a deliberate choice: there is no
+ * default, so a run cannot fall back to some address baked into config.
+ */
 export function hasResendLiveCredentials(): boolean {
   if (!isProviderOptedIn('resend')) return false;
   return (
     process.env.RESEND_API_KEY?.startsWith('re_') === true &&
     Boolean(process.env.EMAIL_FROM_ADDRESS) &&
-    Boolean(process.env.CONTRACT_LIVE_EMAIL_TO)
+    isDeliverableTestRecipient(process.env.CONTRACT_LIVE_EMAIL_TO)
   );
+}
+
+/**
+ * A recipient that is safe to mail repeatedly.
+ *
+ * @remarks
+ * Accepts a plus-addressed mailbox (`you+contract-live@…`), a sub-addressed one, or any address
+ * on a domain that names itself disposable. Refuses a bare production-looking address, so a
+ * mistyped or copy-pasted customer address cannot receive test mail.
+ */
+function isDeliverableTestRecipient(recipient: string | undefined): boolean {
+  if (!recipient?.includes('@')) return false;
+  if (process.env.CONTRACT_LIVE_EMAIL_ALLOW_ANY === 'true') return true;
+  const [localPart = '', domain = ''] = recipient.split('@');
+  // Plus-addressing routes back to the same inbox and is trivially filterable.
+  if (localPart.includes('+')) return true;
+  // RFC 2606 reserves both forms: the `.test` / `.example` / `.invalid` / `.localhost` TLDs, and
+  // the second-level `example.com|net|org`. Disposable-inbox providers are listed alongside them.
+  const reservedTopLevel = /\.(test|testing|example|invalid|localhost)$/i;
+  const reservedOrDisposableDomain =
+    /(^|\.)(example\.(com|net|org)|mailinator\.com|mailsac\.com)$/i;
+  return reservedTopLevel.test(domain) || reservedOrDisposableDomain.test(domain);
 }
 
 /** The throwaway inbox the live Resend check delivers to. */
