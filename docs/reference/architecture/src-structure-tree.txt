@@ -2032,6 +2032,7 @@ src/
     │   │   ├── i18n.middleware.hook.unit.test.ts
     │   │   ├── idempotency-body-cap.policy.unit.test.ts
     │   │   ├── idempotency.middleware.unit.test.ts
+    │   │   ├── method-status-policy.middleware.unit.test.ts
     │   │   ├── metrics.middleware.unit.test.ts
     │   │   ├── middleware-order.unit.test.ts
     │   │   ├── ops.middleware.unit.test.ts
@@ -2041,6 +2042,7 @@ src/
     │   │   ├── rate-limit-presets.constants.unit.test.ts
     │   │   ├── rate-limit-telemetry-throttle.unit.test.ts
     │   │   ├── rate-limit.middleware.unit.test.ts
+    │   │   ├── recent-step-up.middleware.unit.test.ts
     │   │   ├── request-lifecycle.middleware.unit.test.ts
     │   │   ├── request-statement-timeout.middleware.unit.test.ts
     │   │   ├── response-format.middleware.hook.unit.test.ts
@@ -2133,7 +2135,8 @@ src/
     │   │   │   ├── response-format-envelope.util.unit.test.ts
     │   │   │   ├── response-format-payload.util.unit.test.ts
     │   │   │   ├── response.util.unit.test.ts
-    │   │   │   └── trust-proxy.util.unit.test.ts
+    │   │   │   ├── trust-proxy.util.unit.test.ts
+    │   │   │   └── user-agent.util.unit.test.ts
     │   │   ├── idempotency/
     │   │   │   ├── idempotency-fingerprint.util.unit.test.ts
     │   │   │   ├── idempotency-key.util.unit.test.ts
@@ -2143,6 +2146,7 @@ src/
     │   │   │   ├── public-id.util.unit.test.ts
     │   │   │   └── uuid.util.unit.test.ts
     │   │   ├── infrastructure/
+    │   │   │   ├── audit-record.util.unit.test.ts
     │   │   │   ├── audit-request-context.util.unit.test.ts
     │   │   │   ├── list-cap.util.unit.test.ts
     │   │   │   ├── logger.util.unit.test.ts
@@ -2166,7 +2170,8 @@ src/
     │   │   │   ├── webhook-outbound-fetch.util.unit.test.ts
     │   │   │   └── webhook-url.util.unit.test.ts
     │   │   ├── text/
-    │   │   │   └── email.util.unit.test.ts
+    │   │   │   ├── email.util.unit.test.ts
+    │   │   │   └── html-escape.util.unit.test.ts
     │   │   └── validation/
     │   │   │   ├── bullmq-job-validation.unit.test.ts
     │   │   │   ├── file-magic.util.unit.test.ts
