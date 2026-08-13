@@ -20,12 +20,6 @@ export default defineConfig({
       resolve(projectRoot, 'src/tests/contract/contract-vitest-setup.ts'),
     ],
     include: ['src/tests/contract/**/*.test.ts'],
-    /**
-     * `live/**` is the opt-in real-API slice (`pnpm test:contract:live`, its own config). It must
-     * never load here: this tier preloads nock and runs with `CONTRACT_TESTS_ENABLED=true`, which
-     * overwrites every third-party credential with a placeholder.
-     */
-    exclude: ['**/node_modules/**', '**/dist/**', 'src/tests/contract/live/**'],
     /** Preload nock in fork workers so `http`/`https` are patched before Stripe loads (see nock ESM docs). */
     execArgv: ['--import=nock'],
     server: {
