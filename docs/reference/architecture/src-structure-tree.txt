@@ -1633,7 +1633,8 @@ src/
     │   ├── live/
     │   │   ├── helpers/
     │   │   │   └── live-credentials.ts
-    │   │   └── live-setup.ts
+    │   │   ├── live-setup.ts
+    │   │   └── s3.live.contract.test.ts
     │   ├── schemas/
     │   │   ├── resend.schemas.ts
     │   │   ├── s3.schemas.ts

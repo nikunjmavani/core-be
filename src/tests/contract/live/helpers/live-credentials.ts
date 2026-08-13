@@ -58,15 +58,38 @@ export function liveEmailRecipient(): string {
   return recipient;
 }
 
-/** S3 credentials — the run writes and deletes objects, so prefer a throwaway bucket or MinIO. */
+/**
+ * S3 credentials, refusing a bucket that looks like production.
+ *
+ * @remarks
+ * Unlike Stripe, S3 has no `sk_test_`-style marker distinguishing a sandbox from the real thing —
+ * the same credentials reach both. This run writes AND deletes objects, and cleanup is
+ * best-effort, so a run pointed at the production bucket leaves debris in customer storage.
+ *
+ * The guard is therefore on the bucket name: opting in is not enough unless the bucket also
+ * declares itself disposable. Set `CONTRACT_LIVE_S3_ALLOW_WRITES=true` to override for a bucket
+ * whose name does not follow the convention (a MinIO or LocalStack endpoint, for instance).
+ */
 export function hasS3LiveCredentials(): boolean {
   if (!isProviderOptedIn('s3')) return false;
-  return (
+  const hasCredentials =
     Boolean(process.env.S3_BUCKET) &&
     Boolean(process.env.S3_REGION) &&
     Boolean(process.env.S3_ACCESS_KEY_ID) &&
-    Boolean(process.env.S3_SECRET_ACCESS_KEY)
-  );
+    Boolean(process.env.S3_SECRET_ACCESS_KEY);
+  return hasCredentials && isDisposableS3Target();
+}
+
+/** Bucket names that read as throwaway, plus a local object-storage endpoint. */
+const DISPOSABLE_BUCKET_PATTERN =
+  /(^|[-_.])(test|testing|dev|development|sandbox|staging|local|tmp|temp|scratch|ci)([-_.]|$)/i;
+
+function isDisposableS3Target(): boolean {
+  if (process.env.CONTRACT_LIVE_S3_ALLOW_WRITES === 'true') return true;
+  // A local endpoint (MinIO / LocalStack) is disposable regardless of bucket name.
+  const endpoint = process.env.S3_ENDPOINT ?? '';
+  if (/localhost|127\.0\.0\.1|minio|localstack/i.test(endpoint)) return true;
+  return DISPOSABLE_BUCKET_PATTERN.test(process.env.S3_BUCKET ?? '');
 }
 
 /**
