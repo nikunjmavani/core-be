@@ -376,6 +376,7 @@ src/
     │   │   │       │   ├── subscription-happy.integration.test.ts
     │   │   │       │   └── subscription.integration.test.ts
     │   │   │       └── unit/
+    │   │   │       │   ├── billing-account.serializer.unit.test.ts
     │   │   │       │   ├── payment-provider.port.unit.test.ts
     │   │   │       │   ├── stripe-payment-provider.email.unit.test.ts
     │   │   │       │   ├── subscription-period.util.unit.test.ts
@@ -955,7 +956,8 @@ src/
     │   │   │   │   │   ├── user-data-export.processor.unit.test.ts
     │   │   │   │   │   ├── user-data-export.serializer.unit.test.ts
     │   │   │   │   │   ├── user-data-export.service.db.unit.test.ts
-    │   │   │   │   │   └── user-data-export.service.unit.test.ts
+    │   │   │   │   │   ├── user-data-export.service.unit.test.ts
+    │   │   │   │   │   └── user-data-export.validator.unit.test.ts
     │   │   │   │   └── user-data-export.test.ts
     │   │   │   ├── queues/
     │   │   │   │   ├── user-data-export.job.schema.ts

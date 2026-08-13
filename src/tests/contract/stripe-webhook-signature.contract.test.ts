@@ -66,7 +66,8 @@ describe('Stripe webhook signature verification contract', () => {
   test('rejects a payload signed with a different secret', () => {
     const signature = buildStripeWebhookTestSignatureHeader({
       rawPayload: RAW_PAYLOAD,
-      webhookSigningSecret: 'whsec_an_attacker_controlled_secret_at_least_32_chars_long',
+      // Not `whsec_`-prefixed on purpose — see the secret-scanning policy test.
+      webhookSigningSecret: 'an-attacker-controlled-secret-at-least-32-chars-long',
     });
 
     expect(() => constructStripeWebhookEvent(RAW_PAYLOAD, signature)).toThrow(
