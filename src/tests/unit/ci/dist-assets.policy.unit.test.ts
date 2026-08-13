@@ -17,8 +17,17 @@ import { describe, expect, it } from 'vitest';
  * test pins that arrangement from both ends — the script must run in `build`, and the Dockerfile
  * must NOT re-copy an asset the script already places, because a second copy is a second list that
  * can silently diverge.
+ *
+ * Both images are checked, not just the API one. `Dockerfile.worker` mirrors the API image's
+ * runtime stage, and an earlier revision of this test looked at `Dockerfile` alone — so removing
+ * the duplicate COPY from one and not the other passed here and failed in CI on
+ * `check-dockerfile-sync.mjs`. That is the drift this test exists to prevent, slipping through the
+ * test itself.
  */
-const DOCKERFILE_PATH = join(process.cwd(), 'Dockerfile');
+const DOCKERFILE_PATHS = [
+  join(process.cwd(), 'Dockerfile'),
+  join(process.cwd(), 'Dockerfile.worker'),
+];
 const COPY_SCRIPT_PATH = join(process.cwd(), 'tooling/build/copy-dist-assets.mjs');
 const PACKAGE_JSON_PATH = join(process.cwd(), 'package.json');
 
@@ -29,7 +38,10 @@ const DOCKERFILE_INTO_DIST_COPY = /^COPY\s+--from=build\s+\/app\/(\S+)\s+\.\/dis
 const MANIFEST_ENTRY = /\{\s*from:\s*'([^']+)',\s*to:\s*'([^']+)'\s*\}/g;
 
 describe('dist runtime assets', () => {
-  const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
+  const dockerfiles = DOCKERFILE_PATHS.map((path) => ({
+    name: path.split('/').pop() ?? path,
+    contents: readFileSync(path, 'utf8'),
+  }));
   const copyScript = readFileSync(COPY_SCRIPT_PATH, 'utf8');
 
   it('runs the copy script as the last step of pnpm build', () => {
@@ -50,29 +62,42 @@ describe('dist runtime assets', () => {
     expect(copyScript).toContain('src/infrastructure/resilience/lua');
   });
 
-  it('copies the built dist directory in the runtime stage', () => {
-    expect(dockerfile).toMatch(/^COPY\s+--from=build\s+\/app\/dist\s+\.\/dist\s*$/m);
-  });
+  it.each(DOCKERFILE_PATHS.map((path) => path.split('/').pop()))(
+    '%s copies the built dist directory in its runtime stage',
+    (name) => {
+      const { contents } = dockerfiles.find((entry) => entry.name === name) ?? { contents: '' };
 
-  it('does NOT re-copy any asset the build script already places into dist', () => {
-    // The point of the fix. `pnpm build` runs in the build stage, so `/app/dist` is already
-    // complete by the time the runtime stage copies it. A `COPY … ./dist/<something>` line here
-    // would be a second list of assets, free to drift from the script's — which is exactly the
-    // divergence that let production stay healthy while local `pnpm start` crashed.
-    const duplicated = [...dockerfile.matchAll(DOCKERFILE_INTO_DIST_COPY)].map(
-      (match) => `${match[1]} → dist/${match[2]}`,
-    );
+      expect(contents).toMatch(/^COPY\s+--from=build\s+\/app\/dist\s+\.\/dist\s*$/m);
+    },
+  );
 
-    expect(duplicated).toEqual([]);
-  });
+  it.each(DOCKERFILE_PATHS.map((path) => path.split('/').pop()))(
+    '%s does NOT re-copy any asset the build script already places into dist',
+    (name) => {
+      // The point of the fix. `pnpm build` runs in the build stage, so `/app/dist` is already
+      // complete by the time the runtime stage copies it. A `COPY … ./dist/<something>` line here
+      // would be a second list of assets, free to drift from the script's — which is exactly the
+      // divergence that let production stay healthy while local `pnpm start` crashed.
+      const { contents } = dockerfiles.find((entry) => entry.name === name) ?? { contents: '' };
+      const duplicated = [...contents.matchAll(DOCKERFILE_INTO_DIST_COPY)].map(
+        (match) => `${match[1]} → dist/${match[2]}`,
+      );
 
-  it('builds before copying dist, so the script has run', () => {
-    // Ordering matters: if the runtime stage ever copied dist from a stage that had not run
-    // `pnpm build`, the assets would be missing again with no other signal.
-    const buildIndex = dockerfile.indexOf('pnpm build');
-    const copyDistIndex = dockerfile.search(/^COPY\s+--from=build\s+\/app\/dist\s+\.\/dist\s*$/m);
+      expect(duplicated).toEqual([]);
+    },
+  );
 
-    expect(buildIndex).toBeGreaterThan(-1);
-    expect(copyDistIndex).toBeGreaterThan(buildIndex);
-  });
+  it.each(DOCKERFILE_PATHS.map((path) => path.split('/').pop()))(
+    '%s builds before copying dist, so the script has run',
+    (name) => {
+      // Ordering matters: if the runtime stage ever copied dist from a stage that had not run
+      // `pnpm build`, the assets would be missing again with no other signal.
+      const { contents } = dockerfiles.find((entry) => entry.name === name) ?? { contents: '' };
+      const buildIndex = contents.indexOf('pnpm build');
+      const copyDistIndex = contents.search(/^COPY\s+--from=build\s+\/app\/dist\s+\.\/dist\s*$/m);
+
+      expect(buildIndex).toBeGreaterThan(-1);
+      expect(copyDistIndex).toBeGreaterThan(buildIndex);
+    },
+  );
 });

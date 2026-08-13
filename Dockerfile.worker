@@ -66,8 +66,10 @@ RUN apk update && apk upgrade --no-cache
 
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
+# `dist/` already contains every runtime asset: the build stage runs `pnpm build`, which ends in
+# tooling/build/copy-dist-assets.mjs. Re-copying them here would be a second, silently divergent
+# source of truth — the script is the only one.
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/src/infrastructure/resilience/lua ./dist/src/infrastructure/resilience/lua
 COPY --from=build /app/migrations ./migrations
 COPY --from=build /app/src/shared/locales ./src/shared/locales
 COPY --from=build /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
