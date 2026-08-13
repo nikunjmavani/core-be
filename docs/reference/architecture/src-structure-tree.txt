@@ -1630,6 +1630,10 @@ src/
     │   │   ├── register-contract-test-hooks.ts
     │   │   ├── stripe-form.ts
     │   │   └── stripe-signature.ts
+    │   ├── live/
+    │   │   ├── helpers/
+    │   │   │   └── live-credentials.ts
+    │   │   └── live-setup.ts
     │   ├── schemas/
     │   │   ├── resend.schemas.ts
     │   │   ├── s3.schemas.ts
