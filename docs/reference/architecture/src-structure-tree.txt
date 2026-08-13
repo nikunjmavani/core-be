@@ -673,6 +673,7 @@ src/
     │   │   │   │   │   ├── membership-routes-rate-limit.policy.unit.test.ts
     │   │   │   │   │   ├── membership-tombstone-retention.processor.boundary.unit.test.ts
     │   │   │   │   │   ├── membership.controller.unit.test.ts
+    │   │   │   │   │   ├── membership.dto.unit.test.ts
     │   │   │   │   │   ├── membership.repository.db.unit.test.ts
     │   │   │   │   │   ├── membership.serializer.unit.test.ts
     │   │   │   │   │   ├── membership.service.cache-invalidation.unit.test.ts
@@ -746,6 +747,7 @@ src/
     │   │   │   │   │   │   ├── organization-api-key-tombstone-retention.processor.boundary.unit.test.ts
     │   │   │   │   │   │   ├── organization-api-key-tombstone-retention.worker.unit.test.ts
     │   │   │   │   │   │   ├── organization-api-key.controller.unit.test.ts
+    │   │   │   │   │   │   ├── organization-api-key.dto.unit.test.ts
     │   │   │   │   │   │   ├── organization-api-key.repository.db.unit.test.ts
     │   │   │   │   │   │   ├── organization-api-key.repository.prefix-cap.unit.test.ts
     │   │   │   │   │   │   ├── organization-api-key.serializer.no-secret.unit.test.ts
@@ -886,6 +888,7 @@ src/
     │   │   │   ├── upload-tombstone-retention.processor.boundary.unit.test.ts
     │   │   │   ├── upload-tombstone-retention.worker.unit.test.ts
     │   │   │   ├── upload.controller.unit.test.ts
+    │   │   │   ├── upload.dto.unit.test.ts
     │   │   │   ├── upload.offboarding.unit.test.ts
     │   │   │   ├── upload.repository.db.unit.test.ts
     │   │   │   ├── upload.repository.unit.test.ts
