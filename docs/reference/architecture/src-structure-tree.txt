@@ -2008,7 +2008,8 @@ src/
     │   │   │   ├── migration-execution-mode.unit.test.ts
     │   │   │   ├── retention-database.context.unit.test.ts
     │   │   │   ├── transaction.util.db.unit.test.ts
-    │   │   │   └── worker-database-guard.unit.test.ts
+    │   │   │   ├── worker-database-guard.unit.test.ts
+    │   │   │   └── worker-database-guard.util.unit.test.ts
     │   │   ├── mail/
     │   │   │   ├── __snapshots__/
     │   │   │   │   └── email-template.snapshot.unit.test.ts.snap
@@ -2159,6 +2160,7 @@ src/
     │   │   │   └── uuid.util.unit.test.ts
     │   │   ├── infrastructure/
     │   │   │   ├── audit-request-context.util.unit.test.ts
+    │   │   │   ├── error-and-agent-helpers.util.unit.test.ts
     │   │   │   ├── list-cap.util.unit.test.ts
     │   │   │   ├── logger.util.unit.test.ts
     │   │   │   ├── postgres-error.util.unit.test.ts
