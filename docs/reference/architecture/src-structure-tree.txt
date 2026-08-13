@@ -247,6 +247,7 @@ src/
     │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.db.unit.test.ts
     │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.unit.test.ts
     │   │   │       │   ├── webauthn-user-verification.policy.unit.test.ts
+    │   │   │       │   ├── webauthn.serializer.unit.test.ts
     │   │   │       │   ├── webauthn.service.authenticate-options.unit.test.ts
     │   │   │       │   ├── webauthn.service.credential-management.unit.test.ts
     │   │   │       │   ├── webauthn.service.registration-cap.unit.test.ts
@@ -341,6 +342,7 @@ src/
     │   │   │   │   │   ├── stripe-webhook.job.schema.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook.processor-race.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook.processor.unit.test.ts
+    │   │   │   │   │   ├── stripe-webhook.serializer.unit.test.ts
     │   │   │   │   │   └── stripe-webhook.service.unit.test.ts
     │   │   │   ├── queues/
     │   │   │   │   ├── stripe-webhook-backoff.util.ts
@@ -376,6 +378,7 @@ src/
     │   │   │       │   ├── subscription-happy.integration.test.ts
     │   │   │       │   └── subscription.integration.test.ts
     │   │   │       └── unit/
+    │   │   │       │   ├── billing-account.serializer.unit.test.ts
     │   │   │       │   ├── payment-provider.port.unit.test.ts
     │   │   │       │   ├── stripe-payment-provider.email.unit.test.ts
     │   │   │       │   ├── subscription-period.util.unit.test.ts
@@ -955,7 +958,8 @@ src/
     │   │   │   │   │   ├── user-data-export.processor.unit.test.ts
     │   │   │   │   │   ├── user-data-export.serializer.unit.test.ts
     │   │   │   │   │   ├── user-data-export.service.db.unit.test.ts
-    │   │   │   │   │   └── user-data-export.service.unit.test.ts
+    │   │   │   │   │   ├── user-data-export.service.unit.test.ts
+    │   │   │   │   │   └── user-data-export.validator.unit.test.ts
     │   │   │   │   └── user-data-export.test.ts
     │   │   │   ├── queues/
     │   │   │   │   ├── user-data-export.job.schema.ts
@@ -1549,7 +1553,8 @@ src/
     │   ├── security/
     │   │   ├── __tests__/
     │   │   │   └── unit/
-    │   │   │   │   └── safe-webhook-url-for-logs.util.unit.test.ts
+    │   │   │   │   ├── safe-webhook-url-for-logs.util.unit.test.ts
+    │   │   │   │   └── webhook-signature.util.unit.test.ts
     │   │   ├── allowed-origins.util.ts
     │   │   ├── anti-enumeration.util.ts
     │   │   ├── bearer-token.util.ts
@@ -1996,7 +2001,8 @@ src/
     │   │   │   ├── migration-execution-mode.unit.test.ts
     │   │   │   ├── retention-database.context.unit.test.ts
     │   │   │   ├── transaction.util.db.unit.test.ts
-    │   │   │   └── worker-database-guard.unit.test.ts
+    │   │   │   ├── worker-database-guard.unit.test.ts
+    │   │   │   └── worker-database-guard.util.unit.test.ts
     │   │   ├── mail/
     │   │   │   ├── __snapshots__/
     │   │   │   │   └── email-template.snapshot.unit.test.ts.snap
@@ -2126,13 +2132,18 @@ src/
     │   │   │   └── global-admin-role.util.unit.test.ts
     │   │   ├── http/
     │   │   │   ├── api-versioning.util.unit.test.ts
+    │   │   │   ├── catalog-cache-and-audit-context.util.unit.test.ts
     │   │   │   ├── fastify-server.util.unit.test.ts
     │   │   │   ├── list-query.util.unit.test.ts
+    │   │   │   ├── pagination-cursor-conditions.util.unit.test.ts
+    │   │   │   ├── pagination-cursor.util.unit.test.ts
     │   │   │   ├── pagination.util.unit.test.ts
+    │   │   │   ├── request-security-helpers.util.unit.test.ts
     │   │   │   ├── request.util.unit.test.ts
     │   │   │   ├── response-format-envelope.util.unit.test.ts
     │   │   │   ├── response-format-payload.util.unit.test.ts
     │   │   │   ├── response.util.unit.test.ts
+    │   │   │   ├── trust-proxy-and-idempotency-gate.util.unit.test.ts
     │   │   │   └── trust-proxy.util.unit.test.ts
     │   │   ├── idempotency/
     │   │   │   ├── idempotency-fingerprint.util.unit.test.ts
@@ -2144,6 +2155,8 @@ src/
     │   │   │   └── uuid.util.unit.test.ts
     │   │   ├── infrastructure/
     │   │   │   ├── audit-request-context.util.unit.test.ts
+    │   │   │   ├── error-and-agent-helpers.util.unit.test.ts
+    │   │   │   ├── health-operational-metrics.util.unit.test.ts
     │   │   │   ├── list-cap.util.unit.test.ts
     │   │   │   ├── logger.util.unit.test.ts
     │   │   │   ├── postgres-error.util.unit.test.ts
@@ -2164,14 +2177,18 @@ src/
     │   │   │   ├── sensitive-redaction.util.unit.test.ts
     │   │   │   ├── turnstile-verifier.unit.test.ts
     │   │   │   ├── webhook-outbound-fetch.util.unit.test.ts
+    │   │   │   ├── webhook-url-resolution.util.unit.test.ts
     │   │   │   └── webhook-url.util.unit.test.ts
     │   │   ├── text/
     │   │   │   └── email.util.unit.test.ts
-    │   │   └── validation/
+    │   │   ├── validation/
     │   │   │   ├── bullmq-job-validation.unit.test.ts
     │   │   │   ├── file-magic.util.unit.test.ts
     │   │   │   ├── parse-with-schema.util.unit.test.ts
+    │   │   │   ├── storage-key-traversal.util.unit.test.ts
     │   │   │   └── validation.util.unit.test.ts
+    │   │   ├── i18n-and-auth-helpers.util.unit.test.ts
+    │   │   └── idempotency-and-media-helpers.util.unit.test.ts
     │   ├── validators/
     │   │   ├── idempotency-key.property.unit.test.ts
     │   │   ├── locale-hardcoded-fallbacks.policy.unit.test.ts
