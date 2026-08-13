@@ -25,6 +25,7 @@ src/
     │   │   │   ├── audit-export.processor.unit.test.ts
     │   │   │   ├── audit.controller.admin-read-audit.unit.test.ts
     │   │   │   ├── audit.controller.unit.test.ts
+    │   │   │   ├── audit.dto.unit.test.ts
     │   │   │   ├── audit.repository.boundary.db.unit.test.ts
     │   │   │   ├── audit.repository.db.unit.test.ts
     │   │   │   ├── audit.serializer.metadata-strip.unit.test.ts
@@ -83,12 +84,14 @@ src/
     │   │   ├── unit/
     │   │   │   ├── handlers/
     │   │   │   │   ├── auth-login.handlers.unit.test.ts
-    │   │   │   │   └── auth-me-context.handlers.unit.test.ts
+    │   │   │   │   ├── auth-me-context.handlers.unit.test.ts
+    │   │   │   │   └── auth-session.handlers.unit.test.ts
     │   │   │   ├── auth-me-context.serializer.unit.test.ts
     │   │   │   ├── auth-me-context.service.unit.test.ts
     │   │   │   ├── auth-mfa.validator.unit.test.ts
     │   │   │   ├── auth-routes-rate-limit.policy.unit.test.ts
     │   │   │   ├── auth.controller.unit.test.ts
+    │   │   │   ├── auth.dto.unit.test.ts
     │   │   │   ├── auth.routes.mfa-login-captcha.unit.test.ts
     │   │   │   ├── auth.routes.session-revoke-stepup.unit.test.ts
     │   │   │   ├── auth.serializer.unit.test.ts
@@ -392,6 +395,7 @@ src/
     │   │   │       │   ├── subscription-seat-sync.queue.unit.test.ts
     │   │   │       │   ├── subscription.controller.auth-matrix.unit.test.ts
     │   │   │       │   ├── subscription.controller.unit.test.ts
+    │   │   │       │   ├── subscription.dto.unit.test.ts
     │   │   │       │   ├── subscription.repository.db.unit.test.ts
     │   │   │       │   ├── subscription.repository.stripe-sync.unit.test.ts
     │   │   │       │   ├── subscription.repository.unit.test.ts
@@ -506,6 +510,7 @@ src/
     │   │   │       │   ├── webhook-tombstone-retention.processor.boundary.unit.test.ts
     │   │   │       │   ├── webhook-tombstone-retention.worker.unit.test.ts
     │   │   │       │   ├── webhook.controller.unit.test.ts
+    │   │   │       │   ├── webhook.dto.unit.test.ts
     │   │   │       │   ├── webhook.repository.creation-quota-concurrency.db.unit.test.ts
     │   │   │       │   ├── webhook.repository.db.unit.test.ts
     │   │   │       │   ├── webhook.repository.secret-rotation.db.unit.test.ts
@@ -633,6 +638,7 @@ src/
     │   │   │   │   ├── __tests__/
     │   │   │   │   │   └── unit/
     │   │   │   │   │   │   ├── member-role-permission.controller.unit.test.ts
+    │   │   │   │   │   │   ├── member-role-permission.dto.unit.test.ts
     │   │   │   │   │   │   ├── member-role-permission.repository.bound.policy.unit.test.ts
     │   │   │   │   │   │   ├── member-role-permission.serializer.unit.test.ts
     │   │   │   │   │   │   ├── member-role-permission.service.owner-role-guard.unit.test.ts
@@ -690,6 +696,7 @@ src/
     │   │   │   │   │   │   ├── events/
     │   │   │   │   │   │       └── member-invitation.event-handlers.unit.test.ts
     │   │   │   │   │   │   ├── member-invitation.controller.unit.test.ts
+    │   │   │   │   │   │   ├── member-invitation.dto.unit.test.ts
     │   │   │   │   │   │   ├── member-invitation.repository.db.unit.test.ts
     │   │   │   │   │   │   ├── member-invitation.serializer.unit.test.ts
     │   │   │   │   │   │   ├── member-invitation.service.unit.test.ts
@@ -782,6 +789,7 @@ src/
     │   │   │   │   │   ├── unit/
     │   │   │   │   │   │   ├── organization-notification-policy-tombstone-retention.processor.boundary.unit.test.ts
     │   │   │   │   │   │   ├── organization-notification-policy.controller.unit.test.ts
+    │   │   │   │   │   │   ├── organization-notification-policy.dto.unit.test.ts
     │   │   │   │   │   │   ├── organization-notification-policy.serializer.unit.test.ts
     │   │   │   │   │   │   ├── organization-notification-policy.service.unit.test.ts
     │   │   │   │   │   │   └── organization-notification-policy.validator.unit.test.ts
@@ -807,6 +815,7 @@ src/
     │   │   │   │   ├── __tests__/
     │   │   │   │   │   ├── unit/
     │   │   │   │   │   │   ├── organization-settings.controller.unit.test.ts
+    │   │   │   │   │   │   ├── organization-settings.dto.unit.test.ts
     │   │   │   │   │   │   ├── organization-settings.serializer.unit.test.ts
     │   │   │   │   │   │   ├── organization-settings.service.unit.test.ts
     │   │   │   │   │   │   └── organization-settings.validator.unit.test.ts
@@ -1002,6 +1011,7 @@ src/
     │   │   │   │   ├── integration/
     │   │   │   │   │   └── user-notification-preferences.integration.test.ts
     │   │   │   │   └── unit/
+    │   │   │   │   │   ├── user-notification-preferences.dto.unit.test.ts
     │   │   │   │   │   ├── user-notification-preferences.repository.db.unit.test.ts
     │   │   │   │   │   ├── user-notification-preferences.repository.unit.test.ts
     │   │   │   │   │   ├── user-notification-preferences.serializer.edge.unit.test.ts
@@ -1025,6 +1035,7 @@ src/
     │   │   │       │   └── user-settings.integration.test.ts
     │   │   │       └── unit/
     │   │   │       │   ├── user-settings-locale-defaults.util.unit.test.ts
+    │   │   │       │   ├── user-settings.dto.unit.test.ts
     │   │   │       │   ├── user-settings.repository.db.unit.test.ts
     │   │   │       │   ├── user-settings.repository.unit.test.ts
     │   │   │       │   ├── user-settings.serializer.defaults.unit.test.ts
