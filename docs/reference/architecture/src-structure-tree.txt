@@ -247,6 +247,7 @@ src/
     │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.db.unit.test.ts
     │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.unit.test.ts
     │   │   │       │   ├── webauthn-user-verification.policy.unit.test.ts
+    │   │   │       │   ├── webauthn.serializer.unit.test.ts
     │   │   │       │   ├── webauthn.service.authenticate-options.unit.test.ts
     │   │   │       │   ├── webauthn.service.credential-management.unit.test.ts
     │   │   │       │   ├── webauthn.service.registration-cap.unit.test.ts
@@ -303,7 +304,8 @@ src/
     │   │   │   │   │   ├── plan.repository.db.unit.test.ts
     │   │   │   │   │   ├── plan.serializer.shape.unit.test.ts
     │   │   │   │   │   ├── plan.serializer.unit.test.ts
-    │   │   │   │   │   └── plan.service.unit.test.ts
+    │   │   │   │   │   ├── plan.service.unit.test.ts
+    │   │   │   │   │   └── plan.validator.unit.test.ts
     │   │   │   ├── seed/
     │   │   │   │   ├── index.ts
     │   │   │   │   └── plan.reference.seed.ts
@@ -331,6 +333,7 @@ src/
     │   │   │   │   │       │   ├── stripe-webhook-event-reclaim.worker.unit.test.ts
     │   │   │   │   │       │   ├── stripe-webhook-event-retention.worker.unit.test.ts
     │   │   │   │   │       │   └── stripe-webhook.worker.unit.test.ts
+    │   │   │   │   │   ├── stripe-webhook-backoff.util.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-construct-event.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-event-catchup.processor.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-event.repository.db.unit.test.ts
@@ -341,6 +344,7 @@ src/
     │   │   │   │   │   ├── stripe-webhook.job.schema.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook.processor-race.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook.processor.unit.test.ts
+    │   │   │   │   │   ├── stripe-webhook.serializer.unit.test.ts
     │   │   │   │   │   └── stripe-webhook.service.unit.test.ts
     │   │   │   ├── queues/
     │   │   │   │   ├── stripe-webhook-backoff.util.ts
@@ -376,6 +380,7 @@ src/
     │   │   │       │   ├── subscription-happy.integration.test.ts
     │   │   │       │   └── subscription.integration.test.ts
     │   │   │       └── unit/
+    │   │   │       │   ├── billing-account.serializer.unit.test.ts
     │   │   │       │   ├── payment-provider.port.unit.test.ts
     │   │   │       │   ├── stripe-payment-provider.email.unit.test.ts
     │   │   │       │   ├── subscription-period.util.unit.test.ts
@@ -449,6 +454,7 @@ src/
     │   │   │   │   │   ├── notification-dispatch.service.unit.test.ts
     │   │   │   │   │   ├── notification-email-content.unit.test.ts
     │   │   │   │   │   ├── notification.controller.unit.test.ts
+    │   │   │   │   │   ├── notification.job.schema.unit.test.ts
     │   │   │   │   │   ├── notification.queue.unit.test.ts
     │   │   │   │   │   ├── notification.repository.db.unit.test.ts
     │   │   │   │   │   ├── notification.repository.worker-context.unit.test.ts
@@ -726,6 +732,7 @@ src/
     │   │   │   │   │   ├── organization-tombstone-retention.processor.boundary.unit.test.ts
     │   │   │   │   │   ├── organization-tombstone-retention.worker.unit.test.ts
     │   │   │   │   │   ├── organization.controller.unit.test.ts
+    │   │   │   │   │   ├── organization.dto.unit.test.ts
     │   │   │   │   │   ├── organization.repository.db.unit.test.ts
     │   │   │   │   │   ├── organization.routes.unit.test.ts
     │   │   │   │   │   ├── organization.serializer.unit.test.ts
@@ -873,6 +880,7 @@ src/
     │   │   │   ├── upload-route-smoke.integration.test.ts
     │   │   │   └── upload.integration.test.ts
     │   │   ├── unit/
+    │   │   │   ├── upload-content-type.util.unit.test.ts
     │   │   │   ├── upload-pending-sweep.processor.unit.test.ts
     │   │   │   ├── upload-svg.util.unit.test.ts
     │   │   │   ├── upload-tombstone-retention.processor.boundary.unit.test.ts
@@ -955,7 +963,8 @@ src/
     │   │   │   │   │   ├── user-data-export.processor.unit.test.ts
     │   │   │   │   │   ├── user-data-export.serializer.unit.test.ts
     │   │   │   │   │   ├── user-data-export.service.db.unit.test.ts
-    │   │   │   │   │   └── user-data-export.service.unit.test.ts
+    │   │   │   │   │   ├── user-data-export.service.unit.test.ts
+    │   │   │   │   │   └── user-data-export.validator.unit.test.ts
     │   │   │   │   └── user-data-export.test.ts
     │   │   │   ├── queues/
     │   │   │   │   ├── user-data-export.job.schema.ts
