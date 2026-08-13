@@ -1,6 +1,6 @@
 import http from 'k6/http';
 import { sleep } from 'k6';
-import { API_PREFIX, SMOKE_THRESHOLDS, SCENARIOS } from '../helpers/config.js';
+import { API_PREFIX, THRESHOLDS } from '../helpers/config.js';
 import { checkOk, checkResponseTime } from '../helpers/checks.js';
 import { authHeaders } from '../helpers/auth.js';
 
@@ -14,13 +14,19 @@ import { authHeaders } from '../helpers/auth.js';
  */
 export const options = {
   scenarios: {
-    smoke: { ...SCENARIOS.smoke, exec: 'adminOps' },
+    // Sustained 10 VUs rather than 1, so the shared `http_reqs: rate>10` floor is met by the
+    // scenario's own throughput instead of being waived. A single VU with 2s of think-time per
+    // iteration tops out near 1.5 req/s — under the floor by construction, which is why an
+    // earlier revision reached for SMOKE_THRESHOLDS. Ten VUs at the same think-time sustain
+    // ~14.6 req/s, clearing the floor with margin rather than by rounding.
+    //
+    // constant-vus, not the ramping `load` preset: a ramp spends half its wall-clock below
+    // target, which dilutes the run-wide rate to ~11 req/s — technically over, but too close to
+    // the floor to be a stable gate.
+    load: { executor: 'constant-vus', vus: 10, duration: '30s', exec: 'adminOps' },
   },
   thresholds: {
-    // SMOKE_THRESHOLDS, not THRESHOLDS: this runs SCENARIOS.smoke (1 VU with 2s of sleep
-    // per iteration), so the shared `http_reqs: rate>10` floor is unreachable by design —
-    // the observed rate is ~1.5/s. SMOKE_THRESHOLDS omits that floor for exactly this case.
-    ...SMOKE_THRESHOLDS,
+    ...THRESHOLDS,
     'http_req_duration{name:list-users}': ['p(95)<500', 'p(99)<1000'],
     'http_req_duration{name:list-audit-logs}': ['p(95)<500', 'p(99)<1000'],
     'http_req_duration{name:list-permissions}': ['p(95)<200', 'p(99)<400'],

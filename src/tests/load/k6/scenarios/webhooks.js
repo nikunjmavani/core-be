@@ -1,6 +1,6 @@
 import http from 'k6/http';
 import { sleep } from 'k6';
-import { API_PREFIX, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
+import { API_PREFIX, THRESHOLDS } from '../helpers/config.js';
 import { checkStatus, checkResponseTime } from '../helpers/checks.js';
 import { authHeaders } from '../helpers/auth.js';
 
@@ -13,15 +13,15 @@ import { authHeaders } from '../helpers/auth.js';
  */
 export const options = {
   scenarios: {
-    load: { ...SCENARIOS.load, exec: 'webhookOps' },
+    // Sustained 10 VUs rather than the ramping `load` preset. Two requests per iteration over a
+    // ramp that averages ~7.5 of its 10 VUs yielded ~9.7 req/s — under the shared
+    // `http_reqs: rate>10` floor, which is why an earlier revision lowered the floor to 5.
+    // Holding 10 VUs for the whole run removes the ramp dilution and sustains ~19 req/s, so the
+    // scenario meets the shared floor on its own throughput.
+    load: { executor: 'constant-vus', vus: 10, duration: '30s', exec: 'webhookOps' },
   },
   thresholds: {
     ...THRESHOLDS,
-    // Two requests per 1.5s of sleep, over a ramp averaging ~6.7 of 10 VUs, caps this
-    // scenario at ~8.9 req/s — structurally under the shared `rate>10` floor, which it
-    // only ever cleared by rounding. Floor set to the rate the scenario can actually
-    // sustain rather than deleting the throughput check.
-    http_reqs: ['rate>5'],
     'http_req_duration{name:list-webhooks}': ['p(95)<500', 'p(99)<1000'],
     'http_req_duration{name:list-webhook-events}': ['p(95)<500', 'p(99)<1000'],
   },
@@ -56,7 +56,9 @@ export function webhookOps() {
   checkStatus(eventsResponse, 200, 'list-webhook-events');
   checkResponseTime(eventsResponse, 500, 'list-webhook-events');
 
-  sleep(1);
+  // 0.5s rather than 1s: keeps a realistic pause between polls while giving the run enough
+  // throughput to clear the shared rate>10 floor with margin rather than by a rounding error.
+  sleep(0.5);
 }
 
 export default webhookOps;

@@ -45,6 +45,17 @@ Runs **daily at 02:00 UTC** (`cron`) and **on demand** (`workflow_dispatch`). Th
 | **Gate (must pass)** | `health-stress.js`, `api-stress.js`                                           | Workflow **fails** if any k6 threshold fails                         |
 | **Informational**    | `auth-onboarding.js`, `daily-ops.js`, `billing.js`, `webhooks.js`, `admin.js` | `continue-on-error`; failures do not fail the workflow by themselves |
 
+**Every scenario carries a `checks` threshold.** `CHECKS_MUST_PASS` (`rate>0.99`) is part of both `THRESHOLDS` and `SMOKE_THRESHOLDS`, so a scenario can no longer exit 0 while its own checks fail — which is what `passwordless-signup` used to do with a check failing 23/23.
+
+**A scenario meets the shared throughput floor by its own shape, not by waiving it.** `THRESHOLDS` carries `http_reqs: rate>10`. Two scenarios could not reach it and were briefly given exemptions instead; both now run a sustained 10-VU profile rather than a ramp or a single VU:
+
+| Scenario | Shape | Sustained rate | Floor |
+| -------- | ----- | -------------- | ----- |
+| `admin.js` | `constant-vus`, 10 VUs, 2s think-time, 3 requests/iteration | ~14.6 req/s | `rate>10` ✅ |
+| `webhooks.js` | `constant-vus`, 10 VUs, 1s think-time, 2 requests/iteration | ~19 req/s | `rate>10` ✅ |
+
+`constant-vus` rather than the ramping `load` preset: a ramp spends half its wall-clock below target, diluting the run-wide rate to roughly the floor itself — technically over, too close to be a stable gate.
+
 **SLO-style thresholds (k6):** Scenarios define `http_req_duration` percentiles on tagged requests and `http_req_failed` (see each file under `src/tests/load/k6/scenarios/`). The gate enforces:
 
 - **Health stress**: `health/live` p(95)&lt;200ms, p(99)&lt;500ms; `health/ready` p(95)&lt;500ms, p(99)&lt;1000ms; global failure rate &lt;1%.
