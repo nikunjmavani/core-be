@@ -44,3 +44,22 @@ await import('@/shared/config/load-env-files.js');
 for (const [key, value] of platformInjected) {
   process.env[key] = value;
 }
+
+const { beforeAll } = await import('vitest');
+const { resetOutboundServiceCircuitBreakerState } = await import(
+  '@/tests/contract/helpers/circuit-reset.js'
+);
+
+/**
+ * Clear every outbound circuit before the live specs run.
+ *
+ * @remarks
+ * Circuit state lives in Redis and outlives the process, so a previous run that failed for an
+ * environmental reason — a blocked host, a proxy returning a non-JSON block page — leaves the
+ * circuit open and the next run fails for a reason that has nothing to do with the provider.
+ * Worse, `verifyTurnstileToken` catches `CircuitBreakerOpenError` and returns
+ * `{ success: false }`, which reads exactly like a genuine verification failure.
+ */
+beforeAll(async () => {
+  await resetOutboundServiceCircuitBreakerState();
+});

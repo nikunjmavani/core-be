@@ -78,7 +78,24 @@ export function hasS3LiveCredentials(): boolean {
  */
 export function hasTurnstileLiveCredentials(): boolean {
   if (!isProviderOptedIn('turnstile')) return false;
-  return Boolean(process.env.CAPTCHA_SECRET);
+  return isCloudflareTestingSecret(process.env.CAPTCHA_SECRET);
+}
+
+/**
+ * True only for one of Cloudflare's published testing secrets.
+ *
+ * @remarks
+ * Cloudflare's testing secrets begin `1x` (always passes), `2x` (always fails) or `3x` (already
+ * used); a real secret begins `0x`. Requiring a testing prefix is the Turnstile equivalent of
+ * Stripe's `sk_test_` refusal — it means this slice cannot spend a production account's
+ * verification quota, and cannot have its results skewed by real risk scoring.
+ *
+ * These tests do not need a real secret: every assertion is about Cloudflare's documented
+ * behaviour for the testing keys, so a production secret would make them LESS meaningful, not
+ * more.
+ */
+function isCloudflareTestingSecret(secret: string | undefined): boolean {
+  return /^[123]x0{20,}/.test(secret ?? '');
 }
 
 /** Why a provider slice did not run — surfaced by the skipped-branch spec in each file. */
