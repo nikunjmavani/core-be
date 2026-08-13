@@ -2140,6 +2140,7 @@ src/
     │   │   │   └── global-admin-role.util.unit.test.ts
     │   │   ├── http/
     │   │   │   ├── api-versioning.util.unit.test.ts
+    │   │   │   ├── catalog-cache-and-audit-context.util.unit.test.ts
     │   │   │   ├── fastify-server.util.unit.test.ts
     │   │   │   ├── list-query.util.unit.test.ts
     │   │   │   ├── pagination-cursor-conditions.util.unit.test.ts
@@ -2191,6 +2192,7 @@ src/
     │   │   │   ├── parse-with-schema.util.unit.test.ts
     │   │   │   ├── storage-key-traversal.util.unit.test.ts
     │   │   │   └── validation.util.unit.test.ts
+    │   │   ├── i18n-and-auth-helpers.util.unit.test.ts
     │   │   └── idempotency-and-media-helpers.util.unit.test.ts
     │   ├── validators/
     │   │   ├── idempotency-key.property.unit.test.ts
