@@ -9,6 +9,7 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateTestTokenWithActiveSession } from '@/tests/helpers/test-auth.js';
 import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
+import { WebauthnCredentialRepository } from '@/domains/auth/sub-domains/auth-webauthn/webauthn-credential.repository.js';
 import type { FastifyInstance } from 'fastify';
 
 describe('Auth WebAuthn — Integration', () => {
@@ -184,6 +185,60 @@ describe('Auth WebAuthn — Integration', () => {
         token,
       });
       expect(response.statusCode).toBe(404);
+    });
+
+    it('returns the declared 204 and the passkey disappears from the list', async () => {
+      // Every case above proves a DENIAL. Deleting a passkey — what a user does when they lose a
+      // device — had no success assertion at all, so a handler that silently no-op'd would have
+      // looked identical to one that revoked. Two passkeys are registered so the revoke is not
+      // the last-login-credential case (409), isolating the plain success path.
+      const user = await createTestUser({ isEmailVerified: true });
+      const { token, sessionPublicId } = await generateTestTokenWithActiveSession(
+        app,
+        user.public_id,
+      );
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
+
+      const repository = new WebauthnCredentialRepository();
+      const doomed = await repository.createCredential({
+        user_id: user.id,
+        credential_id: 'cred-to-revoke',
+        public_key: 'pk-to-revoke',
+        counter: 0,
+        device_type: 'multiDevice',
+        backed_up: true,
+        transports: ['internal'],
+      });
+      const survivor = await repository.createCredential({
+        user_id: user.id,
+        credential_id: 'cred-to-keep',
+        public_key: 'pk-to-keep',
+        counter: 0,
+        device_type: 'singleDevice',
+        backed_up: false,
+        transports: ['usb'],
+      });
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/auth/me/webauthn/credentials/${doomed.public_id}`),
+        token,
+      });
+      expect(response.statusCode, response.body).toBe(204);
+      expect(response.body).toBe('');
+
+      const remaining = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/auth/me/webauthn/credentials'),
+        token,
+      });
+      expect(remaining.statusCode).toBe(200);
+      const credentialIds = (remaining.json() as { data: Array<{ id: string }> }).data.map(
+        (credential) => credential.id,
+      );
+      // Revocation is soft (`revoked_at`), so "gone" means gone from the owner-facing read — the
+      // property that actually matters to the user who just removed a lost device.
+      expect(credentialIds).toEqual([survivor.public_id]);
     });
   });
 

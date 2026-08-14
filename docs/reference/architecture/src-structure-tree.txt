@@ -86,6 +86,8 @@ src/
     │   │   │   ├── auth-mfa.validator.unit.test.ts
     │   │   │   ├── auth-routes-rate-limit.policy.unit.test.ts
     │   │   │   ├── auth.controller.unit.test.ts
+    │   │   │   ├── auth.event-handlers.unit.test.ts
+    │   │   │   ├── auth.http.util.unit.test.ts
     │   │   │   ├── auth.routes.mfa-login-captcha.unit.test.ts
     │   │   │   ├── auth.routes.session-revoke-stepup.unit.test.ts
     │   │   │   ├── auth.serializer.unit.test.ts
@@ -137,6 +139,8 @@ src/
     │   │   │   │   └── auth.events.ts
     │   │   │   ├── oauth/
     │   │   │   │   ├── __tests__/
+    │   │   │   │   │   ├── integration/
+    │   │   │   │   │   │   └── oauth-callback.integration.test.ts
     │   │   │   │   │   └── unit/
     │   │   │   │   │   │   ├── oauth-pkce.unit.test.ts
     │   │   │   │   │   │   ├── oauth-state.unit.test.ts
@@ -186,6 +190,7 @@ src/
     │   │   │   │   └── unit/
     │   │   │   │   │   ├── auth-mfa-method.cascade.db.unit.test.ts
     │   │   │   │   │   ├── auth-mfa-recovery-code.repository.db.unit.test.ts
+    │   │   │   │   │   ├── auth-mfa-recovery-code.util.unit.test.ts
     │   │   │   │   │   ├── auth-mfa.repository.unit.test.ts
     │   │   │   │   │   ├── auth-mfa.service.org-policy-on-delete.unit.test.ts
     │   │   │   │   │   ├── auth-mfa.service.unit.test.ts
@@ -247,6 +252,7 @@ src/
     │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.db.unit.test.ts
     │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.unit.test.ts
     │   │   │       │   ├── webauthn-user-verification.policy.unit.test.ts
+    │   │   │       │   ├── webauthn.serializer.unit.test.ts
     │   │   │       │   ├── webauthn.service.authenticate-options.unit.test.ts
     │   │   │       │   ├── webauthn.service.credential-management.unit.test.ts
     │   │   │       │   ├── webauthn.service.registration-cap.unit.test.ts
@@ -1783,6 +1789,7 @@ src/
     │   ├── integration.overview.md
     │   ├── mcp-route.integration.test.ts
     │   ├── ops-route-smoke.integration.test.ts
+    │   ├── storage-routes-attach-negative.integration.test.ts
     │   └── storage-routes-happy.integration.test.ts
     ├── load/
     │   ├── k6/

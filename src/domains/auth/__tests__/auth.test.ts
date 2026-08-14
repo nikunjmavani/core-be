@@ -4,7 +4,6 @@ import { createTestApp } from '@/tests/helpers/test-app.js';
 import {
   injectAuthenticated,
   injectUnauthenticated,
-  injectWithCookies,
 } from '@/tests/helpers/test-http-inject.helper.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser, createTestUserWithPassword } from '@/tests/factories/user.factory.js';
@@ -18,26 +17,22 @@ import type { FastifyInstance } from 'fastify';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 /**
- * Extracts the `session_id=<value>` pair from a Set-Cookie header so that
- * subsequent requests can re-attach it via injectWithCookies.
+ * Bundled domain e2e — **canonical for route reachability and gates**.
+ *
+ * This file and `__tests__/integration/auth.integration.test.ts` used to share 33 `it()` titles,
+ * and both are DB-bound, so every duplicated case was paid twice on every CI run. Both files are
+ * structurally required (the bundled e2e by convention, the integration file by `validate:domain`),
+ * so they were split by responsibility rather than one being deleted:
+ *
+ * - **Here:** every route is reachable and every denial fires — 400 / 401 / 403 / 404 shapes plus
+ *   the plain success status of each route.
+ * - **In `auth.integration.test.ts`:** what comes back *through* those gates — the session and
+ *   CSRF cookie contract, the refresh Origin/Referer matrix, the MFA login envelope, and the
+ *   translated i18n copy.
+ *
+ * Nothing is asserted in both files. When adding a case, pick the file by that question.
  */
-function sessionIdCookieValueFromLoginHeaders(loginResponseHeaders: {
-  'set-cookie'?: string | string[];
-}): string {
-  const cookiesRaw = loginResponseHeaders['set-cookie'];
-  let sessionHeader: string | undefined;
-  if (Array.isArray(cookiesRaw)) {
-    sessionHeader = cookiesRaw.find((cookie) => cookie.startsWith('session_id='));
-  } else if (typeof cookiesRaw === 'string' && cookiesRaw.startsWith('session_id=')) {
-    sessionHeader = cookiesRaw;
-  }
-  expect(sessionHeader).toBeDefined();
-  const onlyPair = String(sessionHeader).split(';')[0]!.trim();
-  expect(onlyPair.startsWith('session_id=')).toBe(true);
-  return onlyPair.slice('session_id='.length);
-}
-
-describe('Auth Domain — Integration', () => {
+describe('Auth Domain — Route gates (e2e)', () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
@@ -201,14 +196,17 @@ describe('Auth Domain — Integration', () => {
   // ─── Logout ───────────────────────────────────────────────────
 
   describe('POST /api/v1/auth/logout', () => {
-    it('should accept logout request', async () => {
+    it('rejects a logout with no bearer token', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
         url: testApiPath('/auth/logout'),
         payload: {},
       });
-      // Logout may succeed even without a valid token (idempotent)
-      expect([200, 204, 401]).toContain(response.statusCode);
+      // Previously a three-status band (`[200, 204, 401]`) on a route declared 201, which would
+      // have passed whether the handler rejected the anonymous caller or silently succeeded.
+      // The handler requires a bearer and raises UnauthorizedError when it is absent; the
+      // authenticated 201 is asserted by the logout-after-login case below.
+      expect(response.statusCode, response.body).toBe(401);
     });
 
     it('should clear session cookie on logout after login', async () => {
@@ -231,100 +229,6 @@ describe('Auth Domain — Integration', () => {
         token: accessToken,
       });
       expect([201]).toContain(logoutResponse.statusCode);
-    });
-  });
-
-  // ─── Session Refresh ──────────────────────────────────────────
-
-  describe('POST /api/v1/auth/refresh', () => {
-    it('should return 401 for missing session cookie', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/refresh'),
-        headers: { referer: 'http://localhost:3000/' },
-        payload: {},
-      });
-      expect(response.statusCode).toBe(401);
-    });
-
-    it('should return new access_token when valid session cookie is provided', async () => {
-      const { user, password } = await createTestUserWithPassword();
-
-      const loginResponse = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/login'),
-        payload: {
-          email: user.email,
-          password,
-        },
-      });
-      expect(loginResponse.statusCode).toBe(201);
-
-      const sessionId = sessionIdCookieValueFromLoginHeaders(loginResponse.headers);
-
-      const refreshResponse = await injectWithCookies(app, {
-        method: 'POST',
-        url: testApiPath('/auth/refresh'),
-        cookies: { session_id: sessionId },
-        headers: { referer: 'http://localhost:3000/' },
-        payload: {},
-      });
-      expect(refreshResponse.statusCode).toBe(201);
-      const refreshBody = refreshResponse.json() as { data?: { access_token?: string } };
-      expect(refreshBody.data).toHaveProperty('access_token');
-      const newToken = refreshBody.data?.access_token;
-      expect(typeof newToken).toBe('string');
-      expect((newToken as string).length).toBeGreaterThan(0);
-    });
-
-    it('should return 403 when Origin header is not in ALLOWED_ORIGINS', async () => {
-      const { user, password } = await createTestUserWithPassword();
-      const loginResponse = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/login'),
-        payload: {
-          email: user.email,
-          password,
-        },
-      });
-      expect(loginResponse.statusCode).toBe(201);
-
-      const sessionId = sessionIdCookieValueFromLoginHeaders(loginResponse.headers);
-
-      const refreshResponse = await injectWithCookies(app, {
-        method: 'POST',
-        url: testApiPath('/auth/refresh'),
-        cookies: { session_id: sessionId },
-        headers: { origin: 'https://untrusted.example.com' },
-        payload: {},
-      });
-      expect(refreshResponse.statusCode).toBe(403);
-    });
-
-    it('should return 200 when Origin matches ALLOWED_ORIGINS', async () => {
-      const { user, password } = await createTestUserWithPassword();
-      const loginResponse = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/login'),
-        payload: {
-          email: user.email,
-          password,
-        },
-      });
-      expect(loginResponse.statusCode).toBe(201);
-
-      const sessionId = sessionIdCookieValueFromLoginHeaders(loginResponse.headers);
-
-      const refreshResponse = await injectWithCookies(app, {
-        method: 'POST',
-        url: testApiPath('/auth/refresh'),
-        cookies: { session_id: sessionId },
-        headers: { origin: 'http://localhost:3000' },
-        payload: {},
-      });
-      expect(refreshResponse.statusCode).toBe(201);
-      const refreshBody = refreshResponse.json() as { data?: { access_token?: string } };
-      expect(refreshBody.data).toHaveProperty('access_token');
     });
   });
 
@@ -359,22 +263,6 @@ describe('Auth Domain — Integration', () => {
       expect(response.statusCode).toBe(201);
       const body = response.json() as { data: { message?: string } };
       expect(body.data.message).toBeDefined();
-    });
-
-    it('returns translated success message for send-code with Accept-Language: es', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/email/send-code'),
-        headers: { 'accept-language': 'es' },
-        payload: { email: 'unknown-email-code-user@example.com' },
-      });
-      expect(response.statusCode).toBe(201);
-      const body = response.json() as { data: { message?: string } };
-      expect(body.data.message).toBeDefined();
-      expect([
-        'If an account exists with this email, you will receive a sign-in code shortly.',
-        'Si existe una cuenta con este correo, recibirás un código de inicio de sesión en breve.',
-      ]).toContain(body.data.message);
     });
   });
 
@@ -654,31 +542,6 @@ describe('Auth Domain — Integration', () => {
         payload: { method_type: 'MFA_TOTP' },
       });
       expect(afterStepUp.statusCode).not.toBe(403);
-    });
-  });
-
-  // ─── i18n (Accept-Language) ────────────────────────────────────
-
-  describe('i18n response messages', () => {
-    it('returns 404 error detail in English with Accept-Language: en', async () => {
-      const response = await injectUnauthenticated(app, {
-        url: testApiPath('/auth/nonexistent-route-for-i18n-test'),
-        headers: { 'accept-language': 'en' },
-      });
-      expect(response.statusCode).toBe(404);
-      const body = response.json() as { error?: { detail?: string } };
-      expect(body.error?.detail).toBe('Route not found');
-    });
-
-    it('returns 404 error detail in Spanish when Accept-Language: es is supported', async () => {
-      const response = await injectUnauthenticated(app, {
-        url: testApiPath('/auth/nonexistent-route-for-i18n-test'),
-        headers: { 'accept-language': 'es' },
-      });
-      expect(response.statusCode).toBe(404);
-      const body = response.json() as { error?: { detail?: string } };
-      // Deterministic once i18nMiddleware is fp()-wrapped: Accept-Language: es yields Spanish.
-      expect(body.error?.detail).toBe('Ruta no encontrada');
     });
   });
 

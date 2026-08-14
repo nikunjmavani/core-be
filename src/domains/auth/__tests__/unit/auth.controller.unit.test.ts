@@ -2,6 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import type { FastifyReply } from 'fastify';
 import { NotImplementedError, UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
 import { createAuthController } from '@/domains/auth/auth.controller.js';
+import { createAuthLoginHandlers } from '@/domains/auth/handlers/auth-login.handlers.js';
+import { createAuthSessionHandlers } from '@/domains/auth/handlers/auth-session.handlers.js';
+import { createAuthEmailLoginHandlers } from '@/domains/auth/handlers/auth-email-login.handlers.js';
+import { createAuthOauthHandlers } from '@/domains/auth/handlers/auth-oauth.handlers.js';
+import { createAuthAuthMethodHandlers } from '@/domains/auth/handlers/auth-auth-method.handlers.js';
+import { createAuthMfaHandlers } from '@/domains/auth/handlers/auth-mfa.handlers.js';
+import { createAuthWebauthnHandlers } from '@/domains/auth/handlers/auth-webauthn.handlers.js';
+import { createAuthMeContextHandlers } from '@/domains/auth/handlers/auth-me-context.handlers.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 vi.mock('@/shared/middlewares/session/cookie-session-origin.pre-handler.js', () => ({
@@ -541,5 +549,56 @@ describe('createAuthController', () => {
       mockReply(),
     );
     expect(responsePayload.data).toEqual({ message: 'raw-response' });
+  });
+
+  /**
+   * The eight `handlers/*.ts` factories are exercised transitively by the cases above, but nothing
+   * asserted the composition itself. `createAuthController` is a flat spread of eight factory
+   * results — dropping one line silently removes a whole flow's handlers, and the failure only
+   * surfaces at route-registration time as an `undefined` handler.
+   */
+  describe('handler composition', () => {
+    const container = {
+      authService: authService as never,
+      authMethodService: authMethodService as never,
+      emailLoginService: emailLoginService as never,
+      oauthService: oauthService as never,
+      mfaService: mfaService as never,
+      webauthnService: webauthnService as never,
+      authSessionService: authSessionService as never,
+      authMeContextService: { getContext: vi.fn() } as never,
+    };
+
+    const handlerFactories = [
+      createAuthLoginHandlers,
+      createAuthSessionHandlers,
+      createAuthEmailLoginHandlers,
+      createAuthOauthHandlers,
+      createAuthAuthMethodHandlers,
+      createAuthMfaHandlers,
+      createAuthWebauthnHandlers,
+      createAuthMeContextHandlers,
+    ];
+
+    it('exposes every handler contributed by all eight factories', () => {
+      const composed = createAuthController(container);
+      for (const factory of handlerFactories) {
+        const contributed = Object.keys(factory(container));
+        // A factory that contributes nothing would make this assertion vacuous.
+        expect(contributed.length).toBeGreaterThan(0);
+        for (const handlerName of contributed) {
+          expect(composed).toHaveProperty(handlerName);
+          expect(composed[handlerName as keyof typeof composed]).toBeTypeOf('function');
+        }
+      }
+    });
+
+    it('composes exactly the union of the factories — no extra and no shadowed handler', () => {
+      const composed = createAuthController(container);
+      const union = new Set(handlerFactories.flatMap((factory) => Object.keys(factory(container))));
+      // Equal counts prove no factory was dropped AND that two factories are not fighting over
+      // the same handler name (the later spread would silently win).
+      expect(Object.keys(composed).sort()).toEqual([...union].sort());
+    });
   });
 });
