@@ -52,7 +52,7 @@ describe('Upload Domain — Integration', () => {
         token,
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode, response.body).toBe(400);
     });
 
     it('should return 400 for invalid purpose enum', async () => {
@@ -70,7 +70,7 @@ describe('Upload Domain — Integration', () => {
           file_size: 1024,
         },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode, response.body).toBe(400);
     });
   });
 

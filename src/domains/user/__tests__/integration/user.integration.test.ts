@@ -288,6 +288,25 @@ describe('User Domain — Integration', () => {
       });
       expect(response.statusCode).toBe(401);
     });
+
+    // The route's declared 204 had no HTTP assertion anywhere — only the 401 above and a
+    // service-level unit test. Detaching with no avatar set is a no-op that still must
+    // answer 204 (and touches no object storage, since there is no key to reclaim).
+    it('should return 204 for an authenticated caller and leave avatar_url null', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath('/users/me/avatar'),
+        token,
+      });
+      expect(response.statusCode, response.body).toBe(204);
+
+      const me = await getMeWithRetry(app, token);
+      expect(me.statusCode, me.body).toBe(200);
+      expect((me.json() as { data: { avatar_url: string | null } }).data.avatar_url).toBeNull();
+    });
   });
 
   // ─── Admin: User management ───────────────────────────────────
