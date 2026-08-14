@@ -142,7 +142,12 @@ describe('UploadRepository user/organization isolation (database)', () => {
       status: 'UPLOADED',
     });
 
-    // The owner-scoped sibling lookup refuses the stranger…
+    // The owner-scoped sibling lookup finds it for the owner and refuses the
+    // stranger — both arms, so the null below is the user predicate doing the
+    // work and not an unrelated miss.
+    const scopedForOwner = await repository.findByPublicIdForUser(created.public_id, ownerUser.id);
+    expect(scopedForOwner?.id).toBe(created.id);
+
     const scopedForStranger = await repository.findByPublicIdForUser(
       created.public_id,
       strangerUser.id,
@@ -153,7 +158,6 @@ describe('UploadRepository user/organization isolation (database)', () => {
     const byKey = await repository.findByFileKey(fileKey);
     expect(byKey?.id).toBe(created.id);
     expect(byKey?.user_id).toBe(ownerUser.id);
-    expect(byKey?.user_id).not.toBe(strangerUser.id);
   });
 
   it('findByFileKey applies no organization predicate — it returns another org’s row (sec-UP5)', async () => {
@@ -174,19 +178,34 @@ describe('UploadRepository user/organization isolation (database)', () => {
       status: 'UPLOADED',
     });
 
-    // The org-scoped sibling lookup keeps organization B out…
+    // Organization B needs a row of its own, otherwise the exclusion below is
+    // satisfied by an empty result set and proves nothing about scoping.
+    const inOrganizationB = await repository.create({
+      user_id: ownerUser.id,
+      organization_id: organizationB.id,
+      file_name: 'other-logo.png',
+      file_key: `organization-files/${organizationB.id}/other-logo.png`,
+      mime_type: 'image/png',
+      file_size: 4096,
+      storage_provider: 's3',
+      bucket: 'test-bucket',
+      status: 'UPLOADED',
+    });
+
+    // The org-scoped sibling lookup returns B's row and keeps A's out…
     const scopedToOrganizationB = await repository.findActiveByOrganizationIdAfter(
       organizationB.id,
       0,
       100,
     );
-    expect(scopedToOrganizationB.map((row) => row.id)).not.toContain(created.id);
+    const idsScopedToOrganizationB = scopedToOrganizationB.map((row) => row.id);
+    expect(idsScopedToOrganizationB).toContain(inOrganizationB.id);
+    expect(idsScopedToOrganizationB).not.toContain(created.id);
 
     // …while the key lookup returns organization A's row to any caller, which is
     // why assertKeyConfirmedForOwner compares organization_id itself.
     const byKey = await repository.findByFileKey(fileKey);
     expect(byKey?.id).toBe(created.id);
     expect(byKey?.organization_id).toBe(organizationA.id);
-    expect(byKey?.organization_id).not.toBe(organizationB.id);
   });
 });
