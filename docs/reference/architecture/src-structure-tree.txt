@@ -23,6 +23,9 @@ src/
     │   │   │   │   │   ├── audit-outbox-drain.worker.unit.test.ts
     │   │   │   │   │   └── audit-retention.worker.unit.test.ts
     │   │   │   ├── audit-export.processor.unit.test.ts
+    │   │   │   ├── audit-outbox.repository.db.unit.test.ts
+    │   │   │   ├── audit-retention.processor.unit.test.ts
+    │   │   │   ├── audit-routes-rate-limit.policy.unit.test.ts
     │   │   │   ├── audit.controller.admin-read-audit.unit.test.ts
     │   │   │   ├── audit.controller.unit.test.ts
     │   │   │   ├── audit.repository.boundary.db.unit.test.ts
@@ -1783,6 +1786,7 @@ src/
     │   ├── integration.overview.md
     │   ├── mcp-route.integration.test.ts
     │   ├── ops-route-smoke.integration.test.ts
+    │   ├── storage-routes-attach-negative.integration.test.ts
     │   └── storage-routes-happy.integration.test.ts
     ├── load/
     │   ├── k6/
