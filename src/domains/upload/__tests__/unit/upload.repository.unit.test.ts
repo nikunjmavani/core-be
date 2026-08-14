@@ -63,6 +63,22 @@ describe('UploadRepository', () => {
     expect(result).toBeNull();
   });
 
+  // The sole lookup behind assertKeyConfirmed / assertKeyConfirmedForOwner — the gate that
+  // decides whether an S3 object may be attached as an avatar or a logo — and it had no test.
+  it('findByFileKey returns the row for a known key', async () => {
+    const row = { public_id: 'upload_public_test', file_key: 'avatars/user_public/key.png' };
+    mockLimit.mockResolvedValue([row]);
+
+    expect(await repository.findByFileKey('avatars/user_public/key.png')).toEqual(row);
+    expect(mockSelect).toHaveBeenCalled();
+  });
+
+  it('findByFileKey returns null for an unknown key', async () => {
+    mockLimit.mockResolvedValue([]);
+
+    expect(await repository.findByFileKey('avatars/user_public/missing.png')).toBeNull();
+  });
+
   it('findByPublicIdForUser scopes by user', async () => {
     const row = { public_id: 'upload_public_test', user_id: 1 };
     mockLimit.mockResolvedValue([row]);
