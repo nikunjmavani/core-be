@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { generate as generateTotp } from 'otplib';
+import { eq } from 'drizzle-orm';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import {
   injectAuthenticated,
@@ -15,11 +16,33 @@ import {
   generateSuperAdminToken,
 } from '@/tests/helpers/test-auth.js';
 import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
+import { database } from '@/infrastructure/database/connection.js';
+import { users } from '@/domains/user/user.schema.js';
 import type { FastifyInstance } from 'fastify';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 const ME_RETRY_ATTEMPTS = 3;
 const ME_RETRY_DELAY_MS = 50;
+/**
+ * Wall-clock gap between the two onboarding-complete calls. `markOnboardingComplete` stamps
+ * `now()`, so without a measurable gap a re-stamped row could coincidentally equal the original
+ * and the idempotency assertion would pass for the wrong reason.
+ */
+const ONBOARDING_REPEAT_DELAY_MS = 25;
+
+/**
+ * Reads the raw `onboarding_completed_at` stamp. The API deliberately projects it to the
+ * `onboarding_completed` boolean, so asserting that a repeat call did not MOVE the timestamp
+ * needs a direct read.
+ */
+async function readOnboardingCompletedAt(userPublicId: string): Promise<Date | null> {
+  const [row] = await database
+    .select({ onboarding_completed_at: users.onboarding_completed_at })
+    .from(users)
+    .where(eq(users.public_id, userPublicId))
+    .limit(1);
+  return row?.onboarding_completed_at ?? null;
+}
 
 /**
  * GET /api/v1/users/me with retries on 404 to absorb transient DB visibility after createTestUser().
@@ -219,6 +242,81 @@ describe('User Domain — Integration', () => {
         last_name: 'PATEL',
         job_title: 'CEO',
       });
+    });
+  });
+
+  /**
+   * The frontend calls this at the end of every signup, and post-login routing reads the
+   * resulting flag to choose between the onboarding wizard and the dashboard — a regression
+   * here traps every new user in a loop, so the route is pinned end-to-end rather than only
+   * at the repository layer.
+   */
+  describe('POST /api/v1/users/me/onboarding/complete', () => {
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/users/me/onboarding/complete'),
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should stamp onboarding and report onboarding_completed on GET /users/me', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+
+      const before = await getMeWithRetry(app, token);
+      expect(before.statusCode).toBe(200);
+      expect(
+        (before.json() as { data: { onboarding_completed: boolean } }).data.onboarding_completed,
+      ).toBe(false);
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/users/me/onboarding/complete'),
+        token,
+      });
+      expect(response.statusCode).toBe(201);
+      expect(
+        (response.json() as { data: { id: string; onboarding_completed: boolean } }).data,
+      ).toMatchObject({ id: user.public_id, onboarding_completed: true });
+
+      // Post-login routing reads the flag back from GET /users/me, not from this POST's echo —
+      // assert the persisted read path the frontend actually depends on.
+      const after = await getMeWithRetry(app, token);
+      expect(after.statusCode).toBe(200);
+      expect(
+        (after.json() as { data: { onboarding_completed: boolean } }).data.onboarding_completed,
+      ).toBe(true);
+      expect(await readOnboardingCompletedAt(user.public_id)).not.toBeNull();
+    });
+
+    it('should be a no-op on repeat: still 201, original timestamp preserved', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+
+      const first = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/users/me/onboarding/complete'),
+        token,
+      });
+      expect(first.statusCode).toBe(201);
+      const firstStamp = await readOnboardingCompletedAt(user.public_id);
+      expect(firstStamp).not.toBeNull();
+
+      await new Promise((resolve) => setTimeout(resolve, ONBOARDING_REPEAT_DELAY_MS));
+
+      const second = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/users/me/onboarding/complete'),
+        token,
+      });
+      expect(second.statusCode).toBe(201);
+      expect(
+        (second.json() as { data: { onboarding_completed: boolean } }).data.onboarding_completed,
+      ).toBe(true);
+      // The repository's `IS NULL` guard must hold through the route: a double-submit or retry
+      // must not move the user's original completion time forward.
+      expect(await readOnboardingCompletedAt(user.public_id)).toEqual(firstStamp);
     });
   });
 
