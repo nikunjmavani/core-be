@@ -52,7 +52,7 @@ describe('Upload Domain — Integration', () => {
         token,
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode, response.body).toBe(400);
     });
 
     it('should return 400 for invalid purpose enum', async () => {
@@ -70,7 +70,7 @@ describe('Upload Domain — Integration', () => {
           file_size: 1024,
         },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode, response.body).toBe(400);
     });
   });
 
@@ -90,6 +90,35 @@ describe('Upload Domain — Integration', () => {
       const response = await injectAuthenticated(app, {
         url: testApiPath(`/uploads/${unknownUploadPublicId}`),
         token,
+      });
+      expect(response.statusCode).toBe(404);
+    });
+  });
+
+  // The confirm route is the one endpoint this e2e walk used to skip, so
+  // `pnpm test:e2e` on its own gave it zero coverage — every assertion against it
+  // lived in the integration tier. Both cases below are auth/lookup guards, so
+  // they need no S3 round-trip.
+  describe('POST /api/v1/uploads/:publicId/confirm', () => {
+    const unknownUploadPublicId = 'upl_abcdefghijklmnopqrstu';
+
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/uploads/${unknownUploadPublicId}/confirm`),
+        payload: {},
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return 404 for unknown upload', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/uploads/${unknownUploadPublicId}/confirm`),
+        token,
+        payload: {},
       });
       expect(response.statusCode).toBe(404);
     });

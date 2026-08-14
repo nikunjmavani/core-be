@@ -15,6 +15,9 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 
+/** Bucket recorded on seeded rows; asserted to be absent from the detail response body. */
+const SEEDED_BUCKET = 'test-uploads';
+
 describe('Upload Domain — Integration', () => {
   let app: FastifyInstance;
 
@@ -30,6 +33,36 @@ describe('Upload Domain — Integration', () => {
   beforeEach(async () => {
     await cleanupDatabase();
   });
+
+  /**
+   * Inserts an already-`UPLOADED` upload row directly. The read and re-confirm paths never
+   * touch object storage, so seeding the terminal state is both sufficient and cheaper than
+   * walking request → confirm behind a mocked S3 port.
+   */
+  async function seedUploadedRow(
+    userInternalId: number,
+  ): Promise<{ id: number; publicId: string; fileKey: string }> {
+    const publicId = generatePublicId('upload');
+    const fileKey = `avatars/${publicId}/verified.png`;
+    const [seeded] = await database
+      .insert(uploads)
+      .values({
+        public_id: publicId,
+        user_id: userInternalId,
+        organization_id: null,
+        file_name: 'verified.png',
+        file_key: fileKey,
+        mime_type: 'image/png',
+        file_size: 1024,
+        storage_provider: 's3',
+        bucket: SEEDED_BUCKET,
+        status: 'UPLOADED',
+        metadata: { purpose: 'AVATAR', target: 'USER' },
+        uploaded_at: new Date(),
+      })
+      .returning();
+    return { id: seeded!.id, publicId, fileKey };
+  }
 
   describe('POST /api/v1/uploads', () => {
     it('should return 401 without authentication', async () => {
@@ -53,7 +86,7 @@ describe('Upload Domain — Integration', () => {
         token: token,
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode, response.body).toBe(400);
     });
 
     it('should return 400 for invalid purpose enum', async () => {
@@ -71,7 +104,7 @@ describe('Upload Domain — Integration', () => {
           file_size: 1024,
         },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode, response.body).toBe(400);
     });
   });
 
@@ -84,6 +117,52 @@ describe('Upload Domain — Integration', () => {
         url: testApiPath(`/uploads/${unknownUploadPublicId}`),
       });
       expect(response.statusCode).toBe(401);
+    });
+
+    it('should return 200 with the upload detail for its owner', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const { publicId } = await seedUploadedRow(user.id);
+
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(`/uploads/${publicId}`),
+        token,
+      });
+
+      expect(response.statusCode, response.body).toBe(200);
+      const data = (response.json() as { data: Record<string, unknown> }).data;
+      expect(data).toMatchObject({
+        id: publicId,
+        file_name: 'verified.png',
+        mime_type: 'image/png',
+        file_size: 1024,
+        status: 'UPLOADED',
+        storage_provider: 's3',
+        organization_id: null,
+      });
+    });
+
+    it('should omit the internal storage key and bucket from the detail body', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const { publicId, fileKey } = await seedUploadedRow(user.id);
+
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(`/uploads/${publicId}`),
+        token,
+      });
+
+      expect(response.statusCode, response.body).toBe(200);
+      const data = (response.json() as { data: Record<string, unknown> }).data;
+      // Storage layout is internal: the client attaches via the create-time `key` and reads
+      // via presigned URLs, never the raw path. Leaking either invites bucket enumeration.
+      expect(data).not.toHaveProperty('key');
+      expect(data).not.toHaveProperty('file_key');
+      expect(data).not.toHaveProperty('bucket');
+      expect(response.body).not.toContain(fileKey);
+      expect(response.body).not.toContain(SEEDED_BUCKET);
     });
 
     it('should return 404 for unknown upload', async () => {
@@ -145,28 +224,10 @@ describe('Upload Domain — Integration', () => {
       expect(response.statusCode).toBe(404);
     });
 
-    it('is idempotent: re-confirming an already-UPLOADED row returns 200 without S3 calls', async () => {
+    it('is idempotent: re-confirming an already-UPLOADED row returns 201 without S3 calls', async () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
-      const publicId = generatePublicId('upload');
-      const [seeded] = await database
-        .insert(uploads)
-        .values({
-          public_id: publicId,
-          user_id: user.id,
-          organization_id: null,
-          file_name: 'verified.png',
-          file_key: 'uploads/already-verified/verified.png',
-          mime_type: 'image/png',
-          file_size: 1024,
-          storage_provider: 's3',
-          bucket: 'test-uploads',
-          status: 'UPLOADED',
-          metadata: { purpose: 'AVATAR', target: 'USER' },
-          uploaded_at: new Date(),
-        })
-        .returning();
-      expect(seeded!.status).toBe('UPLOADED');
+      const { id, publicId } = await seedUploadedRow(user.id);
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
@@ -176,8 +237,88 @@ describe('Upload Domain — Integration', () => {
       });
       expect(response.statusCode).toBe(201);
 
-      const [postCall] = await database.select().from(uploads).where(eq(uploads.id, seeded!.id));
+      const [postCall] = await database.select().from(uploads).where(eq(uploads.id, id));
       expect(postCall!.status).toBe('UPLOADED');
+    });
+  });
+
+  /**
+   * `POST /uploads` is the only `idempotencyRequired` route in this domain, but the
+   * middleware's own suite (`idempotency.security.test.ts`) exercises it exclusively against
+   * `/tenancy/organizations`. These cases pin the contract at this route.
+   *
+   * Both use a raw `app.inject` on purpose: `injectAuthenticated` auto-supplies a fresh
+   * `X-Idempotency-Key` for exactly this path, which would route straight past the hook
+   * under test.
+   */
+  describe('POST /api/v1/uploads — idempotency contract', () => {
+    const validAvatarPayload = {
+      purpose: 'avatar',
+      for: 'user',
+      content_type: 'image/png',
+      file_name: 'avatar.png',
+      file_size: 1024,
+    };
+
+    it('should return 422 when X-Idempotency-Key is missing', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: testApiPath('/uploads'),
+        headers: { authorization: `Bearer ${token}` },
+        payload: validAvatarPayload,
+      });
+
+      expect(response.statusCode, response.body).toBe(422);
+    });
+
+    /**
+     * CHARACTERIZATION — this pins today's behavior, which is NOT replay protection.
+     *
+     * The presign response carries `upload_url` and a SigV4 `Policy`/`X-Amz-Signature`, so
+     * `responseBodyContainsSecretFields` refuses to cache it
+     * (`idempotency.cache.secret_response_skipped`). With no completed entry stashed,
+     * `idempotencyOnResponse` takes its release branch and DELETEs the placeholder — leaving
+     * no record of the key at all.
+     *
+     * Consequence: the key is mandatory (see the 422 above) but spent-and-forgotten. A client
+     * that retries after a timeout mints a SECOND upload row and burns another
+     * `UPLOAD_MAX_PENDING_PER_USER` slot, and the divergent-payload guard never fires either.
+     * Only the in-flight window is protected.
+     *
+     * If that is later judged a defect, this test should flip — deliberately, not silently.
+     */
+    it('does not replay a reused key: the presign response is never cached (characterization)', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const headers = {
+        authorization: `Bearer ${token}`,
+        'x-idempotency-key': `idem-${randomUUID()}`,
+      };
+
+      const first = await app.inject({
+        method: 'POST',
+        url: testApiPath('/uploads'),
+        headers,
+        payload: validAvatarPayload,
+      });
+      expect(first.statusCode, first.body).toBe(201);
+
+      const second = await app.inject({
+        method: 'POST',
+        url: testApiPath('/uploads'),
+        headers,
+        payload: validAvatarPayload,
+      });
+      expect(second.statusCode, second.body).toBe(201);
+
+      const idOf = (raw: string): string => (JSON.parse(raw) as { data: { id: string } }).data.id;
+      // A replay would return the first id byte-for-byte; a fresh execution mints a new row.
+      expect(idOf(second.body)).not.toBe(idOf(first.body));
+      const rows = await database.select().from(uploads).where(eq(uploads.user_id, user.id));
+      expect(rows).toHaveLength(2);
     });
   });
 });

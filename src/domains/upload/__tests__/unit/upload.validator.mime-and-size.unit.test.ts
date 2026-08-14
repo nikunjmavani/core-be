@@ -107,4 +107,95 @@ describe('validateCreateUpload — MIME, size, and ownership', () => {
     });
     expect(result.file_name).toBe('screenshot');
   });
+
+  /**
+   * `user-file` and `organization-file` are 2 of the 4 purposes and appeared in this suite only
+   * as incidental `file_key` strings in fixtures. They are the only purposes that admit
+   * `application/pdf` and the only ones at the 10 MB cap, so both of the properties that make
+   * them distinct from avatar/logo were unasserted.
+   */
+  describe('the file purposes (user-file / organization-file)', () => {
+    const ORGANIZATION_PUBLIC_ID = 'org_abcdefghijklmnopqrstu';
+
+    const baseOrganizationFile = {
+      for: 'organization',
+      purpose: 'organization-file',
+      organization_id: ORGANIZATION_PUBLIC_ID,
+      content_type: 'application/pdf',
+      file_size: 1024,
+      file_name: 'contract.pdf',
+    };
+
+    it('accepts application/pdf for user-file', () => {
+      const result = validateCreateUpload({
+        for: 'user',
+        purpose: 'user-file',
+        content_type: 'application/pdf',
+        file_size: 1024,
+        file_name: 'invoice.pdf',
+      });
+
+      expect(result.purpose).toBe('user-file');
+      expect(result.content_type).toBe('application/pdf');
+    });
+
+    // The same content type must stay refused for avatar — a PDF served from the avatar
+    // prefix is rendered inline by browsers and is not an image.
+    it('rejects application/pdf for avatar', () => {
+      expect(() =>
+        validateCreateUpload({
+          ...baseUserUpload,
+          content_type: 'application/pdf',
+          file_name: 'invoice.pdf',
+        }),
+      ).toThrow(ValidationError);
+    });
+
+    it('accepts a user-file exactly at the 10 MB cap and rejects one byte over', () => {
+      const maxSize = UPLOAD_PURPOSE_CONFIG['user-file'].maxSize;
+      const userFile = {
+        for: 'user',
+        purpose: 'user-file',
+        content_type: 'application/pdf',
+        file_name: 'invoice.pdf',
+      };
+
+      expect(validateCreateUpload({ ...userFile, file_size: maxSize }).file_size).toBe(maxSize);
+      expect(() => validateCreateUpload({ ...userFile, file_size: maxSize + 1 })).toThrow(
+        ValidationError,
+      );
+    });
+
+    it('accepts an organization-file exactly at the 10 MB cap and rejects one byte over', () => {
+      const maxSize = UPLOAD_PURPOSE_CONFIG['organization-file'].maxSize;
+
+      expect(validateCreateUpload({ ...baseOrganizationFile, file_size: maxSize }).file_size).toBe(
+        maxSize,
+      );
+      expect(() =>
+        validateCreateUpload({ ...baseOrganizationFile, file_size: maxSize + 1 }),
+      ).toThrow(ValidationError);
+    });
+
+    // route-audit L3: purpose↔target pairing. A user-target organization-file would build an
+    // `organization-files/undefined/...` key on a user-scoped row.
+    it('rejects organization-file on a user target', () => {
+      expect(() =>
+        validateCreateUpload({
+          ...baseOrganizationFile,
+          for: 'user',
+          organization_id: undefined,
+        }),
+      ).toThrow(ValidationError);
+    });
+
+    it('rejects user-file on an organization target', () => {
+      expect(() =>
+        validateCreateUpload({
+          ...baseOrganizationFile,
+          purpose: 'user-file',
+        }),
+      ).toThrow(ValidationError);
+    });
+  });
 });
