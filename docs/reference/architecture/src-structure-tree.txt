@@ -873,7 +873,10 @@ src/
     │   │   │   ├── upload-route-smoke.integration.test.ts
     │   │   │   └── upload.integration.test.ts
     │   │   ├── unit/
+    │   │   │   ├── upload-content-type.util.unit.test.ts
+    │   │   │   ├── upload-key-builders.unit.test.ts
     │   │   │   ├── upload-pending-sweep.processor.unit.test.ts
+    │   │   │   ├── upload-routes-rate-limit.policy.unit.test.ts
     │   │   │   ├── upload-svg.util.unit.test.ts
     │   │   │   ├── upload-tombstone-retention.processor.boundary.unit.test.ts
     │   │   │   ├── upload-tombstone-retention.worker.unit.test.ts
@@ -883,6 +886,7 @@ src/
     │   │   │   ├── upload.repository.unit.test.ts
     │   │   │   ├── upload.repository.user-isolation.db.unit.test.ts
     │   │   │   ├── upload.serializer.unit.test.ts
+    │   │   │   ├── upload.service.assert-key-confirmed.unit.test.ts
     │   │   │   ├── upload.service.org-quota-concurrency.db.unit.test.ts
     │   │   │   ├── upload.service.quota-concurrency.db.unit.test.ts
     │   │   │   ├── upload.service.unit.test.ts
