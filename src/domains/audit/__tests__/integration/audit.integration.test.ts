@@ -201,6 +201,119 @@ describe('Audit Domain — Integration', () => {
       expect(lastPage.meta?.pagination?.has_more).toBe(false);
       expect(lastPage.meta?.pagination?.next).toBeNull();
     });
+
+    /**
+     * Stability under concurrent writes — the property that makes a keyset cursor worth having
+     * over an OFFSET.
+     *
+     * The cases above page a table nobody is writing to. Audit is append-only and written by every
+     * mutating request, so in production rows arrive *between* a caller's page 1 and page 2. With
+     * OFFSET, those inserts shift the window and page 2 re-serves rows already seen; a keyset
+     * cursor is anchored to `(created_at, id)` and must not. Nothing asserted that.
+     */
+    it('is not disturbed by rows inserted after the cursor was minted', async () => {
+      const user = await createTestUser();
+      const token = await generateSuperAdminToken(user.public_id);
+      const seededOldestFirst = await seedAuditLogs(user.id, 5);
+      const newestFirst = [...seededOldestFirst].reverse();
+
+      const pageOne = (await listLogs(token, { limit: '2' })).json() as AuditListBody;
+      const pageOneActions = pageOne.data.map((entry) => entry.action);
+      expect(pageOneActions).toEqual(newestFirst.slice(0, 2));
+
+      // A newer row lands mid-walk. It sorts ahead of everything on page 1, which is exactly the
+      // insert that shifts an OFFSET window by one and makes page 2 repeat a row.
+      await repository.insert({
+        actor_user_id: user.id,
+        action: 'audit.seeded.concurrent',
+        resource_type: 'user',
+        resource_id: user.id,
+        severity: 'INFO',
+        ip_address: '203.0.113.7',
+        user_agent: 'integration/1.0',
+        metadata: { seq: 99 },
+        created_at: new Date(BASE_INSTANT + 99 * ONE_MINUTE_MS),
+      });
+
+      const pageTwo = (
+        await listLogs(token, { limit: '2', after: pageOne.meta?.pagination?.next as string })
+      ).json() as AuditListBody;
+      const pageTwoActions = pageTwo.data.map((entry) => entry.action);
+
+      // Page 2 continues from the anchor: the pre-existing feed, unshifted.
+      expect(pageTwoActions).toEqual(newestFirst.slice(2, 4));
+      // No row is served twice, and the late arrival never appears behind the cursor.
+      expect(pageTwoActions.filter((action) => pageOneActions.includes(action))).toEqual([]);
+      expect(pageTwoActions).not.toContain('audit.seeded.concurrent');
+    });
+
+    /**
+     * The classic keyset failure: a cursor anchored on the sort column alone cannot separate rows
+     * that share it. Audit orders by `created_at DESC, id DESC`, so ties break on the id — but a
+     * regression that dropped the tiebreak would skip or repeat a row exactly at a page boundary
+     * that falls between two same-instant rows, and every other case here would still pass.
+     */
+    it('pages cleanly through rows sharing the same created_at', async () => {
+      const user = await createTestUser();
+      const token = await generateSuperAdminToken(user.public_id);
+
+      const sharedInstant = new Date(BASE_INSTANT);
+      for (let index = 0; index < 4; index += 1) {
+        await repository.insert({
+          actor_user_id: user.id,
+          action: `audit.tied.${index}`,
+          resource_type: 'user',
+          resource_id: user.id,
+          severity: 'INFO',
+          ip_address: '203.0.113.7',
+          user_agent: 'integration/1.0',
+          metadata: { seq: index },
+          created_at: sharedInstant,
+        });
+      }
+
+      const collected: string[] = [];
+      let cursor: string | null | undefined;
+      // Bounded walk: four tied rows at limit 2 is two pages; the bound stops a broken cursor
+      // from looping forever instead of failing.
+      for (let page = 0; page < 4; page += 1) {
+        const body = (
+          await listLogs(token, { limit: '2', ...(cursor ? { after: cursor } : {}) })
+        ).json() as AuditListBody;
+        collected.push(...body.data.map((entry) => entry.action));
+        cursor = body.meta?.pagination?.next;
+        if (!body.meta?.pagination?.has_more) break;
+      }
+
+      // Every row exactly once — no skip, no repeat, across the boundary that splits the tie.
+      expect([...collected].sort()).toEqual([
+        'audit.tied.0',
+        'audit.tied.1',
+        'audit.tied.2',
+        'audit.tied.3',
+      ]);
+      expect(new Set(collected).size).toBe(collected.length);
+    });
+
+    /**
+     * `has_more` is the flag every client loops on. It must be *computed*, not guessed — a route
+     * that returned `data.length === limit` would report `has_more: true` on a perfectly full
+     * final page and send the client into an extra round-trip forever.
+     */
+    it('reports has_more: false on a final page that is exactly full', async () => {
+      const user = await createTestUser();
+      const token = await generateSuperAdminToken(user.public_id);
+      await seedAuditLogs(user.id, 4);
+
+      const pageOne = (await listLogs(token, { limit: '2' })).json() as AuditListBody;
+      const pageTwo = (
+        await listLogs(token, { limit: '2', after: pageOne.meta?.pagination?.next as string })
+      ).json() as AuditListBody;
+
+      expect(pageTwo.data).toHaveLength(2);
+      expect(pageTwo.meta?.pagination?.has_more).toBe(false);
+      expect(pageTwo.meta?.pagination?.next).toBeNull();
+    });
   });
 
   describe('GET /api/v1/audit/logs — input rejection', () => {

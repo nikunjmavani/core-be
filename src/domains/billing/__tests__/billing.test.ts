@@ -28,7 +28,14 @@ const BILLING_PERMISSIONS = {
 
 const ALL_BILLING_PERMISSIONS = Object.values(BILLING_PERMISSIONS);
 
-describe('Billing Domain — Integration', () => {
+/**
+ * Canonical for the billing routes' **gates**: every route is reachable, and every denial fires.
+ *
+ * What comes back *through* those gates — body shape, list contents, validator boundaries, and the
+ * billing-account read denials — belongs in `__tests__/integration/billing.integration.test.ts`.
+ * Keep the split: before it, these two files ran 7 identical DB-bound cases on every CI run.
+ */
+describe('Billing Domain — Route gates (e2e)', () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
@@ -66,34 +73,13 @@ describe('Billing Domain — Integration', () => {
 
   // ─── Plans (public read) ────────────────────────────────────
 
+  // Gates only. The authenticated 200s, the list contents, and the malformed-id 400 are the
+  // response contract and live in the integration suite.
+
   describe('GET /api/v1/billing/plans', () => {
     it('should return plans without authentication', async () => {
       const response = await injectUnauthenticated(app, { url: testApiPath('/billing/plans') });
       expect(response.statusCode).toBe(200);
-    });
-
-    it('should return plans with authentication', async () => {
-      const { token } = await createAuthorizedBillingContext();
-      const response = await injectAuthenticated(app, {
-        url: testApiPath('/billing/plans'),
-        token,
-      });
-      expect(response.statusCode).toBe(200);
-      const body = response.json() as { data?: unknown };
-      expect(body.data).toBeDefined();
-    });
-
-    it('should include created plan in list', async () => {
-      await createTestPlan({ name: 'Pro Plan' });
-      const { token } = await createAuthorizedBillingContext();
-      const response = await injectAuthenticated(app, {
-        url: testApiPath('/billing/plans'),
-        token,
-      });
-      expect(response.statusCode).toBe(200);
-      const body = response.json() as { data: Array<{ name: string }> };
-      const planNames = body.data.map((plan) => plan.name);
-      expect(planNames).toContain('Pro Plan');
     });
   });
 
@@ -104,18 +90,6 @@ describe('Billing Domain — Integration', () => {
         url: testApiPath(`/billing/plans/${plan.public_id}`),
       });
       expect(response.statusCode).toBe(200);
-    });
-
-    it('should return plan by public ID', async () => {
-      const plan = await createTestPlan();
-      const { token } = await createAuthorizedBillingContext();
-      const response = await injectAuthenticated(app, {
-        url: testApiPath(`/billing/plans/${plan.public_id}`),
-        token,
-      });
-      expect(response.statusCode).toBe(200);
-      const body = response.json() as { data?: unknown };
-      expect(body.data).toBeDefined();
     });
 
     it('should return 404 for non-existent plan', async () => {
