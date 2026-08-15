@@ -10,7 +10,10 @@ What this suite covers:
 
 - Per-route p50 / p95 / p99 latency under low-concurrency load.
 - Concurrent-request handling (no leaks, no pool exhaustion).
-- Cache hit-ratio for the permission cache under repeated reads.
+- Cache hit-ratio for the permission cache under repeated reads (`permission-cache.performance.test.ts` — exact join-count budgets: one 5-table join per distinct (user, organization); the strict cache-bypass path never caches).
+- N+1 / scaling tripwires on the read-heavy list routes per domain: organizations + users (`n-plus-one`), memberships (`membership-list`), billing subscriptions + plans (`billing-list`), notification inbox + unread count (`notify-list`), auth session list (`auth-session-list`).
+- EXPLAIN-plan assertions that the migration-provided indexes actually serve the hot queries (`explain-analyze` — audit org filter, user email trgm; `notify-list` — inbox keyset index).
+- Worker concurrency bulkheads stay independent per queue (`worker-bulkheads`).
 
 What it does **not** cover: real-world traffic shape (see `load/` for k6 SLO scenarios), large-payload behavior (separate fixtures), failure modes (see `chaos/`).
 
