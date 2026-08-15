@@ -47,6 +47,8 @@ Org-scoped routes are flat — they carry **no** `/organizations/{organization_i
 | RLS concurrency | `scenarios/rls-concurrency-beyond-pool.js` | `TEST_TOKEN`, `TEST_ORG_ID` (optional `DATABASE_POOL_MAX`, `BEYOND_POOL_FACTOR`, `BEYOND_POOL_VUS`) | `pnpm load:rls-concurrency`          |
 | Admin           | `scenarios/admin.js`           | `ADMIN_TOKEN`                                            | `pnpm load:admin` (after `pnpm tool:admin-token`) |
 | **User journey** | `scenarios/user-journey.js`  | credential pool (see below)                              | `pnpm load:user-journey`                          |
+| **Session journey** | `scenarios/session-refresh-journey.js` | `DEMO_EMAIL`, `DEMO_PASSWORD` (or use defaults) | `pnpm load:session-journey` — login → Bearer read → cookie+CSRF refresh → rotated-token read → logout → refresh 401 |
+| Login burst (rate limit) | `scenarios/login-burst-rate-limit.js` | none (dedicated non-existent identity; optional `BURST_EMAIL`) | `pnpm load:login-burst` — brute-force burst must yield only 401/429 and ≥1 429 proves the limiter engaged (hardened target). Local dev runs `RATE_LIMIT_RELAXED_CAPS=true`, so pass `EXPECT_RATE_LIMIT=false` there. Kept OUT of the nightly gate (per-IP residue) |
 
 **Obtaining credentials:**
 

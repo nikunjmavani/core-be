@@ -117,6 +117,8 @@
     "load:rls-concurrency": "k6 run src/tests/load/k6/scenarios/rls-concurrency-beyond-pool.js",
     "load:admin": "k6 run src/tests/load/k6/scenarios/admin.js",
     "load:user-journey": "k6 run src/tests/load/k6/scenarios/user-journey.js",
+    "load:session-journey": "DEMO_EMAIL=demo@example.com DEMO_PASSWORD='DemoPassword123!' k6 run src/tests/load/k6/scenarios/session-refresh-journey.js",
+    "load:login-burst": "k6 run src/tests/load/k6/scenarios/login-burst-rate-limit.js",
     "load:journey": "bash src/tests/load/k6/run-journey.sh",
     "load:journey:down": "bash src/tests/load/k6/setup-loadtest.sh --teardown",
     "load:coverage": "node tooling/ci/check-load-coverage.mjs",
