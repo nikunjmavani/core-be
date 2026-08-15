@@ -3,17 +3,12 @@ import { generate as generateTotp } from 'otplib';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import {
   injectAuthenticated,
-  injectUnauthenticated,
   type InjectHttpResult,
 } from '@/tests/helpers/test-http-inject.helper.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { seedAllPermissions } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
-import {
-  generateTestToken,
-  generateTestTokenAndSession,
-  generateSuperAdminToken,
-} from '@/tests/helpers/test-auth.js';
+import { generateTestToken, generateTestTokenAndSession } from '@/tests/helpers/test-auth.js';
 import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
 import type { FastifyInstance } from 'fastify';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
@@ -44,7 +39,17 @@ async function getMeWithRetry(
   });
 }
 
-describe('User Domain — Integration', () => {
+/**
+ * Multi-step user flows.
+ *
+ * This suite and `__tests__/integration/user.integration.test.ts` used to be near-duplicates —
+ * 21 of their `it()` titles were shared, including a seven-step MFA round-trip that ran twice.
+ * They are now split by role: **`user.integration.test.ts` is canonical for route contracts**
+ * (the declared status of every user route, plus its denials), and this file keeps only the
+ * flows — cases whose value is the sequence of calls rather than any single status code.
+ * Single-route status assertions belong in the integration suite, not here.
+ */
+describe('User Domain — flows', () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
@@ -65,34 +70,7 @@ describe('User Domain — Integration', () => {
     await seedAllPermissions();
   });
 
-  // ─── Self-service: /me ────────────────────────────────────────
-
   describe('GET /api/v1/users/me', () => {
-    it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, {
-        url: testApiPath('/users/me'),
-      });
-      expect(response.statusCode).toBe(401);
-    });
-
-    it('should return current user profile', async () => {
-      const user = await createTestUser();
-      const token = await generateTestToken({ userId: user.public_id });
-      const response = await getMeWithRetry(app, token);
-      expect(response.statusCode).toBe(200);
-      const body = response.json() as { data?: unknown };
-      expect(body.data).toBeDefined();
-    });
-
-    it('should return is_mfa_enabled false when user has no MFA', async () => {
-      const user = await createTestUser();
-      const token = await generateTestToken({ userId: user.public_id });
-      const response = await getMeWithRetry(app, token);
-      expect(response.statusCode).toBe(200);
-      const body = response.json() as { data: { is_mfa_enabled: boolean } };
-      expect(body.data).toHaveProperty('is_mfa_enabled', false);
-    });
-
     it('exposes personal_organization_id (self-heal provisions one on demand)', async () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
@@ -176,27 +154,6 @@ describe('User Domain — Integration', () => {
   });
 
   describe('PATCH /api/v1/users/me', () => {
-    it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'PATCH',
-        url: testApiPath('/users/me'),
-        payload: {},
-      });
-      expect(response.statusCode).toBe(401);
-    });
-
-    it('should update current user profile', async () => {
-      const user = await createTestUser();
-      const token = await generateTestToken({ userId: user.public_id });
-      const response = await injectAuthenticated(app, {
-        method: 'PATCH',
-        url: testApiPath('/users/me'),
-        token,
-        payload: { first_name: 'Updated' },
-      });
-      expect(response.statusCode).toBe(200);
-    });
-
     it('should update name and job_title together (onboarding profile)', async () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
@@ -222,190 +179,35 @@ describe('User Domain — Integration', () => {
     });
   });
 
-  describe('DELETE /api/v1/users/me', () => {
-    it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'DELETE',
-        url: testApiPath('/users/me'),
-      });
-      expect(response.statusCode).toBe(401);
-    });
-
-    it('should soft-delete user, revoke sessions, and hide profile', async () => {
+  describe('Onboarding then account deletion', () => {
+    it('completes onboarding, then self-deletes and loses access to the profile', async () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
+
+      const onboarding = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/users/me/onboarding/complete'),
+        token,
+      });
+      expect(onboarding.statusCode, onboarding.body).toBe(201);
+      expect(
+        (onboarding.json() as { data: { onboarding_completed: boolean } }).data
+          .onboarding_completed,
+      ).toBe(true);
 
       const deleteResponse = await injectAuthenticated(app, {
         method: 'DELETE',
         url: testApiPath('/users/me'),
         token,
       });
-      expect(deleteResponse.statusCode).toBe(204);
+      expect(deleteResponse.statusCode, deleteResponse.body).toBe(204);
 
+      // Soft-delete revokes the session, so the same bearer no longer authenticates.
       const meResponse = await injectAuthenticated(app, {
         url: testApiPath('/users/me'),
         token,
       });
       expect(meResponse.statusCode).toBe(401);
-    });
-  });
-
-  // ─── Self-service: Settings ───────────────────────────────────
-
-  describe('GET /api/v1/users/me/settings', () => {
-    it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, {
-        url: testApiPath('/users/me/settings'),
-      });
-      expect(response.statusCode).toBe(401);
-    });
-
-    it('should return user settings', async () => {
-      const user = await createTestUser();
-      const token = await generateTestToken({ userId: user.public_id });
-      const response = await injectAuthenticated(app, {
-        url: testApiPath('/users/me/settings'),
-        token,
-      });
-      expect([200, 404]).toContain(response.statusCode);
-    });
-  });
-
-  describe('PATCH /api/v1/users/me/settings', () => {
-    it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'PATCH',
-        url: testApiPath('/users/me/settings'),
-        payload: {},
-      });
-      expect(response.statusCode).toBe(401);
-    });
-  });
-
-  // ─── Self-service: Notification Preferences ───────────────────
-
-  describe('GET /api/v1/users/me/notification-preferences', () => {
-    it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, {
-        url: testApiPath('/users/me/notification-preferences'),
-      });
-      expect(response.statusCode).toBe(401);
-    });
-
-    it('should return notification preferences', async () => {
-      const user = await createTestUser();
-      const token = await generateTestToken({ userId: user.public_id });
-      const response = await injectAuthenticated(app, {
-        url: testApiPath('/users/me/notification-preferences'),
-        token,
-      });
-      expect([200, 404]).toContain(response.statusCode);
-    });
-  });
-
-  // ─── Self-service: Avatar ─────────────────────────────────────
-
-  describe('PUT /api/v1/users/me/avatar', () => {
-    it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'PUT',
-        url: testApiPath('/users/me/avatar'),
-        payload: {},
-      });
-      expect(response.statusCode).toBe(401);
-    });
-  });
-
-  describe('DELETE /api/v1/users/me/avatar', () => {
-    it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'DELETE',
-        url: testApiPath('/users/me/avatar'),
-      });
-      expect(response.statusCode).toBe(401);
-    });
-  });
-
-  // ─── Admin: User management ───────────────────────────────────
-
-  describe('GET /api/v1/users/', () => {
-    it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, {
-        url: testApiPath('/users/'),
-      });
-      expect(response.statusCode).toBe(401);
-    });
-
-    it('should return 403 for non-admin user', async () => {
-      const user = await createTestUser();
-      const token = await generateTestToken({
-        userId: user.public_id,
-        role: 'user',
-      });
-      const response = await injectAuthenticated(app, {
-        url: testApiPath('/users/'),
-        token,
-      });
-      expect(response.statusCode).toBe(403);
-    });
-
-    it('should return users for super admin', async () => {
-      const user = await createTestUser();
-      const token = await generateSuperAdminToken(user.public_id);
-      const response = await injectAuthenticated(app, {
-        url: testApiPath('/users/'),
-        token,
-      });
-      expect(response.statusCode).toBe(200);
-      const body = response.json() as { data?: unknown };
-      expect(body.data).toBeDefined();
-    });
-  });
-
-  describe('GET /api/v1/users/:user_id', () => {
-    it('should return 403 for non-admin user', async () => {
-      const user = await createTestUser();
-      const token = await generateTestToken({
-        userId: user.public_id,
-        role: 'user',
-      });
-      const response = await injectAuthenticated(app, {
-        url: testApiPath(`/users/${user.public_id}`),
-        token,
-      });
-      expect(response.statusCode).toBe(403);
-    });
-  });
-
-  describe('POST /api/v1/users/:user_id/suspend', () => {
-    it('should return 403 for non-admin', async () => {
-      const user = await createTestUser();
-      const token = await generateTestToken({
-        userId: user.public_id,
-        role: 'user',
-      });
-      const response = await injectAuthenticated(app, {
-        method: 'POST',
-        url: testApiPath(`/users/${user.public_id}/suspend`),
-        token,
-      });
-      expect(response.statusCode).toBe(403);
-    });
-  });
-
-  describe('POST /api/v1/users/:user_id/unsuspend', () => {
-    it('should return 403 for non-admin', async () => {
-      const user = await createTestUser();
-      const token = await generateTestToken({
-        userId: user.public_id,
-        role: 'user',
-      });
-      const response = await injectAuthenticated(app, {
-        method: 'POST',
-        url: testApiPath(`/users/${user.public_id}/unsuspend`),
-        token,
-      });
-      expect(response.statusCode).toBe(403);
     });
   });
 });

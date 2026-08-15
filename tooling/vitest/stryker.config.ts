@@ -19,8 +19,12 @@ export default defineConfig({
       'src/domains/auth/**/__tests__/unit/*service*.unit.test.ts',
       'src/domains/billing/**/__tests__/unit/*service*.unit.test.ts',
       'src/domains/tenancy/**/__tests__/unit/*service*.unit.test.ts',
+      'src/domains/user/**/__tests__/unit/*service*.unit.test.ts',
       'src/tests/unit/middleware/**/*.unit.test.ts',
     ],
+    // `*.db.unit.test.ts` needs a live Postgres and breaks Stryker's dry run — the pattern above
+    // would otherwise sweep in e.g. user-data-export.service.db.unit.test.ts.
+    exclude: ['**/*.db.unit.test.ts'],
     pool: 'forks',
     fileParallelism: false,
     maxWorkers: 1,

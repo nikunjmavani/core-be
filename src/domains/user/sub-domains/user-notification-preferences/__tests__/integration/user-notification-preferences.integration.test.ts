@@ -110,4 +110,62 @@ describe('User Notification Preferences Sub-Domain — Integration', () => {
       expect(response.statusCode).toBe(200);
     });
   });
+
+  describe('GET /api/v1/users/me/notification-preferences', () => {
+    it('returns 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/users/me/notification-preferences'),
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    // Previously only asserted as `[200, 404]` in the two domain route suites. The service throws
+    // NotFoundError only for an unknown user, so an authenticated caller with no rows yet gets
+    // 200 and an empty list.
+    it('returns 200 with an empty list before any preference is set', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/users/me/notification-preferences'),
+        token,
+      });
+
+      expect(response.statusCode, response.body).toBe(200);
+      expect((response.json() as { data: unknown[] }).data).toEqual([]);
+    });
+
+    it('reads back the preference set written by PUT', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+
+      const put = await injectAuthenticated(app, {
+        method: 'PUT',
+        url: testApiPath('/users/me/notification-preferences'),
+        token,
+        payload: {
+          preferences: [
+            { notification_type: 'billing.usage_threshold', channel: 'EMAIL', is_enabled: false },
+          ],
+        },
+      });
+      expect(put.statusCode, put.body).toBe(200);
+
+      const read = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/users/me/notification-preferences'),
+        token,
+      });
+      expect(read.statusCode, read.body).toBe(200);
+      expect((read.json() as { data: Array<Record<string, unknown>> }).data).toContainEqual(
+        expect.objectContaining({
+          notification_type: 'billing.usage_threshold',
+          channel: 'EMAIL',
+          is_enabled: false,
+        }),
+      );
+    });
+  });
 });
