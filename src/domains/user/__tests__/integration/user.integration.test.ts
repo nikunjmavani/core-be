@@ -185,7 +185,7 @@ describe('User Domain — Integration', () => {
         token: token,
         payload: { unknown_field: true },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
   });
 

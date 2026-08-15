@@ -109,7 +109,7 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
     '  AUTH    = JWT authentication required',
     '  ROLE    = Global role required (super_admin, admin, user)',
     '  PERM    = Organization-scoped permission required',
-    '  TOKEN   = Non-JWT bearer token required',
+    '  TOKEN   = Credential enforced in-handler (non-JWT bearer token or session cookie)',
     '  Columns after the path: S = success status · I = idempotency (req | -) · O = org scope (both | team-only, 422 on personal)',
     '',
   ];

@@ -987,7 +987,51 @@ describe('Membership Sub-Domain — Integration', () => {
     });
   });
 
+  describe('PATCH /api/v1/tenancy/organization/memberships/:membership_id (route-coverage gap-fill)', () => {
+    it('returns 400 for an out-of-enum status (validator wired at the boundary)', async () => {
+      // updateMembershipDto's enum rule was unit-proven; no 400 was ever observed on this route.
+      // The refusal must come from the validator, not the lookup, so the target membership is real.
+      const { organization, token: ownerToken } = await createAuthorizedContext();
+      const member = await createTestUser({ email: `patch-400-${randomUUID()}@test.com` });
+      const memberRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [TENANCY_PERMISSIONS.MEMBERSHIP_READ],
+      });
+      const membership = await createMembership({
+        userId: member.id,
+        organizationId: organization.id,
+        roleId: memberRole.id,
+      });
+
+      const response = await injectAuthenticated(app, {
+        method: 'PATCH',
+        url: testApiPath(`/tenancy/organization/memberships/${membership.public_id}`),
+        token: ownerToken,
+        organizationPublicId: organization.public_id,
+        payload: { status: 'NOT_A_STATUS' },
+      });
+      expect(response.statusCode, response.body).toBe(400);
+    });
+  });
+
   describe('POST /api/v1/tenancy/organization/transfer-ownership (route-coverage gap-fill)', () => {
+    it('returns 400 when new_owner_user_id is missing (validator wired at the boundary)', async () => {
+      // The DTO rule is unit-proven; no 400 was ever observed on this route, so a validator that
+      // stopped being wired in would pass every existing case. Key supplied → the idempotency 422
+      // cannot fire; what remains is the validator's own refusal.
+      const { organization, token: ownerToken } = await createAuthorizedContext();
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/tenancy/organization/transfer-ownership`),
+        token: ownerToken,
+        organizationPublicId: organization.public_id,
+        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
+        payload: {},
+      });
+      expect(response.statusCode, response.body).toBe(400);
+    });
+
     it('transfers ownership: organizations.owner_user_id updated (201)', async () => {
       const { organization, token: ownerToken, user: owner } = await createAuthorizedContext();
       const newOwner = await createTestUser({ email: `new-owner-${randomUUID()}@test.com` });

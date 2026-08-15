@@ -130,7 +130,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         url: notificationPolicyResourcePath('not-a-public-id'),
         token,
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 404 when notification policy does not exist', async () => {
@@ -210,7 +210,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token,
         payload: { channel: 'EMAIL' },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 400 when channel is missing', async () => {
@@ -224,7 +224,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token,
         payload: { notification_type: 'system.welcome' },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 422 (not 500) when channel is outside the allowed set', async () => {
@@ -240,7 +240,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token,
         payload: { notification_type: 'system.welcome', channel: 'CARRIER_PIGEON' },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
       expect(response.statusCode).toBeLessThan(500);
     });
 
@@ -259,7 +259,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
           extra_field: true,
         },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 400 when muted_until is not a datetime string', async () => {
@@ -277,7 +277,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
           muted_until: 'not-a-valid-datetime',
         },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should create notification policy when manage permission is granted', async () => {
@@ -375,7 +375,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token,
         payload: { default_enabled: true, unexpected: true },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 400 when muted_until on update is not a datetime string', async () => {
@@ -399,7 +399,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token,
         payload: { muted_until: 'invalid-datetime-value' },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should update notification policy when manage permission is granted', async () => {

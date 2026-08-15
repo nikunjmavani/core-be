@@ -85,11 +85,25 @@ describe('OpenAPI completeness', () => {
       const hasBearer =
         Array.isArray(operation.security) &&
         operation.security.some((s) => s && typeof s === 'object' && 'bearerAuth' in s);
+      const hasSessionCookie =
+        Array.isArray(operation.security) &&
+        operation.security.some((s) => s && typeof s === 'object' && 'sessionCookie' in s);
       const isPublic = route.access === 'public';
+      const isSessionCookieRoute = route.path.endsWith('/auth/refresh');
       if (isPublic && hasBearer) {
         mismatches.push(`${route.method} ${openApiPath} is PUBLIC but advertises bearerAuth`);
       }
-      if (!(isPublic || hasBearer)) {
+      // Refresh authenticates via the session cookie + CSRF header (its own scheme); the cookie
+      // scheme must not creep onto any other route, and refresh must not fall back to bearerAuth.
+      if (hasSessionCookie && !isSessionCookieRoute) {
+        mismatches.push(
+          `${route.method} ${openApiPath} advertises sessionCookie but is not refresh`,
+        );
+      }
+      if (isSessionCookieRoute && !hasSessionCookie) {
+        mismatches.push(`${route.method} ${openApiPath} must advertise the sessionCookie scheme`);
+      }
+      if (!(isPublic || hasBearer || (isSessionCookieRoute && hasSessionCookie))) {
         mismatches.push(`${route.method} ${openApiPath} is ${route.access} but has no bearerAuth`);
       }
     }

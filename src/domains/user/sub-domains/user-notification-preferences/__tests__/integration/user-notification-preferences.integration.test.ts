@@ -45,7 +45,7 @@ describe('User Notification Preferences Sub-Domain — Integration', () => {
         token,
         payload: { unknown_field: true },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('returns 422 (not 500) for a channel outside the allowed set', async () => {
@@ -67,7 +67,7 @@ describe('User Notification Preferences Sub-Domain — Integration', () => {
           ],
         },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
       expect(response.statusCode).toBeLessThan(500);
     });
 

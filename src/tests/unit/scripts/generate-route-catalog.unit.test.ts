@@ -67,6 +67,12 @@ describe('generate-route-catalog', () => {
     ).toBe('TOKEN: access-token');
   });
 
+  it('classifyAccess treats refresh as session-cookie guarded, never PUBLIC', () => {
+    const snippet =
+      "zodApplication.post('/refresh', { ...REFRESH_RATE_LIMIT, schema: {} }, controller.refreshToken);";
+    expect(classifyAccess(snippet, new Map())).toBe('TOKEN: session-cookie');
+  });
+
   it('toRegistryAccess maps catalog labels to registry access enum', () => {
     expect(toRegistryAccess('PUBLIC')).toBe('public');
     expect(toRegistryAccess('AUTH')).toBe('authenticated');

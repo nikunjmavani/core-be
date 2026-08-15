@@ -251,6 +251,14 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
             localeStrings.components?.bearerAuthDescription ??
             'JWT access token obtained from the login or token refresh endpoint.',
         },
+        sessionCookie: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'session_id',
+          description:
+            'HttpOnly session cookie set at login; required by the token refresh endpoint ' +
+            'together with the X-CSRF-Token header (double-submit CSRF).',
+        },
       },
       schemas: getMcpComponentSchemas(),
     },

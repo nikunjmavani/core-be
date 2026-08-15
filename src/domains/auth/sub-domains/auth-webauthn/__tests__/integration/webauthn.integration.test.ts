@@ -102,7 +102,7 @@ describe('Auth WebAuthn — Integration', () => {
         token,
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
   });
 
@@ -260,7 +260,7 @@ describe('Auth WebAuthn — Integration', () => {
         url: testApiPath('/auth/webauthn/authenticate/verify'),
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('does not mint a session for a schema-valid but forged assertion', async () => {

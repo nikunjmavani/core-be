@@ -57,7 +57,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
         url: testApiPath('/auth/login'),
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 401 for invalid credentials', async () => {
@@ -69,7 +69,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
           password: 'wrong-password',
         },
       });
-      expect([401, 404]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(401);
     });
 
     it('when BLOCK_DISPOSABLE_EMAIL is off, login with disposable email returns 401 (invalid creds) not 400', async () => {
@@ -241,7 +241,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
         url: testApiPath('/auth/email/send-code'),
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should accept valid email format', async () => {
@@ -273,7 +273,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
         url: testApiPath('/auth/email/login'),
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 401 for an unknown email / wrong code', async () => {
@@ -282,7 +282,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
         url: testApiPath('/auth/email/login'),
         payload: { email: 'unknown-email-login@example.com', code: 'ZZZZZZ' },
       });
-      expect([401, 404]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(401);
     });
   });
 
@@ -331,7 +331,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
         url: testApiPath('/auth/password/forgot'),
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 201 with message for existing user (no enumeration)', async () => {
@@ -376,7 +376,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
         url: testApiPath('/auth/password/reset'),
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 401 for invalid reset token', async () => {
@@ -453,7 +453,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
         token,
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should change password for authenticated user with valid current password', async () => {
@@ -554,7 +554,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
         url: testApiPath('/auth/mfa/login'),
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 401 for a TOTP code without a valid mfa_session_token', async () => {

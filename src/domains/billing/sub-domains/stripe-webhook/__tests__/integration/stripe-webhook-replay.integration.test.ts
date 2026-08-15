@@ -117,7 +117,7 @@ describe('Stripe webhook — replay defence', () => {
 
     const response = await postWebhook(rawPayload, signature);
 
-    expect([400, 401]).toContain(response.statusCode);
+    expect(response.statusCode).toBe(400);
   });
 
   it('writes no ledger row for a refused stale delivery', async () => {

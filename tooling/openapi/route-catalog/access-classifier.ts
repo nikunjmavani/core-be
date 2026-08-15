@@ -15,6 +15,14 @@ export function classifyAccess(snippet: string, permissionMap: Map<string, strin
     return 'TOKEN: access-token';
   }
 
+  // `/refresh` carries no `app.authenticate` (the access token is expired by definition when a
+  // client refreshes), but it is NOT public: the handler requires a valid `session_id` httpOnly
+  // cookie and enforces the CSRF Origin/Referer allowlist. Cataloguing it PUBLIC misread the
+  // route as unauthenticated.
+  if (snippet.includes("'/refresh'") || snippet.includes('"/refresh"')) {
+    return 'TOKEN: session-cookie';
+  }
+
   if (!snippet.includes('app.authenticate')) {
     return 'PUBLIC';
   }

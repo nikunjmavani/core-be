@@ -8,7 +8,7 @@ Legend:
   AUTH    = JWT authentication required
   ROLE    = Global role required (super_admin, admin, user)
   PERM    = Organization-scoped permission required
-  TOKEN   = Non-JWT bearer token required
+  TOKEN   = Credential enforced in-handler (non-JWT bearer token or session cookie)
   Columns after the path: S = success status · I = idempotency (req | -) · O = org scope (both | team-only, 422 on personal)
 
 ================================================================================
@@ -50,7 +50,7 @@ Legend:
   POST   /api/v1/auth/password/change                             201  -    both  AUTH
   POST   /api/v1/auth/password/forgot                             201  -    both  PUBLIC
   POST   /api/v1/auth/password/reset                              201  -    both  PUBLIC
-  POST   /api/v1/auth/refresh                                     201  -    both  PUBLIC
+  POST   /api/v1/auth/refresh                                     201  -    both  TOKEN: session-cookie
   POST   /api/v1/auth/step-up                                     201  -    both  AUTH
   POST   /api/v1/auth/switch-to-organization                      201  -    both  AUTH
   POST   /api/v1/auth/switch-to-personal                          201  -    both  AUTH
@@ -217,11 +217,11 @@ Legend:
 ================================================================================
 
   Total routes    : 132
-  Public          : 17
+  Public          : 16
   Authenticated   : 50
   Role-guarded    : 9
   Perm-guarded    : 52
-  Token-guarded   : 4
+  Token-guarded   : 5
   Team-only (O)   : 9
 
 ================================================================================

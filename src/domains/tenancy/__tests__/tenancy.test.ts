@@ -296,7 +296,7 @@ describe('Tenancy Domain — flows (memberships, leave, roles)', () => {
   // the full add-member flow is covered in membership.integration.test.ts).
 
   describe('POST /api/v1/tenancy/organization/memberships', () => {
-    it('should return 400/422 for missing body', async () => {
+    it('should return 400 for missing body', async () => {
       const { token } = await createAuthorizedUserAndOrganization();
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
@@ -305,7 +305,7 @@ describe('Tenancy Domain — flows (memberships, leave, roles)', () => {
         headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
   });
 
@@ -408,7 +408,7 @@ describe('Tenancy Domain — flows (memberships, leave, roles)', () => {
         token,
         payload: { permission_codes: [TENANCY_PERMISSIONS.ORGANIZATION_READ] },
       });
-      expect([200, 204]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(200);
     });
   });
 });

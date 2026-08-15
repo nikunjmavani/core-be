@@ -36,7 +36,7 @@ describe('Auth Method Sub-Domain — Integration', () => {
         url: testApiPath('/auth/login'),
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 401 for invalid credentials', async () => {

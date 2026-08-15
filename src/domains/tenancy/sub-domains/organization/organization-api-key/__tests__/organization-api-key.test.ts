@@ -215,7 +215,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token,
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 400 when name is empty', async () => {
@@ -229,7 +229,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token,
         payload: { name: '' },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 400 when body contains unknown keys', async () => {
@@ -243,7 +243,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token,
         payload: { name: 'Valid Key', unexpected: true },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should create api key when manage permission is granted', async () => {
@@ -335,7 +335,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token,
         payload: { status: 'INVALID_STATUS' },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should update api key with manage permission', async () => {

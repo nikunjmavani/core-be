@@ -323,7 +323,7 @@ describe('Auth e2e: organization switch', () => {
         payload: { organization_id: team.organization.public_id },
       });
 
-      expect([403, 404]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(403);
     });
   });
 });

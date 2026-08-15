@@ -145,7 +145,7 @@ describe('Billing Domain — Route gates (e2e)', () => {
         token,
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
   });
 
@@ -158,7 +158,7 @@ describe('Billing Domain — Route gates (e2e)', () => {
         url: testApiPath('/billing/webhook'),
         payload: { type: 'test' },
       });
-      expect([400, 401]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 400 for invalid stripe-signature header', async () => {
@@ -168,7 +168,7 @@ describe('Billing Domain — Route gates (e2e)', () => {
         headers: { 'stripe-signature': 'invalid' },
         payload: { type: 'customer.subscription.updated', data: { object: {} } },
       });
-      expect([400, 401]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
   });
 });

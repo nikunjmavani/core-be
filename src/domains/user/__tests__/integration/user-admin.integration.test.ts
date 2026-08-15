@@ -34,6 +34,21 @@ describe('User admin routes — happy paths', () => {
     adminToken = await generateTestToken({ userId: admin.public_id, role: 'super_admin' });
   });
 
+  it('GET /users returns the paginated user list for an admin', async () => {
+    // The admin LIST route had no HTTP test anywhere in the repo — every admin case below targets
+    // /users/:user_id. Observed-status capture across e2e+integration+security showed only a 401.
+    await createTestUser();
+    const response = await injectAuthenticated(app, {
+      method: 'GET',
+      url: testApiPath('/users'),
+      token: adminToken,
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as { data: Array<{ id: string }> };
+    // The seeded admin plus the target — the list actually lists, it does not just answer.
+    expect(body.data.length).toBeGreaterThanOrEqual(2);
+  });
+
   it('GET /users/:user_id returns the target profile', async () => {
     const target = await createTestUser();
     const response = await injectAuthenticated(app, {
@@ -91,6 +106,32 @@ describe('User admin routes — happy paths', () => {
   describe('denials', () => {
     /** Well-formed but unallocated — proves 404 (not found) rather than 422 (bad id shape). */
     const UNKNOWN_USER_ID = generatePublicId('user');
+
+    it('GET /users returns 403 for a plain user', async () => {
+      const caller = await createTestUser();
+      const token = await generateTestToken({ userId: caller.public_id, role: 'user' });
+
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/users'),
+        token,
+      });
+      expect(response.statusCode, response.body).toBe(403);
+    });
+
+    it('PATCH /users/:user_id returns 400 when the body sets status DELETED', async () => {
+      // AdminUpdateUserDto only allows ACTIVE/SUSPENDED — DELETED is reachable solely through the
+      // dedicated delete endpoint (soft-delete + offboarding). This 400 pins that boundary rule;
+      // no admin-PATCH validator refusal was observed anywhere before it.
+      const target = await createTestUser();
+      const response = await injectAuthenticated(app, {
+        method: 'PATCH',
+        url: testApiPath(`/users/${target.public_id}`),
+        token: adminToken,
+        payload: { status: 'DELETED' },
+      });
+      expect(response.statusCode, response.body).toBe(400);
+    });
 
     it('GET /users/:user_id returns 403 for a plain user', async () => {
       const caller = await createTestUser();

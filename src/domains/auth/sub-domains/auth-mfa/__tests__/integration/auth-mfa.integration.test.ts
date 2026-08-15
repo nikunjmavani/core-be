@@ -36,7 +36,7 @@ describe('MFA Sub-Domain — Integration', () => {
         url: testApiPath('/auth/mfa/login'),
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     // Issue #1 regression: a TOTP code alone (without a valid mfa_session_token

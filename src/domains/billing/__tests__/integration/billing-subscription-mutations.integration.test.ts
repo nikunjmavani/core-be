@@ -141,6 +141,23 @@ describe('Billing Subscription Mutations — Integration', () => {
   // ─── POST change-plan ──────────────────────────────────────────────────────
 
   describe('POST /api/v1/billing/subscriptions/:subscription_id/change-plan', () => {
+    it('should return 400 when plan_id is missing (validator wired at the boundary)', async () => {
+      // ChangePlanDto's refusal was unit-proven only — no 400 was ever observed on this route.
+      // Key supplied → the idempotency 422 cannot fire; the body validator runs before the
+      // subscription lookup, so the refusal is the validator's own.
+      const { organization, subscription, token } = await createBillingMutationContext();
+
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/change-plan`),
+        token,
+        organizationPublicId: organization.public_id,
+        payload: {},
+        headers: { 'x-idempotency-key': generatePublicId('subscription') },
+      });
+      expect(response.statusCode, response.body).toBe(400);
+    });
+
     it('should change the plan and return 201 with a valid X-Idempotency-Key', async () => {
       const { organization, subscription, token } = await createBillingMutationContext();
       const newPlan = await createTestPlan({ name: 'New Plan' });
