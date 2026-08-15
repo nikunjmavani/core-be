@@ -576,7 +576,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
       expect(rotatedKeyLookup.statusCode).toBe(200);
     });
 
-    it('rejects concurrent rotations of the same key: one replacement, rest 409, no 5xx', async () => {
+    it('rejects concurrent rotations of the same key: one replacement, rest 4xx, no 5xx', async () => {
       const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.API_KEY_READ,
         TENANCY_PERMISSIONS.API_KEY_MANAGE,

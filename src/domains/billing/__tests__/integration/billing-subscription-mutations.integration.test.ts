@@ -141,7 +141,7 @@ describe('Billing Subscription Mutations — Integration', () => {
   // ─── POST change-plan ──────────────────────────────────────────────────────
 
   describe('POST /api/v1/billing/subscriptions/:subscription_id/change-plan', () => {
-    it('should change the plan and return 200 with a valid X-Idempotency-Key', async () => {
+    it('should change the plan and return 201 with a valid X-Idempotency-Key', async () => {
       const { organization, subscription, token } = await createBillingMutationContext();
       const newPlan = await createTestPlan({ name: 'New Plan' });
 
@@ -342,7 +342,7 @@ describe('Billing Subscription Mutations — Integration', () => {
   // ─── POST cancel ──────────────────────────────────────────────────────────
 
   describe('POST /api/v1/billing/subscriptions/:subscription_id/cancel', () => {
-    it('should cancel an active subscription and return 200 with a valid X-Idempotency-Key', async () => {
+    it('should cancel an active subscription and return 201 with a valid X-Idempotency-Key', async () => {
       const { organization, subscription, token } = await createBillingMutationContext({
         status: 'ACTIVE',
       });
@@ -419,7 +419,7 @@ describe('Billing Subscription Mutations — Integration', () => {
       expect(response.statusCode).toBe(422);
     });
 
-    it('should return 200 when cancelling a subscription that is already scheduled to cancel (cancel_at_period_end=true)', async () => {
+    it('should return 201 when cancelling a subscription that is already scheduled to cancel (cancel_at_period_end=true)', async () => {
       // The service sets cancel_at_period_end=true but does NOT change status to CANCELED.
       // A subscription with cancel_at_period_end=true is still ACTIVE — cancel is idempotent
       // from the perspective of the service (it sets the same flag again).
@@ -453,7 +453,7 @@ describe('Billing Subscription Mutations — Integration', () => {
   // ─── POST resume ──────────────────────────────────────────────────────────
 
   describe('POST /api/v1/billing/subscriptions/:subscription_id/resume', () => {
-    it('should resume a cancelled (cancel_at_period_end) subscription and return 200 with a valid X-Idempotency-Key', async () => {
+    it('should resume a cancelled (cancel_at_period_end) subscription and return 201 with a valid X-Idempotency-Key', async () => {
       const { organization, subscription, token } = await createBillingMutationContext({
         status: 'ACTIVE',
       });
@@ -542,7 +542,7 @@ describe('Billing Subscription Mutations — Integration', () => {
       expect(response.statusCode).toBe(422);
     });
 
-    it('should return 200 when resuming an already-active subscription (idempotent resume)', async () => {
+    it('should return 201 when resuming an already-active subscription (idempotent resume)', async () => {
       // The service's resume() does: find subscription (throws 404 if missing),
       // optionally call Stripe, then set cancel_at_period_end=false + status=ACTIVE.
       // An already-ACTIVE subscription with cancel_at_period_end=false satisfies

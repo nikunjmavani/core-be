@@ -51,7 +51,7 @@ describe('Auth Method Sub-Domain — Integration', () => {
       expect(response.statusCode).toBe(401);
     });
 
-    it('should return 200 for valid credentials', async () => {
+    it('should return 201 for valid credentials', async () => {
       const { user, password } = await createTestUserWithPassword();
       const response = await injectUnauthenticated(app, {
         method: 'POST',

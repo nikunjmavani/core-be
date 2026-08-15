@@ -44,7 +44,7 @@ describe('Integration: JSON content-type parser (empty + malformed bodies)', () 
     await cleanupDatabase();
   });
 
-  it('POST /auth/logout with empty body + application/json returns 204 (not 500)', async () => {
+  it('POST /auth/logout with empty body + application/json returns 201 (not 500)', async () => {
     const user = await createTestUser();
     const token = await generateTestToken({ userId: user.public_id });
 

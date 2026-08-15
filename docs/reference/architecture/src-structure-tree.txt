@@ -872,7 +872,7 @@ src/
     │   │   │       │   ├── authorization.service.unit.test.ts
     │   │   │       │   ├── permission-cache-lock-order.policy.unit.test.ts
     │   │   │       │   ├── permission-cache-no-scan.policy.unit.test.ts
-    │   │   │       │   ├── permission-cache.invalidation.unit.test.ts
+    │   │   │       │   ├── permission-cache.service.invalidation.unit.test.ts
     │   │   │       │   ├── permission.controller.unit.test.ts
     │   │   │       │   ├── permission.repository.cross-org.db.unit.test.ts
     │   │   │       │   ├── permission.repository.db.unit.test.ts

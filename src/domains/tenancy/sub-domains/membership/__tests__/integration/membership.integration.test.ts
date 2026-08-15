@@ -699,7 +699,7 @@ describe('Membership Sub-Domain — Integration', () => {
       return { organization, adminToken, invitation, originalTokenHash };
     }
 
-    it('rotates the token_hash and extends expires_at on resend (200)', async () => {
+    it('rotates the token_hash and extends expires_at on resend (201)', async () => {
       const { organization, adminToken, invitation, originalTokenHash } =
         await createPendingInvitationForResend();
       const originalExpiresAt = invitation.expires_at.getTime();
@@ -759,7 +759,7 @@ describe('Membership Sub-Domain — Integration', () => {
   });
 
   describe('POST /api/v1/tenancy/organization/leave (route-coverage gap-fill)', () => {
-    it('soft-deletes the membership when a non-owner leaves (204)', async () => {
+    it('soft-deletes the membership when a non-owner leaves (201)', async () => {
       const owner = await createTestUser();
       const organization = await createTestOrganization({ ownerUserId: owner.id });
       const memberRole = await createRoleWithPermissions({
@@ -988,7 +988,7 @@ describe('Membership Sub-Domain — Integration', () => {
   });
 
   describe('POST /api/v1/tenancy/organization/transfer-ownership (route-coverage gap-fill)', () => {
-    it('transfers ownership: organizations.owner_user_id updated (200)', async () => {
+    it('transfers ownership: organizations.owner_user_id updated (201)', async () => {
       const { organization, token: ownerToken, user: owner } = await createAuthorizedContext();
       const newOwner = await createTestUser({ email: `new-owner-${randomUUID()}@test.com` });
       const memberRole = await createRoleWithPermissions({

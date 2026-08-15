@@ -102,7 +102,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
       expect(body.data).toHaveProperty('access_token');
     });
 
-    it('should return 200 with access_token and set session cookie on valid login', async () => {
+    it('should return 201 with access_token and set session cookie on valid login', async () => {
       const { user, password } = await createTestUserWithPassword();
       const response = await injectUnauthenticated(app, {
         method: 'POST',
@@ -334,7 +334,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
       expect([400, 422]).toContain(response.statusCode);
     });
 
-    it('should return 200 with message for existing user (no enumeration)', async () => {
+    it('should return 201 with message for existing user (no enumeration)', async () => {
       const { user } = await createTestUserWithPassword();
       const response = await injectUnauthenticated(app, {
         method: 'POST',
@@ -346,7 +346,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
       expect(body.data).toHaveProperty('message');
     });
 
-    it('should return 200 with same message for non-existent email (anti-enumeration)', async () => {
+    it('should return 201 with same message for non-existent email (anti-enumeration)', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
         url: testApiPath('/auth/password/forgot'),

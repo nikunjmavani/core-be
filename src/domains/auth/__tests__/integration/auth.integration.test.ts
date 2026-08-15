@@ -213,7 +213,7 @@ describe('Auth Domain — Response contract (integration)', () => {
       expect(refreshResponse.statusCode).toBe(403);
     });
 
-    it('should return 200 when Referer origin matches ALLOWED_ORIGINS', async () => {
+    it('should return 201 when Referer origin matches ALLOWED_ORIGINS', async () => {
       const loginHeaders = await loginAndGetResponseHeaders();
       const cookiePair = sessionIdCookiePairFromLoginResponse(loginHeaders);
 
@@ -245,7 +245,7 @@ describe('Auth Domain — Response contract (integration)', () => {
       expect(refreshResponse.statusCode).toBe(403);
     });
 
-    it('should return 200 when Origin matches ALLOWED_ORIGINS', async () => {
+    it('should return 201 when Origin matches ALLOWED_ORIGINS', async () => {
       const loginHeaders = await loginAndGetResponseHeaders();
       const cookiePair = sessionIdCookiePairFromLoginResponse(loginHeaders);
 
