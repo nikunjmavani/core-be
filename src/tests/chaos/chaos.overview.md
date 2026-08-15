@@ -12,8 +12,10 @@ What this suite covers:
 
 - Postgres latency injection → query timeouts, statement-timeout pathing, pool waiter alerts.
 - Redis disconnect → BullMQ stall + recovery, permission cache fallback, idempotency middleware behavior.
-- Outbound HTTP slowness → circuit breaker open / half-open / close transitions.
-- Combined-failure scenarios (Postgres slow + Redis flapping).
+- Outbound HTTP failures → per-subscriber webhook circuit-breaker isolation (`webhook-delivery`); the full open → half-open → close state machine is unit-tested in `src/tests/unit/infrastructure/resilience/`.
+- Transactional-outbox lifecycle end to end: enqueue failure during a Redis outage (`redis-queue-enqueue`) AND recovery — the stranded `mail_outbox` row is re-enqueued by a sweeper pass once Redis heals (`mail-outbox-sweeper-recovery`).
+- Retry-ladder exhaustion → the job dead-letters onto `<queue>-dlq` with original job accounting even while Postgres is still down (`webhook-delivery-dlq-exhaustion`).
+- Combined-failure scenarios (Postgres slow + Redis down simultaneously) → every response stays a structured JSON envelope and the same process recovers to 200 once the faults lift (`combined-postgres-redis-degradation`).
 
 What it does **not** cover: HTTP behavior under happy path (integration suite), latency / SLO measurement (load suite).
 
