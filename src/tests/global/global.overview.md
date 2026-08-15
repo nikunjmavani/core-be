@@ -11,9 +11,14 @@ Vitest project: `global` (configured in [tooling/vitest/projects.ts](tooling/vit
 What this suite covers:
 
 - Domain dependency rules (services: same-domain repository + other domains' services only; no `request-database.context` from workers, etc.).
+- Layer boundaries beyond services — controllers/routes never runtime-import repositories, schemas, or database infrastructure; repositories never import services/controllers; dto/validator/serializer stay pure (`layer-boundary.global.test.ts`).
 - Worker readiness — every domain that registers a worker has a corresponding heartbeat and DLQ wiring.
-- Auth / audit emission cardinality — every controller path that should emit audit does.
+- Cross-domain audit surface pinning — exactly the reviewed set of non-audit files imports `@/domains/audit/*`, so an audit trail can neither vanish nor grow silently (`audit-surface-pinning.global.test.ts`).
 - Schema / route catalog drift detection.
+- Schema ↔ FORCE-RLS parity — every table declared in a `*.schema.ts` appears in `EXPECTED_FORCE_RLS_TABLES` (or a reviewed exemption) and vice versa, catching new-table-without-RLS offline before the DB-bound RLS matrix runs (`schema-rls-parity.global.test.ts`).
+- Route rate-limit coverage — every route registration carries a `*_RATE_LIMIT` preset or a reviewed global-limiter-only allowlist entry (`route-rate-limit-coverage.global.test.ts`).
+- Serializer response leak guard — no credential-shaped output keys (`password`, `*_hash`, `secret`, `encrypted`) and no whole-row spreads in `*.serializer.ts` (`serializer-response-leak.global.test.ts`).
+- Event wiring parity — every `*_EVENT` key has an emitter and an `eventBus.on` handler; event string values are globally unique (`event-wiring-parity.global.test.ts`).
 - Import path policy — no parent-relative `../` in `src/` or `tooling/` TypeScript (`import-paths.global.test.ts`).
 - RLS database context network isolation — no outbound I/O inside `withOrganizationDatabaseContext` callbacks in domain code.
 
