@@ -3,15 +3,47 @@ import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
-import { generateTestToken, generateSuperAdminToken } from '@/tests/helpers/test-auth.js';
-import {
-  injectAuthenticated,
-  injectUnauthenticated,
-} from '@/tests/helpers/test-http-inject.helper.js';
+import { generateSuperAdminToken } from '@/tests/helpers/test-auth.js';
+import { injectAuthenticated } from '@/tests/helpers/test-http-inject.helper.js';
+import { AuditRepository } from '@/domains/audit/audit.repository.js';
 import type { FastifyInstance } from 'fastify';
+
+/**
+ * Focused HTTP contracts for `GET /api/v1/audit/logs`.
+ *
+ * **Scope split with `audit.test.ts`.** These two files used to carry byte-identical `it()`
+ * titles — five-for-five, both DB-bound — so ten cases bought five behaviors and a fix applied
+ * to one could leave the other stale. The bundled e2e suite (`audit.test.ts`) is now canonical
+ * for the route's *gates*: 401, 403 for a plain user, 403 for a forged admin claim, and 200 for
+ * a super-admin. This file is canonical for what comes back *through* those gates — the response
+ * body, the cursor contract, input rejection, and the serializer boundary. Nothing is asserted
+ * in both.
+ */
+interface SerializedAuditEntry {
+  action: string;
+  resource_type: string;
+  severity: string;
+  created_at: string;
+  actor_user_id: string | null;
+  target_user_id: string | null;
+  organization_id: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+interface AuditListBody {
+  data: SerializedAuditEntry[];
+  meta?: { pagination?: { per_page: number; has_more: boolean; next: string | null } };
+}
+
+/** Fixed, well-separated instants so newest-first ordering is deterministic, not timing-dependent. */
+const BASE_INSTANT = Date.parse('2024-03-01T00:00:00.000Z');
+const ONE_MINUTE_MS = 60_000;
 
 describe('Audit Domain — Integration', () => {
   let app: FastifyInstance;
+  const repository = new AuditRepository();
 
   beforeAll(async () => {
     const testApp = await createTestApp();
@@ -26,69 +58,211 @@ describe('Audit Domain — Integration', () => {
     await cleanupDatabase();
   });
 
-  describe('GET /api/v1/audit/logs', () => {
-    it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'GET',
-        url: testApiPath('/audit/logs'),
+  /** Seeds `count` audit rows one minute apart, oldest first; returns their actions in that order. */
+  async function seedAuditLogs(actorId: number, count: number): Promise<string[]> {
+    const actions: string[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const action = `audit.seeded.${index}`;
+      await repository.insert({
+        actor_user_id: actorId,
+        action,
+        resource_type: 'user',
+        resource_id: actorId,
+        severity: 'INFO',
+        ip_address: '203.0.113.7',
+        user_agent: 'integration/1.0',
+        metadata: { seq: index },
+        created_at: new Date(BASE_INSTANT + index * ONE_MINUTE_MS),
       });
-      expect(response.statusCode).toBe(401);
-    });
+      actions.push(action);
+    }
+    return actions;
+  }
 
-    it('should return 403 for non-admin user', async () => {
-      const user = await createTestUser();
-      const token = await generateTestToken({ userId: user.public_id, role: 'user' });
-      const response = await injectAuthenticated(app, {
-        method: 'GET',
-        url: testApiPath('/audit/logs'),
-        token,
-      });
-      expect(response.statusCode).toBe(403);
+  async function listLogs(token: string, query: Record<string, string> = {}) {
+    return injectAuthenticated(app, {
+      method: 'GET',
+      url: testApiPath('/audit/logs'),
+      token,
+      query,
     });
+  }
 
-    it('should return logs for super admin', async () => {
-      const user = await createTestUser();
-      const token = await generateSuperAdminToken(user.public_id);
-      const response = await injectAuthenticated(app, {
-        method: 'GET',
-        url: testApiPath('/audit/logs'),
-        token,
-      });
-      expect(response.statusCode).toBe(200);
-      const body = response.json() as { data: unknown };
-      expect(body.data).toBeDefined();
-    });
-
-    it('route-#6: downgrades a non-allowlisted admin-role token (no blind trust)', async () => {
-      // The global ADMIN tier is never minted (roles derive only from GLOBAL_ADMIN_EMAILS →
-      // super_admin / user), so a bare `admin` claim is stale/forged: the auth middleware
-      // re-derives it against live state and a non-allowlisted user is downgraded to USER → 403.
-      const user = await createTestUser();
-      const token = await generateTestToken({ userId: user.public_id, role: 'admin' });
-      const response = await injectAuthenticated(app, {
-        method: 'GET',
-        url: testApiPath('/audit/logs'),
-        token,
-      });
-      expect(response.statusCode).toBe(403);
-    });
-
-    it('should accept cursor pagination query parameters', async () => {
+  describe('GET /api/v1/audit/logs — response body', () => {
+    /**
+     * The happy path previously asserted only that `body.data` was defined. A serializer
+     * regression that emptied every row, dropped every field, or returned `[]` would have passed.
+     * Seed known rows and assert the actual shape.
+     */
+    it('returns the seeded rows with the full serialized field set', async () => {
       const user = await createTestUser();
       const token = await generateSuperAdminToken(user.public_id);
-      const response = await injectAuthenticated(app, {
-        method: 'GET',
-        url: testApiPath('/audit/logs'),
-        token,
-        query: { limit: '5' },
-      });
+      await seedAuditLogs(user.id, 3);
+
+      const response = await listLogs(token);
+
       expect(response.statusCode).toBe(200);
+      const body = response.json() as AuditListBody;
+      expect(body.data).toHaveLength(3);
+
+      const [entry] = body.data;
+      expect(entry).toMatchObject({
+        resource_type: 'user',
+        severity: 'INFO',
+        ip_address: '203.0.113.7',
+        user_agent: 'integration/1.0',
+        // sec-re-08: the internal bigint actor id is replaced by the resolved public id.
+        actor_user_id: user.public_id,
+        target_user_id: null,
+        organization_id: null,
+      });
+      expect(entry?.action).toMatch(/^audit\.seeded\.\d$/);
+      expect(new Date(entry!.created_at).toISOString()).toBe(entry!.created_at);
+      // Strip-only allowlist: no internal surrogate may appear as a top-level key.
+      expect(Object.keys(entry!).sort()).toEqual([
+        'action',
+        'actor_user_id',
+        'created_at',
+        'ip_address',
+        'metadata',
+        'organization_id',
+        'resource_type',
+        'severity',
+        'target_user_id',
+        'user_agent',
+      ]);
+    });
+
+    /**
+     * Newest-first is the ordering the cursor is built on (`ORDER BY created_at DESC, id DESC`).
+     * If it silently flipped, paging would still "work" while walking the ledger backwards —
+     * and an admin investigating an incident would read the oldest events first.
+     */
+    it('orders rows newest-first', async () => {
+      const user = await createTestUser();
+      const token = await generateSuperAdminToken(user.public_id);
+      const seededOldestFirst = await seedAuditLogs(user.id, 4);
+
+      const response = await listLogs(token);
+
+      const body = response.json() as AuditListBody;
+      expect(body.data.map((entry) => entry.action)).toEqual([...seededOldestFirst].reverse());
+    });
+  });
+
+  describe('GET /api/v1/audit/logs — cursor pagination', () => {
+    /**
+     * The pre-existing pagination case seeded fewer rows than `limit` and only checked that
+     * `per_page` echoed back the value it sent — it never followed a cursor. These two cases
+     * actually page: `has_more` / `next` must be truthful, and page 2 must continue the feed.
+     */
+    it('reports has_more and mints a cursor when more rows remain', async () => {
+      const user = await createTestUser();
+      const token = await generateSuperAdminToken(user.public_id);
+      await seedAuditLogs(user.id, 5);
+
+      const response = await listLogs(token, { limit: '2' });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as AuditListBody;
+      expect(body.data).toHaveLength(2);
+      expect(body.meta?.pagination?.per_page).toBe(2);
+      expect(body.meta?.pagination?.has_more).toBe(true);
+      expect(body.meta?.pagination?.next).toBeTruthy();
+    });
+
+    /**
+     * The contract that makes a cursor a cursor: page 2 is disjoint from page 1 and continues
+     * the same newest-first ordering, and the final page clears `next` / `has_more`. A cursor
+     * that re-served page 1 would satisfy every assertion in the case above.
+     */
+    it('follows the cursor to a disjoint page 2 and clears the cursor on the last page', async () => {
+      const user = await createTestUser();
+      const token = await generateSuperAdminToken(user.public_id);
+      const seededOldestFirst = await seedAuditLogs(user.id, 5);
+      const newestFirst = [...seededOldestFirst].reverse();
+
+      const pageOne = (await listLogs(token, { limit: '2' })).json() as AuditListBody;
+      expect(pageOne.data.map((entry) => entry.action)).toEqual(newestFirst.slice(0, 2));
+
+      const cursor = pageOne.meta?.pagination?.next as string;
+      const pageTwo = (
+        await listLogs(token, { limit: '2', after: cursor })
+      ).json() as AuditListBody;
+      expect(pageTwo.data.map((entry) => entry.action)).toEqual(newestFirst.slice(2, 4));
+
+      const lastPage = (
+        await listLogs(token, {
+          limit: '2',
+          after: pageTwo.meta?.pagination?.next as string,
+        })
+      ).json() as AuditListBody;
+      expect(lastPage.data.map((entry) => entry.action)).toEqual(newestFirst.slice(4));
+      expect(lastPage.meta?.pagination?.has_more).toBe(false);
+      expect(lastPage.meta?.pagination?.next).toBeNull();
+    });
+  });
+
+  describe('GET /api/v1/audit/logs — input rejection', () => {
+    /**
+     * Eight validator unit cases prove the `from`/`to` rules; nothing proved the validator is
+     * still reachable from the route. The platform DoS suite touches this route but accepts
+     * either `400` or `422`, so no audit-owned test ever pinned which status the domain returns.
+     */
+    it('rejects a malformed from/to pair with 400 and a field-level error', async () => {
+      const user = await createTestUser();
+      const token = await generateSuperAdminToken(user.public_id);
+
+      const response = await listLogs(token, { from: '2024-03-01', to: 'not-a-datetime' });
+
+      expect(response.statusCode).toBe(400);
       const body = response.json() as {
-        meta?: { pagination?: { per_page: number; has_more: boolean } };
+        error?: { code?: string; errors?: { field: string; message: string }[] };
       };
-      expect(body.meta?.pagination).toBeDefined();
-      expect(body.meta?.pagination?.per_page).toBeLessThanOrEqual(5);
-      expect(typeof body.meta?.pagination?.has_more).toBe('boolean');
+      expect(body.error?.code).toBe('invalid_field');
+      // `from` is date-only and `to` is not a datetime at all — both are reported, with
+      // snake_case field names per the API contract.
+      expect(body.error?.errors?.map((error) => error.field).sort()).toEqual(['from', 'to']);
+    });
+  });
+
+  describe('GET /api/v1/audit/logs — serializer boundary', () => {
+    /**
+     * `audit.serializer.metadata-strip.unit.test.ts` proves the sanitizer in isolation; nothing
+     * proved the route's response actually goes through it. Seed one row carrying all three
+     * classes of metadata key and assert the wire format.
+     */
+    it('strips internal ids and redacts secret-bearing metadata keys on the wire', async () => {
+      const user = await createTestUser();
+      const token = await generateSuperAdminToken(user.public_id);
+      await repository.insert({
+        actor_user_id: user.id,
+        action: 'auth.mfa.enrolled',
+        resource_type: 'user',
+        resource_id: user.id,
+        severity: 'WARNING',
+        metadata: {
+          // Internal numeric surrogate — dropped entirely.
+          auth_method_id: 4242,
+          // Secret-bearing key — kept, value redacted.
+          refresh_token: 'super-secret-value',
+          // Public id and free-form fields — an admin needs these to pivot, so they survive.
+          session_public_id: 'ses_integrationstrip0001',
+          method: 'totp',
+        },
+        created_at: new Date(BASE_INSTANT),
+      });
+
+      const response = await listLogs(token);
+
+      expect(response.statusCode).toBe(200);
+      const [entry] = (response.json() as AuditListBody).data;
+      expect(entry?.metadata).toEqual({
+        refresh_token: '[REDACTED]',
+        session_public_id: 'ses_integrationstrip0001',
+        method: 'totp',
+      });
+      expect(entry?.metadata).not.toHaveProperty('auth_method_id');
     });
   });
 });

@@ -4,6 +4,8 @@
   "testRunner": "vitest",
   "plugins": ["@stryker-mutator/vitest-runner"],
   "mutate": [
+    "src/domains/audit/audit.service.ts",
+    "src/domains/audit/workers/audit-retention.processor.ts",
     "src/domains/auth/auth.service.ts",
     "src/domains/auth/sub-domains/auth-session/auth-session.service.ts",
     "src/domains/auth/sub-domains/auth-method/auth-method.service.ts",
@@ -25,6 +27,8 @@
     "src/domains/tenancy/sub-domains/permission/permission.service.ts",
     "src/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.service.ts",
     "src/domains/tenancy/sub-domains/organization/organization-notification-policy/organization-notification-policy.service.ts",
+    "src/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-delivery.worker.ts",
+    "src/domains/notify/sub-domains/webhook/webhook.service.ts",
     "src/domains/upload/upload.service.ts",
     "src/shared/middlewares/core/auth.middleware.ts",
     "src/shared/middlewares/tenant/tenant.middleware.ts",
