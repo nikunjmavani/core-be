@@ -15,6 +15,7 @@ import {
   invalidatePermissions,
   invalidateOrganizationPermissions,
 } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
+import { resolveUserOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import type { FastifyInstance } from 'fastify';
 
@@ -245,6 +246,59 @@ describe('Permission System Validation', () => {
       );
 
     expect(resolved.sort()).toEqual([...ALL_PERMISSION_CODES].sort());
+  });
+
+  // ─── Case 6b: the module-level export resolves identically ────────────
+
+  it('resolves the same set through the module-level export used by the route guard', async () => {
+    // There are two entry points into permission resolution and they must not drift:
+    //
+    //   * `app.tenancyDomain.authorizationService.resolveUserOrganizationPermissions` — the
+    //     container-wired instance, used by `auth-me-context.service` and `upload.service`.
+    //   * the module-level `resolveUserOrganizationPermissions` export — used by
+    //     `shared/utils/auth/authorization.util.ts`, which is what `requireOrganizationPermission`
+    //     calls on *every* permission-gated request.
+    //
+    // The second is the hotter and more security-critical path. It was previously covered only by a
+    // whole-file duplicate of this suite living in the e2e project; that file has been folded into
+    // this single equivalence assertion, which is the only thing the duplicate actually proved.
+    await seedPermissions(ALL_PERMISSION_CODES);
+    const user = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: user.id });
+    const role = await createRoleWithPermissions({
+      organizationId: organization.id,
+      name: 'Admin',
+      permissionCodes: [TENANCY_PERMISSIONS.ORGANIZATION_READ, TENANCY_PERMISSIONS.MEMBERSHIP_READ],
+    });
+    await createMembership({
+      userId: user.id,
+      organizationId: organization.id,
+      roleId: role.id,
+    });
+
+    const viaContainer =
+      await app.tenancyDomain.authorizationService.resolveUserOrganizationPermissions(
+        user.public_id,
+        organization.public_id,
+      );
+    const viaModuleExport = await resolveUserOrganizationPermissions(
+      user.public_id,
+      organization.public_id,
+    );
+
+    expect([...viaModuleExport].sort()).toEqual([...viaContainer].sort());
+    expect([...viaModuleExport].sort()).toEqual(
+      [TENANCY_PERMISSIONS.MEMBERSHIP_READ, TENANCY_PERMISSIONS.ORGANIZATION_READ].sort(),
+    );
+
+    // And a revocation is observed through the module export too — a stale cache on this path
+    // would leave `requireOrganizationPermission` granting a permission that no longer exists.
+    await invalidatePermissions(user.public_id, organization.public_id);
+    const afterInvalidation = await resolveUserOrganizationPermissions(
+      user.public_id,
+      organization.public_id,
+    );
+    expect([...afterInvalidation].sort()).toEqual([...viaContainer].sort());
   });
 
   // ─── Case 7: Organization-level cache invalidation ─────────────────────

@@ -21,7 +21,20 @@ import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 const ALL_TENANCY_PERMISSIONS = Object.values(TENANCY_PERMISSIONS);
 
-describe('Tenancy Domain — Integration', () => {
+/**
+ * Domain e2e for the tenancy surfaces that are *flows* rather than single route contracts —
+ * membership listing with search / sort / keyset pagination, leaving an organization, and the role
+ * and role-permission surface.
+ *
+ * The flat organization routes (`/organizations`, `/organization`, `/organizations/by-slug/:slug`,
+ * `/permissions`) deliberately live in `tenancy.integration.test.ts` instead. Both files previously
+ * carried the same 12 cases against the same real app and database — identical assertions, twice the
+ * DB-bound runtime, and two places to edit when a contract changed. The split is now by role:
+ * **integration owns route contracts, this file owns multi-step behaviour.** The integration suite
+ * additionally carries the two cases this one never had (slug reclaim after soft-delete, and the
+ * permission catalog's 304 revalidation), so nothing was lost in the trim.
+ */
+describe('Tenancy Domain — flows (memberships, leave, roles)', () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
@@ -62,186 +75,6 @@ describe('Tenancy Domain — Integration', () => {
     });
     return { user, organization, role, token };
   }
-
-  // ─── Organizations ────────────────────────────────────────────
-
-  describe('GET /api/v1/tenancy/organizations', () => {
-    it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, {
-        url: testApiPath('/tenancy/organizations'),
-      });
-      expect(response.statusCode).toBe(401);
-    });
-
-    it('should return organizations for authenticated user', async () => {
-      const user = await createTestUser();
-      const token = await generateTestToken({ userId: user.public_id });
-      const response = await injectAuthenticated(app, {
-        url: testApiPath('/tenancy/organizations'),
-        token,
-      });
-      expect(response.statusCode).toBe(200);
-      const body = response.json() as { data?: unknown };
-      expect(body.data).toBeDefined();
-    });
-  });
-
-  describe('POST /api/v1/tenancy/organizations', () => {
-    it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/tenancy/organizations'),
-        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
-        payload: {},
-      });
-      expect([400, 401]).toContain(response.statusCode);
-    });
-
-    it('should create organization for authenticated user', async () => {
-      const user = await createTestUser();
-      const token = await generateTestToken({ userId: user.public_id });
-      const response = await injectAuthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/tenancy/organizations'),
-        token,
-        headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
-        payload: { name: 'Test Org', slug: 'test-org' },
-      });
-      expect(response.statusCode).toBe(201);
-      const body = response.json() as { data: { name: string } };
-      expect(body.data).toBeDefined();
-      expect(body.data.name).toBe('Test Org');
-    });
-  });
-
-  describe('GET /api/v1/tenancy/organization', () => {
-    it('should return the active organization from the token claim', async () => {
-      const user = await createTestUser();
-      const organization = await createTestOrganization({ ownerUserId: user.id });
-      const token = await generateTestToken({
-        userId: user.public_id,
-        organizationPublicId: organization.public_id,
-      });
-      const response = await injectAuthenticated(app, {
-        url: testApiPath('/tenancy/organization'),
-        token,
-      });
-      expect(response.statusCode).toBe(200);
-      const body = response.json() as { data?: { id?: string } };
-      expect(body.data).toBeDefined();
-      expect(body.data?.id).toBe(organization.public_id);
-    });
-
-    it('should return 403 when the token carries no organization claim', async () => {
-      const user = await createTestUser();
-      const token = await generateTestToken({ userId: user.public_id });
-      const response = await injectAuthenticated(app, {
-        url: testApiPath('/tenancy/organization'),
-        token,
-      });
-      expect(response.statusCode).toBe(403);
-    });
-  });
-
-  describe('PATCH /api/v1/tenancy/organization', () => {
-    it('should return 403 without update permission', async () => {
-      const authorized = await createAuthorizedUserAndOrganization([
-        TENANCY_PERMISSIONS.ORGANIZATION_READ,
-      ]);
-      const otherUser = await createTestUser({ email: 'other@test.com' });
-      const { organization } = authorized;
-      const readRole = await createRoleWithPermissions({
-        organizationId: organization.id,
-        permissionCodes: [TENANCY_PERMISSIONS.ORGANIZATION_READ],
-      });
-      await createMembership({
-        userId: otherUser.id,
-        organizationId: organization.id,
-        roleId: readRole.id,
-      });
-      const otherToken = await generateTestToken({
-        userId: otherUser.public_id,
-        organizationPublicId: organization.public_id,
-      });
-
-      const response = await injectAuthenticatedOrganizationMutation(app, {
-        method: 'PATCH',
-        url: testApiPath('/tenancy/organization'),
-        token: otherToken,
-        payload: { name: 'Updated' },
-      });
-      expect(response.statusCode).toBe(403);
-    });
-
-    it('should update organization with update permission', async () => {
-      const { token } = await createAuthorizedUserAndOrganization();
-      const response = await injectAuthenticatedOrganizationMutation(app, {
-        method: 'PATCH',
-        url: testApiPath('/tenancy/organization'),
-        token,
-        payload: { name: 'Updated Org' },
-      });
-      expect(response.statusCode).toBe(200);
-    });
-  });
-
-  describe('DELETE /api/v1/tenancy/organization', () => {
-    it('should return 403 without delete permission', async () => {
-      const { organization } = await createAuthorizedUserAndOrganization();
-      const otherUser = await createTestUser({ email: 'other2@test.com' });
-      const readRole = await createRoleWithPermissions({
-        organizationId: organization.id,
-        permissionCodes: [TENANCY_PERMISSIONS.ORGANIZATION_READ],
-      });
-      await createMembership({
-        userId: otherUser.id,
-        organizationId: organization.id,
-        roleId: readRole.id,
-      });
-      const otherToken = await generateTestToken({
-        userId: otherUser.public_id,
-        organizationPublicId: organization.public_id,
-      });
-      const response = await injectAuthenticatedOrganizationMutation(app, {
-        method: 'DELETE',
-        url: testApiPath('/tenancy/organization'),
-        token: otherToken,
-      });
-      expect(response.statusCode).toBe(403);
-    });
-
-    it('should soft-delete organization and hide it from subsequent reads', async () => {
-      const { token } = await createAuthorizedUserAndOrganization();
-      const deleteResponse = await injectAuthenticatedOrganizationMutation(app, {
-        method: 'DELETE',
-        url: testApiPath('/tenancy/organization'),
-        token,
-      });
-      expect(deleteResponse.statusCode).toBe(204);
-
-      const getResponse = await injectAuthenticated(app, {
-        url: testApiPath('/tenancy/organization'),
-        token,
-      });
-      expect(getResponse.statusCode).toBe(404);
-    });
-  });
-
-  describe('GET /api/v1/tenancy/organizations/by-slug/:slug', () => {
-    it('should return organization by slug', async () => {
-      const user = await createTestUser();
-      await createTestOrganization({
-        ownerUserId: user.id,
-        slug: 'my-org',
-      });
-      const token = await generateTestToken({ userId: user.public_id });
-      const response = await injectAuthenticated(app, {
-        url: testApiPath('/tenancy/organizations/by-slug/my-org'),
-        token,
-      });
-      expect(response.statusCode).toBe(200);
-    });
-  });
 
   // ─── Memberships ──────────────────────────────────────────────
 
@@ -576,22 +409,6 @@ describe('Tenancy Domain — Integration', () => {
         payload: { permission_codes: [TENANCY_PERMISSIONS.ORGANIZATION_READ] },
       });
       expect([200, 204]).toContain(response.statusCode);
-    });
-  });
-
-  // ─── Permissions (authenticated catalog) ───────────────────────
-
-  describe('GET /api/v1/tenancy/permissions', () => {
-    it('should list all permissions for authenticated users', async () => {
-      const user = await createTestUser();
-      const token = await generateTestToken({ userId: user.public_id });
-      const response = await injectAuthenticated(app, {
-        url: testApiPath('/tenancy/permissions'),
-        token,
-      });
-      expect(response.statusCode).toBe(200);
-      const body = response.json() as { data?: unknown };
-      expect(body.data).toBeDefined();
     });
   });
 });
