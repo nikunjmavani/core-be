@@ -8,9 +8,11 @@ Live API smoke tests that hit a running server (local dev or CI). Used as the fi
 
 What this suite covers:
 
-- `/readyz` returns 200 (readiness — dependencies connected).
-- A handful of canonical authenticated routes per domain return 200 with the expected response shape.
-- Idempotency middleware is wired (same key → same response).
+- `/livez` + `/readyz` respond (readiness — dependencies connected).
+- One canonical route per domain answers without a 5xx: auth (login + `/users/me`), user (settings + notification preferences), tenancy (organizations list), billing (public plans), notify (webhooks list), audit (role-gated logs — 403 for the plain smoke user proves the guard), upload (unknown-id read → 404 proves the path).
+- Idempotency middleware is wired (`idempotency.smoke.test.ts` — missing `X-Idempotency-Key` → 422; replaying the same key returns the identical response, no second execution).
+
+There are TWO smoke layers — don't duplicate between them: this Vitest tier (`pnpm test:smoke`, in-process `fastify.inject()` by default, `SMOKE_EXTERNAL=true` for a live server) and the standalone ops sweep `pnpm test:api-smoke` (`src/scripts/ops/api-smoke-test.ts`, live server + seed, broad per-route canonical sweep incl. S3-backed upload presign). Routes needing live provider credentials belong only in the ops sweep.
 
 What it does **not** cover: full API behavior (integration), latency (performance / load), failure modes (chaos).
 
