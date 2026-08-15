@@ -1,0 +1,14 @@
+[
+  {
+    "email": "secondary.unverified@example.com",
+    "primary": false,
+    "verified": false,
+    "visibility": null
+  },
+  {
+    "email": "contract.fixture@users.noreply.github.com",
+    "primary": true,
+    "verified": true,
+    "visibility": "private"
+  }
+]
