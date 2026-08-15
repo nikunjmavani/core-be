@@ -38,6 +38,13 @@ export function getAllowedContentTypesForPurpose(purpose: UploadPurpose): readon
 
 /** Returns the lowercase, accepted filename extensions for a content type (empty when unknown). */
 export function getAllowedExtensionsForContentType(contentType: string): readonly string[] {
+  // Own-property guard: a bare `map[key] ?? []` returns `Object.prototype` itself for the key
+  // `'__proto__'` (truthy, so the `??` never fires) — found by the property suite. Unreachable
+  // over HTTP today because the purpose allowlist rejects first, but the "empty when unknown"
+  // contract must hold for every caller.
+  if (!Object.hasOwn(CONTENT_TYPE_TO_EXTENSIONS, contentType)) {
+    return [];
+  }
   // eslint-disable-next-line security/detect-object-injection -- key sourced from validator allowlist
   return CONTENT_TYPE_TO_EXTENSIONS[contentType] ?? [];
 }
