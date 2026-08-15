@@ -239,6 +239,32 @@ export const WEBHOOK_RATE_LIMIT = {
 } as const;
 
 /**
+ * Unauthenticated read-only catalog endpoints (60 req / 60s per IP) — today the public plan
+ * catalog (`GET /billing/plans`, `GET /billing/plans/:plan_id`).
+ *
+ * @remarks
+ * These routes are deliberately public (they are on the reviewed allowlist in
+ * `public-route-allowlist.global.test.ts`) but they still hit Postgres on every call — the
+ * `304` short-circuit only helps clients that send `If-None-Match`. Without a per-route cap
+ * they were the only unauthenticated, uncapped surface in the billing domain, falling back to
+ * the global limiter alone. The cap is deliberately looser than {@link STRICT_PUBLIC_RATE_LIMIT}
+ * (5/min): nothing here is credential-bearing, so the threat is read amplification, not
+ * brute force. Keyed by IP on the default `onRequest` hook — there is no authenticated actor
+ * to key on. Lifted when RATE_LIMIT_RELAXED_CAPS is set (development/test) so loopback suites
+ * that loop the catalog do not produce flaky 429s.
+ */
+export const PUBLIC_READ_RATE_LIMIT = {
+  config: {
+    rateLimit: {
+      max: RATE_LIMIT_CAPS_RELAXED ? 5000 : 60,
+      timeWindow: MILLISECONDS_PER_MINUTE,
+      keyGenerator: buildRateLimitKeyFromIpAddress,
+      onExceeding: recordRouteRateLimitExceeded,
+    },
+  },
+} as const;
+
+/**
  * Organization-scoped mutations (100 req / 60s), keyed by organization + authenticated
  * actor (`organization:<id>:actor:<actorId>`). Per-actor namespacing prevents cross-tenant
  * exhaustion of a victim org's shared bucket and isolates members from one another

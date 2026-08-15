@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { PUBLIC_READ_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 import type { PlanService } from './plan.service.js';
 import { createPlanController } from './plan.controller.js';
 import { getPlanParamsDto } from './plan.dto.js';
@@ -16,6 +17,7 @@ export function planRoutes(service: PlanService): FastifyPluginAsync {
     zodApplication.get(
       '/plans',
       {
+        config: { ...PUBLIC_READ_RATE_LIMIT.config },
         schema: {
           summary: 'List available plans',
           description:
@@ -28,6 +30,7 @@ export function planRoutes(service: PlanService): FastifyPluginAsync {
     zodApplication.get<{ Params: { plan_id: string } }>(
       '/plans/:plan_id',
       {
+        config: { ...PUBLIC_READ_RATE_LIMIT.config },
         schema: {
           summary: 'Get plan details',
           description:

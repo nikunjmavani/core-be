@@ -100,6 +100,44 @@ describe('Billing Subscription Mutations — Integration', () => {
     return { user, organization, plan, subscription, role, token };
   }
 
+  /**
+   * Same shape as {@link createBillingMutationContext} but on a **PERSONAL** organization, which
+   * `assertTeamOrganization(organization, 'BILLING')` rejects with 422. Every branch of that
+   * guard was covered at the service layer (`subscription.service.billing-guard.unit.test.ts`)
+   * with a stubbed organization service; nothing confirmed the guard is still *wired* behind the
+   * HTTP routes. A refactor that moved billing reads off the guarded `resolveStripeCustomerId`
+   * path, or dropped the assert from one mutation, would have shipped green.
+   */
+  async function createPersonalOrganizationContext() {
+    const user = await createTestUser();
+    const organization = await createTestOrganization({
+      ownerUserId: user.id,
+      type: 'PERSONAL',
+    });
+    const plan = await createTestPlan();
+    const subscription = await createTestSubscription({
+      organizationId: organization.id,
+      planId: plan.id,
+      status: 'ACTIVE',
+      providerSubscriptionId: null,
+      providerCustomerId: 'cus_test_personal_guard',
+    });
+    const role = await createRoleWithPermissions({
+      organizationId: organization.id,
+      permissionCodes: ALL_BILLING_PERMISSIONS,
+    });
+    await createMembership({
+      userId: user.id,
+      organizationId: organization.id,
+      roleId: role.id,
+    });
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
+    return { user, organization, plan, subscription, token };
+  }
+
   // ─── POST change-plan ──────────────────────────────────────────────────────
 
   describe('POST /api/v1/billing/subscriptions/:subscription_id/change-plan', () => {
@@ -608,6 +646,171 @@ describe('Billing Subscription Mutations — Integration', () => {
       };
       expect(afterResumeBody.data?.cancel_at_period_end).toBe(false);
       expect(afterResumeBody.data?.status).toBe('ACTIVE');
+    });
+  });
+
+  // ─── POST /payment-methods/setup — full matrix ─────────────────────────────
+  //
+  // This route had exactly one assertion in the whole repo (a 201 in
+  // `billing-payment-methods.e2e.test.ts`) despite being BOTH `idempotencyRequired` AND
+  // team-only — the two properties most likely to regress silently, because neither is visible
+  // in the handler body: one comes from a `config` flag read by a global hook, the other from a
+  // guard buried in the service's `resolveStripeCustomerId`.
+  describe('POST /api/v1/billing/payment-methods/setup', () => {
+    it('should return 401 when no auth header is provided', async () => {
+      await createBillingMutationContext();
+
+      const response = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/billing/payment-methods/setup'),
+        payload: {},
+        headers: { 'x-idempotency-key': generatePublicId('subscription') },
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return 403 when the member lacks subscription:manage permission', async () => {
+      // A read-only member: the route requires SUBSCRIPTION_MANAGE, so `subscription:read`
+      // alone must not open a card-collection SetupIntent.
+      const { organization } = await createBillingMutationContext();
+      const readOnlyUser = await createTestUser();
+      const readOnlyRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [BILLING_PERMISSIONS.SUBSCRIPTION_READ],
+      });
+      await createMembership({
+        userId: readOnlyUser.id,
+        organizationId: organization.id,
+        roleId: readOnlyRole.id,
+      });
+      const readOnlyToken = await generateTestToken({
+        userId: readOnlyUser.public_id,
+        organizationPublicId: organization.public_id,
+      });
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/billing/payment-methods/setup'),
+        token: readOnlyToken,
+        organizationPublicId: organization.public_id,
+        payload: {},
+        headers: { 'x-idempotency-key': generatePublicId('subscription') },
+      });
+
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('should return 422 when the X-Idempotency-Key header is missing', async () => {
+      const { organization, token } = await createBillingMutationContext();
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/billing/payment-methods/setup'),
+        token,
+        organizationPublicId: organization.public_id,
+        payload: {},
+      });
+
+      expect(response.statusCode).toBe(422);
+    });
+
+    it('should return 422 for a PERSONAL organization (team-only route)', async () => {
+      const { organization, token } = await createPersonalOrganizationContext();
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/billing/payment-methods/setup'),
+        token,
+        organizationPublicId: organization.public_id,
+        payload: {},
+        headers: { 'x-idempotency-key': generatePublicId('subscription') },
+      });
+
+      expect(response.statusCode).toBe(422);
+    });
+  });
+
+  // ─── Team-only 422 at the HTTP boundary ────────────────────────────────────
+  //
+  // One case per `team`-scoped route in `route-org-scope.json`. Proven at the service layer
+  // only until now; these confirm the guard survives the trip through routing, auth, permission
+  // resolution, and the org RLS context.
+  describe('PERSONAL organization is refused on every team-scoped billing mutation', () => {
+    it('POST /billing/subscriptions returns 422', async () => {
+      const { organization, plan, token } = await createPersonalOrganizationContext();
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/billing/subscriptions'),
+        token,
+        organizationPublicId: organization.public_id,
+        payload: { plan_id: plan.public_id, billing_cycle: 'monthly' },
+        headers: { 'x-idempotency-key': generatePublicId('subscription') },
+      });
+
+      expect(response.statusCode).toBe(422);
+    });
+
+    it('POST /billing/subscriptions/:subscription_id/change-plan returns 422', async () => {
+      const { organization, subscription, token } = await createPersonalOrganizationContext();
+      const newPlan = await createTestPlan({ name: 'Personal Guard Plan' });
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/change-plan`),
+        token,
+        organizationPublicId: organization.public_id,
+        payload: { plan_id: newPlan.public_id },
+        headers: { 'x-idempotency-key': generatePublicId('subscription') },
+      });
+
+      expect(response.statusCode).toBe(422);
+    });
+
+    it('POST /billing/subscriptions/:subscription_id/cancel returns 422', async () => {
+      const { organization, subscription, token } = await createPersonalOrganizationContext();
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/cancel`),
+        token,
+        organizationPublicId: organization.public_id,
+        headers: { 'x-idempotency-key': generatePublicId('subscription') },
+      });
+
+      expect(response.statusCode).toBe(422);
+    });
+
+    it('POST /billing/subscriptions/:subscription_id/resume returns 422', async () => {
+      const { organization, subscription, token } = await createPersonalOrganizationContext();
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/resume`),
+        token,
+        organizationPublicId: organization.public_id,
+        headers: { 'x-idempotency-key': generatePublicId('subscription') },
+      });
+
+      expect(response.statusCode).toBe(422);
+    });
+
+    it('the same PERSONAL organization is NOT refused on a subscription READ', async () => {
+      // Makes the four cases above non-vacuous: they must fail on the billing guard, not on
+      // something incidental to how the personal-org fixture is built (a missing membership, an
+      // unresolvable permission, a bad token claim). `GET /billing/subscriptions` is declared
+      // `both` in route-org-scope.json and carries no team guard, so it must still be 200.
+      const { organization, token } = await createPersonalOrganizationContext();
+
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/billing/subscriptions'),
+        token,
+        organizationPublicId: organization.public_id,
+      });
+
+      expect(response.statusCode).toBe(200);
     });
   });
 
