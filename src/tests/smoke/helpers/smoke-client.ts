@@ -131,8 +131,8 @@ export async function smokeLogin(): Promise<{ accessToken: string }> {
   const response = await smokeFetch('/api/v1/auth/login', {
     method: 'POST',
     body: { email, password },
-    // POST → 201 under the method→status policy (method-status-policy.middleware.ts).
-    expectStatus: 201,
+    // POST → 200 under the uniform method→status policy (method-status-policy.middleware.ts).
+    expectStatus: 200,
   });
   const json = (await response.json()) as { data?: { access_token?: string } };
   const accessToken = json.data?.access_token;
