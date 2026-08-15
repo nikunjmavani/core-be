@@ -5,6 +5,7 @@ import { injectAuthenticated } from '@/tests/helpers/test-http-inject.helper.js'
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { FastifyInstance } from 'fastify';
 
 /**
@@ -80,5 +81,83 @@ describe('User admin routes — happy paths', () => {
       token: adminToken,
     });
     expect(response.statusCode, response.body).toBe(204);
+  });
+
+  /**
+   * Denial paths for the same three routes. Each previously asserted its happy path and nothing
+   * else — including `PATCH` and `DELETE /users/:user_id`, the two destructive admin operations,
+   * where a missing authorization check would have gone unnoticed by every user-owned test.
+   */
+  describe('denials', () => {
+    /** Well-formed but unallocated — proves 404 (not found) rather than 422 (bad id shape). */
+    const UNKNOWN_USER_ID = generatePublicId('user');
+
+    it('GET /users/:user_id returns 403 for a plain user', async () => {
+      const caller = await createTestUser();
+      const target = await createTestUser();
+      const token = await generateTestToken({ userId: caller.public_id, role: 'user' });
+
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(`/users/${target.public_id}`),
+        token,
+      });
+      expect(response.statusCode, response.body).toBe(403);
+    });
+
+    it('GET /users/:user_id returns 404 for an unknown user id', async () => {
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(`/users/${UNKNOWN_USER_ID}`),
+        token: adminToken,
+      });
+      expect(response.statusCode, response.body).toBe(404);
+    });
+
+    it('PATCH /users/:user_id returns 403 for a plain user', async () => {
+      const caller = await createTestUser();
+      const target = await createTestUser();
+      const token = await generateTestToken({ userId: caller.public_id, role: 'user' });
+
+      const response = await injectAuthenticated(app, {
+        method: 'PATCH',
+        url: testApiPath(`/users/${target.public_id}`),
+        token,
+        payload: { first_name: 'Nope' },
+      });
+      expect(response.statusCode, response.body).toBe(403);
+    });
+
+    it('PATCH /users/:user_id returns 404 for an unknown user id', async () => {
+      const response = await injectAuthenticated(app, {
+        method: 'PATCH',
+        url: testApiPath(`/users/${UNKNOWN_USER_ID}`),
+        token: adminToken,
+        payload: { first_name: 'Ghost' },
+      });
+      expect(response.statusCode, response.body).toBe(404);
+    });
+
+    it('DELETE /users/:user_id returns 403 for a plain user', async () => {
+      const caller = await createTestUser();
+      const target = await createTestUser();
+      const token = await generateTestToken({ userId: caller.public_id, role: 'user' });
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/users/${target.public_id}`),
+        token,
+      });
+      expect(response.statusCode, response.body).toBe(403);
+    });
+
+    it('DELETE /users/:user_id returns 404 for an unknown user id', async () => {
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/users/${UNKNOWN_USER_ID}`),
+        token: adminToken,
+      });
+      expect(response.statusCode, response.body).toBe(404);
+    });
   });
 });

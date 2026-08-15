@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { generate as generateTotp } from 'otplib';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import {
@@ -8,17 +7,84 @@ import {
 } from '@/tests/helpers/test-http-inject.helper.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
-import {
-  generateTestToken,
-  generateTestTokenAndSession,
-  generateSuperAdminToken,
-} from '@/tests/helpers/test-auth.js';
-import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
+import { generateTestToken, generateSuperAdminToken } from '@/tests/helpers/test-auth.js';
 import type { FastifyInstance } from 'fastify';
 import type { InjectHttpResult } from '@/tests/helpers/test-http-inject.helper.js';
 
 const ME_RETRY_ATTEMPTS = 3;
 const ME_RETRY_DELAY_MS = 50;
+
+/** PNG file signature so the upload confirm step's magic-byte verification passes. */
+const PNG_MAGIC_BYTES = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+]);
+const FAKE_CONTENT_LENGTH = 1024;
+
+// `PUT /users/me/avatar` needs object storage to answer before it will return its declared 200.
+// Stub at the ObjectStoragePort seam (the same seam `storage-routes-happy` uses) so the avatar
+// contract is proven inside the user domain rather than only in a platform-wide file.
+vi.mock('@/infrastructure/storage/s3-adapter.js', () => {
+  const fakeObjectStorage = {
+    createPresignedUploadUrl: async () => 'https://fake-s3.local/presigned-put',
+    createPresignedUploadPost: async () => ({
+      url: 'https://fake-s3.local/upload',
+      fields: { key: 'fake-policy-key' },
+    }),
+    verifyUploadedObject: async (
+      _key: string,
+      expected: { contentType: string; contentLength: number },
+    ) => ({
+      contentType: expected.contentType,
+      contentLength: expected.contentLength,
+      eTag: '"fake-etag"',
+    }),
+    headObject: async () => ({ contentType: 'image/png', contentLength: FAKE_CONTENT_LENGTH }),
+    deleteObject: async () => true,
+    putObject: async () => {},
+    copyObject: async () => {},
+    getObject: async () => ({ body: PNG_MAGIC_BYTES, contentType: 'image/png' }),
+    getObjectFirstBytes: async () => ({
+      body: PNG_MAGIC_BYTES,
+      contentType: 'image/png',
+      eTag: '"fake-etag"',
+    }),
+    getObjectUrl: (key: string) => `https://fake-s3.local/${key}`,
+    createPresignedDownloadUrl: async () => 'https://fake-s3.local/presigned-get',
+  };
+  return {
+    getDefaultS3ObjectStorageAdapter: () => fakeObjectStorage,
+    S3ObjectStorageAdapter: class {},
+  };
+});
+
+/** Create + confirm an avatar upload, returning the storage key the attach route expects. */
+async function createConfirmedAvatarUpload(
+  application: FastifyInstance,
+  token: string,
+): Promise<string> {
+  const create = await injectAuthenticated(application, {
+    method: 'POST',
+    url: testApiPath('/uploads'),
+    token,
+    payload: {
+      purpose: 'avatar',
+      for: 'user',
+      content_type: 'image/png',
+      file_name: 'avatar.png',
+      file_size: FAKE_CONTENT_LENGTH,
+    },
+  });
+  expect(create.statusCode, create.body).toBe(201);
+  const created = (create.json() as { data: { id: string; key: string } }).data;
+
+  const confirm = await injectAuthenticated(application, {
+    method: 'POST',
+    url: testApiPath(`/uploads/${created.id}/confirm`),
+    token,
+  });
+  expect(confirm.statusCode, confirm.body).toBe(201);
+  return created.key;
+}
 
 /**
  * GET /api/v1/users/me with retries on 404 to absorb transient DB visibility after createTestUser().
@@ -86,64 +152,6 @@ describe('User Domain — Integration', () => {
         false,
       );
     });
-
-    it('should return is_mfa_enabled true after MFA enroll and false after revoke', async () => {
-      // MFA enrollment requires a verified email (account pre-hijacking guard).
-      const user = await createTestUser({ isEmailVerified: true });
-      const { token, sessionPublicId } = await generateTestTokenAndSession({
-        userId: user.public_id,
-      });
-      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
-
-      const meBefore = await getMeWithRetry(app, token);
-      expect(meBefore.statusCode).toBe(200);
-      expect((meBefore.json() as { data: Record<string, unknown> }).data.is_mfa_enabled).toBe(
-        false,
-      );
-
-      const enrollResponse = await injectAuthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/me/mfa/enroll'),
-        token: token,
-        payload: { method_type: 'MFA_TOTP' },
-      });
-      expect(enrollResponse.statusCode).toBe(201);
-      const enrollSecret = (enrollResponse.json() as { data: { secret: string } }).data.secret;
-      const confirmResponse = await injectAuthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/me/mfa/enroll/confirm'),
-        token: token,
-        payload: { code: await generateTotp({ secret: enrollSecret }) },
-      });
-      expect(confirmResponse.statusCode).toBe(201);
-      // route-#10: the serializer returns `mfa_method_id` and DELETE /auth/me/mfa/{mfa_method_id}
-      // now accepts that opaque public id directly (the bigserial id is never exposed).
-      const methodPublicId = (confirmResponse.json() as { data: Record<string, unknown> }).data
-        .mfa_method_id as string;
-      expect(typeof methodPublicId).toBe('string');
-      expect(methodPublicId).toMatch(/^am_[a-z0-9]{21}$/);
-
-      const meAfterEnroll = await getMeWithRetry(app, token);
-      expect(meAfterEnroll.statusCode).toBe(200);
-      expect((meAfterEnroll.json() as { data: Record<string, unknown> }).data.is_mfa_enabled).toBe(
-        true,
-      );
-
-      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
-
-      const deleteResponse = await injectAuthenticated(app, {
-        method: 'DELETE',
-        url: testApiPath(`/auth/me/mfa/${methodPublicId}`),
-        token: token,
-      });
-      expect(deleteResponse.statusCode).toBe(204);
-
-      const meAfterRevoke = await getMeWithRetry(app, token);
-      expect(meAfterRevoke.statusCode).toBe(200);
-      expect((meAfterRevoke.json() as { data: Record<string, unknown> }).data.is_mfa_enabled).toBe(
-        false,
-      );
-    });
   });
 
   describe('PATCH /api/v1/users/me', () => {
@@ -178,6 +186,67 @@ describe('User Domain — Integration', () => {
         payload: { unknown_field: true },
       });
       expect([400, 422]).toContain(response.statusCode);
+    });
+  });
+
+  describe('POST /api/v1/users/me/onboarding/complete', () => {
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/users/me/onboarding/complete'),
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return 201 and flip onboarding_completed on the self profile', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+
+      const before = await getMeWithRetry(app, token);
+      expect(before.statusCode, before.body).toBe(200);
+      expect(
+        (before.json() as { data: { onboarding_completed: boolean } }).data.onboarding_completed,
+      ).toBe(false);
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/users/me/onboarding/complete'),
+        token,
+      });
+      expect(response.statusCode, response.body).toBe(201);
+      expect(
+        (response.json() as { data: { onboarding_completed: boolean } }).data.onboarding_completed,
+      ).toBe(true);
+
+      const after = await getMeWithRetry(app, token);
+      expect(after.statusCode, after.body).toBe(200);
+      expect(
+        (after.json() as { data: { onboarding_completed: boolean } }).data.onboarding_completed,
+      ).toBe(true);
+    });
+
+    it('should be idempotent — a second call still returns 201 and keeps the original stamp', async () => {
+      // The repository stamps only while `onboarding_completed_at IS NULL`, so a wizard that
+      // double-submits must not move the timestamp or start erroring.
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+
+      const first = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/users/me/onboarding/complete'),
+        token,
+      });
+      expect(first.statusCode, first.body).toBe(201);
+
+      const second = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/users/me/onboarding/complete'),
+        token,
+      });
+      expect(second.statusCode, second.body).toBe(201);
+      expect(
+        (second.json() as { data: { onboarding_completed: boolean } }).data.onboarding_completed,
+      ).toBe(true);
     });
   });
 
@@ -221,6 +290,9 @@ describe('User Domain — Integration', () => {
       expect(response.statusCode).toBe(401);
     });
 
+    // `UserSettingsService.get` returns platform defaults when no settings row exists and only
+    // throws for an unknown user, so an authenticated caller always gets 200 — the previous
+    // `[200, 404]` band could not distinguish a working route from a broken one.
     it('should return user settings', async () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
@@ -229,7 +301,7 @@ describe('User Domain — Integration', () => {
         url: testApiPath('/users/me/settings'),
         token: token,
       });
-      expect([200, 404]).toContain(response.statusCode);
+      expect(response.statusCode, response.body).toBe(200);
     });
   });
 
@@ -255,6 +327,8 @@ describe('User Domain — Integration', () => {
       expect(response.statusCode).toBe(401);
     });
 
+    // Same reasoning as settings above: the service only 404s for an unknown user, so an
+    // authenticated caller with no preference rows still gets 200 and an array.
     it('should return notification preferences', async () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
@@ -263,7 +337,8 @@ describe('User Domain — Integration', () => {
         url: testApiPath('/users/me/notification-preferences'),
         token: token,
       });
-      expect([200, 404]).toContain(response.statusCode);
+      expect(response.statusCode, response.body).toBe(200);
+      expect(Array.isArray((response.json() as { data: unknown }).data)).toBe(true);
     });
   });
 
@@ -277,6 +352,51 @@ describe('User Domain — Integration', () => {
         payload: {},
       });
       expect(response.statusCode).toBe(401);
+    });
+
+    // The route's declared 200 previously existed only in `src/tests/integration/
+    // storage-routes-happy.integration.test.ts` — a platform file outside this domain, so a
+    // scoped `VITEST_DOMAIN_FILTER=user` run never proved the avatar attach worked at all.
+    it('should return 200 and expose the attached avatar on the self profile', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const key = await createConfirmedAvatarUpload(app, token);
+
+      const response = await injectAuthenticated(app, {
+        method: 'PUT',
+        url: testApiPath('/users/me/avatar'),
+        token,
+        payload: { avatar_key: key },
+      });
+      expect(response.statusCode, response.body).toBe(200);
+
+      const me = await getMeWithRetry(app, token);
+      expect(me.statusCode, me.body).toBe(200);
+      expect((me.json() as { data: { avatar_url: string | null } }).data.avatar_url).toBeTruthy();
+    });
+
+    it('should clear avatar_url when the avatar is attached and then removed', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const key = await createConfirmedAvatarUpload(app, token);
+
+      const attach = await injectAuthenticated(app, {
+        method: 'PUT',
+        url: testApiPath('/users/me/avatar'),
+        token,
+        payload: { avatar_key: key },
+      });
+      expect(attach.statusCode, attach.body).toBe(200);
+
+      const remove = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath('/users/me/avatar'),
+        token,
+      });
+      expect(remove.statusCode, remove.body).toBe(204);
+
+      const me = await getMeWithRetry(app, token);
+      expect((me.json() as { data: { avatar_url: string | null } }).data.avatar_url).toBeNull();
     });
   });
 

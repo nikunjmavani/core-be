@@ -960,7 +960,9 @@ src/
     │   │   │   │   │   └── user-tombstone-retention.worker.unit.test.ts
     │   │   │   ├── tombstone-repository-reads.unit.test.ts
     │   │   │   ├── user-offboarding-reconcile.processor.unit.test.ts
+    │   │   │   ├── user-offboarding-reconcile.worker.unit.test.ts
     │   │   │   ├── user-routes-rate-limit.policy.unit.test.ts
+    │   │   │   ├── user-tombstone-retention.processor.unit.test.ts
     │   │   │   ├── user.controller.admin-audit.unit.test.ts
     │   │   │   ├── user.controller.unit.test.ts
     │   │   │   ├── user.repository.db.unit.test.ts
@@ -983,11 +985,16 @@ src/
     │   │   │   │   │   └── user-data-export.integration.test.ts
     │   │   │   │   ├── unit/
     │   │   │   │   │   ├── user-data-export-retention.processor.unit.test.ts
+    │   │   │   │   │   ├── user-data-export-retention.worker.unit.test.ts
     │   │   │   │   │   ├── user-data-export.controller.unit.test.ts
     │   │   │   │   │   ├── user-data-export.processor.unit.test.ts
+    │   │   │   │   │   ├── user-data-export.queue.unit.test.ts
+    │   │   │   │   │   ├── user-data-export.repository.db.unit.test.ts
     │   │   │   │   │   ├── user-data-export.serializer.unit.test.ts
     │   │   │   │   │   ├── user-data-export.service.db.unit.test.ts
-    │   │   │   │   │   └── user-data-export.service.unit.test.ts
+    │   │   │   │   │   ├── user-data-export.service.unit.test.ts
+    │   │   │   │   │   ├── user-data-export.validator.unit.test.ts
+    │   │   │   │   │   └── user-data-export.worker.unit.test.ts
     │   │   │   │   └── user-data-export.test.ts
     │   │   │   ├── queues/
     │   │   │   │   ├── user-data-export.job.schema.ts

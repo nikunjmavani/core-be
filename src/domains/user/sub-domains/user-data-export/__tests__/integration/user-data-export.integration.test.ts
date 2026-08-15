@@ -15,6 +15,7 @@ import {
   createMembership,
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { FastifyInstance } from 'fastify';
 
 const TENANCY_PERMISSION_CODES = Object.values(TENANCY_PERMISSIONS);
@@ -101,6 +102,58 @@ describe('User Data Export Sub-Domain — Integration', () => {
         status: 'pending',
       });
       expect(payload).toHaveProperty('export_id');
+    });
+  });
+
+  describe('GET /api/v1/users/me/data-export/:data_export_id', () => {
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'GET',
+        url: testApiPath(`/users/me/data-export/${generatePublicId('userDataExport')}`),
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return 404 for an unknown export id', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      await getAuthenticatedUserReady(app, token);
+
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(`/users/me/data-export/${generatePublicId('userDataExport')}`),
+        token,
+      });
+      expect(response.statusCode, response.body).toBe(404);
+    });
+
+    // The ownership property that actually matters: the repository scopes every read by
+    // (public_id, user_id), so a real, valid export id belonging to somebody else must read as
+    // absent rather than leaking another user's export status or download URL.
+    it('should return 404 for an export id owned by a different user', async () => {
+      const owner = await createTestUser();
+      const ownerToken = await generateTestToken({ userId: owner.public_id });
+      await getAuthenticatedUserReady(app, ownerToken);
+
+      const created = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/users/me/data-export'),
+        token: ownerToken,
+        payload: {},
+      });
+      expect(created.statusCode, created.body).toBe(201);
+      const exportId = (created.json() as { data: { export_id: string } }).data.export_id;
+
+      const stranger = await createTestUser({ email: `stranger-${owner.public_id}@test.com` });
+      const strangerToken = await generateTestToken({ userId: stranger.public_id });
+      await getAuthenticatedUserReady(app, strangerToken);
+
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(`/users/me/data-export/${exportId}`),
+        token: strangerToken,
+      });
+      expect(response.statusCode, response.body).toBe(404);
     });
   });
 });
