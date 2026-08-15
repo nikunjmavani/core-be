@@ -618,10 +618,13 @@ src/
     │   │   │   └── permission.factory.ts
     │   │   ├── integration/
     │   │   │   ├── tenancy-detail-happy.integration.test.ts
+    │   │   │   ├── tenancy-idempotency.integration.test.ts
     │   │   │   ├── tenancy-route-smoke.integration.test.ts
+    │   │   │   ├── tenancy-team-only-routes.integration.test.ts
     │   │   │   └── tenancy.integration.test.ts
     │   │   ├── unit/
-    │   │   │   └── legacy-public-organizations.policy.unit.test.ts
+    │   │   │   ├── legacy-public-organizations.policy.unit.test.ts
+    │   │   │   └── tenancy-identifiers.property.unit.test.ts
     │   │   └── tenancy.test.ts
     │   ├── events/
     │   │   ├── index.ts
@@ -746,6 +749,7 @@ src/
     │   │   ├── organization/
     │   │   │   ├── __tests__/
     │   │   │   │   ├── integration/
+    │   │   │   │   │   ├── organization-audit-logs.integration.test.ts
     │   │   │   │   │   └── organization.integration.test.ts
     │   │   │   │   └── unit/
     │   │   │   │   │   ├── organization-capability.unit.test.ts
@@ -864,7 +868,7 @@ src/
     │   │   │   ├── __tests__/
     │   │   │       ├── integration/
     │   │   │       │   └── permissions.integration.test.ts
-    │   │   │       ├── unit/
+    │   │   │       └── unit/
     │   │   │       │   ├── authorization.service.configuration.unit.test.ts
     │   │   │       │   ├── authorization.service.unit.test.ts
     │   │   │       │   ├── permission-cache-lock-order.policy.unit.test.ts
@@ -875,7 +879,6 @@ src/
     │   │   │       │   ├── permission.repository.db.unit.test.ts
     │   │   │       │   ├── permission.serializer.unit.test.ts
     │   │   │       │   └── permission.service.unit.test.ts
-    │   │   │       └── permissions.test.ts
     │   │   │   ├── seed/
     │   │   │       ├── index.ts
     │   │   │       └── permission.reference.seed.ts
@@ -1898,8 +1901,10 @@ src/
     │   │   ├── cross-org-mutation.security.test.ts
     │   │   ├── cross-org-resource.security.test.ts
     │   │   ├── invitation-email.security.test.ts
+    │   │   ├── invitation-flow-abuse.security.test.ts
     │   │   ├── notify-isolation.security.test.ts
     │   │   ├── object-ownership.security.test.ts
+    │   │   ├── tenancy-grant-escalation.security.test.ts
     │   │   └── tier-and-grant.security.test.ts
     │   ├── headers/
     │   │   ├── cors.security.test.ts
