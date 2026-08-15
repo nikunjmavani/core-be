@@ -47,7 +47,7 @@ function expectRejected(statusCode: number): void {
   // Strict DTOs reject unknown keys with 400; some layers surface 422. The
   // invariant is simply: the over-post never succeeds.
   expect(statusCode).not.toBe(200);
-  expect(statusCode).not.toBe(201);
+  expect(statusCode).not.toBe(200);
   expect(statusCode).not.toBe(204);
   expect([400, 422]).toContain(statusCode);
 }
@@ -97,7 +97,7 @@ describe('Security: mass-assignment / over-posting', () => {
       return generateTestToken({ userId: user.public_id });
     }
 
-    it('baseline: a valid body (with idempotency key) creates the organization (201)', async () => {
+    it('baseline: a valid body (with idempotency key) creates the organization (200)', async () => {
       const token = await createAuthedUserToken();
       const response = await injectAuthenticated(app, {
         method: 'POST',
@@ -106,7 +106,7 @@ describe('Security: mass-assignment / over-posting', () => {
         payload: { name: 'Acme Inc', slug: `acme-${generatePublicId('organization').slice(4)}` },
         headers: idempotent(),
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
     });
 
     it('rejects an injected public_id (server generates identity)', async () => {

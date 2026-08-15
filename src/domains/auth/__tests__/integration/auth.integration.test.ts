@@ -58,7 +58,7 @@ describe('Auth Domain — Response contract (integration)', () => {
         url: testApiPath(AUTH_LOGIN_PATH),
         payload: { email: user.email, password },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const data = (response.json() as { data: Record<string, unknown> }).data;
       expect(data.mfa_required).toBe(true);
       expect(typeof data.mfa_session_token).toBe('string');
@@ -83,7 +83,7 @@ describe('Auth Domain — Response contract (integration)', () => {
         url: testApiPath(AUTH_LOGIN_PATH),
         payload: { email: user.email, password },
       });
-      expect(loginResponse.statusCode).toBe(201);
+      expect(loginResponse.statusCode).toBe(200);
 
       const refreshResponse = await app.inject({
         method: 'POST',
@@ -136,7 +136,7 @@ describe('Auth Domain — Response contract (integration)', () => {
         url: testApiPath(AUTH_LOGIN_PATH),
         payload: { email: user.email, password },
       });
-      expect(loginResponse.statusCode).toBe(201);
+      expect(loginResponse.statusCode).toBe(200);
       return loginResponse.headers;
     }
 
@@ -163,7 +163,7 @@ describe('Auth Domain — Response contract (integration)', () => {
         },
         payload: {},
       });
-      expect(refreshResponse.statusCode).toBe(201);
+      expect(refreshResponse.statusCode).toBe(200);
       const body = refreshResponse.json() as { data?: { access_token?: string } };
       expect(body.data).toHaveProperty('access_token');
       const newToken = body.data?.access_token;
@@ -213,7 +213,7 @@ describe('Auth Domain — Response contract (integration)', () => {
       expect(refreshResponse.statusCode).toBe(403);
     });
 
-    it('should return 201 when Referer origin matches ALLOWED_ORIGINS', async () => {
+    it('should return 200 when Referer origin matches ALLOWED_ORIGINS', async () => {
       const loginHeaders = await loginAndGetResponseHeaders();
       const cookiePair = sessionIdCookiePairFromLoginResponse(loginHeaders);
 
@@ -226,7 +226,7 @@ describe('Auth Domain — Response contract (integration)', () => {
         },
         payload: {},
       });
-      expect(refreshResponse.statusCode).toBe(201);
+      expect(refreshResponse.statusCode).toBe(200);
     });
 
     it('should return 403 when Referer origin is not in ALLOWED_ORIGINS', async () => {
@@ -245,7 +245,7 @@ describe('Auth Domain — Response contract (integration)', () => {
       expect(refreshResponse.statusCode).toBe(403);
     });
 
-    it('should return 201 when Origin matches ALLOWED_ORIGINS', async () => {
+    it('should return 200 when Origin matches ALLOWED_ORIGINS', async () => {
       const loginHeaders = await loginAndGetResponseHeaders();
       const cookiePair = sessionIdCookiePairFromLoginResponse(loginHeaders);
 
@@ -258,7 +258,7 @@ describe('Auth Domain — Response contract (integration)', () => {
         },
         payload: {},
       });
-      expect(refreshResponse.statusCode).toBe(201);
+      expect(refreshResponse.statusCode).toBe(200);
       const body = refreshResponse.json() as { data?: { access_token?: string } };
       expect(body.data).toHaveProperty('access_token');
     });
@@ -274,7 +274,7 @@ describe('Auth Domain — Response contract (integration)', () => {
         headers: { 'accept-language': 'es' },
         payload: { email: 'unknown-email-code-user@example.com' },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       expect((response.json() as { data: Record<string, unknown> }).data.message).toBeDefined();
       expect([
         'If an account exists with this email, you will receive a sign-in code shortly.',

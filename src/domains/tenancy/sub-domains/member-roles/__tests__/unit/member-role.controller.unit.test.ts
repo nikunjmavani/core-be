@@ -77,7 +77,7 @@ describe('createMemberRoleController', () => {
     expect(service.getByPublicId).toHaveBeenCalledWith(organizationPublicId, rolePublicId);
   });
 
-  it('createRole returns 201', async () => {
+  it('createRole returns 200', async () => {
     const reply = mockReply();
     await controller.createRole(
       mockRequest({
@@ -87,7 +87,9 @@ describe('createMemberRoleController', () => {
       reply,
     );
     expect(service.create).toHaveBeenCalled();
-    expect(reply.code).toHaveBeenCalledWith(201);
+    // The controller no longer sets an explicit status: the uniform method-status policy
+    // (POST -> 200) owns the code, so the handler must leave reply.code untouched.
+    expect(reply.code).not.toHaveBeenCalled();
   });
 
   it('updateRole delegates to service', async () => {

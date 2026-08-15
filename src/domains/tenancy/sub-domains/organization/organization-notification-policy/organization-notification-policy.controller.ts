@@ -46,11 +46,10 @@ export function createOrganizationNotificationPolicyController(
       );
       return successResponse(data, getRequestIdentifier(request));
     },
-    createPolicy: async (request: FastifyRequest, reply: FastifyReply) => {
+    createPolicy: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
       const organizationId = resolveActiveOrganizationId(request);
       const data = await service.create(organizationId, request.body, getActingUserPublicId(auth));
-      reply.code(201);
       return successResponse(data, getRequestIdentifier(request));
     },
     updatePolicy: async (request: FastifyRequest, _reply: FastifyReply) => {

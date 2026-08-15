@@ -30,7 +30,7 @@ describe('Auth e2e: email verification-code login flow', () => {
       url: testApiPath('/auth/email/send-code'),
       payload: { email: 'email-login-e2e@example.com' },
     });
-    expect(response.statusCode).toBe(201);
+    expect(response.statusCode).toBe(200);
   });
 
   it('auto-signup: an unknown email is created on send and can log in immediately', async () => {
@@ -43,7 +43,7 @@ describe('Auth e2e: email verification-code login flow', () => {
       url: testApiPath('/auth/email/send-code'),
       payload: { email },
     });
-    expect(sendResponse.statusCode).toBe(201);
+    expect(sendResponse.statusCode).toBe(200);
 
     const code = await codePromise;
     expect(code).toMatch(/^[A-Z0-9]{6}$/);
@@ -53,7 +53,7 @@ describe('Auth e2e: email verification-code login flow', () => {
       url: testApiPath('/auth/email/login'),
       payload: { email, code },
     });
-    expect(loginResponse.statusCode).toBe(201);
+    expect(loginResponse.statusCode).toBe(200);
     const loginBody = loginResponse.json() as { data: { access_token?: string } };
     expect(loginBody.data.access_token).toBeTruthy();
 
@@ -82,7 +82,7 @@ describe('Auth e2e: email verification-code login flow', () => {
       url: testApiPath('/auth/email/send-code'),
       payload: { email: user.email },
     });
-    expect(sendResponse.statusCode).toBe(201);
+    expect(sendResponse.statusCode).toBe(200);
     const sendBody = sendResponse.json() as { data: { code?: unknown } };
     /** Raw code is never returned in the API response — only via the event payload. */
     expect(sendBody.data.code).toBeUndefined();
@@ -95,7 +95,7 @@ describe('Auth e2e: email verification-code login flow', () => {
       url: testApiPath('/auth/email/login'),
       payload: { email: user.email, code },
     });
-    expect(loginResponse.statusCode).toBe(201);
+    expect(loginResponse.statusCode).toBe(200);
     expect((loginResponse.json() as { data: Record<string, unknown> }).data).toHaveProperty(
       'access_token',
     );
@@ -120,7 +120,7 @@ describe('Auth e2e: email verification-code login flow', () => {
       url: testApiPath('/auth/email/login'),
       payload: { email: user.email, code },
     });
-    expect(loginResponse.statusCode).toBe(201);
+    expect(loginResponse.statusCode).toBe(200);
 
     const loginBody = loginResponse.json() as {
       data: { access_token: string; session_id?: string };
@@ -151,7 +151,7 @@ describe('Auth e2e: email verification-code login flow', () => {
       url: testApiPath('/auth/email/login'),
       payload: { email: user.email, code: firstCode },
     });
-    expect(firstLogin.statusCode).toBe(201);
+    expect(firstLogin.statusCode).toBe(200);
 
     // Redeeming the first code invalidated every other live code, so the still-unexpired second fails.
     const secondLogin = await injectUnauthenticated(app, {

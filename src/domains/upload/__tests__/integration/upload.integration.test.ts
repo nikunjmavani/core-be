@@ -224,7 +224,7 @@ describe('Upload Domain — Integration', () => {
       expect(response.statusCode).toBe(404);
     });
 
-    it('is idempotent: re-confirming an already-UPLOADED row returns 201 without S3 calls', async () => {
+    it('is idempotent: re-confirming an already-UPLOADED row returns 200 without S3 calls', async () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
       const { id, publicId } = await seedUploadedRow(user.id);
@@ -235,7 +235,7 @@ describe('Upload Domain — Integration', () => {
         token,
         payload: {},
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
 
       const [postCall] = await database.select().from(uploads).where(eq(uploads.id, id));
       expect(postCall!.status).toBe('UPLOADED');
@@ -304,7 +304,7 @@ describe('Upload Domain — Integration', () => {
         headers,
         payload: validAvatarPayload,
       });
-      expect(first.statusCode, first.body).toBe(201);
+      expect(first.statusCode, first.body).toBe(200);
 
       const second = await app.inject({
         method: 'POST',
@@ -312,7 +312,7 @@ describe('Upload Domain — Integration', () => {
         headers,
         payload: validAvatarPayload,
       });
-      expect(second.statusCode, second.body).toBe(201);
+      expect(second.statusCode, second.body).toBe(200);
 
       const idOf = (raw: string): string => (JSON.parse(raw) as { data: { id: string } }).data.id;
       // A replay would return the first id byte-for-byte; a fresh execution mints a new row.

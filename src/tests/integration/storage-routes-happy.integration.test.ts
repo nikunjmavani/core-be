@@ -82,7 +82,7 @@ async function createUploadAndConfirm(options: {
       file_size: FAKE_CONTENT_LENGTH,
     },
   });
-  expect(create.statusCode, create.body).toBe(201);
+  expect(create.statusCode, create.body).toBe(200);
   // `key` is only exposed at create time ("final storage key to pass to attach
   // endpoints after POST /confirm succeeds"); the detail serializer hides it.
   const created = (create.json() as { data: { id: string; key: string } }).data;
@@ -93,7 +93,7 @@ async function createUploadAndConfirm(options: {
     token,
     ...(organizationPublicId ? { organizationPublicId } : {}),
   });
-  expect(confirm.statusCode, confirm.body).toBe(201);
+  expect(confirm.statusCode, confirm.body).toBe(200);
   return { uploadPublicId: created.id, key: created.key };
 }
 

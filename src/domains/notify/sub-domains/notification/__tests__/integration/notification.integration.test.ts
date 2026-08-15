@@ -73,13 +73,13 @@ describe('Notification Sub-Domain — Integration', () => {
 
   /**
    * `POST /notify/notifications/mark-all-read` was the worst-covered route in the domain: it
-   * declares 201, and the only HTTP case anywhere was a 401. The `updated_count` payload was
+   * declares 200, and the only HTTP case anywhere was a 401. The `updated_count` payload was
    * proven in the controller unit and again in the repository DB unit — but nothing proved the
    * route wiring between the two, which is exactly where a status-policy or serializer
    * regression would land.
    */
   describe('POST /api/v1/notify/notifications/mark-all-read', () => {
-    it('returns 201 with updated_count matching the rows marked', async () => {
+    it('returns 200 with updated_count matching the rows marked', async () => {
       const { user, organization, token } = await createAuthorizedContext();
       for (let index = 0; index < 3; index += 1) {
         await createTestNotification({
@@ -96,14 +96,14 @@ describe('Notification Sub-Domain — Integration', () => {
         organizationPublicId: organization.public_id,
       });
 
-      // 201 is the method→status policy for POST, enforced by the middleware rewrite — this is
+      // 200 is the method→status policy for POST, enforced by the middleware rewrite — this is
       // the only place it is observed for this route.
-      expect(response.statusCode, response.body).toBe(201);
+      expect(response.statusCode, response.body).toBe(200);
       const body = response.json() as { data?: { updated_count?: number } };
       expect(body.data?.updated_count).toBe(3);
     });
 
-    it('returns 201 with updated_count 0 when nothing is unread', async () => {
+    it('returns 200 with updated_count 0 when nothing is unread', async () => {
       const { organization, token } = await createAuthorizedContext();
 
       const response = await injectAuthenticated(app, {
@@ -113,7 +113,7 @@ describe('Notification Sub-Domain — Integration', () => {
         organizationPublicId: organization.public_id,
       });
 
-      expect(response.statusCode, response.body).toBe(201);
+      expect(response.statusCode, response.body).toBe(200);
       const body = response.json() as { data?: { updated_count?: number } };
       expect(body.data?.updated_count).toBe(0);
     });
@@ -134,7 +134,7 @@ describe('Notification Sub-Domain — Integration', () => {
         organizationPublicId: organization.public_id,
       });
 
-      expect(response.statusCode, response.body).toBe(201);
+      expect(response.statusCode, response.body).toBe(200);
       const body = response.json() as { data?: { updated_count?: number } };
       expect(body.data?.updated_count).toBe(1);
     });

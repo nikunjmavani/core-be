@@ -23,7 +23,7 @@ import { generateTestToken } from '@/tests/helpers/test-auth.js';
 const UPLOAD_URL = '/uploads';
 
 function expectUploadRejected(statusCode: number): void {
-  expect(statusCode).not.toBe(201);
+  expect(statusCode).not.toBe(200);
   expect(statusCode).not.toBe(200);
   expect([400, 403, 422]).toContain(statusCode);
 }
@@ -85,7 +85,7 @@ describe('Security: upload request-validation attacks', () => {
         file_size: 1024,
       },
     });
-    expect(response.statusCode).toBe(201);
+    expect(response.statusCode).toBe(200);
   });
 
   // ─── Dangerous content types ────────────────────────────────────────────────

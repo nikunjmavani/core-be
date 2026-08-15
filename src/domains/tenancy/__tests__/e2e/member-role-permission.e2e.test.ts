@@ -63,7 +63,7 @@ describe('Tenancy e2e: member role permission', () => {
       payload: { name: 'E2E Custom Role', description: 'e2e' },
       headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
     });
-    expect([201]).toContain(createRoleResponse.statusCode);
+    expect([200]).toContain(createRoleResponse.statusCode);
 
     const listRolesResponse = await injectAuthenticated(app, {
       method: 'GET',

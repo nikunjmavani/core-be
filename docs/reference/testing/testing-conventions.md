@@ -165,7 +165,7 @@ See also [api-versioning.md](../api/api-versioning.md).
 1. Read the routes file — endpoints, middleware, access control.
 2. `beforeAll`: `createTestApp()`; `afterAll`: `await app.close()`.
 3. `beforeEach`: `cleanupDatabase()`; seed permissions if needed.
-4. Per route: 401, 403 (if gated), 200/201, 400 validation.
+4. Per route: 401, 403 (if gated), 200 (204 for DELETE), 400 validation.
 5. Run targeted `pnpm test:*`; stop `pnpm dev` on shared DB before `pnpm test:e2e`.
 
 ---

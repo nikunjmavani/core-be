@@ -99,14 +99,13 @@ export function createWebhookController(service: WebhookService) {
       // double-serialize and (with the typed projection) reject the input shape.
       return successResponse(data, getRequestIdentifier(request));
     },
-    createWebhook: async (request: FastifyRequest, reply: FastifyReply) => {
+    createWebhook: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
       const data = await service.create(
         resolveActiveOrganizationId(request),
         request.body,
         getActingUserPublicId(auth),
       );
-      reply.code(201);
       return successResponse(data, getRequestIdentifier(request));
     },
     updateWebhook: async (

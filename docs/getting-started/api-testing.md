@@ -97,7 +97,7 @@ curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/readyz
 
 | #   | Method | Path                                  | Expected                 |
 | --- | ------ | ------------------------------------- | ------------------------ |
-| 2.1 | POST   | `/api/v1/auth/login`                  | 201, `data.access_token` |
+| 2.1 | POST   | `/api/v1/auth/login`                  | 200, `data.access_token` |
 | 2.2 | POST   | `/api/v1/auth/login` (wrong password) | 401                      |
 | 2.3 | GET    | `/api/v1/users/me` (no token)         | 401                      |
 

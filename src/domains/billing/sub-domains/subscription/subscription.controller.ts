@@ -51,7 +51,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       );
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
-    createSubscription: async (request: FastifyRequest, reply: FastifyReply) => {
+    createSubscription: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
       const idempotencyKey = readIdempotencyKey(request);
       const data = await service.create(
@@ -60,7 +60,6 @@ export function createSubscriptionController(service: SubscriptionService) {
         getActingUserPublicId(auth),
         idempotencyKey,
       );
-      reply.code(201);
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
     updateSubscription: async (

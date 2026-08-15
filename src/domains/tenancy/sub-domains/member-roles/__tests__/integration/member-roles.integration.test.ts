@@ -229,7 +229,7 @@ describe('Member Roles Sub-Domain — Integration', () => {
         payload: { name: roleName, permission_codes: [TENANCY_PERMISSIONS.ORGANIZATION_READ] },
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
 
       const [roleRow] = await database
         .select({ id: roles.id })
@@ -327,7 +327,7 @@ describe('Member Roles Sub-Domain — Integration', () => {
       expect(rolesAfter).toBe(1);
     });
 
-    it('positive contrast: the SAME POST /roles succeeds (201) on a TEAM org — the guard is type-specific, not a blanket block', async () => {
+    it('positive contrast: the SAME POST /roles succeeds (200) on a TEAM org — the guard is type-specific, not a blanket block', async () => {
       await seedAllTenancyPermissions();
       const owner = await createTestUser();
       const team = await provisionOrganizationWithOwner({
@@ -351,7 +351,7 @@ describe('Member Roles Sub-Domain — Integration', () => {
         payload: { name: `Team Custom Role ${randomUUID()}` },
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const rolesAfter = await countRoles(team.organization.id);
       expect(rolesAfter).toBe(rolesBefore + 1);
     });

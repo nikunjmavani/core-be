@@ -100,7 +100,7 @@ describe('createOrganizationNotificationPolicyController', () => {
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it('createPolicy sets 201 status and delegates to service', async () => {
+  it('createPolicy delegates to service and leaves the status to the method policy', async () => {
     const body = {
       notification_type: 'invite',
       channel: 'email',
@@ -117,7 +117,9 @@ describe('createOrganizationNotificationPolicyController', () => {
       }),
       reply,
     );
-    expect(reply.code).toHaveBeenCalledWith(201);
+    // The controller no longer sets an explicit status: the uniform method-status policy
+    // (POST -> 200) owns the code, so the handler must leave reply.code untouched.
+    expect(reply.code).not.toHaveBeenCalled();
     expect(service.create).toHaveBeenCalledWith(organizationPublicId, body, userId);
     expect(response).toMatchObject({ data: policyRow });
   });

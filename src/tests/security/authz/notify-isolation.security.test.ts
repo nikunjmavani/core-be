@@ -294,7 +294,7 @@ describe('Security: notify tenant and owner isolation', () => {
         token: attacker.token,
       });
 
-      expect(response.statusCode, response.body).toBe(201);
+      expect(response.statusCode, response.body).toBe(200);
       const body = response.json() as { data?: { updated_count?: number } };
       expect(body.data?.updated_count).toBe(0);
 

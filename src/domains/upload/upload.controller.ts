@@ -16,7 +16,7 @@ export function createUploadController(uploadService: UploadService) {
       const auth = requireAuth(request);
       const input = validateCreateUpload(request.body);
       const result = await uploadService.createUpload(input, auth.userId);
-      return reply.status(201).send(successResponse(result, getRequestIdentifier(request)));
+      return reply.status(200).send(successResponse(result, getRequestIdentifier(request)));
     },
 
     getUpload: async (request: FastifyRequest, reply: FastifyReply) => {

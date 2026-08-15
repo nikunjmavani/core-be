@@ -49,7 +49,7 @@ describe('Cross-domain e2e: tenancy + billing organization', () => {
       headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
       payload: { name: 'Billing E2E Org', slug: `billing-e2e-${Date.now()}` },
     });
-    expect(createResponse.statusCode).toBe(201);
+    expect(createResponse.statusCode).toBe(200);
     const created = createResponse.json() as { data: { id: string } };
     const orgToken = await generateTestToken({
       userId: user.public_id,

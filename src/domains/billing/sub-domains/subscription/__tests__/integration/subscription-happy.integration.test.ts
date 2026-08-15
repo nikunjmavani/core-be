@@ -49,7 +49,7 @@ vi.mock('@/domains/billing/sub-domains/subscription/stripe-payment-provider.js',
 const SUBSCRIPTION_PERMISSIONS = ['subscription:read', 'subscription:manage'];
 
 /**
- * Happy paths for subscription create (201) and update (200) with the payment
+ * Happy paths for subscription create (200) and update (200) with the payment
  * provider mocked at the PaymentProvider port implementation, plus the legacy
  * `POST /billing/webhook` alias with a properly signed Stripe event (200).
  */
@@ -90,7 +90,7 @@ describe('Billing subscription — happy paths (mocked payment provider)', () =>
     return { user, organization, token };
   }
 
-  it('POST /billing/subscriptions creates a subscription (201)', async () => {
+  it('POST /billing/subscriptions creates a subscription (200)', async () => {
     const { token } = await createAuthorizedBillingContext();
     const plan = await createTestPlan();
 
@@ -101,7 +101,7 @@ describe('Billing subscription — happy paths (mocked payment provider)', () =>
       headers: { 'x-idempotency-key': `subscription-happy-${randomUUID()}` },
       payload: { plan_id: plan.public_id, billing_cycle: 'monthly' },
     });
-    expect(response.statusCode, response.body).toBe(201);
+    expect(response.statusCode, response.body).toBe(200);
   });
 
   it('PATCH /billing/subscriptions/:subscription_id returns the subscription (200)', async () => {

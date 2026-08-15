@@ -46,10 +46,9 @@ export function createOrganizationController(
       const data = await service.getBySlug(slug, auth.userId, auth.role);
       return successResponse(data, getRequestIdentifier(request));
     },
-    createOrganization: async (request: FastifyRequest, reply: FastifyReply) => {
+    createOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
       const data = await service.create(request.body, auth.userId);
-      reply.code(201);
       return successResponse(data, getRequestIdentifier(request));
     },
     updateOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {

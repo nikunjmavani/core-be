@@ -187,7 +187,7 @@ describe('Tenancy idempotency contract — Integration', () => {
         payload,
         key,
       });
-      expect(first.statusCode).toBe(201);
+      expect(first.statusCode).toBe(200);
       expect(first.headers['x-idempotency-replay']).toBeUndefined();
       const firstId = (JSON.parse(first.body) as { data: { id: string } }).data.id;
 
@@ -198,7 +198,7 @@ describe('Tenancy idempotency contract — Integration', () => {
         payload,
         key,
       });
-      expect(replay.statusCode).toBe(201);
+      expect(replay.statusCode).toBe(200);
       expect(replay.headers['x-idempotency-replay']).toBe('true');
       expect((JSON.parse(replay.body) as { data: { id: string } }).data.id).toBe(firstId);
 
@@ -224,7 +224,7 @@ describe('Tenancy idempotency contract — Integration', () => {
         payload: { name: 'First Role' },
         key,
       });
-      expect(first.statusCode).toBe(201);
+      expect(first.statusCode).toBe(200);
 
       const mismatch = await injectWithoutIdempotencyKey({
         method: 'POST',
@@ -238,7 +238,7 @@ describe('Tenancy idempotency contract — Integration', () => {
   });
 
   describe('POST /organization/api-keys is required-key AND replay-excluded', () => {
-    // This route sits in `IDEMPOTENCY_EXCLUDED_ROUTE_PATTERNS`: its 201 body carries the raw secret
+    // This route sits in `IDEMPOTENCY_EXCLUDED_ROUTE_PATTERNS`: its success body carries the raw secret
     // exactly once, so caching it would let a replayed request re-read a live credential out of
     // Redis. The result is a deliberate and easily-missed combination — the key is *mandatory*
     // (asserted above) but never *dedupes*. Nothing pinned that pairing before; dropping the route
@@ -263,8 +263,8 @@ describe('Tenancy idempotency contract — Integration', () => {
         key,
       });
 
-      expect(first.statusCode).toBe(201);
-      expect(second.statusCode).toBe(201);
+      expect(first.statusCode).toBe(200);
+      expect(second.statusCode).toBe(200);
       // Never a replay — neither response may be served from the idempotency cache.
       expect(first.headers['x-idempotency-replay']).toBeUndefined();
       expect(second.headers['x-idempotency-replay']).toBeUndefined();

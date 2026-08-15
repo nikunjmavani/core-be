@@ -181,7 +181,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
   });
 
   it('replays completed cache entries when Redis already has an entry', async () => {
-    mockRedisGet.mockResolvedValue(buildCompletedEntry(201, { id: 'created' }));
+    mockRedisGet.mockResolvedValue(buildCompletedEntry(200, { id: 'created' }));
     const { claimPreHandler } = await registerIdempotencyHooks();
 
     const request = {
@@ -201,7 +201,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
 
     await claimPreHandler(request, reply);
 
-    expect(reply.status).toHaveBeenCalledWith(201);
+    expect(reply.status).toHaveBeenCalledWith(200);
     expect(send).toHaveBeenCalledWith({ id: 'created' });
     expect(mockRedisSet).not.toHaveBeenCalled();
   });
@@ -213,7 +213,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     mockRedisGet.mockResolvedValue(
       JSON.stringify({
         state: 'completed',
-        statusCode: 201,
+        statusCode: 200,
         body: JSON.stringify({ id: 'first' }),
         headers: { 'content-type': 'application/json' },
         fingerprint: 'fingerprint-for-a-different-original-body',
@@ -264,7 +264,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     mockRedisGet.mockResolvedValue(
       JSON.stringify({
         state: 'completed',
-        statusCode: 201,
+        statusCode: 200,
         body: JSON.stringify({ id: 'created' }),
         headers: { 'content-type': 'application/json' },
         fingerprint,
@@ -290,7 +290,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
 
     await claimPreHandler(request, reply);
 
-    expect(reply.status).toHaveBeenCalledWith(201);
+    expect(reply.status).toHaveBeenCalledWith(200);
     expect(send).toHaveBeenCalledWith({ id: 'created' });
   });
 
@@ -584,7 +584,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
       },
     } as unknown as FastifyRequest;
     const reply = {
-      statusCode: 201,
+      statusCode: 200,
       getHeader: vi.fn().mockReturnValue('application/json'),
     } as unknown as FastifyReply;
 
@@ -613,7 +613,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
       },
     } as unknown as FastifyRequest;
     const reply = {
-      statusCode: 201,
+      statusCode: 200,
       getHeader: vi.fn().mockReturnValue('application/json'),
     } as unknown as FastifyReply;
     const maxSizeBody = 'x'.repeat(100 * 1024);
@@ -641,7 +641,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
       },
     } as unknown as FastifyRequest & { _idempotencyClaimed?: boolean };
     const reply = {
-      statusCode: 201,
+      statusCode: 200,
       getHeader: vi.fn().mockReturnValue('application/json'),
     } as unknown as FastifyReply;
     const oversizedBody = 'x'.repeat(100 * 1024 + 1);
@@ -753,7 +753,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
       _idempotencyKey: IDEMPOTENCY_TEST_KEY,
       _idempotencyClaimed: false,
     } as unknown as FastifyRequest;
-    const reply = { statusCode: 201, getHeader: vi.fn() } as unknown as FastifyReply;
+    const reply = { statusCode: 200, getHeader: vi.fn() } as unknown as FastifyReply;
 
     await onSend(request, reply, { ok: true });
     await onResponse(request, reply);
@@ -790,7 +790,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
       _idempotencyScope: { userId: TEST_USER_PUBLIC_ID },
     } as unknown as FastifyRequest;
     const reply = {
-      statusCode: 201,
+      statusCode: 200,
       getHeader: vi.fn().mockReturnValue('application/json'),
     } as unknown as FastifyReply;
 
@@ -979,7 +979,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     });
 
     it('does NOT consume the cap on a cache-hit replay (cap protects only new claim allocations)', async () => {
-      mockRedisGet.mockResolvedValue(buildCompletedEntry(201, { id: 'replay' }));
+      mockRedisGet.mockResolvedValue(buildCompletedEntry(200, { id: 'replay' }));
       const { claimPreHandler } = await registerIdempotencyHooks();
       const request = {
         method: 'POST',
@@ -997,7 +997,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
 
       await claimPreHandler(request, reply);
 
-      expect(reply.status).toHaveBeenCalledWith(201);
+      expect(reply.status).toHaveBeenCalledWith(200);
       // Cache hit short-circuits before the cap eval — a legitimate retry of a completed
       // request must never count against the actor's cardinality budget.
       expect(mockRedisEval).not.toHaveBeenCalled();
@@ -1071,7 +1071,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
       },
     } as unknown as FastifyRequest & { _idempotencyPendingCompleted?: unknown };
     const reply = {
-      statusCode: 201,
+      statusCode: 200,
       getHeader: vi.fn().mockReturnValue('application/json'),
     } as unknown as FastifyReply;
 

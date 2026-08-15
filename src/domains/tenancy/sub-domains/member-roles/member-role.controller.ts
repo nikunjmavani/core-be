@@ -43,7 +43,7 @@ export function createMemberRoleController(service: MemberRoleService) {
       const data = await service.getByPublicId(organizationId, roleId);
       return successResponse(data, getRequestIdentifier(request));
     },
-    createRole: async (request: FastifyRequest, reply: FastifyReply) => {
+    createRole: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
       const organizationId = resolveActiveOrganizationId(request);
       const data = await service.create(organizationId, request.body, getActingUserPublicId(auth));
@@ -54,7 +54,6 @@ export function createMemberRoleController(service: MemberRoleService) {
         organizationPublicId: organizationId,
         metadata: { role_public_id: (data as { public_id?: string }).public_id },
       });
-      reply.code(201);
       return successResponse(data, getRequestIdentifier(request));
     },
     updateRole: async (request: FastifyRequest, _reply: FastifyReply) => {

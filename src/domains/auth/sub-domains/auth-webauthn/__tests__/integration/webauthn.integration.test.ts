@@ -44,7 +44,7 @@ describe('Auth WebAuthn — Integration', () => {
         payload: {},
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const body = response.json() as {
         data: { options: { challenge: string }; challenge_token: string };
       };
@@ -290,8 +290,8 @@ describe('Auth WebAuthn — Integration', () => {
         },
       });
 
-      // A clean rejection (never a 201 success, never a 5xx crash) ...
-      expect(response.statusCode).not.toBe(201);
+      // A clean rejection (never a 200 success, never a 5xx crash) ...
+      expect(response.statusCode).not.toBe(200);
       expect(response.statusCode).toBeGreaterThanOrEqual(400);
       expect(response.statusCode).toBeLessThan(500);
       // ... and no session / tokens minted regardless of the rejection status.

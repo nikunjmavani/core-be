@@ -50,7 +50,7 @@ export function tenancyRoleWriteOps() {
   );
   checkResponseTime(createResponse, 700, 'create-role');
 
-  if (createResponse.status !== 201 && createResponse.status !== 200) {
+  if (createResponse.status !== 200 && createResponse.status !== 200) {
     sleep(1);
     return;
   }

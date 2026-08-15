@@ -45,7 +45,7 @@ export function createOrganizationApiKeyController(service: OrganizationApiKeySe
       const data = await service.getByPublicId(organizationId, apiKeyId);
       return successResponse(data, getRequestIdentifier(request));
     },
-    createApiKey: async (request: FastifyRequest, reply: FastifyReply) => {
+    createApiKey: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
       const organizationId = resolveActiveOrganizationId(request);
       const result = await service.create(organizationId, request.body, auth.userId);
@@ -57,7 +57,6 @@ export function createOrganizationApiKeyController(service: OrganizationApiKeySe
         severity: 'WARNING',
         metadata: { api_key_id: result.api_key.id },
       });
-      reply.code(201);
       return successResponse(
         { api_key: result.api_key, raw_key: result.raw_key },
         getRequestIdentifier(request),
@@ -108,7 +107,7 @@ export function createOrganizationApiKeyController(service: OrganizationApiKeySe
       });
       return reply.code(204).send();
     },
-    rotateApiKey: async (request: FastifyRequest, reply: FastifyReply) => {
+    rotateApiKey: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
       const rawParams = (request.params as { api_key_id: string }) ?? {
         api_key_id: '',
@@ -127,7 +126,6 @@ export function createOrganizationApiKeyController(service: OrganizationApiKeySe
         severity: 'WARNING',
         metadata: { api_key_id: apiKeyId },
       });
-      reply.code(201);
       return successResponse(
         { api_key: result.api_key, raw_key: result.raw_key },
         getRequestIdentifier(request),

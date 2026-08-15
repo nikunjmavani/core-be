@@ -13,7 +13,7 @@ export const auditUploadRouteResponses: Record<string, ResponseDefinition> = {
 
   // ── Upload ──
   'POST /api/v1/uploads': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.uploadSchema, schemas.uploadExample),
     example: null,
   },
@@ -24,7 +24,7 @@ export const auditUploadRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'POST /api/v1/uploads/{upload_id}/confirm': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.uploadObjectSchema, schemas.uploadObjectExample),
     example: null,
   },

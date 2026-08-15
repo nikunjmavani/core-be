@@ -158,7 +158,7 @@ describe('Billing Subscription Mutations — Integration', () => {
       expect(response.statusCode, response.body).toBe(400);
     });
 
-    it('should change the plan and return 201 with a valid X-Idempotency-Key', async () => {
+    it('should change the plan and return 200 with a valid X-Idempotency-Key', async () => {
       const { organization, subscription, token } = await createBillingMutationContext();
       const newPlan = await createTestPlan({ name: 'New Plan' });
 
@@ -171,7 +171,7 @@ describe('Billing Subscription Mutations — Integration', () => {
         headers: { 'x-idempotency-key': generatePublicId('subscription') },
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const body = response.json() as { data?: { plan_id?: number } };
       expect(body.data).toBeDefined();
     });
@@ -216,7 +216,7 @@ describe('Billing Subscription Mutations — Integration', () => {
         headers: { 'x-idempotency-key': generatePublicId('subscription') },
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       // The two non-owner members are now SUSPENDED; the owner stays ACTIVE.
       const statusOf = async (userId: number) =>
         (
@@ -255,7 +255,7 @@ describe('Billing Subscription Mutations — Integration', () => {
         headers: { 'x-idempotency-key': generatePublicId('subscription') },
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const ownerStatus = (
         await database
           .select({ status: memberships.status })
@@ -283,7 +283,7 @@ describe('Billing Subscription Mutations — Integration', () => {
         headers: { 'x-idempotency-key': generatePublicId('subscription') },
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
     });
 
     it('should return 401 when no auth header is provided', async () => {
@@ -359,7 +359,7 @@ describe('Billing Subscription Mutations — Integration', () => {
   // ─── POST cancel ──────────────────────────────────────────────────────────
 
   describe('POST /api/v1/billing/subscriptions/:subscription_id/cancel', () => {
-    it('should cancel an active subscription and return 201 with a valid X-Idempotency-Key', async () => {
+    it('should cancel an active subscription and return 200 with a valid X-Idempotency-Key', async () => {
       const { organization, subscription, token } = await createBillingMutationContext({
         status: 'ACTIVE',
       });
@@ -372,7 +372,7 @@ describe('Billing Subscription Mutations — Integration', () => {
         headers: { 'x-idempotency-key': generatePublicId('subscription') },
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const body = response.json() as { data?: { cancel_at_period_end?: boolean } };
       expect(body.data?.cancel_at_period_end).toBe(true);
     });
@@ -436,7 +436,7 @@ describe('Billing Subscription Mutations — Integration', () => {
       expect(response.statusCode).toBe(422);
     });
 
-    it('should return 201 when cancelling a subscription that is already scheduled to cancel (cancel_at_period_end=true)', async () => {
+    it('should return 200 when cancelling a subscription that is already scheduled to cancel (cancel_at_period_end=true)', async () => {
       // The service sets cancel_at_period_end=true but does NOT change status to CANCELED.
       // A subscription with cancel_at_period_end=true is still ACTIVE — cancel is idempotent
       // from the perspective of the service (it sets the same flag again).
@@ -463,14 +463,14 @@ describe('Billing Subscription Mutations — Integration', () => {
         headers: { 'x-idempotency-key': generatePublicId('subscription') },
       });
 
-      expect(secondCancelResponse.statusCode).toBe(201);
+      expect(secondCancelResponse.statusCode).toBe(200);
     });
   });
 
   // ─── POST resume ──────────────────────────────────────────────────────────
 
   describe('POST /api/v1/billing/subscriptions/:subscription_id/resume', () => {
-    it('should resume a cancelled (cancel_at_period_end) subscription and return 201 with a valid X-Idempotency-Key', async () => {
+    it('should resume a cancelled (cancel_at_period_end) subscription and return 200 with a valid X-Idempotency-Key', async () => {
       const { organization, subscription, token } = await createBillingMutationContext({
         status: 'ACTIVE',
       });
@@ -492,7 +492,7 @@ describe('Billing Subscription Mutations — Integration', () => {
         headers: { 'x-idempotency-key': generatePublicId('subscription') },
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const body = response.json() as {
         data?: { cancel_at_period_end?: boolean; status?: string };
       };
@@ -559,7 +559,7 @@ describe('Billing Subscription Mutations — Integration', () => {
       expect(response.statusCode).toBe(422);
     });
 
-    it('should return 201 when resuming an already-active subscription (idempotent resume)', async () => {
+    it('should return 200 when resuming an already-active subscription (idempotent resume)', async () => {
       // The service's resume() does: find subscription (throws 404 if missing),
       // optionally call Stripe, then set cancel_at_period_end=false + status=ACTIVE.
       // An already-ACTIVE subscription with cancel_at_period_end=false satisfies
@@ -576,7 +576,7 @@ describe('Billing Subscription Mutations — Integration', () => {
         headers: { 'x-idempotency-key': generatePublicId('subscription') },
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const body = response.json() as {
         data?: { cancel_at_period_end?: boolean; status?: string };
       };
@@ -616,7 +616,7 @@ describe('Billing Subscription Mutations — Integration', () => {
         organizationPublicId: organizationId,
         headers: { 'x-idempotency-key': generatePublicId('subscription') },
       });
-      expect(cancelResponse.statusCode).toBe(201);
+      expect(cancelResponse.statusCode).toBe(200);
       const cancelBody = cancelResponse.json() as {
         data?: { cancel_at_period_end?: boolean };
       };
@@ -643,7 +643,7 @@ describe('Billing Subscription Mutations — Integration', () => {
         organizationPublicId: organizationId,
         headers: { 'x-idempotency-key': generatePublicId('subscription') },
       });
-      expect(resumeResponse.statusCode).toBe(201);
+      expect(resumeResponse.statusCode).toBe(200);
       const resumeBody = resumeResponse.json() as {
         data?: { cancel_at_period_end?: boolean; status?: string };
       };
@@ -668,7 +668,7 @@ describe('Billing Subscription Mutations — Integration', () => {
 
   // ─── POST /payment-methods/setup — full matrix ─────────────────────────────
   //
-  // This route had exactly one assertion in the whole repo (a 201 in
+  // This route had exactly one assertion in the whole repo (a 200 in
   // `billing-payment-methods.e2e.test.ts`) despite being BOTH `idempotencyRequired` AND
   // team-only — the two properties most likely to regress silently, because neither is visible
   // in the handler body: one comes from a `config` flag read by a global hook, the other from a

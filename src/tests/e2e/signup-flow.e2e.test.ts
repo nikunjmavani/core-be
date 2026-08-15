@@ -35,7 +35,7 @@ describe('Cross-domain e2e: signup flow', () => {
         password,
       },
     });
-    expect(loginResponse.statusCode).toBe(201);
+    expect(loginResponse.statusCode).toBe(200);
     const token = (loginResponse.json() as { data?: { access_token?: string } }).data?.access_token;
     expect(token).toBeDefined();
 

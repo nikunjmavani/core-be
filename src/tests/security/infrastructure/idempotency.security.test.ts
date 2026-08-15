@@ -54,7 +54,7 @@ describe('Security: Idempotency', () => {
       payload: { name: 'Idempotent Org', slug: uniqueSlug('idempotent-org') },
     });
 
-    // Should succeed (201) or return validation error (400/422)
+    // Should succeed (200) or return validation error (400/422)
     expect(response.statusCode).toBeLessThan(500);
   });
 
@@ -178,7 +178,7 @@ describe('Security: Idempotency', () => {
 
   it('rejects a too-short X-Idempotency-Key on an idempotency-required write (422)', async () => {
     // A 16-char minimum is enforced (see parseIdempotencyKeyHeader); a shorter valid-charset key is
-    // malformed → 422 idempotencyKeyInvalid, not a 201. Guards the CR-3 length contract end-to-end.
+    // malformed → 422 idempotencyKeyInvalid, not a 200. Guards the CR-3 length contract end-to-end.
     const user = await createTestUser();
     const token = await generateTestToken({ userId: user.public_id });
 
@@ -227,7 +227,7 @@ describe('Security: Idempotency', () => {
       headers: { 'x-idempotency-key': uniqueKey('delete-setup') },
       payload: { name: 'Delete Idempotent Org', slug },
     });
-    if (createRes.statusCode !== 201) throw new Error('Setup: create organization failed');
+    if (createRes.statusCode !== 200) throw new Error('Setup: create organization failed');
     const organizationId = (createRes.json() as { data: { id: string } }).data.id;
 
     // The flat DELETE route resolves the target org from the JWT `org` claim;

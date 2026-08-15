@@ -106,7 +106,7 @@ describe('Auth recovery atomicity — password reset', () => {
       payload: { token: rawToken, password: 'BrandNewPassword456!' },
     });
 
-    expect(response.statusCode).toBe(201);
+    expect(response.statusCode).toBe(200);
     expect(await readPasswordHash(user.id)).not.toBe(passwordHashBefore);
     expect(await readTokenUsedAt(tokenHash)).not.toBeNull();
     // Auto-login: the reset response logs the user straight in (access token + session cookie).

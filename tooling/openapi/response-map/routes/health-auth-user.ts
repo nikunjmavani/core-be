@@ -92,18 +92,18 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
 
   // ── Auth ──
   'POST /api/v1/auth/login': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
     example: null,
   },
-  'POST /api/v1/auth/logout': { statusCode: 201, schema: null, example: null },
+  'POST /api/v1/auth/logout': { statusCode: 200, schema: null, example: null },
   'POST /api/v1/auth/email/send-code': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.verificationCodeSentSchema, schemas.verificationCodeSentExample),
     example: null,
   },
   'POST /api/v1/auth/email/login': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
     example: null,
   },
@@ -128,30 +128,30 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     example: null,
   },
   'POST /api/v1/auth/password/forgot': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.messageSchema, {
       message: 'If that email exists, a reset link has been sent',
     }),
     example: null,
   },
   'POST /api/v1/auth/password/reset': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
     example: null,
   },
-  'POST /api/v1/auth/password/change': { statusCode: 201, schema: null, example: null },
+  'POST /api/v1/auth/password/change': { statusCode: 200, schema: null, example: null },
   'POST /api/v1/auth/me/mfa/enroll': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.mfaEnrollSchema, schemas.mfaEnrollExample),
     example: null,
   },
   'POST /api/v1/auth/me/mfa/verify': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.mfaVerifiedSchema, { verified: true }),
     example: null,
   },
   'POST /api/v1/auth/mfa/login': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
     example: null,
   },
@@ -164,7 +164,7 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
   },
   'DELETE /api/v1/auth/me/mfa/{mfa_method_id}': { statusCode: 204, schema: null, example: null },
   'POST /api/v1/auth/refresh': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
     example: null,
   },
@@ -174,7 +174,7 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     // Re-mints the access token bound to the newly active org AND returns the active-org delta
     // (active_organization + my_permissions + global_role) so the client repaints the dashboard
     // without a follow-up GET /auth/me/context.
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(
       {
         type: 'object',
@@ -197,7 +197,7 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
   'POST /api/v1/auth/switch-to-personal': {
     // Same active-org delta envelope as switch-to-organization; active_organization is the caller's
     // own personal organization (type PERSONAL, all capabilities false).
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(
       {
         type: 'object',
@@ -275,7 +275,7 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     example: null,
   },
   'POST /api/v1/auth/me/auth-methods': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.authMethodSchema, {
       ...schemas.authMethodExample,
       id: 3,
@@ -293,7 +293,7 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
 
   // ── WebAuthn (passkeys) ──
   'POST /api/v1/auth/me/webauthn/register/options': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(
       schemas.webauthnCeremonyOptionsSchema,
       schemas.webauthnRegistrationOptionsExample,
@@ -301,7 +301,7 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     example: null,
   },
   'POST /api/v1/auth/me/webauthn/register/verify': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(
       schemas.webauthnRegisterVerifySchema,
       schemas.webauthnRegisterVerifyExample,
@@ -321,7 +321,7 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     example: null,
   },
   'POST /api/v1/auth/webauthn/authenticate/options': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(
       schemas.webauthnCeremonyOptionsSchema,
       schemas.webauthnAuthenticationOptionsExample,
@@ -329,19 +329,19 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     example: null,
   },
   'POST /api/v1/auth/webauthn/authenticate/verify': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
     example: null,
   },
 
   // ── Step-up + MFA enrollment confirm ──
   'POST /api/v1/auth/step-up': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.stepUpSchema, schemas.stepUpExample),
     example: null,
   },
   'POST /api/v1/auth/me/mfa/enroll/confirm': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.mfaEnrollConfirmSchema, schemas.mfaEnrollConfirmExample),
     example: null,
   },
@@ -398,7 +398,7 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     example: null,
   },
   'POST /api/v1/users/me/data-export': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(
       {
         type: 'object',

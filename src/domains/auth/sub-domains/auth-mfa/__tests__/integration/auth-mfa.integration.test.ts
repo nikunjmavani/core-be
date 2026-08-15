@@ -151,7 +151,7 @@ describe('MFA Sub-Domain — Integration', () => {
         token,
         payload: { method_type: 'MFA_TOTP' },
       });
-      expect(enroll.statusCode, enroll.body).toBe(201);
+      expect(enroll.statusCode, enroll.body).toBe(200);
       const { secret } = (enroll.json() as { data: { secret: string } }).data;
 
       const confirm = await injectAuthenticated(app, {
@@ -160,7 +160,7 @@ describe('MFA Sub-Domain — Integration', () => {
         token,
         payload: { code: await generateTotpCode({ secret }) },
       });
-      expect(confirm.statusCode, confirm.body).toBe(201);
+      expect(confirm.statusCode, confirm.body).toBe(200);
 
       const enrolled = await injectAuthenticated(app, {
         method: 'GET',
@@ -191,7 +191,7 @@ describe('MFA Sub-Domain — Integration', () => {
 
   describe('POST /api/v1/auth/me/mfa/enroll/confirm', () => {
     it('returns 401 without authentication', async () => {
-      // The route asserted only its 201. Every other authed route in the domain pins its 401;
+      // The route asserted only its success status. Every other authed route in the domain pins its 401;
       // without it, a registration that dropped `app.authenticate` would let an unauthenticated
       // caller reach the enrollment-confirmation path.
       const response = await injectUnauthenticated(app, {
@@ -214,7 +214,7 @@ describe('MFA Sub-Domain — Integration', () => {
         token,
         payload: { password },
       });
-      expect(stepUp.statusCode, stepUp.body).toBe(201);
+      expect(stepUp.statusCode, stepUp.body).toBe(200);
 
       const enroll = await injectAuthenticated(app, {
         method: 'POST',
@@ -222,7 +222,7 @@ describe('MFA Sub-Domain — Integration', () => {
         token,
         payload: { method_type: 'MFA_TOTP' },
       });
-      expect(enroll.statusCode, enroll.body).toBe(201);
+      expect(enroll.statusCode, enroll.body).toBe(200);
       const { secret } = (enroll.json() as { data: { secret: string } }).data;
       expect(secret).toBeTypeOf('string');
 
@@ -232,7 +232,7 @@ describe('MFA Sub-Domain — Integration', () => {
         token,
         payload: { code: await generateTotpCode({ secret }) },
       });
-      expect(confirm.statusCode, confirm.body).toBe(201);
+      expect(confirm.statusCode, confirm.body).toBe(200);
 
       // Authenticated step-up verification. Consumed codes are replay-protected
       // within their window, so use the NEXT 30s window (server tolerance ±1 step).
@@ -245,7 +245,7 @@ describe('MFA Sub-Domain — Integration', () => {
           code: await generateTotpCode({ secret, epoch: Math.floor(Date.now() / 1000) + 30 }),
         },
       });
-      expect(verify.statusCode, verify.body).toBe(201);
+      expect(verify.statusCode, verify.body).toBe(200);
 
       // Password login now returns the MFA challenge envelope instead of a token.
       const login = await injectUnauthenticated(app, {
@@ -253,7 +253,7 @@ describe('MFA Sub-Domain — Integration', () => {
         url: testApiPath('/auth/login'),
         payload: { email: user.email, password },
       });
-      expect(login.statusCode, login.body).toBe(201);
+      expect(login.statusCode, login.body).toBe(200);
       const loginBody = (
         login.json() as { data: { mfa_required?: boolean; mfa_session_token?: string } }
       ).data;
@@ -270,7 +270,7 @@ describe('MFA Sub-Domain — Integration', () => {
           totp_code: await generateTotpCode({ secret, epoch: Math.floor(Date.now() / 1000) - 30 }),
         },
       });
-      expect(mfaLogin.statusCode, mfaLogin.body).toBe(201);
+      expect(mfaLogin.statusCode, mfaLogin.body).toBe(200);
       const mfaLoginBody = (mfaLogin.json() as { data: { access_token?: string } }).data;
       expect(mfaLoginBody.access_token).toBeTypeOf('string');
     });
@@ -292,7 +292,7 @@ describe('MFA Sub-Domain — Integration', () => {
         token,
         payload: { password },
       });
-      expect(stepUp.statusCode, stepUp.body).toBe(201);
+      expect(stepUp.statusCode, stepUp.body).toBe(200);
 
       const enroll = await injectAuthenticated(app, {
         method: 'POST',

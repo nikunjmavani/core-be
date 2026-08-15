@@ -144,7 +144,7 @@ async function setupLogin(): Promise<void> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
-    expectedStatus: 201,
+    expectedStatus: 200,
   });
   const payload = body as { data?: { access_token?: string } };
   if (!payload.data?.access_token) {
@@ -217,7 +217,7 @@ function buildDomainProbes(): RouteProbe[] {
       name: 'POST /api/v1/auth/email/send-code',
       method: 'POST',
       path: `${API_PREFIX}/auth/email/send-code`,
-      expectedStatus: 201,
+      expectedStatus: 200,
       body: { email: EMAIL },
     },
 

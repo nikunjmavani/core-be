@@ -97,12 +97,12 @@ describe('Auth Domain — Route gates (e2e)', () => {
           password,
         },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const body = response.json() as { data: Record<string, unknown> };
       expect(body.data).toHaveProperty('access_token');
     });
 
-    it('should return 201 with access_token and set session cookie on valid login', async () => {
+    it('should return 200 with access_token and set session cookie on valid login', async () => {
       const { user, password } = await createTestUserWithPassword();
       const response = await injectUnauthenticated(app, {
         method: 'POST',
@@ -112,7 +112,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
           password,
         },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const body = response.json() as { data: { access_token: string } };
       expect(body.data).toHaveProperty('access_token');
       expect(typeof body.data.access_token).toBe('string');
@@ -146,8 +146,8 @@ describe('Auth Domain — Route gates (e2e)', () => {
         }),
       ]);
 
-      expect(firstLogin.statusCode).toBe(201);
-      expect(secondLogin.statusCode).toBe(201);
+      expect(firstLogin.statusCode).toBe(200);
+      expect(secondLogin.statusCode).toBe(200);
       const firstBody = firstLogin.json() as { data: { access_token: string } };
       const secondBody = secondLogin.json() as { data: { access_token: string } };
       expect(firstBody.data.access_token).not.toBe(secondBody.data.access_token);
@@ -162,7 +162,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
         url: testApiPath('/auth/login'),
         payload: { email: user.email, password },
       });
-      expect(loginResponse.statusCode).toBe(201);
+      expect(loginResponse.statusCode).toBe(200);
       const accessToken = (loginResponse.json() as { data: { access_token: string } }).data
         .access_token;
       const beforeSuspend = await injectAuthenticated(app, {
@@ -202,10 +202,10 @@ describe('Auth Domain — Route gates (e2e)', () => {
         url: testApiPath('/auth/logout'),
         payload: {},
       });
-      // Previously a three-status band (`[200, 204, 401]`) on a route declared 201, which would
+      // Previously a three-status band (`[200, 204, 401]`) on this route, which would
       // have passed whether the handler rejected the anonymous caller or silently succeeded.
       // The handler requires a bearer and raises UnauthorizedError when it is absent; the
-      // authenticated 201 is asserted by the logout-after-login case below.
+      // authenticated 200 is asserted by the logout-after-login case below.
       expect(response.statusCode, response.body).toBe(401);
     });
 
@@ -219,7 +219,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
           password,
         },
       });
-      expect(loginResponse.statusCode).toBe(201);
+      expect(loginResponse.statusCode).toBe(200);
       const loginBody = loginResponse.json() as { data: { access_token: string } };
       const accessToken = loginBody.data.access_token;
 
@@ -228,7 +228,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
         url: testApiPath('/auth/logout'),
         token: accessToken,
       });
-      expect([201]).toContain(logoutResponse.statusCode);
+      expect([200]).toContain(logoutResponse.statusCode);
     });
   });
 
@@ -250,8 +250,8 @@ describe('Auth Domain — Route gates (e2e)', () => {
         url: testApiPath('/auth/email/send-code'),
         payload: { email: 'test@example.com' },
       });
-      // Uniform 201 for known and unknown emails (no account enumeration).
-      expect(response.statusCode).toBe(201);
+      // Uniform 200 for known and unknown emails (no account enumeration).
+      expect(response.statusCode).toBe(200);
     });
 
     it('when BLOCK_DISPOSABLE_EMAIL is off, send-code accepts disposable email', async () => {
@@ -260,7 +260,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
         url: testApiPath('/auth/email/send-code'),
         payload: { email: 'test@yopmail.com' },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const body = response.json() as { data: { message?: string } };
       expect(body.data.message).toBeDefined();
     });
@@ -334,25 +334,25 @@ describe('Auth Domain — Route gates (e2e)', () => {
       expect(response.statusCode).toBe(400);
     });
 
-    it('should return 201 with message for existing user (no enumeration)', async () => {
+    it('should return 200 with message for existing user (no enumeration)', async () => {
       const { user } = await createTestUserWithPassword();
       const response = await injectUnauthenticated(app, {
         method: 'POST',
         url: testApiPath('/auth/password/forgot'),
         payload: { email: user.email },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const body = response.json() as { data: Record<string, unknown> };
       expect(body.data).toHaveProperty('message');
     });
 
-    it('should return 201 with same message for non-existent email (anti-enumeration)', async () => {
+    it('should return 200 with same message for non-existent email (anti-enumeration)', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
         url: testApiPath('/auth/password/forgot'),
         payload: { email: 'nobody@nonexistent.com' },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const body = response.json() as { data: Record<string, unknown> };
       expect(body.data).toHaveProperty('message');
     });
@@ -363,7 +363,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
         url: testApiPath('/auth/password/forgot'),
         payload: { email: 'test@yopmail.com' },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const body = response.json() as { data: Record<string, unknown> };
       expect(body.data).toHaveProperty('message');
     });
@@ -417,7 +417,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
           password: newPassword,
         },
       });
-      expect(resetResponse.statusCode).toBe(201);
+      expect(resetResponse.statusCode).toBe(200);
 
       // Login with new password
       const loginResponse = await injectUnauthenticated(app, {
@@ -428,7 +428,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
           password: newPassword,
         },
       });
-      expect(loginResponse.statusCode).toBe(201);
+      expect(loginResponse.statusCode).toBe(200);
       const loginBody = loginResponse.json() as { data: Record<string, unknown> };
       expect(loginBody.data).toHaveProperty('access_token');
     });
@@ -472,7 +472,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
           new_password: newPassword,
         },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
 
       // Verify login works with new password
       const loginResponse = await injectUnauthenticated(app, {
@@ -483,7 +483,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
           password: newPassword,
         },
       });
-      expect(loginResponse.statusCode).toBe(201);
+      expect(loginResponse.statusCode).toBe(200);
     });
   });
 
@@ -532,7 +532,7 @@ describe('Auth Domain — Route gates (e2e)', () => {
         token,
         payload: { password },
       });
-      expect(stepUp.statusCode).toBe(201);
+      expect(stepUp.statusCode).toBe(200);
 
       // After an explicit step-up the same gated route is reachable.
       const afterStepUp = await injectAuthenticated(app, {

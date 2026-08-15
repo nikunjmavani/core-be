@@ -32,7 +32,7 @@ export function switchToOrganization(token, organizationPublicId) {
     JSON.stringify({ organization_id: organizationPublicId }),
     { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
   );
-  if (response.status === 201 || response.status === 200) {
+  if (response.status === 200 || response.status === 200) {
     const body = JSON.parse(response.body);
     return body.data?.access_token || null;
   }
@@ -47,7 +47,7 @@ export function switchToPersonal(token) {
   const response = http.post(`${API_PREFIX}/auth/switch-to-personal`, null, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
   });
-  if (response.status === 201 || response.status === 200) {
+  if (response.status === 200 || response.status === 200) {
     const body = JSON.parse(response.body);
     return body.data?.access_token || null;
   }

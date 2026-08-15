@@ -21,12 +21,12 @@ export const userAdminRouteResponses: Record<string, ResponseDefinition> = {
   },
   'DELETE /api/v1/users/{user_id}': { statusCode: 204, schema: null, example: null },
   'POST /api/v1/users/{user_id}/suspend': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.userSchema, { ...schemas.userExample, status: 'SUSPENDED' }),
     example: null,
   },
   'POST /api/v1/users/{user_id}/unsuspend': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.userSchema, { ...schemas.userExample, status: 'ACTIVE' }),
     example: null,
   },

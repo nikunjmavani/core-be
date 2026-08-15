@@ -60,7 +60,7 @@ describe('Ops route smoke (catalog)', () => {
         url: '/internal/ops/circuit-breakers/stripe/reset',
         headers: { authorization: `Bearer ${bearerToken}` },
       });
-      expect(response.statusCode, response.body).toBe(201);
+      expect(response.statusCode, response.body).toBe(200);
     });
   });
 });

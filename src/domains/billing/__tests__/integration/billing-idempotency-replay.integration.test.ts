@@ -237,7 +237,7 @@ describe('Billing idempotency replay — 409 while a key is in flight', () => {
       cacheKey,
       JSON.stringify({
         state: 'completed',
-        statusCode: 201,
+        statusCode: 200,
         body: JSON.stringify({ data: { replayed: true } }),
         headers: { 'content-type': 'application/json' },
       }),
@@ -253,7 +253,7 @@ describe('Billing idempotency replay — 409 while a key is in flight', () => {
       headers: { 'x-idempotency-key': idempotencyKey },
     });
 
-    expect(response.statusCode).toBe(201);
+    expect(response.statusCode).toBe(200);
     expect(response.headers['x-idempotency-replay']).toBe('true');
     // The cached body is re-enveloped by the global response hook, so assert on the marker
     // rather than the envelope shape: what matters is that the REPLAYED payload came back

@@ -16,14 +16,14 @@ describe('Auth - Email verification-code login', () => {
     if (app) await app.close();
   });
 
-  it('POST /api/v1/auth/email/send-code returns 201 with message', async () => {
+  it('POST /api/v1/auth/email/send-code returns 200 with message', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'POST',
       url: testApiPath('/auth/email/send-code'),
       payload: { email: 'nonexistent@example.com' },
     });
 
-    expect(response.statusCode).toBe(201);
+    expect(response.statusCode).toBe(200);
     expect((response.json() as { data: { message: string } }).data.message).toContain(
       'sign-in code',
     );

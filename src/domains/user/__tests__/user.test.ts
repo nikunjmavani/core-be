@@ -108,7 +108,7 @@ describe('User Domain — flows', () => {
         token,
         payload: { method_type: 'MFA_TOTP' },
       });
-      expect(enrollResponse.statusCode).toBe(201);
+      expect(enrollResponse.statusCode).toBe(200);
       const enrollBody = enrollResponse.json() as { data: { secret: string } };
       const confirmResponse = await injectAuthenticated(app, {
         method: 'POST',
@@ -118,7 +118,7 @@ describe('User Domain — flows', () => {
           code: await generateTotp({ secret: enrollBody.data.secret }),
         },
       });
-      expect(confirmResponse.statusCode).toBe(201);
+      expect(confirmResponse.statusCode).toBe(200);
       // route-#10: the serializer returns `mfa_method_id` and DELETE /auth/me/mfa/{mfa_method_id}
       // now accepts that opaque public id directly (the bigserial id is never exposed).
       const confirmBody = confirmResponse.json() as {
@@ -189,7 +189,7 @@ describe('User Domain — flows', () => {
         url: testApiPath('/users/me/onboarding/complete'),
         token,
       });
-      expect(onboarding.statusCode, onboarding.body).toBe(201);
+      expect(onboarding.statusCode, onboarding.body).toBe(200);
       expect(
         (onboarding.json() as { data: { onboarding_completed: boolean } }).data
           .onboarding_completed,

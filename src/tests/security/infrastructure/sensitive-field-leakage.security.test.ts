@@ -163,7 +163,7 @@ describe('Security: sensitive-field leakage sweep', () => {
         file_size: 1024,
       },
     });
-    expect(createResponse.statusCode).toBe(201);
+    expect(createResponse.statusCode).toBe(200);
     const publicId = (createResponse.json() as { data: { id: string } }).data.id;
 
     const detailResponse = await injectAuthenticated(app, {

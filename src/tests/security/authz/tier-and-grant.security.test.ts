@@ -134,14 +134,14 @@ describe('Security: privilege-boundary matrix (tier:owner + grant)', () => {
       expect(res.statusCode).toBe(403);
     });
 
-    it('baseline: non-owner member POST leave → 201 (allowed)', async () => {
+    it('baseline: non-owner member POST leave → 200 (allowed)', async () => {
       const { memberToken } = await setupOrgWithMember([]);
       const res = await injectAuthenticated(app, {
         method: 'POST',
         url: testApiPath('/tenancy/organization/leave'),
         token: memberToken,
       });
-      expect(res.statusCode).toBe(201);
+      expect(res.statusCode).toBe(200);
     });
   });
 

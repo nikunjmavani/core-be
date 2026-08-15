@@ -61,7 +61,7 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
       token,
       payload: {},
     });
-    expect(registerOptionsResponse.statusCode).toBe(201);
+    expect(registerOptionsResponse.statusCode).toBe(200);
     const registerOptionsBody = registerOptionsResponse.json() as {
       data: { options: { challenge: string }; challenge_token: string };
     };
@@ -96,7 +96,7 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
         },
       },
     });
-    expect(registerVerifyResponse.statusCode).toBe(201);
+    expect(registerVerifyResponse.statusCode).toBe(200);
     const registerVerifyBody = registerVerifyResponse.json() as {
       data: { verified: boolean; credential_id: string };
     };
@@ -108,7 +108,7 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
       url: testApiPath('/auth/webauthn/authenticate/options'),
       payload: { email: user.email },
     });
-    expect(authenticateOptionsResponse.statusCode).toBe(201);
+    expect(authenticateOptionsResponse.statusCode).toBe(200);
     const authenticateOptionsBody = authenticateOptionsResponse.json() as {
       data: { options: { challenge: string }; challenge_token: string };
     };
@@ -136,7 +136,7 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
       },
     });
 
-    expect(authenticateVerifyResponse.statusCode).toBe(201);
+    expect(authenticateVerifyResponse.statusCode).toBe(200);
     const signInBody = authenticateVerifyResponse.json() as {
       data: { access_token: string };
     };
@@ -179,7 +179,7 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
         token,
         payload: {},
       });
-      expect(optionsResponse.statusCode).toBe(201);
+      expect(optionsResponse.statusCode).toBe(200);
       const challengeToken = (optionsResponse.json() as { data: { challenge_token: string } }).data
         .challenge_token;
 
@@ -214,7 +214,7 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
     }
 
     const first = await registerSamePasskey();
-    expect(first.statusCode).toBe(201);
+    expect(first.statusCode).toBe(200);
 
     const second = await registerSamePasskey();
     expect(second.statusCode).toBe(409);

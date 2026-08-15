@@ -161,7 +161,7 @@ describe('Membership Sub-Domain — Integration', () => {
           role_id: memberRole.public_id,
         },
       });
-      expect(createMembershipResponse.statusCode).toBe(201);
+      expect(createMembershipResponse.statusCode).toBe(200);
 
       const { token: memberToken } = await generateTestTokenWithActiveSession(
         app,
@@ -212,7 +212,7 @@ describe('Membership Sub-Domain — Integration', () => {
           role_id: memberRole.public_id,
         },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const created = (response.json() as { data: { id: string; status: string } }).data;
       expect(created.status).toBe('INVITED');
 
@@ -294,7 +294,7 @@ describe('Membership Sub-Domain — Integration', () => {
       // Plan grants 5 seats; only the owner is using one, so adding a member succeeds.
       const { organization, adminToken, memberRole } = await createSeatLimitedContext(5, true);
       const response = await inviteMember(organization.public_id, adminToken, memberRole.public_id);
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
     });
 
     it('allows the add when no billing is configured at all (empty plan catalog → unlimited)', async () => {
@@ -302,7 +302,7 @@ describe('Membership Sub-Domain — Integration', () => {
       // a deployment with no plans seeded imposes no cap. F3 only bites once a catalog exists.
       const { organization, adminToken, memberRole } = await createSeatLimitedContext(null, false);
       const response = await inviteMember(organization.public_id, adminToken, memberRole.public_id);
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
     });
 
     it('caps an unsubscribed org at the Free-tier ceiling when a plan catalog exists (F3)', async () => {
@@ -322,7 +322,7 @@ describe('Membership Sub-Domain — Integration', () => {
       // Plan grants 2 seats: owner (1) + one invite (1) = full; a second invite must 409.
       const { organization, adminToken, memberRole } = await createSeatLimitedContext(2, true);
       const first = await inviteMember(organization.public_id, adminToken, memberRole.public_id);
-      expect(first.statusCode).toBe(201);
+      expect(first.statusCode).toBe(200);
       const second = await inviteMember(organization.public_id, adminToken, memberRole.public_id);
       expect(second.statusCode).toBe(409);
       expect((second.json() as { error: { reason?: string } }).error.reason).toBe(
@@ -438,7 +438,7 @@ describe('Membership Sub-Domain — Integration', () => {
         token: inviteeToken,
         payload: { token: rawToken },
       });
-      expect(acceptResponse.statusCode).toBe(201);
+      expect(acceptResponse.statusCode).toBe(200);
       // The accept response carries the joined org's public id so the client can
       // POST /auth/switch-to-organization into it without a separate lookup (gate reduction).
       expect(
@@ -469,7 +469,7 @@ describe('Membership Sub-Domain — Integration', () => {
         token: inviteeToken,
         payload: { token: rawToken },
       });
-      expect(acceptResponse.statusCode).toBe(201);
+      expect(acceptResponse.statusCode).toBe(200);
 
       // Regression for item #10: the inviter (a membership:manage holder) previously saw an EMPTY
       // inbox after an invitee accepted. Now an in-app `membership.invite_accepted` row is created.
@@ -699,7 +699,7 @@ describe('Membership Sub-Domain — Integration', () => {
       return { organization, adminToken, invitation, originalTokenHash };
     }
 
-    it('rotates the token_hash and extends expires_at on resend (201)', async () => {
+    it('rotates the token_hash and extends expires_at on resend (200)', async () => {
       const { organization, adminToken, invitation, originalTokenHash } =
         await createPendingInvitationForResend();
       const originalExpiresAt = invitation.expires_at.getTime();
@@ -712,7 +712,7 @@ describe('Membership Sub-Domain — Integration', () => {
         headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: { expires_in_days: 10 },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
 
       const [rotated] = await database
         .select()
@@ -759,7 +759,7 @@ describe('Membership Sub-Domain — Integration', () => {
   });
 
   describe('POST /api/v1/tenancy/organization/leave (route-coverage gap-fill)', () => {
-    it('soft-deletes the membership when a non-owner leaves (201)', async () => {
+    it('soft-deletes the membership when a non-owner leaves (200)', async () => {
       const owner = await createTestUser();
       const organization = await createTestOrganization({ ownerUserId: owner.id });
       const memberRole = await createRoleWithPermissions({
@@ -783,7 +783,7 @@ describe('Membership Sub-Domain — Integration', () => {
         token: memberToken,
         organizationPublicId: organization.public_id,
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
 
       const [softDeleted] = await database
         .select()
@@ -1032,7 +1032,7 @@ describe('Membership Sub-Domain — Integration', () => {
       expect(response.statusCode, response.body).toBe(400);
     });
 
-    it('transfers ownership: organizations.owner_user_id updated (201)', async () => {
+    it('transfers ownership: organizations.owner_user_id updated (200)', async () => {
       const { organization, token: ownerToken, user: owner } = await createAuthorizedContext();
       const newOwner = await createTestUser({ email: `new-owner-${randomUUID()}@test.com` });
       const memberRole = await createRoleWithPermissions({
@@ -1053,7 +1053,7 @@ describe('Membership Sub-Domain — Integration', () => {
         headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: { new_owner_user_id: newOwner.public_id },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
 
       const [updatedOrg] = await database
         .select()
@@ -1255,7 +1255,7 @@ describe('Membership Sub-Domain — Integration', () => {
       expect(owner.id).toBeDefined();
     });
 
-    it('positive contrast: the SAME POST /memberships succeeds (201) on a TEAM org — the guard is type-specific, not a blanket block', async () => {
+    it('positive contrast: the SAME POST /memberships succeeds (200) on a TEAM org — the guard is type-specific, not a blanket block', async () => {
       await seedAllTenancyPermissions();
       const owner = await createTestUser();
       const team = await provisionOrganizationWithOwner({
@@ -1284,7 +1284,7 @@ describe('Membership Sub-Domain — Integration', () => {
         },
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const membershipsAfter = await countMemberships(team.organization.id);
       expect(membershipsAfter).toBe(2); // owner + the newly-invited (INVITED) member
     });

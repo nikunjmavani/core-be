@@ -36,7 +36,7 @@ describe('Auth e2e: organization switch', () => {
     await seedAllPermissions();
   });
 
-  it('switch-to-personal re-mints the token and returns the active-org delta (201)', async () => {
+  it('switch-to-personal re-mints the token and returns the active-org delta (200)', async () => {
     const user = await createTestUser();
     const { organization } = await provisionPersonalOrganization(user.id);
     const { token } = await generateTestTokenAndSession({
@@ -49,7 +49,7 @@ describe('Auth e2e: organization switch', () => {
       token,
     });
 
-    expect(response.statusCode).toBe(201);
+    expect(response.statusCode).toBe(200);
     const body = response.json() as {
       data: {
         access_token: string;
@@ -69,7 +69,7 @@ describe('Auth e2e: organization switch', () => {
     expect(body.data).toHaveProperty('global_role');
   });
 
-  it('switch-to-personal self-heals a missing personal org (201) when personal is enabled', async () => {
+  it('switch-to-personal self-heals a missing personal org (200) when personal is enabled', async () => {
     // A personal-enabled deployment must never leave a user without a personal org: the
     // signup-time provision may have failed/been skipped, so switch-to-personal provisions
     // one on demand instead of dead-ending at a 404. (Default env has personal enabled.)
@@ -84,7 +84,7 @@ describe('Auth e2e: organization switch', () => {
       token,
     });
 
-    expect(response.statusCode).toBe(201);
+    expect(response.statusCode).toBe(200);
     const body = response.json() as {
       data: { active_organization: { id: string; type: string } };
     };
@@ -113,7 +113,7 @@ describe('Auth e2e: organization switch', () => {
     }
   });
 
-  it('switch-to-organization re-mints for an org the caller is a member of (201)', async () => {
+  it('switch-to-organization re-mints for an org the caller is a member of (200)', async () => {
     const user = await createTestUser();
     const { organization } = await provisionPersonalOrganization(user.id);
     const { token } = await generateTestTokenAndSession({
@@ -127,7 +127,7 @@ describe('Auth e2e: organization switch', () => {
       payload: { organization_id: organization.public_id },
     });
 
-    expect(response.statusCode).toBe(201);
+    expect(response.statusCode).toBe(200);
     const body = response.json() as {
       data: {
         access_token: string;
@@ -210,14 +210,14 @@ describe('Auth e2e: organization switch', () => {
       });
       expect(beforeSwitch.statusCode).toBe(200);
 
-      // Switch the active organization to B → 201, capturing the freshly minted token.
+      // Switch the active organization to B → 200, capturing the freshly minted token.
       const switchResponse = await injectAuthenticated(app, {
         method: 'POST',
         url: testApiPath('/auth/switch-to-organization'),
         token: oldToken,
         payload: { organization_id: orgB.organization.public_id },
       });
-      expect(switchResponse.statusCode).toBe(201);
+      expect(switchResponse.statusCode).toBe(200);
       const newToken = (switchResponse.json() as { data: { access_token: string } }).data
         .access_token;
       expect(newToken).toBeDefined();

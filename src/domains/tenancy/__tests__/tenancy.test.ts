@@ -376,7 +376,7 @@ describe('Tenancy Domain — flows (memberships, leave, roles)', () => {
         payload: { name: 'New Role', description: 'A test role' },
         headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const body = response.json() as { data: { name: string } };
       expect(body.data.name).toBe('New Role');
     });
