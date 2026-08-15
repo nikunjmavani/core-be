@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { createTestApp } from '@/tests/helpers/test-app.js';
@@ -15,6 +15,9 @@ import {
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import { NOTIFICATION_CHANNELS, NOTIFICATION_TYPES } from '@/shared/constants/index.js';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+import { redisConnection } from '@/infrastructure/cache/redis.client.js';
+import { buildIdempotencyCacheKey } from '@/shared/utils/idempotency/idempotency-key.util.js';
 
 /**
  * Six tenancy writes are registered with `config.idempotencyRequired = true` (the `I = req` column
@@ -187,7 +190,7 @@ describe('Tenancy idempotency contract — Integration', () => {
         payload,
         key,
       });
-      expect(first.statusCode).toBe(201);
+      expect(first.statusCode).toBe(200);
       expect(first.headers['x-idempotency-replay']).toBeUndefined();
       const firstId = (JSON.parse(first.body) as { data: { id: string } }).data.id;
 
@@ -198,7 +201,7 @@ describe('Tenancy idempotency contract — Integration', () => {
         payload,
         key,
       });
-      expect(replay.statusCode).toBe(201);
+      expect(replay.statusCode).toBe(200);
       expect(replay.headers['x-idempotency-replay']).toBe('true');
       expect((JSON.parse(replay.body) as { data: { id: string } }).data.id).toBe(firstId);
 
@@ -224,7 +227,7 @@ describe('Tenancy idempotency contract — Integration', () => {
         payload: { name: 'First Role' },
         key,
       });
-      expect(first.statusCode).toBe(201);
+      expect(first.statusCode).toBe(200);
 
       const mismatch = await injectWithoutIdempotencyKey({
         method: 'POST',
@@ -238,7 +241,7 @@ describe('Tenancy idempotency contract — Integration', () => {
   });
 
   describe('POST /organization/api-keys is required-key AND replay-excluded', () => {
-    // This route sits in `IDEMPOTENCY_EXCLUDED_ROUTE_PATTERNS`: its 201 body carries the raw secret
+    // This route sits in `IDEMPOTENCY_EXCLUDED_ROUTE_PATTERNS`: its success body carries the raw secret
     // exactly once, so caching it would let a replayed request re-read a live credential out of
     // Redis. The result is a deliberate and easily-missed combination — the key is *mandatory*
     // (asserted above) but never *dedupes*. Nothing pinned that pairing before; dropping the route
@@ -263,8 +266,8 @@ describe('Tenancy idempotency contract — Integration', () => {
         key,
       });
 
-      expect(first.statusCode).toBe(201);
-      expect(second.statusCode).toBe(201);
+      expect(first.statusCode).toBe(200);
+      expect(second.statusCode).toBe(200);
       // Never a replay — neither response may be served from the idempotency cache.
       expect(first.headers['x-idempotency-replay']).toBeUndefined();
       expect(second.headers['x-idempotency-replay']).toBeUndefined();
@@ -275,6 +278,97 @@ describe('Tenancy idempotency contract — Integration', () => {
       expect(secondBody.data.api_key.id).not.toBe(firstBody.data.api_key.id);
       // Two independent secrets — a cached replay would have handed back the first raw key.
       expect(secondBody.data.raw_key).not.toBe(firstBody.data.raw_key);
+    });
+  });
+
+  describe('409 while a key is in flight (the two writes the capture never observed it on)', () => {
+    // Same deterministic mechanics as billing-idempotency-replay: seed the exact in-flight
+    // placeholder the preHandler writes when it wins the SETNX race, then issue one request —
+    // the second-caller branch fires without racing real requests. POST /api-keys is deliberately
+    // absent: it sits in IDEMPOTENCY_EXCLUDED_ROUTE_PATTERNS and the middleware returns BEFORE
+    // creating a placeholder, so a 409 is structurally unreachable there (see the no-replay
+    // cases above, which pin that exclusion's observable behavior).
+    const seededCacheKeys: string[] = [];
+
+    afterEach(async () => {
+      if (seededCacheKeys.length > 0) {
+        await redisConnection.del(...seededCacheKeys);
+        seededCacheKeys.length = 0;
+      }
+    });
+
+    async function seedInFlightClaim(options: {
+      idempotencyKey: string;
+      userPublicId: string;
+      organizationPublicId: string;
+    }): Promise<void> {
+      const cacheKey = buildIdempotencyCacheKey(options.idempotencyKey, {
+        userId: options.userPublicId,
+        organizationId: options.organizationPublicId,
+      });
+      seededCacheKeys.push(cacheKey);
+      await redisConnection.set(
+        cacheKey,
+        JSON.stringify({
+          state: 'in_flight',
+          claimedAt: Date.now(),
+          requestId: 'req-first-caller',
+        }),
+        'EX',
+        60,
+      );
+    }
+
+    it('POST /tenancy/organization/notification-policies returns 409, not 422, mid-flight', async () => {
+      const { user, organization, token } = await createOwnerContext();
+      const idempotencyKey = `idem-${randomUUID()}`;
+      await seedInFlightClaim({
+        idempotencyKey,
+        userPublicId: user.public_id,
+        organizationPublicId: organization.public_id,
+      });
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/tenancy/organization/notification-policies'),
+        token,
+        organizationPublicId: organization.public_id,
+        headers: { 'x-idempotency-key': idempotencyKey },
+        payload: { notification_type: NOTIFICATION_TYPES[0], channel: NOTIFICATION_CHANNELS[0] },
+      });
+
+      expect(response.statusCode, response.body).toBe(409);
+      const body = response.json() as { error?: { code?: string } };
+      // The code matters as much as the status: 409 conflict_in_flight tells the client to retry
+      // the SAME key shortly; the 422 key-reuse code tells it never to.
+      expect(body.error?.code).toBe('conflict_in_flight');
+    });
+
+    it('POST /tenancy/organization/transfer-ownership returns 409, not 422, mid-flight', async () => {
+      const { user, organization, token } = await createOwnerContext();
+      const idempotencyKey = `idem-${randomUUID()}`;
+      await seedInFlightClaim({
+        idempotencyKey,
+        userPublicId: user.public_id,
+        organizationPublicId: organization.public_id,
+      });
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/tenancy/organization/transfer-ownership'),
+        token,
+        organizationPublicId: organization.public_id,
+        headers: { 'x-idempotency-key': idempotencyKey },
+        // Valid-shaped body: this route's Fastify schema validates BEFORE preHandlers (an empty
+        // body 400s without ever reaching the idempotency guard — observed while writing this).
+        // The target user does not exist, which proves the 409 fires before any ownership lookup:
+        // reaching the handler would have produced a 404/400, never a conflict.
+        payload: { new_owner_user_id: generatePublicId('user') },
+      });
+
+      expect(response.statusCode, response.body).toBe(409);
+      const body = response.json() as { error?: { code?: string } };
+      expect(body.error?.code).toBe('conflict_in_flight');
     });
   });
 });

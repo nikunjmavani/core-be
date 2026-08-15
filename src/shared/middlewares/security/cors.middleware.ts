@@ -46,5 +46,5 @@ const corsMiddleware: FastifyPluginAsync = async (app) => {
 // EVERY response with Access-Control-Allow-* reaches routes registered in sibling plugin
 // scopes. Without it only the plugin's global wildcard OPTIONS route worked: preflights
 // carried CORS headers but actual responses did not, so browsers surfaced a CORS error
-// on otherwise-successful (e.g. 201) cross-origin requests.
+// on otherwise-successful (e.g. 200) cross-origin requests.
 export default fp(corsMiddleware, { name: 'cors-middleware' });

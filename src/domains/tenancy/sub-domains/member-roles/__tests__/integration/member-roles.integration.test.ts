@@ -150,6 +150,55 @@ describe('Member Roles Sub-Domain — Integration', () => {
     });
   });
 
+  describe('boundary 400s — validator wired at the route (route-coverage gap-fill)', () => {
+    // Observed-status capture across e2e+integration+security showed no 400 on any of these three
+    // routes: every DTO rule was unit-proven, none was proven wired. One refusal each closes that.
+    // POST /roles is idempotencyRequired — the org-mutation helper supplies the key, so the 422
+    // cannot fire and the refusal is the validator's own.
+
+    it('POST /roles returns 400 when name is missing', async () => {
+      const { organization, token } = await createAuthorizedContext();
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: testApiPath('/tenancy/organization/roles'),
+        token,
+        organizationPublicId: organization.public_id,
+        payload: {},
+      });
+      expect(response.statusCode, response.body).toBe(400);
+    });
+
+    it('PATCH /roles/:role_id returns 400 for an unknown body key (strict DTO)', async () => {
+      const { organization, token } = await createAuthorizedContext();
+      const targetRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [TENANCY_PERMISSIONS.ROLE_READ],
+      });
+      const response = await injectAuthenticated(app, {
+        method: 'PATCH',
+        url: testApiPath(`/tenancy/organization/roles/${targetRole.public_id}`),
+        token,
+        payload: { unexpected_key: 'x' },
+      });
+      expect(response.statusCode, response.body).toBe(400);
+    });
+
+    it('PUT /roles/:role_id/permissions returns 400 when permission_codes is missing', async () => {
+      const { organization, token } = await createAuthorizedContext();
+      const targetRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [TENANCY_PERMISSIONS.ROLE_READ],
+      });
+      const response = await injectAuthenticated(app, {
+        method: 'PUT',
+        url: testApiPath(`/tenancy/organization/roles/${targetRole.public_id}/permissions`),
+        token,
+        payload: {},
+      });
+      expect(response.statusCode, response.body).toBe(400);
+    });
+  });
+
   describe('PUT /api/v1/tenancy/organization/roles/:role_id/permissions', () => {
     it('should replace role permissions', async () => {
       const { organization, token } = await createAuthorizedContext();
@@ -163,7 +212,7 @@ describe('Member Roles Sub-Domain — Integration', () => {
         token,
         payload: { permission_codes: [TENANCY_PERMISSIONS.ORGANIZATION_READ] },
       });
-      expect([200, 204]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(200);
     });
   });
 
@@ -180,7 +229,7 @@ describe('Member Roles Sub-Domain — Integration', () => {
         payload: { name: roleName, permission_codes: [TENANCY_PERMISSIONS.ORGANIZATION_READ] },
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
 
       const [roleRow] = await database
         .select({ id: roles.id })
@@ -278,7 +327,7 @@ describe('Member Roles Sub-Domain — Integration', () => {
       expect(rolesAfter).toBe(1);
     });
 
-    it('positive contrast: the SAME POST /roles succeeds (201) on a TEAM org — the guard is type-specific, not a blanket block', async () => {
+    it('positive contrast: the SAME POST /roles succeeds (200) on a TEAM org — the guard is type-specific, not a blanket block', async () => {
       await seedAllTenancyPermissions();
       const owner = await createTestUser();
       const team = await provisionOrganizationWithOwner({
@@ -302,7 +351,7 @@ describe('Member Roles Sub-Domain — Integration', () => {
         payload: { name: `Team Custom Role ${randomUUID()}` },
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const rolesAfter = await countRoles(team.organization.id);
       expect(rolesAfter).toBe(rolesBefore + 1);
     });

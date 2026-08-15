@@ -29,7 +29,7 @@ Two discriminated states are stored under each cache key:
 ```
 
 ```json
-{ "state": "completed", "statusCode": 201, "body": "...", "headers": { "content-type": "application/json" } }
+{ "state": "completed", "statusCode": 200, "body": "...", "headers": { "content-type": "application/json" } }
 ```
 
 Legacy placeholders written before this state machine (no `state` field, or `state` other than `completed`) are treated as `in_flight` during rolling deploys. Clients seeing the `409 conflict_in_flight` response should wait and retry once the original request has completed.

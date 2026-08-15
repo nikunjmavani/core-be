@@ -21,7 +21,7 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'POST /api/v1/tenancy/organizations': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.organizationSchema, schemas.organizationExample),
     example: null,
   },
@@ -70,7 +70,7 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'POST /api/v1/tenancy/organization/api-keys': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(
       {
         ...schemas.apiKeySchema,
@@ -91,7 +91,7 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'POST /api/v1/tenancy/organization/api-keys/{api_key_id}/rotate': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(
       {
         ...schemas.apiKeySchema,
@@ -116,7 +116,7 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'POST /api/v1/tenancy/organization/notification-policies': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.notificationPolicySchema, schemas.notificationPolicyExample),
     example: null,
   },
@@ -157,7 +157,7 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'POST /api/v1/tenancy/organization/memberships': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.membershipSchema, schemas.membershipExample),
     example: null,
   },
@@ -172,12 +172,12 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'POST /api/v1/tenancy/organization/leave': {
-    statusCode: 201,
+    statusCode: 200,
     schema: null,
     example: null,
   },
   'POST /api/v1/tenancy/organization/transfer-ownership': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.membershipSchema, schemas.membershipExample),
     example: null,
   },
@@ -186,7 +186,7 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
   'POST /api/v1/tenancy/invitations/{invitation_id}/accept': {
     // Returns the accepted invitation plus `organization_id` (the org just joined) so the client
     // can POST /auth/switch-to-organization into it without a separate lookup.
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(
       {
         type: 'object',
@@ -213,7 +213,7 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'POST /api/v1/tenancy/organization/invitations/{invitation_id}/resend': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.invitationSchema, {
       ...schemas.invitationExample,
       expires_at: '2026-02-28T10:30:00.000Z',
@@ -233,7 +233,7 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'POST /api/v1/tenancy/organization/roles': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.memberRoleSchema, {
       ...schemas.memberRoleExample,
       name: 'Editor',

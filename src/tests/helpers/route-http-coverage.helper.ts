@@ -18,7 +18,7 @@ export type RouteSmokeCase = {
   expectForbidden?: number;
   /**
    * Declared happy-path status from tooling/openapi/route-catalog/route-success-statuses.json
-   * (200/201/202/204) — what the route returns for a correctly authorized, valid request.
+   * (200/204) — what the route returns for a correctly authorized, valid request.
    */
   expectSuccess: number;
 };
@@ -115,6 +115,18 @@ export function buildRouteSmokeCases(
       };
     }
     default:
+      // `POST /auth/refresh` is bearer-token registry class but authenticates via the session
+      // cookie + CSRF pair: with no credentials at all, the missing `X-CSRF-Token` is refused
+      // (403) before the missing session cookie would be (401). Both are unauthenticated
+      // rejections; the metrics-token routes stay strict 401.
+      if (route.path.endsWith('/auth/refresh')) {
+        return {
+          route,
+          materializedPath,
+          expectUnauthenticated: [401, 403],
+          expectSuccess: declaredSuccessStatus(route),
+        };
+      }
       return {
         route,
         materializedPath,

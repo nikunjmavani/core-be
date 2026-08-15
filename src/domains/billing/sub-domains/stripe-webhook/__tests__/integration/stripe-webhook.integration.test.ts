@@ -37,7 +37,7 @@ describe('Stripe Webhook Sub-Domain — Integration', () => {
         url: testApiPath('/billing/webhook'),
         payload: { type: 'test' },
       });
-      expect([400, 401]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 400 for invalid stripe-signature header', async () => {
@@ -47,7 +47,7 @@ describe('Stripe Webhook Sub-Domain — Integration', () => {
         headers: { 'stripe-signature': 'invalid' },
         payload: { type: 'customer.subscription.updated', data: { object: {} } },
       });
-      expect([400, 401]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('duplicate signed POST records a single webhook ledger row', async () => {

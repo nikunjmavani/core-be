@@ -74,7 +74,7 @@ async function createConfirmedAvatarUpload(
       file_size: FAKE_CONTENT_LENGTH,
     },
   });
-  expect(create.statusCode, create.body).toBe(201);
+  expect(create.statusCode, create.body).toBe(200);
   const created = (create.json() as { data: { id: string; key: string } }).data;
 
   const confirm = await injectAuthenticated(application, {
@@ -82,7 +82,7 @@ async function createConfirmedAvatarUpload(
     url: testApiPath(`/uploads/${created.id}/confirm`),
     token,
   });
-  expect(confirm.statusCode, confirm.body).toBe(201);
+  expect(confirm.statusCode, confirm.body).toBe(200);
   return created.key;
 }
 
@@ -185,7 +185,7 @@ describe('User Domain — Integration', () => {
         token: token,
         payload: { unknown_field: true },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
   });
 
@@ -198,7 +198,7 @@ describe('User Domain — Integration', () => {
       expect(response.statusCode).toBe(401);
     });
 
-    it('should return 201 and flip onboarding_completed on the self profile', async () => {
+    it('should return 200 and flip onboarding_completed on the self profile', async () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
 
@@ -213,7 +213,7 @@ describe('User Domain — Integration', () => {
         url: testApiPath('/users/me/onboarding/complete'),
         token,
       });
-      expect(response.statusCode, response.body).toBe(201);
+      expect(response.statusCode, response.body).toBe(200);
       expect(
         (response.json() as { data: { onboarding_completed: boolean } }).data.onboarding_completed,
       ).toBe(true);
@@ -225,7 +225,7 @@ describe('User Domain — Integration', () => {
       ).toBe(true);
     });
 
-    it('should be idempotent — a second call still returns 201 and keeps the original stamp', async () => {
+    it('should be idempotent — a second call still returns 200 and keeps the original stamp', async () => {
       // The repository stamps only while `onboarding_completed_at IS NULL`, so a wizard that
       // double-submits must not move the timestamp or start erroring.
       const user = await createTestUser();
@@ -236,14 +236,14 @@ describe('User Domain — Integration', () => {
         url: testApiPath('/users/me/onboarding/complete'),
         token,
       });
-      expect(first.statusCode, first.body).toBe(201);
+      expect(first.statusCode, first.body).toBe(200);
 
       const second = await injectAuthenticated(app, {
         method: 'POST',
         url: testApiPath('/users/me/onboarding/complete'),
         token,
       });
-      expect(second.statusCode, second.body).toBe(201);
+      expect(second.statusCode, second.body).toBe(200);
       expect(
         (second.json() as { data: { onboarding_completed: boolean } }).data.onboarding_completed,
       ).toBe(true);

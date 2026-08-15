@@ -105,14 +105,16 @@ describe('createOrganizationController', () => {
     expect(service.getBySlug).toHaveBeenCalledWith('acme', userPublicId, 'USER');
   });
 
-  it('createOrganization returns 201', async () => {
+  it('createOrganization returns 200', async () => {
     const reply = mockReply();
     await controller.createOrganization(
       mockRequest({ body: { name: 'Acme', slug: 'acme' } }),
       reply,
     );
     expect(service.create).toHaveBeenCalled();
-    expect(reply.code).toHaveBeenCalledWith(201);
+    // The controller no longer sets an explicit status: the uniform method-status policy
+    // (POST -> 200) owns the code, so the handler must leave reply.code untouched.
+    expect(reply.code).not.toHaveBeenCalled();
   });
 
   it('updateOrganization delegates to service', async () => {

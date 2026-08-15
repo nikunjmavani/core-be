@@ -16,10 +16,19 @@ export default defineConfig({
     globals: true,
     setupFiles: [resolve(projectRoot, 'src/tests/setup.ts')],
     include: [
+      // One service glob per domain with mutate targets — a target whose tests are not included
+      // here scores ~0 tests per mutant while looking configured (the user-domain latent bug,
+      // which audit/notify/upload then reproduced by adding targets without their globs).
+      'src/domains/audit/**/__tests__/unit/*service*.unit.test.ts',
       'src/domains/auth/**/__tests__/unit/*service*.unit.test.ts',
       'src/domains/billing/**/__tests__/unit/*service*.unit.test.ts',
+      'src/domains/notify/**/__tests__/unit/*service*.unit.test.ts',
       'src/domains/tenancy/**/__tests__/unit/*service*.unit.test.ts',
+      'src/domains/upload/**/__tests__/unit/*service*.unit.test.ts',
       'src/domains/user/**/__tests__/unit/*service*.unit.test.ts',
+      // The mutate list also carries two non-service targets; their suites match these patterns.
+      'src/domains/audit/**/__tests__/unit/*processor*.unit.test.ts', // audit-retention.processor.ts
+      'src/domains/notify/**/__tests__/unit/**/*worker*.unit.test.ts', // webhook-delivery.worker.ts
       'src/tests/unit/middleware/**/*.unit.test.ts',
     ],
     // `*.db.unit.test.ts` needs a live Postgres and breaks Stryker's dry run — the pattern above

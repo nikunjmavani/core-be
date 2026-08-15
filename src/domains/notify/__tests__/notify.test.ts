@@ -294,7 +294,7 @@ describe('Notify Domain — Integration', () => {
         token,
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const body = response.json() as {
         data: { success: boolean; delivered_at: string };
       };

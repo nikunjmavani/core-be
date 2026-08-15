@@ -76,7 +76,7 @@ describe('User Settings Sub-Domain — Integration', () => {
         token,
         payload: { unknown_field: true },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     // The route's declared 200 had no assertion anywhere in the repository — only a 401 and an

@@ -5,7 +5,8 @@
  * exact sync with `docs/routes.txt`:
  *   - every catalog route has exactly one declared success status,
  *   - no stale entries for routes that left the catalog,
- *   - every declared status is one of 200 / 201 / 202 / 204.
+ *   - every declared status is one of 200 / 204 (the uniform policy: success is 200
+ *     for every method except DELETE, which is 204 — 201/202 are not legal declarations).
  *
  * The map documents each route's happy-path status (controllers do not declare
  * `schema.response`, so this file is the source of truth). Runtime drift is
@@ -48,7 +49,7 @@ function main(): void {
       console.error('');
     }
     if (invalid.length > 0) {
-      console.error('Declared statuses outside the allowed set (200/201/202/204):');
+      console.error('Declared statuses outside the allowed set (200/204):');
       for (const line of invalid) console.error(`  - ${line}`);
       console.error('');
     }

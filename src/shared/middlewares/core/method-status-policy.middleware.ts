@@ -1,52 +1,42 @@
 import type { FastifyInstance } from 'fastify';
 
 /**
- * Routes exempt from the uniform method→status policy because their status
- * semantics are defined by an external protocol, not by this API:
- * Stripe webhooks must acknowledge with 200, and the MCP streamable-HTTP
- * transport owns its response codes.
- */
-export const METHOD_STATUS_POLICY_EXEMPT_PREFIXES = [
-  '/api/v1/billing/webhook',
-  '/api/v1/mcp',
-] as const;
-
-/**
  * Uniform method→success-status policy, enforced centrally:
  *
  * | Method  | Success status |
  * | ------- | -------------- |
  * | GET     | 200            |
- * | POST    | 201            |
+ * | POST    | 200            |
  * | PUT     | 200            |
  * | PATCH   | 200            |
  * | DELETE  | 204            |
  *
- * Exceptions: webhook ingestion + MCP transport (see
- * {@link METHOD_STATUS_POLICY_EXEMPT_PREFIXES}) stay 200.
+ * There are deliberately **no exemptions**. Success is 200 for every method except DELETE (204).
+ * This is the Stripe-shaped uniform model: `200 OK` is true for a create, true for an idempotent
+ * replay of that create, and true for a future upsert — where `201 Created` lies on the replay
+ * and forces a created-vs-existed judgment call on every upsert route. It also matches every
+ * external inbound protocol this API might ever host (webhook acks, OAuth token endpoints,
+ * JSON-RPC transports all expect 200), so the old per-route exemption list is gone rather than
+ * maintained.
  *
  * @remarks
- * - **Algorithm:** an `onSend` hook normalizes any 200/202/204 a POST handler
- *   produced to 201 (other methods/statuses pass through untouched), so every
- *   current and future POST conforms without per-handler boilerplate.
+ * - **Algorithm:** an `onSend` hook normalizes any 201/202/204 a POST handler produced to 200
+ *   (other methods/statuses pass through untouched), so every current and future POST conforms
+ *   without per-handler boilerplate.
  * - **Failure modes:** none — error statuses (>= 300) are never rewritten.
- * - **Side effects:** response status only; bodies are untouched (a 204-bodied
- *   POST becomes a 201 with empty body).
- * - **Notes:** declared statuses live in route-success-statuses.json and are
- *   runtime-verified by the observed-status gate; this hook is the enforcement
- *   point that keeps controllers honest.
+ * - **Side effects:** response status only; bodies are untouched (a 204-bodied POST becomes a
+ *   200 with empty body, exactly as the previous 201 policy treated it).
+ * - **Notes:** declared statuses live in route-success-statuses.json and are runtime-verified
+ *   by the observed-status gate; this hook is the enforcement point that keeps controllers
+ *   honest.
  */
 export function registerMethodStatusPolicy(app: FastifyInstance): void {
   app.addHook('onSend', async (request, reply, payload) => {
     if (request.method !== 'POST') {
       return payload;
     }
-    const routeUrl = request.routeOptions.url ?? '';
-    if (METHOD_STATUS_POLICY_EXEMPT_PREFIXES.some((prefix) => routeUrl.startsWith(prefix))) {
-      return payload;
-    }
-    if (reply.statusCode === 200 || reply.statusCode === 202 || reply.statusCode === 204) {
-      reply.code(201);
+    if (reply.statusCode === 201 || reply.statusCode === 202 || reply.statusCode === 204) {
+      reply.code(200);
     }
     return payload;
   });

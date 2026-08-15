@@ -38,7 +38,8 @@ export function getRequestBodySchema(
  *
  * @remarks
  * These carry no `app.authenticate` onRequest hook (route-catalog access `PUBLIC`): the public auth
- * forms (login/refresh/email-login/oauth/webauthn-authenticate/password/mfa-login) and
+ * forms (login/email-login/oauth/webauthn-authenticate/password/mfa-login; refresh is NOT here —
+ * it authenticates via the session cookie and advertises `sessionCookie`) and
  * the Stripe-signed webhooks (verified via `Stripe-Signature`, not a JWT). The `Health` and
  * `Plan` tags are excluded separately above. Keyed by `"<METHOD> <openapi-path>"`. Kept in
  * sync with `docs/routes.txt` PUBLIC routes by `mcp-openapi`/route-security guard tests.
@@ -47,7 +48,6 @@ const PUBLIC_ROUTE_KEYS = new Set<string>([
   'GET /livez',
   'GET /readyz',
   'POST /api/v1/auth/login',
-  'POST /api/v1/auth/refresh',
   'POST /api/v1/auth/mfa/login',
   'POST /api/v1/auth/email/send-code',
   'POST /api/v1/auth/email/login',
@@ -64,6 +64,10 @@ const PUBLIC_ROUTE_KEYS = new Set<string>([
 export function getRouteSecurity(tags: string[], routeKey: string): object[] | undefined {
   if (tags.includes('Health')) return undefined;
   if (tags.includes('Plan')) return undefined;
+  // Refresh is authenticated by the session cookie + CSRF header, not a bearer JWT — the access
+  // token is expired by definition when a client refreshes. Documented as its own scheme so the
+  // spec neither over-states (bearerAuth) nor under-states (public) the requirement.
+  if (routeKey === 'POST /api/v1/auth/refresh') return [{ sessionCookie: [] }];
   // Public routes (no JWT): don't advertise the bearerAuth requirement.
   if (PUBLIC_ROUTE_KEYS.has(routeKey)) return undefined;
   return [{ bearerAuth: [] }];

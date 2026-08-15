@@ -69,7 +69,7 @@ describe('createMembershipController', () => {
     expect(service.getByPublicId).toHaveBeenCalled();
   });
 
-  it('createMembership returns 201', async () => {
+  it('createMembership returns 200', async () => {
     const reply = { code: vi.fn().mockReturnThis(), send: vi.fn() };
     await controller.createMembership(
       mockRequest({
@@ -78,7 +78,9 @@ describe('createMembershipController', () => {
       }),
       reply as unknown as FastifyReply,
     );
-    expect(reply.code).toHaveBeenCalledWith(201);
+    // The controller no longer sets an explicit status: the uniform method-status policy
+    // (POST -> 200) owns the code, so the handler must leave reply.code untouched.
+    expect(reply.code).not.toHaveBeenCalled();
   });
 
   it('updateMembership and deleteMembership delegate to service', async () => {
@@ -196,7 +198,7 @@ describe('createMembershipController', () => {
     expect(service.getPermissions).toHaveBeenCalledWith(organizationPublicId, membershipPublicId);
   });
 
-  it('createMembership returns 201 with valid organization id', async () => {
+  it('createMembership returns 200 with valid organization id', async () => {
     const reply = mockReply();
     await controller.createMembership(
       mockRequest({
@@ -209,7 +211,9 @@ describe('createMembershipController', () => {
       }),
       reply,
     );
-    expect(reply.code).toHaveBeenCalledWith(201);
+    // The controller no longer sets an explicit status: the uniform method-status policy
+    // (POST -> 200) owns the code, so the handler must leave reply.code untouched.
+    expect(reply.code).not.toHaveBeenCalled();
     expect(service.create).toHaveBeenCalled();
   });
 

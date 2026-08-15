@@ -168,7 +168,7 @@ describe('Security: tenancy grant escalation (API-key scopes, role assignment, o
         },
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       // The serializer deliberately drops `scopes` (they are a server-side capability, not a
       // display field), so the key's existence is asserted through the list route instead.
       const body = response.json() as { data: { api_key: { id: string }; raw_key: string } };
@@ -237,7 +237,7 @@ describe('Security: tenancy grant escalation (API-key scopes, role assignment, o
         },
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
     });
   });
 
@@ -276,7 +276,7 @@ describe('Security: tenancy grant escalation (API-key scopes, role assignment, o
         headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: { name: 'Own Org', slug: `own-${randomUUID().slice(0, 8)}` },
       });
-      expect(created.statusCode).toBe(201);
+      expect(created.statusCode).toBe(200);
       const organizationId = (created.json() as { data: { id: string } }).data.id;
 
       // The creator is bootstrapped as owner: they can read the org through the org claim and

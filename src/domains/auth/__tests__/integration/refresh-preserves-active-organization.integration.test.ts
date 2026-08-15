@@ -68,7 +68,7 @@ describe('refresh preserves the switched active organization (audit-#3)', () => 
       url: testApiPath('/auth/login'),
       payload: { email: user.email, password },
     });
-    expect(loginResponse.statusCode).toBe(201);
+    expect(loginResponse.statusCode).toBe(200);
     const loginToken = (loginResponse.json() as { data: { access_token: string } }).data
       .access_token;
     expect(decodeOrgClaim(loginToken)).toBe(personal.organization.public_id);
@@ -80,7 +80,7 @@ describe('refresh preserves the switched active organization (audit-#3)', () => 
       headers: { authorization: `Bearer ${loginToken}` },
       payload: { organization_id: orgB.organization.public_id },
     });
-    expect(switchResponse.statusCode).toBe(201);
+    expect(switchResponse.statusCode).toBe(200);
     const switchedToken = (switchResponse.json() as { data: { access_token: string } }).data
       .access_token;
     expect(decodeOrgClaim(switchedToken)).toBe(orgB.organization.public_id);
@@ -91,7 +91,7 @@ describe('refresh preserves the switched active organization (audit-#3)', () => 
       headers: { cookie, origin: 'http://localhost:3000' },
       payload: {},
     });
-    expect(refreshResponse.statusCode).toBe(201);
+    expect(refreshResponse.statusCode).toBe(200);
     const refreshedToken = (refreshResponse.json() as { data: { access_token: string } }).data
       .access_token;
 
@@ -108,7 +108,7 @@ describe('refresh preserves the switched active organization (audit-#3)', () => 
       url: testApiPath('/auth/login'),
       payload: { email: user.email, password },
     });
-    expect(loginResponse.statusCode).toBe(201);
+    expect(loginResponse.statusCode).toBe(200);
     const cookie = sessionCookie(loginResponse.headers);
 
     // No switch performed → session has no persisted org → refresh resolves the default.
@@ -118,7 +118,7 @@ describe('refresh preserves the switched active organization (audit-#3)', () => 
       headers: { cookie, origin: 'http://localhost:3000' },
       payload: {},
     });
-    expect(refreshResponse.statusCode).toBe(201);
+    expect(refreshResponse.statusCode).toBe(200);
     const refreshedToken = (refreshResponse.json() as { data: { access_token: string } }).data
       .access_token;
     expect(decodeOrgClaim(refreshedToken)).toBe(personal.organization.public_id);

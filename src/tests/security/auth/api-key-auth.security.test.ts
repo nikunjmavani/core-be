@@ -65,7 +65,7 @@ describe('Security: Organization API key authentication', () => {
       token,
       payload: { name: 'Security test key', scopes: permissionCodes },
     });
-    expect(createResponse.statusCode).toBe(201);
+    expect(createResponse.statusCode).toBe(200);
     const body = createResponse.json() as ApiKeyCreateResponse;
 
     return {

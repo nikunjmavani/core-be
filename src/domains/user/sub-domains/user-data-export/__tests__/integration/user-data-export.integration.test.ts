@@ -95,7 +95,7 @@ describe('User Data Export Sub-Domain — Integration', () => {
         token: bearerToken,
         payload: {},
       });
-      expect(exportResponse.statusCode).toBe(201);
+      expect(exportResponse.statusCode).toBe(200);
 
       const payload = (exportResponse.json() as { data: Record<string, unknown> }).data;
       expect(payload).toMatchObject({
@@ -123,7 +123,7 @@ describe('User Data Export Sub-Domain — Integration', () => {
         token,
         payload: {},
       });
-      expect(first.statusCode, first.body).toBe(201);
+      expect(first.statusCode, first.body).toBe(200);
       const firstId = (first.json() as { data: { export_id: string } }).data.export_id;
 
       const second = await injectAuthenticated(app, {
@@ -132,7 +132,7 @@ describe('User Data Export Sub-Domain — Integration', () => {
         token,
         payload: {},
       });
-      expect(second.statusCode, second.body).toBe(201);
+      expect(second.statusCode, second.body).toBe(200);
       expect((second.json() as { data: { export_id: string } }).data.export_id).toBe(firstId);
     });
 
@@ -155,7 +155,7 @@ describe('User Data Export Sub-Domain — Integration', () => {
       );
 
       for (const response of responses) {
-        expect(response.statusCode, response.body).toBe(201);
+        expect(response.statusCode, response.body).toBe(200);
       }
       const [a, b] = responses.map(
         (response) => (response.json() as { data: { export_id: string } }).data.export_id,
@@ -200,7 +200,7 @@ describe('User Data Export Sub-Domain — Integration', () => {
         token: ownerToken,
         payload: {},
       });
-      expect(created.statusCode, created.body).toBe(201);
+      expect(created.statusCode, created.body).toBe(200);
       const exportId = (created.json() as { data: { export_id: string } }).data.export_id;
 
       const stranger = await createTestUser({ email: `stranger-${owner.public_id}@test.com` });

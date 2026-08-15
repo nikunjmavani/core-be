@@ -67,7 +67,7 @@ describe('Chaos resilience: Redis outage while enqueueing transactional email wo
               },
             });
 
-          expect(magicLinkResponseAwaitingObservation.statusCode).toBe(201);
+          expect(magicLinkResponseAwaitingObservation.statusCode).toBe(200);
           await expect(
             waitForMailDispatchFailureLog(mailEnqueueObservationSpyListening),
           ).resolves.toBe(true);

@@ -97,19 +97,19 @@ not listed operates on the active org regardless of type.
 
 | Route                                                       | B2C (personal only)                 | Hybrid                      | B2B (team only)           |
 | ----------------------------------------------------------- | ----------------------------------- | --------------------------- | ------------------------- |
-| `POST /auth/switch-to-personal`                             | 201                                 | 201                         | **404** (no personal org) |
-| `POST /auth/switch-to-organization`                         | — (no teams)                        | 201                         | 201                       |
-| `POST /tenancy/organizations` (create team)                 | **403** `teamOrganizationsDisabled` | 201                         | 201                       |
+| `POST /auth/switch-to-personal`                             | 200                                 | 200                         | **404** (no personal org) |
+| `POST /auth/switch-to-organization`                         | — (no teams)                        | 200                         | 200                       |
+| `POST /tenancy/organizations` (create team)                 | **403** `teamOrganizationsDisabled` | 200                         | 200                       |
 | `GET /tenancy/organizations` (list teams)                   | 200 (empty)                         | 200                         | 200                       |
 | `DELETE /tenancy/organization`                              | **422**                             | 204 team · **422** personal | 204                       |
-| `POST /tenancy/organization/memberships`                    | **422**                             | 201 team · **422** personal | 201                       |
-| `POST /tenancy/organization/roles`                          | **422**                             | 201 team · **422** personal | 201                       |
-| `POST /tenancy/organization/transfer-ownership`             | **422**                             | 201 team · **422** personal | 201                       |
-| `POST /billing/payment-methods/setup`                       | **422**                             | 201 team · **422** personal | 201                       |
-| `POST /billing/subscriptions`                               | **422**                             | 201 team · **422** personal | 201                       |
-| `POST /billing/subscriptions/{subscription_id}/change-plan` | **422**                             | 201 team · **422** personal | 201                       |
-| `POST /billing/subscriptions/{subscription_id}/cancel`      | **422**                             | 201 team · **422** personal | 201                       |
-| `POST /billing/subscriptions/{subscription_id}/resume`      | **422**                             | 201 team · **422** personal | 201                       |
+| `POST /tenancy/organization/memberships`                    | **422**                             | 200 team · **422** personal | 200                       |
+| `POST /tenancy/organization/roles`                          | **422**                             | 200 team · **422** personal | 200                       |
+| `POST /tenancy/organization/transfer-ownership`             | **422**                             | 200 team · **422** personal | 200                       |
+| `POST /billing/payment-methods/setup`                       | **422**                             | 200 team · **422** personal | 200                       |
+| `POST /billing/subscriptions`                               | **422**                             | 200 team · **422** personal | 200                       |
+| `POST /billing/subscriptions/{subscription_id}/change-plan` | **422**                             | 200 team · **422** personal | 200                       |
+| `POST /billing/subscriptions/{subscription_id}/cancel`      | **422**                             | 200 team · **422** personal | 200                       |
+| `POST /billing/subscriptions/{subscription_id}/resume`      | **422**                             | 200 team · **422** personal | 200                       |
 
 The 422s come from the org-type guard: `personalOrganizationNoMembers`
 (invitations / memberships), `personalOrganizationNoRoles` (roles),

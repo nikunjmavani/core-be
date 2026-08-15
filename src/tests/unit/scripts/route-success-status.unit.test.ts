@@ -27,26 +27,31 @@ describe('route success-status map', () => {
     expect(stale, `Stale map entries:\n${stale.join('\n')}`).toEqual([]);
   });
 
-  it('only uses allowed success statuses (200/201/202/204)', () => {
+  it('only uses allowed success statuses (200/204)', () => {
     const invalid = Object.entries(successStatusMap).filter(
       ([, status]) => !ALLOWED_SUCCESS_STATUSES.has(status),
     );
     expect(invalid, `Invalid statuses: ${JSON.stringify(invalid)}`).toEqual([]);
   });
 
-  it('pins documented non-200 happy paths', () => {
-    expect(successStatusMap['POST /api/v1/auth/logout']).toBe(201);
+  it('pins documented happy paths — only DELETE deviates from 200', () => {
+    expect(successStatusMap['POST /api/v1/auth/logout']).toBe(200);
     expect(successStatusMap['DELETE /api/v1/auth/me/sessions']).toBe(204);
-    expect(successStatusMap['POST /api/v1/tenancy/organizations']).toBe(201);
-    expect(successStatusMap['POST /api/v1/uploads']).toBe(201);
+    expect(successStatusMap['POST /api/v1/tenancy/organizations']).toBe(200);
+    expect(successStatusMap['POST /api/v1/uploads']).toBe(200);
     expect(successStatusMap['POST /api/v1/tenancy/organization/api-keys/:api_key_id/rotate']).toBe(
-      201,
+      200,
     );
-    expect(successStatusMap['POST /api/v1/users/me/data-export']).toBe(201);
+    expect(successStatusMap['POST /api/v1/users/me/data-export']).toBe(200);
+    // The uniform policy: success is 200 for every method except DELETE (204). No POST is 201.
+    const nonStandard = Object.entries(successStatusMap).filter(
+      ([key, status]) => status !== 200 && !(key.startsWith('DELETE ') && status === 204),
+    );
+    expect(nonStandard, JSON.stringify(nonStandard)).toEqual([]);
   });
 
   it('pins documented happy paths per the method-status policy', () => {
-    expect(successStatusMap['POST /api/v1/auth/login']).toBe(201);
+    expect(successStatusMap['POST /api/v1/auth/login']).toBe(200);
     expect(successStatusMap['GET /api/v1/users/me']).toBe(200);
     expect(successStatusMap['GET /readyz']).toBe(200);
   });
@@ -62,7 +67,7 @@ describe('route success-status map', () => {
   });
 
   it('getDeclaredSuccessStatus resolves catalog routes and rejects unknown ones', () => {
-    expect(getDeclaredSuccessStatus({ method: 'POST', path: '/api/v1/auth/logout' })).toBe(201);
+    expect(getDeclaredSuccessStatus({ method: 'POST', path: '/api/v1/auth/logout' })).toBe(200);
     expect(() =>
       getDeclaredSuccessStatus({ method: 'GET', path: '/api/v1/does-not-exist' }),
     ).toThrow(/No declared success status/);

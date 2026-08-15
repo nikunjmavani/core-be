@@ -34,7 +34,7 @@ vi.mock('@/shared/utils/security/webhook-outbound-fetch.util.js', () => ({
 
 function tally(statuses: number[]) {
   return {
-    created: statuses.filter((s) => s === 201).length,
+    created: statuses.filter((s) => s === 200).length,
     conflict: statuses.filter((s) => s === 409).length,
     serverError: statuses.filter((s) => s >= 500).length,
   };
@@ -176,7 +176,7 @@ describe('Security: unique-violation conflict handling', () => {
       const { token, memberRolePublicId, inviteeEmail } = await membershipAdminContext();
 
       const first = await addMember(token, inviteeEmail, memberRolePublicId);
-      expect(first.statusCode).toBe(201);
+      expect(first.statusCode).toBe(200);
 
       const second = await addMember(token, inviteeEmail, memberRolePublicId);
       expect(second.statusCode).toBe(409);

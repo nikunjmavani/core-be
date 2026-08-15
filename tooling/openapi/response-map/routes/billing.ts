@@ -47,7 +47,7 @@ export const billingRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'POST /api/v1/billing/subscriptions': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.subscriptionSchema, schemas.subscriptionExample),
     example: null,
   },
@@ -60,7 +60,7 @@ export const billingRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'POST /api/v1/billing/subscriptions/{subscription_id}/change-plan': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.subscriptionSchema, {
       ...schemas.subscriptionExample,
       plan_id: 'pln_ent456',
@@ -68,7 +68,7 @@ export const billingRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'POST /api/v1/billing/subscriptions/{subscription_id}/cancel': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.subscriptionSchema, {
       ...schemas.subscriptionExample,
       status: 'CANCELLED',
@@ -77,7 +77,7 @@ export const billingRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'POST /api/v1/billing/subscriptions/{subscription_id}/resume': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.subscriptionSchema, {
       ...schemas.subscriptionExample,
       cancel_at_period_end: false,

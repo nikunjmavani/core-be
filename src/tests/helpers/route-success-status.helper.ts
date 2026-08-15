@@ -11,7 +11,7 @@ export type RouteSuccessStatusMap = Record<string, number>;
  * Success statuses controllers are allowed to declare. Anything outside this
  * set in the committed map fails `pnpm validate:route-success-statuses`.
  */
-export const ALLOWED_SUCCESS_STATUSES: ReadonlySet<number> = new Set([200, 201, 202, 204]);
+export const ALLOWED_SUCCESS_STATUSES: ReadonlySet<number> = new Set([200, 204]);
 
 const ROUTE_SUCCESS_STATUS_PATH = join(
   process.cwd(),

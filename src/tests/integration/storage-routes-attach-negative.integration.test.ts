@@ -167,7 +167,7 @@ describe('Storage-backed attach routes — refusals (mocked S3 port)', () => {
         file_size: FAKE_CONTENT_LENGTH,
       },
     });
-    expect(response.statusCode, response.body).toBe(201);
+    expect(response.statusCode, response.body).toBe(200);
     const created = (response.json() as { data: { id: string; key: string } }).data;
     return { uploadPublicId: created.id, key: created.key };
   }
@@ -201,7 +201,7 @@ describe('Storage-backed attach routes — refusals (mocked S3 port)', () => {
         ? { organizationPublicId: options.organizationPublicId }
         : {}),
     });
-    expect(confirm.statusCode, confirm.body).toBe(201);
+    expect(confirm.statusCode, confirm.body).toBe(200);
     return key;
   }
 

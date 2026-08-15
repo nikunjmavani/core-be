@@ -25,7 +25,7 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
  */
 function tally(statuses: number[]): { created: number; conflict: number; serverError: number } {
   return {
-    created: statuses.filter((s) => s === 201).length,
+    created: statuses.filter((s) => s === 200).length,
     conflict: statuses.filter((s) => s === 409).length,
     serverError: statuses.filter((s) => s >= 500).length,
   };
@@ -96,7 +96,7 @@ describe('Security: organization-slug uniqueness race (TOCTOU)', () => {
     const authToken = await token();
     const slug = `race-${generatePublicId('organization').slice(4)}`;
 
-    expect(await createWithSlug(authToken, slug)).toBe(201);
+    expect(await createWithSlug(authToken, slug)).toBe(200);
     expect(await createWithSlug(authToken, slug)).toBe(409);
   });
 });

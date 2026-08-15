@@ -86,7 +86,6 @@ src/
     │   │   ├── unit/
     │   │   │   ├── auth-me-context.serializer.unit.test.ts
     │   │   │   ├── auth-me-context.service.unit.test.ts
-    │   │   │   ├── auth-mfa.validator.unit.test.ts
     │   │   │   ├── auth-routes-rate-limit.policy.unit.test.ts
     │   │   │   ├── auth.controller.unit.test.ts
     │   │   │   ├── auth.event-handlers.unit.test.ts
@@ -873,7 +872,7 @@ src/
     │   │   │       │   ├── authorization.service.unit.test.ts
     │   │   │       │   ├── permission-cache-lock-order.policy.unit.test.ts
     │   │   │       │   ├── permission-cache-no-scan.policy.unit.test.ts
-    │   │   │       │   ├── permission-cache.invalidation.unit.test.ts
+    │   │   │       │   ├── permission-cache.service.invalidation.unit.test.ts
     │   │   │       │   ├── permission.controller.unit.test.ts
     │   │   │       │   ├── permission.repository.cross-org.db.unit.test.ts
     │   │   │       │   ├── permission.repository.db.unit.test.ts
@@ -1732,6 +1731,7 @@ src/
     │   ├── external-sdk-coverage.global.test.ts
     │   ├── global.overview.md
     │   ├── import-paths.global.test.ts
+    │   ├── locale-parity.global.test.ts
     │   ├── mcp-config.global.test.ts
     │   ├── no-direct-db-in-services.global.test.ts
     │   ├── no-nodeenv-branching.global.test.ts
@@ -1747,6 +1747,8 @@ src/
     │   ├── service-cross-domain-boundary.global.test.ts
     │   ├── stryker-mutate-paths.global.test.ts
     │   ├── system-validation.global.test.ts
+    │   ├── test-hygiene.global.test.ts
+    │   ├── test-suite-duplication.global.test.ts
     │   ├── vitest-project-grouping.global.test.ts
     │   └── worker-readiness.global.test.ts
     ├── helpers/
@@ -2063,6 +2065,7 @@ src/
     │   │   │   ├── circuit-breaker.state-machine.unit.test.ts
     │   │   │   ├── circuit-breaker.unit.test.ts
     │   │   │   └── retry-with-backoff.unit.test.ts
+    │   │   ├── boot-tls-guards.unit.test.ts
     │   │   └── migration-error-hint.unit.test.ts
     │   ├── middleware/
     │   │   ├── api-key-auth.middleware.unit.test.ts

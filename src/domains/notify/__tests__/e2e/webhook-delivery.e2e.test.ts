@@ -75,7 +75,7 @@ describe('Notify e2e: webhook delivery', () => {
       },
       headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
     });
-    expect([201]).toContain(createResponse.statusCode);
+    expect([200]).toContain(createResponse.statusCode);
 
     const listResponse = await injectAuthenticated(app, {
       method: 'GET',

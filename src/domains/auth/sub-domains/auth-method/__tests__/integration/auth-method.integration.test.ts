@@ -36,7 +36,7 @@ describe('Auth Method Sub-Domain — Integration', () => {
         url: testApiPath('/auth/login'),
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 401 for invalid credentials', async () => {
@@ -58,7 +58,7 @@ describe('Auth Method Sub-Domain — Integration', () => {
         url: testApiPath('/auth/login'),
         payload: { email: user.email, password },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       expect(
         (response.json() as { data?: { access_token?: string } }).data?.access_token,
       ).toBeDefined();
@@ -72,7 +72,7 @@ describe('Auth Method Sub-Domain — Integration', () => {
         url: testApiPath('/auth/email/send-code'),
         payload: { email: 'email-code-integration@test.com' },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
     });
   });
 
@@ -102,7 +102,7 @@ describe('Auth Method Sub-Domain — Integration', () => {
         token,
         payload: { password },
       });
-      expect(stepUp.statusCode, stepUp.body).toBe(201);
+      expect(stepUp.statusCode, stepUp.body).toBe(200);
 
       // The last-login-capable guard counts auth_methods rows; give the user a
       // PASSWORD method row so removing the email-code is not removing the last one.
@@ -121,7 +121,7 @@ describe('Auth Method Sub-Domain — Integration', () => {
         token,
         payload: { method_type: 'EMAIL_CODE' },
       });
-      expect(create.statusCode, create.body).toBe(201);
+      expect(create.statusCode, create.body).toBe(200);
       const created = (create.json() as { data: { id?: string; public_id?: string } }).data;
       const methodPublicId = created.id ?? created.public_id;
       expect(methodPublicId).toBeTypeOf('string');

@@ -34,6 +34,21 @@ describe('User admin routes — happy paths', () => {
     adminToken = await generateTestToken({ userId: admin.public_id, role: 'super_admin' });
   });
 
+  it('GET /users returns the paginated user list for an admin', async () => {
+    // The admin LIST route had no HTTP test anywhere in the repo — every admin case below targets
+    // /users/:user_id. Observed-status capture across e2e+integration+security showed only a 401.
+    await createTestUser();
+    const response = await injectAuthenticated(app, {
+      method: 'GET',
+      url: testApiPath('/users'),
+      token: adminToken,
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as { data: Array<{ id: string }> };
+    // The seeded admin plus the target — the list actually lists, it does not just answer.
+    expect(body.data.length).toBeGreaterThanOrEqual(2);
+  });
+
   it('GET /users/:user_id returns the target profile', async () => {
     const target = await createTestUser();
     const response = await injectAuthenticated(app, {
@@ -63,14 +78,14 @@ describe('User admin routes — happy paths', () => {
       url: testApiPath(`/users/${target.public_id}/suspend`),
       token: adminToken,
     });
-    expect(suspend.statusCode, suspend.body).toBe(201);
+    expect(suspend.statusCode, suspend.body).toBe(200);
 
     const unsuspend = await injectAuthenticated(app, {
       method: 'POST',
       url: testApiPath(`/users/${target.public_id}/unsuspend`),
       token: adminToken,
     });
-    expect(unsuspend.statusCode, unsuspend.body).toBe(201);
+    expect(unsuspend.statusCode, unsuspend.body).toBe(200);
   });
 
   it('DELETE /users/:user_id soft-deletes the target', async () => {
@@ -91,6 +106,32 @@ describe('User admin routes — happy paths', () => {
   describe('denials', () => {
     /** Well-formed but unallocated — proves 404 (not found) rather than 422 (bad id shape). */
     const UNKNOWN_USER_ID = generatePublicId('user');
+
+    it('GET /users returns 403 for a plain user', async () => {
+      const caller = await createTestUser();
+      const token = await generateTestToken({ userId: caller.public_id, role: 'user' });
+
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/users'),
+        token,
+      });
+      expect(response.statusCode, response.body).toBe(403);
+    });
+
+    it('PATCH /users/:user_id returns 400 when the body sets status DELETED', async () => {
+      // AdminUpdateUserDto only allows ACTIVE/SUSPENDED — DELETED is reachable solely through the
+      // dedicated delete endpoint (soft-delete + offboarding). This 400 pins that boundary rule;
+      // no admin-PATCH validator refusal was observed anywhere before it.
+      const target = await createTestUser();
+      const response = await injectAuthenticated(app, {
+        method: 'PATCH',
+        url: testApiPath(`/users/${target.public_id}`),
+        token: adminToken,
+        payload: { status: 'DELETED' },
+      });
+      expect(response.statusCode, response.body).toBe(400);
+    });
 
     it('GET /users/:user_id returns 403 for a plain user', async () => {
       const caller = await createTestUser();
@@ -184,7 +225,7 @@ describe('User admin routes — happy paths', () => {
    * for the target ("an outstanding bearer/cookie session cannot outlive the deactivation") and
    * `AuthSessionService` busts the 60-second session-validity cache; separately, session
    * validation rejects any user whose status is not ACTIVE. Until now the two suspend routes
-   * asserted only their 201 — nothing proved the target actually lost access.
+   * asserted only their success status — nothing proved the target actually lost access.
    */
   describe('suspension takes effect', () => {
     it('revokes the suspended user active session', async () => {
@@ -205,7 +246,7 @@ describe('User admin routes — happy paths', () => {
         url: testApiPath(`/users/${target.public_id}/suspend`),
         token: adminToken,
       });
-      expect(suspend.statusCode, suspend.body).toBe(201);
+      expect(suspend.statusCode, suspend.body).toBe(200);
 
       const after = await injectAuthenticated(app, {
         method: 'GET',
@@ -235,7 +276,7 @@ describe('User admin routes — happy paths', () => {
         url: testApiPath(`/users/${target.public_id}/unsuspend`),
         token: adminToken,
       });
-      expect(unsuspend.statusCode, unsuspend.body).toBe(201);
+      expect(unsuspend.statusCode, unsuspend.body).toBe(200);
       expect((unsuspend.json() as { data: { status: string } }).data.status).toBe('ACTIVE');
 
       const withOldSession = await injectAuthenticated(app, {

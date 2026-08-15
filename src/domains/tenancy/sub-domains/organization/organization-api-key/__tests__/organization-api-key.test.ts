@@ -165,7 +165,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token,
         payload: { name: 'Listing Test Key', scopes: ['api-key:read'], expires_in_days: 365 },
       });
-      expect(created.statusCode).toBe(201);
+      expect(created.statusCode).toBe(200);
       const createdBody = created.json() as { data: { api_key: { id: string } } };
       const apiKeyPublicId = createdBody.data.api_key.id;
 
@@ -215,7 +215,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token,
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 400 when name is empty', async () => {
@@ -229,7 +229,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token,
         payload: { name: '' },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 400 when body contains unknown keys', async () => {
@@ -243,7 +243,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token,
         payload: { name: 'Valid Key', unexpected: true },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should create api key when manage permission is granted', async () => {
@@ -257,7 +257,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token,
         payload: { name: 'New Key', scopes: ['api-key:manage'], expires_in_days: 30 },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const body = response.json() as {
         data: { api_key: { name: string }; raw_key: string };
       };
@@ -286,7 +286,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token: managerContext.token,
         payload: { name: 'Owned By Manager', scopes: ['api-key:read'] },
       });
-      expect(createResponse.statusCode).toBe(201);
+      expect(createResponse.statusCode).toBe(200);
       const createBody = createResponse.json() as { data: { api_key: { id: string } } };
       const apiKeyPublicId = createBody.data.api_key.id;
 
@@ -325,7 +325,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token,
         payload: { name: 'Patch Status Key', scopes: ['api-key:read'] },
       });
-      expect(createResponse.statusCode).toBe(201);
+      expect(createResponse.statusCode).toBe(200);
       const createBody = createResponse.json() as { data: { api_key: { id: string } } };
       const apiKeyPublicId = createBody.data.api_key.id;
 
@@ -335,7 +335,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token,
         payload: { status: 'INVALID_STATUS' },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should update api key with manage permission', async () => {
@@ -347,7 +347,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token,
         payload: { name: 'Before Rename', scopes: ['api-key:read'] },
       });
-      expect(createResponse.statusCode).toBe(201);
+      expect(createResponse.statusCode).toBe(200);
       const createBody = createResponse.json() as { data: { api_key: { id: string } } };
       const apiKeyPublicId = createBody.data.api_key.id;
 
@@ -383,7 +383,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token: managerContext.token,
         payload: { name: 'Deletion Target', scopes: ['api-key:read'] },
       });
-      expect(createResponse.statusCode).toBe(201);
+      expect(createResponse.statusCode).toBe(200);
       const createBody = createResponse.json() as { data: { api_key: { id: string } } };
       const apiKeyPublicId = createBody.data.api_key.id;
 
@@ -437,7 +437,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token,
         payload: { name: 'To Delete', scopes: ['api-key:read'] },
       });
-      expect(createResponse.statusCode).toBe(201);
+      expect(createResponse.statusCode).toBe(200);
       const createBody = createResponse.json() as { data: { api_key: { id: string } } };
       const apiKeyPublicId = createBody.data.api_key.id;
 
@@ -480,7 +480,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token: managerContext.token,
         payload: { name: 'Rotate Protected', scopes: ['api-key:read'] },
       });
-      expect(createResponse.statusCode).toBe(201);
+      expect(createResponse.statusCode).toBe(200);
       const createBody = createResponse.json() as { data: { api_key: { id: string } } };
       const apiKeyPublicId = createBody.data.api_key.id;
 
@@ -534,7 +534,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token,
         payload: { name: 'Rotation Source', scopes: ['api-key:read'] },
       });
-      expect(createResponse.statusCode).toBe(201);
+      expect(createResponse.statusCode).toBe(200);
       const createBody = createResponse.json() as {
         data: { raw_key: string; api_key: { id: string } };
       };
@@ -546,7 +546,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         url: `${apiKeysResourcePath(apiKeyPublicIdBeforeRotation)}/rotate`,
         token,
       });
-      expect(rotateResponse.statusCode).toBe(201);
+      expect(rotateResponse.statusCode).toBe(200);
       const rotateBody = rotateResponse.json() as {
         data: { raw_key: string; api_key: { id: string; name: string } };
       };
@@ -576,7 +576,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
       expect(rotatedKeyLookup.statusCode).toBe(200);
     });
 
-    it('rejects concurrent rotations of the same key: one replacement, rest 409, no 5xx', async () => {
+    it('rejects concurrent rotations of the same key: one replacement, rest 4xx, no 5xx', async () => {
       const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.API_KEY_READ,
         TENANCY_PERMISSIONS.API_KEY_MANAGE,
@@ -588,7 +588,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         token,
         payload: { name: 'Concurrent Rotation Source', scopes: ['api-key:read'] },
       });
-      expect(createResponse.statusCode).toBe(201);
+      expect(createResponse.statusCode).toBe(200);
       const apiKeyPublicId = (createResponse.json() as { data: { api_key: { id: string } } }).data
         .api_key.id;
 
@@ -606,7 +606,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
       // — both are timing-dependent, so we assert the invariant, not the exact split).
       const statuses = await Promise.all([rotateOnce(), rotateOnce(), rotateOnce(), rotateOnce()]);
       expect(statuses.filter((status) => status >= 500)).toHaveLength(0);
-      expect(statuses.filter((status) => status === 201)).toHaveLength(1);
+      expect(statuses.filter((status) => status === 200)).toHaveLength(1);
       expect(statuses.filter((status) => status >= 400 && status < 500)).toHaveLength(3);
 
       // Exactly one active key remains (the single replacement); the original is retired. Without

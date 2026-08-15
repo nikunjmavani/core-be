@@ -21,7 +21,7 @@ import {
 /**
  * E2E coverage for the billing payment-method / invoice read routes and the SetupIntent write.
  * Stripe is stubbed (only the client functions these routes touch) so the happy-path statuses
- * (200/200/200/201) are exercised deterministically without a live Stripe call.
+ * (200/200/200/200) are exercised deterministically without a live Stripe call.
  */
 vi.mock('@/infrastructure/payment/stripe.client.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/infrastructure/payment/stripe.client.js')>();
@@ -112,7 +112,7 @@ describe('Billing payment methods (e2e)', () => {
     expect(response.statusCode).toBe(200);
   });
 
-  it('POST /billing/payment-methods/setup returns 201', async () => {
+  it('POST /billing/payment-methods/setup returns 200', async () => {
     const { token } = await createBillingContext();
     const response = await injectAuthenticatedOrganizationMutation(app, {
       method: 'POST',
@@ -121,6 +121,6 @@ describe('Billing payment methods (e2e)', () => {
       payload: {},
       headers: { 'x-idempotency-key': 'e2e-payment-method-setup-key-000001' },
     });
-    expect(response.statusCode).toBe(201);
+    expect(response.statusCode).toBe(200);
   });
 });

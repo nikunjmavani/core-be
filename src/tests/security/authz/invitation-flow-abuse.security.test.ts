@@ -250,7 +250,7 @@ describe('Security: invitation lifecycle flow abuse', () => {
         token: context.inviteeToken,
         payload: { token: context.rawToken },
       });
-      expect(first.statusCode).toBe(201);
+      expect(first.statusCode).toBe(200);
 
       const replay = await injectAuthenticated(app, {
         method: 'POST',
@@ -303,7 +303,7 @@ describe('Security: invitation lifecycle flow abuse', () => {
         token: context.adminToken,
         payload: { expires_in_days: 7 },
       });
-      expect(resend.statusCode).toBe(201);
+      expect(resend.statusCode).toBe(200);
 
       const acceptWithOldToken = await injectAuthenticated(app, {
         method: 'POST',
@@ -345,7 +345,7 @@ describe('Security: invitation lifecycle flow abuse', () => {
         token: context.inviteeToken,
         payload: { token: context.rawToken },
       });
-      expect(legitimate.statusCode).toBe(201);
+      expect(legitimate.statusCode).toBe(200);
 
       const membership = await readMembershipStatus(context.inviteeMembership.id);
       expect(membership?.status).toBe('ACTIVE');
@@ -368,7 +368,7 @@ describe('Security: invitation lifecycle flow abuse', () => {
         token: context.inviteeToken,
         payload: { token: context.rawToken },
       });
-      expect(legitimate.statusCode).toBe(201);
+      expect(legitimate.statusCode).toBe(200);
     });
   });
 

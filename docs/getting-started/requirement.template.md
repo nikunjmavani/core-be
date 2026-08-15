@@ -64,7 +64,7 @@ it. Either way the final, approved document looks like the form below.
 - Response (serialized; external id is `id`): <fields>
   # e.g. { id, amount_cents, currency, status, issued_at, created_at }
 - Statuses / headers / pagination: <success + errors | headers | cursor?>
-  # e.g. 200 list/get, 201 create, 403 no-permission, 404 not-found, 422 missing X-Idempotency-Key | X-Idempotency-Key required on POST | cursor pagination on list
+  # e.g. 200 list/get/create, 403 no-permission, 404 not-found, 422 missing X-Idempotency-Key | X-Idempotency-Key required on POST | cursor pagination on list
 
 ## 4. Business logic
 - Service intent per operation: <what each operation does>

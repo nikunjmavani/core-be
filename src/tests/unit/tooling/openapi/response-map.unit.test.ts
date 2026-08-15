@@ -5,7 +5,7 @@ import { wrapSuccess } from '@tooling/openapi/response-map/building-blocks.js';
 describe('response-map', () => {
   it('routeResponseMap includes health and auth login responses', () => {
     expect(routeResponseMap['GET /readyz']?.statusCode).toBe(200);
-    expect(routeResponseMap['POST /api/v1/auth/login']?.statusCode).toBe(201);
+    expect(routeResponseMap['POST /api/v1/auth/login']?.statusCode).toBe(200);
   });
 
   it('wrapSuccess nests data under meta envelope', () => {

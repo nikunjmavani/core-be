@@ -32,7 +32,7 @@ indexNote: route params / public-ids / methodâ†’status policy / header matrix â€
 
 | GET | POST | PUT/PATCH | DELETE |
 | --- | ---- | --------- | ------ |
-| 200 | 201  | 200       | 204    |
+| 200 | 200  | 200       | 204    |
 
 Exceptions (protocol-owned, stay 200): `POST /billing/webhook`, `POST /api/v1/mcp`.
 The policy is enforced centrally in `method-status-policy.middleware.ts`; declared statuses live in `tooling/openapi/route-catalog/route-success-statuses.json` and are runtime-verified by `pnpm validate:route-success-coverage` (drift fails CI).

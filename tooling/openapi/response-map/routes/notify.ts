@@ -26,7 +26,7 @@ export const notifyRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'POST /api/v1/notify/notifications/mark-all-read': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.messageSchema, { message: 'All notifications marked as read' }),
     example: null,
   },
@@ -63,7 +63,7 @@ export const notifyRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'POST /api/v1/notify/webhooks': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.webhookSchema, schemas.webhookExample),
     example: null,
   },
@@ -85,7 +85,7 @@ export const notifyRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'POST /api/v1/notify/webhooks/{webhook_id}/test': {
-    statusCode: 201,
+    statusCode: 200,
     schema: wrapSuccess(schemas.webhookTestSchema, schemas.webhookTestExample),
     example: null,
   },

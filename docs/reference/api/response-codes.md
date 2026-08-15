@@ -9,7 +9,7 @@ When to set which HTTP status — the single contract every route, test, and doc
 | Method      | Status  | Meaning                                                                                                                                              |
 | ----------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | GET         | **200** | Resource(s) returned.                                                                                                                                |
-| POST        | **201** | Resource created / action accepted. The central `onSend` hook rewrites any 200/202/204 a POST handler produced to 201 — controllers never hand-pick. |
+| POST        | **200** | Success — including creates, idempotent replays, and upserts (where a fixed 201 would lie on the replay). The central `onSend` hook rewrites any 201/202/204 a POST handler produced to 200 — controllers never hand-pick. |
 | PUT / PATCH | **200** | Updated resource returned.                                                                                                                           |
 | DELETE      | **204** | Deleted/revoked; no body.                                                                                                                            |
 

@@ -46,6 +46,6 @@ describe('k6 coverage policy (#67)', () => {
     );
 
     expect(stripe).toContain('expectedStatuses(400)');
-    expect(idempotency).toContain('expectedStatuses(200, 201, 409, 422)');
+    expect(idempotency).toContain('expectedStatuses(200, 200, 409, 422)');
   });
 });

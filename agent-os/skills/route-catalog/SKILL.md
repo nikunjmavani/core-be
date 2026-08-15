@@ -33,7 +33,7 @@ For every `app.<method>(path, ...)` call, extract:
 | ----------------- | ----------------------------------------------------------- |
 | **Method**        | `app.get`, `app.post`, `app.patch`, `app.put`, `app.delete` |
 | **Relative path** | First string argument (e.g. `'/organizations/:id'`)         |
-| **S** (status)    | Declared happy-path status from `route-success-statuses.json` (GET 200 · POST 201 · PUT/PATCH 200 · DELETE 204; webhooks/MCP stay 200) |
+| **S** (status)    | Declared happy-path status from `route-success-statuses.json` (success 200 for every method except DELETE 204; no exemptions) |
 | **I** (idempotency) | `req` if the route is one of the 8 `idempotencyRequired` writes (`X-Idempotency-Key` mandatory), else `-` |
 | **O** (org scope) | `both` if the route works for personal **and** team orgs; `team` if it is team-only (rejects a personal org with 422). Backed by `tooling/openapi/route-catalog/route-org-scope.json` |
 | **Access**        | Inspect the `preHandler` array in the options object        |
@@ -87,14 +87,14 @@ Legend:
   Routes: <count>
 ================================================================================
 
-  POST   /api/v1/auth/login                                       201  -    both  PUBLIC
-  POST   /api/v1/auth/logout                                      201  -    both  PUBLIC
+  POST   /api/v1/auth/login                                       200  -    both  PUBLIC
+  POST   /api/v1/auth/logout                                      200  -    both  PUBLIC
   ...
   GET    /api/v1/auth/me/mfa                                      200  -    both  AUTH
-  POST   /api/v1/auth/me/mfa/enroll                               201  -    both  AUTH
-  POST   /api/v1/auth/me/webauthn/register/options               201  -    both  AUTH
-  POST   /api/v1/auth/mfa/login                                   201  -    both  PUBLIC
-  POST   /api/v1/auth/password/change                             201  -    both  AUTH
+  POST   /api/v1/auth/me/mfa/enroll                               200  -    both  AUTH
+  POST   /api/v1/auth/me/webauthn/register/options               200  -    both  AUTH
+  POST   /api/v1/auth/mfa/login                                   200  -    both  PUBLIC
+  POST   /api/v1/auth/password/change                             200  -    both  AUTH
   ...
 
 ================================================================================
@@ -109,8 +109,8 @@ Legend:
   ...
 
   — Membership —
-  POST   /api/v1/tenancy/organization/invitations                201  req  team  PERM: invitation:manage
-  POST   /api/v1/tenancy/organization/memberships                201  req  team  PERM: membership:manage
+  POST   /api/v1/tenancy/organization/invitations                200  req  team  PERM: invitation:manage
+  POST   /api/v1/tenancy/organization/memberships                200  req  team  PERM: membership:manage
   ...
 
 ================================================================================
@@ -123,7 +123,7 @@ Legend:
   ...
 
   — Subscriptions —
-  POST   /api/v1/billing/subscriptions                            201  req  both  PERM: subscription:manage
+  POST   /api/v1/billing/subscriptions                            200  req  both  PERM: subscription:manage
   ...
 
 ================================================================================

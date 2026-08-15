@@ -22,7 +22,7 @@ import {
  */
 function tally(statuses: number[]) {
   return {
-    created: statuses.filter((s) => s === 201).length,
+    created: statuses.filter((s) => s === 200).length,
     conflict: statuses.filter((s) => s === 409).length,
     serverError: statuses.filter((s) => s >= 500).length,
   };
@@ -73,7 +73,7 @@ describe('Security: role-name uniqueness conflict', () => {
   it('a sequential duplicate role name is a clean 409 (not a 500)', async () => {
     const { token } = await adminContext();
     const first = await createRole(token, 'Duplicate Role');
-    expect(first.statusCode).toBe(201);
+    expect(first.statusCode).toBe(200);
 
     const second = await createRole(token, 'Duplicate Role');
     expect(second.statusCode).toBe(409);
@@ -92,7 +92,7 @@ describe('Security: role-name uniqueness conflict', () => {
 
   it('a different name still succeeds (the guard is name-specific)', async () => {
     const { token } = await adminContext();
-    expect((await createRole(token, 'Alpha')).statusCode).toBe(201);
-    expect((await createRole(token, 'Beta')).statusCode).toBe(201);
+    expect((await createRole(token, 'Alpha')).statusCode).toBe(200);
+    expect((await createRole(token, 'Beta')).statusCode).toBe(200);
   });
 });

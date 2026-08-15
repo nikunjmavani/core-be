@@ -130,7 +130,8 @@ describe('Subscription Sub-Domain — Integration', () => {
         headers: { 'x-idempotency-key': 'subscription-create-missing-body-key' },
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      // The key is supplied above, so the idempotency 422 cannot fire — this is the validator's 400.
+      expect(response.statusCode).toBe(400);
     });
   });
 

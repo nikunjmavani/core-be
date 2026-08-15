@@ -22,7 +22,7 @@ export function userDataExportOps() {
     ...authHeaders(token),
     tags: { name: 'user-data-export' },
   });
-  if ([200, 201, 202, 409].includes(response.status)) {
+  if ([200, 200, 202, 409].includes(response.status)) {
     checkResponseTime(response, 5000, 'user-data-export');
   }
   sleep(1);

@@ -106,7 +106,7 @@ describe('Tenancy Domain — Integration', () => {
         headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: { name: 'Test Org', slug: 'test-org' },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       expect((response.json() as { data: Record<string, unknown> }).data).toBeDefined();
       expect((response.json() as { data: Record<string, unknown> }).data.name).toBe('Test Org');
     });
@@ -126,7 +126,7 @@ describe('Tenancy Domain — Integration', () => {
         headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: { name: 'Reclaim Co', slug: 'reclaim-me' },
       });
-      expect(createResponse.statusCode).toBe(201);
+      expect(createResponse.statusCode).toBe(200);
       const createdId = (createResponse.json() as { data: { id: string } }).data.id;
 
       // The creator is bootstrapped as owner with full permissions — soft-delete the org.
@@ -149,7 +149,7 @@ describe('Tenancy Domain — Integration', () => {
         headers: { 'x-idempotency-key': `idem-${randomUUID()}` },
         payload: { name: 'Reclaim Co 2', slug: 'reclaim-me' },
       });
-      expect(recreateResponse.statusCode).toBe(201);
+      expect(recreateResponse.statusCode).toBe(200);
     });
 
     it('R9: still rejects a slug already held by a LIVE organization (constraint not over-loosened)', async () => {
@@ -164,7 +164,7 @@ describe('Tenancy Domain — Integration', () => {
       });
 
       const first = await injectAuthenticated(app, payload('First Co'));
-      expect(first.statusCode).toBe(201);
+      expect(first.statusCode).toBe(200);
 
       const second = await injectAuthenticated(app, payload('Second Co'));
       expect(second.statusCode).toBe(409);

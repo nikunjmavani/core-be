@@ -38,7 +38,7 @@ added" list up top, so you can change them before the document is finalized like
 - Auth per route: org-permission:billing.read on GET; org-permission:billing.write on POST
 - Request body: POST { amount_cents: integer > 0, currency: 'usd'|'eur', due_at?: ISO-8601 }
 - Response: { id, number, amount_cents, currency, status, issued_at, created_at }
-- Statuses / headers / pagination: 200 list/get, 201 create, 403 no-permission, 404 not-found, 422 missing X-Idempotency-Key | X-Idempotency-Key required on POST | cursor pagination on list
+- Statuses / headers / pagination: 200 list/get/create, 403 no-permission, 404 not-found, 422 missing X-Idempotency-Key | X-Idempotency-Key required on POST | cursor pagination on list
 
 ## 4. Business logic
 - Service intent per operation: listInvoices({ organizationId, cursor }); getInvoice({ organizationId, invoiceId }); createInvoice({ organizationId, input })

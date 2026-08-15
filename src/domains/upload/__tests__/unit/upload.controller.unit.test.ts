@@ -36,7 +36,7 @@ describe('createUploadController', () => {
 
   const controller = createUploadController(uploadService);
 
-  it('createUpload returns 201 with presigned payload', async () => {
+  it('createUpload returns 200 with presigned payload', async () => {
     const reply = mockReply();
     await controller.createUpload(
       mockRequest({
@@ -51,7 +51,7 @@ describe('createUploadController', () => {
       reply,
     );
     expect(uploadService.createUpload).toHaveBeenCalled();
-    expect(reply.status).toHaveBeenCalledWith(201);
+    expect(reply.status).toHaveBeenCalledWith(200);
     expect(reply.send).toHaveBeenCalled();
   });
 

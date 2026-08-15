@@ -21,7 +21,7 @@ import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 /**
  * Four tenancy routes are `O = team` in `docs/routes.txt` — they must answer **422** on a PERSONAL
  * organization. Two of them (`POST /organization/memberships`, `POST /organization/roles`) already
- * pair a 422 with a TEAM 201. The other two — `DELETE /organization` and
+ * pair a 422 with a TEAM success. The other two — `DELETE /organization` and
  * `POST /organization/transfer-ownership` — had no route-level assertion at all; the guard was
  * covered only generically by `organization-capability.unit`, which tests the helper function in
  * isolation and cannot tell whether a route actually calls it.
@@ -148,7 +148,7 @@ describe('Tenancy team-only route guards — Integration', () => {
       expect(body.error?.code).toBe('unprocessable_entity');
     });
 
-    it('transfers a TEAM organization to an active member with 201', async () => {
+    it('transfers a TEAM organization to an active member with 200', async () => {
       const team = await createOwnedOrganization('TEAM');
       const recipient = await addSecondMember(team.organization.id, team.role.id);
 
@@ -160,7 +160,7 @@ describe('Tenancy team-only route guards — Integration', () => {
         payload: { new_owner_user_id: recipient.public_id },
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
     });
 
     it('runs the PERSONAL guard before the owner check — a non-owner also gets 422, not 403', async () => {

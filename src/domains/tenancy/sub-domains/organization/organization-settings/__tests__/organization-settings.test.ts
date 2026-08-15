@@ -154,7 +154,7 @@ describe('Tenancy Organization Settings Sub-Domain — Integration', () => {
         token,
         payload: { is_email_notifications_enabled: true, unknown_field: true },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 400 when is_email_notifications_enabled has wrong type', async () => {
@@ -169,7 +169,7 @@ describe('Tenancy Organization Settings Sub-Domain — Integration', () => {
         token,
         payload: { is_email_notifications_enabled: 'not-a-boolean' },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should update settings with organization update permission', async () => {

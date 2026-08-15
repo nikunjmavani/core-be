@@ -130,7 +130,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         url: notificationPolicyResourcePath('not-a-public-id'),
         token,
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 404 when notification policy does not exist', async () => {
@@ -159,7 +159,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token,
         payload: { notification_type: 'system.welcome', channel: 'EMAIL', default_enabled: true },
       });
-      expect(created.statusCode).toBe(201);
+      expect(created.statusCode).toBe(200);
       const createdBody = created.json() as { data: { id: string } };
       const policyId = createdBody.data.id;
 
@@ -210,7 +210,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token,
         payload: { channel: 'EMAIL' },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 400 when channel is missing', async () => {
@@ -224,7 +224,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token,
         payload: { notification_type: 'system.welcome' },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 422 (not 500) when channel is outside the allowed set', async () => {
@@ -240,7 +240,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token,
         payload: { notification_type: 'system.welcome', channel: 'CARRIER_PIGEON' },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
       expect(response.statusCode).toBeLessThan(500);
     });
 
@@ -259,7 +259,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
           extra_field: true,
         },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 400 when muted_until is not a datetime string', async () => {
@@ -277,7 +277,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
           muted_until: 'not-a-valid-datetime',
         },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should create notification policy when manage permission is granted', async () => {
@@ -297,7 +297,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
           muted_until: null,
         },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const body = response.json() as { data: { notification_type: string; channel: string } };
       expect(body.data).toHaveProperty('notification_type', 'billing.usage_threshold');
       expect(body.data).toHaveProperty('channel', 'WEB_PUSH');
@@ -324,7 +324,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token: manageContext.token,
         payload: { notification_type: 'security.alert', channel: 'EMAIL' },
       });
-      expect(created.statusCode).toBe(201);
+      expect(created.statusCode).toBe(200);
       const createdBody = created.json() as { data: { id: string } };
       const policyId = createdBody.data.id;
 
@@ -365,7 +365,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token,
         payload: { notification_type: 'subscription.updated', channel: 'EMAIL' },
       });
-      expect(created.statusCode).toBe(201);
+      expect(created.statusCode).toBe(200);
       const createdBody = created.json() as { data: { id: string } };
       const policyId = createdBody.data.id;
 
@@ -375,7 +375,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token,
         payload: { default_enabled: true, unexpected: true },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return 400 when muted_until on update is not a datetime string', async () => {
@@ -389,7 +389,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token,
         payload: { notification_type: 'billing.payment_failed', channel: 'SMS' },
       });
-      expect(created.statusCode).toBe(201);
+      expect(created.statusCode).toBe(200);
       const createdBody = created.json() as { data: { id: string } };
       const policyId = createdBody.data.id;
 
@@ -399,7 +399,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token,
         payload: { muted_until: 'invalid-datetime-value' },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('should update notification policy when manage permission is granted', async () => {
@@ -418,7 +418,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
           is_mandatory: false,
         },
       });
-      expect(created.statusCode).toBe(201);
+      expect(created.statusCode).toBe(200);
       const createdBody = created.json() as { data: { id: string } };
       const policyId = createdBody.data.id;
 
@@ -459,7 +459,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token: manageContext.token,
         payload: { notification_type: 'webhook.delivery_failed', channel: 'EMAIL' },
       });
-      expect(created.statusCode).toBe(201);
+      expect(created.statusCode).toBe(200);
       const createdBody = created.json() as { data: { id: string } };
       const policyId = createdBody.data.id;
 
@@ -516,7 +516,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
           channel: 'IN_APP',
         },
       });
-      expect(created.statusCode).toBe(201);
+      expect(created.statusCode).toBe(200);
       const createdBody = created.json() as { data: { id: string } };
       const policyId = createdBody.data.id;
       // sec-T5: policy id is now a 21-char public id (string), not the

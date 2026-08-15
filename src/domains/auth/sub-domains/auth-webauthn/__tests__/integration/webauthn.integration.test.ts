@@ -44,7 +44,7 @@ describe('Auth WebAuthn — Integration', () => {
         payload: {},
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(200);
       const body = response.json() as {
         data: { options: { challenge: string }; challenge_token: string };
       };
@@ -102,7 +102,7 @@ describe('Auth WebAuthn — Integration', () => {
         token,
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
   });
 
@@ -260,7 +260,7 @@ describe('Auth WebAuthn — Integration', () => {
         url: testApiPath('/auth/webauthn/authenticate/verify'),
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('does not mint a session for a schema-valid but forged assertion', async () => {
@@ -290,8 +290,8 @@ describe('Auth WebAuthn — Integration', () => {
         },
       });
 
-      // A clean rejection (never a 201 success, never a 5xx crash) ...
-      expect(response.statusCode).not.toBe(201);
+      // A clean rejection (never a 200 success, never a 5xx crash) ...
+      expect(response.statusCode).not.toBe(200);
       expect(response.statusCode).toBeGreaterThanOrEqual(400);
       expect(response.statusCode).toBeLessThan(500);
       // ... and no session / tokens minted regardless of the rejection status.

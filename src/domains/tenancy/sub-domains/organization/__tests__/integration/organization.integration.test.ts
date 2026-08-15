@@ -138,7 +138,7 @@ describe('Organization Sub-Domain — Integration', () => {
         token,
         payload: { unknown_field: true },
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(400);
     });
 
     it('concurrent slug updates to the same new slug resolve to one 200 + one 409 (no 5xx)', async () => {

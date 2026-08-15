@@ -186,9 +186,9 @@ All successful API responses use this shape. No `success: true` wrapper; `data` 
 - **data**: single object (use `public_id` as `id` in JSON).
 - **meta.request_id**: required on every response.
 
-### 2.3 Create (201)
+### 2.3 Create (200)
 
-Same as single resource; response body is the created entity with `data` + `meta.request_id`. HTTP status 201.
+Same as single resource; response body is the created entity with `data` + `meta.request_id`. HTTP status 200 — the uniform policy (success 200 everywhere except DELETE 204) keeps creates, idempotent replays, and future upserts on one code.
 
 ### 2.4 Delete (204)
 

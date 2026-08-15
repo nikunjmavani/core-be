@@ -144,7 +144,7 @@ async function setupLogin(): Promise<void> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
-    expectedStatus: 201,
+    expectedStatus: 200,
   });
   const payload = body as { data?: { access_token?: string } };
   if (!payload.data?.access_token) {
@@ -169,6 +169,23 @@ async function setupOrganization(): Promise<void> {
     throw new Error('organizations: missing public id');
   }
   smokeContext.organizationId = demoOrganization.id;
+
+  // Post-flatten, the ACTIVE organization rides the signed `org` JWT claim — the
+  // X-Organization-Id header is ignored on flat routes. Login mints a token scoped to the
+  // demo user's PERSONAL org, where the org-permission probes (subscription:read,
+  // webhook:read, audit-log:read) legitimately 403. Switch to the demo TEAM org and adopt
+  // the re-scoped token, exactly as a real client does.
+  const switchResponse = await requestJson(`${API_PREFIX}/auth/switch-to-organization`, {
+    method: 'POST',
+    headers: { ...authHeaders(false), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ organization_id: demoOrganization.id }),
+    expectedStatus: 200,
+  });
+  const switchPayload = switchResponse.body as { data?: { access_token?: string } };
+  if (!switchPayload.data?.access_token) {
+    throw new Error('switch-to-organization: missing access_token');
+  }
+  smokeContext.accessToken = switchPayload.data.access_token;
 }
 
 async function setupPlanAndRoleIds(): Promise<void> {
@@ -217,7 +234,7 @@ function buildDomainProbes(): RouteProbe[] {
       name: 'POST /api/v1/auth/email/send-code',
       method: 'POST',
       path: `${API_PREFIX}/auth/email/send-code`,
-      expectedStatus: 201,
+      expectedStatus: 200,
       body: { email: EMAIL },
     },
 
@@ -309,12 +326,6 @@ function buildDomainProbes(): RouteProbe[] {
     {
       name: 'GET /api/v1/tenancy/organization/memberships',
       path: () => organizationPath('/memberships'),
-      needsOrganization: true,
-      expectedStatus: 200,
-    },
-    {
-      name: 'GET /api/v1/tenancy/organization/invitations',
-      path: () => organizationPath('/invitations'),
       needsOrganization: true,
       expectedStatus: 200,
     },

@@ -15,7 +15,7 @@ Decide **which test layer** to add or update when a feature is created or change
 Covers:
 
 - **Unit** — validators, serializers, `shared/utils`, errors (pure logic, no DB)
-- **Domain (e2e)** — Fastify inject route tests (401, 403, 200/201, 400)
+- **Domain (e2e)** — Fastify inject route tests (401, 403, 200/204, 400)
 - **Integration / security / perf / load / smoke** — when appropriate
 
 ## When to Use
@@ -172,7 +172,7 @@ k6 scenarios and helpers live in `src/tests/load/k6/` (`.js` files, not Vitest).
 ### 2. HTTP / domain (e2e)
 
 - [ ] New/changed **route** → domain test file (see steps below)
-- [ ] **401** without token, **403** without permission (if gated), **200/201** success, **400** invalid body
+- [ ] **401** without token, **403** without permission (if gated), **200** success (**204** for DELETE), **400** invalid body
 - [ ] New **permission** → align seeds (`seed-maintainer`) and test with/without permission
 - [ ] Run e2e with dev server **stopped** on shared DB (avoid deadlocks with `pnpm dev`)
 
@@ -202,7 +202,7 @@ pnpm test:security      # auth, middleware, RLS touched
    - `beforeAll`: `createTestApp()`
    - `afterAll`: `await app.close()`
    - `beforeEach`: `cleanupDatabase()`; seed permissions if needed
-   - Per route: 401, 403 (if applicable), 200/201, 400 validation
+   - Per route: 401, 403 (if applicable), 200 (204 for DELETE), 400 validation
 4. **Create domain factories** in `__tests__/factories/` if needed.
 5. Run targeted commands from checklist above; run `pnpm typecheck`.
 
