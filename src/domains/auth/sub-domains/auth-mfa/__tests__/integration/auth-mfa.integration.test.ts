@@ -8,7 +8,9 @@ import {
 } from '@/tests/helpers/test-http-inject.helper.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser, createTestUserWithPassword } from '@/tests/factories/user.factory.js';
-import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import { generateTestToken, generateTestTokenAndSession } from '@/tests/helpers/test-auth.js';
+import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { FastifyInstance } from 'fastify';
 
 describe('MFA Sub-Domain — Integration', () => {
@@ -91,6 +93,113 @@ describe('MFA Sub-Domain — Integration', () => {
         url: testApiPath('/auth/me/mfa/test-id'),
       });
       expect(response.statusCode).toBe(401);
+    });
+
+    it('returns 400 for a malformed method id (route schema, before any lookup)', async () => {
+      // The `:mfa_method_id` param is an opaque `am_<21>` public id (route-#10). A malformed
+      // value must be refused by the route schema — never reach the service, where it would be
+      // an unbounded string used in a lookup.
+      const user = await createTestUser({ isEmailVerified: true });
+      const { token, sessionPublicId } = await generateTestTokenAndSession({
+        userId: user.public_id,
+      });
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId, 'password');
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath('/auth/me/mfa/not-a-public-id'),
+        token,
+      });
+      expect(response.statusCode, response.body).toBe(400);
+    });
+
+    it('refuses a well-formed but unknown method id without revealing whether it exists', async () => {
+      // NOTE: unlike the sibling passkey route (which 404s), `deleteMfa` raises
+      // UnauthorizedError('errors:mfaMethodNotFound') for a method that is unknown OR owned by
+      // someone else, so the observed status is 401. That is an anti-enumeration choice, but it
+      // is also an inconsistency with DELETE /auth/me/webauthn/credentials/:credential_id — this
+      // case pins today's real behaviour so a future alignment is a deliberate, visible change.
+      const user = await createTestUser({ isEmailVerified: true });
+      const { token, sessionPublicId } = await generateTestTokenAndSession({
+        userId: user.public_id,
+      });
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId, 'password');
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/auth/me/mfa/${generatePublicId('authMethod')}`),
+        token,
+      });
+      expect(response.statusCode, response.body).toBe(401);
+      // Whatever the status, it must never be a success — the caller does not own this method.
+      expect(response.statusCode).not.toBe(204);
+    });
+
+    it('returns the declared 204 and the method disappears from GET /me/mfa', async () => {
+      // The route had exactly ONE case (a 401) and no success assertion, while the service side
+      // is well covered. This closes the route half: a real enrolled TOTP method is removed over
+      // HTTP, the declared 204 is observed, and the follow-up read proves it is gone.
+      const { user } = await createTestUserWithPassword({ isEmailVerified: true });
+      const { token, sessionPublicId } = await generateTestTokenAndSession({
+        userId: user.public_id,
+      });
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId, 'password');
+
+      const enroll = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/me/mfa/enroll'),
+        token,
+        payload: { method_type: 'MFA_TOTP' },
+      });
+      expect(enroll.statusCode, enroll.body).toBe(201);
+      const { secret } = (enroll.json() as { data: { secret: string } }).data;
+
+      const confirm = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/me/mfa/enroll/confirm'),
+        token,
+        payload: { code: await generateTotpCode({ secret }) },
+      });
+      expect(confirm.statusCode, confirm.body).toBe(201);
+
+      const enrolled = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/auth/me/mfa'),
+        token,
+      });
+      const methods = (enrolled.json() as { data: Array<{ id: string }> }).data;
+      expect(methods).toHaveLength(1);
+      const methodPublicId = methods[0]!.id;
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/auth/me/mfa/${methodPublicId}`),
+        token,
+      });
+      expect(response.statusCode, response.body).toBe(204);
+      expect(response.body).toBe('');
+
+      const afterDelete = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/auth/me/mfa'),
+        token,
+      });
+      expect(afterDelete.statusCode).toBe(200);
+      expect((afterDelete.json() as { data: unknown[] }).data).toHaveLength(0);
+    });
+  });
+
+  describe('POST /api/v1/auth/me/mfa/enroll/confirm', () => {
+    it('returns 401 without authentication', async () => {
+      // The route asserted only its 201. Every other authed route in the domain pins its 401;
+      // without it, a registration that dropped `app.authenticate` would let an unauthenticated
+      // caller reach the enrollment-confirmation path.
+      const response = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/me/mfa/enroll/confirm'),
+        payload: { code: '123456' },
+      });
+      expect(response.statusCode, response.body).toBe(401);
     });
   });
 

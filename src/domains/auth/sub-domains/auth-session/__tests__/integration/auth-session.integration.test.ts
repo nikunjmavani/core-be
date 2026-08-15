@@ -99,6 +99,40 @@ describe('Auth Session Sub-Domain — Integration', () => {
       expect(response.statusCode).toBe(409);
     });
 
+    it('returns the declared 204 and the revoked session disappears from the list', async () => {
+      // The domain's DELETE routes were proven only by their denial cases — revoking a session
+      // and NOT revoking it returned the same untested status. Pin the declared 204 AND the
+      // observable effect, so a handler that stopped calling the service would still fail here.
+      const user = await createTestUser();
+      const { token: callerToken, sessionPublicId: callerSessionPublicId } =
+        await generateTestTokenAndSession({ userId: user.public_id });
+      const { sessionPublicId: otherSessionPublicId } = await generateTestTokenAndSession({
+        userId: user.public_id,
+      });
+      await seedRecentStepUpForTestUser(user.public_id, callerSessionPublicId);
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(`/auth/me/sessions/${otherSessionPublicId}`),
+        token: callerToken,
+      });
+      expect(response.statusCode, response.body).toBe(204);
+      expect(response.body).toBe('');
+
+      const remaining = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/auth/me/sessions'),
+        token: callerToken,
+      });
+      expect(remaining.statusCode).toBe(200);
+      const sessionIds = (remaining.json() as { data: Array<{ id: string }> }).data.map(
+        (session) => session.id,
+      );
+      expect(sessionIds).not.toContain(otherSessionPublicId);
+      // The caller's own session survives — revoking one session must not log them out.
+      expect(sessionIds).toContain(callerSessionPublicId);
+    });
+
     it('route-#9: a DIFFERENT session id is NOT blocked by the guard (reaches the service → 404)', async () => {
       const user = await createTestUser();
       const { token, sessionPublicId } = await generateTestTokenAndSession({
@@ -174,8 +208,50 @@ describe('Auth Session Sub-Domain — Integration', () => {
         token,
       });
 
-      // Not the 403 step-up gate — a strong factor authorizes the revoke.
-      expect(response.statusCode).toBeLessThan(400);
+      // Not the 403 step-up gate — a strong factor authorizes the revoke. Assert the declared
+      // 204 rather than the old `< 400` band: any 2xx used to pass, including a 200 that never
+      // reached the service.
+      expect(response.statusCode, response.body).toBe(204);
+    });
+  });
+
+  describe('DELETE /api/v1/auth/me/sessions — revoke-all success path', () => {
+    it('returns 204, drops every other session, and preserves the caller’s own (sec-new-A3)', async () => {
+      const user = await createTestUser();
+      const { token: callerToken, sessionPublicId: callerSessionPublicId } =
+        await generateTestTokenAndSession({ userId: user.public_id });
+      const { sessionPublicId: secondSessionPublicId } = await generateTestTokenAndSession({
+        userId: user.public_id,
+      });
+      const { sessionPublicId: thirdSessionPublicId } = await generateTestTokenAndSession({
+        userId: user.public_id,
+      });
+      await seedRecentStepUpForTestUser(user.public_id, callerSessionPublicId, 'password');
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath('/auth/me/sessions'),
+        token: callerToken,
+      });
+      expect(response.statusCode, response.body).toBe(204);
+      // sec-r4-A1: revoke-all must NOT clear the caller's session cookie — doing so would
+      // destroy the browser-side refresh token for the session it deliberately preserved.
+      expect(response.cookies.session_id).toBeUndefined();
+
+      const remaining = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/auth/me/sessions'),
+        token: callerToken,
+      });
+      expect(remaining.statusCode).toBe(200);
+      const sessionIds = (remaining.json() as { data: Array<{ id: string }> }).data.map(
+        (session) => session.id,
+      );
+      // "Revoke all except mine" is the whole contract: the other two are gone, the caller stays
+      // logged in. This is what a user reaches for when they believe they are compromised.
+      expect(sessionIds).toEqual([callerSessionPublicId]);
+      expect(sessionIds).not.toContain(secondSessionPublicId);
+      expect(sessionIds).not.toContain(thirdSessionPublicId);
     });
   });
 });

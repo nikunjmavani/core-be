@@ -1,25 +1,33 @@
-import { createHash, randomBytes } from 'node:crypto';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createTestApp } from '@/tests/helpers/test-app.js';
-import {
-  injectAuthenticated,
-  injectUnauthenticated,
-  injectRoute,
-} from '@/tests/helpers/test-http-inject.helper.js';
+import { injectUnauthenticated, injectRoute } from '@/tests/helpers/test-http-inject.helper.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { eq } from 'drizzle-orm';
-import { createTestUser, createTestUserWithPassword } from '@/tests/factories/user.factory.js';
-import { generateTestToken, generateTestTokenAndSession } from '@/tests/helpers/test-auth.js';
-import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
+import { createTestUserWithPassword } from '@/tests/factories/user.factory.js';
 import { database } from '@/infrastructure/database/connection.js';
 import { users } from '@/domains/user/user.schema.js';
-import { verification_tokens } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.schema.js';
 import type { FastifyInstance } from 'fastify';
 
 const AUTH_LOGIN_PATH = '/auth/login';
 
-describe('Auth Domain — Integration', () => {
+/**
+ * Domain integration — **canonical for what comes back through the routes**.
+ *
+ * This file and the bundled e2e `__tests__/auth.test.ts` used to share 33 `it()` titles, and both
+ * are DB-bound, so every duplicated case cost two real HTTP round-trips against Postgres and Redis
+ * on every CI run. Both files are structurally required (the bundled e2e by convention, this one by
+ * `validate:domain`), so they were split by responsibility rather than one being deleted:
+ *
+ * - **In `auth.test.ts`:** every route is reachable and every denial fires — the 400 / 401 / 403 /
+ *   404 gate shapes and each route's plain success status.
+ * - **Here:** the response contract *through* those gates — the session and CSRF cookie pair, the
+ *   refresh Origin/Referer allowlist matrix, the MFA-challenge login envelope, and the translated
+ *   i18n copy.
+ *
+ * Nothing is asserted in both files. When adding a case, pick the file by that question.
+ */
+describe('Auth Domain — Response contract (integration)', () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
@@ -35,61 +43,9 @@ describe('Auth Domain — Integration', () => {
     await cleanupDatabase();
   });
 
-  // ─── Login ────────────────────────────────────────────────────
+  // ─── Login envelope ───────────────────────────────────────────
 
-  describe('POST /api/v1/auth/login', () => {
-    it('should return 400 for missing credentials', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath(AUTH_LOGIN_PATH),
-        payload: {},
-      });
-      expect([400, 422]).toContain(response.statusCode);
-    });
-
-    it('should return 401 for invalid credentials', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath(AUTH_LOGIN_PATH),
-        payload: {
-          email: 'nonexistent@test.com',
-          password: 'wrong-password',
-        },
-      });
-      expect([401, 404]).toContain(response.statusCode);
-    });
-
-    it('when BLOCK_DISPOSABLE_EMAIL is off, login with disposable email returns 401 (invalid creds) not 400', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath(AUTH_LOGIN_PATH),
-        payload: {
-          email: 'test@yopmail.com',
-          password: 'wrong-password',
-        },
-      });
-      expect(response.statusCode).toBe(401);
-      expect(response.statusCode).not.toBe(400);
-    });
-
-    it('when BLOCK_DISPOSABLE_EMAIL is off, login with disposable email and valid credentials succeeds', async () => {
-      const { user, password } = await createTestUserWithPassword({
-        email: 'test@yopmail.com',
-      });
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath(AUTH_LOGIN_PATH),
-        payload: {
-          email: user.email,
-          password,
-        },
-      });
-      expect(response.statusCode).toBe(201);
-      expect((response.json() as { data: Record<string, unknown> }).data).toHaveProperty(
-        'access_token',
-      );
-    });
-
+  describe('POST /api/v1/auth/login — MFA challenge envelope', () => {
     it('should return mfa_required without access_token when MFA is enabled', async () => {
       const { user, password } = await createTestUserWithPassword();
       await database
@@ -137,99 +93,9 @@ describe('Auth Domain — Integration', () => {
       });
       expect(refreshResponse.statusCode).toBe(401);
     });
-
-    it('should return 200 with access_token and set session cookie on valid login', async () => {
-      const { user, password } = await createTestUserWithPassword();
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath(AUTH_LOGIN_PATH),
-        payload: {
-          email: user.email,
-          password,
-        },
-      });
-      expect(response.statusCode).toBe(201);
-      expect((response.json() as { data: Record<string, unknown> }).data).toHaveProperty(
-        'access_token',
-      );
-      expect(typeof (response.json() as { data: Record<string, unknown> }).data.access_token).toBe(
-        'string',
-      );
-
-      // Verify httpOnly session cookie is set
-      const cookies = response.headers['set-cookie'];
-      expect(cookies).toBeDefined();
-      const sessionCookie = Array.isArray(cookies)
-        ? cookies.find((cookie: string) => cookie.startsWith('session_id='))
-        : typeof cookies === 'string' && cookies.startsWith('session_id=')
-          ? cookies
-          : undefined;
-      expect(sessionCookie).toBeDefined();
-      expect(sessionCookie).toContain('HttpOnly');
-    });
-
-    it('should create distinct sessions when logging in twice in quick succession', async () => {
-      const { user, password } = await createTestUserWithPassword();
-      const credentials = { email: user.email, password };
-
-      const [firstLogin, secondLogin] = await Promise.all([
-        injectUnauthenticated(app, {
-          method: 'POST',
-          url: testApiPath(AUTH_LOGIN_PATH),
-          payload: credentials,
-        }),
-        injectUnauthenticated(app, {
-          method: 'POST',
-          url: testApiPath(AUTH_LOGIN_PATH),
-          payload: credentials,
-        }),
-      ]);
-
-      expect(firstLogin.statusCode).toBe(201);
-      expect(secondLogin.statusCode).toBe(201);
-      expect((firstLogin.json() as { data: Record<string, unknown> }).data.access_token).not.toBe(
-        (secondLogin.json() as { data: Record<string, unknown> }).data.access_token,
-      );
-    });
   });
 
-  // ─── Logout ───────────────────────────────────────────────────
-
-  describe('POST /api/v1/auth/logout', () => {
-    it('should accept logout request', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/logout'),
-        payload: {},
-      });
-      // Logout may succeed even without a valid token (idempotent)
-      expect([200, 204, 401]).toContain(response.statusCode);
-    });
-
-    it('should clear session cookie on logout after login', async () => {
-      const { user, password } = await createTestUserWithPassword();
-      const loginResponse = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath(AUTH_LOGIN_PATH),
-        payload: {
-          email: user.email,
-          password,
-        },
-      });
-      expect(loginResponse.statusCode).toBe(201);
-      const accessToken = (loginResponse.json() as { data: { access_token: string } }).data
-        .access_token;
-
-      const logoutResponse = await injectAuthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/logout'),
-        token: accessToken,
-      });
-      expect([201]).toContain(logoutResponse.statusCode);
-    });
-  });
-
-  // ─── Session Refresh ──────────────────────────────────────────
+  // ─── Session Refresh: cookie pair + Origin/Referer allowlist ──
 
   describe('POST /api/v1/auth/refresh', () => {
     function cookiePairFromLoginResponse(
@@ -263,6 +129,17 @@ describe('Auth Domain — Integration', () => {
       return `${sessionPair}; ${csrfPair}`;
     }
 
+    async function loginAndGetResponseHeaders() {
+      const { user, password } = await createTestUserWithPassword();
+      const loginResponse = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath(AUTH_LOGIN_PATH),
+        payload: { email: user.email, password },
+      });
+      expect(loginResponse.statusCode).toBe(201);
+      return loginResponse.headers;
+    }
+
     it('should return 401 for missing session cookie', async () => {
       const response = await app.inject({
         method: 'POST',
@@ -274,19 +151,8 @@ describe('Auth Domain — Integration', () => {
     });
 
     it('should return new access_token when valid session cookie is provided', async () => {
-      const { user, password } = await createTestUserWithPassword();
-
-      const loginResponse = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath(AUTH_LOGIN_PATH),
-        payload: {
-          email: user.email,
-          password,
-        },
-      });
-      expect(loginResponse.statusCode).toBe(201);
-
-      const cookieHeader = authCookieHeaderFromLoginResponse(loginResponse.headers);
+      const loginHeaders = await loginAndGetResponseHeaders();
+      const cookieHeader = authCookieHeaderFromLoginResponse(loginHeaders);
 
       const refreshResponse = await app.inject({
         method: 'POST',
@@ -314,34 +180,13 @@ describe('Auth Domain — Integration', () => {
     });
 
     it('should set csrf_token cookie on login', async () => {
-      const { user, password } = await createTestUserWithPassword();
-      const loginResponse = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath(AUTH_LOGIN_PATH),
-        payload: {
-          email: user.email,
-          password,
-        },
-      });
-      expect(loginResponse.statusCode).toBe(201);
-      expect(cookiePairFromLoginResponse(loginResponse.headers, 'csrf_token')).toMatch(
-        /^csrf_token=/,
-      );
+      const loginHeaders = await loginAndGetResponseHeaders();
+      expect(cookiePairFromLoginResponse(loginHeaders, 'csrf_token')).toMatch(/^csrf_token=/);
     });
 
     it('should return 403 when Origin header is not in ALLOWED_ORIGINS', async () => {
-      const { user, password } = await createTestUserWithPassword();
-      const loginResponse = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath(AUTH_LOGIN_PATH),
-        payload: {
-          email: user.email,
-          password,
-        },
-      });
-      expect(loginResponse.statusCode).toBe(201);
-
-      const cookiePair = sessionIdCookiePairFromLoginResponse(loginResponse.headers);
+      const loginHeaders = await loginAndGetResponseHeaders();
+      const cookiePair = sessionIdCookiePairFromLoginResponse(loginHeaders);
 
       const refreshResponse = await app.inject({
         method: 'POST',
@@ -356,18 +201,8 @@ describe('Auth Domain — Integration', () => {
     });
 
     it('should return 403 when Origin and Referer are both absent', async () => {
-      const { user, password } = await createTestUserWithPassword();
-      const loginResponse = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath(AUTH_LOGIN_PATH),
-        payload: {
-          email: user.email,
-          password,
-        },
-      });
-      expect(loginResponse.statusCode).toBe(201);
-
-      const cookiePair = sessionIdCookiePairFromLoginResponse(loginResponse.headers);
+      const loginHeaders = await loginAndGetResponseHeaders();
+      const cookiePair = sessionIdCookiePairFromLoginResponse(loginHeaders);
 
       const refreshResponse = await app.inject({
         method: 'POST',
@@ -379,18 +214,8 @@ describe('Auth Domain — Integration', () => {
     });
 
     it('should return 200 when Referer origin matches ALLOWED_ORIGINS', async () => {
-      const { user, password } = await createTestUserWithPassword();
-      const loginResponse = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath(AUTH_LOGIN_PATH),
-        payload: {
-          email: user.email,
-          password,
-        },
-      });
-      expect(loginResponse.statusCode).toBe(201);
-
-      const cookiePair = sessionIdCookiePairFromLoginResponse(loginResponse.headers);
+      const loginHeaders = await loginAndGetResponseHeaders();
+      const cookiePair = sessionIdCookiePairFromLoginResponse(loginHeaders);
 
       const refreshResponse = await app.inject({
         method: 'POST',
@@ -405,18 +230,8 @@ describe('Auth Domain — Integration', () => {
     });
 
     it('should return 403 when Referer origin is not in ALLOWED_ORIGINS', async () => {
-      const { user, password } = await createTestUserWithPassword();
-      const loginResponse = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath(AUTH_LOGIN_PATH),
-        payload: {
-          email: user.email,
-          password,
-        },
-      });
-      expect(loginResponse.statusCode).toBe(201);
-
-      const cookiePair = sessionIdCookiePairFromLoginResponse(loginResponse.headers);
+      const loginHeaders = await loginAndGetResponseHeaders();
+      const cookiePair = sessionIdCookiePairFromLoginResponse(loginHeaders);
 
       const refreshResponse = await app.inject({
         method: 'POST',
@@ -431,18 +246,8 @@ describe('Auth Domain — Integration', () => {
     });
 
     it('should return 200 when Origin matches ALLOWED_ORIGINS', async () => {
-      const { user, password } = await createTestUserWithPassword();
-      const loginResponse = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath(AUTH_LOGIN_PATH),
-        payload: {
-          email: user.email,
-          password,
-        },
-      });
-      expect(loginResponse.statusCode).toBe(201);
-
-      const cookiePair = sessionIdCookiePairFromLoginResponse(loginResponse.headers);
+      const loginHeaders = await loginAndGetResponseHeaders();
+      const cookiePair = sessionIdCookiePairFromLoginResponse(loginHeaders);
 
       const refreshResponse = await app.inject({
         method: 'POST',
@@ -459,38 +264,9 @@ describe('Auth Domain — Integration', () => {
     });
   });
 
-  // ─── Email verification-code login ────────────────────────────
+  // ─── i18n (Accept-Language) ────────────────────────────────────
 
-  describe('POST /api/v1/auth/email/send-code', () => {
-    it('should return 400 for missing email', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/email/send-code'),
-        payload: {},
-      });
-      expect([400, 422]).toContain(response.statusCode);
-    });
-
-    it('should accept valid email format', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/email/send-code'),
-        payload: { email: 'test@example.com' },
-      });
-      // Uniform 201 for known and unknown emails (no account enumeration).
-      expect(response.statusCode).toBe(201);
-    });
-
-    it('when BLOCK_DISPOSABLE_EMAIL is off, send-code accepts disposable email', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/email/send-code'),
-        payload: { email: 'test@yopmail.com' },
-      });
-      expect(response.statusCode).toBe(201);
-      expect((response.json() as { data: Record<string, unknown> }).data.message).toBeDefined();
-    });
-
+  describe('i18n response messages', () => {
     it('returns translated success message for send-code with Accept-Language: es', async () => {
       const response = await injectRoute(app, {
         method: 'POST',
@@ -505,240 +281,7 @@ describe('Auth Domain — Integration', () => {
         'Si existe una cuenta con este correo, recibirás un código de inicio de sesión en breve.',
       ]).toContain((response.json() as { data: Record<string, unknown> }).data.message);
     });
-  });
 
-  describe('POST /api/v1/auth/email/login', () => {
-    it('should return 400 for missing email/code', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/email/login'),
-        payload: {},
-      });
-      expect([400, 422]).toContain(response.statusCode);
-    });
-
-    it('should return 401 for an unknown email / wrong code', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/email/login'),
-        payload: { email: 'unknown-email-login@example.com', code: 'ZZZZZZ' },
-      });
-      expect([401, 404]).toContain(response.statusCode);
-    });
-  });
-
-  // ─── OAuth ────────────────────────────────────────────────────
-
-  describe('GET /api/v1/auth/oauth/providers', () => {
-    it('should list OAuth providers', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'GET',
-        url: testApiPath('/auth/oauth/providers'),
-      });
-      expect(response.statusCode).toBe(200);
-      expect((response.json() as { data: Record<string, unknown> }).data).toHaveProperty(
-        'providers',
-      );
-      expect(
-        Array.isArray((response.json() as { data: Record<string, unknown> }).data.providers),
-      ).toBe(true);
-      expect((response.json() as { data: Record<string, unknown> }).data.providers).toContain(
-        'google',
-      );
-      expect((response.json() as { data: Record<string, unknown> }).data.providers).toContain(
-        'github',
-      );
-    });
-  });
-
-  describe('GET /api/v1/auth/oauth/:provider', () => {
-    it('should return 404 for an unknown provider name', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'GET',
-        url: testApiPath('/auth/oauth/twitter'),
-      });
-      // Unknown provider names are a missing resource (404); the typed 501 is
-      // reserved for supported-but-unconfigured providers.
-      expect(response.statusCode).toBe(404);
-    });
-
-    it('should return 200 with the authorize redirect URL', async () => {
-      // setup.ts pins fake OAuth client credentials, so the authorize URL is
-      // built deterministically in every environment.
-      const response = await injectUnauthenticated(app, {
-        method: 'GET',
-        url: testApiPath('/auth/oauth/google'),
-      });
-      expect(response.statusCode).toBe(200);
-    });
-  });
-
-  // ─── Password: Forgot / Reset ─────────────────────────────────
-
-  describe('POST /api/v1/auth/password/forgot', () => {
-    it('should return 400 for missing email', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/password/forgot'),
-        payload: {},
-      });
-      expect([400, 422]).toContain(response.statusCode);
-    });
-
-    it('should return 200 with message for existing user (no enumeration)', async () => {
-      const { user } = await createTestUserWithPassword();
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/password/forgot'),
-        payload: { email: user.email },
-      });
-      expect(response.statusCode).toBe(201);
-      expect((response.json() as { data: Record<string, unknown> }).data).toHaveProperty('message');
-    });
-
-    it('should return 200 with same message for non-existent email (anti-enumeration)', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/password/forgot'),
-        payload: { email: 'nobody@nonexistent.com' },
-      });
-      expect(response.statusCode).toBe(201);
-      expect((response.json() as { data: Record<string, unknown> }).data).toHaveProperty('message');
-    });
-
-    it('when BLOCK_DISPOSABLE_EMAIL is off, password forgot accepts disposable email', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/password/forgot'),
-        payload: { email: 'test@yopmail.com' },
-      });
-      expect(response.statusCode).toBe(201);
-      expect((response.json() as { data: Record<string, unknown> }).data).toHaveProperty('message');
-    });
-  });
-
-  describe('POST /api/v1/auth/password/reset', () => {
-    it('should return 400 for missing token/password', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/password/reset'),
-        payload: {},
-      });
-      expect([400, 422]).toContain(response.statusCode);
-    });
-
-    it('should return 401 for invalid reset token', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/password/reset'),
-        payload: {
-          token: 'invalid-token-value',
-          password: 'NewSecurePassword123!',
-        },
-      });
-      expect(response.statusCode).toBe(401);
-    });
-
-    it('should reset password with a valid token and allow login with new password', async () => {
-      const { user } = await createTestUserWithPassword();
-
-      // Create a password reset token directly in DB
-      const rawToken = randomBytes(32).toString('hex');
-      const tokenHash = createHash('sha256').update(rawToken).digest('hex');
-      const expiresAt = new Date(Date.now() + 3_600_000); // 1 hour
-
-      await database.insert(verification_tokens).values({
-        token_type: 'PASSWORD_RESET',
-        token_hash: tokenHash,
-        user_id: user.id,
-        email: user.email,
-        expires_at: expiresAt,
-      });
-
-      // Reset password
-      const newPassword = 'BrandNewPassword456!';
-      const resetResponse = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/password/reset'),
-        payload: {
-          token: rawToken,
-          password: newPassword,
-        },
-      });
-      expect(resetResponse.statusCode).toBe(201);
-
-      // Login with new password
-      const loginResponse = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath(AUTH_LOGIN_PATH),
-        payload: {
-          email: user.email,
-          password: newPassword,
-        },
-      });
-      expect(loginResponse.statusCode).toBe(201);
-      expect((loginResponse.json() as { data: Record<string, unknown> }).data).toHaveProperty(
-        'access_token',
-      );
-    });
-  });
-
-  describe('POST /api/v1/auth/password/change', () => {
-    it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/password/change'),
-        payload: {},
-      });
-      expect(response.statusCode).toBe(401);
-    });
-
-    it('should return 400 for missing body with authentication', async () => {
-      const user = await createTestUser();
-      const token = await generateTestToken({ userId: user.public_id });
-      const response = await injectAuthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/password/change'),
-        token: token,
-        payload: {},
-      });
-      expect([400, 422]).toContain(response.statusCode);
-    });
-
-    it('should change password for authenticated user with valid current password', async () => {
-      const { user, password } = await createTestUserWithPassword();
-      const { token, sessionPublicId } = await generateTestTokenAndSession({
-        userId: user.public_id,
-      });
-      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
-      const newPassword = 'ChangedPassword789!';
-      const response = await injectAuthenticated(app, {
-        method: 'POST',
-        url: testApiPath('/auth/password/change'),
-        token: token,
-        payload: {
-          current_password: password,
-          new_password: newPassword,
-        },
-      });
-      expect(response.statusCode).toBe(201);
-
-      // Verify login works with new password
-      const loginResponse = await injectUnauthenticated(app, {
-        method: 'POST',
-        url: testApiPath(AUTH_LOGIN_PATH),
-        payload: {
-          email: user.email,
-          password: newPassword,
-        },
-      });
-      expect(loginResponse.statusCode).toBe(201);
-    });
-  });
-
-  // ─── i18n (Accept-Language) ────────────────────────────────────
-
-  describe('i18n response messages', () => {
     it('returns 404 error detail in English with Accept-Language: en', async () => {
       const response = await injectRoute(app, {
         method: 'GET',
@@ -751,7 +294,7 @@ describe('Auth Domain — Integration', () => {
       );
     });
 
-    it('returns 404 error with translated detail (Accept-Language respected when supported)', async () => {
+    it('returns 404 error detail in Spanish when Accept-Language: es is supported', async () => {
       const response = await injectRoute(app, {
         method: 'GET',
         url: testApiPath('/auth/nonexistent-route-for-i18n-test'),
@@ -760,17 +303,6 @@ describe('Auth Domain — Integration', () => {
       expect(response.statusCode).toBe(404);
       const errorDetail = (response.json() as { error?: { detail?: string } }).error?.detail;
       // Deterministic once i18nMiddleware is fp()-wrapped: Accept-Language: es yields Spanish.
-      expect(errorDetail).toBe('Ruta no encontrada');
-    });
-
-    it('returns 404 error detail in Spanish when supported (Accept-Language: es)', async () => {
-      const response = await injectRoute(app, {
-        method: 'GET',
-        url: testApiPath('/auth/another-nonexistent-route-for-i18n-test'),
-        headers: { 'accept-language': 'es' },
-      });
-      expect(response.statusCode).toBe(404);
-      const errorDetail = (response.json() as { error?: { detail?: string } }).error?.detail;
       expect(errorDetail).toBe('Ruta no encontrada');
     });
   });
