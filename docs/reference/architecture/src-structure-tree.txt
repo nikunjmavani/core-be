@@ -440,8 +440,10 @@ src/
     │   │   ├── e2e/
     │   │   │   └── webhook-delivery.e2e.test.ts
     │   │   ├── integration/
-    │   │   │   ├── notify-route-smoke.integration.test.ts
-    │   │   │   └── notify.integration.test.ts
+    │   │   │   └── notify-route-smoke.integration.test.ts
+    │   │   ├── unit/
+    │   │   │   ├── notify-routes-rate-limit.policy.unit.test.ts
+    │   │   │   └── notify.event-handlers.unit.test.ts
     │   │   └── notify.test.ts
     │   ├── events/
     │   │   └── notify.event-handlers.ts
@@ -460,7 +462,10 @@ src/
     │   │   │   │   │       └── member-invitation-accepted.event-handlers.unit.test.ts
     │   │   │   │   │   ├── notification-dispatch.service.unit.test.ts
     │   │   │   │   │   ├── notification-email-content.unit.test.ts
+    │   │   │   │   │   ├── notification-email-idempotency.unit.test.ts
+    │   │   │   │   │   ├── notification-retention.processor.db.unit.test.ts
     │   │   │   │   │   ├── notification.controller.unit.test.ts
+    │   │   │   │   │   ├── notification.job.schema.unit.test.ts
     │   │   │   │   │   ├── notification.queue.unit.test.ts
     │   │   │   │   │   ├── notification.repository.db.unit.test.ts
     │   │   │   │   │   ├── notification.repository.worker-context.unit.test.ts
@@ -528,20 +533,21 @@ src/
     │   │   │       ├── __tests__/
     │   │   │       │   ├── integration/
     │   │   │       │   │   └── webhook-delivery.worker.integration.test.ts
-    │   │   │       │   ├── unit/
+    │   │   │       │   └── unit/
     │   │   │       │   │   ├── events/
-    │   │   │       │   │   │   ├── worker/
-    │   │   │       │   │   │   │   ├── webhook-delivery.worker.dual-sign.unit.test.ts
-    │   │   │       │   │   │   │   ├── webhook-delivery.worker.durability.unit.test.ts
-    │   │   │       │   │   │   │   └── webhook-delivery.worker.unit.test.ts
-    │   │   │       │   │   │   ├── webhook-delivery-emit.unit.test.ts
-    │   │   │       │   │   │   └── webhook-delivery.event-handlers.unit.test.ts
+    │   │   │       │   │       ├── worker/
+    │   │   │       │   │       │   ├── webhook-delivery.worker.dual-sign.unit.test.ts
+    │   │   │       │   │       │   ├── webhook-delivery.worker.durability.unit.test.ts
+    │   │   │       │   │       │   └── webhook-delivery.worker.unit.test.ts
+    │   │   │       │   │       ├── webhook-delivery-emit.unit.test.ts
+    │   │   │       │   │       └── webhook-delivery.event-handlers.unit.test.ts
     │   │   │       │   │   ├── webhook-delivery-attempt.repository.db.unit.test.ts
     │   │   │       │   │   ├── webhook-delivery-attempt.repository.try-mark-sending.db.unit.test.ts
+    │   │   │       │   │   ├── webhook-delivery.job.schema.unit.test.ts
+    │   │   │       │   │   ├── webhook-delivery.queue.unit.test.ts
     │   │   │       │   │   ├── webhook-delivery.repository.db.unit.test.ts
     │   │   │       │   │   ├── webhook-delivery.repository.event-key.unit.test.ts
     │   │   │       │   │   └── webhook-outbound-circuit.unit.test.ts
-    │   │   │       │   └── webhook-delivery.worker.test.ts
     │   │   │       ├── events/
     │   │   │       │   ├── webhook-delivery-emit.ts
     │   │   │       │   └── webhook-delivery.event-handlers.ts
@@ -559,6 +565,7 @@ src/
     │   │   │       ├── __tests__/
     │   │   │       │   └── unit/
     │   │   │       │   │   ├── webhook-event.controller.unit.test.ts
+    │   │   │       │   │   ├── webhook-event.repository.unit.test.ts
     │   │   │       │   │   ├── webhook-event.serializer.shape.unit.test.ts
     │   │   │       │   │   └── webhook-event.service.unit.test.ts
     │   │   │       ├── seed/
@@ -1872,6 +1879,7 @@ src/
     │   │   ├── cross-org-mutation.security.test.ts
     │   │   ├── cross-org-resource.security.test.ts
     │   │   ├── invitation-email.security.test.ts
+    │   │   ├── notify-isolation.security.test.ts
     │   │   ├── object-ownership.security.test.ts
     │   │   └── tier-and-grant.security.test.ts
     │   ├── headers/
@@ -1907,6 +1915,7 @@ src/
     │   ├── rate-limit/
     │   │   ├── billing-mutation-rate-limit.security.test.ts
     │   │   ├── cross-tenant-rate-limit.security.test.ts
+    │   │   ├── notify-mutation-rate-limit.security.test.ts
     │   │   ├── preset-authed-burst.security.test.ts
     │   │   ├── rate-limit-burst.security.test.ts
     │   │   └── rate-limiting.security.test.ts
