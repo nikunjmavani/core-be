@@ -1,0 +1,8 @@
+{
+  "access_token": "ya29.contract-fixture-google-access-token",
+  "expires_in": 3599,
+  "refresh_token": "1//contract-fixture-google-refresh-token",
+  "scope": "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile",
+  "token_type": "Bearer",
+  "id_token": "contract-fixture.unparsed.jwt"
+}

@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Outbound HTTP contract tests for the platform's third-party integrations: Stripe (subscription, customer, webhook), Resend (mail), S3 (presigned URLs), and customer webhook endpoints. Uses `nock` to record / replay fixture interactions and pin our request shape against the upstream's documented API.
+Outbound HTTP contract tests for the platform's third-party integrations: Stripe (subscription, customer, webhook), Resend (mail), S3 (presigned URLs), Cloudflare Turnstile (captcha), OAuth providers (Google + GitHub code exchange, userinfo, and the primary+verified email guard), and customer webhook endpoints. Uses `nock` to record / replay fixture interactions and pin our request shape against the upstream's documented API.
 
 Vitest config: [tooling/vitest/contract.config.ts](tooling/vitest/contract.config.ts).
 
