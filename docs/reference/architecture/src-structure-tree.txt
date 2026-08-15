@@ -285,6 +285,8 @@ src/
     │   │   ├── factories/
     │   │   │   └── subscription.factory.ts
     │   │   ├── integration/
+    │   │   │   ├── billing-account-reads.integration.test.ts
+    │   │   │   ├── billing-idempotency-replay.integration.test.ts
     │   │   │   ├── billing-route-smoke.integration.test.ts
     │   │   │   ├── billing-subscription-mutations.integration.test.ts
     │   │   │   └── billing.integration.test.ts
@@ -299,11 +301,13 @@ src/
     │   │   │   │   ├── integration/
     │   │   │   │   │   └── plan.integration.test.ts
     │   │   │   │   └── unit/
+    │   │   │   │   │   ├── plan-routes-rate-limit.policy.unit.test.ts
     │   │   │   │   │   ├── plan.controller.unit.test.ts
     │   │   │   │   │   ├── plan.repository.db.unit.test.ts
     │   │   │   │   │   ├── plan.serializer.shape.unit.test.ts
     │   │   │   │   │   ├── plan.serializer.unit.test.ts
-    │   │   │   │   │   └── plan.service.unit.test.ts
+    │   │   │   │   │   ├── plan.service.unit.test.ts
+    │   │   │   │   │   └── plan.validator.unit.test.ts
     │   │   │   ├── seed/
     │   │   │   │   ├── index.ts
     │   │   │   │   └── plan.reference.seed.ts
@@ -324,23 +328,28 @@ src/
     │   │   │   │   │   ├── stripe-webhook-out-of-order-cancellation.integration.test.ts
     │   │   │   │   │   ├── stripe-webhook-payload-shrink.integration.test.ts
     │   │   │   │   │   ├── stripe-webhook-reclaim.integration.test.ts
+    │   │   │   │   │   ├── stripe-webhook-replay.integration.test.ts
     │   │   │   │   │   └── stripe-webhook.integration.test.ts
     │   │   │   │   └── unit/
     │   │   │   │   │   ├── events/
     │   │   │   │   │       └── worker/
+    │   │   │   │   │       │   ├── stripe-webhook-event-catchup.worker.unit.test.ts
     │   │   │   │   │       │   ├── stripe-webhook-event-reclaim.worker.unit.test.ts
     │   │   │   │   │       │   ├── stripe-webhook-event-retention.worker.unit.test.ts
     │   │   │   │   │       │   └── stripe-webhook.worker.unit.test.ts
+    │   │   │   │   │   ├── stripe-webhook-backoff.util.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-construct-event.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-event-catchup.processor.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-event.repository.db.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-event.repository.ledger-immutability.db.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-ingress.plugin.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-organization.util.unit.test.ts
+    │   │   │   │   │   ├── stripe-webhook-raw-body.registry.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook.controller.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook.job.schema.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook.processor-race.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook.processor.unit.test.ts
+    │   │   │   │   │   ├── stripe-webhook.serializer.unit.test.ts
     │   │   │   │   │   └── stripe-webhook.service.unit.test.ts
     │   │   │   ├── queues/
     │   │   │   │   ├── stripe-webhook-backoff.util.ts
@@ -376,12 +385,15 @@ src/
     │   │   │       │   ├── subscription-happy.integration.test.ts
     │   │   │       │   └── subscription.integration.test.ts
     │   │   │       └── unit/
+    │   │   │       │   ├── billing-account.serializer.unit.test.ts
     │   │   │       │   ├── payment-provider.port.unit.test.ts
     │   │   │       │   ├── stripe-payment-provider.email.unit.test.ts
     │   │   │       │   ├── subscription-period.util.unit.test.ts
     │   │   │       │   ├── subscription-routes-rate-limit.policy.unit.test.ts
+    │   │   │       │   ├── subscription-seat-sync.job.schema.unit.test.ts
     │   │   │       │   ├── subscription-seat-sync.processor.unit.test.ts
     │   │   │       │   ├── subscription-seat-sync.queue.unit.test.ts
+    │   │   │       │   ├── subscription-seat-sync.worker.unit.test.ts
     │   │   │       │   ├── subscription.controller.auth-matrix.unit.test.ts
     │   │   │       │   ├── subscription.controller.unit.test.ts
     │   │   │       │   ├── subscription.repository.db.unit.test.ts
@@ -1838,6 +1850,7 @@ src/
     │   │   └── setup-loadtest.sh
     │   └── load.overview.md
     ├── performance/
+    │   ├── billing-list.performance.test.ts
     │   ├── concurrent-requests.performance.test.ts
     │   ├── explain-analyze.performance.test.ts
     │   ├── membership-list.performance.test.ts
@@ -1862,6 +1875,7 @@ src/
     │   ├── authz/
     │   │   ├── admin-only.security.test.ts
     │   │   ├── auth-token-flow.security.test.ts
+    │   │   ├── billing-privilege.security.test.ts
     │   │   ├── cross-org-mutation.security.test.ts
     │   │   ├── cross-org-resource.security.test.ts
     │   │   ├── invitation-email.security.test.ts
@@ -1899,6 +1913,7 @@ src/
     │   │   ├── upload-attacks.security.test.ts
     │   │   └── upload-svg.security.test.ts
     │   ├── rate-limit/
+    │   │   ├── billing-mutation-rate-limit.security.test.ts
     │   │   ├── cross-tenant-rate-limit.security.test.ts
     │   │   ├── notify-mutation-rate-limit.security.test.ts
     │   │   ├── preset-authed-burst.security.test.ts
