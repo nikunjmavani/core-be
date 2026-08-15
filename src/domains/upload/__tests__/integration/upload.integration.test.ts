@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
+import { redisConnection } from '@/infrastructure/cache/redis.client.js';
+import { buildIdempotencyCacheKey } from '@/shared/utils/idempotency/idempotency-key.util.js';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import {
   injectAuthenticated,
@@ -319,6 +321,44 @@ describe('Upload Domain — Integration', () => {
       expect(idOf(second.body)).not.toBe(idOf(first.body));
       const rows = await database.select().from(uploads).where(eq(uploads.user_id, user.id));
       expect(rows).toHaveLength(2);
+    });
+
+    it('returns 409 conflict_in_flight while the same key is mid-flight — the one window that IS protected', async () => {
+      // The characterization above proves a COMPLETED request's key is spent-and-forgotten.
+      // This is the other half of that finding: DURING flight the placeholder exists, so a
+      // concurrent retry gets 409 (retry the same key shortly) rather than minting a second
+      // upload row. Deterministic per the billing-idempotency-replay pattern: seed the exact
+      // in-flight placeholder the preHandler writes, then issue one request.
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const idempotencyKey = `idem-${randomUUID()}`;
+      // No organization in the token -> the middleware scopes the key as `none:<userId>`.
+      const cacheKey = buildIdempotencyCacheKey(idempotencyKey, { userId: user.public_id });
+      await redisConnection.set(
+        cacheKey,
+        JSON.stringify({
+          state: 'in_flight',
+          claimedAt: Date.now(),
+          requestId: 'req-first-caller',
+        }),
+        'EX',
+        60,
+      );
+
+      try {
+        const response = await app.inject({
+          method: 'POST',
+          url: testApiPath('/uploads'),
+          headers: { authorization: `Bearer ${token}`, 'x-idempotency-key': idempotencyKey },
+          payload: validAvatarPayload,
+        });
+
+        expect(response.statusCode, response.body).toBe(409);
+        const body = response.json() as { error?: { code?: string } };
+        expect(body.error?.code).toBe('conflict_in_flight');
+      } finally {
+        await redisConnection.del(cacheKey);
+      }
     });
   });
 });
