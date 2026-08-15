@@ -27,7 +27,7 @@ describe('route success-status map', () => {
     expect(stale, `Stale map entries:\n${stale.join('\n')}`).toEqual([]);
   });
 
-  it('only uses allowed success statuses (200/201/202/204)', () => {
+  it('only uses allowed success statuses (200/204)', () => {
     const invalid = Object.entries(successStatusMap).filter(
       ([, status]) => !ALLOWED_SUCCESS_STATUSES.has(status),
     );

@@ -18,7 +18,7 @@ export type RouteSmokeCase = {
   expectForbidden?: number;
   /**
    * Declared happy-path status from tooling/openapi/route-catalog/route-success-statuses.json
-   * (200/201/202/204) — what the route returns for a correctly authorized, valid request.
+   * (200/204) — what the route returns for a correctly authorized, valid request.
    */
   expectSuccess: number;
 };

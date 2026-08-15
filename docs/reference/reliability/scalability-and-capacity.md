@@ -74,8 +74,8 @@ and concurrent-create paths race their unique indexes (Postgres `23505`):
   held at **0 new `23505` 5xx** through the whole ladder.
 - The other **24 `23505`s** observed during the run are concurrent-create races
   on idempotent paths (org / session / MFA bootstrap) — every one is caught and
-  resolved to `200`/`201`. Recorded route statuses across the ladder were
-  **200/201 only**.
+  resolved to 2xx success statuses. Recorded route statuses across the ladder were
+  **success-only** (run predates the uniform-200 policy).
 
 ## Scaling past one instance
 

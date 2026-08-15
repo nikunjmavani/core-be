@@ -82,7 +82,7 @@ Real example from [`src/domains/auth/sub-domains/auth-method/email-login.service
  *   find-or-creates the user (unknown email → auto-signup of a passwordless user + `EMAIL_CODE`
  *   auth-method). It issues a fresh alphanumeric code under the concurrent-code cap, persists only a
  *   keyed user-scoped HMAC of it, and emits `AUTH_EVENT.EMAIL_VERIFICATION_CODE_REQUESTED` with the
- *   raw code in the payload. The response is a uniform 201 for known and unknown emails.
+ *   raw code in the payload. The response is a uniform 200 for known and unknown emails.
  * - {@link EmailLoginService.login} resolves the user, applies a per-user attempt cap, atomically
  *   consumes a matching code scoped to `(user_id, EMAIL_CODE)`, invalidates the user's remaining live
  *   codes (single-use across the set), flips `is_email_verified`, and mints a JWT + session (or an

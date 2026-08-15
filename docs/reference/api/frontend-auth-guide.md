@@ -97,13 +97,13 @@ You don't watch a clock. When a call returns `401` (token expired), refresh once
 
 | Step | Request | Result |
 |------|---------|--------|
-| **Email code — send** | `POST /auth/email/send-code` | `201` (uniform — no enumeration). Emails a one-time alphanumeric sign-in code; auto-creates a passwordless account for an unknown email. |
-| **Email code — login** | `POST /auth/email/login` | `201` → `{ data: { access_token } }` + `Set-Cookie: session_id` (or `{ mfa_required, mfa_session_token }`). Verifies the code, logging in or completing first-time sign-up. |
-| Login | `POST /auth/login` | `201` → `{ data: { access_token } }` + `Set-Cookie: session_id` |
-| Use | any route + `Authorization: Bearer` | `200/201/…` |
+| **Email code — send** | `POST /auth/email/send-code` | `200` (uniform — no enumeration). Emails a one-time alphanumeric sign-in code; auto-creates a passwordless account for an unknown email. |
+| **Email code — login** | `POST /auth/email/login` | `200` → `{ data: { access_token } }` + `Set-Cookie: session_id` (or `{ mfa_required, mfa_session_token }`). Verifies the code, logging in or completing first-time sign-up. |
+| Login | `POST /auth/login` | `200` → `{ data: { access_token } }` + `Set-Cookie: session_id` |
+| Use | any route + `Authorization: Bearer` | `2xx` |
 | Expiry | any route | `401` → trigger refresh |
-| Refresh | `POST /auth/refresh` (cookie auto-sent) | `201` → `{ data: { access_token } }`, session cookie rotated |
-| Logout | `POST /auth/logout` + `Authorization: Bearer` | `201`, session revoked server-side, cookie cleared |
+| Refresh | `POST /auth/refresh` (cookie auto-sent) | `200` → `{ data: { access_token } }`, session cookie rotated |
+| Logout | `POST /auth/logout` + `Authorization: Bearer` | `200`, session revoked server-side, cookie cleared |
 
 If **refresh itself fails** (`401`/`403`), the session is gone (logged out elsewhere, admin-suspended,
 or expired) → clear the in-memory token and send the user to login.
@@ -120,8 +120,8 @@ To act in a different organization, **re-mint the token**:
 
 | Endpoint | Body | Auth | Result |
 |----------|------|------|--------|
-| `POST /auth/switch-to-organization` | `{ "organization_id": "org_…" }` | `Bearer` | `201` → new `access_token` scoped to that org. `403` if the caller isn't a member, `400` if the id is missing. |
-| `POST /auth/switch-to-personal` | none | `Bearer` | `201` → new `access_token` scoped to the caller's personal org. Cannot fail with `403`. |
+| `POST /auth/switch-to-organization` | `{ "organization_id": "org_…" }` | `Bearer` | `200` → new `access_token` scoped to that org. `403` if the caller isn't a member, `400` if the id is missing. |
+| `POST /auth/switch-to-personal` | none | `Bearer` | `200` → new `access_token` scoped to the caller's personal org. Cannot fail with `403`. |
 
 Switching re-binds the session to the new token, so **the previous access token immediately stops
 working** (hash drift). Always swap your in-memory token for the returned one. No new refresh cookie
@@ -181,17 +181,17 @@ sequenceDiagram
   Note over FE,API: step 1 — obtain an access token (any entry flow below)
   FE->>API: POST /auth/login  [or email verification-code login / oauth callback / passkey verify / refresh]
   alt user has MFA, or org policy requires it
-    API-->>FE: 201 { mfa_required: true, mfa_session_token }
+    API-->>FE: 200 { mfa_required: true, mfa_session_token }
     FE->>API: POST /auth/mfa/login { mfa_session_token, totp_code }
   end
-  API-->>FE: 201 { access_token, session_id }  + Set-Cookie session_id
+  API-->>FE: 200 { access_token, session_id }  + Set-Cookie session_id
   Note over FE: keep access_token in memory
   FE->>API: GET /auth/me/context   [Authorization: Bearer]
   API-->>FE: 200 { user, active_organization, my_permissions, global_role, organizations[] }
   Note over FE: dashboard painted
 ```
 
-The first-factor entry points (`login`, `email/send-code`, `email/login`, `oauth/.../callback`, `webauthn/authenticate/verify`, `password/reset`) all return the **same discriminated body** — branch on the field, **not** the HTTP status (every POST here is `201`):
+The first-factor entry points (`login`, `email/send-code`, `email/login`, `oauth/.../callback`, `webauthn/authenticate/verify`, `password/reset`) all return the **same discriminated body** — branch on the field, **not** the HTTP status (every POST here is `200`):
 
 - `{ access_token, session_id }` → logged in; store the token and call `GET /auth/me/context`.
 - `{ mfa_required: true, mfa_session_token }` → collect a TOTP or recovery code and call `POST /auth/mfa/login`, which then returns `{ access_token, session_id }`.

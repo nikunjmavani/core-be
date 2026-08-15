@@ -5,7 +5,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/api-contract-guard/SKILL.md",
-      "computedHash": "1d5c8f22afa1288e7ff8724055627baef5227787bd978b5bebe41db46d002f88"
+      "computedHash": "66dcbc28b570b5014c3a1747b167e2ebcfd39f041b0c5afe9cbc83ea2540137f"
     },
     "auto-implement": {
       "source": "local",
@@ -257,7 +257,7 @@
       "source": "local",
       "sourceType": "local",
       "skillPath": "agent-os/skills/tsdoc-export-guard/SKILL.md",
-      "computedHash": "403d42a3611a36c07599aae01c14d975e526c9a2f0c5f3db60e42629ae5299ab"
+      "computedHash": "58b397a3ebe18731f04c653f70c4a11065e731a75c53e430d9c503f01c745a73"
     },
     "workers-events": {
       "source": "local",
