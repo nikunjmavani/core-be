@@ -7,6 +7,14 @@ export interface CreateOrganizationOptions {
   name?: string;
   slug?: string;
   ownerUserId: number;
+  /**
+   * Organization type. Defaults to the column default `'TEAM'`. Pass `'PERSONAL'` to build the
+   * org shape that `assertTeamOrganization` rejects with 422 — the only way to drive the
+   * team-only guard on billing / other team-scoped routes at the HTTP boundary rather than by
+   * stubbing the organization service. A user may own only one PERSONAL org
+   * (`idx_organizations_personal_owner` is a partial unique index).
+   */
+  type?: 'PERSONAL' | 'TEAM';
 }
 
 /**
@@ -49,6 +57,7 @@ export async function createTestOrganization(options: CreateOrganizationOptions)
       slug,
       owner_user_id: options.ownerUserId,
       created_by_user_id: options.ownerUserId,
+      ...(options.type !== undefined ? { type: options.type } : {}),
     })
     .returning();
 
