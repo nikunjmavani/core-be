@@ -31,6 +31,7 @@
     "src/domains/notify/sub-domains/webhook/webhook.service.ts",
     "src/domains/upload/upload.service.ts",
     "src/domains/user/user.service.ts",
+    "src/domains/user/sub-domains/user-data-export/user-data-export.service.ts",
     "src/shared/middlewares/core/auth.middleware.ts",
     "src/shared/middlewares/tenant/tenant.middleware.ts",
     "src/shared/middlewares/core/idempotency.middleware.ts",

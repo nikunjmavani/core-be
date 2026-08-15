@@ -4,7 +4,7 @@ import { createTestApp } from '@/tests/helpers/test-app.js';
 import { injectAuthenticated } from '@/tests/helpers/test-http-inject.helper.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
-import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import { generateTestToken, generateTestTokenAndSession } from '@/tests/helpers/test-auth.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { FastifyInstance } from 'fastify';
 
@@ -158,6 +158,92 @@ describe('User admin routes — happy paths', () => {
         token: adminToken,
       });
       expect(response.statusCode, response.body).toBe(404);
+    });
+
+    it('POST /users/:user_id/suspend returns 404 for an unknown user id', async () => {
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/users/${UNKNOWN_USER_ID}/suspend`),
+        token: adminToken,
+      });
+      expect(response.statusCode, response.body).toBe(404);
+    });
+
+    it('POST /users/:user_id/unsuspend returns 404 for an unknown user id', async () => {
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/users/${UNKNOWN_USER_ID}/unsuspend`),
+        token: adminToken,
+      });
+      expect(response.statusCode, response.body).toBe(404);
+    });
+  });
+
+  /**
+   * Suspension is only meaningful if it takes effect. `suspendUser` revokes every active session
+   * for the target ("an outstanding bearer/cookie session cannot outlive the deactivation") and
+   * `AuthSessionService` busts the 60-second session-validity cache; separately, session
+   * validation rejects any user whose status is not ACTIVE. Until now the two suspend routes
+   * asserted only their 201 — nothing proved the target actually lost access.
+   */
+  describe('suspension takes effect', () => {
+    it('revokes the suspended user active session', async () => {
+      const target = await createTestUser({ email: 'suspend-target@example.com' });
+      const { token: targetToken } = await generateTestTokenAndSession({
+        userId: target.public_id,
+      });
+
+      const before = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/users/me'),
+        token: targetToken,
+      });
+      expect(before.statusCode, before.body).toBe(200);
+
+      const suspend = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/users/${target.public_id}/suspend`),
+        token: adminToken,
+      });
+      expect(suspend.statusCode, suspend.body).toBe(201);
+
+      const after = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/users/me'),
+        token: targetToken,
+      });
+      expect(after.statusCode, after.body).toBe(401);
+    });
+
+    it('unsuspend restores ACTIVE status without resurrecting the revoked session', async () => {
+      // Deliberately asymmetric: unsuspend flips the status back but does NOT re-issue the
+      // sessions suspend revoked, so the old bearer must stay dead and the user must sign in
+      // again. Asserting a symmetric "access restored" here would encode the wrong contract.
+      const target = await createTestUser({ email: 'unsuspend-target@example.com' });
+      const { token: targetToken } = await generateTestTokenAndSession({
+        userId: target.public_id,
+      });
+
+      await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/users/${target.public_id}/suspend`),
+        token: adminToken,
+      });
+
+      const unsuspend = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/users/${target.public_id}/unsuspend`),
+        token: adminToken,
+      });
+      expect(unsuspend.statusCode, unsuspend.body).toBe(201);
+      expect((unsuspend.json() as { data: { status: string } }).data.status).toBe('ACTIVE');
+
+      const withOldSession = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/users/me'),
+        token: targetToken,
+      });
+      expect(withOldSession.statusCode, withOldSession.body).toBe(401);
     });
   });
 });

@@ -103,6 +103,65 @@ describe('User Data Export Sub-Domain — Integration', () => {
       });
       expect(payload).toHaveProperty('export_id');
     });
+
+    /**
+     * `auth.user_data_exports` carries the partial unique index
+     * `idx_user_data_exports_user_pending` — at most one pending export per user. The service
+     * treats a repeat request as idempotent: it returns the in-flight export rather than
+     * erroring, and catches the unique violation on the concurrent path
+     * (`user-data-export.concurrent_pending_returned`). Neither branch had a test, so a
+     * regression would surface to a double-clicking user as a 500.
+     */
+    it('returns the in-flight export instead of creating a second one', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      await getAuthenticatedUserReady(app, token);
+
+      const first = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/users/me/data-export'),
+        token,
+        payload: {},
+      });
+      expect(first.statusCode, first.body).toBe(201);
+      const firstId = (first.json() as { data: { export_id: string } }).data.export_id;
+
+      const second = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/users/me/data-export'),
+        token,
+        payload: {},
+      });
+      expect(second.statusCode, second.body).toBe(201);
+      expect((second.json() as { data: { export_id: string } }).data.export_id).toBe(firstId);
+    });
+
+    it('survives concurrent export requests without a unique-violation 500', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      await getAuthenticatedUserReady(app, token);
+
+      // Fired together so both can pass the pending-check before either insert lands — the
+      // race the service's isPostgresUniqueViolation branch exists to absorb.
+      const responses = await Promise.all(
+        [0, 1].map(() =>
+          injectAuthenticated(app, {
+            method: 'POST',
+            url: testApiPath('/users/me/data-export'),
+            token,
+            payload: {},
+          }),
+        ),
+      );
+
+      for (const response of responses) {
+        expect(response.statusCode, response.body).toBe(201);
+      }
+      const [a, b] = responses.map(
+        (response) => (response.json() as { data: { export_id: string } }).data.export_id,
+      );
+      expect(a).toBe(b);
+    });
   });
 
   describe('GET /api/v1/users/me/data-export/:data_export_id', () => {

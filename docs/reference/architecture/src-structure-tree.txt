@@ -969,6 +969,7 @@ src/
     │   │   │   ├── user.repository.unit.test.ts
     │   │   │   ├── user.serializer.unit.test.ts
     │   │   │   ├── user.service.account-deletion-safety.unit.test.ts
+    │   │   │   ├── user.service.avatar-lifecycle.unit.test.ts
     │   │   │   ├── user.service.unit.test.ts
     │   │   │   ├── user.validator.unit.test.ts
     │   │   │   └── users-email-trgm-migration.policy.unit.test.ts
@@ -992,6 +993,8 @@ src/
     │   │   │   │   │   ├── user-data-export.repository.db.unit.test.ts
     │   │   │   │   │   ├── user-data-export.serializer.unit.test.ts
     │   │   │   │   │   ├── user-data-export.service.db.unit.test.ts
+    │   │   │   │   │   ├── user-data-export.service.lifecycle.unit.test.ts
+    │   │   │   │   │   ├── user-data-export.service.payload.unit.test.ts
     │   │   │   │   │   ├── user-data-export.service.unit.test.ts
     │   │   │   │   │   ├── user-data-export.validator.unit.test.ts
     │   │   │   │   │   └── user-data-export.worker.unit.test.ts
