@@ -256,6 +256,7 @@ src/
     │   │   │       │   ├── webauthn-user-verification.policy.unit.test.ts
     │   │   │       │   ├── webauthn.serializer.unit.test.ts
     │   │   │       │   ├── webauthn.service.authenticate-options.unit.test.ts
+    │   │   │       │   ├── webauthn.service.ceremonies.unit.test.ts
     │   │   │       │   ├── webauthn.service.credential-management.unit.test.ts
     │   │   │       │   ├── webauthn.service.registration-cap.unit.test.ts
     │   │   │       │   └── webauthn.validator.unit.test.ts
@@ -409,6 +410,7 @@ src/
     │   │   │       │   ├── subscription.repository.unit.test.ts
     │   │   │       │   ├── subscription.serializer.shape.unit.test.ts
     │   │   │       │   ├── subscription.serializer.unit.test.ts
+    │   │   │       │   ├── subscription.service.account-reads.unit.test.ts
     │   │   │       │   ├── subscription.service.billing-guard.unit.test.ts
     │   │   │       │   ├── subscription.service.cancel-resume.unit.test.ts
     │   │   │       │   ├── subscription.service.seats.unit.test.ts
