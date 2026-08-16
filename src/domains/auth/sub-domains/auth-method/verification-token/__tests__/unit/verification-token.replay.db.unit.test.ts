@@ -85,4 +85,52 @@ describe('VerificationTokenRepository — atomic consume (replay protection)', (
     expect(await repository.findValidByTokenHash('magic-hash')).toBeNull();
     expect(await repository.findValidByTokenHash('reset-hash')).not.toBeNull();
   });
+
+  it('invalidateAllByUser invalidates EVERY token type for the user (offboarding), leaving other users untouched', async () => {
+    // The sibling above pins the single-type method. Offboarding uses the type-agnostic
+    // invalidateAllByUser (no token_type predicate): a soft-deleted user must be left with no live
+    // token of ANY type, or a still-valid PASSWORD_RESET/EMAIL_CHANGE could resurrect the account.
+    const userA = await createTestUser({ email: 'invalidate-all-a@example.com' });
+    const userB = await createTestUser({ email: 'invalidate-all-b@example.com' });
+    const expiresAt = new Date(Date.now() + 3_600_000);
+    await repository.create('EMAIL_CODE', userA.id, userA.email, 'a-code', expiresAt);
+    await repository.create('PASSWORD_RESET', userA.id, userA.email, 'a-reset', expiresAt);
+    await repository.create('EMAIL_CHANGE', userA.id, userA.email, 'a-change', expiresAt);
+    await repository.create('EMAIL_CODE', userB.id, userB.email, 'b-code', expiresAt);
+
+    await repository.invalidateAllByUser(userA.id);
+
+    // Every one of user A's tokens is gone, regardless of type.
+    expect(await repository.findValidByTokenHash('a-code')).toBeNull();
+    expect(await repository.findValidByTokenHash('a-reset')).toBeNull();
+    expect(await repository.findValidByTokenHash('a-change')).toBeNull();
+    // The invalidation is user-scoped — user B's token survives.
+    expect(await repository.findValidByTokenHash('b-code')).not.toBeNull();
+  });
+
+  it('consumeOtpForUser will not consume another user’s code (cross-user isolation)', async () => {
+    // The atomic consume is keyed on user_id: presenting a valid code hash that belongs to a
+    // DIFFERENT user must neither authenticate nor burn the victim’s code.
+    const attacker = await createTestUser({ email: 'otp-attacker@example.com' });
+    const victim = await createTestUser({ email: 'otp-victim@example.com' });
+    const expiresAt = new Date(Date.now() + 3_600_000);
+    await repository.create('EMAIL_CODE', victim.id, victim.email, 'shared-code-hash', expiresAt);
+
+    // Attacker presents the victim’s exact code hash under their own id → no match, no burn.
+    expect(
+      await repository.consumeOtpForUser(attacker.id, 'EMAIL_CODE', 'shared-code-hash'),
+    ).toBeNull();
+
+    // The victim’s code was untouched by the attacker’s attempt and is still redeemable by them…
+    const consumed = await repository.consumeOtpForUser(
+      victim.id,
+      'EMAIL_CODE',
+      'shared-code-hash',
+    );
+    expect(consumed?.user_id).toBe(victim.id);
+    // …and single-use thereafter.
+    expect(
+      await repository.consumeOtpForUser(victim.id, 'EMAIL_CODE', 'shared-code-hash'),
+    ).toBeNull();
+  });
 });

@@ -8,6 +8,7 @@ vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
 }));
 
 import { withGlobalRetentionCleanupDatabaseContext } from '@/infrastructure/database/contexts/retention-database.context.js';
+import { captureException } from '@/infrastructure/observability/sentry/sentry.js';
 import { runOrganizationOffboardingReconcileJob } from '@/domains/tenancy/sub-domains/organization/workers/organization-offboarding-reconcile.processor.js';
 
 describe('runOrganizationOffboardingReconcileJob (TEN-06)', () => {
@@ -40,6 +41,13 @@ describe('runOrganizationOffboardingReconcileJob (TEN-06)', () => {
     const result = await runOrganizationOffboardingReconcileJob(service);
 
     expect(result).toEqual({ scanned: 2, resumed: 1, failed: 1 });
+    // The failed org offboarding is reported to Sentry with its public id and the reconcile source
+    // tag (mirrors the user-offboarding reconcile twin), so a stuck teardown is not lost silently.
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(captureException).toHaveBeenCalledWith(expect.any(Error), {
+      organizationId: 'org_a',
+      tags: { source: 'organization-offboarding-reconcile' },
+    });
   });
 
   it('no-ops when nothing is stuck', async () => {

@@ -8,6 +8,7 @@ vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
 }));
 
 import { withGlobalRetentionCleanupDatabaseContext } from '@/infrastructure/database/contexts/retention-database.context.js';
+import { captureException } from '@/infrastructure/observability/sentry/sentry.js';
 import { runUserOffboardingReconcileJob } from '@/domains/user/workers/user-offboarding-reconcile.processor.js';
 
 describe('runUserOffboardingReconcileJob (USER-04/USER-09)', () => {
@@ -42,6 +43,13 @@ describe('runUserOffboardingReconcileJob (USER-04/USER-09)', () => {
 
     expect(service.resumeOffboarding).toHaveBeenCalledTimes(2);
     expect(result).toEqual({ scanned: 2, resumed: 1, failed: 1 });
+    // The per-row failure is not merely counted — it is reported to Sentry with the row's public id
+    // and the reconcile source tag, so a silently stuck offboarding surfaces operationally.
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(captureException).toHaveBeenCalledWith(expect.any(Error), {
+      userId: 'user_a',
+      tags: { source: 'user-offboarding-reconcile' },
+    });
   });
 
   it('no-ops when nothing is stuck', async () => {
