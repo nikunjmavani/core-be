@@ -128,4 +128,39 @@ describe('webhook-outbound-circuit', () => {
 
     expect(getWebhookOutboundCircuitCacheSize()).toBe(WEBHOOK_CIRCUIT_CACHE_MAX_ENTRIES);
   });
+
+  it('evicts an idle breaker once the idle TTL has elapsed (time-based, distinct from the LRU cap)', async () => {
+    // The LRU cap test above covers size-based eviction; the idle-TTL sweep (evictExpiredCircuits,
+    // run on every access) is separate and was untested. Freeze Date.now — not useFakeTimers — so
+    // opossum's own interval timers keep running while we control the breaker's lastAccessed clock.
+    const okFetch = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }));
+    const IDLE_TTL_MS = 60 * 60 * 1000; // WEBHOOK_CIRCUIT_CACHE_IDLE_TTL_MS (1 hour)
+    const base = 1_000_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(base);
+
+    try {
+      await fetchWebhookWithCircuitBreaker({
+        webhookId: 100,
+        webhookUrl: 'https://a.example/hook',
+        init: { method: 'POST' },
+        fetchImplementation: okFetch,
+      });
+      expect(getWebhookOutboundCircuitCacheSize()).toBe(1);
+
+      // Advance past the idle TTL, then touch a DIFFERENT breaker so the sweep runs first.
+      nowSpy.mockReturnValue(base + IDLE_TTL_MS + 1);
+      await fetchWebhookWithCircuitBreaker({
+        webhookId: 200,
+        webhookUrl: 'https://b.example/hook',
+        init: { method: 'POST' },
+        fetchImplementation: okFetch,
+      });
+
+      // Breaker 100 was idle beyond the TTL and evicted; only 200 remains. Without idle eviction
+      // this would be 2.
+      expect(getWebhookOutboundCircuitCacheSize()).toBe(1);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
 });

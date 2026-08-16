@@ -203,4 +203,44 @@ describe('audit-outbox.repository (database)', () => {
     const [row] = await database.select().from(audit_outbox).where(eq(audit_outbox.id, stagedId));
     expect(row?.last_error).toHaveLength(4_000);
   });
+
+  /**
+   * `getPendingBacklogStats` feeds the drain-depth alarm (backlog size, oldest age, retry pressure).
+   * It was only ever mocked in the processor test, so the aggregate SQL — the `WHERE status =
+   * 'PENDING'` scope and the three COALESCE/EXTRACT expressions — never ran. Prove it on real rows.
+   */
+  it('getPendingBacklogStats returns all zeros for an empty backlog', async () => {
+    const stats = await withAuditOutboxDrainDatabaseContext((handle) =>
+      createDrainAuditOutboxRepository(handle).getPendingBacklogStats(),
+    );
+    expect(stats).toEqual({ pendingCount: 0, oldestPendingAgeSeconds: 0, maxAttemptCount: 0 });
+  });
+
+  it('getPendingBacklogStats aggregates only PENDING rows — oldest age and max attempt_count', async () => {
+    const oldest = await stagePendingRow('user.oldest');
+    await stagePendingRow('user.mid');
+    const processed = await stagePendingRow('user.processed');
+
+    // Backdate the oldest row so oldest-age is provably > 0.
+    await database
+      .update(audit_outbox)
+      .set({ created_at: new Date(Date.now() - 120_000) })
+      .where(eq(audit_outbox.id, oldest));
+
+    // One claim bumps every row's attempt_count to 1 (rows stay PENDING); then remove one row from
+    // the PENDING set via PROCESSED so the count/scope is exercised, not just the aggregates.
+    await withAuditOutboxDrainDatabaseContext((handle) =>
+      createDrainAuditOutboxRepository(handle).claimPendingBatch(10),
+    );
+    await withAuditOutboxDrainDatabaseContext((handle) =>
+      createDrainAuditOutboxRepository(handle).markProcessed([processed]),
+    );
+
+    const stats = await withAuditOutboxDrainDatabaseContext((handle) =>
+      createDrainAuditOutboxRepository(handle).getPendingBacklogStats(),
+    );
+    expect(stats.pendingCount).toBe(2); // the PROCESSED row is excluded by the WHERE scope
+    expect(stats.maxAttemptCount).toBe(1); // the claim bumped attempt_count
+    expect(stats.oldestPendingAgeSeconds).toBeGreaterThanOrEqual(100);
+  });
 });

@@ -463,4 +463,29 @@ describe('WebhookService', () => {
       .mock.calls.at(-1)?.[0] as unknown as Record<string, unknown>;
     expect(createPayload).not.toHaveProperty('created_by_user_id');
   });
+
+  it('create auto-generates a 256-bit hex signing secret when the caller omits one (sec-UP #8)', async () => {
+    // The existing no-secret test asserts only the created_by field. The security-load-bearing part
+    // is that an omitted secret becomes a STRONG one — an empty/weak signing secret makes the HMAC
+    // forgeable. encryptFieldSecret is the real impl in this suite (only decryptFieldSecret is
+    // stubbed), so the stored ciphertext is genuine and can be reversed with the real decryptor.
+    await service.create(
+      'org_public',
+      { url: 'https://example.com/hook', events: ['subscription.updated'] },
+      'user_public',
+    );
+
+    const createPayload = vi.mocked(webhookRepository.create).mock.calls.at(-1)?.[0] as {
+      encrypted_secret: string;
+    };
+    // A real, version-prefixed ciphertext was stored (not an empty/plaintext secret).
+    expect(createPayload.encrypted_secret).toContain(':');
+
+    const actual = await vi.importActual<typeof FieldSecretEncryptionModule>(
+      '@/shared/utils/security/field-secret-encryption.util.js',
+    );
+    const generatedSecret = actual.decryptFieldSecret(createPayload.encrypted_secret);
+    // 32 random bytes → 64 hex chars → 256 bits of entropy.
+    expect(generatedSecret).toMatch(/^[a-f0-9]{64}$/);
+  });
 });
