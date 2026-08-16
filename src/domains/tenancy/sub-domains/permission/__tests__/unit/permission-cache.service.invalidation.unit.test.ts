@@ -190,4 +190,55 @@ describe('permission-cache service invalidation', () => {
     await setCachedPermissions('user_public_id', 'org_public_id', ['tenancy:read']);
     expect(redisConnection.set).not.toHaveBeenCalled();
   });
+
+  it('getCachedPermissions degrades to a cache-miss (null) when the org version value is CORRUPT (audit-#T0)', async () => {
+    // Distinct from a Redis outage (covered above): a non-integer version value must also not
+    // masquerade as version 0. getOrganizationCacheVersion throws, and the read path catches it
+    // and returns null so the caller re-resolves from the database under a safe cache-miss.
+    vi.mocked(redisConnection.get).mockResolvedValue('not-a-number');
+    const result = await getCachedPermissions('user_public_id', 'org_public_id');
+    expect(result).toBeNull();
+  });
+
+  it('invalidatePermissions treats a CORRUPT org version as a failure — Sentry + org-wide backstop bump (audit-#T0/#T1)', async () => {
+    // A corrupt version cannot target the user's key safely, so invalidation must not silently
+    // succeed: it surfaces to Sentry and over-invalidates the whole org (version bump) so the
+    // stale per-user entry cannot survive to its TTL. `del` is never reached (the throw happens
+    // during the version read), distinguishing this from the del-rejects case above.
+    vi.mocked(redisConnection.get).mockResolvedValue('garbage-version');
+    vi.mocked(redisConnection.eval).mockResolvedValue(3 as never);
+
+    await invalidatePermissions('user_public_id', 'org_public_id');
+
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(redisConnection.del).not.toHaveBeenCalled();
+    expect(redisConnection.eval).toHaveBeenCalledTimes(1);
+    const backstopArgs = vi.mocked(redisConnection.eval).mock.calls[0]!;
+    expect(String(backstopArgs[0])).toContain("redis.call('INCR'");
+    expect(backstopArgs[2]).toBe('perm:org:org_public_id:v');
+  });
+
+  it('withPermissionCacheRecomputeLock falls back to a direct recompute (no caching) when the lock SET fails', async () => {
+    // If Redis is unreachable when claiming the recompute lock, the request must still resolve:
+    // recompute directly against the database and serve it, WITHOUT attempting to cache (the
+    // caller does not hold the lock, so a commit could clobber a concurrent invalidation).
+    mockedRedisSet(redisConnection.set).mockRejectedValue(new Error('redis down'));
+    const recompute = vi.fn().mockResolvedValue(['tenancy:read']);
+
+    const result = await withPermissionCacheRecomputeLock(
+      'user_public_id',
+      'org_public_id',
+      recompute,
+    );
+
+    expect(result).toEqual(['tenancy:read']);
+    expect(recompute).toHaveBeenCalledTimes(1);
+    // No guarded-commit Lua ran — the fallback path never writes to the cache.
+    const commitCall = vi
+      .mocked(redisConnection.eval)
+      .mock.calls.find(
+        (call) => typeof call[0] === 'string' && call[0].includes("redis.call('SET'"),
+      );
+    expect(commitCall).toBeUndefined();
+  });
 });
