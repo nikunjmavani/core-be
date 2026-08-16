@@ -42,7 +42,7 @@ describe('Security: Idempotency', () => {
     await cleanupDatabase();
   });
 
-  it('should accept requests with X-Idempotency-Key header', async () => {
+  it('accepts an idempotency-required write carrying a valid X-Idempotency-Key (200)', async () => {
     const user = await createTestUser();
     const token = await generateTestToken({ userId: user.public_id });
 
@@ -54,22 +54,11 @@ describe('Security: Idempotency', () => {
       payload: { name: 'Idempotent Org', slug: uniqueSlug('idempotent-org') },
     });
 
-    // Should succeed (200) or return validation error (400/422)
-    expect(response.statusCode).toBeLessThan(500);
-  });
-
-  it('should process requests without X-Idempotency-Key normally', async () => {
-    const user = await createTestUser();
-    const token = await generateTestToken({ userId: user.public_id });
-
-    const response = await injectAuthenticated(app, {
-      method: 'POST',
-      url: testApiPath('/tenancy/organizations'),
-      token,
-      payload: { name: 'No Key Org', slug: uniqueSlug('no-key-org') },
-    });
-
-    expect(response.statusCode).toBeLessThan(500);
+    // A well-formed authed write WITH a valid key must succeed (POST → 200 under the
+    // uniform status policy). The prior `< 500` assertion would have passed on a 401/422
+    // too, so a regression that rejected valid idempotent writes went unguarded.
+    expect(response.statusCode).toBe(200);
+    expect((response.json() as { data?: { id?: string } }).data?.id).toBeTruthy();
   });
 
   it('should reject malformed X-Idempotency-Key', async () => {
@@ -257,19 +246,26 @@ describe('Security: Idempotency', () => {
     const user = await createTestUser();
     const token = await generateTestToken({ userId: user.public_id });
     const key = uniqueKey('replay');
+    // A replay requires an IDENTICAL request fingerprint (method + route + body). The prior
+    // version sent a DIFFERENT body on the second call, which is an idempotency-key CONFLICT
+    // (422), not a replay — so it never exercised the replay path and its replay assertion was
+    // dead. Same payload both times so the second call is a genuine replay.
+    const payload = { name: 'Replay Org', slug: uniqueSlug('replay-org') };
 
     const first = await injectAuthenticated(app, {
       method: 'POST',
       url: testApiPath('/tenancy/organizations'),
       token,
       headers: { 'x-idempotency-key': key },
-      payload: { name: 'Replay Org', slug: uniqueSlug('replay-org') },
+      payload,
     });
 
-    expect(first.statusCode).toBeLessThan(500);
+    expect(first.statusCode).toBe(200);
     expect(first.headers['x-idempotency-replay']).toBeUndefined();
+    const firstOrganizationId = (first.json() as { data?: { id?: string } }).data?.id;
+    expect(firstOrganizationId).toBeTruthy();
 
-    // Allow onSend hook to finish caching the response before sending duplicate key request
+    // Allow the post-commit hook to finish caching the response before the duplicate.
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     const second = await injectAuthenticated(app, {
@@ -277,14 +273,16 @@ describe('Security: Idempotency', () => {
       url: testApiPath('/tenancy/organizations'),
       token,
       headers: { 'x-idempotency-key': key },
-      payload: { name: 'Replay Org Again', slug: uniqueSlug('replay-org-again') },
+      payload,
     });
 
-    expect(second.statusCode).toBeLessThan(500);
+    // Whether served from cache (replay) or re-executed after a Redis eviction, the second
+    // call is a 200 that resolves to the SAME organization — never a duplicate create.
+    expect(second.statusCode).toBe(200);
+    const secondOrganizationId = (second.json() as { data?: { id?: string } }).data?.id;
     if (second.headers['x-idempotency-replay'] === 'true') {
-      expect(second.statusCode).toBe(first.statusCode);
+      expect(secondOrganizationId).toBe(firstOrganizationId);
     }
-    // When Redis has eviction (e.g. volatile-lru), cache may be missing; second request can still return 2xx
   });
 
   it('should deduplicate concurrent requests with same idempotency key', async () => {

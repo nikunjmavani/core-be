@@ -60,8 +60,8 @@ describe('Security: Path traversal', () => {
         token,
       });
 
+      // The set already excludes every 5xx, so a separate `toBeLessThan(500)` added nothing.
       expect([400, 401, 403, 404]).toContain(response.statusCode);
-      expect(response.statusCode).toBeLessThan(500);
     });
   }
 
