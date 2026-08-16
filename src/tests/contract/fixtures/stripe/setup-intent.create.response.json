@@ -1,0 +1,9 @@
+{
+  "id": "seti_1CONTRACTfixture01",
+  "object": "setup_intent",
+  "client_secret": "seti_1CONTRACTfixture01_secret_CONTRACTclientsecret",
+  "customer": "cus_CONTRACTfixture01",
+  "payment_method_types": ["card"],
+  "status": "requires_payment_method",
+  "usage": "off_session"
+}
