@@ -46,7 +46,9 @@ describe('Cross-domain e2e: data export and deletion', () => {
       url: testApiPath('/users/me'),
       token,
     });
-    expect([200, 204]).toContain(deleteResponse.statusCode);
+    // DELETE is 204 under the uniform method→status policy (a CLAUDE.md non-negotiable);
+    // accepting 200 too would let a policy-violating regression pass this cross-domain guard.
+    expect(deleteResponse.statusCode).toBe(204);
 
     const exportRows = await database
       .select({ id: user_data_exports.id })
