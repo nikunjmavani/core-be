@@ -237,6 +237,22 @@ describe('OrganizationService', () => {
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
+  it('uploadLogo rejects an SVG logo (stored-XSS defense) and never persists it', async () => {
+    // The org-logo attach path carries its own independent content-type gate — an SVG logo is
+    // served inline and is a stored-XSS vector. The upload domain's SVG tests do not cover this
+    // path; here headObject reports the confirmed object as image/svg+xml.
+    vi.mocked(objectStorage.headObject).mockResolvedValueOnce({
+      contentType: 'image/svg+xml',
+      contentLength: 512,
+    } as never);
+    const key = `organization-logos/${organizationRow.public_id}/logo.svg`;
+
+    await expect(
+      service.uploadLogo(organizationRow.public_id, { key }, 'owner_public'),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
   it('update throws when repository update returns null', async () => {
     vi.mocked(repository.update).mockResolvedValue(null);
     await expect(

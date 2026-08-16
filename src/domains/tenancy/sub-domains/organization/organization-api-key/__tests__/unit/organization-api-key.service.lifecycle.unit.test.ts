@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ConflictError, NotFoundError } from '@/shared/errors/index.js';
+import { ConflictError, ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
+import { assertCallerCanGrantPermissionCodes } from '@/domains/tenancy/sub-domains/permission/assert-grantable-permissions.util.js';
 
 vi.mock('@/infrastructure/database/contexts/organization-database.context.js', () => ({
   withOrganizationDatabaseContext: (_organizationPublicId: string, callback: () => unknown) =>
@@ -112,6 +113,25 @@ describe('OrganizationApiKeyService lifecycle', () => {
       await expect(service.create('org_public', body, 'user_public')).rejects.toBeInstanceOf(
         NotFoundError,
       );
+    });
+
+    it('sec-T1: blocks create (and mints no key) when the scope-grant guard denies escalation', async () => {
+      // An api key is a bearer credential: scopes exceeding the caller's own permissions must be
+      // refused BEFORE the key is minted. The guard runs first; when it throws, create must abort
+      // and never persist a key. (The lifecycle mock normally no-ops the guard — make it deny here.)
+      const { service, apiKeyRepository } = buildService();
+      vi.mocked(assertCallerCanGrantPermissionCodes).mockRejectedValueOnce(
+        new ForbiddenError('errors:cannotGrantPermissionNotHeld'),
+      );
+
+      await expect(
+        service.create(
+          'org_public',
+          { name: 'Escalation Key', scopes: ['organization:delete'] },
+          'user_public',
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(apiKeyRepository.create).not.toHaveBeenCalled();
     });
 
     it('generates a one-time raw key, hashes it, and persists hash+prefix (no expiry by default)', async () => {
