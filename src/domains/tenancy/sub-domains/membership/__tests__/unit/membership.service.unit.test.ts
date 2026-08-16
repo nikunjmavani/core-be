@@ -18,7 +18,21 @@ vi.mock('@/domains/tenancy/sub-domains/permission/assert-grantable-permissions.u
 vi.mock('@/shared/utils/text/email.util.js', () => ({
   isDisposableEmailBlocked: vi.fn().mockReturnValue(false),
 }));
-import { ForbiddenError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
+
+// The seat-availability check acquires a per-org advisory lock (real DB in production). Mock only
+// the lock (keep RESOURCE_QUOTA_LOCK_NAMESPACE) so the seat logic runs without a live connection.
+vi.mock('@/infrastructure/database/resource-quota-lock.util.js', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@/infrastructure/database/resource-quota-lock.util.js')
+  >()),
+  acquireResourceQuotaLock: vi.fn().mockResolvedValue(undefined),
+}));
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/shared/errors/index.js';
 import { MembershipService } from '@/domains/tenancy/sub-domains/membership/membership.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { MemberRoleService } from '@/domains/tenancy/sub-domains/member-roles/member-role.service.js';
@@ -94,6 +108,8 @@ describe('MembershipService', () => {
         new Map(ids.map((id) => [id, { public_id: `role_public_${id}`, name: 'Admin' }])),
     ),
     resolveLiveInvitationsByMembershipIds: vi.fn(async () => new Map()),
+    // REQ-4 seat enforcement: consulted only when the seat-enforcement port is wired.
+    countActiveByOrganization: vi.fn().mockResolvedValue(0),
   } as unknown as MembershipRepository;
 
   const authorizationService = {
@@ -309,6 +325,83 @@ describe('MembershipService', () => {
     } as never);
     await service.update('org_public', 'mem_public', { status: 'ACTIVE' }, 'updater_public');
     expect(membershipRepository.update).toHaveBeenCalled();
+  });
+
+  describe('REQ-4 seat-cap enforcement (F1) — the suspend→add→reactivate bypass', () => {
+    // The shared `service` has no seat-enforcement port wired (so its create/update tests skip the
+    // check). Wire a LOCAL instance that reuses the same mocks so the check runs, without leaking
+    // the wiring into the sibling tests above.
+    const reserveSeatCeilingForMemberAdd = vi.fn();
+    const enqueueSeatQuantitySync = vi.fn().mockResolvedValue(undefined);
+    const seatEnforcedService = new MembershipService(
+      organizationService,
+      memberRoleService,
+      memberRolePermissionService,
+      membershipRepository,
+      authorizationService,
+      permissionRepository,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      userService,
+      memberInvitationService,
+    );
+    seatEnforcedService.wireSeatEnforcement({
+      reserveSeatCeilingForMemberAdd,
+      enqueueSeatQuantitySync,
+    });
+
+    it('create blocks a new member when the org is already at its plan seat ceiling', async () => {
+      reserveSeatCeilingForMemberAdd.mockResolvedValue(3); // plan ceiling = 3
+      vi.mocked(membershipRepository.countActiveByOrganization).mockResolvedValue(3); // already full
+
+      await expect(
+        seatEnforcedService.create(
+          'org_public',
+          { email: 'invitee@example.com', role_id: 'role_public' },
+          'inviter_public',
+        ),
+      ).rejects.toBeInstanceOf(ConflictError);
+      expect(membershipRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('create consults the seat check and proceeds when the org is under the ceiling', async () => {
+      reserveSeatCeilingForMemberAdd.mockResolvedValue(5);
+      vi.mocked(membershipRepository.countActiveByOrganization).mockResolvedValue(2);
+
+      await seatEnforcedService.create(
+        'org_public',
+        { email: 'invitee@example.com', role_id: 'role_public' },
+        'inviter_public',
+      );
+
+      expect(reserveSeatCeilingForMemberAdd).toHaveBeenCalledWith(organization.id);
+      expect(membershipRepository.create).toHaveBeenCalled();
+    });
+
+    it('reactivating a SUSPENDED member re-runs the seat check and blocks at the ceiling (closes the suspend→add→reactivate bypass)', async () => {
+      // The documented exploit: suspend a member (frees a seat) → add a new member into the slot →
+      // reactivate the suspended one, overshooting the plan ceiling unbounded. SUSPENDED members are
+      // not counted, so a SUSPENDED→ACTIVE transition MUST re-run the same seat availability check.
+      vi.mocked(membershipRepository.findByPublicId).mockResolvedValue({
+        ...membershipRow,
+        status: 'SUSPENDED',
+        joined_at: new Date(),
+      } as never);
+      reserveSeatCeilingForMemberAdd.mockResolvedValue(3);
+      vi.mocked(membershipRepository.countActiveByOrganization).mockResolvedValue(3);
+
+      await expect(
+        seatEnforcedService.update(
+          'org_public',
+          'mem_public',
+          { status: 'ACTIVE' },
+          'updater_public',
+        ),
+      ).rejects.toBeInstanceOf(ConflictError);
+      expect(membershipRepository.update).not.toHaveBeenCalled();
+    });
   });
 
   it('delete soft-deletes membership', async () => {
