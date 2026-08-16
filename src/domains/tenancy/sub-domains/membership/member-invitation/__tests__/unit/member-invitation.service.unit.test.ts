@@ -341,5 +341,19 @@ describe('MemberInvitationService', () => {
         ValidationError,
       );
     });
+
+    it('throws ValidationError and neither rotates the token nor emits when the invitation is expired', async () => {
+      vi.mocked(invitationRepository.findByPublicId).mockResolvedValue(
+        makeInvitationRow({ expires_at: new Date('2020-01-01T00:00:00.000Z') }) as never,
+      );
+      await expect(service.resend('org_public_abc', 'inv_public_123', body)).rejects.toBeInstanceOf(
+        ValidationError,
+      );
+      // The expiry guard must fire BEFORE the destructive token rotation: `resend` overwrites the
+      // token_hash in place, so rotating for an already-expired invite would invalidate the
+      // invitee's link while still refusing the operation. No rotation, no outbox event.
+      expect(invitationRepository.resend).not.toHaveBeenCalled();
+      expect(eventBus.emitStrict).not.toHaveBeenCalled();
+    });
   });
 });

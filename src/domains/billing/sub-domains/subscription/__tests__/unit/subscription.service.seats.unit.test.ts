@@ -226,4 +226,19 @@ describe('SubscriptionService seat counters (REQ-4)', () => {
     expect(paymentProvider.updateSubscriptionQuantity).not.toHaveBeenCalled();
     expect(repository.update).not.toHaveBeenCalled();
   });
+
+  it('syncSeatQuantityForOrganization reconciles seats locally but skips Stripe for a subscription with no provider id', async () => {
+    // A local-only subscription (no provider_subscription_id) must NOT call Stripe — updating a
+    // quantity against a null id would throw — yet the local seat count must still be reconciled.
+    vi.mocked(repository.findActiveByOrganization).mockResolvedValue(
+      baseRow({ provider_subscription_id: null }) as never,
+    );
+    vi.mocked(membershipSeatUsage.countActiveMembers).mockResolvedValue(4);
+
+    await service.syncSeatQuantityForOrganization('org_public', 'idem-local');
+
+    expect(paymentProvider.updateSubscriptionQuantity).not.toHaveBeenCalled();
+    // The ledger is still updated to the recomputed max(1, memberCount).
+    expect(repository.update).toHaveBeenCalledWith('sub_public', 1, { seats: 4 });
+  });
 });
