@@ -240,6 +240,45 @@ describe('UploadService', () => {
     expect(repository.softDeleteByPublicId).not.toHaveBeenCalled();
   });
 
+  it('deleteUpload 404s an org-scoped upload whose organization is undiscoverable (not 403 / not 500)', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValueOnce({
+      ...uploadRow,
+      organization_id: 10,
+    } as never);
+    // The organization row is gone (hard-deleted / undiscoverable). Access resolution must 404
+    // BEFORE the permission check — never a 403 (which would imply the resource exists) and never
+    // a 500 from dereferencing a null org. `Once` so this null does not leak to later tests
+    // (`beforeEach` clears call history but does not re-stub `findOrganizationByInternalId`).
+    vi.mocked(organizationService.findOrganizationByInternalId).mockResolvedValueOnce(
+      null as never,
+    );
+
+    await expect(service.deleteUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+    expect(resolveUserOrganizationPermissions).not.toHaveBeenCalled();
+  });
+
+  it('sec-UP1: confirmUpload refuses a legacy in-place (non-pending-keyed) row and marks it FAILED', async () => {
+    // A row whose file_key never went through the `pending/` indirection has finalKey === sourceKey,
+    // so the presigned PUT URL the client used stays valid for its full TTL — an attacker could swap
+    // a same-length / same-magic-byte payload AFTER confirm and the row would stay UPLOADED with
+    // hostile content. Confirm must refuse (never run verify) and mark the row FAILED, forcing a
+    // re-upload to a fresh pending key.
+    vi.mocked(repository.findByPublicId).mockResolvedValueOnce({
+      ...uploadRow,
+      status: 'PENDING',
+      file_key: 'avatars/user_public/legacy-in-place.png', // no `pending/` prefix
+    } as never);
+
+    await expect(service.confirmUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    expect(repository.markStatusByPublicId).toHaveBeenCalledWith(uploadPublicId, 'FAILED');
+    // The security point: the object is NEVER verified/published from the client-writable key.
+    expect(objectStorage.verifyUploadedObject).not.toHaveBeenCalled();
+  });
+
   it('createUpload succeeds for organization logo with permission', async () => {
     const result = await service.createUpload(
       {
