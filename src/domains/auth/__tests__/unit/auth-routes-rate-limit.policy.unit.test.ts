@@ -159,4 +159,12 @@ describe('auth public-route rate-limit + captcha policy (public go-live surface)
   it('POST /refresh carries REFRESH_RATE_LIMIT', () => {
     expect(findRouteOptionsObject('post', '/refresh')).toContain('...REFRESH_RATE_LIMIT');
   });
+
+  // The org-switch POSTs each re-mint a JWT and hit the DB per call, so they carry a per-user
+  // MODERATE cap (not left on the global limiter alone). Pins the preset against a silent drop.
+  for (const url of ['/switch-to-personal', '/switch-to-organization']) {
+    it(`POST ${url} carries MODERATE_AUTHED_RATE_LIMIT`, () => {
+      expect(findRouteOptionsObject('post', url)).toContain('...MODERATE_AUTHED_RATE_LIMIT');
+    });
+  }
 });

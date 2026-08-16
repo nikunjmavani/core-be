@@ -707,6 +707,7 @@ src/
     │   │   │   │   │   ├── membership.serializer.unit.test.ts
     │   │   │   │   │   ├── membership.service.cache-invalidation.unit.test.ts
     │   │   │   │   │   ├── membership.service.grantable-permissions.unit.test.ts
+    │   │   │   │   │   ├── membership.service.seat-downgrade.unit.test.ts
     │   │   │   │   │   ├── membership.service.unit.test.ts
     │   │   │   │   │   └── membership.validator.unit.test.ts
     │   │   │   ├── member-invitation/
@@ -1629,7 +1630,8 @@ src/
 ├── tests/
     ├── bench/
     │   ├── README.md
-    │   └── bench.overview.md
+    │   ├── bench.overview.md
+    │   └── run-benches.ts
     ├── chaos/
     │   ├── helpers/
     │   │   ├── chaos-app.ts
@@ -1638,8 +1640,10 @@ src/
     │   ├── chaos.constants.ts
     │   ├── chaos.overview.md
     │   ├── circuit-breaker-contention.chaos.test.ts
+    │   ├── combined-postgres-redis-degradation.chaos.test.ts
     │   ├── database-pool-exhaustion.chaos.test.ts
     │   ├── global-setup.ts
+    │   ├── mail-outbox-sweeper-recovery.chaos.test.ts
     │   ├── postgres-health.chaos.test.ts
     │   ├── postgres-pool-concurrency.chaos.test.ts
     │   ├── postgres-reset-peer.chaos.test.ts
@@ -1652,9 +1656,16 @@ src/
     │   ├── redis-queue-enqueue.chaos.test.ts
     │   ├── redis-rate-limit.chaos.test.ts
     │   ├── setup.ts
+    │   ├── webhook-delivery-dlq-exhaustion.chaos.test.ts
     │   └── webhook-delivery.chaos.test.ts
     ├── contract/
     │   ├── fixtures/
+    │   │   ├── oauth/
+    │   │   │   ├── github.emails.success.response.json
+    │   │   │   ├── github.token.success.response.json
+    │   │   │   ├── github.user.success.response.json
+    │   │   │   ├── google.token.success.response.json
+    │   │   │   └── google.userinfo.success.response.json
     │   │   ├── resend/
     │   │   │   ├── emails.send.error.response.json
     │   │   │   ├── emails.send.request.expected.json
@@ -1668,9 +1679,14 @@ src/
     │   │   │       └── customer.subscription.updated.json
     │   │   │   ├── customer.create.request.fields.json
     │   │   │   ├── customer.create.response.json
+    │   │   │   ├── customer.retrieve.default-pm.response.json
+    │   │   │   ├── invoices.list.response.json
+    │   │   │   ├── payment-methods.list.response.json
+    │   │   │   ├── setup-intent.create.response.json
     │   │   │   ├── subscription.cancel.response.json
     │   │   │   ├── subscription.create.request.fields.json
     │   │   │   ├── subscription.create.response.json
+    │   │   │   ├── subscription.retrieve.confirmation-secret.response.json
     │   │   │   ├── subscription.retrieve.response.json
     │   │   │   ├── subscription.update.cancel-at-period-end.response.json
     │   │   │   ├── subscription.update.request.fields.json
@@ -1683,16 +1699,20 @@ src/
     │   │   ├── stripe-form.ts
     │   │   └── stripe-signature.ts
     │   ├── schemas/
+    │   │   ├── oauth.schemas.ts
     │   │   ├── resend.schemas.ts
     │   │   ├── s3.schemas.ts
     │   │   └── stripe.schemas.ts
     │   ├── README.md
     │   ├── contract-vitest-setup.ts
     │   ├── contract.overview.md
+    │   ├── github-oauth.contract.test.ts
+    │   ├── google-oauth.contract.test.ts
     │   ├── request-id-eventbus.contract.test.ts
     │   ├── resend.contract.test.ts
     │   ├── s3-object-storage-adapter.contract.test.ts
     │   ├── s3.contract.test.ts
+    │   ├── stripe-billing-account.contract.test.ts
     │   ├── stripe-webhook.contract.test.ts
     │   ├── stripe.contract.test.ts
     │   ├── turnstile.contract.test.ts
@@ -1732,13 +1752,16 @@ src/
     │   │       ├── 20250101000001_first.sql
     │   │       └── 20250102000001_second.sql
     ├── global/
+    │   ├── audit-surface-pinning.global.test.ts
     │   ├── authz-model-coverage.global.test.ts
     │   ├── authz-runtime-coverage.global.test.ts
     │   ├── domain-consistency.global.test.ts
     │   ├── ensure-openapi-spec.global-setup.ts
+    │   ├── event-wiring-parity.global.test.ts
     │   ├── external-sdk-coverage.global.test.ts
     │   ├── global.overview.md
     │   ├── import-paths.global.test.ts
+    │   ├── layer-boundary.global.test.ts
     │   ├── locale-parity.global.test.ts
     │   ├── mcp-config.global.test.ts
     │   ├── no-direct-db-in-services.global.test.ts
@@ -1751,7 +1774,10 @@ src/
     │   ├── public-route-allowlist.global.test.ts
     │   ├── rls-context-network-isolation.global.test.ts
     │   ├── route-completeness.global.test.ts
+    │   ├── route-rate-limit-coverage.global.test.ts
+    │   ├── schema-rls-parity.global.test.ts
     │   ├── seed-public-id-entity.global.test.ts
+    │   ├── serializer-response-leak.global.test.ts
     │   ├── service-cross-domain-boundary.global.test.ts
     │   ├── stryker-mutate-paths.global.test.ts
     │   ├── system-validation.global.test.ts
@@ -1859,6 +1885,7 @@ src/
     │   │   │   ├── health-stress.js
     │   │   │   ├── health.js
     │   │   │   ├── idempotency-storm.js
+    │   │   │   ├── login-burst-rate-limit.js
     │   │   │   ├── login-smoke.js
     │   │   │   ├── member-role-permission-list.js
     │   │   │   ├── notification-policy-crud.js
@@ -1869,6 +1896,7 @@ src/
     │   │   │   ├── permission-cached.js
     │   │   │   ├── permission-write.js
     │   │   │   ├── rls-concurrency-beyond-pool.js
+    │   │   │   ├── session-refresh-journey.js
     │   │   │   ├── stripe-webhook-ingest.js
     │   │   │   ├── tenancy-role-write.js
     │   │   │   ├── upload-list.js
@@ -1882,12 +1910,15 @@ src/
     │   │   └── setup-loadtest.sh
     │   └── load.overview.md
     ├── performance/
+    │   ├── auth-session-list.performance.test.ts
     │   ├── billing-list.performance.test.ts
     │   ├── concurrent-requests.performance.test.ts
     │   ├── explain-analyze.performance.test.ts
     │   ├── membership-list.performance.test.ts
     │   ├── n-plus-one.performance.test.ts
+    │   ├── notify-list.performance.test.ts
     │   ├── performance.overview.md
+    │   ├── permission-cache.performance.test.ts
     │   └── worker-bulkheads.performance.test.ts
     ├── security/
     │   ├── auth/
@@ -1895,6 +1926,7 @@ src/
     │   │   ├── auth-enforcement.security.test.ts
     │   │   ├── auth-enumeration-parity.security.test.ts
     │   │   ├── auth-public-rate-limit.security.test.ts
+    │   │   ├── email-code-brute-force.security.test.ts
     │   │   ├── jwt-attacks.security.test.ts
     │   │   ├── jwt-security.security.test.ts
     │   │   ├── mcp-auth.security.test.ts
@@ -1924,6 +1956,7 @@ src/
     │   │   └── trust-proxy.security.test.ts
     │   ├── infrastructure/
     │   │   ├── api-versioning.security.test.ts
+    │   │   ├── idempotency-cross-actor.security.test.ts
     │   │   ├── idempotency.security.test.ts
     │   │   ├── mutation-audit.security.test.ts
     │   │   ├── permission-route-matrix.security.test.ts
@@ -1985,12 +2018,16 @@ src/
     │   ├── helpers/
     │   │   ├── smoke-client.ts
     │   │   └── smoke-env.ts
+    │   ├── audit.smoke.test.ts
     │   ├── auth.smoke.test.ts
     │   ├── billing.smoke.test.ts
     │   ├── health.smoke.test.ts
+    │   ├── idempotency.smoke.test.ts
     │   ├── notify.smoke.test.ts
     │   ├── smoke.overview.md
-    │   └── tenancy.smoke.test.ts
+    │   ├── tenancy.smoke.test.ts
+    │   ├── upload.smoke.test.ts
+    │   └── user.smoke.test.ts
     ├── unit/
     │   ├── api/
     │   │   ├── permission-cache-post-commit.policy.unit.test.ts
@@ -1998,6 +2035,8 @@ src/
     │   │   ├── snake-case-body-keys.policy.unit.test.ts
     │   │   ├── stripe-webhook-ingress.policy.unit.test.ts
     │   │   └── zod-route-body-boundary.policy.unit.test.ts
+    │   ├── bench/
+    │   │   └── bench-runner.unit.test.ts
     │   ├── ci/
     │   │   ├── codegraph-git-hooks.policy.unit.test.ts
     │   │   ├── dependabot-ci-triage.policy.unit.test.ts
