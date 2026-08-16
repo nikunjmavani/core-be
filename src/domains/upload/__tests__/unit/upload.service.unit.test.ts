@@ -491,6 +491,44 @@ describe('UploadService', () => {
     expect(createArgs?.file_key).toBe(`pending/${result.key}`);
   });
 
+  // The avatar/logo purposes have dedicated key builders (covered above + in the key-builder units).
+  // The generic *-file purposes fall through the else-branch — `${keyPrefix}/${ownerSegment}/${uuid}`
+  // — whose owner segment the attach-ownership check later relies on. Pin the shape for both.
+  it('createUpload builds a user-files/{userPublicId}/ key for the user-file purpose', async () => {
+    const result = await service.createUpload(
+      {
+        purpose: 'user-file',
+        for: 'user',
+        content_type: 'image/png',
+        file_name: 'doc.png',
+        file_size: 1024,
+      },
+      userPublicId,
+    );
+
+    expect(result.key).toMatch(new RegExp(`^user-files/${userPublicId}/[0-9a-f-]{36}\\.png$`));
+    expect(result.key).not.toMatch(/^pending\//);
+    const presignArgs = vi.mocked(objectStorage.createPresignedUploadUrl).mock.calls[0]?.[0];
+    expect(presignArgs?.key).toBe(`pending/${result.key}`);
+  });
+
+  it('createUpload builds an organization-files/{organizationPublicId}/ key for the organization-file purpose', async () => {
+    const result = await service.createUpload(
+      {
+        purpose: 'organization-file',
+        for: 'organization',
+        organization_id: 'org_public',
+        content_type: 'image/png',
+        file_name: 'doc.png',
+        file_size: 1024,
+      },
+      userPublicId,
+    );
+
+    expect(result.key).toMatch(/^organization-files\/org_public\/[0-9a-f-]{36}\.png$/);
+    expect(result.key).not.toMatch(/^pending\//);
+  });
+
   it('confirmUpload allows org managers to confirm teammate-created organization uploads', async () => {
     // sec-UP1: must be pending-keyed.
     const finalKey = uploadRow.file_key;

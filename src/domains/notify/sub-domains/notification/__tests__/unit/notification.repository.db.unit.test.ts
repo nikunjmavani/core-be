@@ -197,4 +197,54 @@ describe('NotificationRepository (database)', () => {
     const row = await repository.findByIdForDispatch(notificationId, null);
     expect(row?.actionUrl).toBe('https://example.com/inbox');
   });
+
+  // Every prior findByUser assertion used a single matching row (has_more only ever false, the
+  // cursor never round-tripped). Drive the keyset across a real page boundary.
+  it('findByUser pages through multiple keyset pages and round-trips the cursor', async () => {
+    const user = await createTestUser({ email: 'notify-keyset@example.com' });
+    for (let index = 0; index < 3; index += 1) {
+      await repository.create({
+        user_id: user.id,
+        type: 'SYSTEM',
+        title: `N${String(index)}`,
+        message: 'body',
+      });
+    }
+
+    const page1 = await repository.findByUser(user.id, { limit: 2 });
+    expect(page1.items).toHaveLength(2);
+    expect(page1.has_more).toBe(true);
+    expect(page1.next_cursor).toEqual(expect.any(String));
+
+    const page2 = await repository.findByUser(user.id, { limit: 2, after: page1.next_cursor! });
+    expect(page2.items).toHaveLength(1);
+    expect(page2.has_more).toBe(false);
+    expect(page2.next_cursor).toBeNull();
+
+    // The two pages are disjoint and together cover all three rows (the (created_at,id) keyset).
+    const page1Ids = page1.items.map((row) => row.id);
+    expect(page1Ids).not.toContain(page2.items[0]!.id);
+    expect(new Set([...page1Ids, page2.items[0]!.id]).size).toBe(3);
+  });
+
+  it('findByUser computes a real total only when include_total is set', async () => {
+    // The route reserves a dedicated rate limit for include_total precisely because the count(*) is
+    // expensive — pin that it is null by default and an accurate count when requested.
+    const user = await createTestUser({ email: 'notify-total@example.com' });
+    for (let index = 0; index < 3; index += 1) {
+      await repository.create({
+        user_id: user.id,
+        type: 'SYSTEM',
+        title: `N${String(index)}`,
+        message: 'body',
+      });
+    }
+
+    expect((await repository.findByUser(user.id, { limit: 2 })).total).toBeNull();
+
+    const withTotal = await repository.findByUser(user.id, { limit: 2, include_total: true });
+    expect(withTotal.total).toBe(3);
+    expect(withTotal.items).toHaveLength(2);
+    expect(withTotal.has_more).toBe(true);
+  });
 });
