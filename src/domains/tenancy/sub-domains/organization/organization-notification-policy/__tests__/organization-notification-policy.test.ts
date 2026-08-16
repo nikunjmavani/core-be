@@ -227,7 +227,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
       expect(response.statusCode).toBe(400);
     });
 
-    it('should return 422 (not 500) when channel is outside the allowed set', async () => {
+    it('should return 400 (not 500) when channel is outside the allowed set', async () => {
       const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
@@ -240,8 +240,9 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token,
         payload: { notification_type: 'system.welcome', channel: 'CARRIER_PIGEON' },
       });
+      // Unknown enum value is a request-SHAPE failure → 400 per the response-codes contract
+      // (a DTO rejection, not a business-rule 422); it must not reach the DB channel check as a 500.
       expect(response.statusCode).toBe(400);
-      expect(response.statusCode).toBeLessThan(500);
     });
 
     it('should return 400 when body contains unknown keys', async () => {

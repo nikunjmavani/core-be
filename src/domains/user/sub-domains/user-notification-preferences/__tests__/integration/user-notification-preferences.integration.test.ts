@@ -48,7 +48,7 @@ describe('User Notification Preferences Sub-Domain — Integration', () => {
       expect(response.statusCode).toBe(400);
     });
 
-    it('returns 422 (not 500) for a channel outside the allowed set', async () => {
+    it('returns 400 (not 500) for a channel outside the allowed set', async () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
       // An unknown channel must be rejected by the DTO, not slip through to the
@@ -67,8 +67,9 @@ describe('User Notification Preferences Sub-Domain — Integration', () => {
           ],
         },
       });
+      // Unknown enum value is a request-SHAPE failure → 400 per the response-codes contract
+      // (a DTO rejection, not a business-rule 422); it must not reach the DB channel check as a 500.
       expect(response.statusCode).toBe(400);
-      expect(response.statusCode).toBeLessThan(500);
     });
 
     it('returns 400 (not 500) when organization_id is set — org-scoped prefs unsupported here', async () => {
