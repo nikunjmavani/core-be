@@ -144,6 +144,33 @@ describe('MfaService', () => {
     );
   });
 
+  it('sec-U1: refuses to mint a session when the account was SUSPENDED during the MFA-session window', async () => {
+    // First factor already passed (a valid mfa_session_token exists); the account was suspended
+    // before the second factor completed. `auth.service` blocks suspended users BEFORE minting the
+    // MFA token — this second guard covers the window AFTER, a real TOCTOU. Reject before any session.
+    vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue({
+      ...user,
+      status: 'SUSPENDED',
+    } as never);
+
+    await expect(
+      service.verifyLoginMfa({ mfa_session_token: 'token', totp_code: '123456' }, '127.0.0.1'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(authSessionService.createSessionForUser).not.toHaveBeenCalled();
+  });
+
+  it('sec-U1: refuses to mint a session when the account was soft-deleted during the MFA-session window', async () => {
+    vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue({
+      ...user,
+      deleted_at: new Date(),
+    } as never);
+
+    await expect(
+      service.verifyLoginMfa({ mfa_session_token: 'token', totp_code: '123456' }, '127.0.0.1'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(authSessionService.createSessionForUser).not.toHaveBeenCalled();
+  });
+
   it('verifyLoginMfa issues session after valid recovery code', async () => {
     const { consumeMfaRecoveryCode } = await import(
       '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js'

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Redis } from 'ioredis';
+import { UnauthorizedError } from '@/shared/errors/index.js';
 import { mockedRedisSet } from '@/tests/helpers/redis-mock.helper.js';
 import { EmailLoginService } from '@/domains/auth/sub-domains/auth-method/email-login.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
@@ -322,6 +323,22 @@ describe('EmailLoginService', () => {
     expect(userService.updateEmailVerified).toHaveBeenCalledWith(user.public_id);
     expect(result.access_token).toBe('jwt-token');
     expect(redis.del).toHaveBeenCalled();
+  });
+
+  it('sec-U1: login refuses to mint a session when the account was SUSPENDED between code issue and login', async () => {
+    // `findByEmail` filters only soft-deleted, so a suspended user reaches the consume+active-guard.
+    // The just-consumed code proves email control, but a suspended account must NOT get a session
+    // (TOCTOU: ACTIVE when the code was issued, suspended before login completed).
+    vi.mocked(userService.findByEmail).mockResolvedValue({ ...user, status: 'SUSPENDED' } as never);
+    vi.mocked(verificationTokenRepository.consumeOtpForUser).mockResolvedValue({
+      token_type: 'EMAIL_CODE',
+      user_id: user.id,
+    } as never);
+
+    await expect(
+      service.login({ email: user.email, code: 'ABCDEF' }, '127.0.0.1', 'vitest'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(authSessionService.createSessionForUser).not.toHaveBeenCalled();
   });
 
   it('login rejects an unknown email without consuming a code', async () => {
