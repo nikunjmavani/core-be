@@ -386,6 +386,46 @@ describe('WebhookService', () => {
     expect(webhookRepository.update).not.toHaveBeenCalled();
   });
 
+  it('audit-#9: a secret-rotation race loser (UPDATE matches zero rows after an eligible pre-check) gets a retryable 409, not a 404', async () => {
+    // The pre-check passes (no prior rotation on the row it read), but a concurrent rotation wins
+    // the atomic eligibility predicate so this UPDATE matches zero rows. The service must re-read
+    // and map the loser to a ConflictError with a retry-after — never a misleading NotFoundError.
+    vi.mocked(webhookRepository.findByPublicId)
+      .mockResolvedValueOnce(webhook as never) // pre-check: eligible (no secret_rotated_at)
+      .mockResolvedValueOnce({
+        ...webhook,
+        secret_rotated_at: new Date(Date.now() - 60 * 60 * 1000), // the winner rotated 1h ago
+      } as never);
+    vi.mocked(webhookRepository.update).mockResolvedValueOnce(null as never);
+
+    await expect(
+      service.update(
+        'org_public',
+        'webhook_public',
+        { secret: 'race-losing-secret-value' },
+        'user_public',
+      ),
+    ).rejects.toBeInstanceOf(ConflictError);
+    // Unlike the pre-check 409, the UPDATE WAS attempted — the race was lost at the DB, not the gate.
+    expect(webhookRepository.update).toHaveBeenCalled();
+  });
+
+  it('audit-#9: an UPDATE returning null for a VANISHED webhook maps to NotFoundError, not a false 409', async () => {
+    vi.mocked(webhookRepository.findByPublicId)
+      .mockResolvedValueOnce(webhook as never) // pre-check: eligible
+      .mockResolvedValueOnce(null as never); // re-read: the row is gone
+    vi.mocked(webhookRepository.update).mockResolvedValueOnce(null as never);
+
+    await expect(
+      service.update(
+        'org_public',
+        'webhook_public',
+        { secret: 'secret-for-vanished-hook' },
+        'user_public',
+      ),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
   it('route-audit/NOTIFY-11: allows a re-rotation once the previous overlap window has elapsed', async () => {
     vi.mocked(webhookRepository.findByPublicId).mockResolvedValueOnce({
       ...webhook,

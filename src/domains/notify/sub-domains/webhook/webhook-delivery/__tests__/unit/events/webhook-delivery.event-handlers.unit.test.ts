@@ -71,4 +71,20 @@ describe('webhook delivery event handlers', () => {
     expect(enqueueWebhookDeliveryByAttemptIdMock).toHaveBeenCalledOnce();
     expect(enqueueWebhookDeliveryByAttemptIdMock).toHaveBeenCalledWith(42, 'org_public_test_99');
   });
+
+  it('does not enqueue an unscoped delivery when the attempt has no resolvable organization', async () => {
+    // The handler resolves the org so delivery is enqueued tenant-scoped. A null (attempt/org gone)
+    // makes it throw `organization_not_found`, which the handler CATCHES and logs — it must never
+    // enqueue an organization-less delivery, and the throw must not escape the event bus (a failing
+    // handler must not fail the originating request).
+    findOrganizationPublicIdByDeliveryAttemptIdMock.mockResolvedValue(null);
+
+    await eventBus.emit({
+      type: NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED,
+      payload: { delivery_attempt_id: 7 },
+      timestamp: new Date(),
+    });
+
+    expect(enqueueWebhookDeliveryByAttemptIdMock).not.toHaveBeenCalled();
+  });
 });

@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
+import { database } from '@/infrastructure/database/connection.js';
+import { webhook_delivery_attempts } from '@/domains/notify/sub-domains/webhook/webhook.schema.js';
 import { WebhookRepository } from '@/domains/notify/sub-domains/webhook/webhook.repository.js';
 import {
   createPendingWebhookDeliveryAttempt,
   findOrganizationPublicIdByDeliveryAttemptId,
   findOrganizationPublicIdByWebhookId,
   findWebhookDeliveryAttemptWithWebhook,
+  markDeliveryAttemptEnqueueFailed,
 } from '@/domains/notify/sub-domains/webhook/webhook-delivery/webhook-delivery.repository.js';
 
 describe('webhook-delivery.repository (database)', () => {
@@ -85,5 +89,37 @@ describe('webhook-delivery.repository (database)', () => {
   it('findOrganizationPublicIdByDeliveryAttemptId returns null when attempt missing', async () => {
     const result = await findOrganizationPublicIdByDeliveryAttemptId(999_999);
     expect(result).toBeNull();
+  });
+
+  // The only backstop against a delivery row stuck in PENDING forever when the post-commit BullMQ
+  // enqueue fails (a Redis blip). Referenced only in source until now — no test proved the SQL.
+  it('markDeliveryAttemptEnqueueFailed moves a stuck PENDING row to FAILED / enqueue_failed with no retry', async () => {
+    const owner = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const webhook = await webhookRepository.create({
+      organization_id: organization.id,
+      url: 'https://example.com/enqueue-fail',
+      events: ['subscription.updated'],
+      encrypted_secret: 'sample-webhook-secret-enqueuefail',
+      created_by_user_id: owner.id,
+    });
+    const deliveryAttemptId = await createPendingWebhookDeliveryAttempt({
+      webhookId: webhook.id,
+      eventType: 'subscription.updated',
+      payload: { subscription_id: 'sub_enqueue_fail' },
+    });
+    expect(deliveryAttemptId).not.toBeNull();
+
+    await markDeliveryAttemptEnqueueFailed(deliveryAttemptId!);
+
+    const [row] = await database
+      .select()
+      .from(webhook_delivery_attempts)
+      .where(eq(webhook_delivery_attempts.id, deliveryAttemptId!));
+    expect(row?.status).toBe('FAILED');
+    expect(row?.response_body).toBe('enqueue_failed');
+    expect(row?.http_status_code).toBeNull();
+    // next_retry_at null so the retention/retry paths never re-pick a terminally-enqueue-failed row.
+    expect(row?.next_retry_at).toBeNull();
   });
 });

@@ -112,6 +112,32 @@ describe('notification.worker', () => {
     expect(result).toEqual({ channels: ['email:queued', 'in_app:persisted'] });
   });
 
+  it('sec-N7: sends to the joined row recipient, never a producer-supplied data.email (email-hijack guard)', async () => {
+    // `data` is `Record<string, unknown>`; a domain handler that reflected request input into it
+    // could smuggle an `email` field. The worker must ALWAYS use the notification row's joined
+    // `auth.users.email` and ignore `data.email`, or system mail is redirected to an attacker inbox.
+    const repository = createNotificationRepository(
+      buildNotificationRow({
+        userEmail: 'real@user.com',
+        data: { channels: ['email'], email: 'attacker@evil.com' },
+      }),
+    );
+
+    await processNotificationDispatchJob(
+      10,
+      'organization_public_id',
+      { id: 'job-hijack', requestId: 'request-1' },
+      repository,
+    );
+
+    expect(recordOutboxEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'real@user.com' }),
+    );
+    expect(recordOutboxEmailMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'attacker@evil.com' }),
+    );
+  });
+
   it('does not enqueue a duplicate email when a prior run already durably dispatched (audit-#7)', async () => {
     isNotificationEmailDispatchedMock.mockResolvedValue(true);
     const repository = createNotificationRepository(buildNotificationRow());
