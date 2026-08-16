@@ -79,6 +79,20 @@ describe('UserRepository (database)', () => {
     expect(afterDelete).toBeNull();
   });
 
+  it('softDelete is a no-op without markDeletionStarted (two-phase guard blocks the delete)', async () => {
+    // The soft-delete UPDATE guards on `deletion_started_at IS NOT NULL`. Skipping the mark phase
+    // must match 0 rows — returns null and leaves the row live — so a stray soft-delete can never
+    // bypass the offboarding sequence that markDeletionStarted gates.
+    const user = await createTestUser({ email: 'no-mark-softdelete@example.com' });
+
+    const result = await repository.softDelete(user.public_id);
+    expect(result).toBeNull();
+
+    const stillLive = await repository.findByPublicId(user.public_id);
+    expect(stillLive?.public_id).toBe(user.public_id);
+    expect(stillLive?.deleted_at).toBeNull();
+  });
+
   it('insertOAuthUser inserts oauth user with the supplied public_id', async () => {
     const publicId = generatePublicId('user');
     const oauthUser = await repository.insertOAuthUser(publicId, {

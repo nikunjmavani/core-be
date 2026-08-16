@@ -10,6 +10,8 @@ import { UserService } from '@/domains/user/user.service.js';
 import type { UserRepository } from '@/domains/user/user.repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { createObjectStoragePortMock } from '@/tests/helpers/object-storage-mock.helper.js';
+import { env } from '@/shared/config/env.config.js';
+import { ensurePersonalOrganizationPublicId } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 
 /**
  * UserService wraps repository calls in `withUserDatabaseContext` /
@@ -192,6 +194,33 @@ describe('UserService', () => {
     expect(me.id).toBe(userRow.public_id);
     await service.updateMe(userRow.public_id, { first_name: 'Updated' });
     expect(repository.update).toHaveBeenCalled();
+  });
+
+  it('getMe reports a null personal_organization_id and skips provisioning when personal orgs are disabled', async () => {
+    // The disabled branch must short-circuit — no on-demand provisioning — and report null, so a
+    // deployment with personal orgs off never dead-ends on a self-heal that cannot run.
+    const original = env.PERSONAL_ORGANIZATION_ENABLED;
+    env.PERSONAL_ORGANIZATION_ENABLED = false;
+    try {
+      const me = await service.getMe(userRow.public_id);
+      expect(me.personal_organization_id).toBeNull();
+      expect(ensurePersonalOrganizationPublicId).not.toHaveBeenCalled();
+    } finally {
+      env.PERSONAL_ORGANIZATION_ENABLED = original;
+    }
+  });
+
+  it('getMe surfaces the on-demand provisioned personal_organization_id when personal orgs are enabled', async () => {
+    const original = env.PERSONAL_ORGANIZATION_ENABLED;
+    env.PERSONAL_ORGANIZATION_ENABLED = true;
+    try {
+      vi.mocked(ensurePersonalOrganizationPublicId).mockResolvedValueOnce('org_personalxxxxxxxxxx');
+      const me = await service.getMe(userRow.public_id);
+      expect(me.personal_organization_id).toBe('org_personalxxxxxxxxxx');
+      expect(ensurePersonalOrganizationPublicId).toHaveBeenCalledWith(userRow.id);
+    } finally {
+      env.PERSONAL_ORGANIZATION_ENABLED = original;
+    }
   });
 
   it('completeOnboarding stamps the flag and returns the fresh self profile', async () => {
