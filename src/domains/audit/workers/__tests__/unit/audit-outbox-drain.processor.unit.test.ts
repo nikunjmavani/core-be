@@ -1,4 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { users } from '@/domains/user/user.schema.js';
+import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
+import { api_keys } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.schema.js';
 
 const drainRepositoryMock = vi.hoisted(() => ({
   claimPendingBatch: vi.fn(),
@@ -45,17 +48,22 @@ function buildDatabaseHandle(
     public_id,
   }));
 
-  let callIndex = 0;
-  const responses = [userRows, orgRows, apiKeyRows];
+  // Route resolution SELECTs by the queried TABLE, not by call order: `buildResolutionMaps`
+  // SKIPS a table's SELECT when the batch references no id of that kind (e.g. an API-key-only
+  // actor has no user public id), so a positional response array would misalign the moment a
+  // table is skipped. Table identity keeps every actor/target/org/api-key combination correct.
+  const rowsByTable = new Map<unknown, Array<{ id: number; public_id: string }>>([
+    [users, userRows],
+    [organizations, orgRows],
+    [api_keys, apiKeyRows],
+  ]);
 
   const select = vi.fn().mockImplementation(() => ({
-    from: vi.fn().mockImplementation(() => ({
+    from: vi.fn().mockImplementation((table: unknown) => ({
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      where: vi.fn().mockImplementation(async (_predicate: unknown) => {
-        const rows = responses[callIndex] ?? [];
-        callIndex += 1;
-        return rows;
-      }),
+      where: vi
+        .fn()
+        .mockImplementation(async (_predicate: unknown) => rowsByTable.get(table) ?? []),
     })),
   }));
 
@@ -210,6 +218,55 @@ describe('runAuditOutboxDrainJob', () => {
       expect.stringMatching(/actor public_id did not resolve/),
     );
     expect(databaseHandle.insert).not.toHaveBeenCalled();
+  });
+
+  it('marks a row permanently FAILED when the organization public_id no longer resolves', async () => {
+    // The actor resolves but the organization was hard-deleted between the outbox insert and
+    // the drain. This is the SIBLING of the actor-unresolvable branch (processor `resolveRowInserts`
+    // org guard) — a tenant deleted mid-flight must produce a terminal FAILED row for triage, never
+    // a silently-dropped audit or a wedged queue head.
+    const row = buildOutboxRow({
+      id: 105,
+      actor_user_public_id: 'user_a',
+      organization_public_id: 'org_gone',
+    });
+    drainRepositoryMock.claimPendingBatch.mockResolvedValueOnce([row]);
+    // user_a resolves; org_gone does not (empty org map).
+    const databaseHandle = buildDatabaseHandle({ user_a: 5 }, {}, {});
+
+    const result = await runAuditOutboxDrainJob(databaseHandle as never);
+
+    expect(result).toEqual({ drained: 0, transientFailed: 0, permanentlyFailed: 1 });
+    expect(drainRepositoryMock.markPermanentlyFailed).toHaveBeenCalledExactlyOnceWith(
+      105,
+      expect.stringMatching(/organization_public_id org_gone did not resolve/),
+    );
+    expect(databaseHandle.insert).not.toHaveBeenCalled();
+  });
+
+  it('drains a row attributed to an API-key actor: resolves the api-key id, inserts actor_api_key_id / null user', async () => {
+    // The whole `actor_api_key_public_id` column exists so key-attributed actions stay auditable.
+    // Every other drain test uses a USER actor; this exercises the api-key resolution branch — a
+    // regression there would mark every API-key-attributed audit as "actor public_id did not
+    // resolve" → permanently FAILED, silently losing that class of audit.
+    const row = buildOutboxRow({
+      id: 106,
+      actor_user_public_id: null,
+      actor_api_key_public_id: 'key_a',
+      organization_public_id: 'org_a',
+    });
+    drainRepositoryMock.claimPendingBatch.mockResolvedValueOnce([row]);
+    let insertedRow: Record<string, unknown> | undefined;
+    const databaseHandle = buildDatabaseHandle({}, { org_a: 10 }, { key_a: 77 }, async (values) => {
+      insertedRow = values;
+    });
+
+    const result = await runAuditOutboxDrainJob(databaseHandle as never);
+
+    expect(result).toEqual({ drained: 1, transientFailed: 0, permanentlyFailed: 0 });
+    expect(insertedRow?.actor_api_key_id).toBe(77);
+    expect(insertedRow?.actor_user_id).toBeNull();
+    expect(drainRepositoryMock.markProcessed).toHaveBeenCalledExactlyOnceWith([106]);
   });
 
   it('records a TRANSIENT failure on first DB error and KEEPS the row PENDING for retry', async () => {

@@ -193,4 +193,60 @@ describe('AuditRepository (database)', () => {
       expect(secondPage.items.length).toBeGreaterThan(0);
     });
   });
+
+  // The `include_total` count(*) is the expensive path the route's dedicated rate limit exists
+  // to protect (audit.routes.ts) — yet no DB test proved it actually computes. The default
+  // (keyset-only, no count) and the opt-in real count were both unverified end to end.
+  it('findWithFilters returns null total by default and a real count(*) when include_total is true', async () => {
+    const actor = await createTestUser({ email: 'audit-total@example.com' });
+    const COUNT = 3;
+    for (let n = 0; n < COUNT; n += 1) {
+      await repository.insert({
+        actor_user_id: actor.id,
+        action: `user.counted.${n}`,
+        resource_type: 'user',
+        resource_id: actor.id,
+      });
+    }
+
+    const withoutTotal = await repository.findWithFilters({ limit: 20, actor_user_id: actor.id });
+    expect(withoutTotal.total).toBeNull();
+
+    const withTotal = await repository.findWithFilters({
+      limit: 20,
+      actor_user_id: actor.id,
+      include_total: true,
+    });
+    expect(withTotal.total).toBe(COUNT);
+  });
+
+  // GDPR export correctness: `listActivityForUserDataExport` feeds the user's data-export bundle.
+  // A wrong filter would leak another user's activity into the subject's export; a wrong limit
+  // would truncate it. Only mocked from the user-data-export side — never run against real SQL.
+  it('listActivityForUserDataExport returns only the subject actor rows, capped at the limit', async () => {
+    const subject = await createTestUser({ email: 'audit-export-subject@example.com' });
+    const other = await createTestUser({ email: 'audit-export-other@example.com' });
+
+    // Another actor's activity must never appear in the subject's export.
+    await repository.insert({
+      actor_user_id: other.id,
+      action: 'other.login',
+      resource_type: 'user',
+      resource_id: other.id,
+    });
+    for (let n = 0; n < 3; n += 1) {
+      await repository.insert({
+        actor_user_id: subject.id,
+        action: `subject.action.${n}`,
+        resource_type: 'user',
+        resource_id: subject.id,
+      });
+    }
+
+    const activity = await repository.listActivityForUserDataExport(subject.id, 2);
+
+    // Capped at the limit, and every row is the subject's — no cross-actor leak.
+    expect(activity).toHaveLength(2);
+    expect(activity.every((row) => row.action.startsWith('subject.action.'))).toBe(true);
+  });
 });
