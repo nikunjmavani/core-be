@@ -131,6 +131,42 @@ describe('UserService', () => {
     expect(result?.email).toBe('user@example.com');
   });
 
+  describe('findOrCreateInvitedByEmail (invite resurrection guard)', () => {
+    it('returns the existing LIVE user and mints nothing', async () => {
+      vi.mocked(repository.findByEmail).mockResolvedValueOnce(userRow as never);
+
+      const result = await service.findOrCreateInvitedByEmail({ email: 'user@example.com' });
+
+      expect(result).toBe(userRow);
+      expect(repository.insertOAuthUser).not.toHaveBeenCalled();
+    });
+
+    it('mints a FRESH passwordless account when the email belongs to a soft-deleted (offboarded) user', async () => {
+      // A tombstoned account must NOT be resurrected into an active org membership with its old
+      // public_id — that would re-attach an offboarded identity. The guard is `&& !existing.deleted_at`;
+      // if it ever regressed to `if (existing) return existing`, the deleted row would be reused.
+      vi.mocked(repository.findByEmail).mockResolvedValueOnce({
+        ...userRow,
+        deleted_at: new Date(),
+      } as never);
+
+      await service.findOrCreateInvitedByEmail({ email: 'user@example.com' });
+
+      expect(repository.insertOAuthUser).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ email: 'user@example.com', is_email_verified: false }),
+      );
+    });
+
+    it('mints a passwordless account when no user exists for the invited email', async () => {
+      vi.mocked(repository.findByEmail).mockResolvedValueOnce(null as never);
+
+      await service.findOrCreateInvitedByEmail({ email: 'brand-new@example.com' });
+
+      expect(repository.insertOAuthUser).toHaveBeenCalled();
+    });
+  });
+
   it('requireUserRecordByPublicId returns active user', async () => {
     const result = await service.requireUserRecordByPublicId(userRow.public_id);
     expect(result.public_id).toBe(userRow.public_id);

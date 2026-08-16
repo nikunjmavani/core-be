@@ -147,4 +147,58 @@ describe('UserRepository (database)', () => {
     const byEmailUpper = await repository.findMany({ limit: 20, search: 'CASE-SEARCH-TARGET' });
     expect(byEmailUpper.items.some((row) => row.public_id === user.public_id)).toBe(true);
   });
+
+  // sec-r5: removing a PASSWORD auth-method must actually kill the credential so login stops
+  // authenticating. Only the DECISION to call clearPasswordHash was tested (mocked); the SQL
+  // (`password_hash = NULL`, guarded by `isNull(deleted_at)`, RETURNING) never ran.
+  it('clearPasswordHash nulls the stored credential and persists it', async () => {
+    const user = await createTestUser({ email: 'clear-hash@example.com' });
+    await repository.updatePassword(user.public_id, 'live-hash');
+    expect((await repository.findByPublicId(user.public_id))?.password_hash).toBe('live-hash');
+
+    const cleared = await repository.clearPasswordHash(user.public_id);
+    expect(cleared?.password_hash).toBeNull();
+    // Re-read proves it persisted (not just the RETURNING row).
+    expect((await repository.findByPublicId(user.public_id))?.password_hash).toBeNull();
+  });
+
+  it('clearPasswordHash returns null for an unknown user id', async () => {
+    const result = await repository.clearPasswordHash(generatePublicId('user'));
+    expect(result).toBeNull();
+  });
+
+  // Admin list status filter — no test anywhere passed `status`; a dropped predicate would return
+  // the whole table for every filtered admin query.
+  it('findMany filters the admin list by status', async () => {
+    const active = await createTestUser({ email: 'active-filter@example.com' });
+    const toSuspend = await createTestUser({ email: 'suspended-filter@example.com' });
+    await repository.suspend(toSuspend.public_id);
+
+    const suspendedOnly = await repository.findMany({ limit: 20, status: 'SUSPENDED' });
+    const ids = suspendedOnly.items.map((row) => row.public_id);
+    expect(ids).toContain(toSuspend.public_id);
+    expect(ids).not.toContain(active.public_id);
+  });
+
+  // Keyset pagination traversal — every prior findMany test used a single matching row, so
+  // has_more was only ever false and the opaque cursor round-trip never ran. An off-by-one on the
+  // limit+1 sentinel or a cursor-encoding bug would drop or duplicate users across admin pages.
+  it('findMany paginates by keyset: has_more + a cursor yielding a disjoint next page', async () => {
+    const created = [];
+    for (let index = 0; index < 3; index += 1) {
+      created.push(await createTestUser({ email: `page-user-${index}@example.com` }));
+    }
+
+    const page1 = await repository.findMany({ limit: 2 });
+    expect(page1.items).toHaveLength(2);
+    expect(page1.has_more).toBe(true);
+    expect(page1.next_cursor).toBeTruthy();
+
+    const page2 = await repository.findMany({ limit: 2, after: page1.next_cursor! });
+    const page1Ids = new Set(page1.items.map((row) => row.public_id));
+    // Disjoint — no user appears on both pages.
+    expect(page2.items.every((row) => !page1Ids.has(row.public_id))).toBe(true);
+    expect(page2.items.length).toBeGreaterThan(0);
+    expect(created).toHaveLength(3);
+  });
 });
