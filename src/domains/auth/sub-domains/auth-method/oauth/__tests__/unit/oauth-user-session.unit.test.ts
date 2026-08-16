@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { ForbiddenError } from '@/shared/errors/index.js';
+import { ForbiddenError, UnauthorizedError } from '@/shared/errors/index.js';
 import { completeOAuthUserSession } from '@/domains/auth/sub-domains/auth-method/oauth/oauth-user-session.js';
 import { ensurePersonalOrganization } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 
@@ -128,6 +128,24 @@ describe('completeOAuthUserSession', () => {
     // The account already has a credential, so the bare-claim path is never even probed.
     expect(authMethodService.hasActiveLoginCredential).not.toHaveBeenCalled();
     expect(userService.updateEmailVerified).not.toHaveBeenCalled();
+  });
+
+  it('sec-U1: refuses to mint a session for a returning VERIFIED account that was suspended since signup', async () => {
+    // A verified pre-existing account clears the find-or-link takeover checks, but if it has since
+    // been suspended the OAuth callback must NOT issue a session (the method docstring promises to
+    // reject suspended/locked accounts before minting).
+    userService.findByEmail.mockResolvedValue({
+      id: 42,
+      public_id: 'returning_public',
+      email: 'returning@example.com',
+      status: 'SUSPENDED',
+      is_email_verified: true,
+    });
+
+    const error = await callCompleteOAuthUserSession().catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UnauthorizedError);
+    expect(authSessionService.createSessionForUser).not.toHaveBeenCalled();
   });
 
   it('blocks find-or-link into an unverified passkey-only account (passkey counts as a credential)', async () => {
