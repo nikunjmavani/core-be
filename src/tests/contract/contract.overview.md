@@ -13,6 +13,7 @@ What this suite covers:
 - Request shape matches upstream API expectations (path, method, headers, body fields).
 - Response parsing matches our types (we don't ignore an unexpected field that becomes mandatory).
 - Idempotency-Key forwarding to Stripe.
+- Stripe write path (customer/subscription create/update/qty/cancel/resume, events list) AND the billing-account read + setup path (`GET /v1/invoices`, `GET /v1/payment_methods?type=card`, customer default-PM retrieve, `POST /v1/setup_intents`, subscription `latest_invoice.confirmation_secret` expand) — `stripe.contract.test.ts` + `stripe-billing-account.contract.test.ts`.
 - Webhook signature verification on inbound (Stripe).
 - Request-id forwarding on outbound customer webhooks.
 

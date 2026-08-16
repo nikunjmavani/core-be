@@ -1,0 +1,33 @@
+{
+  "object": "list",
+  "url": "/v1/invoices",
+  "has_more": false,
+  "data": [
+    {
+      "id": "in_1CONTRACTfixture0001",
+      "object": "invoice",
+      "number": "CONTRACT-0001",
+      "status": "paid",
+      "amount_due": 4900,
+      "amount_paid": 4900,
+      "currency": "usd",
+      "created": 1750000000,
+      "due_date": null,
+      "hosted_invoice_url": "https://invoice.stripe.com/i/acct_contract/test_0001",
+      "invoice_pdf": "https://pay.stripe.com/invoice/acct_contract/test_0001/pdf"
+    },
+    {
+      "id": "in_1CONTRACTfixture0002",
+      "object": "invoice",
+      "number": "CONTRACT-0002",
+      "status": "open",
+      "amount_due": 4900,
+      "amount_paid": 0,
+      "currency": "usd",
+      "created": 1752000000,
+      "due_date": 1754000000,
+      "hosted_invoice_url": "https://invoice.stripe.com/i/acct_contract/test_0002",
+      "invoice_pdf": null
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "id": "cus_CONTRACTfixture01",
+  "object": "customer",
+  "email": "contract.fixture@example.com",
+  "invoice_settings": {
+    "default_payment_method": "pm_1CONTRACTfixtureDEFAULT"
+  }
+}
