@@ -50,12 +50,8 @@ const GLOBAL_LIMITER_ONLY_ALLOWLIST = new Set<string>([
   'src/domains/user/user.routes.ts → GET /me',
   'src/domains/user/user.routes.ts → GET /me/settings',
   'src/domains/user/user.routes.ts → GET /me/notification-preferences',
-  // ── Flagged for follow-up (kept allowlisted so this test only pins, never
-  //    changes, runtime behavior): the org-switch POSTs mint fresh JWTs and
-  //    hit the DB per call, yet are the only auth POSTs without a preset.
-  //    Candidate: MODERATE_AUTHED_RATE_LIMIT.
-  'src/domains/auth/auth.routes.ts → POST /switch-to-personal',
-  'src/domains/auth/auth.routes.ts → POST /switch-to-organization',
+  // (The org-switch POSTs previously lived here as a flagged follow-up; they now carry
+  //  MODERATE_AUTHED_RATE_LIMIT, so they are enforced by the preset check below, not allowlisted.)
 ]);
 
 /** Marker every deliberate per-route rate-limit choice carries (preset spread). */

@@ -7,6 +7,7 @@ import {
   requireStrongRecentStepUpPreHandler,
 } from '@/shared/middlewares/core/recent-step-up.middleware.js';
 import {
+  MODERATE_AUTHED_RATE_LIMIT,
   REFRESH_RATE_LIMIT,
   STRICT_AUTHED_RATE_LIMIT,
   STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS,
@@ -219,6 +220,9 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/switch-to-personal',
     {
       onRequest: [app.authenticate],
+      // Per-user cap: each switch re-mints a JWT and hits the DB, so throttle like the other
+      // moderate authed operations rather than leaving it on the global limiter alone.
+      ...MODERATE_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Switch to personal organization',
         description:
@@ -232,6 +236,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/switch-to-organization',
     {
       onRequest: [app.authenticate],
+      ...MODERATE_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Switch active organization',
         description:
