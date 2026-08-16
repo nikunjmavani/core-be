@@ -342,4 +342,36 @@ describe('SubscriptionRepository (database)', () => {
     });
     expect(updated?.cancel_at_period_end).toBe(true);
   });
+
+  it('idx_subscriptions_org rejects a SECOND non-terminal subscription for the same organization', async () => {
+    // The partial unique index (WHERE status NOT IN CANCELED/INCOMPLETE_EXPIRED) is the durable
+    // backstop for the concurrent-create race when the Redis quota lock lapses — the service's
+    // 409 is only the fast path. The exclusion side (re-subscribe after cancel/expiry) is tested;
+    // the ENFORCEMENT side (two non-terminal rows collide) was not.
+    const owner = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const plan = await createTestPlan();
+
+    await repository.create({
+      organization_id: organization.id,
+      plan_id: plan.id,
+      billing_cycle: 'MONTHLY',
+      status: 'ACTIVE',
+      current_period_start: new Date(),
+      current_period_end: new Date(Date.now() + 86_400_000),
+      created_by_user_id: owner.id,
+    });
+
+    await expect(
+      repository.create({
+        organization_id: organization.id,
+        plan_id: plan.id,
+        billing_cycle: 'MONTHLY',
+        status: 'ACTIVE', // still non-terminal → trips the partial unique index
+        current_period_start: new Date(),
+        current_period_end: new Date(Date.now() + 86_400_000),
+        created_by_user_id: owner.id,
+      }),
+    ).rejects.toThrow();
+  });
 });

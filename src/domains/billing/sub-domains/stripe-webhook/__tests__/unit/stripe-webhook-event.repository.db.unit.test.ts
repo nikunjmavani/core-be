@@ -95,6 +95,24 @@ describe('StripeWebhookEventRepository', () => {
     expect(failedRows[0]?.failure_reason).toBe('synthetic failure');
   });
 
+  it('markFailed truncates an oversized failure_reason to 2000 chars', async () => {
+    // A Stripe error carrying a huge body (dumped payload / stack) must not bloat the ledger row.
+    // Only short reasons were ever exercised; the FAILURE_REASON_MAX_LENGTH slice never ran.
+    await repository.tryClaimEvent({
+      stripe_event_id: stripeEventId,
+      event_type: 'customer.subscription.updated',
+      stripe_created_at: new Date(),
+    });
+
+    await repository.markFailed(stripeEventId, 'x'.repeat(5_000));
+
+    const [row] = await database
+      .select()
+      .from(stripe_webhook_events)
+      .where(eq(stripe_webhook_events.stripe_event_id, stripeEventId));
+    expect(row?.failure_reason).toHaveLength(2_000);
+  });
+
   // audit #15: the capped count query (LIMIT sub-select) still returns the live
   // failed tally end-to-end against the partial index.
   it('countFailedEvents tallies failed ledger rows', async () => {

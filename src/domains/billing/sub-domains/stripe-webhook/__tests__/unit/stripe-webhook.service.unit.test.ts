@@ -235,6 +235,45 @@ describe('StripeWebhookService', () => {
       expect(infoSpy).not.toHaveBeenCalledWith(expect.anything(), 'stripe.webhook.reclaimed');
     });
 
+    it('REQ-4: reconciles the purchased seat quantity FROM the Stripe subscription item', async () => {
+      await service.handleEvent(
+        buildEvent({
+          data: {
+            object: buildSubscription({
+              items: {
+                data: [
+                  {
+                    current_period_start: periodStartSeconds,
+                    current_period_end: periodEndSeconds,
+                    price: { id: 'price_default_test' },
+                    quantity: 5,
+                  },
+                ],
+              },
+            }),
+          },
+        }),
+      );
+
+      expect(subscriptionService.syncFromStripeProviderSubscription).toHaveBeenCalledWith(
+        'sub_123',
+        expect.objectContaining({ seats: 5 }),
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it('REQ-4: omits seats (never clobbers to 0) when the Stripe item carries no quantity', async () => {
+      // The default item has no `quantity`; the guard must yield `undefined`, not `0`, so the sync
+      // does not zero out a subscription's seats when Stripe simply omitted the field.
+      await service.handleEvent(buildEvent());
+
+      const syncCall = vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mock
+        .calls[0];
+      const syncPayload = syncCall?.[1] as Record<string, unknown> | undefined;
+      expect(syncPayload?.seats).toBeUndefined();
+    });
+
     it('upper-cases an unmapped status rather than dropping it', async () => {
       await service.handleEvent(
         buildEvent({ data: { object: buildSubscription({ status: 'some_future_status' }) } }),
