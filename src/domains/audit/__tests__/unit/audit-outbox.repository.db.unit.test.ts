@@ -167,4 +167,40 @@ describe('audit-outbox.repository (database)', () => {
       .orderBy(asc(audit_outbox.id));
     expect(remaining.map((row) => row.id)).toEqual(stagedIds.slice(2));
   });
+
+  /**
+   * The retry-boundedness contract's linchpin: a below-cap transient failure captures the error
+   * but MUST leave `status = 'PENDING'` so the next drain pass re-claims the row. The drain
+   * integration test proves the terminal transitions (`markProcessed` → PROCESSED,
+   * `markPermanentlyFailed` → FAILED) against real SQL, but the transient path was only ever
+   * asserted through the processor's mock — if a refactor made this flip `status`, a transient
+   * failure would either stop retrying or escape the attempt cap, invisibly above the mock.
+   */
+  it('recordTransientFailure captures last_error but keeps the row PENDING for a bounded retry', async () => {
+    const stagedId = await stagePendingRow('user.transient');
+
+    await withAuditOutboxDrainDatabaseContext((handle) =>
+      createDrainAuditOutboxRepository(handle).recordTransientFailure(stagedId, 'rls-rejected'),
+    );
+
+    const [row] = await database.select().from(audit_outbox).where(eq(audit_outbox.id, stagedId));
+    expect(row?.status).toBe('PENDING');
+    expect(row?.last_error).toBe('rls-rejected');
+  });
+
+  /**
+   * `last_error` is capped at 4000 chars so one pathological error message (a giant stack, a
+   * dumped payload) cannot bloat the outbox row width unboundedly. Only the mock ever saw the
+   * `.slice(0, 4_000)`; prove it against the real column.
+   */
+  it('recordTransientFailure truncates an oversized last_error to 4000 chars', async () => {
+    const stagedId = await stagePendingRow('user.transient.long');
+
+    await withAuditOutboxDrainDatabaseContext((handle) =>
+      createDrainAuditOutboxRepository(handle).recordTransientFailure(stagedId, 'x'.repeat(5_000)),
+    );
+
+    const [row] = await database.select().from(audit_outbox).where(eq(audit_outbox.id, stagedId));
+    expect(row?.last_error).toHaveLength(4_000);
+  });
 });
