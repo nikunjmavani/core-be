@@ -188,6 +188,60 @@ describe('upload-pending-sweep.processor', () => {
     expect(result.autoConfirmedCount).toBe(0);
   });
 
+  it('sec-UP2: refuses to auto-confirm an SVG row (auto-confirm would bypass the DOMPurify sanitize)', async () => {
+    // Auto-confirm flips status=UPLOADED WITHOUT running the HTTP-path publish that DOMPurifies SVG
+    // bytes and copies them off the still-client-writable pending key. An unsanitized stored SVG is
+    // stored XSS. The sweep must FAIL the row before it even HEADs it; the user must call the HTTP
+    // confirm (which sanitizes + copies) to publish an SVG.
+    const row = makeRow({
+      id: 42,
+      file_key: 'pending/avatars/owner/vector.svg',
+      mime_type: 'image/svg+xml',
+    });
+    findPendingUploadsOlderThanMock.mockResolvedValueOnce([row]);
+
+    const result = await runUploadPendingSweepJob({} as never);
+
+    expect(headObjectResultMock).not.toHaveBeenCalled();
+    expect(copyObjectMock).not.toHaveBeenCalled();
+    expect(markConfirmedByInternalIdMock).not.toHaveBeenCalled();
+    expect(setUploadStatusByInternalIdMock).toHaveBeenCalledWith(expect.anything(), 42, 'FAILED');
+    expect(result.failedCount).toBe(1);
+    expect(result.autoConfirmedCount).toBe(0);
+  });
+
+  it('leaves a verified row PENDING when the copy-to-final-key fails (never wrongly confirms or destroys it)', async () => {
+    // A valid auto-confirm candidate whose bytes verified, but publishing them to the immutable
+    // final key throws. The row must be SKIPPED — stay PENDING for the next sweep — never flipped to
+    // UPLOADED with file_key still pointing at the expirable pending object, and never hard-deleted.
+    const row = makeRow({
+      id: 55,
+      file_key: 'pending/avatars/owner/copyfail.png',
+      file_size: 2048,
+    });
+    findPendingUploadsOlderThanMock.mockResolvedValueOnce([row]);
+    headObjectResultMock.mockResolvedValueOnce(
+      foundHead({ contentType: 'image/png', contentLength: 2048 }),
+    );
+    getObjectMock.mockResolvedValueOnce({ body: validPngBody });
+    copyObjectMock.mockRejectedValueOnce(new Error('s3 copy failed'));
+    const databaseHandle = {} as never;
+
+    const result = await runUploadPendingSweepJob(databaseHandle);
+
+    expect(markConfirmedByInternalIdMock).not.toHaveBeenCalled();
+    expect(setUploadStatusByInternalIdMock).not.toHaveBeenCalled();
+    // Neither confirmed, nor failed, nor deleted — just skipped for the next pass.
+    expect(result.autoConfirmedCount).toBe(0);
+    expect(result.failedCount).toBe(0);
+    expect(result.deletedCount).toBe(0);
+    expect(hardDeleteUploadsByInternalIdsMock).toHaveBeenCalledWith(databaseHandle, []);
+    expect(loggerMocks.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ uploadId: 55 }),
+      'upload-pending-sweep.copyToFinalKeyFailed',
+    );
+  });
+
   it('marks rows FAILED when magic bytes do not match declared content type', async () => {
     const row = makeRow({ id: 6, file_key: 'avatars/owner/spoof.png', file_size: 100 });
     findPendingUploadsOlderThanMock.mockResolvedValueOnce([row]);
