@@ -10,7 +10,7 @@ import { VERIFICATION_CODE_MAX_VERIFY_ATTEMPTS } from '@/domains/auth/sub-domain
 /**
  * Online brute-force resistance for the passwordless email-code login.
  *
- * The verification code is a short, bounded string, so its ONLY defence against
+ * The verification code is a short, bounded string, so its ONLY defense against
  * an attacker who knows a victim's email is the per-user online attempt cap
  * (`VERIFICATION_CODE_MAX_VERIFY_ATTEMPTS`) plus the short TTL and single-use
  * consume. The cap lives in the service on a Redis counter keyed by user id and
