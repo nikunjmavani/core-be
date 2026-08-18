@@ -98,6 +98,17 @@ const INTENTIONALLY_ABSENT = new Set<string>([
 ]);
 
 /**
+ * Git branch-name examples cited in the branch-naming guides. A branch is
+ * `<type>/<slug>` where `<type>` is a conventional-commit type (BRANCH_TYPES in
+ * `.husky/pre-push`), and `docs` is both a valid type and a PATH_PREFIX — so
+ * `docs/american-spelling-organization` reads as a repo path to the pass below.
+ * These are branch names, not files: nothing on disk should ever match them.
+ * Add new branch examples here when the naming docs gain one.
+ * Owner: agent-os/rules/git-branch-naming.mdc.
+ */
+const BRANCH_NAME_EXAMPLES = new Set<string>(['docs/american-spelling-organization']);
+
+/**
  * Archival point-in-time snapshots — exempt from both passes (they legitimately
  * cite paths and link targets as they existed at the time).
  */
@@ -164,6 +175,7 @@ function extractCitedPath(rawToken: string): string | null {
   if (!PATH_PREFIXES.some((prefix) => token.startsWith(prefix))) return null;
   if (GENERATED_PATH_PREFIXES.some((prefix) => token.startsWith(prefix))) return null;
   if (INTENTIONALLY_ABSENT.has(token.replace(/\/$/, ''))) return null;
+  if (BRANCH_NAME_EXAMPLES.has(token)) return null;
   return token;
 }
 

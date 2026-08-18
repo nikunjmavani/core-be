@@ -422,7 +422,7 @@ All 19 phases from the Consolidated Master Plan (Domain API Upgrade + CI/CD + en
 ### Phase 9 — Permission system tests
 
 - [x] Permission factories (`src/domains/tenancy/__tests__/factories/permission.factory.ts`)
-- [x] Permission integration tests (`src/domains/tenancy/sub-domains/permission/__tests__/permissions.test.ts`)
+- [x] Permission integration tests (`src/domains/tenancy/sub-domains/permission/__tests__/integration/permissions.integration.test.ts`)
 
 ### Phase 10 — Route registry + completeness
 
