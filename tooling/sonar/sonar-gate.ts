@@ -129,6 +129,15 @@ async function tokenIsValid(token: string): Promise<boolean> {
   return parsed.valid === true;
 }
 
+/** True when `admin` still authenticates with `password` (SonarQube answers 200 + `valid:false` on a bad password, not 401). */
+async function adminPasswordIsValid(password: string): Promise<boolean> {
+  const response = await sonarApi('/api/authentication/validate', {
+    basicAuth: `${ADMIN_LOGIN}:${password}`,
+  });
+  if (!response.ok) return false;
+  return ((await response.json()) as { valid?: boolean }).valid === true;
+}
+
 function generateLocalAdminPassword(): string {
   return `Sonar1!${randomBytes(12).toString('base64url')}`;
 }
@@ -145,6 +154,17 @@ async function ensureToken(): Promise<string> {
 
   log('Provisioning a SonarQube token…');
   let adminPassword = env.SONAR_ADMIN_PASSWORD;
+
+  // A stored password goes stale whenever the SonarQube volume is recreated (`sonar:reset`, a
+  // pruned Docker volume, a re-cloned container): the instance reverts to `admin/admin` while the
+  // generated one is still on disk. Without this check the mint below fails with HTTP 401 and the
+  // gate tells the developer to run the DESTRUCTIVE `sonar:reset` — even though the
+  // default-credential re-provision path directly beneath us recovers it non-destructively.
+  // Discard the stale value and fall through to that path instead.
+  if (adminPassword && !(await adminPasswordIsValid(adminPassword))) {
+    log('Stored SONAR_ADMIN_PASSWORD is stale (instance was reset) — re-provisioning.');
+    adminPassword = undefined;
+  }
 
   if (!adminPassword) {
     const defaultWorks = await sonarApi('/api/authentication/validate', {

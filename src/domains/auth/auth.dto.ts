@@ -215,25 +215,23 @@ export type MfaLoginVerifyInput = z.infer<typeof MfaLoginVerifyDto>;
  * arrived valid and was thrown away before the handler ran, making Google sign-in impossible.
  *
  * The known extras are declared so they appear in the generated OpenAPI rather than being silently
- * swallowed; `.passthrough()` covers the rest, since a provider may add fields at any time. Only
+ * swallowed; `z.looseObject` covers the rest, since a provider may add fields at any time. Only
  * `code` and `state` are ever read — `state` is the CSRF-bearing value and is verified downstream.
  */
-export const OauthCallbackQueryDto = z
-  .object({
-    code: trimmedStringMinMax(1, 2048),
-    state: trimmedStringMinMax(1, 512),
-    /** Google: issuer identifier (`https://accounts.google.com`). */
-    iss: z.string().optional(),
-    /** Google/GitHub: space-delimited scopes actually granted. */
-    scope: z.string().optional(),
-    /** Google: index of the signed-in account in a multi-account session. */
-    authuser: z.string().optional(),
-    /** Google: hosted-domain of a Workspace account. */
-    hd: z.string().optional(),
-    /** Google: echo of the `prompt` parameter. */
-    prompt: z.string().optional(),
-  })
-  .passthrough();
+export const OauthCallbackQueryDto = z.looseObject({
+  code: trimmedStringMinMax(1, 2048),
+  state: trimmedStringMinMax(1, 512),
+  /** Google: issuer identifier (`https://accounts.google.com`). */
+  iss: z.string().optional(),
+  /** Google/GitHub: space-delimited scopes actually granted. */
+  scope: z.string().optional(),
+  /** Google: index of the signed-in account in a multi-account session. */
+  authuser: z.string().optional(),
+  /** Google: hosted-domain of a Workspace account. */
+  hd: z.string().optional(),
+  /** Google: echo of the `prompt` parameter. */
+  prompt: z.string().optional(),
+});
 
 /** Inferred input type of {@link OauthCallbackQueryDto}. */
 export type OauthCallbackQueryInput = z.infer<typeof OauthCallbackQueryDto>;
