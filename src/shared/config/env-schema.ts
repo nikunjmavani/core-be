@@ -249,6 +249,20 @@ const envSchemaBase = z.object({
   AUTH_SESSION_MAX_AGE_DAYS: z.coerce.number().int().min(1).max(365).default(7),
   /** Secure flag for session + CSRF cookies. Set false only for plaintext local loops. */
   COOKIE_SECURE: booleanString('true'),
+  /**
+   * `SameSite` for the session + CSRF cookies. Defaults `strict`, which assumes the SPA reaches
+   * this API same-site — same registrable domain, or proxied through the SPA's own origin.
+   *
+   * When the SPA is served from a DIFFERENT site than the API (e.g. `*.netlify.app` calling
+   * `*.railway.app`) the browser strips a `strict` cookie from every cross-site request, so the
+   * cookie-authenticated routes under `/api/v1/auth` — refresh, logout, switch-to-organization —
+   * return 401 even though login succeeded. `none` is the only value a browser sends cross-site,
+   * and it requires `COOKIE_SECURE=true` (enforced by a refine below).
+   *
+   * Prefer same-site hosting and leave this `strict`: `none` widens CSRF exposure to whatever the
+   * double-submit CSRF token catches on its own.
+   */
+  COOKIE_SAMESITE: z.enum(['strict', 'lax', 'none']).default('strict'),
 
   // ── Policy flags (replace former `NODE_ENV === …` comparisons in runtime code) ──────────────
   // Runtime modules read one of these flags, never NODE_ENV. Two kinds:
@@ -1266,6 +1280,11 @@ export const envSchema = envSchemaBase
       path: ['EMAIL_FROM_ADDRESS'],
     },
   )
+  .refine((data) => data.COOKIE_SAMESITE !== 'none' || data.COOKIE_SECURE === true, {
+    message:
+      'COOKIE_SAMESITE=none requires COOKIE_SECURE=true — browsers reject a cross-site cookie without the Secure attribute.',
+    path: ['COOKIE_SAMESITE'],
+  })
   .refine(
     (data) => {
       // sec-r4-C2: in production, session + CSRF cookies must carry the Secure attribute so they

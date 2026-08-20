@@ -44,6 +44,40 @@ const productionRequiredBase = {
 };
 
 describe('env-schema', () => {
+  describe('COOKIE_SAMESITE', () => {
+    it('defaults to strict', () => {
+      const parsed = envSchema.parse({ ...commonRequiredBase });
+      expect(parsed.COOKIE_SAMESITE).toBe('strict');
+    });
+
+    it('accepts none when the cookie is Secure', () => {
+      // A cross-site SPA (different registrable domain from the API) needs `none` or the browser
+      // strips the cookie from every request to /api/v1/auth.
+      const parsed = envSchema.parse({
+        ...commonRequiredBase,
+        COOKIE_SAMESITE: 'none',
+        COOKIE_SECURE: 'true',
+      });
+      expect(parsed.COOKIE_SAMESITE).toBe('none');
+    });
+
+    it('rejects none without Secure — browsers refuse such a cookie outright', () => {
+      expect(() =>
+        envSchema.parse({
+          ...commonRequiredBase,
+          COOKIE_SAMESITE: 'none',
+          COOKIE_SECURE: 'false',
+        }),
+      ).toThrow();
+    });
+
+    it('rejects a value outside strict | lax | none', () => {
+      expect(() =>
+        envSchema.parse({ ...commonRequiredBase, COOKIE_SAMESITE: 'sometimes' }),
+      ).toThrow();
+    });
+  });
+
   it('exports schema keys for tooling sync', () => {
     expect(envSchemaKeys.length).toBeGreaterThan(0);
     expect(envSchemaKeys).toContain('DATABASE_URL');

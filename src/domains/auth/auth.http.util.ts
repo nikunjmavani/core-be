@@ -27,12 +27,13 @@ export function generateCsrfToken(): string {
   return randomBytes(32).toString('base64url');
 }
 
-/** Builds the cookie options used for {@link SESSION_COOKIE_NAME}: httpOnly, sameSite=strict, scoped to `/api/v1/auth`. */
+/** Builds the cookie options used for {@link SESSION_COOKIE_NAME}: httpOnly, sameSite from COOKIE_SAMESITE, scoped to `/api/v1/auth`. */
 export function getSessionCookieOptions() {
   return {
     httpOnly: true,
     secure: env.COOKIE_SECURE,
-    sameSite: 'strict' as const,
+    // Configurable so a cross-site SPA can opt into `none`; see COOKIE_SAMESITE in env-schema.
+    sameSite: env.COOKIE_SAMESITE,
     path: SESSION_COOKIE_PATH,
     maxAge: env.AUTH_SESSION_MAX_AGE_DAYS * SECONDS_PER_DAY,
   };
@@ -43,7 +44,9 @@ export function getCsrfCookieOptions() {
   return {
     httpOnly: false,
     secure: env.COOKIE_SECURE,
-    sameSite: 'strict' as const,
+    // Must track the session cookie: the SPA echoes this value back as the CSRF header, so a
+    // stricter SameSite here would silently break double-submit on cross-site requests.
+    sameSite: env.COOKIE_SAMESITE,
     path: SESSION_COOKIE_PATH,
     maxAge: env.AUTH_SESSION_MAX_AGE_DAYS * SECONDS_PER_DAY,
   };

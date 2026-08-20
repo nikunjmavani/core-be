@@ -5,7 +5,7 @@
 
 Allowed values + description come from the explicit registry; the **default** and **required/optional**
 status are read from each Zod field, so this can never disagree with what boots. Registry coverage:
-**12 / 229** variables migrated to an explicit `{ allowed, description }` entry.
+**12 / 230** variables migrated to an explicit `{ allowed, description }` entry.
 
 | Variable | Allowed values | Default | In registry | Description |
 | --- | --- | --- | :---: | --- |
@@ -32,6 +32,7 @@ status are read from each Zod field, so this can never disagree with what boots.
 | `CAPTCHA_PROVIDER` | — | `disabled` |  | — |
 | `CAPTCHA_SECRET` | — | — *(optional)* |  | — |
 | `COMMIT_DISPATCH_RECOVERY_CRON` | — | — *(optional)* |  | — |
+| `COOKIE_SAMESITE` | — | `strict` |  | — |
 | `COOKIE_SECURE` | — | `true` |  | — |
 | `DATABASE_CONNECTION_BUDGET_ENFORCED` | — | `true` |  | — |
 | `DATABASE_HTTP_STATEMENT_TIMEOUT_MS` | — | `5000` |  | — |

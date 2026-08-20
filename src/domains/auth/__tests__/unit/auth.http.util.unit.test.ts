@@ -56,12 +56,20 @@ function mockRequest(overrides: Record<string, unknown> = {}): FastifyRequest {
 }
 
 describe('auth.http.util — session cookie options', () => {
-  it('scopes the session cookie httpOnly, sameSite=strict, and to the auth API surface', () => {
+  it('scopes the session cookie httpOnly, sameSite from config, and to the auth API surface', () => {
     const options = getSessionCookieOptions();
     // httpOnly is the whole point: JS must never be able to read the refresh secret.
     expect(options.httpOnly).toBe(true);
-    expect(options.sameSite).toBe('strict');
+    // sameSite is config-driven (COOKIE_SAMESITE), not hardcoded — a cross-site SPA needs `none`,
+    // and hardcoding `strict` made every cookie-authenticated /api/v1/auth route 401 for it.
+    expect(options.sameSite).toBe(env.COOKIE_SAMESITE);
     expect(options.path).toBe(SESSION_COOKIE_PATH);
+  });
+
+  it('keeps the CSRF cookie on the same sameSite as the session cookie', () => {
+    // Double-submit only works if both cookies travel together: a stricter SameSite on either one
+    // silently breaks every mutating cross-site call while login still appears to succeed.
+    expect(getCsrfCookieOptions().sameSite).toBe(getSessionCookieOptions().sameSite);
   });
 
   it('drives `secure` from config and bounds maxAge by AUTH_SESSION_MAX_AGE_DAYS', () => {
