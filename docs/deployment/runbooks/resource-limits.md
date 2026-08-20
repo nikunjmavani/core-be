@@ -120,7 +120,7 @@ Enable **`SCHEDULER_ENABLED=true` on only one service** per environment so repea
 
 Worker processes also poll pool pressure (same intervals as API) and attach `workerQueueFamilies` / `workerPeakPostgresConcurrency` to Sentry pool alerts when `METRICS_ENABLED` is on.
 
-Use **`DATABASE_MIGRATION_URL`** (owner) for migrations and **`DATABASE_URL`** as the restricted **`core_be_app`** role in production after [migration 20260516000008_core_be_app_role.sql](../../../migrations/00000000000000_init.sql). RLS is enforced via `FORCE ROW LEVEL SECURITY` ([20260516000006_force_row_level_security.sql](../../../migrations/00000000000000_init.sql)).
+Use **`DATABASE_MIGRATION_URL`** (owner) for migrations and **`DATABASE_URL`** as a restricted non-superuser **login** role that is granted `core_be_app` (see [Database runtime role](#database-runtime-role-row-level-security-safety) below). `core_be_app` itself is created `NOLOGIN` in the [baseline migration](../../../migrations/00000000000000_init.sql) and cannot be connected as directly — it is the privilege holder, not the connecting role. RLS is enforced via `FORCE ROW LEVEL SECURITY`, also defined in the baseline.
 
 ### Neon connection strings
 
