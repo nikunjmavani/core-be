@@ -196,7 +196,7 @@ describe('auth.http.util — OAuth nonce cookie', () => {
     );
   });
 
-  it('never uses `strict` — that would block the provider\'s top-level redirect back', () => {
+  it("never uses `strict` — that would block the provider's top-level redirect back", () => {
     expect(getOauthNonceCookieOptions().sameSite).not.toBe('strict');
   });
 

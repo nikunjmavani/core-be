@@ -1286,8 +1286,7 @@ export const envSchema = envSchemaBase
     path: ['COOKIE_SAMESITE'],
   })
   .refine(
-    (data) =>
-      !data.OAUTH_GOOGLE_CLIENT_ID || Boolean(data.OAUTH_GOOGLE_REDIRECT_URI?.trim()),
+    (data) => !data.OAUTH_GOOGLE_CLIENT_ID || Boolean(data.OAUTH_GOOGLE_REDIRECT_URI?.trim()),
     {
       // The fallback in google-oauth.provider.ts builds `${FRONTEND_URL}/auth/oauth/google/callback`,
       // which is not a route core-fe serves (it mounts `/callback`), and this API has no self-origin
@@ -1295,16 +1294,15 @@ export const envSchema = envSchemaBase
       // the provider is configured — a loud boot failure beats a silently wrong redirect that only
       // surfaces as a provider-side `redirect_uri_mismatch`.
       message:
-        'OAUTH_GOOGLE_REDIRECT_URI is required when OAUTH_GOOGLE_CLIENT_ID is set — it must match the Google Cloud Console entry exactly and point at this API\'s /api/v1/auth/oauth/google/callback.',
+        "OAUTH_GOOGLE_REDIRECT_URI is required when OAUTH_GOOGLE_CLIENT_ID is set — it must match the Google Cloud Console entry exactly and point at this API's /api/v1/auth/oauth/google/callback.",
       path: ['OAUTH_GOOGLE_REDIRECT_URI'],
     },
   )
   .refine(
-    (data) =>
-      !data.OAUTH_GITHUB_CLIENT_ID || Boolean(data.OAUTH_GITHUB_REDIRECT_URI?.trim()),
+    (data) => !data.OAUTH_GITHUB_CLIENT_ID || Boolean(data.OAUTH_GITHUB_REDIRECT_URI?.trim()),
     {
       message:
-        'OAUTH_GITHUB_REDIRECT_URI is required when OAUTH_GITHUB_CLIENT_ID is set — it must match the GitHub App callback URL exactly and point at this API\'s /api/v1/auth/oauth/github/callback.',
+        "OAUTH_GITHUB_REDIRECT_URI is required when OAUTH_GITHUB_CLIENT_ID is set — it must match the GitHub App callback URL exactly and point at this API's /api/v1/auth/oauth/github/callback.",
       path: ['OAUTH_GITHUB_REDIRECT_URI'],
     },
   )
