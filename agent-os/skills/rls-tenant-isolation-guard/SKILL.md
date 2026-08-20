@@ -56,11 +56,29 @@ A very common trap: the members list runs under **org-only** context (`app.curre
 - **Reference:** `tenancy.search_organization_membership_ids(org_id, pattern)` (migration `20260702000000`) returns matching membership **ids**; `MembershipRepository.findByOrganizationId` then filters its typed `(created_at,id)` keyset query with `id IN (...)`. Search term arrives pre-escaped via `buildContainsLikePattern` and matches with default `ESCAPE '\'`. Sibling read-only resolvers: `auth.resolve_user_summaries_by_ids`, `auth.resolve_user_public_ids_by_ids`, `tenancy.resolve_organization_default_locale`.
 - **Test it as `core_be_app`, not the superuser.** Add a `src/tests/security/rls/*.security.test.ts` using `grantCoreBeAppRoleForTests` + `executeAsCoreBeAppTenant(orgPublicId, …)` that (a) shows the raw join is blocked to 0 rows [control], (b) shows the resolver returns the match, and (c) shows it never returns another org's row. A superuser-only db-unit test will pass even if the resolver is broken — it proves nothing about RLS. See `membership-search-resolver.security.test.ts`.
 
+### Picking the context: each GUC grants only what a policy names
+
+A `with*DatabaseContext` wrapper sets **one** GUC and grants access only on tables whose policies test it. Choosing the wrong one is silent — reads return zero rows, writes fail `WITH CHECK` with SQLSTATE 42501.
+
+| Context | GUC | Grants on |
+| --- | --- | --- |
+| `withOrganizationDatabaseContext` | `app.current_organization_id` | tenant-scoped tables (`*_tenant_isolation`) |
+| `withUserDatabaseContext` | `app.current_user_id` | user-owned rows (`auth.*`, uploads, notifications) **and** the tenancy discovery policies (`organizations_user_discovery`, `memberships_user_self_discovery`) |
+| `withGlobalAdminDatabaseContext` | `app.global_admin` | **`auth.*` and `audit.logs` ONLY** |
+| `withGlobalRetentionCleanupDatabaseContext` | `app.global_retention_cleanup` | retention-sweep tables |
+
+**`app.global_admin` is NOT a tenancy bypass.** No `tenancy.*` policy carries that arm, so the admin context reads zero rows from `tenancy.organizations` / `tenancy.memberships` and fails their `WITH CHECK` on write. (The `WITH CHECK` checklist item above warns about a `global_admin` arm leaking from `USING` — that concerns tables where such an arm exists, e.g. `audit.logs`; on tenancy tables there is none to leak.) This shipped to production three times — organization provisioning (42501), active-org resolution at login (zero rows → no `org` claim, empty permissions), and the `OrganizationRepository` user-id resolvers (`null` → permission-cache purge skipped, attribution nulled).
+
+- **Never import `withGlobalAdminDatabaseContext` under `src/domains/tenancy/**`** — enforced by `no-global-admin-in-tenancy.global.test.ts`. The policy fact itself is pinned by `tenancy-global-admin-invisibility.security.test.ts`.
+- For an auth-flow read that has no org GUC yet (login, MFA, org switch, refresh), use `withUserDatabaseContext` — the tenancy discovery policies are keyed on `app.current_user_id`, so the caller sees exactly their own orgs and memberships.
+- The joined-table rule above applies to **any** context that cannot satisfy the target policy — org-only context *and* post-commit paths running with no GUC at all (a frequent miss: `sec-R11`-style "invalidate AFTER commit, outside the org block" code).
+
 ## Top failure modes
 
 1. **`ENABLE` without `FORCE`** → table owner bypasses RLS → cross-org leak. (Tell: not added to `EXPECTED_FORCE_RLS_TABLES`.)
 2. **`USING`-only policy on a writable table** → rows moved/planted into another tenant (no `WITH CHECK`).
 3. **GUC-less query path** → RLS returns zero rows (silent broken query), or a dev "fixes" it by reaching for the unpinned pool → `WorkerDatabaseContextError`.
+3b. **Wrong-GUC query path** → same silent zero rows, but harder to spot because a context *is* present and looks authoritative. Canonical case: reaching for `withGlobalAdminDatabaseContext` on a `tenancy.*` read because the flow has no org yet. (Tell: a `null`/empty result that the caller treats as "not found" and swallows — e.g. `if (userPublicId)` guarding a cache purge.)
 4. **Superuser/`BYPASSRLS` `DATABASE_URL`** → Postgres skips FORCE RLS silently; only caught on hosted by `assert-database-rls-safety`.
 5. **DB context held across external I/O** → pool exhaustion under load.
 

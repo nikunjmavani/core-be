@@ -150,6 +150,21 @@ Postgres Row-Level Security is the **defense-in-depth** layer for tenant isolati
 - Workers get RLS via `runTenantScopedWorkerJob` which **requires** `organizationPublicId` in the job payload and opens its own `withOrganizationContext` transaction. Workers are forbidden from importing `request-database.context.ts` (enforced by `worker-database-guard.util.ts` and global tests).
 - Global-scope workers (cross-org sweeps) use `withGlobalRetentionCleanupDatabaseContext`, which sets a different GUC that RLS policies recognize as "global retention" — strictly limited to retention/cleanup operations.
 
+### Each context grants only what a policy names
+
+A context sets **one** GUC. It grants access only on tables whose policies test that GUC — picking the wrong context does not raise an error, it silently returns **zero rows** (or fails a `WITH CHECK` with SQLSTATE 42501 on write).
+
+| Context | GUC it sets | Grants on |
+| --- | --- | --- |
+| `withOrganizationDatabaseContext` | `app.current_organization_id` | tenant-scoped tables (`organizations_tenant_isolation` and the per-table `*_tenant_isolation` policies) |
+| `withUserDatabaseContext` | `app.current_user_id` | user-owned rows — `auth.users`, `auth.auth_methods`, uploads/notifications, **and the tenancy discovery policies** (`organizations_user_discovery`, `memberships_user_self_discovery`) |
+| `withGlobalAdminDatabaseContext` | `app.global_admin` | **`auth.*` and `audit.logs` ONLY** |
+| `withGlobalRetentionCleanupDatabaseContext` | `app.global_retention_cleanup` | retention-sweep tables only |
+
+**`app.global_admin` grants nothing on `tenancy.*`.** No tenancy policy carries that arm — the tenancy tables are reachable only through the active-org GUC or the user GUC. Reading `tenancy.organizations` / `tenancy.memberships` under the admin context returns zero rows; writing fails its `WITH CHECK`. This shipped to production three times (organization provisioning, active-org resolution at login, and the `OrganizationRepository` user-id resolvers) before being pinned by [no-global-admin-in-tenancy.global.test.ts](src/tests/global/no-global-admin-in-tenancy.global.test.ts) and [tenancy-global-admin-invisibility.security.test.ts](src/tests/security/rls/tenancy-global-admin-invisibility.security.test.ts).
+
+To read `auth.users` from a context that is not the user's own (e.g. inside org context, or post-commit with no GUC), use an `auth.*` **SECURITY DEFINER** resolver — `auth.resolve_user_id_by_public_id`, `auth.resolve_user_by_internal_id`, `auth.resolve_user_public_ids_by_ids` — never a direct join.
+
 ### How to apply
 
 - New tenant-scoped table: add an RLS policy in its migration. The migration linter (`pnpm db:migrate:lint`) rejects schemas that omit RLS where it's required.
