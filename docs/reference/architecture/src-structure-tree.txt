@@ -1766,6 +1766,7 @@ src/
     │   ├── locale-parity.global.test.ts
     │   ├── mcp-config.global.test.ts
     │   ├── no-direct-db-in-services.global.test.ts
+    │   ├── no-global-admin-in-tenancy.global.test.ts
     │   ├── no-nodeenv-branching.global.test.ts
     │   ├── no-stripe-shaped-literals.global.test.ts
     │   ├── openapi-completeness.global.test.ts
@@ -2006,6 +2007,7 @@ src/
     │   │   ├── retention-cleanup-rls.security.test.ts
     │   │   ├── rls-matrix.security.test.ts
     │   │   ├── system-tables-rls.security.test.ts
+    │   │   ├── tenancy-global-admin-invisibility.security.test.ts
     │   │   ├── tenancy-with-check-write-confinement.security.test.ts
     │   │   ├── tenant-isolation-with-check-retention.security.test.ts
     │   │   ├── tenant-isolation.security.test.ts
