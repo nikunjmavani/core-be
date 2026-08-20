@@ -1,4 +1,3 @@
-import { withGlobalAdminDatabaseContext } from '@/infrastructure/database/contexts/global-admin-database.context.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -14,8 +13,8 @@ import { OrganizationRepository } from '@/domains/tenancy/sub-domains/organizati
  * - **RLS:** every tenancy lookup runs under {@link withUserDatabaseContext} via
  *   {@link withUserContextForInternalId}, which sets `app.current_user_id` so the
  *   `organizations_user_discovery` / `memberships_user_self_discovery` policies (migration
- *   `20260520000004`) match the caller's own rows. These reads must NOT use
- *   {@link withGlobalAdminDatabaseContext}: `tenancy.organizations` and `tenancy.memberships` are
+ *   `20260520000004`) match the caller's own rows. These reads must NOT run under the
+ *   global-admin context: `tenancy.organizations` and `tenancy.memberships` are
  *   FORCE RLS and their policies honor only `app.current_organization_id` and `app.current_user_id`
  *   — never `app.global_admin` (only the `auth.*` and `audit.logs` policies carry that arm). Under
  *   the admin context every policy evaluates false and the memberships → organizations join returns
@@ -27,20 +26,24 @@ import { OrganizationRepository } from '@/domains/tenancy/sub-domains/organizati
 const organizationRepository = new OrganizationRepository();
 
 /**
- * Resolves `userInternalId` → `auth.users.public_id` under the global-admin context (the
- * `auth.users` policies DO carry an `app.global_admin` arm, so this lookup is permitted), then runs
- * `callback` under {@link withUserDatabaseContext} so the tenancy policies see `app.current_user_id`.
+ * Resolves `userInternalId` → `auth.users.public_id` through the `auth.resolve_user_by_internal_id`
+ * SECURITY DEFINER resolver, then runs `callback` under {@link withUserDatabaseContext} so the
+ * tenancy policies see `app.current_user_id`.
  *
  * Returns `undefined` when the internal id resolves to no live user, so callers degrade to
  * "no organization" exactly as they did when the underlying query returned no rows.
+ *
+ * @remarks
+ * The resolver replaces a `withGlobalAdminDatabaseContext` wrapper. That wrapper worked — the
+ * `auth.users` policy does carry an `app.global_admin` arm — but it opened the admin escape hatch
+ * on a self-service login path (the same objection recorded in `provisionOrganization`) and cost a
+ * second transaction on every login, refresh, and `getMe`. The resolver needs neither.
  */
 async function withUserContextForInternalId<T>(
   userInternalId: number,
   callback: () => Promise<T>,
 ): Promise<T | undefined> {
-  const userPublicId = await withGlobalAdminDatabaseContext(() =>
-    organizationRepository.resolveUserPublicIdByInternalId(userInternalId),
-  );
+  const userPublicId = await organizationRepository.resolveUserPublicIdByInternalId(userInternalId);
   if (userPublicId === null) return undefined;
   return withUserDatabaseContext(userPublicId, callback);
 }
