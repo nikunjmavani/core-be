@@ -134,6 +134,7 @@ function getOauthNonceSameSite(): 'none' | 'lax' {
   return env.COOKIE_SAMESITE === 'none' ? 'none' : 'lax';
 }
 
+/** Cookie attributes for the OAuth nonce cookie — shared by the set and clear paths so they always match (a `clearCookie` only lands when `path` and `sameSite` are identical). */
 export function getOauthNonceCookieOptions() {
   return {
     httpOnly: true,

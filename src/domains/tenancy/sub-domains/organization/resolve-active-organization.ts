@@ -1,23 +1,49 @@
 import { withGlobalAdminDatabaseContext } from '@/infrastructure/database/contexts/global-admin-database.context.js';
+import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { provisionPersonalOrganization } from '@/domains/tenancy/sub-domains/organization/organization-provisioning.js';
 import { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
 
 /**
- * Orchestrates the login/active-organization lookups under the global-admin RLS context. The SQL
- * lives in {@link OrganizationRepository}; these helpers only choose the context and map the
+ * Orchestrates the login/active-organization lookups under the caller's own user RLS context. The
+ * SQL lives in {@link OrganizationRepository}; these helpers only choose the context and map the
  * repository's `null` to `undefined` for their callers.
  *
  * @remarks
- * - **RLS:** every lookup runs under {@link withGlobalAdminDatabaseContext} because the auth flows
- *   that call them (login, MFA, organization switch) have no `app.current_organization_id` yet —
- *   the memberships/organizations policies are keyed on it. The context pins a handle in ALS so the
- *   repository's request-scoped reads resolve to the admin transaction. Each query is constrained
- *   to the authenticated user's own `user_id`, so the bypass never reads cross-user data.
+ * - **RLS:** every tenancy lookup runs under {@link withUserDatabaseContext} via
+ *   {@link withUserContextForInternalId}, which sets `app.current_user_id` so the
+ *   `organizations_user_discovery` / `memberships_user_self_discovery` policies (migration
+ *   `20260520000004`) match the caller's own rows. These reads must NOT use
+ *   {@link withGlobalAdminDatabaseContext}: `tenancy.organizations` and `tenancy.memberships` are
+ *   FORCE RLS and their policies honor only `app.current_organization_id` and `app.current_user_id`
+ *   — never `app.global_admin` (only the `auth.*` and `audit.logs` policies carry that arm). Under
+ *   the admin context every policy evaluates false and the memberships → organizations join returns
+ *   zero rows, stranding users on the onboarding wizard once the login role lost BYPASSRLS.
+ *   `provisionOrganization` was corrected for the same reason on the write side; this is the
+ *   matching read-side fix.
  * - **Side effects:** none (read-only).
  */
 const organizationRepository = new OrganizationRepository();
+
+/**
+ * Resolves `userInternalId` → `auth.users.public_id` under the global-admin context (the
+ * `auth.users` policies DO carry an `app.global_admin` arm, so this lookup is permitted), then runs
+ * `callback` under {@link withUserDatabaseContext} so the tenancy policies see `app.current_user_id`.
+ *
+ * Returns `undefined` when the internal id resolves to no live user, so callers degrade to
+ * "no organization" exactly as they did when the underlying query returned no rows.
+ */
+async function withUserContextForInternalId<T>(
+  userInternalId: number,
+  callback: () => Promise<T>,
+): Promise<T | undefined> {
+  const userPublicId = await withGlobalAdminDatabaseContext(() =>
+    organizationRepository.resolveUserPublicIdByInternalId(userInternalId),
+  );
+  if (userPublicId === null) return undefined;
+  return withUserDatabaseContext(userPublicId, callback);
+}
 
 /**
  * Resolve the default active organization for a user at login: the PERSONAL organization
@@ -28,7 +54,7 @@ const organizationRepository = new OrganizationRepository();
 export async function resolveDefaultActiveOrganizationPublicId(
   userInternalId: number,
 ): Promise<string | undefined> {
-  const resolved = await withGlobalAdminDatabaseContext(() =>
+  const resolved = await withUserContextForInternalId(userInternalId, () =>
     organizationRepository.findDefaultActiveOrganizationPublicId(
       userInternalId,
       env.PERSONAL_ORGANIZATION_ENABLED,
@@ -39,9 +65,9 @@ export async function resolveDefaultActiveOrganizationPublicId(
 
 /**
  * Confirm the user holds an ACTIVE membership in the given organization (and the org is
- * active/not-deleted), returning both the internal `id` and `public_id`. Runs under the
- * global-admin RLS context (no org context at switch time) but is constrained to the
- * caller's own `user_id`.
+ * active/not-deleted), returning both the internal `id` and `public_id`. Runs under the caller's own
+ * user RLS context (no org context at switch time) so the tenancy discovery policies match,
+ * and the query is additionally constrained to the caller's own `user_id`.
  *
  * @remarks
  * - **Algorithm:** one indexed join (memberships → organizations) filtered to ACTIVE
@@ -53,7 +79,7 @@ export async function findUserActiveOrganizationByPublicId(
   userInternalId: number,
   organizationPublicId: string,
 ): Promise<{ id: number; public_id: string } | undefined> {
-  const resolved = await withGlobalAdminDatabaseContext(() =>
+  const resolved = await withUserContextForInternalId(userInternalId, () =>
     organizationRepository.findActiveMembershipOrganizationByPublicId(
       userInternalId,
       organizationPublicId,
@@ -65,9 +91,9 @@ export async function findUserActiveOrganizationByPublicId(
 /**
  * Confirm the user holds an ACTIVE membership in the given organization (and the org is
  * active/not-deleted) — the membership gate for `switch-to-organization`. Returns the
- * org `public_id` when valid, otherwise `undefined` (caller maps to 403). Runs under the
- * global-admin RLS context (no org context at switch time) but is constrained to the
- * caller's own `user_id`.
+ * org `public_id` when valid, otherwise `undefined` (caller maps to 403). Runs under the caller's own
+ * user RLS context (no org context at switch time) so the tenancy discovery policies match,
+ * and the query is additionally constrained to the caller's own `user_id`.
  */
 export async function findUserActiveOrganizationPublicId(
   userInternalId: number,
@@ -82,14 +108,14 @@ export async function findUserActiveOrganizationPublicId(
  * (audit-#3). Given the session's stored internal `organization_id`, confirm the
  * user still holds an ACTIVE membership in that active/non-deleted org and return
  * its `public_id`; otherwise `undefined` so the caller falls back to the default
- * active organization. Constrained to the caller's own `user_id` under the
- * global-admin RLS context (no org context at refresh time).
+ * active organization. Constrained to the caller's own `user_id` under that same
+ * user RLS context (no org context at refresh time).
  */
 export async function findUserActiveOrganizationPublicIdByInternalId(
   userInternalId: number,
   organizationInternalId: number,
 ): Promise<string | undefined> {
-  const resolved = await withGlobalAdminDatabaseContext(() =>
+  const resolved = await withUserContextForInternalId(userInternalId, () =>
     organizationRepository.findActiveMembershipOrganizationPublicIdByInternalId(
       userInternalId,
       organizationInternalId,
@@ -117,7 +143,7 @@ export async function resolvePersonalOrganizationPublicId(
 export async function resolvePersonalOrganization(
   ownerUserInternalId: number,
 ): Promise<{ id: number; public_id: string } | undefined> {
-  const resolved = await withGlobalAdminDatabaseContext(() =>
+  const resolved = await withUserContextForInternalId(ownerUserInternalId, () =>
     organizationRepository.findPersonalOrganization(ownerUserInternalId),
   );
   return resolved ?? undefined;
@@ -141,9 +167,10 @@ export async function resolvePersonalOrganization(
  *   owner). A concurrent provision that loses the race raises a unique violation; we absorb it
  *   and re-resolve, so this function never creates a duplicate and never surfaces the race to
  *   the caller.
- * - **RLS:** provisioning runs inside its own `withGlobalAdminDatabaseContext` write
- *   transaction (see {@link provisionPersonalOrganization}); the surrounding reads use the
- *   same admin context, constrained to the caller's own `user_id`.
+ * - **RLS:** provisioning runs inside its own `withOrganizationDatabaseContext` write
+ *   transaction scoped to the new org's pre-generated `public_id` (see
+ *   {@link provisionPersonalOrganization}); the surrounding reads run under the caller's own
+ *   user context, constrained to the caller's own `user_id`.
  * - **Side effects:** provisions one organization (+ owner role, permissions, membership)
  *   on the self-heal path; read-only when the personal org already exists or personal is
  *   disabled.
