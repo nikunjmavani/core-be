@@ -1288,13 +1288,15 @@ export const envSchema = envSchemaBase
   .refine(
     (data) => !data.OAUTH_GOOGLE_CLIENT_ID || Boolean(data.OAUTH_GOOGLE_REDIRECT_URI?.trim()),
     {
-      // The fallback in google-oauth.provider.ts builds `${FRONTEND_URL}/auth/oauth/google/callback`,
-      // which is not a route core-fe serves (it mounts `/callback`), and this API has no self-origin
-      // variable to build its own callback from. Rather than invent one, require the value whenever
-      // the provider is configured — a loud boot failure beats a silently wrong redirect that only
-      // surfaces as a provider-side `redirect_uri_mismatch`.
+      // The value must be the SPA's `/callback`, not an API route: this API is JSON-only and
+      // issues no redirects, so the provider has to return the browser to the front end, which
+      // completes the exchange over XHR. The fallback in google-oauth.provider.ts builds
+      // `${FRONTEND_URL}/auth/oauth/google/callback`, which is not a route core-fe serves (it
+      // mounts `/callback`), so requiring the value whenever the provider is configured keeps
+      // that fallback unreachable — a loud boot failure beats a silently wrong redirect that
+      // only surfaces as a provider-side `redirect_uri_mismatch`.
       message:
-        "OAUTH_GOOGLE_REDIRECT_URI is required when OAUTH_GOOGLE_CLIENT_ID is set — it must match the Google Cloud Console entry exactly and point at this API's /api/v1/auth/oauth/google/callback.",
+        "OAUTH_GOOGLE_REDIRECT_URI is required when OAUTH_GOOGLE_CLIENT_ID is set — it must match the Google Cloud Console entry exactly and point at the front end's /callback (this API issues no redirects; the SPA completes the exchange).",
       path: ['OAUTH_GOOGLE_REDIRECT_URI'],
     },
   )
@@ -1302,7 +1304,7 @@ export const envSchema = envSchemaBase
     (data) => !data.OAUTH_GITHUB_CLIENT_ID || Boolean(data.OAUTH_GITHUB_REDIRECT_URI?.trim()),
     {
       message:
-        "OAUTH_GITHUB_REDIRECT_URI is required when OAUTH_GITHUB_CLIENT_ID is set — it must match the GitHub App callback URL exactly and point at this API's /api/v1/auth/oauth/github/callback.",
+        "OAUTH_GITHUB_REDIRECT_URI is required when OAUTH_GITHUB_CLIENT_ID is set — it must match the GitHub App callback URL exactly and point at the front end's /callback (this API issues no redirects; the SPA completes the exchange).",
       path: ['OAUTH_GITHUB_REDIRECT_URI'],
     },
   )

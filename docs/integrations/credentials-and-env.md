@@ -117,12 +117,12 @@ below show where the value comes from; the runbook above shows the workflow.
 2. **Create Project** (if needed) → **OAuth consent screen** → External (or Internal) → fill app name, save.
 3. **Credentials** → **Create credentials** → **OAuth client ID**.
 4. Application type: **Web application**.
-5. **Authorized redirect URIs** add: `http://localhost:3000/auth/oauth/google/callback` (or your API base + `/auth/oauth/google/callback`).
+5. **Authorized redirect URIs** add: `http://localhost:5173/callback` (or your **front-end** base + `/callback`). This is the SPA's route, not an API route — the API is JSON-only and issues no redirects, so the provider must return the browser to the front end, which then completes the code exchange.
 6. Create → copy **Client ID** and **Client secret**.
 7. In `.env`:  
    `OAUTH_GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com`  
    `OAUTH_GOOGLE_CLIENT_SECRET=xxxx`  
-   `OAUTH_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/oauth/google/callback`
+   `OAUTH_GOOGLE_REDIRECT_URI=http://localhost:5173/callback`
 
 ---
 
@@ -139,12 +139,12 @@ below show where the value comes from; the runbook above shows the workflow.
 **Steps:**
 
 1. GitHub → **Settings** → **Developer settings** → **OAuth Apps** → **New OAuth App**.
-2. **Application name:** e.g. `My App (Local)`. **Homepage URL:** `http://localhost:3000`. **Authorization callback URL:** `http://localhost:3000/auth/oauth/github/callback`.
+2. **Application name:** e.g. `My App (Local)`. **Homepage URL:** `http://localhost:5173`. **Authorization callback URL:** `http://localhost:5173/callback` — the SPA's route, not an API route (the API issues no redirects; the SPA completes the exchange).
 3. Register → copy **Client ID** and generate **Client secret**.
 4. In `.env`:  
    `OAUTH_GITHUB_CLIENT_ID=xxxx`  
    `OAUTH_GITHUB_CLIENT_SECRET=xxxx`  
-   `OAUTH_GITHUB_REDIRECT_URI=http://localhost:3000/auth/oauth/github/callback`
+   `OAUTH_GITHUB_REDIRECT_URI=http://localhost:5173/callback`
 
 **Production smoke (after secrets are in Railway / GitHub Environment):**
 
@@ -308,9 +308,9 @@ S3_REGION=us-east-1
 EMAIL_FROM_ADDRESS=onboarding@resend.dev
 EMAIL_FROM_NAME=YourApp
 OAUTH_GOOGLE_CLIENT_ID=....apps.googleusercontent.com
-OAUTH_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/oauth/google/callback
+OAUTH_GOOGLE_REDIRECT_URI=http://localhost:5173/callback
 OAUTH_GITHUB_CLIENT_ID=...
-OAUTH_GITHUB_REDIRECT_URI=http://localhost:3000/auth/oauth/github/callback
+OAUTH_GITHUB_REDIRECT_URI=http://localhost:5173/callback
 ```
 
 No third party offers a single "create all env vars" CLI; use the steps above
