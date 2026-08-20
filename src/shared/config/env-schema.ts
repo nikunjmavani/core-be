@@ -1286,6 +1286,55 @@ export const envSchema = envSchemaBase
     path: ['COOKIE_SAMESITE'],
   })
   .refine(
+    (data) =>
+      !data.OAUTH_GOOGLE_CLIENT_ID || Boolean(data.OAUTH_GOOGLE_REDIRECT_URI?.trim()),
+    {
+      // The fallback in google-oauth.provider.ts builds `${FRONTEND_URL}/auth/oauth/google/callback`,
+      // which is not a route core-fe serves (it mounts `/callback`), and this API has no self-origin
+      // variable to build its own callback from. Rather than invent one, require the value whenever
+      // the provider is configured — a loud boot failure beats a silently wrong redirect that only
+      // surfaces as a provider-side `redirect_uri_mismatch`.
+      message:
+        'OAUTH_GOOGLE_REDIRECT_URI is required when OAUTH_GOOGLE_CLIENT_ID is set — it must match the Google Cloud Console entry exactly and point at this API\'s /api/v1/auth/oauth/google/callback.',
+      path: ['OAUTH_GOOGLE_REDIRECT_URI'],
+    },
+  )
+  .refine(
+    (data) =>
+      !data.OAUTH_GITHUB_CLIENT_ID || Boolean(data.OAUTH_GITHUB_REDIRECT_URI?.trim()),
+    {
+      message:
+        'OAUTH_GITHUB_REDIRECT_URI is required when OAUTH_GITHUB_CLIENT_ID is set — it must match the GitHub App callback URL exactly and point at this API\'s /api/v1/auth/oauth/github/callback.',
+      path: ['OAUTH_GITHUB_REDIRECT_URI'],
+    },
+  )
+  .refine(
+    (data) => {
+      // `none` makes the Origin allowlist the primary CSRF control on the cookie-session route,
+      // so it must be trustworthy in EVERY environment — not only where NODE_ENV says production.
+      // The existing https rule below is production-gated, and a cross-site deployment need not be
+      // NODE_ENV=production to be internet-facing.
+      if (data.COOKIE_SAMESITE !== 'none') {
+        return true;
+      }
+      return data.ALLOWED_ORIGINS.split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+        .every((origin) => {
+          try {
+            return new URL(origin).protocol === 'https:';
+          } catch {
+            return false;
+          }
+        });
+    },
+    {
+      message:
+        'COOKIE_SAMESITE=none requires every ALLOWED_ORIGINS entry to be an absolute https:// origin — the Origin allowlist is the primary CSRF control once the session cookie is cross-site.',
+      path: ['ALLOWED_ORIGINS'],
+    },
+  )
+  .refine(
     (data) => {
       // sec-r4-C2: in production, session + CSRF cookies must carry the Secure attribute so they
       // are never transmitted over plaintext HTTP. COOKIE_SECURE=false is only valid for local

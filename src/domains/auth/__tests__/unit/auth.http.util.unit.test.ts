@@ -9,8 +9,10 @@ import {
   CSRF_HEADER_NAME,
   OAUTH_NONCE_COOKIE_NAME,
   SESSION_COOKIE_NAME,
+  clearCsrfCookie,
   clearOauthNonceCookie,
   clearSessionCookie,
+  getOauthNonceCookieOptions,
   formatSessionCookieValue,
   generateCsrfToken,
   generateRefreshSecret,
@@ -92,7 +94,7 @@ describe('auth.http.util — session cookie options', () => {
     const csrf = getCsrfCookieOptions();
     const session = getSessionCookieOptions();
     expect(csrf.secure).toBe(env.COOKIE_SECURE);
-    expect(csrf.sameSite).toBe('strict');
+    expect(csrf.sameSite).toBe(env.COOKIE_SAMESITE);
     expect(csrf.path).toBe(SESSION_COOKIE_PATH);
     // The CSRF token must not outlive the session it protects.
     expect(csrf.maxAge).toBe(session.maxAge);
@@ -173,20 +175,31 @@ describe('auth.http.util — cookie writes', () => {
     );
   });
 
-  it('clearSessionCookie clears BOTH cookies on the session path', () => {
+  it('clearSessionCookie clears BOTH cookies, each mirroring its own set', () => {
     const reply = mockReply();
     clearSessionCookie(reply);
-    // Clearing only the session cookie would strand a readable CSRF token in the browser.
-    expect(reply.clearCookie).toHaveBeenCalledWith(SESSION_COOKIE_NAME, {
-      path: SESSION_COOKIE_PATH,
-    });
-    expect(reply.clearCookie).toHaveBeenCalledWith(CSRF_COOKIE_NAME, {
-      path: SESSION_COOKIE_PATH,
-    });
+    // A clear is itself a Set-Cookie: at `SameSite=none` one that omits the attribute defaults to
+    // Lax and the browser drops it cross-site, so the cookie would survive logout.
+    expect(reply.clearCookie).toHaveBeenCalledWith(SESSION_COOKIE_NAME, getSessionCookieOptions());
+    expect(reply.clearCookie).toHaveBeenCalledWith(CSRF_COOKIE_NAME, getCsrfCookieOptions());
   });
 });
 
 describe('auth.http.util — OAuth nonce cookie', () => {
+  it('promotes the nonce cookie to `none` when the session cookies are cross-site', () => {
+    // The SPA sets this cookie via a cross-site XHR (`GET /auth/oauth/:provider`). Per RFC 6265bis
+    // a browser IGNORES a non-`none` cookie arriving on a cross-site subresource response, so a
+    // `lax` nonce would never be stored and every callback would 401 on the nonce check — the exact
+    // flow COOKIE_SAMESITE=none exists to make work.
+    expect(getOauthNonceCookieOptions().sameSite).toBe(
+      env.COOKIE_SAMESITE === 'none' ? 'none' : 'lax',
+    );
+  });
+
+  it('never uses `strict` — that would block the provider\'s top-level redirect back', () => {
+    expect(getOauthNonceCookieOptions().sameSite).not.toBe('strict');
+  });
+
   it('writes the nonce httpOnly, sameSite=lax, scoped to the callback path and the state TTL', () => {
     const reply = mockReply();
     setOauthNonceCookie(reply, 'nonce-value');
@@ -195,7 +208,7 @@ describe('auth.http.util — OAuth nonce cookie', () => {
     expect(reply.setCookie).toHaveBeenCalledWith(OAUTH_NONCE_COOKIE_NAME, 'nonce-value', {
       httpOnly: true,
       secure: env.COOKIE_SECURE,
-      sameSite: 'lax',
+      sameSite: env.COOKIE_SAMESITE === 'none' ? 'none' : 'lax',
       path: OAUTH_COOKIE_PATH,
       maxAge: OAUTH_STATE_TTL_SECONDS,
     });
@@ -215,10 +228,12 @@ describe('auth.http.util — OAuth nonce cookie', () => {
   it('clears the nonce on the OAuth path so it is genuinely single-use', () => {
     const reply = mockReply();
     clearOauthNonceCookie(reply);
-    // A mismatched path would leave the cookie alive in the browser and replayable.
-    expect(reply.clearCookie).toHaveBeenCalledWith(OAUTH_NONCE_COOKIE_NAME, {
-      path: OAUTH_COOKIE_PATH,
-    });
+    // A mismatched path — or a missing SameSite at `none` — would leave the cookie alive in the
+    // browser and replayable, so the clear mirrors the set exactly.
+    expect(reply.clearCookie).toHaveBeenCalledWith(
+      OAUTH_NONCE_COOKIE_NAME,
+      getOauthNonceCookieOptions(),
+    );
   });
 });
 
@@ -264,5 +279,42 @@ describe('auth.http.util — OAuth provider-not-implemented detection', () => {
     expect(isOauthProviderNotImplementedError(new Error('token exchange failed'))).toBe(false);
     expect(isOauthProviderNotImplementedError({ statusCode: 500 })).toBe(false);
     expect(isOauthProviderNotImplementedError(undefined)).toBe(false);
+  });
+});
+
+describe('auth.http.util — cookie clears mirror their sets', () => {
+  // A clear is itself a Set-Cookie. At `SameSite=none` a clear that omits the attribute defaults to
+  // Lax, so the browser drops it in the cross-site context and the cookie survives logout —
+  // leaving a credential-shaped value in the jar. @fastify/cookie overrides expires/maxAge/signed
+  // and passes everything else through, so handing it the full options object is safe.
+  it('clearSessionCookie carries the session cookie attributes', () => {
+    const reply = mockReply();
+    clearSessionCookie(reply);
+    const [name, options] = (reply.clearCookie as unknown as { mock: { calls: unknown[][] } }).mock
+      .calls[0] as [string, Record<string, unknown>];
+    expect(name).toBe(SESSION_COOKIE_NAME);
+    expect(options.sameSite).toBe(getSessionCookieOptions().sameSite);
+    expect(options.secure).toBe(env.COOKIE_SECURE);
+    expect(options.path).toBe(SESSION_COOKIE_PATH);
+  });
+
+  it('clearCsrfCookie carries the CSRF cookie attributes', () => {
+    const reply = mockReply();
+    clearCsrfCookie(reply);
+    const [name, options] = (reply.clearCookie as unknown as { mock: { calls: unknown[][] } }).mock
+      .calls[0] as [string, Record<string, unknown>];
+    expect(name).toBe(CSRF_COOKIE_NAME);
+    expect(options.sameSite).toBe(getCsrfCookieOptions().sameSite);
+    expect(options.path).toBe(SESSION_COOKIE_PATH);
+  });
+
+  it('clearOauthNonceCookie carries the nonce cookie attributes', () => {
+    const reply = mockReply();
+    clearOauthNonceCookie(reply);
+    const [name, options] = (reply.clearCookie as unknown as { mock: { calls: unknown[][] } }).mock
+      .calls[0] as [string, Record<string, unknown>];
+    expect(name).toBe(OAUTH_NONCE_COOKIE_NAME);
+    expect(options.sameSite).toBe(getOauthNonceCookieOptions().sameSite);
+    expect(options.path).toBe(OAUTH_COOKIE_PATH);
   });
 });
