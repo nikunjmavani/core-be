@@ -18,6 +18,14 @@ import {
 } from '@/shared/utils/http/pagination.util.js';
 import type { Organization } from './organization.types.js';
 
+/**
+ * Normalizes a `db.execute()` result into rows across drivers (postgres-js returns an array,
+ * node-postgres a `{ rows }` envelope) for the SECURITY DEFINER `auth.*` resolvers.
+ */
+function extractResolverRows<T>(result: unknown): T[] {
+  return (Array.isArray(result) ? result : ((result as { rows?: unknown[] }).rows ?? [])) as T[];
+}
+
 interface OrganizationListPagination {
   after?: string;
   limit: number;
@@ -32,23 +40,44 @@ interface OrganizationListPagination {
  * collisions.
  */
 export class OrganizationRepository extends BaseRepository {
+  /**
+   * Resolve `auth.users.public_id` → internal id via the `auth.resolve_user_id_by_public_id`
+   * SECURITY DEFINER resolver rather than a direct `auth.users` SELECT.
+   *
+   * @remarks
+   * `auth.users` is FORCE RLS and its only policy is
+   * `public_id = app.current_user_id OR app.global_admin`. Most callers here run inside
+   * `withOrganizationDatabaseContext`, which sets ONLY `app.current_organization_id` — so a
+   * direct SELECT matched no row and returned `null`, silently nulling the
+   * `created_by_user_id` / `updated_by_user_id` attribution it feeds. The resolver carries the
+   * identical `deleted_at IS NULL` predicate, so behaviour is unchanged where RLS already
+   * allowed the read.
+   */
   async resolveUserIdByPublicId(public_id: string | undefined): Promise<number | null> {
     if (!public_id) return null;
-    const rows = await getRequestDatabase()
-      .select({ id: authUsers.id })
-      .from(authUsers)
-      .where(and(eq(authUsers.public_id, public_id), isNull(authUsers.deleted_at)))
-      .limit(1);
-    return rows[0]?.id ?? null;
+    const result = await getRequestDatabase().execute<{ id: string | number | null }>(
+      sql`SELECT auth.resolve_user_id_by_public_id(${public_id}) AS id`,
+    );
+    const rawId = extractResolverRows<{ id: string | number | null }>(result)[0]?.id ?? null;
+    return rawId === null ? null : Number(rawId);
   }
 
+  /**
+   * Resolve an internal user id → `auth.users.public_id` via the `auth.resolve_user_by_internal_id`
+   * SECURITY DEFINER resolver rather than a direct `auth.users` SELECT.
+   *
+   * @remarks
+   * Same FORCE RLS rationale as {@link OrganizationRepository.resolveUserIdByPublicId}. This
+   * direction is the more damaging one: `MembershipService.invalidatePermissionsForMembership`
+   * guards on the result, so a `null` silently SKIPPED the permission-cache purge on role change,
+   * member removal, and bulk suspend — leaving revoked permissions live for the remainder of the
+   * cache TTL. The resolver carries the identical `deleted_at IS NULL` predicate.
+   */
   async resolveUserPublicIdByInternalId(user_id: number): Promise<string | null> {
-    const rows = await getRequestDatabase()
-      .select({ public_id: authUsers.public_id })
-      .from(authUsers)
-      .where(and(eq(authUsers.id, user_id), isNull(authUsers.deleted_at)))
-      .limit(1);
-    return rows[0]?.public_id ?? null;
+    const result = await getRequestDatabase().execute<{ public_id: string | null }>(
+      sql`SELECT public_id FROM auth.resolve_user_by_internal_id(${user_id})`,
+    );
+    return extractResolverRows<{ public_id: string | null }>(result)[0]?.public_id ?? null;
   }
 
   async findById(identifier: number): Promise<Organization | null> {
