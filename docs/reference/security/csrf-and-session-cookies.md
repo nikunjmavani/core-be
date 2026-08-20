@@ -33,7 +33,7 @@ flowchart LR
 | **Path**     | `/api/v1/auth`       | Cookie is sent only to auth routes, not the whole API.                                                          |
 | **HttpOnly** | `true`               | JavaScript cannot read the value (mitigates XSS token theft).                                                   |
 | **Secure**   | `true` in production | Cookie is sent only over HTTPS in production.                                                                   |
-| **SameSite** | `Strict`             | Cookie is **not** sent on cross-site subrequests (primary CSRF mitigation for browser-driven abuse of refresh). |
+| **SameSite** | `COOKIE_SAMESITE` (default `Strict`) | Not sent on cross-site subrequests (primary CSRF mitigation for browser-driven abuse of refresh). |
 
 ### `csrf_token` (double-submit, readable by SPA)
 
@@ -43,7 +43,7 @@ flowchart LR
 | **Path**     | `/api/v1/auth`       | Same scope as `session_id`.                                                                                     |
 | **HttpOnly** | `false`              | SPA reads the value and sends it as `X-CSRF-Token` (double-submit pattern).                                     |
 | **Secure**   | `true` in production | Sent only over HTTPS in production.                                                                     |
-| **SameSite** | `Strict`             | Not sent on cross-site requests.                                                                                |
+| **SameSite** | `COOKIE_SAMESITE` (default `Strict`) | Tracks the session cookie — the two must match or double-submit breaks silently.                                                                                |
 
 Implementation: [`src/domains/auth/auth.http.util.ts`](../../../src/domains/auth/auth.http.util.ts) (`getSessionCookieOptions`, `getCsrfCookieOptions`, `SESSION_COOKIE_NAME`, `CSRF_COOKIE_NAME`).
 
@@ -56,7 +56,7 @@ Routes that set or clear the cookie include login, email verification-code verif
 | Credential                    | Typical CSRF risk               | Why                                                                                                                                                                                                           |
 | ----------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`Authorization: Bearer …`** | Low for classic CSRF            | Malicious sites do not automatically attach arbitrary `Authorization` headers on cross-origin requests the way they do with cookies.                                                                          |
-| **`session_id` cookie**       | Mitigated for cross-site misuse | **`SameSite=Strict`** prevents the browser from including this cookie on cross-site requests in modern browsers, which blocks the usual “evil.com submits a hidden form to your API” pattern against refresh. |
+| **`session_id` cookie**       | Mitigated for cross-site misuse | **`SameSite`** (default `Strict`) prevents the browser from including this cookie on cross-site requests in modern browsers, which blocks the usual “evil.com submits a hidden form to your API” pattern against refresh. |
 
 ```mermaid
 flowchart TB
@@ -64,7 +64,7 @@ flowchart TB
     Form[Cross-site POST idea]
   end
   subgraph browser [User browser]
-    CookiePolicy[SameSite Strict on session_id]
+    CookiePolicy[SameSite COOKIE_SAMESITE on session_id]
   end
   subgraph corebe [API]
     Refresh[POST /auth/refresh]
@@ -89,6 +89,27 @@ Login and other session-establishing routes set both **`session_id`** and **`csr
 See [`src/shared/middlewares/session/cookie-session-origin.pre-handler.ts`](../../../src/shared/middlewares/session/cookie-session-origin.pre-handler.ts) (`requireAllowedSourceOriginForCookieSessionRoute`).
 
 ---
+
+## Configuring `SameSite`
+
+`COOKIE_SAMESITE` (`strict` | `lax` | `none`, default `strict`) drives both the session and CSRF
+cookies. They always share one value — a mismatch breaks double-submit silently while login still
+appears to succeed.
+
+`strict` assumes the SPA reaches this API **same-site**: the same registrable domain
+(`app.example.com` → `api.example.com`), or the API proxied through the SPA's own origin. If the SPA
+is served from a different site, the browser strips the cookie from every cross-site request and the
+cookie-authenticated routes under `/api/v1/auth` fail after a successful login.
+
+`none` is the only value a browser sends cross-site. It requires `COOKIE_SECURE=true` and every
+`ALLOWED_ORIGINS` entry to be absolute `https://` — both enforced in `env-schema.ts`, because at
+`none` the Origin allowlist becomes the primary CSRF control on the cookie-session route.
+
+> **`none` is a stopgap, not a destination.** Safari's ITP blocks third-party cookie *setting* by
+> default and Chrome is restricting third-party cookies, so a cross-site SPA will still lose its
+> session for some users regardless of this setting. The durable fix is same-site hosting
+> (`app.example.com` + `api.example.com`) or proxying `/api` through the SPA origin. Prefer those;
+> reach for `none` only to unblock a deployment you cannot yet move.
 
 ## When SameSite-only mitigation is not enough
 

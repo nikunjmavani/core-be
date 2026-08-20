@@ -44,6 +44,95 @@ const productionRequiredBase = {
 };
 
 describe('env-schema', () => {
+  describe('OAuth redirect URIs', () => {
+    it('requires OAUTH_GOOGLE_REDIRECT_URI once the Google client is configured', () => {
+      // The code fallback builds `${FRONTEND_URL}/auth/oauth/google/callback`, which core-fe does
+      // not serve, and this API has no self-origin variable to build its own from. Fail loudly at
+      // boot rather than ship a silently wrong redirect that only surfaces provider-side.
+      expect(() =>
+        envSchema.parse({ ...commonRequiredBase, OAUTH_GOOGLE_CLIENT_ID: 'google-client-id' }),
+      ).toThrow();
+    });
+
+    it('accepts the Google client when the redirect URI is supplied', () => {
+      const parsed = envSchema.parse({
+        ...commonRequiredBase,
+        OAUTH_GOOGLE_CLIENT_ID: 'google-client-id',
+        OAUTH_GOOGLE_REDIRECT_URI: 'https://api.example.com/api/v1/auth/oauth/google/callback',
+      });
+      expect(parsed.OAUTH_GOOGLE_REDIRECT_URI).toContain('/api/v1/auth/oauth/google/callback');
+    });
+
+    it('requires OAUTH_GITHUB_REDIRECT_URI once the GitHub client is configured', () => {
+      expect(() =>
+        envSchema.parse({ ...commonRequiredBase, OAUTH_GITHUB_CLIENT_ID: 'github-client-id' }),
+      ).toThrow();
+    });
+
+    it('leaves both optional when neither provider is configured', () => {
+      expect(() => envSchema.parse({ ...commonRequiredBase })).not.toThrow();
+    });
+  });
+
+  describe('COOKIE_SAMESITE', () => {
+    it('defaults to strict', () => {
+      const parsed = envSchema.parse({ ...commonRequiredBase });
+      expect(parsed.COOKIE_SAMESITE).toBe('strict');
+    });
+
+    it('accepts none when the cookie is Secure', () => {
+      // A cross-site SPA (different registrable domain from the API) needs `none` or the browser
+      // strips the cookie from every request to /api/v1/auth.
+      const parsed = envSchema.parse({
+        ...commonRequiredBase,
+        COOKIE_SAMESITE: 'none',
+        COOKIE_SECURE: 'true',
+        // `none` additionally requires https origins — commonRequiredBase uses http://localhost.
+        ALLOWED_ORIGINS: 'https://app.example.com',
+      });
+      expect(parsed.COOKIE_SAMESITE).toBe('none');
+    });
+
+    it('rejects none without Secure — browsers refuse such a cookie outright', () => {
+      expect(() =>
+        envSchema.parse({
+          ...commonRequiredBase,
+          COOKIE_SAMESITE: 'none',
+          COOKIE_SECURE: 'false',
+        }),
+      ).toThrow();
+    });
+
+    it('rejects none when any ALLOWED_ORIGINS entry is not https', () => {
+      // At `none` the Origin allowlist becomes the primary CSRF control on the cookie-session
+      // route, so it must be trustworthy in every environment — not only under NODE_ENV=production.
+      expect(() =>
+        envSchema.parse({
+          ...commonRequiredBase,
+          COOKIE_SAMESITE: 'none',
+          COOKIE_SECURE: 'true',
+          ALLOWED_ORIGINS: 'https://app.example.com,http://legacy.example.com',
+        }),
+      ).toThrow();
+    });
+
+    it('accepts none when every ALLOWED_ORIGINS entry is https', () => {
+      const parsed = envSchema.parse({
+        ...commonRequiredBase,
+        COOKIE_SAMESITE: 'none',
+        COOKIE_SECURE: 'true',
+        ALLOWED_ORIGINS: 'https://app.example.com,https://admin.example.com',
+      });
+      expect(parsed.COOKIE_SAMESITE).toBe('none');
+    });
+
+    it('rejects a value outside strict | lax | none', () => {
+      expect(() =>
+        envSchema.parse({ ...commonRequiredBase, COOKIE_SAMESITE: 'sometimes' }),
+      ).toThrow();
+    });
+  });
+
   it('exports schema keys for tooling sync', () => {
     expect(envSchemaKeys.length).toBeGreaterThan(0);
     expect(envSchemaKeys).toContain('DATABASE_URL');

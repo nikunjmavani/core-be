@@ -27,12 +27,13 @@ export function generateCsrfToken(): string {
   return randomBytes(32).toString('base64url');
 }
 
-/** Builds the cookie options used for {@link SESSION_COOKIE_NAME}: httpOnly, sameSite=strict, scoped to `/api/v1/auth`. */
+/** Builds the cookie options used for {@link SESSION_COOKIE_NAME}: httpOnly, sameSite from COOKIE_SAMESITE, scoped to `/api/v1/auth`. */
 export function getSessionCookieOptions() {
   return {
     httpOnly: true,
     secure: env.COOKIE_SECURE,
-    sameSite: 'strict' as const,
+    // Configurable so a cross-site SPA can opt into `none`; see COOKIE_SAMESITE in env-schema.
+    sameSite: env.COOKIE_SAMESITE,
     path: SESSION_COOKIE_PATH,
     maxAge: env.AUTH_SESSION_MAX_AGE_DAYS * SECONDS_PER_DAY,
   };
@@ -43,7 +44,9 @@ export function getCsrfCookieOptions() {
   return {
     httpOnly: false,
     secure: env.COOKIE_SECURE,
-    sameSite: 'strict' as const,
+    // Must track the session cookie: the SPA echoes this value back as the CSRF header, so a
+    // stricter SameSite here would silently break double-submit on cross-site requests.
+    sameSite: env.COOKIE_SAMESITE,
     path: SESSION_COOKIE_PATH,
     maxAge: env.AUTH_SESSION_MAX_AGE_DAYS * SECONDS_PER_DAY,
   };
@@ -56,7 +59,10 @@ export function setCsrfCookie(reply: FastifyReply, csrfToken?: string): void {
 
 /** Removes {@link CSRF_COOKIE_NAME} from the browser (used on logout / session revoke). */
 export function clearCsrfCookie(reply: FastifyReply): void {
-  reply.clearCookie(CSRF_COOKIE_NAME, { path: SESSION_COOKIE_PATH });
+  // Same attributes as the set: a clear is itself a Set-Cookie, and at `SameSite=none` a clear
+  // that omits it defaults to Lax and is dropped by the browser in the cross-site context —
+  // leaving a credential-shaped value in the jar after logout.
+  reply.clearCookie(CSRF_COOKIE_NAME, getCsrfCookieOptions());
 }
 
 /** Separator between session public id and refresh secret in {@link SESSION_COOKIE_NAME}. */
@@ -104,7 +110,7 @@ export function setSessionCookie(
 
 /** Clears both the session and CSRF cookies (logout flow). */
 export function clearSessionCookie(reply: FastifyReply): void {
-  reply.clearCookie(SESSION_COOKIE_NAME, { path: SESSION_COOKIE_PATH });
+  reply.clearCookie(SESSION_COOKIE_NAME, getSessionCookieOptions());
   clearCsrfCookie(reply);
 }
 
@@ -116,11 +122,23 @@ export const OAUTH_NONCE_COOKIE_NAME = 'oauth_nonce';
  * cookie survives the top-level navigation back from the provider, scoped to the OAuth callback
  * path, and expiring with the Redis `state` TTL.
  */
-function getOauthNonceCookieOptions() {
+/**
+ * `SameSite` for the OAuth nonce cookie. Never `strict` — that would block the cookie on the
+ * provider's top-level redirect back to us. But `lax` is not enough either when the SPA is
+ * cross-site: this cookie is SET on the response to a cross-site `fetch` (the SPA calls
+ * `GET /auth/oauth/:provider` via XHR), and per RFC 6265bis a browser IGNORES a non-`none`
+ * cookie arriving in that context. It is never stored, so the callback reads no nonce and
+ * `consumeOAuthState` fails closed with 401 — availability, never a login-CSRF bypass.
+ */
+function getOauthNonceSameSite(): 'none' | 'lax' {
+  return env.COOKIE_SAMESITE === 'none' ? 'none' : 'lax';
+}
+
+export function getOauthNonceCookieOptions() {
   return {
     httpOnly: true,
     secure: env.COOKIE_SECURE,
-    sameSite: 'lax' as const,
+    sameSite: getOauthNonceSameSite(),
     path: OAUTH_COOKIE_PATH,
     maxAge: OAUTH_STATE_TTL_SECONDS,
   };
@@ -139,7 +157,7 @@ export function readOauthNonceCookie(request: FastifyRequest): string | undefine
 
 /** Removes the OAuth nonce cookie (called after the callback consumes it). */
 export function clearOauthNonceCookie(reply: FastifyReply): void {
-  reply.clearCookie(OAUTH_NONCE_COOKIE_NAME, { path: OAUTH_COOKIE_PATH });
+  reply.clearCookie(OAUTH_NONCE_COOKIE_NAME, getOauthNonceCookieOptions());
 }
 
 /** Returns the request remote IP, falling back to `127.0.0.1` when Fastify has not populated `request.ip`. */
