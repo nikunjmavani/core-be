@@ -12,6 +12,7 @@ import {
   recordCommitDispatchDurabilityFallback,
   recordEventBusHandlerFailure,
 } from '@/infrastructure/observability/metrics/prometheus-metrics.js';
+import { MAX_CONCURRENT_ON_COMMIT_TASKS } from '@/shared/constants/limits.constants.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
@@ -132,16 +133,25 @@ export class EventBus {
     const queue = onCommitStorage.getStore();
     if (queue === undefined || queue.tasks.length === 0) return;
     const tasks = queue.tasks.splice(0, queue.tasks.length);
-    await Promise.all(
-      tasks.map(async (task) => {
+    // Bounded fan-out: a task that touches the database opens its own scoped context, and so its
+    // own pooled connection. Dispatching the whole queue at once made one request's connection
+    // demand equal its task count, multiplying to `requests x tasks-per-request` under load.
+    // Workers pull from a shared cursor so a long task cannot stall the others.
+    let nextTaskIndex = 0;
+    const runTasksSequentially = async (): Promise<void> => {
+      while (nextTaskIndex < tasks.length) {
+        const task = tasks[nextTaskIndex++];
+        if (task === undefined) return;
         try {
           await task();
         } catch (error) {
           logger.error({ error }, 'event-bus.on-commit.task.failed');
           captureException(error, { tags: { source: 'event-bus.on-commit' } });
         }
-      }),
-    );
+      }
+    };
+    const workerCount = Math.min(tasks.length, MAX_CONCURRENT_ON_COMMIT_TASKS);
+    await Promise.all(Array.from({ length: workerCount }, runTasksSequentially));
   }
 
   /**

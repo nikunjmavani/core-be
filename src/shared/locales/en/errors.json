@@ -164,5 +164,6 @@
   "captchaProviderUnavailable": "CAPTCHA verification is temporarily unavailable",
   "queueDashboardReadOnly": "Queue dashboard mutations are disabled in this environment",
   "idempotencyKeyRequired": "X-Idempotency-Key header is required for this operation",
-  "invalidMetricsToken": "Invalid or missing metrics token"
+  "invalidMetricsToken": "Invalid or missing metrics token",
+  "resourceBusy": "The resource is busy right now. Please retry in a moment."
 }

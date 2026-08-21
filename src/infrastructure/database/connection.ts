@@ -22,7 +22,7 @@ export { DEFAULT_DATABASE_POOL_MAX };
 /**
  * Builds the postgres.js client options from `DATABASE_URL` + env: SSL mode parsed from
  * the URL (and tightened by `DATABASE_SSL_REJECT_UNAUTHORIZED`), per-connection
- * `statement_timeout` / `idle_in_transaction_session_timeout`, pool sizing, and a
+ * `statement_timeout` / `idle_in_transaction_session_timeout` / `lock_timeout`, pool sizing, and a
  * Neon-pooler-aware `prepare: false` toggle.
  */
 export function buildPostgresOptions(databaseUrl: string) {
@@ -48,9 +48,17 @@ export function buildPostgresOptions(databaseUrl: string) {
   const idleInTransactionTimeoutMs =
     env.DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS ?? THIRTY_SECONDS_MS;
 
+  /**
+   * The three timeouts catch three different failures and do not substitute for one another:
+   * `statement_timeout` a runaway query, `idle_in_transaction_session_timeout` an abandoned
+   * transaction, and `lock_timeout` a statement waiting behind someone else's lock. A lock waiter
+   * is neither idle nor executing, so without `lock_timeout` it holds its pooled connection for an
+   * unbounded wait and concurrent waiters turn lock contention into pool exhaustion.
+   */
   const connectionParameters: Record<string, string> = {
     statement_timeout: String(connectionStatementTimeoutMs),
     idle_in_transaction_session_timeout: String(idleInTransactionTimeoutMs),
+    lock_timeout: String(env.DATABASE_LOCK_TIMEOUT_MS),
   };
 
   return {

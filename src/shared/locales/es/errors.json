@@ -164,5 +164,6 @@
   "captchaProviderUnavailable": "La verificación CAPTCHA no está disponible temporalmente",
   "queueDashboardReadOnly": "Las mutaciones del panel de colas están deshabilitadas en este entorno",
   "idempotencyKeyRequired": "El encabezado X-Idempotency-Key es obligatorio para esta operación",
-  "invalidMetricsToken": "Token de métricas inválido o ausente"
+  "invalidMetricsToken": "Token de métricas inválido o ausente",
+  "resourceBusy": "El recurso está ocupado en este momento. Vuelve a intentarlo en un momento."
 }

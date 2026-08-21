@@ -79,6 +79,15 @@ async function createApp(): Promise<FastifyInstance> {
     error.code = '57014';
     throw error;
   });
+  app.get('/lock-timeout', async () => {
+    // Shape a postgres.js PostgresError: SQLSTATE lives on `code`, and drizzle wraps the driver
+    // error in `cause`, which is where the handler's detection has to look.
+    const driverError = Object.assign(new Error('canceling statement due to lock timeout'), {
+      code: '55P03',
+    });
+    throw Object.assign(new Error('Failed query'), { cause: driverError });
+  });
+
   app.get('/unhandled', async () => {
     throw new Error('unexpected');
   });
@@ -248,6 +257,18 @@ describe('error-handler.middleware status + body mapping', () => {
       expect(body.error.errors.some((entry: { field: string }) => entry.field === 'email')).toBe(
         true,
       );
+    });
+
+    it('maps a Postgres lock_timeout (55P03) to 409 rather than a masked 500', async () => {
+      // `DATABASE_LOCK_TIMEOUT_MS` bounds lock waits — including `pg_advisory_xact_lock`, which the
+      // quota guards use — so contention now surfaces as a cancelled statement instead of queueing
+      // forever. It is transient (retrying succeeds once the holder commits), so it must not be
+      // reported as a server fault or captured to Sentry as unhandled.
+      const response = await app.inject({ method: 'GET', url: '/lock-timeout' });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error.code).toBe('conflict');
+      expect(mockedCaptureException).not.toHaveBeenCalled();
     });
 
     it('maps a plain unhandled error to a masked 500 internal_error and captures it', async () => {

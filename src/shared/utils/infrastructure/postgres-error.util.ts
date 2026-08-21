@@ -4,6 +4,7 @@
 import { DEFAULT_TRANSIENT_RETRY_ATTEMPTS } from '@/shared/constants/limits.constants.js';
 
 const POSTGRES_UNIQUE_VIOLATION = '23505';
+const POSTGRES_LOCK_NOT_AVAILABLE = '55P03';
 const POSTGRES_FOREIGN_KEY_VIOLATION = '23503';
 const MAX_CAUSE_DEPTH = 5;
 
@@ -51,6 +52,21 @@ function hasPostgresErrorCode(error: unknown, code: string): boolean {
 /** Returns true when `error` is a Postgres `unique_violation` (SQLSTATE 23505). */
 export function isPostgresUniqueViolation(error: unknown): boolean {
   return hasPostgresErrorCode(error, POSTGRES_UNIQUE_VIOLATION);
+}
+
+/**
+ * Returns true when `error` is a Postgres `lock_not_available` (SQLSTATE 55P03) — the statement
+ * was cancelled because it waited longer than `lock_timeout` for a lock.
+ *
+ * @remarks
+ * `DATABASE_LOCK_TIMEOUT_MS` bounds lock waits so a blocked statement cannot hold its pooled
+ * connection indefinitely. That bound also applies to `pg_advisory_xact_lock`, which the quota
+ * guards use to serialize count+insert, so heavy contention on one scope surfaces here instead of
+ * queueing forever. It is transient: the same request retried after the contention clears
+ * succeeds, which is why the caller maps it to 409 rather than 500.
+ */
+export function isPostgresLockTimeout(error: unknown): boolean {
+  return hasPostgresErrorCode(error, POSTGRES_LOCK_NOT_AVAILABLE);
 }
 
 /** Returns true when `error` is a Postgres `foreign_key_violation` (SQLSTATE 23503). */

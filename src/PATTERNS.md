@@ -165,6 +165,19 @@ A context sets **one** GUC. It grants access only on tables whose policies test 
 
 To read `auth.users` from a context that is not the user's own (e.g. inside org context, or post-commit with no GUC), use an `auth.*` **SECURITY DEFINER** resolver — `auth.resolve_user_id_by_public_id`, `auth.resolve_user_by_internal_id`, `auth.resolve_user_public_ids_by_ids` — never a direct join.
 
+### Connection-holding discipline
+
+These four properties hold today and are what keep lock contention from becoming pool exhaustion. Three are conventions — breaking one is a silent regression, not a build error.
+
+| Property | Why it matters | Status |
+| --- | --- | --- |
+| **Transactions are callback-scoped** — zero `.commit()` / `.rollback()` in `src/domains`, `src/shared`, `src/core` | Makes the "early return between BEGIN and COMMIT leaks a transaction holding its row locks" defect class **unwritable** | verified, convention |
+| **Every `set_config` passes `true`** (transaction-scoped) | A session-scoped identity survives on a pooled connection and leaks the previous caller's tenant to the next one | verified, convention |
+| **No batch-and-parallel write fan-out** — no slicing an id list and dispatching the chunks through `Promise.all` | Postgres serialises the statements on one connection anyway, so the concurrency buys nothing while every statement's row locks are held until COMMIT — the lock window grows with the batch count. Issue one statement for the whole list, or chunk **sequentially** | verified, convention |
+| **Bounded post-commit fan-out** — `flushOnCommit` runs at most `MAX_CONCURRENT_ON_COMMIT_TASKS` tasks at once | A post-commit task that touches the database opens its own scoped context, so unbounded dispatch made one request's connection demand equal its queue length | enforced in code |
+
+**Three timeouts, three different failures, no substitutes** (all connection parameters, see [database.overview.md](src/infrastructure/database/database.overview.md)): `statement_timeout` bounds a running query, `idle_in_transaction_session_timeout` bounds an open-and-idle transaction, `lock_timeout` bounds a statement **blocked behind someone else's lock**. A lock waiter is neither running nor idle, so only `lock_timeout` bounds it — while it holds its pooled checkout for the entire wait.
+
 ### How to apply
 
 - New tenant-scoped table: add an RLS policy in its migration. The migration linter (`pnpm db:migrate:lint`) rejects schemas that omit RLS where it's required.

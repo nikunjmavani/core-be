@@ -12,6 +12,18 @@ export const DEFAULT_REPOSITORY_LIST_LIMIT = 500;
 /** Bounded stale-request scan size for each commit-dispatch recovery pass. */
 export const DEFAULT_COMMIT_DISPATCH_RECOVERY_BATCH_SIZE = 50;
 
+/**
+ * Maximum post-commit `onCommit` tasks executed concurrently by `eventBus.flushOnCommit`.
+ *
+ * @remarks
+ * The queue length is not structurally bounded, and a task that touches the database opens its
+ * own scoped context — hence its own pooled connection. Dispatching the whole queue at once made
+ * a single request's connection demand equal its task count, multiplying under load to
+ * `requests x tasks-per-request`. Capping keeps that demand predictable while retaining nearly
+ * all of the parallelism, since these tasks are short enqueue calls.
+ */
+export const MAX_CONCURRENT_ON_COMMIT_TASKS = 8;
+
 /** Poll interval (milliseconds) for permission-cache lock waiters during stampede control. */
 export const PERMISSION_CACHE_STAMPEDE_POLL_MS = 50;
 

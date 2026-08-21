@@ -3,8 +3,14 @@ import fp from 'fastify-plugin';
 import i18next from 'i18next';
 import { randomUUID } from 'node:crypto';
 import { z, ZodError } from 'zod';
-import { AppError, ERROR_CODE_TO_SNAKE, ValidationError } from '@/shared/errors/index.js';
+import {
+  AppError,
+  ConflictError,
+  ERROR_CODE_TO_SNAKE,
+  ValidationError,
+} from '@/shared/errors/index.js';
 import { EXTERNAL_ERROR_MESSAGE } from '@/shared/constants/index.js';
+import { isPostgresLockTimeout } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { captureException } from '@/infrastructure/observability/sentry/sentry.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
@@ -359,6 +365,17 @@ const errorHandlerMiddlewarePlugin: FastifyPluginAsync = async (app) => {
         fallbackMessage: 'The database operation timed out',
         code: 'gateway_timeout',
       });
+    }
+
+    // A statement cancelled by `lock_timeout` (SQLSTATE 55P03) is transient contention, not a
+    // server fault: the same request succeeds once the holder commits. Without this it would fall
+    // through to the 500 branch and be captured to Sentry as an unhandled error. Mapped to 409 per
+    // the response-codes decision guide — "valid request colliding with current state, retrying may
+    // succeed" — rather than 503, which is reserved for a dependency being unavailable.
+    if (isPostgresLockTimeout(error)) {
+      const conflictError = new ConflictError('errors:resourceBusy');
+      reply.status(conflictError.statusCode);
+      return handleAppErrorResponse(conflictError, request, currentRequestId);
     }
 
     if (error instanceof AppError) {

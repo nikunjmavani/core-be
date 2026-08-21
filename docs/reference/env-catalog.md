@@ -5,7 +5,7 @@
 
 Allowed values + description come from the explicit registry; the **default** and **required/optional**
 status are read from each Zod field, so this can never disagree with what boots. Registry coverage:
-**12 / 230** variables migrated to an explicit `{ allowed, description }` entry.
+**12 / 232** variables migrated to an explicit `{ allowed, description }` entry.
 
 | Variable | Allowed values | Default | In registry | Description |
 | --- | --- | --- | :---: | --- |
@@ -37,6 +37,7 @@ status are read from each Zod field, so this can never disagree with what boots.
 | `DATABASE_CONNECTION_BUDGET_ENFORCED` | — | `true` |  | — |
 | `DATABASE_HTTP_STATEMENT_TIMEOUT_MS` | — | `5000` |  | — |
 | `DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS` | — | — *(optional)* |  | — |
+| `DATABASE_LOCK_TIMEOUT_MS` | — | `3000` |  | — |
 | `DATABASE_MIGRATION_URL` | — | — *(optional)* |  | — |
 | `DATABASE_POOL_ACTIVE_CRITICAL_RATIO` | — | `0.95` |  | — |
 | `DATABASE_POOL_ACTIVE_WARN_RATIO` | — | `0.8` |  | — |
@@ -54,6 +55,7 @@ status are read from each Zod field, so this can never disagree with what boots.
 | `DATABASE_STATEMENT_TIMEOUT_MS` | — | — *(optional)* |  | — |
 | `DATABASE_TLS_ENFORCED` | — | `true` |  | — |
 | `DATABASE_URL` | — | — *(required)* |  | — |
+| `DATABASE_WORKER_LOCK_TIMEOUT_MS` | — | `30000` |  | — |
 | `DATABASE_WORKER_STATEMENT_TIMEOUT_MS` | — | `300000` |  | — |
 | `DEPLOYMENT_API_REPLICA_COUNT` | — | — *(optional)* |  | — |
 | `DEPLOYMENT_TOTAL_REPLICA_COUNT` | — | — *(optional)* |  | — |
