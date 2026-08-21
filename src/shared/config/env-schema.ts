@@ -739,7 +739,7 @@ const envSchemaBase = z.object({
    * whole wait. Without a bound, concurrent waiters on one row convert lock contention directly
    * into pool exhaustion. Minimum 1000; 0 ("wait forever") is deliberately not accepted.
    */
-  DATABASE_LOCK_TIMEOUT_MS: z.coerce.number().int().min(1_000).default(3_000),
+  DATABASE_LOCK_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(30_000).default(3_000),
   /** Warn when in-process org RLS checkouts reach this fraction of DATABASE_POOL_MAX (default 0.8). */
   DATABASE_POOL_ACTIVE_WARN_RATIO: z.coerce.number().min(0).max(1).default(0.8),
   /** Critical alert when in-process org RLS checkouts reach this fraction of DATABASE_POOL_MAX (default 0.95). */
@@ -1529,6 +1529,24 @@ export const envSchema = envSchemaBase
       message:
         'OTEL_EXPORTER_OTLP_ENDPOINT must be an https:// URL in production (telemetry exporters cannot transmit SQL fragments / request paths in plaintext).',
       path: ['OTEL_EXPORTER_OTLP_ENDPOINT'],
+    },
+  )
+  .refine(
+    (data) => {
+      // statement_timeout measures TOTAL statement duration, lock wait included. So a
+      // lock_timeout at or above it never fires — the statement timeout cuts the statement short
+      // first and the lock bound is inert, silently restoring the unbounded-wait behaviour this
+      // setting exists to prevent. 0 means "no statement timeout", so there is nothing to bound
+      // against.
+      if (data.DATABASE_HTTP_STATEMENT_TIMEOUT_MS === 0) {
+        return true;
+      }
+      return data.DATABASE_LOCK_TIMEOUT_MS < data.DATABASE_HTTP_STATEMENT_TIMEOUT_MS;
+    },
+    {
+      message:
+        'DATABASE_LOCK_TIMEOUT_MS must be < DATABASE_HTTP_STATEMENT_TIMEOUT_MS (or the statement timeout must be 0). statement_timeout includes time spent waiting for a lock, so an equal or larger lock timeout never fires and the lock wait is effectively unbounded again.',
+      path: ['DATABASE_LOCK_TIMEOUT_MS'],
     },
   )
   .refine(

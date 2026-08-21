@@ -723,6 +723,48 @@ describe('env-schema', () => {
     }
   });
 
+  it('defaults DATABASE_LOCK_TIMEOUT_MS to 3000, below the HTTP statement budget', () => {
+    const parsed = envSchema.safeParse({ ...commonRequiredBase });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.DATABASE_LOCK_TIMEOUT_MS).toBe(3_000);
+    }
+  });
+
+  it('rejects DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS = 0 (an unbounded idle transaction)', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS: '0',
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(
+        parsed.error.issues.some((i) => i.path[0] === 'DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS'),
+      ).toBe(true);
+    }
+  });
+
+  it('rejects DATABASE_LOCK_TIMEOUT_MS >= DATABASE_HTTP_STATEMENT_TIMEOUT_MS (the bound would be inert)', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      DATABASE_HTTP_STATEMENT_TIMEOUT_MS: '4000',
+      DATABASE_LOCK_TIMEOUT_MS: '4000',
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((i) => i.path[0] === 'DATABASE_LOCK_TIMEOUT_MS')).toBe(true);
+    }
+  });
+
+  it('allows DATABASE_LOCK_TIMEOUT_MS above the statement timeout when that timeout is 0 (disabled)', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      DATABASE_HTTP_STATEMENT_TIMEOUT_MS: '0',
+      DATABASE_LOCK_TIMEOUT_MS: '9000',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
   it('rejects DATABASE_HTTP_STATEMENT_TIMEOUT_MS >= PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS × 1000', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,
