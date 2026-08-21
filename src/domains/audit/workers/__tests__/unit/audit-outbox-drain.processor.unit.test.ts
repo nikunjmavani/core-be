@@ -178,6 +178,15 @@ describe('runAuditOutboxDrainJob', () => {
       'app.current_organization_id',
       'org_a',
     );
+    // …and the system arm is explicitly turned OFF for a tenanted row. Savepoints do NOT restore
+    // settings on RELEASE, so leaving it unset would inherit `'true'` from any earlier tenantless
+    // row in the same batch and widen `audit_logs_tenant_isolation_insert` for the remainder.
+    expect(setLocalDatabaseConfigMock).toHaveBeenNthCalledWith(
+      3,
+      databaseHandle,
+      'app.system_audit_insert',
+      'false',
+    );
     expect(databaseHandle.insert).toHaveBeenCalledTimes(1);
     expect(drainRepositoryMock.markProcessed).toHaveBeenCalledExactlyOnceWith([100]);
   });
@@ -198,6 +207,14 @@ describe('runAuditOutboxDrainJob', () => {
       databaseHandle,
       'app.system_audit_insert',
       'true',
+    );
+    // Both identity GUCs are written on EVERY row, never just the one this row needs:
+    // `RELEASE SAVEPOINT` keeps whatever the savepoint set, so a one-GUC-per-branch loop
+    // inherits the previous row's value and widens the insert policy for the rest of the batch.
+    expect(setLocalDatabaseConfigMock).toHaveBeenCalledWith(
+      databaseHandle,
+      'app.current_organization_id',
+      '',
     );
   });
 
