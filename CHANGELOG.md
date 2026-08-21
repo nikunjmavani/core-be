@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [6.0.0](https://github.com/nikunjmavani/core-be/compare/v5.2.2...v6.0.0) (2026-08-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* **api:** all 45 POST routes that returned 201 now return 200. The method-status policy becomes exemption-free: success is 200 everywhere, DELETE stays 204. Stripe-shaped uniform model - 200 stays true for idempotent replays and future upserts, where a fixed 201 lies on the replay ("Created" when nothing was created). The webhook + MCP exemption list is deleted rather than maintained: every inbound protocol this API might ever host (webhook acks, OAuth token endpoints, JSON-RPC) expects 200, so the exemption class is gone for good.
+
+### Added
+
+* **api:** uniform success 200 for every method except DELETE (204) ([#1071](https://github.com/nikunjmavani/core-be/issues/1071)) ([eee0dd3](https://github.com/nikunjmavani/core-be/commit/eee0dd3248eb114a7d0c32d6911671754ad05a2c))
+
+
+### Fixed
+
+* **auth:** accept provider params on OAuth callback; make cookie SameSite configurable ([#1103](https://github.com/nikunjmavani/core-be/issues/1103)) ([bdca0ac](https://github.com/nikunjmavani/core-be/commit/bdca0ac6756c67f0a5c282e13386524e7522c65d))
+* **auth:** per-user rate-limit on the two org-switch POSTs ([#1095](https://github.com/nikunjmavani/core-be/issues/1095)) ([3fed87d](https://github.com/nikunjmavani/core-be/commit/3fed87dcb41672e41c8235faa9c7f8277f949ced))
+* **database:** bound lock waits (HTTP + worker), floor the idle timeout, close a savepoint GUC leak ([#1109](https://github.com/nikunjmavani/core-be/issues/1109)) ([3b85cb4](https://github.com/nikunjmavani/core-be/commit/3b85cb4d4c854eb59e70655dc2666fb6b7a35913))
+* **sonar,auth:** self-heal a stale Sonar admin password; drop deprecated Zod passthrough ([#1107](https://github.com/nikunjmavani/core-be/issues/1107)) ([84c92a6](https://github.com/nikunjmavani/core-be/commit/84c92a6119eb343a9b9a8b95ec9b13e199ea1902))
+* **tenancy:** read active organization under the user RLS context, not global-admin ([#1105](https://github.com/nikunjmavani/core-be/issues/1105)) ([0b488db](https://github.com/nikunjmavani/core-be/commit/0b488dba5f31daf53b5a2e79b128dac7fef716ef))
+* **tenancy:** resolve user ids via SECURITY DEFINER, not a raw auth.users read ([#1106](https://github.com/nikunjmavani/core-be/issues/1106)) ([66ae50b](https://github.com/nikunjmavani/core-be/commit/66ae50b6a713c9841a85e1716472b1d328b3d66b))
+
 ## [5.2.2](https://github.com/nikunjmavani/core-be/compare/v5.2.1...v5.2.2) (2026-08-11)
 
 
