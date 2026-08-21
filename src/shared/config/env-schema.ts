@@ -740,6 +740,17 @@ const envSchemaBase = z.object({
    * into pool exhaustion. Minimum 1000; 0 ("wait forever") is deliberately not accepted.
    */
   DATABASE_LOCK_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(30_000).default(3_000),
+  /**
+   * Per-transaction lock_timeout (ms) for WORKER contexts. Default: 30000.
+   *
+   * The connection-level `DATABASE_LOCK_TIMEOUT_MS` is tuned for HTTP, where a caller is waiting
+   * and the statement budget is 5s anyway. Background work has a 5-minute statement budget
+   * (`DATABASE_WORKER_STATEMENT_TIMEOUT_MS`) and retries safely, so giving up on a lock after 3s
+   * is needlessly impatient — it converts contention into DLQ churn. Applied with `SET LOCAL`
+   * alongside the worker statement timeout, so it lifts the HTTP-tuned cap for that transaction
+   * only. Mirrors the `HTTP vs WORKER` split already used for `statement_timeout`.
+   */
+  DATABASE_WORKER_LOCK_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(30_000),
   /** Warn when in-process org RLS checkouts reach this fraction of DATABASE_POOL_MAX (default 0.8). */
   DATABASE_POOL_ACTIVE_WARN_RATIO: z.coerce.number().min(0).max(1).default(0.8),
   /** Critical alert when in-process org RLS checkouts reach this fraction of DATABASE_POOL_MAX (default 0.95). */
@@ -1529,6 +1540,14 @@ export const envSchema = envSchemaBase
       message:
         'OTEL_EXPORTER_OTLP_ENDPOINT must be an https:// URL in production (telemetry exporters cannot transmit SQL fragments / request paths in plaintext).',
       path: ['OTEL_EXPORTER_OTLP_ENDPOINT'],
+    },
+  )
+  .refine(
+    (data) => data.DATABASE_WORKER_LOCK_TIMEOUT_MS < data.DATABASE_WORKER_STATEMENT_TIMEOUT_MS,
+    {
+      message:
+        'DATABASE_WORKER_LOCK_TIMEOUT_MS must be < DATABASE_WORKER_STATEMENT_TIMEOUT_MS. statement_timeout includes time spent waiting for a lock, so an equal or larger lock timeout never fires and the worker lock wait is effectively unbounded.',
+      path: ['DATABASE_WORKER_LOCK_TIMEOUT_MS'],
     },
   )
   .refine(

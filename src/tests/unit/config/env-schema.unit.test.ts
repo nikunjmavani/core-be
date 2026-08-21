@@ -765,6 +765,31 @@ describe('env-schema', () => {
     expect(parsed.success).toBe(true);
   });
 
+  it('gives workers a longer lock budget than HTTP by default', () => {
+    const parsed = envSchema.safeParse({ ...commonRequiredBase });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.DATABASE_WORKER_LOCK_TIMEOUT_MS).toBe(30_000);
+      expect(parsed.data.DATABASE_WORKER_LOCK_TIMEOUT_MS).toBeGreaterThan(
+        parsed.data.DATABASE_LOCK_TIMEOUT_MS,
+      );
+    }
+  });
+
+  it('rejects DATABASE_WORKER_LOCK_TIMEOUT_MS >= DATABASE_WORKER_STATEMENT_TIMEOUT_MS', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      DATABASE_WORKER_STATEMENT_TIMEOUT_MS: '20000',
+      DATABASE_WORKER_LOCK_TIMEOUT_MS: '20000',
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((i) => i.path[0] === 'DATABASE_WORKER_LOCK_TIMEOUT_MS')).toBe(
+        true,
+      );
+    }
+  });
+
   it('rejects DATABASE_HTTP_STATEMENT_TIMEOUT_MS >= PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS × 1000', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,

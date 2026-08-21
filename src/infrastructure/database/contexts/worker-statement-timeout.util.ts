@@ -3,7 +3,7 @@ import { getEnv } from '@/shared/config/env.config.js';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 
 /**
- * sec-D2: lift the connection-level HTTP statement_timeout (5 s by default)
+ * sec-D2: lift the connection-level HTTP-tuned `statement_timeout` (5 s) and `lock_timeout` (3 s)
  * for the duration of a worker transaction.
  *
  * `buildPostgresOptions` applies `statement_timeout` at connection time
@@ -22,8 +22,19 @@ import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/co
 export async function applyWorkerStatementTimeout(
   databaseHandle: RequestScopedPostgresDatabase,
 ): Promise<void> {
-  const timeoutMs = getEnv().DATABASE_WORKER_STATEMENT_TIMEOUT_MS;
+  const environment = getEnv();
   await databaseHandle.execute(
-    drizzleSql.raw(`SET LOCAL statement_timeout = ${Number(timeoutMs)}`),
+    drizzleSql.raw(
+      `SET LOCAL statement_timeout = ${Number(environment.DATABASE_WORKER_STATEMENT_TIMEOUT_MS)}`,
+    ),
+  );
+  // Same rationale for lock waits. The connection-level `lock_timeout` is tuned for HTTP (3s, a
+  // caller is waiting); a background job with a 5-minute statement budget that abandons a lock
+  // after 3s just converts contention into retries and DLQ churn. Lift it for this transaction
+  // only — the connection-level cap re-applies on the next checkout.
+  await databaseHandle.execute(
+    drizzleSql.raw(
+      `SET LOCAL lock_timeout = ${Number(environment.DATABASE_WORKER_LOCK_TIMEOUT_MS)}`,
+    ),
   );
 }
