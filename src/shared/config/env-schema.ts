@@ -720,8 +720,26 @@ const envSchemaBase = z.object({
    * 0 falls back to `DATABASE_STATEMENT_TIMEOUT_MS`.
    */
   DATABASE_HTTP_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(0).default(5_000),
-  /** Per-connection idle_in_transaction_session_timeout (ms). Caps stuck transactions; 0 disables. Default: 30000. */
-  DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS: z.coerce.number().int().min(0).optional(),
+  /**
+   * Per-connection idle_in_transaction_session_timeout (ms). Caps a transaction that opened,
+   * stalled, and still holds its pooled connection. Default: 30000.
+   *
+   * Minimum 1000 — unlike the statement timeouts, 0 is NOT accepted here. Postgres reads 0 as
+   * "no bound", so a single misconfiguration would silently remove the only ceiling on an
+   * abandoned transaction, with nothing failing at boot to say so.
+   */
+  DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS: z.coerce.number().int().min(1_000).optional(),
+  /**
+   * Per-connection lock_timeout (ms). Caps how long a statement waits for someone else's lock
+   * before failing. Default: 3000.
+   *
+   * Distinct from the other two timeouts and NOT substitutable: a statement blocked on a lock is
+   * neither idle (so `idle_in_transaction_session_timeout` never fires) nor executing (so
+   * `statement_timeout` has nothing to cut short) — yet it holds its pooled connection for the
+   * whole wait. Without a bound, concurrent waiters on one row convert lock contention directly
+   * into pool exhaustion. Minimum 1000; 0 ("wait forever") is deliberately not accepted.
+   */
+  DATABASE_LOCK_TIMEOUT_MS: z.coerce.number().int().min(1_000).default(3_000),
   /** Warn when in-process org RLS checkouts reach this fraction of DATABASE_POOL_MAX (default 0.8). */
   DATABASE_POOL_ACTIVE_WARN_RATIO: z.coerce.number().min(0).max(1).default(0.8),
   /** Critical alert when in-process org RLS checkouts reach this fraction of DATABASE_POOL_MAX (default 0.95). */

@@ -2006,6 +2006,7 @@ src/
     │   │   ├── organizations-rls-deleted.security.test.ts
     │   │   ├── retention-cleanup-rls.security.test.ts
     │   │   ├── rls-matrix.security.test.ts
+    │   │   ├── savepoint-guc-totality.security.test.ts
     │   │   ├── system-tables-rls.security.test.ts
     │   │   ├── tenancy-global-admin-invisibility.security.test.ts
     │   │   ├── tenancy-with-check-write-confinement.security.test.ts

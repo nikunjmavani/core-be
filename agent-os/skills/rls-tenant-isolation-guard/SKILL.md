@@ -45,7 +45,7 @@ For **worker / processor** code touching tenant data:
 - [ ] Worker repositories accept an explicit `databaseHandle` (`createWorker*Repository(databaseHandle)`) — the nominal brand prevents passing the pool at compile time.
 - [ ] **No external I/O (fetch / Stripe / S3 / Resend) inside a `with*DatabaseContext` callback** — it holds a pool checkout across the network round-trip (`rls-context-network-isolation.global.test.ts`).
 
-For **`SECURITY DEFINER`** functions — the RLS-bypass resolvers across `auth` / `tenancy` / `billing` / `notify` (`grep -rl 'SECURITY DEFINER' migrations/` lists the current set; it grows over time): each one MUST pin `SET search_path` and `GRANT EXECUTE` only to `core_be_app`. Because the function bypasses RLS, **its body is the sole tenant/ownership boundary** — scope every query by the resolved id and return only the caller's rows.
+For **`SECURITY DEFINER`** functions — the RLS-bypass resolvers across `auth` / `tenancy` / `billing` / `notify` (`grep -rl 'SECURITY DEFINER' migrations/` lists the current set; it grows over time): each one MUST pin `SET search_path`, `GRANT EXECUTE` to `core_be_app`, **and `REVOKE EXECUTE … FROM PUBLIC`** — Postgres grants function EXECUTE to PUBLIC by DEFAULT, so a `GRANT` alone never achieves "only"; every resolver written to this rule so far is still PUBLIC-executable. Because the function bypasses RLS, **its body is the sole tenant/ownership boundary** — scope every query by the resolved id and return only the caller's rows.
 
 ### Reading / searching a FORCE-RLS column that lives on a *joined* table
 
@@ -72,6 +72,21 @@ A `with*DatabaseContext` wrapper sets **one** GUC and grants access only on tabl
 - **Never import `withGlobalAdminDatabaseContext` under `src/domains/tenancy/**`** — enforced by `no-global-admin-in-tenancy.global.test.ts`. The policy fact itself is pinned by `tenancy-global-admin-invisibility.security.test.ts`.
 - For an auth-flow read that has no org GUC yet (login, MFA, org switch, refresh), use `withUserDatabaseContext` — the tenancy discovery policies are keyed on `app.current_user_id`, so the caller sees exactly their own orgs and memberships.
 - The joined-table rule above applies to **any** context that cannot satisfy the target policy — org-only context *and* post-commit paths running with no GUC at all (a frequent miss: `sec-R11`-style "invalidate AFTER commit, outside the org block" code).
+
+### Savepoints do NOT restore session settings
+
+`RELEASE SAVEPOINT` **keeps** whatever the savepoint set — only `ROLLBACK TO SAVEPOINT` restores it. A nested transaction (drizzle issues one as a `SAVEPOINT`) that changes the tenant identity therefore leaks that change into the rest of the OUTER transaction, and into every later iteration of a per-row loop:
+
+```sql
+BEGIN;
+SELECT set_config('app.current_organization_id','A',true);
+SAVEPOINT s; SELECT set_config('app.current_organization_id','B',true); RELEASE SAVEPOINT s;
+SELECT current_setting('app.current_organization_id');   -- 'B', not 'A'
+```
+
+**Rule:** inside a nested transaction, set **every** GUC the RLS identity depends on, on **every** iteration — never only the one that row happens to need. A branch that sets just its own GUC inherits the other branch's value from the previous row, silently widening the policy for the remainder of the batch. Reference: the per-row savepoint in `audit-outbox-drain.processor.ts` writes both `app.current_organization_id` and `app.system_audit_insert` unconditionally for exactly this reason.
+
+Do **not** try to enforce this with a blanket "no `set_config` inside a nested transaction" test — legitimate per-row RLS scoping needs it. Enforce *totality* (all identity GUCs written every iteration) instead.
 
 ## Top failure modes
 

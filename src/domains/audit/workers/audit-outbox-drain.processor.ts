@@ -215,17 +215,30 @@ async function drainOutboxRow(options: {
     // postgres-js transaction-error state, so the nested transaction is the supported mechanism.)
     await databaseHandle.transaction(async (savepoint) => {
       const savepointHandle = savepoint as unknown as RequestScopedPostgresDatabase;
-      if (row.organization_public_id !== null) {
-        await setLocalDatabaseConfig(
-          savepointHandle,
-          'app.current_organization_id',
-          row.organization_public_id,
-        );
-      } else {
-        // Tenantless audit (system events). RLS requires the system arm to be true and
-        // organization_id IS NULL; resolveRowInserts guarantees the latter.
-        await setLocalDatabaseConfig(savepointHandle, 'app.system_audit_insert', 'true');
-      }
+      // Set BOTH GUCs on every row, never just the one this row needs.
+      //
+      // `RELEASE SAVEPOINT` KEEPS whatever the savepoint set — only `ROLLBACK TO SAVEPOINT`
+      // restores it. So a value set for one row survives into the rest of the outer batch
+      // transaction and is inherited by every later row. When these branches each set only their
+      // own GUC, a tenanted row left `app.current_organization_id` set for a following tenantless
+      // row, and a tenantless row left `app.system_audit_insert='true'` set for every following
+      // tenanted row — silently widening the `audit_logs_tenant_isolation_insert` policy for the
+      // remainder of the batch. That is not exploitable today only because the policy selects its
+      // arm on the row's `organization_id` COLUMN rather than on the GUC; one edit to either the
+      // policy or this branch turns it into a cross-tenant insert. Writing both values every
+      // iteration makes each row's RLS identity total, so nothing is inherited.
+      await setLocalDatabaseConfig(
+        savepointHandle,
+        'app.current_organization_id',
+        row.organization_public_id ?? '',
+      );
+      // Tenantless audit (system events) need the system arm; `resolveRowInserts` guarantees such
+      // rows carry `organization_id IS NULL`, which the policy's system arm also requires.
+      await setLocalDatabaseConfig(
+        savepointHandle,
+        'app.system_audit_insert',
+        row.organization_public_id === null ? 'true' : 'false',
+      );
       await savepointHandle.insert(logs).values(resolution.row);
     });
     return { kind: 'success', id: row.id };
